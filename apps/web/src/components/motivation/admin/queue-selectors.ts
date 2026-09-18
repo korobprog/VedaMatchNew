@@ -42,11 +42,29 @@ export function selectImagePosts(posts: MotivationAdminCandidateDto[]) {
  * кнопкой-переключателем — «Скрыть» отменяется на месте, без похода в
  * другую вкладку. `selectSetAsidePosts` эти карточки больше не забирает —
  * дом у скрытого после публикации один, дублировать его в «Отложенных» незачем.
+ *
+ * Скрытое всегда идёт в самом низу списка (VED-251, чек-лист: «Все скрытые
+ * афоризмы отправляй в самый низ ленты в меню редакции»), а не вперемешку с
+ * видимым — иначе снятые с показа карточки то и дело попадались первыми и
+ * заслоняли то, что сейчас действительно читают. Сортировка стабильна:
+ * `Array.prototype.sort` по спецификации не переставляет местами элементы с
+ * одинаковым ключом, так что порядок внутри каждой из двух групп остаётся
+ * тем же, каким его отдал сервер.
  */
 export function selectPublishedPosts(posts: MotivationAdminCandidateDto[]) {
-  return posts.filter(
-    (post) => post.status === "published" || post.status === "hidden",
-  );
+  return posts
+    .filter((post) => post.status === "published" || post.status === "hidden")
+    .sort((a, b) => Number(a.status === "hidden") - Number(b.status === "hidden"));
+}
+
+/**
+ * Отдельная вкладка «Скрытые» (VED-251): весь список того, что снято с
+ * показа, — чтобы не выискивать скрытые карточки среди опубликованных.
+ * Возврат в ленту — та же кнопка, что и на «Опубликованных» (общий
+ * `PostActions` в `published-list.tsx`).
+ */
+export function selectHiddenPosts(posts: MotivationAdminCandidateDto[]) {
+  return posts.filter((post) => post.status === "hidden");
 }
 
 /**

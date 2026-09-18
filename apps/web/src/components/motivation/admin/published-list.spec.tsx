@@ -104,7 +104,8 @@ describe("MotivationPublishedList", () => {
     expect(card).not.toHaveTextContent("2026-08-16");
   });
 
-  // VED-199: кнопки — квадраты со значками; подпись — для скринридера и в подсказке.
+  // VED-199, VED-264: кнопки — квадраты со значками; подпись — для
+  // скринридера и в подсказке.
   it("подписывает каждую кнопку-значок для скринридера и подсказкой", () => {
     render(<MotivationPublishedList posts={[post()]} />);
 
@@ -112,11 +113,14 @@ describe("MotivationPublishedList", () => {
       "Открыть в ленте",
       "Править текст",
       "Скрыть из ленты",
+      "Читать полностью",
       "Заменить картинку",
       "Удалить",
+      "Поиск",
+      "Скрытые",
     ]) {
       const control = screen.getByRole(
-        name === "Открыть в ленте" ? "link" : "button",
+        ["Открыть в ленте", "Скрытые"].includes(name) ? "link" : "button",
         { name },
       );
       expect(control).toHaveAttribute("title");
@@ -138,7 +142,12 @@ describe("MotivationPublishedList", () => {
   it("у скрытого поста «Открыть в ленте» — неактивная кнопка, а не ссылка в тупик", () => {
     render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
 
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    // Ссылка «Открыть в ленте» на конкретный slug пропадает; ссылка
+    // «Скрытые» (VED-264, ведёт на другую вкладку) остаётся — она не о
+    // тупике конкретного поста.
+    expect(
+      screen.queryByRole("link", { name: "Открыть в ленте" }),
+    ).not.toBeInTheDocument();
 
     const disabledButton = screen.getByRole("button", {
       name: /Скрыто — сначала верните в ленту/,
@@ -407,5 +416,118 @@ describe("MotivationPublishedList", () => {
 
     expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  // VED-264: «Показать текст афоризма полностью — быстро, без возвращения
+  // в ленту, из меню читать полностью».
+  describe("«Читать полностью» (VED-264)", () => {
+    it("раскрывает и сворачивает полный текст афоризма прямо в карточке", async () => {
+      const user = userEvent.setup();
+      render(
+        <MotivationPublishedList
+          posts={[
+            post({
+              text: "Душа не умирает\n\nПояснение к стиху",
+              attributionSpeaker: "Прабхупада",
+              attributionWork: "Бхагавад-гита",
+              attributionLocator: "2.13",
+            }),
+          ]}
+        />,
+      );
+
+      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Читать полностью" }));
+
+      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
+      expect(screen.getByText(/Прабхупада · Бхагавад-гита · 2\.13/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Свернуть текст" }));
+
+      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+    });
+
+    it("не уходит из «Опубликованных» и не открывает форму правки", async () => {
+      const user = userEvent.setup();
+      render(<MotivationPublishedList posts={[post()]} />);
+
+      await user.click(screen.getByRole("button", { name: "Читать полностью" }));
+
+      expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
+    });
+  });
+
+  // VED-264: «Кнопка поиска, чтобы не мотать вверх каждый раз».
+  it("«Поиск» переводит фокус в поле поиска вверху экрана", async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    const spy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(scrollIntoView);
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    await user.click(screen.getByRole("button", { name: "Поиск" }));
+
+    expect(screen.getByRole("searchbox")).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  // VED-264: «Кнопка — меню всех скрытых афоризмов».
+  it("«Скрытые» ведёт на отдельную вкладку скрытых", () => {
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    expect(screen.getByRole("link", { name: "Скрытые" })).toHaveAttribute(
+      "href",
+      "/admin/motivation/hidden",
+    );
+  });
+
+  describe("variant=\"hidden\" — вкладка «Скрытые» (VED-251)", () => {
+    it("говорит, что скрытых нет, без ссылки на «Заготовки»", () => {
+      render(<MotivationPublishedList posts={[]} variant="hidden" />);
+
+      expect(screen.getByText(/Скрытых нет/)).toBeInTheDocument();
+      expect(screen.queryByText(/Пока ничего не опубликовано/)).not.toBeInTheDocument();
+    });
+
+    it("считает только скрытое, без «Опубликовано: 0»", () => {
+      render(
+        <MotivationPublishedList
+          posts={[post({ id: "h1", status: "hidden" })]}
+          variant="hidden"
+        />,
+      );
+
+      expect(screen.getByText("Скрыто: 1")).toBeInTheDocument();
+      expect(screen.queryByText(/Опубликовано/)).not.toBeInTheDocument();
+    });
+
+    it("не даёт ссылке «Скрытые» вести саму на себя", () => {
+      render(
+        <MotivationPublishedList
+          posts={[post({ id: "h1", status: "hidden" })]}
+          variant="hidden"
+        />,
+      );
+
+      expect(screen.queryByRole("link", { name: "Скрытые" })).not.toBeInTheDocument();
+    });
+
+    it("тот же PostActions: «Вернуть в ленту» доступна и здесь", async () => {
+      const user = userEvent.setup();
+      const fetchMock = stubFetch();
+      render(
+        <MotivationPublishedList
+          posts={[post({ id: "h1", status: "hidden" })]}
+          variant="hidden"
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: /Вернуть в ленту/ }));
+
+      await waitFor(() => expect(lastBody(fetchMock)).toEqual({ hidden: false }));
+    });
   });
 });

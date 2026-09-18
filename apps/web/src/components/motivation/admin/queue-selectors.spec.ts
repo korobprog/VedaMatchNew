@@ -6,6 +6,7 @@ import type {
 import {
   countQueue,
   filterByQuery,
+  selectHiddenPosts,
   selectImagePosts,
   selectPublishedPosts,
   selectSetAsidePosts,
@@ -78,6 +79,32 @@ describe("queue selectors", () => {
       "e",
       "e2",
     ]);
+  });
+
+  // VED-251: «Все скрытые афоризмы отправляй в самый низ ленты».
+  it("скрытое всегда в самом низу «Опубликованных», видимое — в прежнем порядке", () => {
+    const hiddenFirst = post("h1", "published", null, "hidden");
+    const visibleA = post("v1", "published", null, "published");
+    const hiddenSecond = post("h2", "published", null, "hidden");
+    const visibleB = post("v2", "published", null, "published");
+    const mixed = [hiddenFirst, visibleA, hiddenSecond, visibleB];
+
+    // Видимые сохраняют взаимный порядок (v1 раньше v2), скрытые — следом
+    // за ними, тоже в своём взаимном порядке (h1 раньше h2), а не в конец
+    // списка как попало.
+    expect(selectPublishedPosts(mixed).map((item) => item.id)).toEqual([
+      "v1",
+      "v2",
+      "h1",
+      "h2",
+    ]);
+  });
+
+  it("selectHiddenPosts отдаёт только скрытое — отдельная вкладка «Скрытые»", () => {
+    const hidden = post("h", "published", null, "hidden");
+    const mixed = [...posts, hidden];
+
+    expect(selectHiddenPosts(mixed).map((item) => item.id)).toEqual(["h"]);
   });
 
   it("counts only what is actually waiting for the admin", () => {

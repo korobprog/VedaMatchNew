@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { BarChart3, CalendarHeart, Film, FolderTree, ImagePlus, ListChecks, Music4, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
+import { BarChart3, CalendarHeart, EyeOff, Film, FolderTree, ImagePlus, ListChecks, Music4, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
 
 export type MotivationAdminTab =
   | "queue"
   | "published"
+  | "hidden"
   | "reels"
   | "events"
   | "analytics"
@@ -26,6 +27,10 @@ const ITEMS: Array<{
   // вопрос «где то, что уже вышло» админка отвечала «поищите».
   { key: "queue", href: "/admin/motivation/queue", label: "Заготовки", icon: ListChecks },
   { key: "published", href: "/admin/motivation/published", label: "Опубликованные", icon: Newspaper },
+  // Отдельная вкладка (VED-251): без неё скрытое искали вперемешку с
+  // видимым на «Опубликованных» — теперь там весь список разом, с тем же
+  // возвратом в ленту одной кнопкой.
+  { key: "hidden", href: "/admin/motivation/hidden", label: "Скрытые", icon: EyeOff },
   // Два разных пути: «Своя» — текст пишет админ, «Цитата» — текст пишет ИИ.
   { key: "reels", href: "/admin/motivation/reels", label: "Рилсы", icon: Film },
   { key: "create", href: "/admin/motivation/create", label: "Своя", icon: PenLine },
@@ -52,9 +57,12 @@ const ITEMS: Array<{
 export function MotivationAdminTabs({
   active,
   queueCount,
+  hiddenCount,
 }: {
   active: MotivationAdminTab;
   queueCount?: number;
+  /** Счётчик на вкладке «Скрытые» — сколько там сейчас лежит (VED-251). */
+  hiddenCount?: number;
 }) {
   return (
     <nav className="mb-6 border-b border-glass-brd pb-3" aria-label="Разделы админки Motivation">
@@ -80,6 +88,11 @@ export function MotivationAdminTabs({
                 {item.key === "queue" && queueCount ? (
                   <span className="rounded-full bg-gold/20 px-1.5 text-[11px] font-bold text-gold">
                     {queueCount}
+                  </span>
+                ) : null}
+                {item.key === "hidden" && hiddenCount ? (
+                  <span className="rounded-full bg-gold/20 px-1.5 text-[11px] font-bold text-gold">
+                    {hiddenCount}
                   </span>
                 ) : null}
               </Link>

@@ -1,7 +1,7 @@
 import { CollapsibleBlock } from "@/components/motivation/collapsible-block";
 import { MotivationAdminTabs } from "@/components/motivation/admin/admin-tabs";
 import { QueueBoard } from "@/components/motivation/admin/queue-board";
-import { countQueue } from "@/components/motivation/admin/queue-selectors";
+import { countQueue, selectHiddenPosts } from "@/components/motivation/admin/queue-selectors";
 import { MotivationWorkerHealthCard } from "@/components/motivation/admin/worker-health";
 import {
   getAdminMotivationCategories,
@@ -28,7 +28,11 @@ export default async function AdminMotivationQueuePage() {
 
   return (
     <>
-      <MotivationAdminTabs active="queue" queueCount={posts ? countQueue(posts) : undefined} />
+      <MotivationAdminTabs
+        active="queue"
+        queueCount={posts ? countQueue(posts) : undefined}
+        hiddenCount={posts ? selectHiddenPosts(posts).length : undefined}
+      />
       {/* Порядок проверки и состояние воркера — свёрнуты по умолчанию.
           Раньше они занимали два экрана над первой карточкой: до афоризма,
           ради которого сюда и заходят, надо было домотать. */}

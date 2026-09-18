@@ -2,6 +2,7 @@ import { MotivationAdminTabs } from "@/components/motivation/admin/admin-tabs";
 import { MotivationPublishedList } from "@/components/motivation/admin/published-list";
 import {
   countQueue,
+  selectHiddenPosts,
   selectPublishedPosts,
 } from "@/components/motivation/admin/queue-selectors";
 import {
@@ -34,13 +35,15 @@ export default async function AdminMotivationPublishedPage({
     <>
       <p className="mb-4 mt-2 max-w-3xl text-sm text-text-1">
         Всё, что видно в ленте, и то, что вы сняли с показа вручную, — вторые
-        помечены «Скрыто из ленты» и возвращаются той же кнопкой. Здесь же
+        внизу списка, помечены «Скрыто из ленты» и возвращаются той же
+        кнопкой. Весь скрытый список целиком — во вкладке «Скрытые». Здесь же
         можно поправить текст или удалить. Всё, что ждёт проверки, — во
         вкладке «Заготовки».
       </p>
       <MotivationAdminTabs
         active="published"
         queueCount={posts ? countQueue(posts) : undefined}
+        hiddenCount={posts ? selectHiddenPosts(posts).length : undefined}
       />
       <MotivationPublishedList
         posts={posts ? selectPublishedPosts(posts) : null}

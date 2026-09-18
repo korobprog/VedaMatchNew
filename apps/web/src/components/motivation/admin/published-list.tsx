@@ -4,10 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  BookOpen,
   ExternalLink,
   Eye,
   EyeOff,
+  Inbox,
   Pencil,
+  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,6 +24,7 @@ import {
 } from "../quote-text";
 import { CategorySelect } from "./category-select";
 import { DeletePostConfirm } from "./delete-post-button";
+import { formatAttribution } from "./quote-details";
 import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
@@ -54,11 +58,17 @@ import {
  * `aria-label` и всплывающей подсказке.
  * Поиск по названию и цитате: за полгода публикаций пролистать до нужной
  * дороже, чем набрать три слова.
+ *
+ * Тот же компонент рисует и вкладку «Скрытые» (VED-251, VED-264,
+ * `variant="hidden"`) — список тех же карточек с тем же `PostActions`, без
+ * дублирования кнопок и правки. Меняется только то, что зависит от смысла
+ * списка: подсказка при пустом списке и строка-счётчик над ним.
  */
 export function MotivationPublishedList({
   posts,
   categories = [],
   openSlug,
+  variant = "published",
 }: {
   posts: MotivationAdminCandidateDto[] | null;
   /** Справочник для выбора категории в правке. */
@@ -68,14 +78,33 @@ export function MotivationPublishedList({
    * сразу: искать глазами то, на что только что смотрел, — лишний шаг.
    */
   openSlug?: string;
+  /**
+   * «Скрытые» показывает только снятое с показа — здесь кнопка «Скрытые» у
+   * самой карточки лишняя (страница и так эта вкладка), поэтому на её месте
+   * остаётся пустая клетка сетки, а не ссылка саму на себя.
+   */
+  variant?: "published" | "hidden";
 }) {
   const { pending, errors, run } = useAdminCommand();
   const [query, setQuery] = useState("");
+  /** Ref на поле поиска — кнопка «Поиск» в карточке (VED-264) ведёт сюда,
+      не заставляя мотать список вверх руками. */
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const focusSearch = () => {
+    searchInputRef.current?.focus();
+    searchInputRef.current?.scrollIntoView({ block: "start" });
+  };
   const openId = useMemo(
     () => posts?.find((post) => post.slug === openSlug)?.id ?? null,
     [posts, openSlug],
   );
   const [editing, setEditing] = useState<string | null>(openId);
+  /**
+   * Карточка, у которой открыт полный текст (VED-264): показать афоризм
+   * целиком быстро, не уходя в ленту за ним. Один открытый разворот за раз —
+   * тот же приём, что и у правки, чтобы карточка не росла бесконечно.
+   */
+  const [reading, setReading] = useState<string | null>(null);
   /** Карточка, у которой спросили «удалить?»: вопрос встаёт под ней. */
   const [deleting, setDeleting] = useState<string | null>(null);
   /** Ошибки загрузки картинки — под карточкой, а не в клетке значка. */
@@ -128,8 +157,9 @@ export function MotivationPublishedList({
   if (posts.length === 0)
     return (
       <p className={`${cardClass} text-center text-text-2`}>
-        Пока ничего не опубликовано. Всё, что ждёт проверки, — во вкладке
-        «Заготовки».
+        {variant === "hidden"
+          ? "Скрытых нет. Всё, что видно в ленте, лежит во вкладке «Опубликованные»."
+          : "Пока ничего не опубликовано. Всё, что ждёт проверки, — во вкладке «Заготовки»."}
       </p>
     );
 
@@ -152,6 +182,7 @@ export function MotivationPublishedList({
       <label className="block max-w-md">
         <span className={labelClass}>Найти по цитате или автору</span>
         <input
+          ref={searchInputRef}
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -163,13 +194,17 @@ export function MotivationPublishedList({
       <p className="mt-3 text-sm text-text-2">
         {query.trim()
           ? `Найдено: ${found.length} из ${posts.length}`
-          : // `posts` — это `published` и `hidden` вместе (VED-251), и
-            // «Опубликовано: N» врало бы, если часть N на деле скрыта из
-            // ленты. Хвост «· Скрыто: M» показываем только когда скрытые
-            // действительно есть — не загромождать подпись нулём.
-            hiddenCount > 0
-            ? `Опубликовано: ${publishedCount} · Скрыто: ${hiddenCount}`
-            : `Опубликовано: ${publishedCount}`}
+          : variant === "hidden"
+            ? // На «Скрытых» весь список и так скрыт — считать «Опубликовано: 0»
+              // рядом с ним только сбивало бы с толку.
+              `Скрыто: ${hiddenCount}`
+            : // `posts` — это `published` и `hidden` вместе (VED-251), и
+              // «Опубликовано: N» врало бы, если часть N на деле скрыта из
+              // ленты. Хвост «· Скрыто: M» показываем только когда скрытые
+              // действительно есть — не загромождать подпись нулём.
+              hiddenCount > 0
+              ? `Опубликовано: ${publishedCount} · Скрыто: ${hiddenCount}`
+              : `Опубликовано: ${publishedCount}`}
       </p>
 
       {/* Пришли из ленты, а карточки здесь нет — значит, её успели удалить.
@@ -233,15 +268,26 @@ export function MotivationPublishedList({
 
                   <PostActions
                     post={post}
+                    variant={variant}
                     returning={post.id === openId}
                     editing={editing === post.id}
+                    reading={reading === post.id}
                     deleting={deleting === post.id}
                     pendingAction={pending[post.id]}
-                    onEdit={() =>
+                    onEdit={() => {
+                      setReading(null);
                       setEditing((current) =>
                         current === post.id ? null : post.id,
-                      )
-                    }
+                      );
+                    }}
+                    onToggleRead={() => {
+                      setEditing(null);
+                      setDeleting(null);
+                      setReading((current) =>
+                        current === post.id ? null : post.id,
+                      );
+                    }}
+                    onFocusSearch={focusSearch}
                     onDelete={() =>
                       setDeleting((current) =>
                         current === post.id ? null : post.id,
@@ -301,6 +347,8 @@ export function MotivationPublishedList({
                 </p>
               )}
 
+              {reading === post.id && <FullTextView post={post} />}
+
               {editing === post.id && (
                 <PublishedTextForm
                   post={post}
@@ -324,36 +372,51 @@ function aphorismOf(post: MotivationAdminCandidateDto): string {
 }
 
 /**
- * Пять действий карточки — квадратами со значками, три и два в ряд
- * (VED-199). Порядок прежний: посмотреть, править, скрыть, заменить
- * картинку, удалить — опасное последним.
+ * Восемь действий карточки — квадратами со значками, сеткой 3×3 (VED-199,
+ * VED-264). Ряд первый прежний: посмотреть, править, скрыть. Ряд второй:
+ * читать полностью, заменить картинку, удалить — опасное последним. Ряд
+ * третий — новый (VED-264): поиск и переход к «Скрытым».
  *
- * Во втором ряду перед «Заменить картинку» — пустая клетка-распорка
- * (VED-251): без неё картинка вставала прямо под первой кнопкой ряда, а
- * у подсвеченной карточки та кнопка — «Вернуться в ленту» со стрелкой «←».
- * На телефоне это две соседние по вертикали цели, и палец легко промахивался
- * с одной на другую. Распорка сдвигает картинку в среднюю колонку, под
- * «Править текст», — действия больше не стоят друг под другом.
+ * Клетка «Читать полностью» стоит там, где раньше была пустая
+ * распорка-заглушка (VED-251): без неё картинка вставала прямо под первой
+ * кнопкой ряда, а у подсвеченной карточки та кнопка — «Вернуться в ленту» со
+ * стрелкой «←». На телефоне это были две соседние по вертикали цели, и палец
+ * легко промахивался с одной на другую. Замена безопасна: «Читать полностью»
+ * не портит данные и не грозит потерей — промах по ней ничем не рискует,
+ * в отличие от промаха по замене картинки, которой заглушка была нужна
+ * прежде.
+ *
+ * Сетка не растёт вширь на маленьком экране — только вниз, поэтому три
+ * новых кнопки на 375px не сдвигают и не ужимают ничего рядом.
  */
 function PostActions({
   post,
+  variant,
   returning,
   editing,
+  reading,
   deleting,
   pendingAction,
   onEdit,
+  onToggleRead,
+  onFocusSearch,
   onDelete,
   onUploadError,
   onHideToggle,
   run,
 }: {
   post: MotivationAdminCandidateDto;
+  variant: "published" | "hidden";
   /** Карточка, ради которой пришли из ленты: ссылка ведёт обратно. */
   returning: boolean;
   editing: boolean;
+  /** Открыт ли под карточкой полный текст (VED-264). */
+  reading: boolean;
   deleting: boolean;
   pendingAction: string | undefined;
   onEdit: () => void;
+  onToggleRead: () => void;
+  onFocusSearch: () => void;
   onDelete: () => void;
   onUploadError: (message: string | null) => void;
   /** `true` — карточку только что скрыли, `false` — вернули в ленту. */
@@ -449,9 +512,23 @@ function PostActions({
         )}
       </button>
 
-      {/* Пустая распорка: сдвигает «Заменить картинку» из-под первой кнопки
-          ряда на клетку правее (см. комментарий над компонентом). */}
-      <span aria-hidden className="size-11" />
+      {/* «Читать полностью» (VED-264): полный текст афоризма разворачивается
+          прямо под карточкой, без перехода в ленту. Тем же нажатием
+          сворачивается обратно. */}
+      <button
+        type="button"
+        onClick={onToggleRead}
+        aria-expanded={reading}
+        aria-label={reading ? "Свернуть текст" : "Читать полностью"}
+        title={reading ? "Свернуть текст" : "Читать полностью"}
+        className={iconButton}
+      >
+        {reading ? (
+          <X aria-hidden className="size-5" />
+        ) : (
+          <BookOpen aria-hidden className="size-5" />
+        )}
+      </button>
 
       {/* Открытку редакция рисует сама — генерация нарисует не то. Замена
           картинки со стадией карточки ничего не делает: опубликованная
@@ -475,6 +552,60 @@ function PostActions({
       >
         <Trash2 aria-hidden className="size-5" />
       </button>
+
+      {/* «Поиск» (VED-264): фокус на поле поиска вверху экрана, чтобы не
+          мотать длинный список руками. */}
+      <button
+        type="button"
+        onClick={onFocusSearch}
+        aria-label="Поиск"
+        title="Поиск по цитате или автору"
+        className={iconButton}
+      >
+        <Search aria-hidden className="size-5" />
+      </button>
+
+      {/* «Скрытые» (VED-264): весь список снятого с показа. На самой
+          вкладке «Скрытые» кнопка вела бы саму на себя — вместо ссылки там
+          пустая клетка, чтобы сетка не съезжала. */}
+      {variant === "hidden" ? (
+        <span aria-hidden className="size-11" />
+      ) : (
+        <Link
+          href="/admin/motivation/hidden"
+          aria-label="Скрытые"
+          title="Все скрытые афоризмы"
+          className={iconButton}
+        >
+          <Inbox aria-hidden className="size-5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Полный текст афоризма прямо под карточкой (VED-264): то же самое, что
+ * показывает публичная лента в «Читать полностью», — без перехода в неё.
+ */
+function FullTextView({ post }: { post: MotivationAdminCandidateDto }) {
+  const { quote, explanation } = splitQuoteAndExplanation(post.text);
+  const attribution = formatAttribution([
+    post.attributionSpeaker,
+    post.attributionWork,
+    post.attributionLocator,
+  ]);
+  return (
+    <div className="mt-3 space-y-2 border-t border-glass-brd pt-3">
+      <p className="whitespace-pre-line text-sm leading-6 text-text-0">
+        {quote || post.title || post.slug}
+      </p>
+      {explanation && (
+        <p className="whitespace-pre-line text-sm leading-6 text-text-1">
+          {explanation}
+        </p>
+      )}
+      {attribution && <p className="text-xs text-text-2">{attribution}</p>}
     </div>
   );
 }
