@@ -37,6 +37,12 @@ jobs:
       APP_CONTOUR: ${{ inputs.contour }}
       APP_CHANNEL: ${{ inputs.channel }}
       APP_VERSION_SHA: ${{ github.sha }}
+      # Клиент самообновления (VED-176) стучится в latest.json по этому
+      # адресу (variant.ts: downloadBaseUrl), а не по адресу сайта — манифест
+      # реально лежит в S3-хранилище, тот же секрет, что публикует шаг
+      # «Публикация в S3» ниже. Пусто (секрет не задан) — variant.ts тихо
+      # откатывается на webOrigin, сборка не падает.
+      APP_DOWNLOAD_BASE_URL: ${{ secrets.S3_PUBLIC_URL }}
     steps:
       - uses: actions/checkout@v4
 
