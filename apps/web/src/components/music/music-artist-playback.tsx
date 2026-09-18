@@ -42,7 +42,9 @@ export function MusicArtistPlayback({
 }) {
   // Выбор — в `useState`, не в `localStorage`: это не та же привычка, что
   // вид списка/сетки (VED-225) — сбрасывается при новом заходе на страницу.
-  const [mode, setMode] = useState<TrackSortMode>("date");
+  // По умолчанию — алфавит (VED-273): «по дате» человек выбирает сам кнопкой
+  // ниже, и это выбор уважается до следующего захода на страницу.
+  const [mode, setMode] = useState<TrackSortMode>("alpha");
   const [reverse, setReverse] = useState(false);
 
   const sorted = useMemo(
