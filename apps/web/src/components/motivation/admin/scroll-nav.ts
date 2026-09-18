@@ -54,6 +54,25 @@ export function scrollButtonsVisibility(
   };
 }
 
+/**
+ * Сравнение по четырём полям, а не по ссылке (VED-265, круг 2): `scroll`
+ * летит на каждый кадр жеста, и без явного сравнения `ScrollNavButtons`
+ * складывал бы в состояние новый объект при каждом вызове, даже когда все
+ * четыре флага не изменились, — React не может отбросить обновление сам,
+ * потому что ссылка каждый раз новая.
+ */
+export function sameScrollButtonsVisibility(
+  a: ScrollButtonsVisibility,
+  b: ScrollButtonsVisibility,
+): boolean {
+  return (
+    a.toTop === b.toTop &&
+    a.upTenth === b.upTenth &&
+    a.downTenth === b.downTenth &&
+    a.toBottom === b.toBottom
+  );
+}
+
 export type ScrollNavAction = "top" | "bottom" | "up-tenth" | "down-tenth";
 
 /**

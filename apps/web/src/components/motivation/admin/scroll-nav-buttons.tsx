@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronsDown, ChevronsUp, ChevronUp } from "lucide-react";
 import {
   nextScrollTop,
+  sameScrollButtonsVisibility,
   scrollButtonsVisibility,
   type ScrollButtonsVisibility,
   type ScrollMetrics,
@@ -40,32 +41,69 @@ function readMetrics(): ScrollMetrics {
  *
  * Видимость считает чистая `scrollButtonsVisibility` (`scroll-nav.ts`) —
  * компонент только слушает `scroll`/`resize`/рост содержимого и
- * перекладывает результат в состояние.
+ * перекладывает результат в состояние, с троттлингом через
+ * `requestAnimationFrame` и сравнением по полям (см. ниже).
  */
 export function ScrollNavButtons() {
   const [visible, setVisible] = useState<ScrollButtonsVisibility>(HIDDEN);
 
   useEffect(() => {
-    const update = () => setVisible(scrollButtonsVisibility(readMetrics()));
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
+    // `scroll` летит десятками раз за один жест (даже с `passive: true`) —
+    // без троттлинга каждое событие гоняло бы пересчёт и обновляло
+    // состояние. `requestAnimationFrame` схлопывает любое число событий
+    // между двумя кадрами в один пересчёт, а `frame` не даёт поставить
+    // в очередь второй кадр, пока первый не отработал (круг 2, VED-265).
+    let frame: number | null = null;
+
+    const applyVisibility = () => {
+      frame = null;
+      setVisible((current) => {
+        const next = scrollButtonsVisibility(readMetrics());
+        // Сравнение по четырём полям, не по ссылке: без него `setVisible`
+        // с новым объектом на каждый кадр скролла перерисовывал бы
+        // компонент, даже когда показывать нужно то же самое.
+        return sameScrollButtonsVisibility(current, next) ? current : next;
+      });
+    };
+
+    const requestUpdate = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(applyVisibility);
+    };
+
+    requestUpdate();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+
+    // `requestAnimationFrame` не тикает у вкладки в фоне — если прокрутка
+    // страницы изменилась, пока вкладка была скрыта (например, программно),
+    // запрошенный кадр просто ждёт возврата. `visibilitychange` досчитывает
+    // видимость сразу по возвращении, а не только при следующем `scroll`.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") applyVisibility();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     // Список догружается и растёт уже после первого рендера (картинки,
     // подгрузка карточек) — без этого кнопки «до конца» пропадали бы
     // раньше времени, ещё до того как страница реально доскроллена.
+    // Наблюдаем `document.body`, а не список: крутится всё окно целиком
+    // (см. комментарий к компоненту), и высота, от которой считается
+    // видимость, зависит от страницы целиком, а не только от одного блока.
     // В тестовом DOM `ResizeObserver` может не быть — тогда обходимся
     // `scroll`/`resize`.
     let observer: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(update);
+      observer = new ResizeObserver(requestUpdate);
       observer.observe(document.body);
     }
 
     return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       observer?.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
     };
   }, []);
 
@@ -86,11 +124,16 @@ export function ScrollNavButtons() {
   return (
     <div
       className="glass pointer-events-auto fixed right-3 z-30 flex flex-col gap-1 rounded-2xl p-1 sm:right-6"
-      // Мини-плеер висит fixed поверх любой страницы (VED-248, `z-40`,
-      // высота ~64px плюс отступ) — запас берёт с большим шагом, чем его
-      // рост от изменения safe-area, чтобы кнопки никогда не оказались под
-      // ним или под будущей нижней панелью.
-      style={{ bottom: "max(6rem, calc(env(safe-area-inset-bottom) + 5rem))" }}
+      // `--vm-player-space` — тот же токен, которым портал резервирует
+      // место под полосу плеера снизу страницы (`globals.css`): он уже
+      // учитывает свёрнутый/развёрнутый вид (`data-collapsed`), подъём
+      // (`data-lifted`) и safe-area, и меняется вместе с полосой, а не
+      // отдельной константой, которая рано или поздно с ней разойдётся
+      // (круг 2, VED-265: захардкоженный отступ уходил под развёрнутый
+      // плеер на телефоне). Без плеера переменная не объявлена вовсе —
+      // фоллбэк `0px`. Ещё 0.75rem — зазор между кнопками и полосой/низом
+      // экрана, когда плеера нет.
+      style={{ bottom: "calc(var(--vm-player-space, 0px) + 0.75rem)" }}
     >
       {visible.toTop && (
         <NavButton label="Промотать наверх до конца" onClick={() => go("top")}>

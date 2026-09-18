@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   nextScrollTop,
+  sameScrollButtonsVisibility,
   scrollButtonsVisibility,
   type ScrollMetrics,
 } from "./scroll-nav";
@@ -58,6 +59,33 @@ describe("scrollButtonsVisibility (VED-265)", () => {
       downTenth: false,
       toBottom: false,
     });
+  });
+});
+
+describe("sameScrollButtonsVisibility (VED-265, круг 2)", () => {
+  const middle = scrollButtonsVisibility(metrics({ scrollTop: 2000 }));
+
+  it("одинаковые снимки — совпадают, даже разными объектами", () => {
+    const copy = { ...middle };
+    expect(sameScrollButtonsVisibility(middle, copy)).toBe(true);
+    expect(copy).not.toBe(middle); // разные ссылки — сравнение всё равно по полям
+  });
+
+  it("различие хотя бы в одном поле — не совпадают", () => {
+    expect(
+      sameScrollButtonsVisibility(middle, { ...middle, toTop: !middle.toTop }),
+    ).toBe(false);
+    expect(
+      sameScrollButtonsVisibility(middle, {
+        ...middle,
+        downTenth: !middle.downTenth,
+      }),
+    ).toBe(false);
+  });
+
+  it("переход через край — видимость меняется, сравнение это ловит", () => {
+    const top = scrollButtonsVisibility(metrics({ scrollTop: 0 }));
+    expect(sameScrollButtonsVisibility(middle, top)).toBe(false);
   });
 });
 
