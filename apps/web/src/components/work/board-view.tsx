@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ChevronUp,
   GripVertical,
+  History,
   ListChecks,
   Loader2,
   MessageSquare,
@@ -75,7 +76,7 @@ import { findTaskByKey, parseFocusKey } from "./task-focus";
 import { descriptionHasWholeText, splitTaskDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 import { groupTasksByPriority } from "./task-grouping";
-import { groupTasksByDueDate } from "./task-due-grouping";
+import { groupTasksByCreatedDate } from "./task-created-grouping";
 import {
   readWorkGroupMode,
   writeWorkGroupMode,
@@ -501,10 +502,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       клавиши: подсказка под полем должна показывать правду, а не обещание. */
   const draftSplit = splitTaskDraft(draft);
 
-  /* «Сегодня» для группировки по дате (VED-160) — момент рендера, местное
-     время браузера: границы дня у человека в Красноярске и на сервере в
-     Амстердаме разные, поэтому не Date.now() внутри чистой функции, а один
-     снимок времени на весь проход по колонкам. */
+  /* «Сегодня» для группировки по дате создания (VED-160) — момент рендера,
+     местное время браузера: границы дня у человека в Красноярске и на
+     сервере в Амстердаме разные, поэтому не Date.now() внутри чистой
+     функции, а один снимок времени на весь проход по колонкам. */
   const now = new Date();
 
   const searchActive = matches !== null && isTaskQuery(query);
@@ -553,35 +554,71 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
-        {/* Ряд переносится (VED-105). Без переноса «Свернуть все», «По
-            важности», «Архив» и «Пригласить» на телефоне не помещались и
-            распирали страницу вбок: 420 точек при экране 375. Вместе со
-            страницей растягивалось и окно задачи — полоса «Сохранить» у его
-            низа и правого края уходила за экран. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {/* Один ряд, слева направо: «Свернуть все» (только на телефоне), «По
+            дате», «По важности», «Архив», «Пригласить» — порядок, которого
+            просил тестировщик (VED-160, круг 3). Раньше «Архив» с
+            «Пригласить» переносились строкой ниже: пяти кнопкам с полным
+            текстом на 360 точках не хватало места. Три второстепенные кнопки
+            («Свернуть все», «Архив», «Пригласить») на телефоне остаются
+            только значком — подпись уходит в `aria-label` для скринридера, а
+            у «Архива» и «Пригласить» текст возвращается рядом со значком от
+            sm и шире, где место уже не в обрез. «По дате» и «По важности» —
+            сама суть переключателя вида, их текст не прячем ни на одном
+            размере экрана.
+
+            Прикидка ширины на 360 точек (контентная область экрана — 328 при
+            паддинге страницы 16 с каждой стороны): три значка по 40 (минимальная
+            область нажатия) — 120, «По дате» (текст без иконки, паддинг
+            2.5×2) — около 74, «По важности» — около 104, три зазора gap-1.5
+            между пятью кнопками — 18. Итого около 316 из 328 — укладывается
+            с небольшим запасом; `flex-wrap` на контейнере оставлен как сетка
+            безопасности на случай более узкого экрана или крупного шрифта в
+            настройках браузера. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
               стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
               не пара рядом: вторая всегда была бы бесполезной, а место
-              занимала бы то же. */}
+              занимала бы то же. Кнопка всегда значковая — на этой ширине
+              экрана текст рядом с ней никогда не появляется, полю подписи
+              взяться неоткуда. */}
           {board.columns.length > 1 && (
             <button
               type="button"
               onClick={toggleAll}
               aria-expanded={!allFolded}
-              className="flex items-center gap-1.5 rounded-xl border border-glass-brd px-2.5 py-2 text-xs font-semibold text-text-1 hover:text-text-0 sm:hidden"
+              aria-label={allFolded ? "Развернуть все разделы" : "Свернуть все разделы"}
+              title={allFolded ? "Развернуть все разделы" : "Свернуть все разделы"}
+              className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-glass-brd text-text-1 hover:text-text-0 sm:hidden"
             >
               {allFolded ? (
-                <ChevronDown aria-hidden className="size-3.5" />
+                <ChevronDown aria-hidden className="size-4" />
               ) : (
-                <ChevronUp aria-hidden className="size-3.5" />
+                <ChevronUp aria-hidden className="size-4" />
               )}
-              {allFolded ? "Развернуть все" : "Свернуть все"}
             </button>
           )}
-          {/* Группировка по важности (VED-51) и по дате (VED-160). Одна пара
-              кнопок на один режим: включив одну, вторая гаснет — вместе они
-              не имеют смысла. Нажатое состояние видно не только рамкой — его
-              называет `aria-pressed`. */}
+          {/* Группировка по дате создания (VED-160) и по важности (VED-51).
+              Одна пара кнопок на один режим: включив одну, вторая гаснет —
+              вместе они не имеют смысла. Нажатое состояние видно не только
+              рамкой — его называет `aria-pressed`. «По дате» стоит первой —
+              так попросил тестировщик. */}
+          <button
+            type="button"
+            aria-pressed={groupMode === "date"}
+            onClick={() => toggleGroupMode("date")}
+            title={
+              groupMode === "date"
+                ? "Карточки собраны по дате создания; перетаскивание пока выключено"
+                : "Собрать карточки раздела по дате создания: новые сверху"
+            }
+            className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
+              groupMode === "date"
+                ? "border-cyan text-text-0"
+                : "border-glass-brd text-text-1 hover:text-text-0"
+            }`}
+          >
+            По дате
+          </button>
           <button
             type="button"
             aria-pressed={groupMode === "priority"}
@@ -601,28 +638,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           </button>
           <button
             type="button"
-            aria-pressed={groupMode === "date"}
-            onClick={() => toggleGroupMode("date")}
-            title={
-              groupMode === "date"
-                ? "Карточки собраны по сроку; перетаскивание пока выключено"
-                : "Собрать карточки раздела по сроку: просроченное и без срока — по краям"
-            }
-            className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
-              groupMode === "date"
-                ? "border-cyan text-text-0"
-                : "border-glass-brd text-text-1 hover:text-text-0"
-            }`}
-          >
-            По дате
-          </button>
-          <button
-            type="button"
             onClick={() => setArchiveOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-glass-brd px-2.5 py-2 text-xs font-semibold text-text-1 hover:text-text-0"
+            aria-label="Архив"
+            title="Архив"
+            className="flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl border border-glass-brd px-2.5 py-2 text-xs font-semibold text-text-1 hover:text-text-0"
           >
-            <Archive aria-hidden className="size-3.5" />
-            Архив
+            <Archive aria-hidden className="size-4 shrink-0" />
+            <span className="hidden sm:inline">Архив</span>
           </button>
           <WorkInvitePanel space={space} onChanged={reload} />
         </div>
@@ -680,9 +702,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       )}
       {groupMode === "date" && (
         <p className="mb-3 text-xs text-text-2">
-          Карточки собраны по сроку. Перетаскивание пока выключено — порядок
-          внутри раздела задаёт срок; перенести карточку в соседний раздел
-          можно стрелками на ней.
+          Карточки собраны по дате создания: новые сверху. Перетаскивание пока
+          выключено — порядок внутри раздела задаёт время создания; перенести
+          карточку в соседний раздел можно стрелками на ней.
         </p>
       )}
 
@@ -1053,7 +1075,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   ))}
 
                 {/* Сгруппированный раздел — тот же список, разложенный по
-                    важности или по сроку: горящее/просроченное сверху,
+                    важности или по дате создания: горящее/свежее сверху,
                     пустые группы не занимают строку. Подпись группы —
                     заголовок третьего уровня под названием раздела:
                     скринридер должен слышать вложенность, а не ровный ряд
@@ -1087,18 +1109,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   </div>
                 ) : groupMode === "date" ? (
                   <div className="flex min-h-[40px] flex-col gap-3">
-                    {groupTasksByDueDate(column.tasks, now).map((group) => (
+                    {groupTasksByCreatedDate(column.tasks, now).map((group) => (
                       <div key={group.bucket}>
                         <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-text-2">
-                          {group.bucket === "overdue" && (
-                            <span
-                              aria-hidden
-                              className="size-1.5 rounded-full bg-magenta"
-                            />
-                          )}
-                          {group.bucket !== "none" && (
-                            <CalendarClock aria-hidden className="size-3.5" />
-                          )}
+                          <History aria-hidden className="size-3.5" />
                           {group.title}
                           <span className="font-normal">
                             {group.tasks.length}

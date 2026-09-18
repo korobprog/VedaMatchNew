@@ -55,6 +55,7 @@ function taskRow(overrides: Partial<WorkTaskRow> = {}): WorkTaskRow {
     labels: [],
     checklist: [],
     _count: { comments: 0, attachments: 0 },
+    createdAt: new Date('2026-09-01T00:00:00.000Z'),
     ...overrides,
   };
 }
@@ -99,6 +100,14 @@ describe('toWorkTaskCard', () => {
       'VM',
     );
     expect(card.labels).toEqual([{ id: 'l1', name: 'срочно', color: 'gold' }]);
+  });
+
+  it('дата создания едет строкой ISO — вид «По дате» группирует по ней', () => {
+    const card = toWorkTaskCard(
+      taskRow({ createdAt: new Date('2026-09-05T08:30:00.000Z') }),
+      'VM',
+    );
+    expect(card.createdAt).toBe('2026-09-05T08:30:00.000Z');
   });
 });
 
