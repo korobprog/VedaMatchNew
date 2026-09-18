@@ -71,6 +71,7 @@ export interface WorkTaskRow {
   labels: Array<{ label: { id: string; name: string; color: string } }>;
   checklist: Array<{ done: boolean }>;
   _count: { comments: number; attachments: number };
+  createdAt: Date;
 }
 
 /**
@@ -99,6 +100,7 @@ export function toWorkTaskCard(
     commentCount: task._count.comments,
     attachmentCount: task._count.attachments,
     hasDescription: task.description.trim().length > 0,
+    createdAt: task.createdAt.toISOString(),
   };
 }
 
