@@ -41,6 +41,10 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // сменилась с `bg2` на `bg0` — прежняя пара `bg2` на контейнере `bg1`
   // почти не отличалась глазом (раунд оценки 004, дефект 8).
   { name: 'активный сегмент «Люди»', text: 'text0', surface: 'bg0' },
+  // Секция «Проверить обновление» (VED-176): мета карточки и подсказки —
+  // `text1` на непрозрачной карточке `bg1`, заголовок — `text0` на `bg1`.
+  { name: 'мета карточки обновления', text: 'text1', surface: 'bg1' },
+  { name: 'заголовок карточки обновления', text: 'text0', surface: 'bg1' },
 ];
 
 describe.each([
@@ -59,6 +63,10 @@ describe.each([
 const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Palette }[] = [
   { name: 'иконка значка «Преданный» на кружке cyan', graphic: 'bg0', surface: 'cyan' },
   { name: 'иконка значка «Фото проверено» на кружке gold', graphic: 'bg0', surface: 'gold' },
+  // Полоса прогресса секции самообновления (`self-update-section.tsx`, VED-176):
+  // заполнение на дорожке `bg2` — magenta при скачивании, cyan при проверке файла.
+  { name: 'заполнение прогресса скачивания на дорожке', graphic: 'magenta', surface: 'bg2' },
+  { name: 'заполнение прогресса проверки файла на дорожке', graphic: 'cyan', surface: 'bg2' },
 ];
 
 describe.each([

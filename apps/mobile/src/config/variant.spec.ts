@@ -7,9 +7,28 @@ describe('resolveVariant', () => {
       channel: 'site',
       apiOrigin: 'https://api.vedamatch.ru',
       webOrigin: 'https://vedamatch.ru',
+      downloadBaseUrl: null,
       selfUpdate: true,
       pushProviders: ['rustore', 'fcm'],
     });
+  });
+
+  it('без APP_DOWNLOAD_BASE_URL адреса раздачи нет — сайт не подставляется молча (он отвечает 307 на лендинг)', () => {
+    expect(resolveVariant({ APP_CONTOUR: 'com' }).downloadBaseUrl).toBeNull();
+    expect(resolveVariant({ APP_DOWNLOAD_BASE_URL: '   ' }).downloadBaseUrl).toBeNull();
+  });
+
+  it('APP_DOWNLOAD_BASE_URL переопределяет адрес раздачи манифеста отдельно от сайта', () => {
+    const variant = resolveVariant({ APP_DOWNLOAD_BASE_URL: 'https://s3.example.com/vedamatch-bucket/' });
+    expect(variant.downloadBaseUrl).toBe('https://s3.example.com/vedamatch-bucket');
+    // Путь у этого адреса разрешён (в отличие от APP_API_ORIGIN/APP_WEB_ORIGIN) —
+    // публичный адрес S3-хранилища обычно устроен как host/bucket-name.
+    expect(variant.webOrigin).toBe('https://vedamatch.ru');
+  });
+
+  it('падает на APP_DOWNLOAD_BASE_URL без http/https', () => {
+    expect(() => resolveVariant({ APP_DOWNLOAD_BASE_URL: 'ftp://s3.example.com' })).toThrow('нужен http или https');
+    expect(() => resolveVariant({ APP_DOWNLOAD_BASE_URL: 'не-адрес' })).toThrow('не является адресом');
   });
 
   it('глобальная сборка для магазина не обновляет себя и шлёт пуши через FCM', () => {

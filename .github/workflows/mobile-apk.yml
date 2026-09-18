@@ -23,9 +23,19 @@ on:
         description: Опубликовать APK и latest.json в S3 (только channel=site)
         type: boolean
         default: false
+      test_folder:
+        description: Публиковать в тестовую папку test/ (сайт и пользователи её не видят)
+        type: boolean
+        default: false
+      version_code_base:
+        description: База versionCode (versionCode = база + номер запуска)
+        type: string
+        default: '1000'
 
 concurrency:
-  group: mobile-apk-${{ github.ref }}-${{ inputs.contour }}-${{ inputs.channel }}
+  # test_folder в группе: тестовый прогон с той же ветки не должен отменять
+  # идущую боевую публикацию посреди загрузки в S3 (cancel-in-progress).
+  group: mobile-apk-${{ github.ref }}-${{ inputs.contour }}-${{ inputs.channel }}-${{ inputs.test_folder && 'test' || 'prod' }}
   cancel-in-progress: true
 
 jobs:
@@ -37,16 +47,11 @@ jobs:
       APP_CONTOUR: ${{ inputs.contour }}
       APP_CHANNEL: ${{ inputs.channel }}
       APP_VERSION_SHA: ${{ github.sha }}
+      VERSION_CODE_BASE: ${{ inputs.version_code_base }}
+      INPUT_PUBLISH: ${{ inputs.publish }}
+      INPUT_TEST_FOLDER: ${{ inputs.test_folder }}
     steps:
       - uses: actions/checkout@v4
-
-      # run_number растёт на каждый запуск воркфлоу (включая ручные) — этого
-      # достаточно для монотонности, требуемой самообновлением с сайта.
-      # Смещение — чтобы не начинать снова с единицы поверх версий, уже
-      # выпущенных этим способом; см. apps/mobile/src/config/app-version.ts.
-      # Считается в шаге: выражения GitHub `${{ }}` не умеют арифметику.
-      - name: Version code
-        run: echo "APP_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -56,6 +61,25 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+
+      # versionCode = база + run_number (run_number растёт на каждый запуск,
+      # включая ручные, — монотонность для самообновления с сайта), и адрес
+      # раздачи, в который смотрит клиент самообновления (variant.ts:
+      # downloadBaseUrl). Чистая логика с тестом — scripts/release-version.mjs:
+      # база только десятичная без ведущего нуля (без восьмеричной ловушки
+      # bash), база ≠ 1000 при publish=true без test_folder — ошибка (иначе
+      # сайт уедет на большой versionCode без пути назад), адрес только для
+      # channel=site, хвостовой «/» секрета срезается до склейки с /test.
+      - name: Version code
+        working-directory: apps/mobile
+        env:
+          S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+        run: |
+          node --test scripts/release-version.test.mjs
+          # Сначала во временный файл: при ошибке валидации в $GITHUB_ENV не
+          # попадёт ничего, а шаг упадёт с понятным текстом.
+          node scripts/release-version.mjs > "$RUNNER_TEMP/release-version.env"
+          cat "$RUNNER_TEMP/release-version.env" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -167,7 +191,7 @@ jobs:
           # номер пакета плюс первые семь символов sha сборки.
           VERSION_NAME="$(node -p "require('./package.json').version")+${GITHUB_SHA:0:7}"
 
-          KEY_PREFIX="mobile/android/${{ inputs.contour }}-${{ inputs.channel }}"
+          KEY_PREFIX="${{ inputs.test_folder && 'test/' || '' }}mobile/android/${{ inputs.contour }}-${{ inputs.channel }}"
           APK_KEY="$KEY_PREFIX/vedamatch-$VERSION_NAME-$APP_VERSION_CODE.apk"
           MANIFEST_KEY="$KEY_PREFIX/latest.json"
           PUBLIC_APK_URL="${S3_PUBLIC_URL%/}/$APK_KEY"

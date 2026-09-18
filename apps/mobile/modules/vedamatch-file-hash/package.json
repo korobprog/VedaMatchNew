@@ -1,0 +1,8 @@
+{
+  "name": "vedamatch-file-hash",
+  "version": "1.0.0",
+  "description": "Свой Expo-модуль: потоковый SHA-256 файла через java.security.MessageDigest в фоновом потоке — проверка скачанного APK самообновления (VED-176). Только Android.",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -1,0 +1,238 @@
+import {
+  FILE_CORRUPTED_MESSAGE,
+  IDLE_DOWNLOAD_STATE,
+  isDownloadActive,
+  reduceDownloadState,
+  type DownloadState,
+} from './download-progress-state';
+
+describe('reduceDownloadState — полный happy path', () => {
+  it('idle → confirm-metered → downloading → progress → verifying → ready → installing', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    expect(state.phase).toBe('confirm-metered');
+
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    expect(state.phase).toBe('downloading');
+    expect(state.bytesWritten).toBe(0);
+
+    state = reduceDownloadState(state, { type: 'progress', bytesWritten: 20, totalBytes: 100 });
+    expect(state.phase).toBe('downloading');
+    expect(state.bytesWritten).toBe(20);
+    expect(state.totalBytes).toBe(100);
+
+    state = reduceDownloadState(state, { type: 'progress', bytesWritten: 100, totalBytes: 100 });
+    expect(state.bytesWritten).toBe(100);
+
+    state = reduceDownloadState(state, { type: 'download-complete', localUri: 'file:///cache/vedamatch.apk' });
+    expect(state.phase).toBe('verifying');
+    expect(state.localUri).toBe('file:///cache/vedamatch.apk');
+
+    state = reduceDownloadState(state, { type: 'hash-verified' });
+    expect(state.phase).toBe('ready');
+    expect(state.localUri).toBe('file:///cache/vedamatch.apk');
+
+    state = reduceDownloadState(state, { type: 'install-started' });
+    expect(state.phase).toBe('installing');
+  });
+});
+
+describe('reduceDownloadState — Wi-Fi проходит confirm-metered мгновенно', () => {
+  it('start сразу за network-metered-confirmed без промежуточного экрана диалога', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    expect(state.phase).toBe('downloading');
+  });
+});
+
+describe('reduceDownloadState — отмена на каждом промежуточном состоянии', () => {
+  const startedConfirm = () => reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+  const downloading = () => reduceDownloadState(startedConfirm(), { type: 'network-metered-confirmed' });
+  const verifying = () =>
+    reduceDownloadState(downloading(), { type: 'download-complete', localUri: 'file:///cache/a.apk' });
+  const ready = () => reduceDownloadState(verifying(), { type: 'hash-verified' });
+
+  it('cancel в confirm-metered — cancelled', () => {
+    expect(reduceDownloadState(startedConfirm(), { type: 'cancel' }).phase).toBe('cancelled');
+  });
+
+  it('cancel в downloading — cancelled, localUri сброшен', () => {
+    const cancelled = reduceDownloadState(downloading(), { type: 'cancel' });
+    expect(cancelled.phase).toBe('cancelled');
+    expect(cancelled.localUri).toBeNull();
+  });
+
+  it('cancel в verifying — cancelled', () => {
+    expect(reduceDownloadState(verifying(), { type: 'cancel' }).phase).toBe('cancelled');
+  });
+
+  it('cancel в ready — cancelled (файл готов, но человек передумал устанавливать)', () => {
+    expect(reduceDownloadState(ready(), { type: 'cancel' }).phase).toBe('cancelled');
+  });
+
+  it('cancel в idle — no-op, состояние не меняется (даже ссылкой)', () => {
+    expect(reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'cancel' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+
+  it('cancel в installing — no-op: системный установщик уже открыт, отменить нельзя', () => {
+    const installing = reduceDownloadState(ready(), { type: 'install-started' });
+    expect(reduceDownloadState(installing, { type: 'cancel' })).toBe(installing);
+  });
+
+  it('cancel в cancelled — no-op, повторная отмена не ломает состояние', () => {
+    const cancelled = reduceDownloadState(downloading(), { type: 'cancel' });
+    expect(reduceDownloadState(cancelled, { type: 'cancel' })).toBe(cancelled);
+  });
+});
+
+describe('reduceDownloadState — hash-mismatch', () => {
+  it('возвращает в error, очищает localUri и ставит понятное русское сообщение', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    state = reduceDownloadState(state, { type: 'download-complete', localUri: 'file:///cache/bad.apk' });
+    const afterMismatch = reduceDownloadState(state, { type: 'hash-mismatch' });
+
+    expect(afterMismatch.phase).toBe('error');
+    expect(afterMismatch.localUri).toBeNull();
+    expect(afterMismatch.errorMessage).toBe(FILE_CORRUPTED_MESSAGE);
+  });
+
+  it('hash-mismatch вне verifying — no-op', () => {
+    expect(reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'hash-mismatch' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+});
+
+describe('reduceDownloadState — защита от гонки: progress после cancel игнорируется', () => {
+  it('cancelled + progress — состояние не меняется, включая ссылку на объект', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    state = reduceDownloadState(state, { type: 'progress', bytesWritten: 10, totalBytes: 100 });
+    const cancelled = reduceDownloadState(state, { type: 'cancel' });
+
+    const afterLateProgress = reduceDownloadState(cancelled, {
+      type: 'progress',
+      bytesWritten: 99,
+      totalBytes: 100,
+    });
+    expect(afterLateProgress).toBe(cancelled);
+  });
+
+  it('progress в idle (закачка не начата) — тоже no-op', () => {
+    const afterProgress = reduceDownloadState(IDLE_DOWNLOAD_STATE, {
+      type: 'progress',
+      bytesWritten: 1,
+      totalBytes: 100,
+    });
+    expect(afterProgress).toBe(IDLE_DOWNLOAD_STATE);
+  });
+});
+
+describe('reduceDownloadState — ошибка сети во время закачки', () => {
+  it('downloading + error — error с сообщением, localUri пуст', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    const failed = reduceDownloadState(state, { type: 'error', message: 'Нет связи с сервером.' });
+    expect(failed.phase).toBe('error');
+    expect(failed.errorMessage).toBe('Нет связи с сервером.');
+    expect(failed.localUri).toBeNull();
+  });
+
+  it('error после cancel не переоткрывает отменённую закачку', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    const cancelled = reduceDownloadState(state, { type: 'cancel' });
+    const afterLateError = reduceDownloadState(cancelled, { type: 'error', message: 'опоздавшая ошибка' });
+    expect(afterLateError).toBe(cancelled);
+  });
+});
+
+describe('reduceDownloadState — повторный тап «Скачать» не перезапускает активную закачку', () => {
+  it('start во время downloading — no-op', () => {
+    let state: DownloadState = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    expect(reduceDownloadState(state, { type: 'start' })).toBe(state);
+  });
+
+  it('start после error — можно начать заново (новый confirm-metered)', () => {
+    let state = reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'start' });
+    state = reduceDownloadState(state, { type: 'network-metered-confirmed' });
+    state = reduceDownloadState(state, { type: 'error', message: 'сбой' });
+    const restarted = reduceDownloadState(state, { type: 'start' });
+    expect(restarted.phase).toBe('confirm-metered');
+    expect(restarted.errorMessage).toBeNull();
+  });
+});
+
+describe('reduceDownloadState — прогресс проверки файла (verify-progress)', () => {
+  const verifying: DownloadState = {
+    ...IDLE_DOWNLOAD_STATE,
+    phase: 'verifying',
+    bytesWritten: 100,
+    totalBytes: 100,
+    localUri: 'file:///cache/vedamatch.apk',
+  };
+
+  it('download-complete начинает проверку с нуля прохешированных байт', () => {
+    const downloading: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'downloading', bytesVerified: 77 };
+    const state = reduceDownloadState(downloading, { type: 'download-complete', localUri: 'file:///x.apk' });
+    expect(state.bytesVerified).toBe(0);
+  });
+
+  it('verifying + verify-progress — растёт bytesVerified, остальное не трогается', () => {
+    const state = reduceDownloadState(verifying, { type: 'verify-progress', bytesVerified: 40 });
+    expect(state).toEqual({ ...verifying, bytesVerified: 40 });
+  });
+
+  it('verify-progress после отмены проверки — no-op (последний кусок отчитался поздно)', () => {
+    const cancelled = reduceDownloadState(verifying, { type: 'cancel' });
+    expect(cancelled.phase).toBe('cancelled');
+    expect(reduceDownloadState(cancelled, { type: 'verify-progress', bytesVerified: 90 })).toBe(cancelled);
+  });
+
+  it('verify-progress во время закачки — no-op, не путается с прогрессом скачивания', () => {
+    const downloading: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'downloading', bytesWritten: 10, totalBytes: 100 };
+    expect(reduceDownloadState(downloading, { type: 'verify-progress', bytesVerified: 50 })).toBe(downloading);
+  });
+});
+
+describe('reduceDownloadState — возврат из системного установщика', () => {
+  const installing: DownloadState = {
+    ...IDLE_DOWNLOAD_STATE,
+    phase: 'installing',
+    bytesWritten: 100,
+    totalBytes: 100,
+    localUri: 'file:///cache/vedamatch.apk',
+  };
+
+  it('installing + install-returned — снова ready с тем же проверенным файлом (можно нажать «Установить» ещё раз)', () => {
+    expect(reduceDownloadState(installing, { type: 'install-returned' })).toEqual({ ...installing, phase: 'ready' });
+  });
+
+  it('install-returned вне installing — no-op', () => {
+    const ready: DownloadState = { ...installing, phase: 'ready' };
+    expect(reduceDownloadState(ready, { type: 'install-returned' })).toBe(ready);
+    expect(reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'install-returned' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+});
+
+describe('reduceDownloadState — reset перед новой ручной проверкой', () => {
+  it('ошибка и отмена сбрасываются в idle — карточка снова предлагает «Скачать»', () => {
+    const failed: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'error', errorMessage: 'нет сети' };
+    const cancelled: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'cancelled' };
+    expect(reduceDownloadState(failed, { type: 'reset' })).toBe(IDLE_DOWNLOAD_STATE);
+    expect(reduceDownloadState(cancelled, { type: 'reset' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+
+  it.each(['confirm-metered', 'downloading', 'verifying', 'ready', 'installing'] as const)(
+    'активная фаза %s не сбрасывается',
+    (phase) => {
+      const state: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase, localUri: 'file:///x.apk' };
+      expect(reduceDownloadState(state, { type: 'reset' })).toBe(state);
+      expect(isDownloadActive(phase)).toBe(true);
+    },
+  );
+
+  it('idle, error и cancelled — не активные фазы', () => {
+    expect(isDownloadActive('idle')).toBe(false);
+    expect(isDownloadActive('error')).toBe(false);
+    expect(isDownloadActive('cancelled')).toBe(false);
+  });
+});
