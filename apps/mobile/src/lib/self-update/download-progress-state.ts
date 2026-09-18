@@ -56,11 +56,24 @@ export type DownloadEvent =
   /** Системный установщик закрылся, а приложение живо — человек отказался или установка не удалась. */
   | { type: 'install-returned' }
   | { type: 'cancel' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** Новая ручная проверка: забыть закончившуюся ошибкой/отменённую попытку. */
+  | { type: 'reset' };
 
 export const FILE_CORRUPTED_MESSAGE = 'Файл повреждён при скачивании, попробуйте ещё раз';
 
 const BUSY_PHASES: readonly DownloadPhase[] = ['downloading', 'verifying', 'installing'];
+/**
+ * Фазы, в которых идёт работа или лежит проверенный файл, — новая проверка
+ * обновления их не сбрасывает (и строка «Проверить обновление» в это время
+ * не запускает её вовсе).
+ */
+export const ACTIVE_PHASES: readonly DownloadPhase[] = ['confirm-metered', 'downloading', 'verifying', 'ready', 'installing'];
+
+export function isDownloadActive(phase: DownloadPhase): boolean {
+  return ACTIVE_PHASES.includes(phase);
+}
+
 const NON_CANCELLABLE_PHASES: readonly DownloadPhase[] = ['idle', 'cancelled', 'error', 'installing'];
 
 export function reduceDownloadState(state: DownloadState, event: DownloadEvent): DownloadState {
@@ -121,6 +134,10 @@ export function reduceDownloadState(state: DownloadState, event: DownloadEvent):
       // Отменённую закачку не переводим в ошибку — «Отмена» уже финальна.
       if (state.phase === 'cancelled') return state;
       return { ...state, phase: 'error', errorMessage: event.message, localUri: null };
+
+    case 'reset':
+      if (isDownloadActive(state.phase) || state === IDLE_DOWNLOAD_STATE) return state;
+      return IDLE_DOWNLOAD_STATE;
 
     default:
       return state;

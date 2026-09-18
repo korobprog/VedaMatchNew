@@ -1,6 +1,7 @@
 import {
   FILE_CORRUPTED_MESSAGE,
   IDLE_DOWNLOAD_STATE,
+  isDownloadActive,
   reduceDownloadState,
   type DownloadState,
 } from './download-progress-state';
@@ -209,5 +210,29 @@ describe('reduceDownloadState — возврат из системного ус�
     const ready: DownloadState = { ...installing, phase: 'ready' };
     expect(reduceDownloadState(ready, { type: 'install-returned' })).toBe(ready);
     expect(reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'install-returned' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+});
+
+describe('reduceDownloadState — reset перед новой ручной проверкой', () => {
+  it('ошибка и отмена сбрасываются в idle — карточка снова предлагает «Скачать»', () => {
+    const failed: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'error', errorMessage: 'нет сети' };
+    const cancelled: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'cancelled' };
+    expect(reduceDownloadState(failed, { type: 'reset' })).toBe(IDLE_DOWNLOAD_STATE);
+    expect(reduceDownloadState(cancelled, { type: 'reset' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+
+  it.each(['confirm-metered', 'downloading', 'verifying', 'ready', 'installing'] as const)(
+    'активная фаза %s не сбрасывается',
+    (phase) => {
+      const state: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase, localUri: 'file:///x.apk' };
+      expect(reduceDownloadState(state, { type: 'reset' })).toBe(state);
+      expect(isDownloadActive(phase)).toBe(true);
+    },
+  );
+
+  it('idle, error и cancelled — не активные фазы', () => {
+    expect(isDownloadActive('idle')).toBe(false);
+    expect(isDownloadActive('error')).toBe(false);
+    expect(isDownloadActive('cancelled')).toBe(false);
   });
 });

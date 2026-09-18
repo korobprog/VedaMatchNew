@@ -79,7 +79,12 @@ export function useSelfUpdate() {
       if (manual) setCheckState({ kind: 'check-error', reason: 'version-unknown' });
       return;
     }
-    if (manual) setCheckState({ kind: 'checking' });
+    if (manual) {
+      // Прошлая попытка закончилась ошибкой или отменой — новая проверка
+      // начинает с чистой карточки (активную закачку reset не трогает).
+      dispatch({ type: 'reset' });
+      setCheckState({ kind: 'checking' });
+    }
 
     const result = await fetchAppManifest(current);
     if (result.kind !== 'ok') {
@@ -99,7 +104,7 @@ export function useSelfUpdate() {
     if (!manual && !autoCheckReveals(decision)) return;
     manifestRef.current = result.manifest;
     setCheckState({ kind: 'checked', decision });
-  }, []);
+  }, [dispatch]);
 
   const checkForUpdate = useCallback(() => runCheck(true), [runCheck]);
 

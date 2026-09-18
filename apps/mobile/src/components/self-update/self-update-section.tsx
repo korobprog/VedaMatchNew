@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import { checkFailureText } from '@/lib/self-update/check-messages';
+import { isDownloadActive } from '@/lib/self-update/download-progress-state';
 import { formatApkSizeMb, formatBuildDate, percentOf } from '@/lib/self-update/format';
 import type { AppManifest } from '@/lib/self-update/manifest-validation';
 import { useSelfUpdate } from '@/lib/self-update/use-self-update';
@@ -27,7 +28,7 @@ export function SelfUpdateSection() {
   const update = useSelfUpdate();
 
   const busy = update.checkState.kind === 'checking';
-  const downloadBusy = update.downloadState.phase !== 'idle' && update.downloadState.phase !== 'cancelled';
+  const downloadBusy = isDownloadActive(update.downloadState.phase);
 
   const onPressRow = useCallback(() => {
     if (!downloadBusy) void update.checkForUpdate();
