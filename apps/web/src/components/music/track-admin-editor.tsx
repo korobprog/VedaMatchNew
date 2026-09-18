@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { MusicArtistDto, MusicTrackDetailDto } from "@vedamatch/shared";
 import { updateMusicTrack } from "@/lib/music-admin-client-api";
 import {
@@ -9,6 +9,10 @@ import {
   type MusicTrackEditState,
 } from "@/lib/music-track-edit";
 import { MusicCoverField } from "./cover-field";
+import {
+  MUSIC_LYRICS_EDIT_PARAM,
+  wantsLyricsEdit,
+} from "./player/lyrics-edit-link";
 
 const fieldClass =
   "w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0";
@@ -33,6 +37,16 @@ function stateOf(track: MusicTrackDetailDto): MusicTrackEditState {
  *
  * Свёрнуто по умолчанию: карточку открывают слушать, и форма на полэкрана
  * мешала бы самой редакции.
+ *
+ * Открывается и параметром `?edit=lyrics` в адресе (VED-269), не только
+ * своей кнопкой — так на неё ведёт кнопка-карандаш в панели текста плеера
+ * (`lyrics-panel.tsx`): та смонтирована глобально и не имеет права
+ * импортировать эту форму напрямую (компонент портала не может
+ * импортировать компоненты Музыки), а ссылка — может. Тот же приём, что у
+ * шторки «В плейлист» и параметра `?add=1`. При таком открытии форма ещё и
+ * прокручивает к себе страницу и ставит фокус в поле «Текст бхаджана» —
+ * человек пришёл сюда именно за ним, а не разглядывать название записи
+ * сверху.
  */
 export function MusicTrackAdminEditor({
   track,
@@ -42,8 +56,14 @@ export function MusicTrackAdminEditor({
   artists: MusicArtistDto[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const fromUrl = wantsLyricsEdit(params);
   const initial = stateOf(track);
-  const [open, setOpen] = useState(false);
+  // Та же схема, что у `MusicAddToPlaylist`: открытость выводится из
+  // адреса или собственной кнопки, а не переносится в состояние эффектом.
+  const [openedByButton, setOpenedByButton] = useState(false);
+  const open = openedByButton || fromUrl;
   const [draft, setDraft] = useState<MusicTrackEditState>(initial);
   /** `undefined` — картинку не трогали, см. `buildTrackEditPatch`. */
   const [coverKey, setCoverKey] = useState<string | null | undefined>(
@@ -52,20 +72,52 @@ export function MusicTrackAdminEditor({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const lyricsFieldRef = useRef<HTMLTextAreaElement | null>(null);
 
   const patch = buildTrackEditPatch(initial, draft, coverKey);
   const changed = Object.keys(patch).length > 0;
+
+  // Пришли по ссылке из панели текста плеера — форма сама раскрыта видимой
+  // строкой ниже (`open`), а сюда, в поле «Текст бхаджана», нужно ещё и
+  // докрутить страницу и поставить фокус: человек искал не саму запись, а
+  // конкретно это поле.
+  useEffect(() => {
+    if (!fromUrl) return;
+    lyricsFieldRef.current?.scrollIntoView({ block: "center" });
+    lyricsFieldRef.current?.focus();
+    // Зависимость только от `fromUrl` — срабатывает один раз на переход по
+    // ссылке, а не на каждый рендер: иначе любой ввод в поле (он тоже
+    // меняет рендер формы) уводил бы фокус с текущей позиции курсора
+    // обратно в начало поля.
+  }, [fromUrl]);
 
   function set<K extends keyof MusicTrackEditState>(key: K, value: string) {
     setDraft((was) => ({ ...was, [key]: value }));
     setSaved(false);
   }
 
+  // Общее закрытие для «Отмена» и после успешного сохранения. Снимает
+  // параметр из адреса, если форму открыла ссылка из панели текста плеера:
+  // иначе «назад» в браузере возвращал бы форму раскрытой, а обновление
+  // страницы открывало бы её заново — та же причина, что и в
+  // `MusicAddToPlaylist`.
+  function closeForm() {
+    setOpenedByButton(false);
+    if (fromUrl) {
+      const rest = new URLSearchParams(params.toString());
+      rest.delete(MUSIC_LYRICS_EDIT_PARAM);
+      const query = rest.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
+    }
+  }
+
   function cancel() {
     setDraft(stateOf(track));
     setCoverKey(undefined);
     setError(null);
-    setOpen(false);
+    closeForm();
   }
 
   async function save() {
@@ -75,7 +127,7 @@ export function MusicTrackAdminEditor({
       await updateMusicTrack(track.id, patch);
       setCoverKey(undefined);
       setSaved(true);
-      setOpen(false);
+      closeForm();
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не удалось сохранить");
@@ -91,7 +143,7 @@ export function MusicTrackAdminEditor({
           type="button"
           onClick={() => {
             setDraft(stateOf(track));
-            setOpen(true);
+            setOpenedByButton(true);
           }}
           className="inline-flex h-9 items-center gap-2 rounded-xl border border-glass-brd px-3 text-sm font-semibold text-text-1 hover:text-text-0"
         >
@@ -179,6 +231,10 @@ export function MusicTrackAdminEditor({
           <label key={key} className="block">
             <span className="mb-1 block text-xs text-text-2">{label}</span>
             <textarea
+              // Только у «Текст бхаджана»: сюда докручивает и ставит фокус
+              // переход по ссылке из панели плеера — остальные два поля
+              // этой ссылкой не адресуются.
+              ref={key === "lyrics" ? lyricsFieldRef : undefined}
               value={draft[key]}
               onChange={(event) => set(key, event.target.value)}
               rows={8}

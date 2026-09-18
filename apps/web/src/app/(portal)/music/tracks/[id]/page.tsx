@@ -175,11 +175,17 @@ export default async function MusicTrackPage({
         </div>
       </div>
 
+      {/* `Suspense` обязателен: внутри `useSearchParams` (VED-269, открытие
+          по `?edit=lyrics` из панели плеера), без границы Next роняет
+          сборку страницы на предрендере — та же причина, что у
+          `MusicAddToPlaylist` выше. */}
       {canEdit && (
-        <MusicTrackAdminEditor
-          track={track}
-          artists={adminArtists?.items ?? []}
-        />
+        <Suspense fallback={<div className="mt-6 h-9" />}>
+          <MusicTrackAdminEditor
+            track={track}
+            artists={adminArtists?.items ?? []}
+          />
+        </Suspense>
       )}
 
       <MusicTrackLyrics lyrics={track.lyrics} />
