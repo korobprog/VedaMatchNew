@@ -26,6 +26,12 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # Чистая логика VED-215 (разбор путей PR → карточка «ДОГНАТЬ»):
+      # node:test без зависимостей, ловит поломку на PR, а не только при
+      # пуше в main, когда воркфлоу web-app-parity.yml уже поздно чинить.
+      - name: Test web-app-parity
+        run: node --test scripts/web-app-parity/*.test.mjs
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
