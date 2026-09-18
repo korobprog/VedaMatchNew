@@ -96,6 +96,7 @@ jobs:
           pnpm --filter @vedamatch/mobile lint
           pnpm --filter @vedamatch/mobile test
           pnpm --filter @vedamatch/mobile test:gradle-release-signing
+          pnpm --filter @vedamatch/mobile test:gradle-architectures
           pnpm --filter @vedamatch/mobile test:app-manifest
 
       # Настройки Firebase для пушей FCM лежат в секрете репозитория, а не в

@@ -64,6 +64,7 @@
     "test": "jest",
     "test:brand-geometry": "node --test scripts/brand-geometry.test.mjs",
     "test:gradle-release-signing": "node --test plugins/gradle-release-signing.test.mjs",
+    "test:gradle-architectures": "node --test plugins/gradle-architectures.test.mjs",
     "test:app-manifest": "node --test scripts/app-manifest.test.mjs",
     "test:release-version": "node --test scripts/release-version.test.mjs",
     "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
