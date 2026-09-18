@@ -218,6 +218,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // импортом функции: ExpoConfig.plugins типизирован только под путь к
       // модулю (@expo/config-types), Expo резолвит и вызывает его сам.
       './plugins/with-release-signing.js',
+      // Нативный код только под ARM-телефоны: x86/x86_64 (эмуляторы,
+      // Chromebook) добавляли к APK с сайта ~71 МБ из 155. Под эмулятор —
+      // ANDROID_ARCHITECTURES=x86_64, см. plugins/gradle-architectures.js.
+      './plugins/with-android-architectures.js',
     ],
     // Веб-версия (ios.vedamatch.com): одностраничная сборка `expo export
     // --platform web`. Шаблон страницы, манифест, иконки и service worker —

@@ -26,6 +26,7 @@
 | `APP_VERSION_CODE` | `versionCode` Android, целое > 0; без неё `1`. Обязан расти от сборки к сборке — см. «versionCode и versionName» ниже |
 | `APP_VERSION_SHA` | sha коммита, первые 7 символов дописываются к `versionName` |
 | `APP_DOWNLOAD_BASE_URL` | Публичный адрес раздачи самообновления (канал `site`), тот же, что `S3_PUBLIC_URL` портала. Приложение ищет манифест по `<APP_DOWNLOAD_BASE_URL>/mobile/android/<контур>-<канал>/latest.json`. Путь в адресе разрешён (`https://host/bucket`), хвостовой слэш срезается. **Без неё запасного адреса нет**: сайт этот путь не раздаёт (`vedamatch.ru/mobile/...` отвечает 307 на лендинг), поэтому секция «Проверить обновление» так и пишет — «Адрес обновлений не настроен в этой сборке». В CI берётся из секрета `S3_PUBLIC_URL`, только для `channel=site` |
+| `ANDROID_ARCHITECTURES` | Процессоры, под которые собирается нативный код, через запятую. По умолчанию `armeabi-v7a,arm64-v8a` — все телефоны; x86/x86_64 нужны только эмулятору и Chromebook и добавляли к APK ~71 МБ. Для эмулятора: `ANDROID_ARCHITECTURES=x86_64` перед `expo prebuild`. Неизвестное имя — ошибка сборки (`plugins/gradle-architectures.js`) |
 
 Проверить самообновление, не трогая файлы, которые видят пользователи сайта:
 собрать с `APP_DOWNLOAD_BASE_URL=<S3_PUBLIC_URL>/test` — тогда приложение
