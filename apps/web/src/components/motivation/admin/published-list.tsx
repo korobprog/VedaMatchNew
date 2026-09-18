@@ -25,6 +25,7 @@ import {
 import { CategorySelect } from "./category-select";
 import { DeletePostConfirm } from "./delete-post-button";
 import { formatAttribution } from "./quote-details";
+import { ScrollNavButtons } from "./scroll-nav-buttons";
 import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
@@ -362,6 +363,10 @@ export function MotivationPublishedList({
           ))}
         </ul>
       )}
+
+      {/* VED-265: длинную ленту редакции быстрее пролистать кнопками у
+          края, чем крутить руками. */}
+      <ScrollNavButtons />
     </>
   );
 }
