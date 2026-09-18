@@ -73,4 +73,31 @@ describe('app.config', () => {
     expect(nativeCallsIndex).toBeGreaterThanOrEqual(0);
     expect(nativeCallsIndex).toBeLessThan(notificationsIndex);
   });
+
+  // VED-176: самообновление ставит APK через системный установщик — нужно
+  // REQUEST_INSTALL_PACKAGES, но только там, где секция вообще есть.
+  describe('REQUEST_INSTALL_PACKAGES (VED-176)', () => {
+    const previousChannel = process.env.APP_CHANNEL;
+
+    afterEach(() => {
+      if (previousChannel === undefined) delete process.env.APP_CHANNEL;
+      else process.env.APP_CHANNEL = previousChannel;
+    });
+
+    it('канал site (по умолчанию) — разрешение объявлено', () => {
+      delete process.env.APP_CHANNEL;
+      const siteConfig = appConfig({ config: {} } as never);
+      expect(siteConfig.android?.permissions ?? []).toEqual(
+        expect.arrayContaining(['android.permission.REQUEST_INSTALL_PACKAGES']),
+      );
+    });
+
+    it('канал store — разрешения нет вовсе (не только скрытая кнопка)', () => {
+      process.env.APP_CHANNEL = 'store';
+      const storeConfig = appConfig({ config: {} } as never);
+      expect(storeConfig.android?.permissions ?? []).not.toEqual(
+        expect.arrayContaining(['android.permission.REQUEST_INSTALL_PACKAGES']),
+      );
+    });
+  });
 });

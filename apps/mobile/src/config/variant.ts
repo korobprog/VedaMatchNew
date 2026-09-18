@@ -19,6 +19,18 @@ export interface AppVariant {
   channel: Channel;
   apiOrigin: string;
   webOrigin: string;
+  /**
+   * Публичный адрес раздачи `latest.json`/APK для самообновления (VED-176,
+   * `self-update-client.ts`). По умолчанию совпадает с `webOrigin`, но на
+   * проде манифест реально лежит на отдельном домене S3-хранилища портала
+   * (`APP_DOWNLOAD_BASE_URL` контейнера `web`, см. `.env.example` и
+   * `portal/docker-compose.dokploy.yml` — по умолчанию берёт `S3_PUBLIC_URL`):
+   * тот же адрес нужно передать сюда переменной `APP_DOWNLOAD_BASE_URL` при
+   * сборке приложения, иначе клиент будет стучаться в путь на `vedamatch.ru`,
+   * которого там нет — сайт читает манифест из S3 только на своём сервере,
+   * страницы `/app` наружу этот URL не отдают.
+   */
+  downloadBaseUrl: string;
   selfUpdate: boolean;
   /** Порядок важен: первый провайдер основной, остальные запасные. */
   pushProviders: PushProvider[];
@@ -76,15 +88,38 @@ function originOverride(name: string, raw: string | undefined): string | null {
   return url.origin;
 }
 
+/**
+ * Адрес раздачи манифеста самообновления (`APP_DOWNLOAD_BASE_URL`): в
+ * отличие от `originOverride` выше, путь разрешён — публичный адрес
+ * S3-совместимого хранилища часто устроен как `https://host/bucket-name`, а
+ * не голый origin. Проверяем только протокол и то, что это вообще адрес.
+ */
+function publicBaseUrlOverride(name: string, raw: string | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name}="${value}" не является адресом`);
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`${name}="${value}": нужен http или https`);
+  }
+  return value.replace(/\/+$/, '');
+}
+
 export function resolveVariant(env: VariantEnv): AppVariant {
   const contour = pick('APP_CONTOUR', env.APP_CONTOUR, ['ru', 'com'], 'ru');
   const channel = pick('APP_CHANNEL', env.APP_CHANNEL, ['site', 'store'], 'site');
+  const webOrigin = originOverride('APP_WEB_ORIGIN', env.APP_WEB_ORIGIN) ?? ORIGINS[contour].web;
 
   return {
     contour,
     channel,
     apiOrigin: originOverride('APP_API_ORIGIN', env.APP_API_ORIGIN) ?? ORIGINS[contour].api,
-    webOrigin: originOverride('APP_WEB_ORIGIN', env.APP_WEB_ORIGIN) ?? ORIGINS[contour].web,
+    webOrigin,
+    downloadBaseUrl: publicBaseUrlOverride('APP_DOWNLOAD_BASE_URL', env.APP_DOWNLOAD_BASE_URL) ?? webOrigin,
     selfUpdate: channel === 'site',
     pushProviders: [...PUSH[contour]],
   };

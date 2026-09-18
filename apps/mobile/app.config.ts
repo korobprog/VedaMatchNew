@@ -106,6 +106,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'android.permission.FOREGROUND_SERVICE_CAMERA',
         'android.permission.ACCESS_WIFI_STATE',
         'android.permission.CHANGE_NETWORK_STATE',
+        // Самообновление с сайта (VED-176): открыть системный установщик по
+        // `content://` требует REQUEST_INSTALL_PACKAGES с Android 8+, иначе
+        // `startActivityAsync(ACTION_INSTALL_PACKAGE)` откроет системный
+        // экран «Разрешить установку неизвестных приложений» и завершится,
+        // не установив файл. Только канал `site` — на `store` (RuStore,
+        // Google Play) секции «Проверить обновление» вовсе нет
+        // (`variant.selfUpdate`), и это разрешение там не нужно и не должно
+        // просить пользователя: Google Play отдельно проверяет использование
+        // REQUEST_INSTALL_PACKAGES декларацией назначения в консоли и не
+        // пропустит его без обоснования у приложения, которое само не умеет
+        // ставить APK на этом канале.
+        ...(variant.selfUpdate ? ['android.permission.REQUEST_INSTALL_PACKAGES'] : []),
       ],
     },
     plugins: [
