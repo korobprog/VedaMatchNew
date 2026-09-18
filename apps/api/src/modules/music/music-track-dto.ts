@@ -32,6 +32,10 @@ export interface MusicArtistRow extends MusicCoverSource {
   kind: MusicArtistKind;
   bio: string | null;
   isVerified: boolean;
+  /** Корневая категория витрины (VED-165-2). `undefined` — строка выбрана
+   * без этого поля (например, в `MusicArtistRow`, вложенном в альбом или
+   * трек, где оно не нужно); тогда наружу уходит `null`. */
+  rootCategoryId?: string | null;
 }
 
 export interface MusicAlbumRow extends MusicCoverSource {
@@ -167,6 +171,7 @@ export function toMusicArtistDto(
     coverUrl: buildCoverUrl(publicBaseUrl, row.coverKey),
     isVerified: row.isVerified,
     trackCount,
+    rootCategoryId: row.rootCategoryId ?? null,
   };
 }
 

@@ -101,15 +101,12 @@ export function MusicFilters({
   categories: MusicCategoryDto[];
 }) {
   const active = countMusicFilters(state);
-  // Пустой раздел не показывается — тем же приёмом, что был у прежних чипов
-  // над каталогом (VED-145): чип-обещание без содержимого только вводит в
-  // заблуждение. Исключение — уже выбранный стиль: убрать его из списка,
-  // пока он применён, значит спрятать способ его снять.
-  const styles = categories.filter(
-    (category) =>
-      category.kind === "style" &&
-      (category.trackCount > 0 || category.slug === state.category),
-  );
+  // Раздел «Стиль» виден всегда, даже без единой размеченной записи
+  // (тестировщик прямо просил не прятать его): это карта раздела каталога, а
+  // не список тегов «что уже нашлось» — редакция должна видеть весь набор
+  // стилей, чтобы понимать, что вообще можно проставить, и уметь снять
+  // фильтр, даже если он ссылается на пока пустой стиль.
+  const styles = categories.filter((category) => category.kind === "style");
 
   return (
     <details className="group" open={active > 0}>
@@ -161,27 +158,34 @@ export function MusicFilters({
           ))}
         </FilterRow>
 
-        {styles.length > 0 && (
-          <FilterRow label="Стиль">
-            {styles.map((category) => (
-              <Link
-                key={category.id}
-                href={musicFilterHref(state, {
-                  category:
-                    state.category === category.slug ? null : category.slug,
-                })}
-                className={`${chip} ${state.category === category.slug ? chipOn : chipOff}`}
-              >
-                {category.title}
-                {category.trackCount > 0 && (
+        <FilterRow label="Стиль">
+          {styles.length === 0 ? (
+            <span className="text-xs text-text-2">
+              Пока нет ни одного стиля.
+            </span>
+          ) : (
+            styles.map((category) => {
+              const on = state.category === category.slug;
+              // Пустой стиль не прячется, но приглушён — редакция видит,
+              // что раздел существует, но пока ничего в нём не размечено.
+              const empty = category.trackCount === 0 && !on;
+              return (
+                <Link
+                  key={category.id}
+                  href={musicFilterHref(state, {
+                    category: on ? null : category.slug,
+                  })}
+                  className={`${chip} ${on ? chipOn : chipOff} ${empty ? "opacity-50" : ""}`}
+                >
+                  {category.title}
                   <span className="ml-1 font-mono text-[11px] text-text-2">
                     {category.trackCount}
                   </span>
-                )}
-              </Link>
-            ))}
-          </FilterRow>
-        )}
+                </Link>
+              );
+            })
+          )}
+        </FilterRow>
 
         <FilterRow label="Запись">
           <Link

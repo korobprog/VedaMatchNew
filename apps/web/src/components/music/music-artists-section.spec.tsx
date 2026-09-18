@@ -14,6 +14,7 @@ function artist(over: Partial<MusicArtistDto> = {}): MusicArtistDto {
     coverUrl: null,
     isVerified: false,
     trackCount: 3,
+    rootCategoryId: null,
     ...over,
   };
 }

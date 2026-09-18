@@ -19,8 +19,14 @@ export type MusicAlbumKind = 'album' | 'live' | 'compilation' | 'single';
  * Вид категории каталога (VED-165). `root` — одна из двух корневых категорий
  * витрины («Традиционное», «Современное») — главный выбор, показывается не в
  * общем ряду. `style` — прежний плоский список (киртан, бхаджан, мантра…),
- * фильтр «Стиль» под заголовком. У трека может стоять и то, и другое
- * одновременно — фильтр применяет их как пересечение, не замену.
+ * фильтр «Стиль» под заголовком.
+ *
+ * Корневая (VED-165-2) стоит у исполнителя (`MusicArtistDto.rootCategoryId`),
+ * а не у записи: редакция проставляет её пачкой на странице исполнителей, и
+ * новая запись того же исполнителя сразу попадает в нужную вкладку. Стиль —
+ * по-прежнему тег на самой записи. Фильтр применяет оба измерения как
+ * пересечение, не замену: «Традиционное» + «Мантра» сужает список до записей
+ * исполнителя с этой корневой, у которых вдобавок стоит стиль «Мантра».
  */
 export type MusicCategoryKind = 'root' | 'style';
 
@@ -131,6 +137,13 @@ export interface MusicArtistDto {
   coverUrl: string | null;
   isVerified: boolean;
   trackCount: number;
+  /**
+   * Корневая категория витрины — «Традиционное»/«Современное» (VED-165-2).
+   * `null` — не размечен. Стоит у исполнителя, а не у записи: новая запись
+   * того же исполнителя наследует её без отдельной правки, см.
+   * `MusicBulkArtistRootCategoryRequest`.
+   */
+  rootCategoryId: string | null;
 }
 
 export interface MusicAlbumDto {
@@ -300,6 +313,11 @@ export interface CreateMusicArtistRequest {
   isVerified?: boolean;
   /** Ключ залитой обложки. `null` — снять. */
   coverKey?: string | null;
+  /**
+   * Корневая категория (VED-165-2). `null` — снять. Сервис отказывает, если
+   * категория существует, но не `kind: 'root'`.
+   */
+  rootCategoryId?: string | null;
 }
 
 export type UpdateMusicArtistRequest = Partial<CreateMusicArtistRequest>;
@@ -368,20 +386,20 @@ export interface MusicBulkTrackArtistResult {
 }
 
 /**
- * Массовая простановка корневой категории (VED-165). Без переразметки хотя
- * бы части каталога фильтр «Традиционное»/«Современное» показывает пустой
- * список — этим действием редакция размечает выборку в одно нажатие вместо
- * правки записей по одной. Стилевые категории (киртан, мантра…) у записи не
- * трогаются — снимается и ставится только корневая.
- * `rootCategoryId: null` — снять корневую у выбранных записей.
+ * Массовая простановка корневой категории исполнителям (VED-165-2). Без
+ * переразметки хотя бы части каталога фильтр «Традиционное»/«Современное»
+ * показывает пустой список — этим действием редакция размечает выбранных
+ * исполнителей в одно нажатие, и их записи (включая будущие) попадают в
+ * нужную вкладку без отдельной правки. `rootCategoryId: null` — снять
+ * корневую у выбранных исполнителей.
  */
-export interface MusicBulkTrackRootCategoryRequest {
-  trackIds: string[];
+export interface MusicBulkArtistRootCategoryRequest {
+  artistIds: string[];
   rootCategoryId: string | null;
 }
 
-export interface MusicBulkTrackRootCategoryResult {
-  /** Сколько записей поменялось. */
+export interface MusicBulkArtistRootCategoryResult {
+  /** Сколько исполнителей поменялось. */
   updated: number;
 }
 

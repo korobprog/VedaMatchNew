@@ -36,6 +36,7 @@ function prismaMock() {
       musicArtist: {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue({}),
         create: jest
           .fn()
@@ -43,6 +44,7 @@ function prismaMock() {
         update: jest
           .fn()
           .mockImplementation(({ data }) => ({ id: 'a1', ...data })),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       musicAlbum: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -219,61 +221,118 @@ describe('MusicAdminCatalogService', () => {
     });
   });
 
-  describe('setTracksRootCategory (VED-165)', () => {
-    function withCategoriesAndTracks(
-      mock: ReturnType<typeof prismaMock>,
-      byTrack: Record<string, string[]>,
-    ) {
-      mock.prisma.musicTrack.findMany.mockResolvedValue(
-        Object.keys(byTrack).map((id) => ({ id })),
+  describe('setArtistsRootCategory (VED-165-2)', () => {
+    function withArtists(ids: string[]) {
+      const mock = prismaMock();
+      mock.prisma.musicArtist.findMany.mockResolvedValue(
+        ids.map((id) => ({ id })),
       );
-      // Две корневые категории каталога — ровно как заводит сид.
-      mock.prisma.musicCategory.findMany.mockResolvedValue([
-        { id: 'root-old' },
-        { id: 'root-new' },
-      ]);
-      mock.tx.musicTrackCategory.findMany.mockImplementation(
-        ({ where }: { where: { trackId: string } }) =>
-          Promise.resolve(
-            (byTrack[where.trackId] ?? []).map((categoryId) => ({
-              categoryId,
-            })),
-          ),
-      );
+      mock.prisma.musicArtist.updateMany.mockResolvedValue({
+        count: ids.length,
+      });
+      return mock;
     }
 
     it('не пускает не-администратора', async () => {
       await expect(
-        service(prismaMock()).setTracksRootCategory(false, {
-          trackIds: ['t1'],
+        service(prismaMock()).setArtistsRootCategory(false, {
+          artistIds: ['a1'],
           rootCategoryId: 'root-new',
         }),
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('пустой список записей — 400', async () => {
+    it('пустой список исполнителей — 400', async () => {
       await expect(
-        service(prismaMock()).setTracksRootCategory(true, {
-          trackIds: [],
+        service(prismaMock()).setArtistsRootCategory(true, {
+          artistIds: [],
           rootCategoryId: 'root-new',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('несуществующая категория — 400', async () => {
-      const mock = prismaMock();
+    it('несуществующая категория — 400, до похода за исполнителями', async () => {
+      const mock = withArtists(['a1']);
       mock.prisma.musicCategory.findUnique.mockResolvedValue(null);
 
       await expect(
-        service(mock).setTracksRootCategory(true, {
-          trackIds: ['t1'],
+        service(mock).setArtistsRootCategory(true, {
+          artistIds: ['a1'],
           rootCategoryId: 'missing',
         }),
       ).rejects.toThrow(BadRequestException);
-      expect(mock.prisma.musicTrack.findMany).not.toHaveBeenCalled();
+      expect(mock.prisma.musicArtist.findMany).not.toHaveBeenCalled();
     });
 
     it('стилевую категорию корневой не поставить — 400', async () => {
+      const mock = withArtists(['a1']);
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'style-mantra',
+        kind: 'style',
+      });
+
+      await expect(
+        service(mock).setArtistsRootCategory(true, {
+          artistIds: ['a1'],
+          rootCategoryId: 'style-mantra',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('не трогает ничего, если часть исполнителей пропала', async () => {
+      const mock = withArtists(['a1']);
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'root-new',
+        kind: 'root',
+      });
+
+      await expect(
+        service(mock).setArtistsRootCategory(true, {
+          artistIds: ['a1', 'gone'],
+          rootCategoryId: 'root-new',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mock.prisma.musicArtist.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('ставит корневую выбранным исполнителям одним updateMany', async () => {
+      const mock = withArtists(['a1', 'a2']);
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'root-new',
+        kind: 'root',
+      });
+
+      const result = await service(mock).setArtistsRootCategory(true, {
+        artistIds: ['a1', 'a2'],
+        rootCategoryId: 'root-new',
+      });
+
+      expect(result).toEqual({ updated: 2 });
+      expect(mock.prisma.musicArtist.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a1', 'a2'] } },
+        data: { rootCategoryId: 'root-new' },
+      });
+    });
+
+    it('rootCategoryId: null снимает корневую без похода в справочник категорий', async () => {
+      const mock = withArtists(['a1']);
+
+      const result = await service(mock).setArtistsRootCategory(true, {
+        artistIds: ['a1'],
+        rootCategoryId: null,
+      });
+
+      expect(result).toEqual({ updated: 1 });
+      expect(mock.prisma.musicCategory.findUnique).not.toHaveBeenCalled();
+      expect(mock.prisma.musicArtist.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['a1'] } },
+        data: { rootCategoryId: null },
+      });
+    });
+  });
+
+  describe('createArtist / updateArtist — rootCategoryId (VED-165-2)', () => {
+    it('создание с корневой категорией стиля — 400', async () => {
       const mock = prismaMock();
       mock.prisma.musicCategory.findUnique.mockResolvedValue({
         id: 'style-mantra',
@@ -281,93 +340,63 @@ describe('MusicAdminCatalogService', () => {
       });
 
       await expect(
-        service(mock).setTracksRootCategory(true, {
-          trackIds: ['t1'],
+        service(mock).createArtist(true, {
+          name: 'Гаура дас',
           rootCategoryId: 'style-mantra',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('не трогает ничего, если часть записей пропала', async () => {
+    it('создание с настоящей корневой — проходит и попадает в data', async () => {
       const mock = prismaMock();
       mock.prisma.musicCategory.findUnique.mockResolvedValue({
         id: 'root-new',
         kind: 'root',
       });
-      mock.prisma.musicTrack.findMany.mockResolvedValue([{ id: 't1' }]);
 
-      await expect(
-        service(mock).setTracksRootCategory(true, {
-          trackIds: ['t1', 'gone'],
-          rootCategoryId: 'root-new',
-        }),
-      ).rejects.toThrow(NotFoundException);
-      expect(mock.tx.musicTrackCategory.deleteMany).not.toHaveBeenCalled();
-    });
-
-    it('ставит корневую, снимая прежнюю и не трогая стиль', async () => {
-      const mock = prismaMock();
-      mock.prisma.musicCategory.findUnique.mockResolvedValue({
-        id: 'root-new',
-        kind: 'root',
-      });
-      withCategoriesAndTracks(mock, {
-        t1: ['root-old', 'style-mantra'],
-        t2: ['style-kirtan'],
-      });
-
-      const result = await service(mock).setTracksRootCategory(true, {
-        trackIds: ['t1', 't2'],
+      await service(mock).createArtist(true, {
+        name: 'Гаура дас',
         rootCategoryId: 'root-new',
       });
 
-      expect(result).toEqual({ updated: 2 });
-      expect(mock.tx.musicTrackCategory.deleteMany).toHaveBeenCalledWith({
-        where: { trackId: 't1' },
-      });
-      expect(mock.tx.musicTrackCategory.createMany).toHaveBeenCalledWith({
-        data: [
-          { trackId: 't1', categoryId: 'style-mantra' },
-          { trackId: 't1', categoryId: 'root-new' },
-        ],
-      });
-      expect(mock.tx.musicTrackCategory.createMany).toHaveBeenCalledWith({
-        data: [
-          { trackId: 't2', categoryId: 'style-kirtan' },
-          { trackId: 't2', categoryId: 'root-new' },
-        ],
+      expect(mock.prisma.musicArtist.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ rootCategoryId: 'root-new' }),
       });
     });
 
-    it('rootCategoryId: null снимает корневую, стиль остаётся', async () => {
+    it('правка снимает корневую через null, не трогая остальное', async () => {
       const mock = prismaMock();
-      withCategoriesAndTracks(mock, { t1: ['root-old', 'style-mantra'] });
-
-      const result = await service(mock).setTracksRootCategory(true, {
-        trackIds: ['t1'],
-        rootCategoryId: null,
+      mock.prisma.musicArtist.findUnique.mockResolvedValue({
+        id: 'a1',
+        coverKey: null,
       });
 
-      expect(result).toEqual({ updated: 1 });
+      await service(mock).updateArtist(true, 'a1', { rootCategoryId: null });
+
       expect(mock.prisma.musicCategory.findUnique).not.toHaveBeenCalled();
-      expect(mock.tx.musicTrackCategory.createMany).toHaveBeenCalledWith({
-        data: [{ trackId: 't1', categoryId: 'style-mantra' }],
+      expect(mock.prisma.musicArtist.update).toHaveBeenCalledWith({
+        where: { id: 'a1' },
+        data: { rootCategoryId: null },
       });
     });
 
-    it('rootCategoryId: null у записи без стиля — createMany не зовётся', async () => {
+    it('правка со стилевой категорией — 400, update не зовётся', async () => {
       const mock = prismaMock();
-      withCategoriesAndTracks(mock, { t1: ['root-old'] });
-
-      await service(mock).setTracksRootCategory(true, {
-        trackIds: ['t1'],
-        rootCategoryId: null,
+      mock.prisma.musicArtist.findUnique.mockResolvedValue({
+        id: 'a1',
+        coverKey: null,
+      });
+      mock.prisma.musicCategory.findUnique.mockResolvedValue({
+        id: 'style-mantra',
+        kind: 'style',
       });
 
-      expect(mock.tx.musicTrackCategory.deleteMany).toHaveBeenCalledWith({
-        where: { trackId: 't1' },
-      });
-      expect(mock.tx.musicTrackCategory.createMany).not.toHaveBeenCalled();
+      await expect(
+        service(mock).updateArtist(true, 'a1', {
+          rootCategoryId: 'style-mantra',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mock.prisma.musicArtist.update).not.toHaveBeenCalled();
     });
   });
 

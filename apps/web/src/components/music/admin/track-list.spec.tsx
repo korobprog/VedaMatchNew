@@ -12,14 +12,11 @@ import { MusicTrackList } from "./track-list";
 const updateMusicTrack = vi.fn();
 const deleteMusicTrack = vi.fn();
 const setMusicTracksArtist = vi.fn();
-const setMusicTracksRootCategory = vi.fn();
 
 vi.mock("@/lib/music-admin-client-api", () => ({
   updateMusicTrack: (...args: unknown[]) => updateMusicTrack(...args),
   deleteMusicTrack: (...args: unknown[]) => deleteMusicTrack(...args),
   setMusicTracksArtist: (...args: unknown[]) => setMusicTracksArtist(...args),
-  setMusicTracksRootCategory: (...args: unknown[]) =>
-    setMusicTracksRootCategory(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -72,7 +69,6 @@ beforeEach(() => {
   updateMusicTrack.mockReset().mockResolvedValue({});
   deleteMusicTrack.mockReset().mockResolvedValue({});
   setMusicTracksArtist.mockReset();
-  setMusicTracksRootCategory.mockReset();
 });
 
 describe("MusicTrackList — массовая смена исполнителя (VED-226)", () => {
@@ -97,9 +93,6 @@ describe("MusicTrackList — массовая смена исполнителя 
     await userEvent.click(
       screen.getByRole("checkbox", { name: /Выбрать все показанные \(2\)/ }),
     );
-    // Две панели действий видят один и тот же выбор (VED-165: рядом с
-    // массовой сменой исполнителя появилась массовая простановка корневой
-    // категории) — сверяем счётчик именно у панели смены исполнителя.
     const artistBar = screen.getByRole("region", {
       name: "Действия с выбранными записями",
     });
@@ -146,67 +139,11 @@ describe("MusicTrackList — массовая смена исполнителя 
   });
 });
 
-describe("MusicTrackList — массовая простановка корневой категории (VED-165)", () => {
-  it("ставит выбранную корневую у отмеченных записей", async () => {
-    setMusicTracksRootCategory.mockResolvedValue({ updated: 2 });
-    const user = userEvent.setup();
-    renderList([
-      track({ id: "t1", title: "Первая" }),
-      track({ id: "t2", title: "Вторая" }),
-    ]);
-
-    await user.click(screen.getByRole("checkbox", { name: "Выбрать «Первая»" }));
-    await user.click(screen.getByRole("checkbox", { name: "Выбрать «Вторая»" }));
-    await user.selectOptions(
-      screen.getByLabelText("Корневая категория для выбранных записей"),
-      "r1",
-    );
-    await user.click(
-      within(
-        screen.getByRole("region", {
-          name: "Корневая категория выбранных записей",
-        }),
-      ).getByRole("button", { name: "Применить" }),
-    );
-
-    expect(setMusicTracksRootCategory).toHaveBeenCalledWith({
-      trackIds: ["t1", "t2"],
-      rootCategoryId: "r1",
-    });
-    await waitFor(() =>
-      expect(
-        screen.getByText(/2 записи — корневая теперь «Традиционное»/),
-      ).toBeInTheDocument(),
-    );
-    expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument();
-  });
-
-  it("«Снять корневую» шлёт null", async () => {
-    setMusicTracksRootCategory.mockResolvedValue({ updated: 1 });
-    const user = userEvent.setup();
-    renderList([track({ id: "t1", title: "Первая" })]);
-
-    await user.click(screen.getByRole("checkbox", { name: "Выбрать «Первая»" }));
-    await user.click(
-      within(
-        screen.getByRole("region", {
-          name: "Корневая категория выбранных записей",
-        }),
-      ).getByRole("button", { name: "Применить" }),
-    );
-
-    expect(setMusicTracksRootCategory).toHaveBeenCalledWith({
-      trackIds: ["t1"],
-      rootCategoryId: null,
-    });
-  });
-});
-
 describe("MusicTrackList", () => {
   it("правка предзаполнена тем, что стоит у записи сейчас", async () => {
     const user = userEvent.setup();
     renderList([
-      track({ artistId: "a2", categoryIds: ["r1", "c1"] }),
+      track({ artistId: "a2", categoryIds: ["c1"] }),
     ]);
 
     await user.click(screen.getByLabelText("Править «Durga Chalisa»"));
@@ -214,9 +151,9 @@ describe("MusicTrackList", () => {
     // Без идентификаторов в DTO селект показывал бы первый пункт списка, и
     // сохранение молча перевешивало бы запись на чужого исполнителя.
     expect(screen.getByLabelText("Исполнитель")).toHaveValue("a2");
-    // VED-165: два раздельных селекта — корневая и стиль — оба
-    // предзаполнены тем, что уже стоит на записи.
-    expect(screen.getByLabelText("Корневая")).toHaveValue("r1");
+    // VED-165-2: корневая категория здесь больше не спрашивается — она
+    // переехала на исполнителя; остаётся один селект, стиль.
+    expect(screen.queryByLabelText("Корневая")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Стиль")).toHaveValue("c1");
     expect(screen.getByLabelText("Духовная линия")).toHaveValue(
       "sri_chaitanya_gaudiya_math",
@@ -240,33 +177,32 @@ describe("MusicTrackList", () => {
     );
   });
 
-  it("корневая и стиль сохраняются вместе — комбинация, не замена", async () => {
+  it("выбор стиля сохраняется как есть", async () => {
     const user = userEvent.setup();
     renderList([track({ categoryIds: [] })]);
 
     await user.click(screen.getByLabelText("Править «Durga Chalisa»"));
-    await user.selectOptions(screen.getByLabelText("Корневая"), "r1");
     await user.selectOptions(screen.getByLabelText("Стиль"), "c1");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() =>
       expect(updateMusicTrack).toHaveBeenCalledWith("t1", {
-        categoryIds: ["r1", "c1"],
+        categoryIds: ["c1"],
       }),
     );
   });
 
-  it("снятие корневой не трогает стиль", async () => {
+  it("снятие стиля отправляет пустой список категорий", async () => {
     const user = userEvent.setup();
-    renderList([track({ categoryIds: ["r1", "c1"] })]);
+    renderList([track({ categoryIds: ["c1"] })]);
 
     await user.click(screen.getByLabelText("Править «Durga Chalisa»"));
-    await user.selectOptions(screen.getByLabelText("Корневая"), "Не указана");
+    await user.selectOptions(screen.getByLabelText("Стиль"), "Не указан");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() =>
       expect(updateMusicTrack).toHaveBeenCalledWith("t1", {
-        categoryIds: ["c1"],
+        categoryIds: [],
       }),
     );
   });

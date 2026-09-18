@@ -21,7 +21,6 @@ import {
 } from "@/components/lineage-picker";
 import { Alert } from "@/components/ui/alert";
 import { MusicBulkArtistBar } from "./bulk-artist-bar";
-import { MusicBulkRootCategoryBar } from "./bulk-root-category-bar";
 import {
   ARTIST_FILTER_ALL,
   ARTIST_FILTER_NONE,
@@ -30,7 +29,7 @@ import {
   toggleAllShown,
   type ArtistFilter,
 } from "./bulk-artist";
-import { mergeTrackCategories, splitTrackCategories } from "./track-categories";
+import { styleCategoryId } from "./track-categories";
 
 const STATUS_LABELS: Record<MusicAdminTrackDto["status"], string> = {
   draft: "черновик",
@@ -168,12 +167,6 @@ export function MusicTrackList({
           <MusicBulkArtistBar
             selectedIds={selectedIds}
             artists={artists}
-            onClear={() => setSelected(new Set())}
-          />
-
-          <MusicBulkRootCategoryBar
-            selectedIds={selectedIds}
-            categories={categories}
             onClear={() => setSelected(new Set())}
           />
 
@@ -419,12 +412,12 @@ function TrackEditForm({
   const [title, setTitle] = useState(track.title);
   const [artistId, setArtistId] = useState(track.artistId ?? "");
   const [albumId, setAlbumId] = useState(track.albumId ?? "");
-  // VED-165: два раздельных выбора вместо одного списка — запись несёт
-  // корневую категорию и стиль одновременно («Традиционное» + «Мантра»), а
-  // не одно из двух. `splitTrackCategories` достаёт оба из уже стоящих тегов.
-  const initialSplit = splitTrackCategories(track.categoryIds, categories);
-  const [rootId, setRootId] = useState(initialSplit.rootId);
-  const [styleId, setStyleId] = useState(initialSplit.styleId);
+  // VED-165-2: корневая категория («Традиционное»/«Современное») переехала
+  // на исполнителя — здесь остаётся только стиль (киртан, мантра…), у записи
+  // не бывает больше одного, `styleCategoryId` достаёт его из уже стоящих
+  // тегов.
+  const initialStyleId = styleCategoryId(track.categoryIds, categories);
+  const [styleId, setStyleId] = useState(initialStyleId);
   const [status, setStatus] = useState<MusicTrackStatus>(track.status);
   /** `"all"` — для всех линий; в запрос уходит `null`. */
   const [lineage, setLineage] = useState<string>(
@@ -434,7 +427,6 @@ function TrackEditForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const roots = categories.filter((category) => category.kind === "root");
   const styles = categories.filter((category) => category.kind === "style");
 
   const trimmed = title.trim();
@@ -442,8 +434,7 @@ function TrackEditForm({
     (trimmed !== track.title && trimmed.length > 0) ||
     artistId !== (track.artistId ?? "") ||
     albumId !== (track.albumId ?? "") ||
-    rootId !== initialSplit.rootId ||
-    styleId !== initialSplit.styleId ||
+    styleId !== initialStyleId ||
     status !== track.status ||
     lineage !== lineageToSelect(track.lineage) ||
     isLive !== track.isLiveRecording;
@@ -460,8 +451,8 @@ function TrackEditForm({
         ...(albumId !== (track.albumId ?? "")
           ? { albumId: albumId || null }
           : {}),
-        ...(rootId !== initialSplit.rootId || styleId !== initialSplit.styleId
-          ? { categoryIds: mergeTrackCategories(rootId, styleId) }
+        ...(styleId !== initialStyleId
+          ? { categoryIds: styleId ? [styleId] : [] }
           : {}),
         ...(status !== track.status ? { status } : {}),
         ...(lineage !== lineageToSelect(track.lineage)
@@ -526,25 +517,11 @@ function TrackEditForm({
           </select>
         </label>
 
-        {/* Два раздельных выбора (VED-165), а не один список: у записи может
-            стоять и корневая категория, и стиль одновременно — «Традицион-
-            ное» + «Мантра» это два тега на одном треке. */}
-        <label className="block">
-          <span className="mb-1 block text-xs text-text-2">Корневая</span>
-          <select
-            value={rootId}
-            onChange={(event) => setRootId(event.target.value)}
-            className={field}
-          >
-            <option value="">Не указана</option>
-            {roots.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.title}
-              </option>
-            ))}
-          </select>
-        </label>
-
+        {/* VED-165-2: корневую категорию («Традиционное»/«Современное») эта
+            форма больше не спрашивает — по просьбе тестировщика она теперь
+            стоит у исполнителя целиком (страница «Исполнители» в
+            справочниках) и наследуется записью через связь `artist`. Здесь
+            остаётся только стиль (киртан, мантра…). */}
         <label className="block">
           <span className="mb-1 block text-xs text-text-2">Стиль</span>
           <select

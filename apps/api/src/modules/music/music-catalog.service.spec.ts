@@ -178,9 +178,10 @@ describe('MusicCatalogService — линия слушателя', () => {
   });
 });
 
-// VED-165: корневая категория («Традиционное»/«Современное») и стиль
-// (киртан, мантра…) — два независимых тега на одном треке, и фильтр обязан
-// требовать оба одновременно (пересечение), а не любой из них (объединение).
+// VED-165 / VED-165-2: корневая категория («Традиционное»/«Современное») —
+// теперь на исполнителе (`artist.rootCategory`), стиль (киртан, мантра…) —
+// по-прежнему тег записи. Фильтр обязан требовать оба одновременно
+// (пересечение), а не любой из них (объединение).
 describe('MusicCatalogService — корневая категория и стиль', () => {
   it('без обоих фильтров ничего не добавляет в where — «Все» не прячет неразмеченное', async () => {
     const { service: catalog, prisma } = service();
@@ -190,13 +191,13 @@ describe('MusicCatalogService — корневая категория и сти�
     expect(whereOf(prisma)).not.toHaveProperty('AND');
   });
 
-  it('root один — одно условие some в AND', async () => {
+  it('root один — условие на artist.rootCategory в AND', async () => {
     const { service: catalog, prisma } = service();
 
     await catalog.listTracks({ ...query, root: 'traditional' }, null);
 
     expect(whereOf(prisma).AND).toEqual([
-      { categories: { some: { category: { slug: 'traditional' } } } },
+      { artist: { rootCategory: { slug: 'traditional' } } },
     ]);
   });
 
@@ -209,7 +210,7 @@ describe('MusicCatalogService — корневая категория и сти�
     );
 
     expect(whereOf(prisma).AND).toEqual([
-      { categories: { some: { category: { slug: 'traditional' } } } },
+      { artist: { rootCategory: { slug: 'traditional' } } },
       { categories: { some: { category: { slug: 'mantra' } } } },
     ]);
   });
@@ -226,9 +227,66 @@ describe('MusicCatalogService — корневая категория и сти�
 
     expect(whereOf(prisma).AND).toEqual([
       { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
-      { categories: { some: { category: { slug: 'modern' } } } },
+      { artist: { rootCategory: { slug: 'modern' } } },
       { categories: { some: { category: { slug: 'bhajan' } } } },
     ]);
+  });
+});
+
+// VED-165-2: счётчик корневой категории теперь суммируется по исполнителям,
+// а не по прямой связи записи — молчаливо забыть об этом значило бы вернуть
+// старый groupBy, который для корневой навсегда показывал бы ноль.
+describe('MusicCatalogService — listCategories считает корневую через исполнителя', () => {
+  it('складывает стиль (по записи) и корневую (по исполнителю) в один список', async () => {
+    const prisma = prismaMock();
+    prisma.musicCategory.findMany.mockResolvedValue([
+      {
+        id: 'traditional',
+        slug: 'traditional',
+        title: 'Традиционное',
+        position: 0,
+        kind: 'root',
+      },
+      {
+        id: 'mantra',
+        slug: 'mantra',
+        title: 'Мантра',
+        position: 1,
+        kind: 'style',
+      },
+    ]);
+    prisma.musicTrackCategory.groupBy.mockResolvedValue([
+      { categoryId: 'mantra', _count: { trackId: 3 } },
+    ]);
+    prisma.musicArtist.findMany.mockResolvedValue([
+      { rootCategoryId: 'traditional', _count: { tracks: 5 } },
+    ]);
+    const { service: catalog } = service(prisma);
+
+    const result = await catalog.listCategories();
+
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'traditional', trackCount: 5 }),
+      expect.objectContaining({ id: 'mantra', trackCount: 3 }),
+    ]);
+  });
+
+  it('без размеченных исполнителей корневая просто ноль, а не ошибка', async () => {
+    const prisma = prismaMock();
+    prisma.musicCategory.findMany.mockResolvedValue([
+      {
+        id: 'modern',
+        slug: 'modern',
+        title: 'Современное',
+        position: 0,
+        kind: 'root',
+      },
+    ]);
+    const { service: catalog } = service(prisma);
+
+    const result = await catalog.listCategories();
+
+    expect(result).toEqual([expect.objectContaining({ trackCount: 0 })]);
   });
 });
 

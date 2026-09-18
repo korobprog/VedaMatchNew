@@ -91,11 +91,14 @@ describe("MusicFilters — секция «Стиль»", () => {
     expect(screen.getByRole("link", { name: /Мантра/ })).toBeInTheDocument();
   });
 
-  it("прячет пустой стиль, кроме уже выбранного", () => {
+  it("не прячет пустой стиль — показывает приглушённым с нулём (тестировщик просил не скрывать раздел)", () => {
     render(
       <MusicFilters state={baseState} artists={artists} categories={categories} />,
     );
-    expect(screen.queryByRole("link", { name: /Бхаджан/ })).not.toBeInTheDocument();
+    const empty = screen.getByRole("link", { name: /Бхаджан/ });
+    expect(empty).toBeInTheDocument();
+    expect(empty).toHaveTextContent("0");
+    expect(empty.className).toMatch(/opacity-50/);
 
     render(
       <MusicFilters
@@ -104,7 +107,22 @@ describe("MusicFilters — секция «Стиль»", () => {
         categories={categories}
       />,
     );
-    expect(screen.getAllByRole("link", { name: /Бхаджан/ }).length).toBeGreaterThan(0);
+    // Уже выбранный пустой стиль не приглушается — иначе способ его снять
+    // выглядел бы неактивным.
+    const selected = screen.getAllByRole("link", { name: /Бхаджан/ }).at(-1)!;
+    expect(selected.className).not.toMatch(/opacity-50/);
+  });
+
+  it("раздел «Стиль» виден и без единого стилевого раздела в справочнике", () => {
+    render(
+      <MusicFilters
+        state={baseState}
+        artists={artists}
+        categories={[category("traditional", "Традиционное", "root", 4)]}
+      />,
+    );
+    expect(screen.getByText("Стиль")).toBeInTheDocument();
+    expect(screen.getByText("Пока нет ни одного стиля.")).toBeInTheDocument();
   });
 
   it("ссылка стиля сохраняет root — пересечение, а не замена", () => {

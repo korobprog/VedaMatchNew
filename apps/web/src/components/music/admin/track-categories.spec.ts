@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MusicCategoryDto } from "@vedamatch/shared";
-import { mergeTrackCategories, splitTrackCategories } from "./track-categories";
+import { styleCategoryId } from "./track-categories";
 
 const category = (
   id: string,
@@ -14,50 +14,34 @@ const categories = [
   category("style-mantra", "style"),
 ];
 
-describe("splitTrackCategories", () => {
-  it("разводит корневую и стиль по видам", () => {
-    expect(
-      splitTrackCategories(["root-trad", "style-mantra"], categories),
-    ).toEqual({ rootId: "root-trad", styleId: "style-mantra" });
+describe("styleCategoryId", () => {
+  it("находит стилевой id среди тегов записи", () => {
+    expect(styleCategoryId(["style-mantra"], categories)).toBe("style-mantra");
   });
 
-  it("без корневой отдаёт пустую строку — не 'не выбрано' через null", () => {
-    expect(splitTrackCategories(["style-kirtan"], categories)).toEqual({
-      rootId: "",
-      styleId: "style-kirtan",
-    });
+  it("пустой набор — пустая строка, не 'не выбрано' через null", () => {
+    expect(styleCategoryId([], categories)).toBe("");
   });
 
-  it("пустой набор — обе пустые", () => {
-    expect(splitTrackCategories([], categories)).toEqual({
-      rootId: "",
-      styleId: "",
-    });
+  it("только корневая (данные до VED-165-2) — стиля нет, пустая строка", () => {
+    expect(styleCategoryId(["root-trad"], categories)).toBe("");
   });
 
   it("неизвестный id в наборе не роняет разбор", () => {
-    expect(
-      splitTrackCategories(["gone", "style-kirtan"], categories),
-    ).toEqual({ rootId: "", styleId: "style-kirtan" });
+    expect(styleCategoryId(["gone", "style-kirtan"], categories)).toBe(
+      "style-kirtan",
+    );
   });
 
-  it("порядок в categoryIds не важен — root и style видны сами по себе", () => {
-    expect(
-      splitTrackCategories(["style-mantra", "root-modern"], categories),
-    ).toEqual({ rootId: "root-modern", styleId: "style-mantra" });
-  });
-});
-
-describe("mergeTrackCategories", () => {
-  it("собирает оба id в массив", () => {
-    expect(mergeTrackCategories("root-trad", "style-mantra")).toEqual([
-      "root-trad",
+  it("корневая и стиль одновременно (старые данные) — берёт стилевой, игнорируя корневой", () => {
+    expect(styleCategoryId(["root-modern", "style-mantra"], categories)).toBe(
       "style-mantra",
-    ]);
+    );
   });
 
-  it("пустые строки не попадают в массив", () => {
-    expect(mergeTrackCategories("root-trad", "")).toEqual(["root-trad"]);
-    expect(mergeTrackCategories("", "")).toEqual([]);
+  it("два стилевых тега — берёт первый по порядку в массиве", () => {
+    expect(
+      styleCategoryId(["style-mantra", "style-kirtan"], categories),
+    ).toBe("style-mantra");
   });
 });

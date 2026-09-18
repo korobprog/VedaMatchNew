@@ -3,24 +3,24 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MusicCategoryDto } from "@vedamatch/shared";
-import { setMusicTracksRootCategory } from "@/lib/music-admin-client-api";
+import { setMusicArtistsRootCategory } from "@/lib/music-admin-client-api";
 import { plural } from "@/lib/plural";
 import { Alert } from "@/components/ui/alert";
 
-const recordsWord = (n: number) => plural(n, "запись", "записи", "записей");
+const artistsWord = (n: number) =>
+  plural(n, "исполнитель", "исполнителя", "исполнителей");
 
 /**
- * Панель массовой простановки корневой категории (VED-165). Появляется над
- * списком, когда выбрана хотя бы одна запись — тем же приёмом, что и массовая
- * смена исполнителя (`MusicBulkArtistBar`).
+ * Панель массовой простановки корневой категории исполнителям (VED-165-2).
+ * Появляется над списком, когда выбран хотя бы один — тем же приёмом, что и
+ * массовая смена исполнителя у записей (`MusicBulkArtistBar`).
  *
- * Без переразметки хотя бы части каталога фильтр «Традиционное»/
- * «Современное» показывает пустой список, а проставлять корневую запись за
- * записью — то самое узкое место, ради которого когда-то завели массовую
- * смену исполнителя. Выбор — из уже заведённых корневых категорий: их всего
- * две, и заводить произвольную здесь не нужно (для этого есть справочники).
+ * Раньше корневую ставили записи (VED-165), но тестировщик прямо попросил
+ * относить к категории исполнителя целиком, «чтобы не возиться с треками» —
+ * так редакция размечает исполнителя один раз, а не каждую его новую запись
+ * отдельно.
  */
-export function MusicBulkRootCategoryBar({
+export function MusicBulkArtistRootCategoryBar({
   selectedIds,
   categories,
   onClear,
@@ -43,11 +43,11 @@ export function MusicBulkRootCategoryBar({
     setError(null);
     setDone(null);
     try {
-      const result = await setMusicTracksRootCategory({
-        trackIds: selectedIds,
+      const result = await setMusicArtistsRootCategory({
+        artistIds: selectedIds,
         rootCategoryId: nextRootId || null,
       });
-      const what = `${result.updated} ${recordsWord(result.updated)}`;
+      const what = `${result.updated} ${artistsWord(result.updated)}`;
       const rootTitle = roots.find((root) => root.id === nextRootId)?.title;
       setDone(
         rootTitle
@@ -78,15 +78,17 @@ export function MusicBulkRootCategoryBar({
   return (
     <div
       role="region"
-      aria-label="Корневая категория выбранных записей"
+      aria-label="Корневая категория выбранных исполнителей"
       className="mb-3 rounded-xl border border-glass-brd bg-bg-1/60 p-3"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="mr-auto text-sm text-text-0">
-          Выбрано: {count} {recordsWord(count)}
+          Выбрано: {count} {artistsWord(count)}
         </span>
         <label className="flex items-center gap-2">
-          <span className="sr-only">Корневая категория для выбранных записей</span>
+          <span className="sr-only">
+            Корневая категория для выбранных исполнителей
+          </span>
           <select
             value={rootId}
             onChange={(event) => setRootId(event.target.value)}

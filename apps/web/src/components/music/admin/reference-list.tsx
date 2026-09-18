@@ -30,6 +30,19 @@ export interface MusicReferenceRow {
    * него увидеть, что уже стоит у категории, можно было бы только в базе.
    */
   categoryKind?: MusicCategoryKind;
+  /**
+   * Корневая категория исполнителя (VED-165-2). Только для
+   * `kind === "artist"`, вместе с `rootCategories` у списка: без него у
+   * редакции нет способа увидеть или поменять разметку, не открывая каждого
+   * исполнителя формой.
+   */
+  rootCategoryId?: string | null;
+}
+
+/** Опция выбора корневой категории — ровно то, что нужно `<select>` в строке. */
+export interface MusicReferenceRootOption {
+  id: string;
+  title: string;
 }
 
 /**
@@ -58,11 +71,24 @@ export function MusicReferenceList({
   empty,
   kind,
   rows,
+  rootCategories,
+  selection,
 }: {
   title: string;
   empty: string;
   kind: MusicReferenceKind;
   rows: MusicReferenceRow[];
+  /**
+   * Варианты корневой категории (VED-165-2) — только для `kind === "artist"`.
+   * Без списка `<select>` в строке не рисуется: подставить категорию, о
+   * которой список не знает, было бы нечем.
+   */
+  rootCategories?: MusicReferenceRootOption[];
+  /** Выбор строк чекбоксами — используется массовым действием над списком. */
+  selection?: {
+    selectedIds: ReadonlySet<string>;
+    onToggle: (id: string) => void;
+  };
 }) {
   return (
     <section className="glass rounded-2xl border border-glass-brd p-4">
@@ -74,7 +100,16 @@ export function MusicReferenceList({
       ) : (
         <ul className="space-y-1">
           {rows.map((row) => (
-            <Row key={row.id} row={row} kind={kind} />
+            <Row
+              key={row.id}
+              row={row}
+              kind={kind}
+              rootCategories={rootCategories}
+              selected={selection?.selectedIds.has(row.id) ?? false}
+              onToggleSelected={
+                selection ? () => selection.onToggle(row.id) : undefined
+              }
+            />
           ))}
         </ul>
       )}
@@ -82,7 +117,19 @@ export function MusicReferenceList({
   );
 }
 
-function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }) {
+function Row({
+  row,
+  kind,
+  rootCategories,
+  selected,
+  onToggleSelected,
+}: {
+  row: MusicReferenceRow;
+  kind: MusicReferenceKind;
+  rootCategories?: MusicReferenceRootOption[];
+  selected: boolean;
+  onToggleSelected?: () => void;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<"view" | "rename" | "confirm" | "cover">(
     "view",
@@ -134,6 +181,17 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
       updateMusicCategory(row.id, {
         kind: row.categoryKind === "root" ? "style" : "root",
       }),
+    );
+
+  /**
+   * Корневая категория исполнителя (VED-165-2), прямо в списке — тем же
+   * приёмом, что переключатель вида раздела: точечная правка одного
+   * исполнителя без открытия отдельной формы. Массовая простановка сразу
+   * нескольким — в панели над списком (`MusicBulkArtistRootCategoryBar`).
+   */
+  const setRootCategory = (rootCategoryId: string) =>
+    void run(() =>
+      updateMusicArtist(row.id, { rootCategoryId: rootCategoryId || null }),
     );
 
   /** Обложка есть только у исполнителя и альбома: раздел каталога — просто имя. */
@@ -258,6 +316,19 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
         </div>
       ) : (
         <div className="flex items-baseline gap-2">
+          {onToggleSelected && (
+            // Цель 32×32 вокруг галочки 16 — та же, что у списка записей:
+            // мельче 24×24 не проходит по WCAG 2.5.8.
+            <label className="flex size-8 shrink-0 cursor-pointer items-center justify-center self-center">
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={onToggleSelected}
+                aria-label={`Выбрать «${row.primary}»`}
+                className="size-4"
+              />
+            </label>
+          )}
           {kind !== "category" && (
             <span
               aria-hidden
@@ -278,6 +349,26 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
             <span className="shrink-0 self-center rounded-full border border-cyan/40 px-2 text-[11px] text-cyan">
               {row.badge}
             </span>
+          )}
+          {kind === "artist" && rootCategories && rootCategories.length > 0 && (
+            <label className="shrink-0 self-center">
+              <span className="sr-only">
+                Корневая категория «{row.primary}»
+              </span>
+              <select
+                value={row.rootCategoryId ?? ""}
+                onChange={(event) => setRootCategory(event.target.value)}
+                disabled={pending}
+                className="h-7 rounded-full border border-glass-brd bg-bg-1 px-2 text-[11px] text-text-1 disabled:opacity-50"
+              >
+                <option value="">Без категории</option>
+                {rootCategories.map((root) => (
+                  <option key={root.id} value={root.id}>
+                    {root.title}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
           {kind === "category" && row.categoryKind && (
             <button

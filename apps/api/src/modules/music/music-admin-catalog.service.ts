@@ -10,9 +10,9 @@ import type {
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
+  MusicBulkArtistRootCategoryRequest,
+  MusicBulkArtistRootCategoryResult,
   MusicBulkTrackArtistResult,
-  MusicBulkTrackRootCategoryRequest,
-  MusicBulkTrackRootCategoryResult,
   MusicCoverScope,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
@@ -112,9 +112,30 @@ export class MusicAdminCatalogService {
 
   // ---------- Исполнители ----------
 
+  /**
+   * Категория существует и именно `root` — общая проверка для одиночной
+   * правки исполнителя и массового действия (VED-165-2). Стилевую сюда
+   * поставить нельзя: у витрины только две вкладки, и обе — корневые
+   * категории сида, третьего вида просто не заведено.
+   */
+  private async assertRootCategory(
+    id: string | null | undefined,
+  ): Promise<void> {
+    if (id === null || id === undefined) return;
+    const category = await this.prisma.musicCategory.findUnique({
+      where: { id },
+      select: { id: true, kind: true },
+    });
+    if (!category) throw new BadRequestException('Категория не найдена');
+    if (category.kind !== 'root') {
+      throw new BadRequestException('Это не корневая категория');
+    }
+  }
+
   async createArtist(viewerIsAdmin: boolean, body: CreateMusicArtistRequest) {
     this.assertAdmin(viewerIsAdmin);
     const name = this.text(body.name, 'Имя', MAX_NAME_LENGTH, true)!;
+    await this.assertRootCategory(body.rootCategoryId);
 
     const slug = await this.freeSlug(buildMusicSlug(name), async (candidate) =>
       Boolean(
@@ -132,6 +153,9 @@ export class MusicAdminCatalogService {
         kind: body.kind ?? 'unknown',
         bio: this.text(body.bio, 'Описание', MAX_BIO_LENGTH, false),
         isVerified: body.isVerified ?? false,
+        ...(body.rootCategoryId === undefined
+          ? {}
+          : { rootCategoryId: body.rootCategoryId }),
         ...this.coverPatch(body.coverKey, null, 'artist'),
       },
     });
@@ -148,6 +172,9 @@ export class MusicAdminCatalogService {
       select: { id: true, coverKey: true },
     });
     if (!existing) throw new NotFoundException('Исполнитель не найден');
+    if (body.rootCategoryId !== undefined) {
+      await this.assertRootCategory(body.rootCategoryId);
+    }
 
     return this.prisma.musicArtist.update({
       where: { id },
@@ -164,6 +191,9 @@ export class MusicAdminCatalogService {
         ...(body.isVerified === undefined
           ? {}
           : { isVerified: body.isVerified }),
+        ...(body.rootCategoryId === undefined
+          ? {}
+          : { rootCategoryId: body.rootCategoryId }),
       },
     });
   }
@@ -756,78 +786,45 @@ export class MusicAdminCatalogService {
   }
 
   /**
-   * Массовая простановка корневой категории (VED-165): без переразметки
-   * каталога фильтр «Традиционное»/«Современное» показывает пустой список,
-   * а руками разводить по одной записи — то же самое узкое место, ради
-   * которого когда-то завели массовую смену исполнителя (VED-226).
+   * Массовая простановка корневой категории исполнителям (VED-165-2).
    *
-   * Стилевые категории (киртан, мантра…) не трогаем — снимается и ставится
-   * только корневая, второе измерение фильтра у записи остаётся как было.
-   * `updateMany` здесь не подходит: `MusicTrackCategory` — таблица связи, а
-   * не колонка на самой записи, и «снять прежнюю корневую, не тронув стиль»
-   * требует прочитать текущий набор тегов каждой записи.
+   * Раньше корневую ставили записи (или пачке записей, VED-165) — но
+   * тестировщик прямо попросил «относить к категории скопом» исполнителя, а
+   * не мучиться с каждым треком: `rootCategoryId` теперь колонка на самом
+   * исполнителе, и `updateMany` для неё уже годится — не нужен обход по
+   * одной записи, как был для таблицы связи `MusicTrackCategory`. Заодно
+   * решается риск «неразмеченного каталога» из VED-165: разметив
+   * исполнителя один раз, каждая новая его запись сразу попадает в нужную
+   * вкладку — старую разметку по одной записи пришлось бы повторять на
+   * каждую новую загрузку.
    */
-  async setTracksRootCategory(
+  async setArtistsRootCategory(
     viewerIsAdmin: boolean,
-    body: MusicBulkTrackRootCategoryRequest,
-  ): Promise<MusicBulkTrackRootCategoryResult> {
+    body: MusicBulkArtistRootCategoryRequest,
+  ): Promise<MusicBulkArtistRootCategoryResult> {
     this.assertAdmin(viewerIsAdmin);
-    const trackIds = [...new Set(body.trackIds ?? [])];
-    if (trackIds.length === 0) {
-      throw new BadRequestException('Нужно выбрать хотя бы одну запись');
+    const artistIds = [...new Set(body.artistIds ?? [])];
+    if (artistIds.length === 0) {
+      throw new BadRequestException('Нужно выбрать хотя бы одного исполнителя');
     }
+    await this.assertRootCategory(body.rootCategoryId);
 
-    if (body.rootCategoryId !== null) {
-      const category = await this.prisma.musicCategory.findUnique({
-        where: { id: body.rootCategoryId },
-        select: { id: true, kind: true },
-      });
-      if (!category) throw new BadRequestException('Категория не найдена');
-      if (category.kind !== 'root') {
-        throw new BadRequestException('Это не корневая категория');
-      }
-    }
-
-    const found = await this.prisma.musicTrack.findMany({
-      where: { id: { in: trackIds } },
+    const found = await this.prisma.musicArtist.findMany({
+      where: { id: { in: artistIds } },
       select: { id: true },
     });
-    if (found.length !== trackIds.length) {
-      throw new NotFoundException('Часть записей не найдена — обновите список');
+    if (found.length !== artistIds.length) {
+      throw new NotFoundException(
+        'Часть исполнителей не найдена — обновите список',
+      );
     }
 
-    // Все корневые id разом — чтобы снять прежнюю корневую у записи, не
-    // трогая стилевые теги: с одним запросом на всю операцию, а не на
-    // запись.
-    const roots = await this.prisma.musicCategory.findMany({
-      where: { kind: 'root' },
-      select: { id: true },
-    });
-    const rootIds = new Set(roots.map((row) => row.id));
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const trackId of trackIds) {
-        const existing = await tx.musicTrackCategory.findMany({
-          where: { trackId },
-          select: { categoryId: true },
-        });
-        const keep = existing
-          .map((row) => row.categoryId)
-          .filter((categoryId) => !rootIds.has(categoryId));
-        const next = body.rootCategoryId
-          ? [...keep, body.rootCategoryId]
-          : keep;
-
-        await tx.musicTrackCategory.deleteMany({ where: { trackId } });
-        if (next.length > 0) {
-          await tx.musicTrackCategory.createMany({
-            data: next.map((categoryId) => ({ trackId, categoryId })),
-          });
-        }
-      }
+    const { count } = await this.prisma.musicArtist.updateMany({
+      where: { id: { in: artistIds } },
+      data: { rootCategoryId: body.rootCategoryId },
     });
 
-    return { updated: trackIds.length };
+    return { updated: count };
   }
 
   private async replaceCategories(
