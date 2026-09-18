@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 // Заголовок и тело карточки «ДОГНАТЬ» (VED-215): один сервис веба —
 // одна карточка в колонке «VedaMath-Native», без сети.
+import { CATALOG_SERVICES } from './changed-paths-to-services.mjs';
 
 /**
  * Слаг сервиса → человеческое имя, как в каталоге (`apps/api/prisma/seed.cjs`
  * и остальные пять захардкоженных мест из чек-листа
- * `docs/service-module-contract.md` — это осознанное шестое). Сервис без
- * записи здесь получает заголовок со слагом как есть, а не падает —
- * маппинг не исчерпывает список модулей репозитория (например, у устаревшего
- * `gitabase` записи в каталоге больше нет).
+ * `docs/service-module-contract.md` — это осознанное шестое). Ключи —
+ * ровно `CATALOG_SERVICES` (белый список раунда 002, см.
+ * `changed-paths-to-services.mjs`), проверено тестом
+ * «SERVICE_NAMES покрывает ровно CATALOG_SERVICES».
+ *
+ * Сервис без записи здесь (случается только при прямом вызове
+ * `buildCardTitle` мимо `servicesFromPaths`, например в тестах) получает
+ * заголовок со слагом как есть, а не падает — маппинг не обязан покрывать
+ * произвольный ввод.
  */
 export const SERVICE_NAMES = {
   union: 'Знакомства',
@@ -24,6 +30,22 @@ export const SERVICE_NAMES = {
   wellness: 'Здоровье',
   travel: 'Путешествия',
 };
+
+/** Пункты настоящего чек-листа доски (`POST /work/tasks/:id/checklist`) —
+ * `run.mjs` заводит их отдельным запросом после создания карточки, а не
+ * markdown-текстом внутри описания: только так они видны на доске и
+ * считаются в `checklistDone/checklistTotal` (раунд 001, Н5). Ровно два
+ * пункта, как в живом тексте карточки VED-215 на доске
+ * («перенести в приложение» / «не нужно в приложении»); третий пункт из
+ * раунда 001 («это ссылка — проверить, что ссылка жива») был не пунктом
+ * чек-листа, а пояснением для сервисов-ссылок — теперь это текст
+ * `LINK_ONLY_NOTE` в теле, а не взаимоисключающий чекбокс.
+ */
+export const CHECKLIST_ITEMS = ['перенести в приложение', 'не нужно в приложении'];
+
+const LINK_ONLY_NOTE =
+  'Если сервис в приложении сейчас открывается только внешней ссылкой — ' +
+  'достаточно проверить, что ссылка жива, и отметить «не нужно в приложении».';
 
 /** Максимум путей, показанных в теле карточки списком — дальше «и ещё N». */
 const MAX_LISTED_PATHS = 15;
@@ -61,16 +83,12 @@ function formatChangedPaths(changedPaths) {
   return lines.join('\n');
 }
 
-const CHECKLIST = [
-  '- [ ] перенести в приложение',
-  '- [ ] в приложении это ссылка — проверить, что ссылка жива',
-  '- [ ] не нужно в приложении',
-].join('\n');
-
 /**
- * Тело новой карточки: ссылка на PR, изменённые пути, чек-лист. Тот же
- * набор данных используется и для комментария к уже существующей карточке
- * (`buildCommentBody`) — только без повторного чек-листа.
+ * Тело новой карточки: ссылка на PR и **только пути этого сервиса**
+ * (`changedPaths` — уже отфильтрованный по сервису список, раунд 001 нашёл
+ * баг: сюда передавали весь список путей PR целиком, и карточка «Общение»
+ * несла пути «Админки» того же PR). Настоящий чек-лист доски заводится
+ * отдельным запросом в `run.mjs`, здесь — только пояснение для ссылок.
  */
 export function buildCardBody({ service, prUrl, prTitle, changedPaths }) {
   const title = (prTitle ?? '').trim();
@@ -83,8 +101,7 @@ export function buildCardBody({ service, prUrl, prTitle, changedPaths }) {
     'Изменённые пути:',
     formatChangedPaths(changedPaths),
     '',
-    'Чек-лист:',
-    CHECKLIST,
+    LINK_ONLY_NOTE,
   ]
     .filter((line) => line !== null)
     .join('\n');
@@ -104,4 +121,14 @@ export function buildCommentBody({ prUrl, prTitle, changedPaths }) {
   ]
     .filter((line) => line !== null)
     .join('\n');
+}
+
+// Проверка на рассинхрон с CATALOG_SERVICES — падает сразу при импорте, а
+// не только в тесте, если кто-то добавит сервис в один список и забудет
+// про другой.
+const missingNames = CATALOG_SERVICES.filter((slug) => !(slug in SERVICE_NAMES));
+if (missingNames.length > 0) {
+  throw new Error(
+    `card-content.mjs: SERVICE_NAMES не покрывает CATALOG_SERVICES: ${missingNames.join(', ')}`,
+  );
 }

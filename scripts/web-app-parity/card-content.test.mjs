@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { CATALOG_SERVICES } from './changed-paths-to-services.mjs';
 import {
+  CHECKLIST_ITEMS,
   SERVICE_NAMES,
   buildCardBody,
   buildCardFullTitle,
@@ -20,6 +22,13 @@ test('каждый сервис каталога имеет русское им�
   for (const [slug, name] of Object.entries(SERVICE_NAMES)) {
     assert.ok(name.length > 0, `${slug} должен иметь непустое имя`);
   }
+});
+
+test('SERVICE_NAMES покрывает ровно CATALOG_SERVICES — ни пропуска, ни лишнего', () => {
+  assert.deepEqual(
+    Object.keys(SERVICE_NAMES).sort(),
+    [...CATALOG_SERVICES].sort(),
+  );
 });
 
 test('полный заголовок дополняет префикс summary из PR', () => {
@@ -45,16 +54,24 @@ test('тело карточки содержит ссылку на PR и хот�
   assert.match(body, /apps\/web\/src\/app\/market\/page\.tsx/);
 });
 
-test('тело карточки содержит чек-лист из трёх пунктов', () => {
+// Раунд 001, Н5: три взаимоисключающих пункта в одном markdown-чек-листе
+// сбивали исполнителя карточки. Настоящий чек-лист доски («перенести в
+// приложение» / «не нужно в приложении») заводится отдельным запросом в
+// run.mjs (CHECKLIST_ITEMS), а в теле — только пояснение для сервисов,
+// которые в приложении пока открываются внешней ссылкой.
+test('CHECKLIST_ITEMS — ровно два пункта настоящего чек-листа доски', () => {
+  assert.deepEqual(CHECKLIST_ITEMS, ['перенести в приложение', 'не нужно в приложении']);
+});
+
+test('тело карточки не содержит markdown-чекбоксов — только пояснение про ссылку', () => {
   const body = buildCardBody({
     service: 'market',
     prUrl: 'https://example.invalid/pr/1',
     prTitle: 'x',
     changedPaths: ['a'],
   });
-  assert.match(body, /- \[ \] перенести в приложение/);
-  assert.match(body, /- \[ \] в приложении это ссылка — проверить, что ссылка жива/);
-  assert.match(body, /- \[ \] не нужно в приложении/);
+  assert.doesNotMatch(body, /- \[ \]/);
+  assert.match(body, /достаточно проверить, что ссылка жива/);
 });
 
 test('длинный список путей (>15) обрезается с «и ещё N»', () => {

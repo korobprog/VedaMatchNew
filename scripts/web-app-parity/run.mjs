@@ -17,9 +17,22 @@
 //   WEB_APP_PARITY_PR_TITLE='Новый фильтр по цене' \
 //   WEB_APP_PARITY_DRY_RUN=1 \
 //   node scripts/web-app-parity/run.mjs
-import { servicesFromPaths } from './changed-paths-to-services.mjs';
+//
+// Раунд 001, Б2: в dry-run нельзя глушить и `GET` — тогда дедуп (критерии
+// приёмки №3/№4) в принципе не может исполниться, dry-run всегда «создаёт».
+// Здесь глушится только запись (`method !== 'GET'`): с настоящим ключом и
+// `WEB_APP_PARITY_DRY_RUN=1` раннер реально читает боевую доску, реально
+// прогоняет дедуп по её карточкам и печатает, что бы сделал — без единой
+// записи на прод.
+import { fileURLToPath } from 'node:url';
+import { groupChangedPathsByService } from './changed-paths-to-services.mjs';
 import { isOptedOut } from './pr-body-opt-out.mjs';
-import { buildCardBody, buildCardFullTitle, buildCommentBody } from './card-content.mjs';
+import {
+  CHECKLIST_ITEMS,
+  buildCardBody,
+  buildCardFullTitle,
+  buildCommentBody,
+} from './card-content.mjs';
 import { findExistingCard } from './dedupe-existing-card.mjs';
 
 const DEFAULT_BOARD_ID = 'f7ecf5b2-ad69-4067-ba0a-79e51643149d';
@@ -35,7 +48,10 @@ function readMultiline(value) {
 
 async function apiFetch({ apiUrl, apiKey, method, path, body, dryRun }) {
   const url = `${apiUrl}${path}`;
-  if (dryRun) {
+  // Раунд 001, Б2: dry-run глушит только запись. `GET` уходит по-настоящему
+  // — иначе dry-run не может доказать дедуп (нечем сравнивать: список
+  // карточек всегда пуст).
+  if (dryRun && method !== 'GET') {
     console.log(`[dry-run] ${method} ${path}`, body ? JSON.stringify(body) : '');
     return { dryRun: true };
   }
@@ -56,6 +72,21 @@ async function apiFetch({ apiUrl, apiKey, method, path, body, dryRun }) {
   return response.json();
 }
 
+/**
+ * Карточки, среди которых ищем дубль. Раунд 001, Н4: искать нужно по всей
+ * доске, не только в колонке создания («VedaMath-Native») — карточку
+ * могли перетащить в «В работе»/«На доработку», пока её не закрыли, и
+ * следующий PR по тому же сервису обязан увидеть её там же, а не завести
+ * вторую. Закрытые колонки (`isDone`, «Выполнено») исключены осознанно:
+ * закрытая карточка не дубль, а прошлая задача, новый PR должен завести
+ * новую.
+ */
+function openCardsAcrossBoard(board) {
+  return (board?.columns ?? [])
+    .filter((column) => !column.isDone)
+    .flatMap((column) => column.tasks ?? []);
+}
+
 export async function run(env = process.env) {
   const apiKey = env.VEDAMATCH_API_KEY;
   if (!apiKey) {
@@ -72,7 +103,10 @@ export async function run(env = process.env) {
   const apiUrl = env.VEDAMATCH_API_URL || DEFAULT_API_URL;
   const dryRun = env.WEB_APP_PARITY_DRY_RUN === '1';
 
-  const services = servicesFromPaths(changedPaths);
+  // Раунд 001, Н3: карточка сервиса должна нести только его пути, не весь
+  // список путей PR целиком.
+  const pathsByService = groupChangedPathsByService(changedPaths);
+  const services = [...pathsByService.keys()];
   if (services.length === 0) {
     console.log('Изменённые пути не затрагивают ни один сервис каталога — карточка не заводится.');
     return { skipped: true, reason: 'no-services', services: [] };
@@ -97,17 +131,17 @@ export async function run(env = process.env) {
     return { skipped: true, reason: 'board-fetch-failed', services };
   }
 
-  const existingCards = dryRun
-    ? []
-    : (board?.columns ?? [])
-        .filter((column) => column.id === columnId)
-        .flatMap((column) => column.tasks ?? []);
+  // `GET` больше не глушится dry-run (см. Б2 выше), поэтому `board` — всегда
+  // настоящий ответ API либо исключение, пойманное выше; `openCardsAcrossBoard`
+  // сама вернёт `[]` на пустом/неполном объекте, если он всё-таки чем-то не тем.
+  const existingCards = openCardsAcrossBoard(board);
 
   const results = [];
   for (const service of services) {
+    const paths = pathsByService.get(service) ?? [];
     const existing = findExistingCard(existingCards, service);
     if (existing) {
-      const body = buildCommentBody({ prUrl, prTitle, changedPaths });
+      const body = buildCommentBody({ prUrl, prTitle, changedPaths: paths });
       await apiFetch({
         apiUrl,
         apiKey,
@@ -121,7 +155,7 @@ export async function run(env = process.env) {
     }
 
     const title = buildCardFullTitle(service, prTitle).slice(0, 200);
-    const description = buildCardBody({ service, prUrl, prTitle, changedPaths });
+    const description = buildCardBody({ service, prUrl, prTitle, changedPaths: paths });
     const created = await apiFetch({
       apiUrl,
       apiKey,
@@ -130,13 +164,33 @@ export async function run(env = process.env) {
       body: { columnId, title, description },
       dryRun,
     });
+
+    // Настоящий чек-лист доски (не markdown-текст) — раунд 001, Н5. Только
+    // когда создание не было заглушено dry-run (тогда `created.id` есть).
+    const taskId = created?.id;
+    if (taskId) {
+      for (const text of CHECKLIST_ITEMS) {
+        await apiFetch({
+          apiUrl,
+          apiKey,
+          method: 'POST',
+          path: `/work/tasks/${taskId}/checklist`,
+          body: { text },
+          dryRun,
+        });
+      }
+    }
+
     results.push({ service, action: 'created', task: created });
   }
 
   return { skipped: false, services, results };
 }
 
-const isMain = process.argv[1] && new URL(import.meta.url).pathname === process.argv[1];
+// `fileURLToPath`, а не сравнение `pathname` строкой — путь с пробелами или
+// не-ASCII символами percent-encoded в `pathname`, но не в `process.argv[1]`
+// (раунд 001, Н6), и сравнение строк молча не совпадало бы никогда.
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
   run().catch((error) => {
     console.error(`::error::web-app-parity: ${error.message}`);

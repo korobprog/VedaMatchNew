@@ -44,6 +44,17 @@ permissions:
   # `gh pr view` ниже — читает описание PR того же репозитория, только читает.
   pull-requests: read
 
+# Раунд 001, Б3: без сериализации два мержа в main подряд (обычное дело —
+# история main лежит плотно) запускают два джоба параллельно. Оба делают
+# GET доски до того, как второй запишет свою карточку, оба не видят чужую
+# карточку и оба создают — получаются два «ДОГНАТЬ. Рынок: …». Дедуп читает
+# доску до записи, а не во время неё, и от гонки не спасает сам по себе.
+# `cancel-in-progress: false` — очередь, а не отмена: отменённый прогон
+# потерял бы карточку вовсе, а не просто отложил.
+concurrency:
+  group: web-app-parity
+  cancel-in-progress: false
+
 jobs:
   parity:
     name: догнать сервис в приложении
@@ -60,8 +71,11 @@ jobs:
         with:
           node-version: 24
 
-      - name: Тесты чистой логики
-        run: node --test scripts/web-app-parity/*.test.mjs
+      # Раунд 001, Н6: прогон тестов здесь стоял ДО шага создания карточки
+      # и гасил её при красных тестах — против собственного обоснования
+      # файла («сообщить нужно, даже если CI покраснел», PR уже смержен).
+      # Тесты чистой логики гоняются в `ci.yml` на каждый PR — здесь их
+      # не дублируем и не блокируем ими карточку.
 
       # Изменённые пути — многострочные, поэтому уходят в GITHUB_ENV через
       # heredoc со случайным разделителем (защита от инъекции через
@@ -83,7 +97,11 @@ jobs:
           delim="EOF_$(date +%s%N)"
           {
             echo "WEB_APP_PARITY_CHANGED_PATHS<<$delim"
-            git diff --name-only "$BEFORE_SHA" "$AFTER_SHA"
+            # Раунд 001, Н6: без `core.quotePath=false` git отдаёт пути с
+            # не-ASCII символами в кавычках и escape-последовательностями
+            # (`"apps/web/src/app/market/\320\244.tsx"`) — такой путь не
+            # совпадёт ни с одним префиксом сервиса, и сервис потеряется.
+            git -c core.quotePath=false diff --name-only "$BEFORE_SHA" "$AFTER_SHA"
             echo "$delim"
           } >> "$GITHUB_ENV"
 
@@ -116,8 +134,15 @@ jobs:
             pr_url=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/tmp/pr.json','utf8')).url)")
           else
             echo "::warning::Не удалось получить описание PR #${pr_number:-?} через gh pr view ($(cat /tmp/pr.err 2>/dev/null | head -c 200)) — используется текст коммита, в нём нет пометки «Затрагивает приложение»."
-            pr_title=$(git log -1 --format=%B "$AFTER_SHA" | tail -n +3)
-            pr_body="$pr_title"
+            # Раунд 001, Н6: третья строка тела коммита — заголовок PR
+            # ровно у мержевого коммита («Merge pull request #N …\n\n<title>»).
+            # Прямой пуш в main (не через мерж) даёт однострочное сообщение,
+            # и «строка 3» пуста — тогда откатываемся на тему коммита (`%s`),
+            # чтобы заголовок карточки не остался пустым («ДОГНАТЬ. Рынок:»
+            # без summary).
+            body_line3=$(git log -1 --format=%B "$AFTER_SHA" | sed -n '3p')
+            pr_title="${body_line3:-$subject}"
+            pr_body=$(git log -1 --format=%B "$AFTER_SHA")
             if [ -n "$pr_number" ]; then
               pr_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${pr_number}"
             else
