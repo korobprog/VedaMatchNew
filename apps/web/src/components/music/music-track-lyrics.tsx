@@ -1,16 +1,15 @@
 import type { MusicTrackLyricsDto } from "@vedamatch/shared";
 
 /**
- * Текст бхаджана: оригинал, транслитерация, перевод.
+ * Текст бхаджана: оригинал, перевод, транслитерация.
  *
- * Колонки в модели были с первой миграции, админ их пишет, сервер отдаёт — и
- * никто не рисовал. Формально это этап 9, но там речь про синхронный по
- * времени текст, а показать уже введённое стоит одного блока.
- *
- * Тремя колонками, а не вкладками: смысл в том, чтобы читать строку и тут же
- * видеть, как она произносится и что означает. Вкладки заставляют переключаться
- * на каждой строке. На узком экране колонки складываются в столбик — там
- * переключаться всё равно нечем.
+ * Раньше три поля рисовались колонками рядом (на широком экране) — это и
+ * была жалоба VED-248: «перевод» уезжал в свою колонку сбоку, и его читали
+ * отдельно от самого текста, не строка за строкой, а целым блоком где-то
+ * сбоку или, на телефоне, ниже длинной портянки транслитерации. Теперь —
+ * одно окно, блоки подряд сверху вниз, независимо от ширины экрана: текст
+ * сразу же продолжается переводом, а транслитерация (нужна реже — спеть,
+ * а не понять) идёт последней.
  *
  * `whitespace-pre-line`: перенос строк в бхаджане — это разметка, а не
  * оформление, и склеивать её в абзац нельзя.
@@ -32,17 +31,19 @@ export function MusicTrackLyrics({
   headingId?: string;
   compact?: boolean;
 }) {
-  const columns = [
+  // Перевод — сразу за текстом: их читают вместе, строка за строкой.
+  // Транслитерация — нужна реже (спеть, а не понять) и идёт последней.
+  const blocks = [
     { key: "lyrics", label: "Текст", value: lyrics.lyrics },
+    { key: "translation", label: "Перевод", value: lyrics.translation },
     {
       key: "transliteration",
       label: "Транслитерация",
       value: lyrics.transliteration,
     },
-    { key: "translation", label: "Перевод", value: lyrics.translation },
-  ].filter((column) => column.value);
+  ].filter((block) => block.value);
 
-  if (columns.length === 0) return null;
+  if (blocks.length === 0) return null;
 
   return (
     <section className={compact ? undefined : "mt-10"} aria-labelledby={headingId}>
@@ -53,22 +54,16 @@ export function MusicTrackLyrics({
         Текст
       </h2>
 
-      <div
-        className={`mt-4 grid gap-6 ${
-          columns.length === 1
-            ? "max-w-prose"
-            : columns.length === 2
-              ? "sm:grid-cols-2"
-              : "sm:grid-cols-2 lg:grid-cols-3"
-        }`}
-      >
-        {columns.map((column) => (
-          <div key={column.key} className="flex flex-col gap-1.5">
+      {/* Одно окно, а не колонки (VED-248): блоки идут подряд сверху вниз
+          на любой ширине экрана, а не рядом друг с другом на широких. */}
+      <div className="mt-4 flex max-w-prose flex-col gap-6">
+        {blocks.map((block) => (
+          <div key={block.key} className="flex flex-col gap-1.5">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-2">
-              {column.label}
+              {block.label}
             </h3>
             <p className="whitespace-pre-line text-sm leading-relaxed text-text-1">
-              {column.value}
+              {block.value}
             </p>
           </div>
         ))}

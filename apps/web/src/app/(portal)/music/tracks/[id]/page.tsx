@@ -88,10 +88,15 @@ export default async function MusicTrackPage({
 
       <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:gap-7">
         <div className="h-48 w-48 shrink-0 overflow-hidden rounded-2xl sm:h-56 sm:w-56">
+          {/* `contain`, а не `cover` (VED-248): обложка здесь не плитка в
+              сетке каталога, а сама себе витрина — обрезать её край
+              значило бы показать не то, что загрузил редактор (широкий
+              баннер терял текст, урезанный до квадрата). */}
           <MusicCover
             url={track.coverUrl}
             seed={track.id}
             alt={`Обложка: ${track.title}`}
+            fit="contain"
           />
         </div>
 

@@ -34,4 +34,33 @@ describe("MusicCover", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("[aria-hidden='true']")).not.toBeNull();
   });
+
+  // VED-248: широкий баннер обрезался до квадрата на странице записи и в
+  // плеере — по умолчанию `cover` остаётся прежним для плиток каталога.
+  it("по умолчанию — cover, без подложки под картинкой", () => {
+    render(
+      <MusicCover url="https://cdn.test/a.jpg" seed="t1" alt="Обложка: Киртан" />,
+    );
+
+    const img = screen.getByAltText("Обложка: Киртан");
+    expect(img).toHaveClass("object-cover");
+    expect(img).not.toHaveClass("object-contain");
+    expect(img.style.backgroundImage).toBe("");
+  });
+
+  it("fit=\"contain\" показывает картинку целиком на фирменной подложке", () => {
+    render(
+      <MusicCover
+        url="https://cdn.test/a.jpg"
+        seed="t1"
+        alt="Обложка: Киртан"
+        fit="contain"
+      />,
+    );
+
+    const img = screen.getByAltText("Обложка: Киртан");
+    expect(img).toHaveClass("object-contain");
+    expect(img).not.toHaveClass("object-cover");
+    expect(img.style.backgroundImage).not.toBe("");
+  });
 });

@@ -209,11 +209,15 @@ export function MiniPlayer() {
             aria-label={`Открыть запись: ${current.title}`}
             className="size-8 shrink-0 overflow-hidden rounded-lg"
           >
+            {/* `contain` (VED-248): даже в свёрнутой полоске широкая
+                обложка должна быть видна целиком, не урезанной до
+                квадрата. */}
             <MusicCover
               url={current.coverUrl}
               seed={current.id}
               alt=""
               rounded="rounded-lg"
+              fit="contain"
             />
           </Link>
 
@@ -288,11 +292,15 @@ export function MiniPlayer() {
             aria-label={`Открыть запись: ${current.title}`}
             className="h-10 w-10 shrink-0 overflow-hidden rounded-[10px]"
           >
+            {/* `contain` (VED-248): развёрнутая полоса — тоже витрина
+                записи, а не плитка каталога; обрезать широкую обложку до
+                квадрата здесь так же неверно, как на странице записи. */}
             <MusicCover
               url={current.coverUrl}
               seed={current.id}
               alt=""
               rounded="rounded-[10px]"
+              fit="contain"
             />
           </Link>
           <div className="flex min-w-0 flex-col">
