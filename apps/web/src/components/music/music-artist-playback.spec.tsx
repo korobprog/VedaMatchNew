@@ -63,14 +63,28 @@ beforeEach(() => {
 });
 
 describe("MusicArtistPlayback", () => {
-  it("по умолчанию — «по дате добавления», новые сверху (как отдал сервер)", () => {
+  // VED-273: по умолчанию группировка — алфавит, а не дата добавления.
+  it("по умолчанию — «по алфавиту»", () => {
     render(
       <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
     );
 
     expect(
-      screen.getByRole("button", { name: "По дате добавления" }),
+      screen.getByRole("button", { name: "По алфавиту" }),
     ).toHaveAttribute("aria-pressed", "true");
+    const titles = rowTitles().join("|");
+    expect(titles.indexOf("Арати")).toBeLessThan(titles.indexOf("Бхаджан"));
+    expect(titles.indexOf("Бхаджан")).toBeLessThan(titles.indexOf("Ямуна"));
+  });
+
+  it("«По дате добавления» переупорядочивает строки — новые сверху", async () => {
+    const user = userEvent.setup();
+    render(
+      <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "По дате добавления" }));
+
     const titles = rowTitles().join("|");
     expect(titles.indexOf("Ямуна")).toBeLessThan(titles.indexOf("Бхаджан"));
     expect(titles.indexOf("Бхаджан")).toBeLessThan(titles.indexOf("Арати"));
@@ -119,24 +133,25 @@ describe("MusicArtistPlayback", () => {
 
   // VED-159, круг 2: «Слушать»/«Перемешать» должны идти по тому же порядку,
   // что видит человек после сортировки — не по исходному порядку с сервера.
-  it("«Слушать» ставит очередь в исходном порядке, пока сортировка «По дате»", async () => {
+  it("«Слушать» ставит очередь в порядке «По дате» после переключения сортировки", async () => {
     const user = userEvent.setup();
     render(
       <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
     );
 
+    await user.click(screen.getByRole("button", { name: "По дате добавления" }));
     await user.click(screen.getByRole("button", { name: "Слушать" }));
 
     expect(player.value.play).toHaveBeenCalledWith("y", ["y", "b", "a"]);
   });
 
-  it("«Слушать» ставит очередь в алфавитном порядке после переключения сортировки", async () => {
+  // VED-273: алфавит — теперь порядок по умолчанию, клика не требуется.
+  it("«Слушать» ставит очередь в алфавитном порядке по умолчанию", async () => {
     const user = userEvent.setup();
     render(
       <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
     );
 
-    await user.click(screen.getByRole("button", { name: "По алфавиту" }));
     await user.click(screen.getByRole("button", { name: "Слушать" }));
 
     expect(player.value.play).toHaveBeenCalledWith("a", ["a", "b", "y"]);
