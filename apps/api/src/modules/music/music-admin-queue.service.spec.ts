@@ -39,6 +39,7 @@ function prismaMock() {
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    musicTrackCategory: { groupBy: jest.fn().mockResolvedValue([]) },
     musicReport: { count: jest.fn().mockResolvedValue(0) },
   };
 }
@@ -299,5 +300,50 @@ describe('уведомления о решении', () => {
     await service(prisma, events).decide(true, 't1', { decision: 'publish' });
 
     expect(events.emit).not.toHaveBeenCalled();
+  });
+});
+
+// VED-165-2: справочник редакции считает всё (не только опубликованное), в
+// отличие от витрины — регресс здесь означало бы, что счётчик у корневой
+// категории навсегда показывает ноль (прежний `_count` на связи
+// `MusicTrackCategory`, которая для корневой больше не заводится).
+describe('MusicAdminQueueService.listCategories', () => {
+  it('складывает стиль (тег записи) и корневую (через исполнителя) без фильтра по статусу', async () => {
+    const prisma = prismaMock();
+    prisma.musicCategory.findMany.mockResolvedValue([
+      {
+        id: 'traditional',
+        slug: 'traditional',
+        title: 'Традиционное',
+        position: 0,
+        kind: 'root',
+      },
+      {
+        id: 'mantra',
+        slug: 'mantra',
+        title: 'Мантра',
+        position: 1,
+        kind: 'style',
+      },
+    ]);
+    prisma.musicTrackCategory.groupBy.mockResolvedValue([
+      { categoryId: 'mantra', _count: { trackId: 2 } },
+    ]);
+    prisma.musicArtist.findMany.mockResolvedValue([
+      { rootCategoryId: 'traditional', _count: { tracks: 6 } },
+    ]);
+
+    const result = await service(prisma).listCategories(true);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({ id: 'traditional', trackCount: 6 }),
+      expect.objectContaining({ id: 'mantra', trackCount: 2 }),
+    ]);
+    // Справочник редакции не фильтрует по статусу — считает весь каталог.
+    expect(prisma.musicTrackCategory.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { track: {}, category: { kind: 'style' } },
+      }),
+    );
   });
 });

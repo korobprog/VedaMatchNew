@@ -15,10 +15,10 @@ import type {
   CreateMusicIngestBatchRequest,
   MusicArtistsFromTagsRequest,
   MusicArtistsFromTagsResult,
+  MusicBulkArtistRootCategoryRequest,
+  MusicBulkArtistRootCategoryResult,
   MusicBulkTrackArtistRequest,
   MusicBulkTrackArtistResult,
-  MusicBulkTrackRootCategoryRequest,
-  MusicBulkTrackRootCategoryResult,
   MusicIngestBatchDetailDto,
   MusicIngestBatchDto,
   MusicModerationDecisionRequest,
@@ -84,12 +84,16 @@ export const setMusicTracksArtist = (body: MusicBulkTrackArtistRequest) =>
     body: JSON.stringify(body),
   });
 
-/** Массовая простановка корневой категории у выбранных записей (VED-165). */
-export const setMusicTracksRootCategory = (
-  body: MusicBulkTrackRootCategoryRequest,
+/**
+ * Массовая простановка корневой категории выбранным исполнителям
+ * (VED-165-2): проще размечать исполнителя целиком, чем каждую его запись —
+ * новая запись того же исполнителя сразу попадает в нужную вкладку.
+ */
+export const setMusicArtistsRootCategory = (
+  body: MusicBulkArtistRootCategoryRequest,
 ) =>
-  send<MusicBulkTrackRootCategoryResult>(
-    `/music/admin/catalog/tracks/root-category`,
+  send<MusicBulkArtistRootCategoryResult>(
+    `/music/admin/catalog/artists/root-category`,
     {
       method: "POST",
       body: JSON.stringify(body),

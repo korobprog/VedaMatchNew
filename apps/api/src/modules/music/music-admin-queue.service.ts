@@ -24,6 +24,7 @@ import {
   toMusicTrackDetailDto,
 } from './music-track-dto';
 import { musicCoverBaseUrl } from './music-cover-file';
+import { countTracksByCategory } from './music-category-counts';
 
 const MAX_NOTE_LENGTH = 500;
 const QUEUE_PAGE = 50;
@@ -53,7 +54,9 @@ export class MusicAdminQueueService {
     private readonly events: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
+    this.publicBaseUrl = musicCoverBaseUrl(
+      config.get<string>('API_PUBLIC_URL'),
+    );
   }
 
   private assertAdmin(viewerIsAdmin: boolean): void {
@@ -302,11 +305,17 @@ export class MusicAdminQueueService {
   ): Promise<MusicAdminCategoriesDto> {
     this.assertAdmin(viewerIsAdmin);
     const rows = await this.prisma.musicCategory.findMany({
-      include: { _count: { select: { tracks: true } } },
       orderBy: [{ position: 'asc' }, { title: 'asc' }],
     });
+    // Справочник редакции считает всё, не только опубликованное (VED-165-2):
+    // черновик или отклонённая запись занимают раздел каталога с её точки
+    // зрения не меньше опубликованной. Стиль — тег записи, корневая — теперь
+    // на исполнителе, см. `music-category-counts.ts`.
+    const byCategory = await countTracksByCategory(this.prisma, false);
     return {
-      items: rows.map((row) => toMusicCategoryDto(row, row._count.tracks)),
+      items: rows.map((row) =>
+        toMusicCategoryDto(row, byCategory.get(row.id) ?? 0),
+      ),
     };
   }
 }

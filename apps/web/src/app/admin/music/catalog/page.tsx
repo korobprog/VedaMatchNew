@@ -1,4 +1,5 @@
 import { MusicAdminTabs } from "@/components/music/admin/admin-tabs";
+import { MusicArtistCatalogPanel } from "@/components/music/admin/artist-catalog-panel";
 import { MusicArtistsFromTags } from "@/components/music/admin/artists-from-tags";
 import { MusicReferenceForms } from "@/components/music/admin/reference-forms";
 import { MusicReferenceList } from "@/components/music/admin/reference-list";
@@ -73,17 +74,9 @@ export default async function AdminMusicCatalogPage() {
         Что уже есть
       </h2>
       <div className="grid gap-4 lg:grid-cols-3">
-        <MusicReferenceList
-          kind="artist"
-          title="Исполнители"
-          empty="Пока никого."
-          rows={artistItems.map((artist) => ({
-            id: artist.id,
-            primary: artist.name,
-            secondary: countLabel(artist.trackCount),
-            badge: artist.isVerified ? "проверен" : null,
-            coverUrl: artist.coverUrl,
-          }))}
+        <MusicArtistCatalogPanel
+          artists={artistItems}
+          categories={categoryItems}
         />
         <MusicReferenceList
           kind="album"

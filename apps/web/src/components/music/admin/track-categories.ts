@@ -1,46 +1,24 @@
 import type { MusicCategoryDto } from "@vedamatch/shared";
 
 /**
- * Разбор набора `categoryIds` записи на корневую и стилевую часть (VED-165).
+ * Стиль записи из уже стоящих тегов (VED-165-2).
  *
- * У записи может быть несколько категорий, но по замыслу фильтра — ровно
- * одна корневая («Традиционное»/«Современное») и ровно один стиль (киртан,
- * мантра…) одновременно. Форма правки показывает два раздельных выбора
- * вместо одного списка, и ей нужно знать, какой из уже стоящих на записи
- * тегов куда положить — отсюда и функция.
+ * Раньше запись несла два тега одновременно — корневую категорию и стиль
+ * (VED-165) — и здесь жил разбор обоих (`splitTrackCategories`). Корневая
+ * переехала на исполнителя (по просьбе тестировщика — «скопом», без правки
+ * каждой записи), и у формы правки записи остаётся один выбор: стиль.
  *
- * Если на записи почему-то оказалось несколько тегов одного вида (например,
+ * Если на записи почему-то оказалось несколько стилевых тегов (например,
  * заведено раньше через API напрямую), берётся первый — форма всё равно
  * заменит набор целиком при сохранении.
  */
-export interface SplitTrackCategories {
-  rootId: string;
-  styleId: string;
-}
-
-export function splitTrackCategories(
+export function styleCategoryId(
   categoryIds: string[],
   categories: MusicCategoryDto[],
-): SplitTrackCategories {
+): string {
   const byId = new Map(categories.map((category) => [category.id, category]));
-  let rootId = "";
-  let styleId = "";
   for (const id of categoryIds) {
-    const category = byId.get(id);
-    if (!category) continue;
-    if (category.kind === "root" && !rootId) rootId = id;
-    if (category.kind === "style" && !styleId) styleId = id;
+    if (byId.get(id)?.kind === "style") return id;
   }
-  return { rootId, styleId };
-}
-
-/**
- * Обратная операция: два выбора формы — обратно в `categoryIds` для
- * `updateMusicTrack`. Пустая строка — «не выбрано», в массив не попадает.
- */
-export function mergeTrackCategories(
-  rootId: string,
-  styleId: string,
-): string[] {
-  return [rootId, styleId].filter((id) => id !== "");
+  return "";
 }

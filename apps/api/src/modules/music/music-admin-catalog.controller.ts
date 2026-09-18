@@ -19,8 +19,8 @@ import type {
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   MusicArtistsFromTagsRequest,
+  MusicBulkArtistRootCategoryRequest,
   MusicBulkTrackArtistRequest,
-  MusicBulkTrackRootCategoryRequest,
   MusicModerationDecisionRequest,
   MusicReportDecisionRequest,
   UpdateMusicCategoryRequest,
@@ -180,6 +180,21 @@ export class MusicAdminCatalogController {
     return this.catalog.deleteArtist(isAdmin(user), id);
   }
 
+  /**
+   * Массовая простановка корневой категории исполнителям (VED-165-2): по
+   * запросу тестировщика — «скопом» на исполнителя, а не по одной записи
+   * (см. историю решения в `music-admin-catalog.service.ts`). Стоит перед
+   * `artists/:id`-маршрутами по тому же принципу, что и у смены исполнителя
+   * записей — читается рядом с остальными действиями над исполнителем.
+   */
+  @Post('artists/root-category')
+  setArtistsRootCategory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: MusicBulkArtistRootCategoryRequest,
+  ) {
+    return this.catalog.setArtistsRootCategory(isAdmin(user), body);
+  }
+
   @Post('albums')
   createAlbum(
     @CurrentUser() user: AccessTokenPayload,
@@ -241,19 +256,6 @@ export class MusicAdminCatalogController {
     @Body() body: MusicBulkTrackArtistRequest,
   ) {
     return this.catalog.setTracksArtist(isAdmin(user), body);
-  }
-
-  /**
-   * Массовая простановка корневой категории (VED-165) — тем же приёмом, что
-   * массовая смена исполнителя: без неё разметить каталог по «Традиционное»/
-   * «Современное» можно только записью за записью.
-   */
-  @Post('tracks/root-category')
-  setTracksRootCategory(
-    @CurrentUser() user: AccessTokenPayload,
-    @Body() body: MusicBulkTrackRootCategoryRequest,
-  ) {
-    return this.catalog.setTracksRootCategory(isAdmin(user), body);
   }
 
   @Patch('tracks/:id')

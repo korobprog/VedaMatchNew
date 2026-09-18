@@ -202,7 +202,17 @@ describe('toMusicArtistDto', () => {
       coverUrl: 'https://cdn.example.org/bucket/music/artists/a1.jpg',
       isVerified: true,
       trackCount: 7,
+      rootCategoryId: null,
     });
+  });
+
+  // VED-165-2: корневая категория переехала с записи на исполнителя —
+  // молчаливая потеря поля на полпути к DTO значила бы, что вкладки
+  // «Традиционное»/«Современное» на его странице не видят разметку.
+  it('прокидывает rootCategoryId, когда он проставлен', () => {
+    expect(
+      toMusicArtistDto({ ...artist, rootCategoryId: 'root-1' }, 0, BASE),
+    ).toMatchObject({ rootCategoryId: 'root-1' });
   });
 });
 

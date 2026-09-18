@@ -4695,14 +4695,23 @@ model MusicArtist {
   coverKey   String?
   /// Отметка редакции «это тот самый человек», а не значок портала.
   isVerified Boolean         @default(false)
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  /// Корневая категория витрины («Традиционное»/«Современное», VED-165-2).
+  /// Раньше её ставили записи за записью (`MusicTrackCategory`), но
+  /// тестировщик попросил разметку по исполнителю целиком — так проще для
+  /// редакции и новая запись того же исполнителя сразу попадает в нужную
+  /// вкладку, без повторной правки. `kind` категории обязан быть `root`,
+  /// это проверяет сервис, а не база.
+  rootCategoryId String?
+  rootCategory   MusicCategory?     @relation("MusicArtistRootCategory", fields: [rootCategoryId], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   albums        MusicAlbum[]
   tracks        MusicTrack[]
   ingestBatches MusicIngestBatch[]
 
   @@index([kind])
+  @@index([rootCategoryId])
 }
 
 /// Альбом или программа целиком.
@@ -4746,7 +4755,11 @@ model MusicCategory {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  tracks MusicTrackCategory[]
+  tracks      MusicTrackCategory[]
+  /// Исполнители, у которых эта категория выбрана корневой (VED-165-2).
+  /// Заполняется только у категорий `kind: root` — сервис не даёт поставить
+  /// стилевую.
+  rootArtists MusicArtist[]        @relation("MusicArtistRootCategory")
 
   @@index([position])
   @@index([kind])

@@ -17,6 +17,7 @@ import {
   durationCondition,
   type NormalizedMusicTrackQuery,
 } from './music-catalog-query';
+import { countTracksByCategory } from './music-category-counts';
 import {
   buildCoverUrl,
   toMusicAlbumDto,
@@ -129,16 +130,9 @@ export class MusicCatalogService {
       orderBy: [{ position: 'asc' }, { title: 'asc' }],
     });
 
-    // Счётчики одним groupBy, а не запросом на категорию: их пять, но N+1
-    // здесь ничем не оправдан.
-    const counts = await this.prisma.musicTrackCategory.groupBy({
-      by: ['categoryId'],
-      where: { track: { status: 'published' } },
-      _count: { trackId: true },
-    });
-    const byCategory = new Map(
-      counts.map((row) => [row.categoryId, row._count.trackId]),
-    );
+    // Стиль считается прямой связью записи, корневая (VED-165-2) — через
+    // исполнителя: см. `music-category-counts.ts`.
+    const byCategory = await countTracksByCategory(this.prisma, true);
 
     return categories.map((row) =>
       toMusicCategoryDto(row, byCategory.get(row.id) ?? 0),
@@ -203,17 +197,22 @@ export class MusicCatalogService {
     const duration = durationCondition(query.duration);
     const lineage = await this.viewerLineage(viewerId, query.lineage);
 
-    // Корневая категория и стиль (VED-165) — оба через `some` на одной и той
-    // же связи `categories`, поэтому их нельзя положить двумя ключами в один
-    // объект `where`: вторая запись с тем же именем ключа молча стёрла бы
-    // первую. Складываем оба условия (и условие линии — по той же причине) в
-    // общий массив `AND`: Prisma требует, чтобы трек прошёл каждое из них, то
-    // есть нашёлся тег и с корневым слагом, и со стилевым, — ровно
-    // пересечение, которое просит карточка («традиционное» + «мантра»).
+    // Корневая категория (VED-165-2) переехала на исполнителя: фильтр по ней
+    // — условие на связь `artist.rootCategory`, а не на `categories`, как у
+    // стиля. У записи без исполнителя `artist` пуст, и Prisma-фильтр по
+    // вложенной связи для пустого `artist` не совпадёт ни с чем — запись без
+    // исполнителя корректно выпадает из любой вкладки «Традиционное»/
+    // «Современное».
+    //
+    // Оба измерения (и условие линии — по той же причине) складываются в
+    // общий массив `AND`, а не два прямых ключа в одном объекте `where`:
+    // `artist` уже встречается отдельным ключом верхнего уровня у фильтра по
+    // слагу исполнителя (`query.artist` ниже), и класть туда же ещё одно
+    // условие вторым спредом значило бы молча стереть первое.
     const andConditions = [
       ...lineageAndConditions(lineage),
       ...(query.root
-        ? [{ categories: { some: { category: { slug: query.root } } } }]
+        ? [{ artist: { rootCategory: { slug: query.root } } }]
         : []),
       ...(query.category
         ? [{ categories: { some: { category: { slug: query.category } } } }]
