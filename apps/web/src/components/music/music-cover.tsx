@@ -54,6 +54,7 @@ export function MusicCover({
   className = "",
   rounded = "rounded-2xl",
   fill = true,
+  fit = "cover",
 }: {
   url: string | null;
   /** Постоянный ключ записи — обычно её id. */
@@ -72,6 +73,20 @@ export function MusicCover({
    * ширину карточки и выдавливала название со счётчиком за её границу.
    */
   fill?: boolean;
+  /**
+   * `cover` (по умолчанию) режет картинку под рамку — годится для плиток
+   * каталога и мелких миниатюр, где важна ровная сетка, а не пропорции
+   * исходника.
+   *
+   * `contain` показывает файл целиком, с полями по бокам или сверху/снизу:
+   * нужен там, где обложка — не плитка в сетке, а сама себе витрина
+   * (страница записи, полоса плеера), и обрезать её край — значит показать
+   * не то, что загрузил редактор. Так широкий баннер «Madhurastakam»
+   * терял текст на картинке, урезанный до квадрата (VED-248). Поля под
+   * `contain` закрашены тем же фирменным градиентом, что у записи совсем
+   * без обложки, — не пустым белым и не прозрачным.
+   */
+  fit?: "cover" | "contain";
 }) {
   const size = fill ? "h-full w-full" : "";
   /* Ссылка есть, а файл не пришёл — показываем ту же заглушку, что и у записи
@@ -88,7 +103,10 @@ export function MusicCover({
         alt={alt}
         loading="lazy"
         onError={() => setFailed(true)}
-        className={`${size} object-cover ${rounded} ${className}`}
+        // Фон виден только в полях `contain`: при `cover` картинка и так
+        // закрывает рамку целиком, и подкладывать под неё нечего.
+        style={fit === "contain" ? placeholderStyle(seed) : undefined}
+        className={`${size} ${fit === "contain" ? "object-contain" : "object-cover"} ${rounded} ${className}`}
       />
     );
   }
