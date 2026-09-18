@@ -128,3 +128,27 @@ describe("AppDownloadSection", () => {
     expect(link).toHaveAttribute("href", "https://t.me/vedamatch_bot");
   });
 });
+
+describe("AppDownloadSection — бот Telegram", () => {
+  it("на контуре com показывает способ с шагами и ссылкой на бота", () => {
+    render(<AppDownloadSection manifest={MANIFEST} variant="full" showTelegram />);
+
+    expect(
+      screen.getByRole("heading", { name: "VedaMatch в Telegram" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Открыть бота/ })).toHaveAttribute(
+      "href",
+      "https://t.me/vedamatch_bot",
+    );
+    // Шаги — списком, а не сплошным текстом: их читают перед нажатием.
+    expect(screen.getAllByRole("listitem").some((item) => /кнопку/.test(item.textContent ?? ""))).toBe(true);
+  });
+
+  it("без контура com способа нет: вход через Telegram там выключен", () => {
+    render(<AppDownloadSection manifest={MANIFEST} variant="full" />);
+
+    expect(
+      screen.queryByRole("heading", { name: "VedaMatch в Telegram" }),
+    ).not.toBeInTheDocument();
+  });
+});

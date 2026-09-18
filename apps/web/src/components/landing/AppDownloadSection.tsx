@@ -136,6 +136,12 @@ export function AppDownloadSection({
           <IPhoneAppBlock showTelegram={showTelegram} />
         )}
 
+        {/* Третий способ: бот открывает ту же веб-версию внутри Telegram —
+            без установки и без пароля. Показываем там же, где включён вход
+            через Telegram (контур com): на vedamatch.ru способ выключен
+            (AuthProviderSetting), и звать туда людей было бы обманом. */}
+        {showTelegram && <TelegramBotBlock />}
+
         {variant === "full" && device === "desktop" && (
           <div className="mt-12 flex flex-col items-center gap-3 text-center">
             <p className="text-sm text-text-1">
@@ -369,6 +375,58 @@ function IosCard({
           не рендерится вовсе — компонент сам решает по режиму установки. */}
       <InstallButton className="mt-4" />
     </CardShell>
+  );
+}
+
+/**
+ * Бот `@vedamatch_bot` как способ пользоваться порталом: внутри Telegram
+ * открывается та же веб-версия (мини-приложение), вход происходит сам —
+ * Telegram сообщает, кто открыл, и пароль не нужен. Шаги нумерованные:
+ * человек читает их до того, как нажать, и знает, что будет дальше.
+ */
+function TelegramBotBlock() {
+  return (
+    <div className="mt-6 rounded-2xl border border-glass-brd glass p-6 md:p-8">
+      <h3 className="font-display text-xl font-bold text-text-0">
+        VedaMatch в Telegram
+      </h3>
+      <p className="mt-2 max-w-2xl text-sm text-text-1">
+        Тот же портал прямо в Telegram: чаты, звонки, люди и общины. Ставить
+        ничего не нужно, пароль вводить тоже — Telegram сам сообщает, кто
+        открыл приложение.
+      </p>
+      <ol className="mt-4 max-w-2xl list-decimal space-y-2 pl-5 text-sm text-text-1 marker:text-text-2">
+        <li>
+          Откройте бота{" "}
+          <span className="font-mono text-text-0">@vedamatch_bot</span>.
+        </li>
+        <li>
+          Нажмите кнопку{" "}
+          <span className="font-semibold text-text-0">«VedaMatch»</span> слева
+          от поля ввода — откроется приложение.
+        </li>
+        <li>
+          Вход произойдёт сам. Если вы уже пользуетесь порталом, привяжите
+          Telegram к своему аккаунту: «Сервисы» → «Аккаунт и способы входа».
+        </li>
+        <li>
+          Разрешите боту писать вам — тогда сообщения и звонки будут приходить
+          уведомлениями в Telegram. Это включается и выключается там же, в
+          разделе «Аккаунт».
+        </li>
+      </ol>
+      <a
+        href="https://t.me/vedamatch_bot"
+        className={cn(
+          "mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3",
+          "border border-glass-brd text-base font-semibold text-text-0",
+          "transition-colors duration-300 hover:border-cyan/50",
+        )}
+      >
+        <Send className="h-5 w-5" aria-hidden="true" />
+        Открыть бота
+      </a>
+    </div>
   );
 }
 
