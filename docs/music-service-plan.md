@@ -84,7 +84,11 @@
 ```
 MusicArtist         slug, name, kind (kirtaneer|group|temple|unknown), bio, coverKey, isVerified
 MusicAlbum          slug, title, artistId?, kind (album|live|compilation|single), year, coverKey
-MusicCategory       slug, title, order            // киртан, бхаджан, мантра, гуру-пуджа, инструментал
+MusicCategory       slug, title, order, kind (root|style)  // root: Традиционное/Современное — главный
+                    // выбор витрины; style: киртан, бхаджан, мантра, гуру-пуджа, инструментал —
+                    // фильтр «Стиль», применяется вместе с root как пересечение (VED-165).
+                    // API: `root` и `category` — два независимых параметра запроса,
+                    // `category` теперь значит именно «стиль», не путать с `root`.
 MusicTrack          title, artistId?, albumId?, storageKey, mime, sizeBytes,
                     durationSeconds, bitrateKbps, status, uploadedById?, language,
                     lyrics?, transliteration?, translation?, playCount, publishedAt

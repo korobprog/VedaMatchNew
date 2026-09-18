@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { MusicCategoryKind } from "@vedamatch/shared";
 import {
   deleteMusicAlbum,
   deleteMusicArtist,
@@ -23,6 +24,12 @@ export interface MusicReferenceRow {
   badge: string | null;
   /** Обложка, если она уже есть. У разделов каталога обложек не бывает. */
   coverUrl?: string | null;
+  /**
+   * Вид раздела каталога (VED-165). Только для `kind === "category"` — по
+   * ней рисуется переключатель «Корневая» / «Стиль» прямо в списке: без
+   * него увидеть, что уже стоит у категории, можно было бы только в базе.
+   */
+  categoryKind?: MusicCategoryKind;
 }
 
 /**
@@ -116,6 +123,18 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
           : updateMusicCategory(row.id, { title: next }),
     );
   };
+
+  /**
+   * Переключатель вида раздела (VED-165). Прямо в списке, а не отдельной
+   * формой: категорий немного, а решение «это корневая или стиль» — то, что
+   * редакция может захотеть поправить сразу, увидев список целиком.
+   */
+  const toggleKind = () =>
+    void run(() =>
+      updateMusicCategory(row.id, {
+        kind: row.categoryKind === "root" ? "style" : "root",
+      }),
+    );
 
   /** Обложка есть только у исполнителя и альбома: раздел каталога — просто имя. */
   const coverScope = kind === "artist" ? "artist" : "album";
@@ -259,6 +278,25 @@ function Row({ row, kind }: { row: MusicReferenceRow; kind: MusicReferenceKind }
             <span className="shrink-0 self-center rounded-full border border-cyan/40 px-2 text-[11px] text-cyan">
               {row.badge}
             </span>
+          )}
+          {kind === "category" && row.categoryKind && (
+            <button
+              type="button"
+              onClick={toggleKind}
+              disabled={pending}
+              aria-label={`«${row.primary}» сейчас: ${
+                row.categoryKind === "root" ? "корневая" : "стиль"
+              }. Нажмите, чтобы сделать ${
+                row.categoryKind === "root" ? "стилем" : "корневой"
+              }`}
+              className={`shrink-0 self-center rounded-full border px-2 text-[11px] transition-colors disabled:opacity-50 ${
+                row.categoryKind === "root"
+                  ? "border-magenta/40 text-magenta hover:bg-magenta/10"
+                  : "border-glass-brd text-text-2 hover:text-text-0"
+              }`}
+            >
+              {row.categoryKind === "root" ? "корневая" : "стиль"}
+            </button>
           )}
           {kind !== "category" && (
             <button

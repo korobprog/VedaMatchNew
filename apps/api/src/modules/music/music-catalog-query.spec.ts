@@ -10,6 +10,7 @@ describe('normalizeMusicTrackQuery', () => {
   it('на пустом запросе отдаёт значения по умолчанию', () => {
     expect(normalizeMusicTrackQuery({})).toEqual({
       q: null,
+      root: null,
       category: null,
       artist: null,
       language: null,
@@ -23,7 +24,9 @@ describe('normalizeMusicTrackQuery', () => {
   });
 
   it('линию принимает из справочника или «all», прочее считает «не спрашивали»', () => {
-    expect(normalizeMusicTrackQuery({ lineage: 'ipbys' }).lineage).toBe('ipbys');
+    expect(normalizeMusicTrackQuery({ lineage: 'ipbys' }).lineage).toBe(
+      'ipbys',
+    );
     expect(normalizeMusicTrackQuery({ lineage: 'all' }).lineage).toBe('all');
     expect(normalizeMusicTrackQuery({ lineage: 'hare' }).lineage).toBeNull();
     expect(normalizeMusicTrackQuery({ lineage: '' }).lineage).toBeNull();
@@ -40,6 +43,29 @@ describe('normalizeMusicTrackQuery', () => {
 
     expect(result.category).toBeNull();
     expect(result.artist).toBeNull();
+  });
+
+  // VED-165: корневая категория и стиль — два независимых параметра, оба
+  // разбираются и уживаются в одном запросе одновременно.
+  it('root и category — независимые параметры и сосуществуют', () => {
+    const result = normalizeMusicTrackQuery({
+      root: 'traditional',
+      category: 'mantra',
+    });
+
+    expect(result.root).toBe('traditional');
+    expect(result.category).toBe('mantra');
+  });
+
+  it('root без category и наоборот — второе остаётся пустым', () => {
+    expect(normalizeMusicTrackQuery({ root: 'modern' })).toMatchObject({
+      root: 'modern',
+      category: null,
+    });
+    expect(normalizeMusicTrackQuery({ category: 'bhajan' })).toMatchObject({
+      root: null,
+      category: 'bhajan',
+    });
   });
 
   it('неизвестную сортировку заменяет на свежее, а не падает', () => {

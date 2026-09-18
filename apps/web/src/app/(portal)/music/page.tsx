@@ -17,7 +17,6 @@ import {
 } from "@/lib/music-api";
 import { LineageStatus } from "@/components/lineage-status";
 import { MusicArtistsSection } from "@/components/music/music-artists-section";
-import { MusicCategoryChips } from "@/components/music/music-category-chips";
 import { MusicCover } from "@/components/music/music-cover";
 import {
   MusicFilters,
@@ -26,6 +25,7 @@ import {
 } from "@/components/music/music-filters";
 import { MusicPlaylistCard } from "@/components/music/music-playlist-card";
 import { MusicRail } from "@/components/music/music-rail";
+import { MusicRootTabs } from "@/components/music/music-root-tabs";
 import { MusicSearchField } from "@/components/music/music-search-field";
 import { MusicTrackList } from "@/components/music/music-track-list";
 import { plural } from "@/lib/plural";
@@ -69,6 +69,7 @@ export default async function MusicPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    root?: string | string[];
     category?: string | string[];
     q?: string | string[];
     all?: string | string[];
@@ -83,6 +84,10 @@ export default async function MusicPage({
   const params = await searchParams;
   const first = (value?: string | string[]) =>
     (Array.isArray(value) ? value[0] : value)?.trim() || null;
+  // Корневая категория витрины (VED-165) — «Традиционное»/«Современное»,
+  // независимый параметр рядом с `category` (стиль): оба применяются как
+  // пересечение.
+  const root = first(params.root);
   const category = first(params.category);
   const query = first(params.q);
   const artist = first(params.artist);
@@ -100,6 +105,7 @@ export default async function MusicPage({
   const showAll = first(params.all) !== null || explicitLineage !== null;
 
   const filterState = {
+    root,
     category,
     q: query,
     artist,
@@ -109,7 +115,14 @@ export default async function MusicPage({
     cursor,
   };
   const hasFilter = Boolean(
-    category || query || artist || duration || live || sort || cursor,
+    root ||
+      category ||
+      query ||
+      artist ||
+      duration ||
+      live ||
+      sort ||
+      cursor,
   );
 
   // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
@@ -132,6 +145,7 @@ export default async function MusicPage({
       getMusicCatalog(),
       hasFilter || showAll
         ? getMusicTracks({
+            ...(root ? { root } : {}),
             ...(category ? { category } : {}),
             ...(query ? { q: query } : {}),
             ...(artist ? { artist } : {}),
@@ -182,18 +196,24 @@ export default async function MusicPage({
 
   const activeCategory =
     catalog.categories.find((item) => item.slug === category) ?? null;
+  const activeRoot =
+    catalog.categories.find((item) => item.slug === root) ?? null;
   const tracks = filtered ? filtered.items : catalog.fresh;
   // Заголовок обязан отвечать на «что я сейчас вижу». «Новое в каталоге» над
   // отобранным по длительности списком — прямое враньё, и человек читает его
-  // как «фильтр не сработал».
+  // как «фильтр не сработал». Корневая и стиль выбраны вместе (VED-165) —
+  // заголовок называет оба, а не один из них.
   const heading = query
     ? `Найдено по запросу «${query}»`
-    : (activeCategory?.title ??
-      (countMusicFilters(filterState) > 0
-        ? "Отобранное"
-        : showAll
-          ? "Все записи"
-          : "Новое в каталоге"));
+    : activeRoot && activeCategory
+      ? `${activeRoot.title} · ${activeCategory.title}`
+      : (activeRoot?.title ??
+        activeCategory?.title ??
+        (countMusicFilters(filterState) > 0
+          ? "Отобранное"
+          : showAll
+            ? "Все записи"
+            : "Новое в каталоге"));
 
   const pendingUploads =
     mine?.items.filter((item) => item.status !== "published").length ?? 0;
@@ -282,7 +302,7 @@ export default async function MusicPage({
           />
         </div>
         <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
-          <MusicSearchField value={query} category={category} />
+          <MusicSearchField value={query} root={root} category={category} />
           {/* Загружать может любой вошедший: сервис наполняется записями с
               программ, а редакция их разбирает. Кнопка стоит на виду, а не
               прячется в меню, — иначе о такой возможности не узнают. */}
@@ -310,11 +330,12 @@ export default async function MusicPage({
       </header>
 
       <div className="mt-6 flex flex-col gap-3">
-        <MusicCategoryChips
+        <MusicRootTabs categories={catalog.categories} state={filterState} />
+        <MusicFilters
+          state={filterState}
+          artists={catalog.artists}
           categories={catalog.categories}
-          active={activeCategory?.slug ?? null}
         />
-        <MusicFilters state={filterState} artists={catalog.artists} />
       </div>
 
       {/* Исполнители — до списка записей. Хвостом после подборок их не
@@ -360,7 +381,7 @@ export default async function MusicPage({
           <p className="mt-3 text-sm text-text-1">
             {query
               ? "Ничего не нашлось. Попробуйте другое слово или посмотрите весь каталог."
-              : activeCategory
+              : activeRoot || activeCategory
                 ? "В этом разделе пока пусто. Загляните в другие или посмотрите всё."
                 : appliedLineage
                   ? "Для вашей линии записей пока нет. Записи других линий скрыты."

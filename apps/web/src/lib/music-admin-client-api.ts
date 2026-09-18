@@ -17,6 +17,8 @@ import type {
   MusicArtistsFromTagsResult,
   MusicBulkTrackArtistRequest,
   MusicBulkTrackArtistResult,
+  MusicBulkTrackRootCategoryRequest,
+  MusicBulkTrackRootCategoryResult,
   MusicIngestBatchDetailDto,
   MusicIngestBatchDto,
   MusicModerationDecisionRequest,
@@ -81,6 +83,18 @@ export const setMusicTracksArtist = (body: MusicBulkTrackArtistRequest) =>
     method: "POST",
     body: JSON.stringify(body),
   });
+
+/** Массовая простановка корневой категории у выбранных записей (VED-165). */
+export const setMusicTracksRootCategory = (
+  body: MusicBulkTrackRootCategoryRequest,
+) =>
+  send<MusicBulkTrackRootCategoryResult>(
+    `/music/admin/catalog/tracks/root-category`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 
 /**
  * Удаление записи вместе с файлом. Не то же самое, что «скрыть» из очереди

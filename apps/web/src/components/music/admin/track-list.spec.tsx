@@ -12,11 +12,14 @@ import { MusicTrackList } from "./track-list";
 const updateMusicTrack = vi.fn();
 const deleteMusicTrack = vi.fn();
 const setMusicTracksArtist = vi.fn();
+const setMusicTracksRootCategory = vi.fn();
 
 vi.mock("@/lib/music-admin-client-api", () => ({
   updateMusicTrack: (...args: unknown[]) => updateMusicTrack(...args),
   deleteMusicTrack: (...args: unknown[]) => deleteMusicTrack(...args),
   setMusicTracksArtist: (...args: unknown[]) => setMusicTracksArtist(...args),
+  setMusicTracksRootCategory: (...args: unknown[]) =>
+    setMusicTracksRootCategory(...args),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -49,7 +52,8 @@ const albums = [
   { id: "al1", title: "Вечерняя арати" },
 ] as unknown as MusicAlbumDto[];
 const categories = [
-  { id: "c1", title: "Бхаджаны", slug: "bhajans" },
+  { id: "r1", title: "Традиционное", slug: "traditional", kind: "root" },
+  { id: "c1", title: "Бхаджаны", slug: "bhajans", kind: "style" },
 ] as unknown as MusicCategoryDto[];
 
 function renderList(items: MusicAdminTrackDto[] = [track()]) {
@@ -68,6 +72,7 @@ beforeEach(() => {
   updateMusicTrack.mockReset().mockResolvedValue({});
   deleteMusicTrack.mockReset().mockResolvedValue({});
   setMusicTracksArtist.mockReset();
+  setMusicTracksRootCategory.mockReset();
 });
 
 describe("MusicTrackList — массовая смена исполнителя (VED-226)", () => {
@@ -92,10 +97,16 @@ describe("MusicTrackList — массовая смена исполнителя 
     await userEvent.click(
       screen.getByRole("checkbox", { name: /Выбрать все показанные \(2\)/ }),
     );
-    expect(screen.getByText(/Выбрано: 2 записи/)).toBeInTheDocument();
+    // Две панели действий видят один и тот же выбор (VED-165: рядом с
+    // массовой сменой исполнителя появилась массовая простановка корневой
+    // категории) — сверяем счётчик именно у панели смены исполнителя.
+    const artistBar = screen.getByRole("region", {
+      name: "Действия с выбранными записями",
+    });
+    expect(within(artistBar).getByText(/Выбрано: 2 записи/)).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Сменить исполнителя" }),
+      within(artistBar).getByRole("button", { name: "Сменить исполнителя" }),
     );
     await userEvent.type(
       screen.getByRole("combobox", { name: "Исполнитель для выбранных записей" }),
@@ -104,7 +115,9 @@ describe("MusicTrackList — массовая смена исполнителя 
     expect(
       screen.getByText(/перейдут к существующему исполнителю «Мадхава»/),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    await userEvent.click(
+      within(artistBar).getByRole("button", { name: "Применить" }),
+    );
 
     expect(setMusicTracksArtist).toHaveBeenCalledWith({
       trackIds: ["t1", "t2"],
@@ -133,23 +146,84 @@ describe("MusicTrackList — массовая смена исполнителя 
   });
 });
 
+describe("MusicTrackList — массовая простановка корневой категории (VED-165)", () => {
+  it("ставит выбранную корневую у отмеченных записей", async () => {
+    setMusicTracksRootCategory.mockResolvedValue({ updated: 2 });
+    const user = userEvent.setup();
+    renderList([
+      track({ id: "t1", title: "Первая" }),
+      track({ id: "t2", title: "Вторая" }),
+    ]);
+
+    await user.click(screen.getByRole("checkbox", { name: "Выбрать «Первая»" }));
+    await user.click(screen.getByRole("checkbox", { name: "Выбрать «Вторая»" }));
+    await user.selectOptions(
+      screen.getByLabelText("Корневая категория для выбранных записей"),
+      "r1",
+    );
+    await user.click(
+      within(
+        screen.getByRole("region", {
+          name: "Корневая категория выбранных записей",
+        }),
+      ).getByRole("button", { name: "Применить" }),
+    );
+
+    expect(setMusicTracksRootCategory).toHaveBeenCalledWith({
+      trackIds: ["t1", "t2"],
+      rootCategoryId: "r1",
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByText(/2 записи — корневая теперь «Традиционное»/),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument();
+  });
+
+  it("«Снять корневую» шлёт null", async () => {
+    setMusicTracksRootCategory.mockResolvedValue({ updated: 1 });
+    const user = userEvent.setup();
+    renderList([track({ id: "t1", title: "Первая" })]);
+
+    await user.click(screen.getByRole("checkbox", { name: "Выбрать «Первая»" }));
+    await user.click(
+      within(
+        screen.getByRole("region", {
+          name: "Корневая категория выбранных записей",
+        }),
+      ).getByRole("button", { name: "Применить" }),
+    );
+
+    expect(setMusicTracksRootCategory).toHaveBeenCalledWith({
+      trackIds: ["t1"],
+      rootCategoryId: null,
+    });
+  });
+});
+
 describe("MusicTrackList", () => {
   it("правка предзаполнена тем, что стоит у записи сейчас", async () => {
     const user = userEvent.setup();
-    renderList([track({ artistId: "a2", categoryIds: ["c1"] })]);
+    renderList([
+      track({ artistId: "a2", categoryIds: ["r1", "c1"] }),
+    ]);
 
     await user.click(screen.getByLabelText("Править «Durga Chalisa»"));
 
     // Без идентификаторов в DTO селект показывал бы первый пункт списка, и
     // сохранение молча перевешивало бы запись на чужого исполнителя.
     expect(screen.getByLabelText("Исполнитель")).toHaveValue("a2");
-    expect(screen.getByLabelText("Раздел")).toHaveValue("c1");
+    // VED-165: два раздельных селекта — корневая и стиль — оба
+    // предзаполнены тем, что уже стоит на записи.
+    expect(screen.getByLabelText("Корневая")).toHaveValue("r1");
+    expect(screen.getByLabelText("Стиль")).toHaveValue("c1");
     expect(screen.getByLabelText("Духовная линия")).toHaveValue(
       "sri_chaitanya_gaudiya_math",
     );
   });
 
-  it("шлёт только тронутое: правка названия не затирает линию и раздел", async () => {
+  it("шлёт только тронутое: правка названия не затирает линию и разделы", async () => {
     const user = userEvent.setup();
     renderList([track({ categoryIds: ["c1"] })]);
 
@@ -162,6 +236,37 @@ describe("MusicTrackList", () => {
     await waitFor(() =>
       expect(updateMusicTrack).toHaveBeenCalledWith("t1", {
         title: "Дурга-чалиса",
+      }),
+    );
+  });
+
+  it("корневая и стиль сохраняются вместе — комбинация, не замена", async () => {
+    const user = userEvent.setup();
+    renderList([track({ categoryIds: [] })]);
+
+    await user.click(screen.getByLabelText("Править «Durga Chalisa»"));
+    await user.selectOptions(screen.getByLabelText("Корневая"), "r1");
+    await user.selectOptions(screen.getByLabelText("Стиль"), "c1");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() =>
+      expect(updateMusicTrack).toHaveBeenCalledWith("t1", {
+        categoryIds: ["r1", "c1"],
+      }),
+    );
+  });
+
+  it("снятие корневой не трогает стиль", async () => {
+    const user = userEvent.setup();
+    renderList([track({ categoryIds: ["r1", "c1"] })]);
+
+    await user.click(screen.getByLabelText("Править «Durga Chalisa»"));
+    await user.selectOptions(screen.getByLabelText("Корневая"), "Не указана");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() =>
+      expect(updateMusicTrack).toHaveBeenCalledWith("t1", {
+        categoryIds: ["c1"],
       }),
     );
   });

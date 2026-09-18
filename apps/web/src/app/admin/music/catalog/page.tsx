@@ -108,6 +108,7 @@ export default async function AdminMusicCatalogPage() {
             primary: category.title,
             secondary: countLabel(category.trackCount),
             badge: null,
+            categoryKind: category.kind,
           }))}
         />
       </div>

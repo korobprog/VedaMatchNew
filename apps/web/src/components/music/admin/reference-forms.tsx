@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { MusicArtistDto, MusicArtistKind } from "@vedamatch/shared";
+import type {
+  MusicArtistDto,
+  MusicArtistKind,
+  MusicCategoryKind,
+} from "@vedamatch/shared";
 import {
   createMusicAlbum,
   createMusicArtist,
@@ -231,6 +235,10 @@ function AlbumForm({ artists }: { artists: MusicArtistDto[] }) {
 function CategoryForm() {
   const [title, setTitle] = useState("");
   const [titleEn, setTitleEn] = useState("");
+  // VED-165: по умолчанию — стиль, тем же умолчанием, что у схемы. Корневых
+  // и так только две («Традиционное», «Современное»), заведены сидом; поле
+  // здесь — на случай, если редакции понадобится завести ещё одну.
+  const [kind, setKind] = useState<MusicCategoryKind>("style");
   const { pending, error, done, run } = useSubmit();
 
   return (
@@ -255,6 +263,31 @@ function CategoryForm() {
           placeholder="Guru-puja"
         />
       </label>
+      <fieldset className="block">
+        <legend className="mb-1 block text-xs text-text-2">
+          Вид — главный выбор витрины или фильтр «Стиль»
+        </legend>
+        <div className="flex gap-4 text-sm text-text-1">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="category-kind"
+              checked={kind === "style"}
+              onChange={() => setKind("style")}
+            />
+            Стиль
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="category-kind"
+              checked={kind === "root"}
+              onChange={() => setKind("root")}
+            />
+            Корневая
+          </label>
+        </div>
+      </fieldset>
       <button
         type="button"
         disabled={pending || !title.trim()}
@@ -264,10 +297,12 @@ function CategoryForm() {
               createMusicCategory({
                 title: title.trim(),
                 titleEn: titleEn.trim() || null,
+                kind,
               }),
             () => {
               setTitle("");
               setTitleEn("");
+              setKind("style");
             },
           )
         }

@@ -20,6 +20,7 @@ import type {
   UpdateMusicArtistRequest,
   MusicArtistsFromTagsRequest,
   MusicBulkTrackArtistRequest,
+  MusicBulkTrackRootCategoryRequest,
   MusicModerationDecisionRequest,
   MusicReportDecisionRequest,
   UpdateMusicCategoryRequest,
@@ -240,6 +241,19 @@ export class MusicAdminCatalogController {
     @Body() body: MusicBulkTrackArtistRequest,
   ) {
     return this.catalog.setTracksArtist(isAdmin(user), body);
+  }
+
+  /**
+   * Массовая простановка корневой категории (VED-165) — тем же приёмом, что
+   * массовая смена исполнителя: без неё разметить каталог по «Традиционное»/
+   * «Современное» можно только записью за записью.
+   */
+  @Post('tracks/root-category')
+  setTracksRootCategory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: MusicBulkTrackRootCategoryRequest,
+  ) {
+    return this.catalog.setTracksRootCategory(isAdmin(user), body);
   }
 
   @Patch('tracks/:id')

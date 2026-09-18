@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type {
   MusicArtistDto,
+  MusicCategoryDto,
   MusicDurationBucket,
   MusicTrackSort,
 } from "@vedamatch/shared";
@@ -32,6 +33,13 @@ const DURATIONS: { value: MusicDurationBucket; label: string }[] = [
 ];
 
 export interface MusicFilterState {
+  /**
+   * Корневая категория витрины — «Традиционное»/«Современное» (VED-165).
+   * Живёт отдельно от `category` и не считается «Фильтром»: это главный
+   * выбор витрины, вкладки над каталогом, а не пункт свёрнутой панели.
+   */
+  root: string | null;
+  /** Стиль — прежний плоский список (киртан, бхаджан, мантра…). */
   category: string | null;
   q: string | null;
   artist: string | null;
@@ -63,10 +71,18 @@ export function musicFilterHref(
   return query ? `/music?${query}` : "/music";
 }
 
-/** Сколько фильтров стоит — числом на свёрнутом чипе. */
+/**
+ * Сколько фильтров стоит — числом на свёрнутом чипе. `root` сюда не входит:
+ * это главный выбор витрины (вкладки сверху), а не пункт панели фильтров.
+ */
 export function countMusicFilters(state: MusicFilterState): number {
-  return [state.artist, state.duration, state.live, state.sort].filter(Boolean)
-    .length;
+  return [
+    state.category,
+    state.artist,
+    state.duration,
+    state.live,
+    state.sort,
+  ].filter(Boolean).length;
 }
 
 const chip =
@@ -77,11 +93,23 @@ const chipOn = "border-violet/40 bg-violet/15 text-text-0";
 export function MusicFilters({
   state,
   artists,
+  categories,
 }: {
   state: MusicFilterState;
   artists: MusicArtistDto[];
+  /** Полный список категорий каталога — стилевые (`kind: 'style'`) отбираются здесь. */
+  categories: MusicCategoryDto[];
 }) {
   const active = countMusicFilters(state);
+  // Пустой раздел не показывается — тем же приёмом, что был у прежних чипов
+  // над каталогом (VED-145): чип-обещание без содержимого только вводит в
+  // заблуждение. Исключение — уже выбранный стиль: убрать его из списка,
+  // пока он применён, значит спрятать способ его снять.
+  const styles = categories.filter(
+    (category) =>
+      category.kind === "style" &&
+      (category.trackCount > 0 || category.slug === state.category),
+  );
 
   return (
     <details className="group" open={active > 0}>
@@ -133,6 +161,28 @@ export function MusicFilters({
           ))}
         </FilterRow>
 
+        {styles.length > 0 && (
+          <FilterRow label="Стиль">
+            {styles.map((category) => (
+              <Link
+                key={category.id}
+                href={musicFilterHref(state, {
+                  category:
+                    state.category === category.slug ? null : category.slug,
+                })}
+                className={`${chip} ${state.category === category.slug ? chipOn : chipOff}`}
+              >
+                {category.title}
+                {category.trackCount > 0 && (
+                  <span className="ml-1 font-mono text-[11px] text-text-2">
+                    {category.trackCount}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </FilterRow>
+        )}
+
         <FilterRow label="Запись">
           <Link
             href={musicFilterHref(state, {
@@ -171,6 +221,7 @@ export function MusicFilters({
         {active > 0 && (
           <Link
             href={musicFilterHref(state, {
+              category: null,
               artist: null,
               duration: null,
               live: null,

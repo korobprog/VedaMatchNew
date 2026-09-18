@@ -4669,6 +4669,14 @@ enum MusicReportKind {
   quality
 }
 
+/// Вид категории каталога (VED-165). Ровно два уровня: `root` — единственный
+/// главный выбор витрины, `style` — дополнительный фильтр поверх него.
+/// Третий уровень enum'ом не добавить — понадобится новая модель.
+enum MusicCategoryKind {
+  root
+  style
+}
+
 enum MusicReportStatus {
   open
   resolved
@@ -4721,18 +4729,27 @@ model MusicAlbum {
 /// Раздел каталога: киртан, бхаджан, мантра, гуру-пуджа, инструментал.
 /// Таблица, а не enum: набор растёт, и каждое добавление миграцией — тупик
 /// (то же решение, что у `NoticeRubric` и `ContactsTag`).
+///
+/// `kind` разводит два независимых измерения фильтра (VED-165): `root` —
+/// две корневые категории витрины («Традиционное», «Современное»), `style`
+/// — прежний плоский список (киртан, бхаджан, мантра…), уехавший в фильтр
+/// «Стиль». У записи может стоять и то, и другое одновременно — сочетание
+/// «традиционное + мантра» это ровно два тега на одном треке, а не новый
+/// уровень дерева.
 model MusicCategory {
-  id        String   @id @default(uuid())
-  slug      String   @unique
+  id        String            @id @default(uuid())
+  slug      String            @unique
   title     String
   titleEn   String?
-  position  Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  position  Int               @default(0)
+  kind      MusicCategoryKind @default(style)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   tracks MusicTrackCategory[]
 
   @@index([position])
+  @@index([kind])
 }
 
 /// Запись в каталоге.

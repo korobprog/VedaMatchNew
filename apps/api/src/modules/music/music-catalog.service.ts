@@ -50,13 +50,29 @@ const TRACK_CARD_INCLUDE = {
 } as const;
 
 /**
+ * Условие по линии как элемент массива `AND` — то же самое, что кладёт в
+ * `where` `lineageCondition()`, но без обёртки `{ AND: [...] }`. Отдельная
+ * функция, а не чтение `.AND` у `lineageCondition()`: тип последней —
+ * объединение `{} | { AND: [...] }`, и `'AND' in lineageFilter` для TS не
+ * сужает его настолько, чтобы спред `...lineageFilter.AND` прошёл проверку
+ * типов. Массив вместо объекта ещё и переиспользуется в `listTracks`, где
+ * условие линии кладётся в общий `AND` вместе с фильтром по категориям
+ * (VED-165) — двумя разными ключами `categories` в одном объекте их не
+ * сложить, второй спред молча стёр бы первый.
+ */
+function lineageAndConditions(lineage: LineageId | null) {
+  return lineage ? [{ OR: [{ lineage }, { lineage: null }] }] : [];
+}
+
+/**
  * Условие по линии: своя плюс записи «для всех» (`null`). Завёрнуто в
  * `AND`, а не положено в `where` как `OR`: `OR` в поиске уже занят словом
  * (название или исполнитель), и второй `OR` молча перетёр бы первый. Пустой
  * объект, когда фильтра нет.
  */
 export function lineageCondition(lineage: LineageId | null) {
-  return lineage ? { AND: [{ OR: [{ lineage }, { lineage: null }] }] } : {};
+  const and = lineageAndConditions(lineage);
+  return and.length ? { AND: and } : {};
 }
 
 @Injectable()
@@ -69,7 +85,9 @@ export class MusicCatalogService {
   ) {
     // Обложки лежат открыто и раздаются напрямую; аудио — нет, оно уйдёт
     // подписанной ссылкой на этапе 2.
-    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
+    this.publicBaseUrl = musicCoverBaseUrl(
+      config.get<string>('API_PUBLIC_URL'),
+    );
   }
 
   /**
@@ -185,10 +203,27 @@ export class MusicCatalogService {
     const duration = durationCondition(query.duration);
     const lineage = await this.viewerLineage(viewerId, query.lineage);
 
+    // Корневая категория и стиль (VED-165) — оба через `some` на одной и той
+    // же связи `categories`, поэтому их нельзя положить двумя ключами в один
+    // объект `where`: вторая запись с тем же именем ключа молча стёрла бы
+    // первую. Складываем оба условия (и условие линии — по той же причине) в
+    // общий массив `AND`: Prisma требует, чтобы трек прошёл каждое из них, то
+    // есть нашёлся тег и с корневым слагом, и со стилевым, — ровно
+    // пересечение, которое просит карточка («традиционное» + «мантра»).
+    const andConditions = [
+      ...lineageAndConditions(lineage),
+      ...(query.root
+        ? [{ categories: { some: { category: { slug: query.root } } } }]
+        : []),
+      ...(query.category
+        ? [{ categories: { some: { category: { slug: query.category } } } }]
+        : []),
+    ];
+
     const rows = await this.prisma.musicTrack.findMany({
       where: {
         status: 'published',
-        ...lineageCondition(lineage),
+        ...(andConditions.length ? { AND: andConditions } : {}),
         ...(query.q
           ? {
               OR: [
@@ -200,9 +235,6 @@ export class MusicCatalogService {
                 },
               ],
             }
-          : {}),
-        ...(query.category
-          ? { categories: { some: { category: { slug: query.category } } } }
           : {}),
         ...(query.artist ? { artist: { slug: query.artist } } : {}),
         ...(query.language ? { language: query.language } : {}),
