@@ -10,6 +10,7 @@ import { ArchiveList } from "./archive-list";
 import { ImageReviewCard } from "./image-review-card";
 import { LoadFailure } from "./load-failure";
 import { QuoteReviewCard } from "./quote-review-card";
+import { ScrollNavButtons } from "./scroll-nav-buttons";
 import {
   filterByQuery,
   selectImagePosts,
@@ -201,6 +202,10 @@ export function QueueBoard({
       {/* Опубликованное здесь больше не лежит — у него своя вкладка. Тут
           остаётся только отложенное: отклонённое и снятое с показа. */}
       <ArchiveList posts={setAsidePosts} pending={pending} errors={errors} run={run} />
+
+      {/* VED-265: та же плавающая прокрутка, что и на «Опубликованных» —
+          «Заготовки» не короче (два раздела карточек плюс отложенное). */}
+      <ScrollNavButtons />
     </>
   );
 }
