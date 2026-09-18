@@ -19,6 +19,7 @@ import { useQueueTracks } from "./use-queue-tracks";
 export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
   const player = useMusicPlayer();
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const currentRef = useRef<HTMLLIElement | null>(null);
   const queue = player?.queue ?? [];
   const { tracks, missing } = useQueueTracks(queue);
 
@@ -26,6 +27,17 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
   // закрыть её с клавиатуры не получится.
   useEffect(() => {
     closeRef.current?.focus();
+  }, []);
+
+  // Прокрутка к играющей записи при открытии (VED-270): очередь бывает
+  // длинной, а текущий трек — где угодно в её середине или в конце, не
+  // обязательно сверху, где панель открывается.
+  useEffect(() => {
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    currentRef.current?.scrollIntoView({
+      block: "center",
+      behavior: calm ? "auto" : "smooth",
+    });
   }, []);
 
   useEffect(() => {
@@ -91,7 +103,17 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
             const gone = missing.has(id);
             const isCurrent = at === player.index;
             return (
-              <li key={`${id}-${at}`} className="group flex items-center">
+              <li
+                key={`${id}-${at}`}
+                ref={isCurrent ? currentRef : undefined}
+                // Фон и рамка — тот же приём, что у играющей строки в списках
+                // записей (`play-row.tsx`, VED-141): фиолетовый фон вместо
+                // одного текстового акцента, чтобы текущий трек находили в
+                // длинной очереди с первого взгляда, а не читали список.
+                className={`group flex items-center rounded-xl transition-colors ${
+                  isCurrent ? "bg-violet/10 ring-1 ring-inset ring-violet/40" : ""
+                }`}
+              >
                 <button
                   type="button"
                   disabled={gone}
