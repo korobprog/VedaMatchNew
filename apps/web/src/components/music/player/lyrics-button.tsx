@@ -72,7 +72,9 @@ export function MusicLyricsButton({
           <path d="M10 11h6M10 15h4" />
         </svg>
       </button>
-      {open && lyrics && <MusicLyricsPanel lyrics={lyrics} onClose={close} />}
+      {open && lyrics && (
+        <MusicLyricsPanel trackId={trackId} lyrics={lyrics} onClose={close} />
+      )}
     </>
   );
 }

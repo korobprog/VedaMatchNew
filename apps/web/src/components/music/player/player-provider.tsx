@@ -216,6 +216,15 @@ export interface MusicPlayerApi {
   setSleepTimer(timer: MusicSleepTimer): void;
   /** Сообщить плееру, чьё офлайн-хранилище использовать. */
   setOfflineUserId(userId: string | null): void;
+  /**
+   * Человек — в редакции Музыки (VED-269). Решает, показывать ли кнопку
+   * «редактировать текст» в панели текста: там, где плеер смонтирован (он
+   * общий для всего портала), прав по странице не знают, — их сообщает
+   * `MusicEditorIdentity` из портального layout, тем же приёмом, что и
+   * `offlineUserId`.
+   */
+  isMusicEditor: boolean;
+  setIsMusicEditor(value: boolean): void;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerApi | null>(null);
@@ -281,6 +290,12 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * лендинг. Пусто — офлайна нет, играем из сети.
    */
   const [offlineUserId, setOfflineUserIdState] = useState<string | null>(null);
+  /**
+   * Человек в редакции Музыки (VED-269). Тем же приёмом и по той же
+   * причине, что `offlineUserId` выше, — сообщает портальный layout,
+   * который знает права, а не сама страница с плеером.
+   */
+  const [isMusicEditor, setIsMusicEditor] = useState(false);
   /**
    * Чей источник фактически назначен элементу.
    *
@@ -1216,6 +1231,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       sleepTimer,
       setSleepTimer,
       toggleFavorite,
+      isMusicEditor,
+      setIsMusicEditor,
     }),
     [
       current,
@@ -1251,6 +1268,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       offlineUserId,
       setOfflineUserId,
       sleepTimer,
+      isMusicEditor,
+      setIsMusicEditor,
     ],
   );
 
