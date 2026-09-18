@@ -214,3 +214,115 @@ describe('NoticesService.remove', () => {
     });
   });
 });
+
+describe('NoticesService.adminList — список для админки (VED-42, круг 2)', () => {
+  function adminListSetup() {
+    const rows = [
+      {
+        id: 'n1',
+        titleRu: 'Отдам книги',
+        titleEn: null,
+        status: 'published',
+        kind: 'offer',
+        city: 'Москва',
+        createdAt: new Date('2026-09-10T00:00:00.000Z'),
+        expiresAt: new Date('2026-10-10T00:00:00.000Z'),
+        author: { name: 'Александр' },
+      },
+    ];
+    const prisma = {
+      notice: {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue(rows),
+      },
+    };
+    const service = new NoticesService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { emit: jest.fn() } as never,
+    );
+    return { prisma, service };
+  }
+
+  it('собирает читаемую строку: заголовок, мирское имя автора, даты строками', async () => {
+    const { service } = adminListSetup();
+    const response = await service.adminList({});
+    expect(response.items).toEqual([
+      {
+        id: 'n1',
+        title: 'Отдам книги',
+        status: 'published',
+        kind: 'offer',
+        authorName: 'Александр',
+        city: 'Москва',
+        createdAt: '2026-09-10T00:00:00.000Z',
+        expiresAt: '2026-10-10T00:00:00.000Z',
+      },
+    ]);
+    expect(response).toMatchObject({
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+    });
+  });
+
+  it('без заголовка на обеих локалях — запасной текст', async () => {
+    const { prisma, service } = adminListSetup();
+    prisma.notice.findMany.mockResolvedValueOnce([
+      {
+        id: 'n2',
+        titleRu: null,
+        titleEn: null,
+        status: 'draft',
+        kind: 'request',
+        city: null,
+        createdAt: new Date('2026-09-11T00:00:00.000Z'),
+        expiresAt: new Date('2026-10-11T00:00:00.000Z'),
+        author: { name: 'Мария' },
+      },
+    ]);
+    const response = await service.adminList({});
+    expect(response.items[0].title).toBe('Без названия');
+  });
+
+  it('фильтр и поиск доходят до Prisma через where', async () => {
+    const { prisma, service } = adminListSetup();
+    await service.adminList({ q: 'книги', status: 'published' });
+    const call = prisma.notice.findMany.mock.calls[0][0] as {
+      where: { status?: string; OR?: unknown[] };
+    };
+    expect(call.where.status).toBe('published');
+    expect(call.where.OR).toHaveLength(3);
+    expect(prisma.notice.count).toHaveBeenCalledWith({ where: call.where });
+  });
+
+  it('страница считается по общему числу и размеру страницы', async () => {
+    const { prisma, service } = adminListSetup();
+    prisma.notice.count.mockResolvedValueOnce(45);
+    const response = await service.adminList({ page: '2', pageSize: '20' });
+    expect(response).toMatchObject({
+      page: 2,
+      pageSize: 20,
+      total: 45,
+      totalPages: 3,
+    });
+    const call = prisma.notice.findMany.mock.calls[0][0] as {
+      skip: number;
+      take: number;
+    };
+    expect(call.skip).toBe(20);
+    expect(call.take).toBe(20);
+  });
+
+  it('пустой список — totalPages не падает до нуля', async () => {
+    const { prisma, service } = adminListSetup();
+    prisma.notice.count.mockResolvedValueOnce(0);
+    prisma.notice.findMany.mockResolvedValueOnce([]);
+    const response = await service.adminList({});
+    expect(response).toMatchObject({ items: [], total: 0, totalPages: 1 });
+  });
+});

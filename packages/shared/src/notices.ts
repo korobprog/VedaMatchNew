@@ -404,6 +404,32 @@ export interface AdminNoticeReportsResponse {
   openCount: number;
 }
 
+/**
+ * Строка списка объявлений в админке (VED-42, круг 2): раньше в разделе
+ * «Объявления» были только жалобы и ссылка на журнал — увидеть и удалить
+ * произвольное объявление можно было лишь с его собственной страницы.
+ */
+export interface AdminNoticeListItemDto {
+  id: string;
+  title: string;
+  status: NoticeStatus;
+  kind: NoticeKind;
+  /** Мирское имя: в админке нужно понимать, кто перед тобой. */
+  authorName: string;
+  city: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Форма ответа — как у `AdminUserListResponse`: страница, размер, всего. */
+export interface AdminNoticeListResponse {
+  items: AdminNoticeListItemDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export type NoticeSubscriptionKind = 'rubric' | 'city' | 'community';
 
 export interface NoticeSubscriptionDto {

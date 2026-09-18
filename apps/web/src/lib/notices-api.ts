@@ -2,6 +2,7 @@
 // Запросы идут из браузера: авторизация — той же cookie, что и у остальных
 // сервисов, поэтому здесь только знание эндпоинтов, без работы с токенами.
 import type {
+  AdminNoticeListResponse,
   AdminNoticeReportDecisionRequest,
   AdminNoticeReportsResponse,
   CreateNoticeReportRequest,
@@ -251,6 +252,27 @@ export const getAdminNoticeReports = (status = "open", signal?: AbortSignal) =>
     `/admin/notices/reports?status=${status}`,
     { method: "GET", signal },
   );
+
+/**
+ * Список всех объявлений для админки (VED-42, круг 2): поиск, статус,
+ * страница. Удаление сюда не входит — та же кнопка вызывает уже существующий
+ * `deleteNotice()` ниже по файлу, серверный путь один на оба места.
+ */
+export const getAdminNotices = (
+  query: { q?: string; status?: string; page?: number; pageSize?: number },
+  signal?: AbortSignal,
+) => {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.status) params.set("status", query.status);
+  if (query.page) params.set("page", String(query.page));
+  if (query.pageSize) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return request<AdminNoticeListResponse>(
+    `/admin/notices${qs ? `?${qs}` : ""}`,
+    { method: "GET", signal },
+  );
+};
 
 export const decideNoticeReport = (
   reportId: string,
