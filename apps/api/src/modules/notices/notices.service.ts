@@ -11,6 +11,7 @@ import {
   PORTAL_ACTIVITY_EVENTS,
   NOTICES_PER_DAY,
   type AdminAuditEvent,
+  type AdminNoticeListResponse,
   type CreateNoticeRequest,
   type NoticeDto,
   type NoticeCalendarResponse,
@@ -27,6 +28,11 @@ import {
   type UpdateNoticeRequest,
   type UpdateNoticeStatusRequest,
 } from '@vedamatch/shared';
+import {
+  type AdminNoticeListQuery,
+  buildAdminNoticeListWhere,
+  parseAdminNoticeListQuery,
+} from './admin-notice-list';
 import { normalizeCityKey } from '../../common/city-key';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CommunitiesService } from '../communities/communities.service';
@@ -719,6 +725,62 @@ export class NoticesService {
       };
       this.bus.emit('admin.action', event);
     }
+  }
+
+  /**
+   * Список объявлений для админки (VED-42, круг 2): тестировщик не нашёл в
+   * разделе «Объявления» ничего, кроме жалоб и ссылки на журнал, — удалить
+   * произвольное объявление можно было только с его собственной страницы.
+   * Здесь — все статусы разом (включая черновики и снятые), поиск по
+   * заголовку и мирскому имени автора, постраничный вывод. Удаление отсюда
+   * идёт тем же путём, что и раньше: `remove()` выше, без дублирования
+   * бизнес-логики.
+   */
+  async adminList(
+    rawQuery: AdminNoticeListQuery,
+  ): Promise<AdminNoticeListResponse> {
+    const parsed = parseAdminNoticeListQuery(rawQuery);
+    const where = buildAdminNoticeListWhere(parsed);
+
+    const [total, rows] = await Promise.all([
+      this.prisma.notice.count({ where }),
+      this.prisma.notice.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (parsed.page - 1) * parsed.pageSize,
+        take: parsed.pageSize,
+        select: {
+          id: true,
+          titleRu: true,
+          titleEn: true,
+          status: true,
+          kind: true,
+          city: true,
+          createdAt: true,
+          expiresAt: true,
+          // Мирское имя: тот же выбор, что у журнала и жалоб — админке
+          // нужно понимать, кто перед тобой, а не духовное самоназвание.
+          author: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        title: row.titleRu ?? row.titleEn ?? 'Без названия',
+        status: row.status,
+        kind: row.kind,
+        authorName: row.author.name,
+        city: row.city,
+        createdAt: row.createdAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+      })),
+      page: parsed.page,
+      pageSize: parsed.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / parsed.pageSize)),
+    };
   }
 
   // ===== Картинки =====

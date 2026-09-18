@@ -398,3 +398,26 @@ export class AdminNoticesController {
     if (!isAdmin(user)) throw new ForbiddenException('Только администратор');
   }
 }
+
+/**
+ * Список всех объявлений в админке (VED-42, круг 2). Отдельный контроллер,
+ * а не метод на `AdminNoticesController`: у того путь `admin/notices/reports`
+ * целиком про жалобы, а список — про сами объявления, путь на сегмент
+ * короче. Удаление сюда не переехало — админ удаляет тем же
+ * `DELETE /notices/:id`, что и раньше (см. `NoticesController.remove`),
+ * список только показывает кнопку и вызывает тот же запрос.
+ */
+@Controller('admin/notices')
+@UseGuards(AuthGuard)
+export class AdminNoticeListController {
+  constructor(private readonly notices: NoticesService) {}
+
+  @Get()
+  list(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    if (!isAdmin(user)) throw new ForbiddenException('Только администратор');
+    return this.notices.adminList(query);
+  }
+}
