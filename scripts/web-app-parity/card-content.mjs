@@ -11,6 +11,10 @@ import { CATALOG_SERVICES } from './changed-paths-to-services.mjs';
  * `changed-paths-to-services.mjs`), проверено тестом
  * «SERVICE_NAMES покрывает ровно CATALOG_SERVICES».
  *
+ * `vacancies` — исключение раунда 003 (`CATALOG_SERVICES_WITHOUT_SEED_ENTRY`):
+ * у «Вакансий» нет записи `Service` в сиде, имя не оттуда, а из заголовков
+ * `apps/web/src/app/(portal)/vacancies/` и README.
+ *
  * Сервис без записи здесь (случается только при прямом вызове
  * `buildCardTitle` мимо `servicesFromPaths`, например в тестах) получает
  * заголовок со слагом как есть, а не падает — маппинг не обязан покрывать
@@ -28,6 +32,7 @@ export const SERVICE_NAMES = {
   work: 'Работа',
   notices: 'Объявления',
   wellness: 'Здоровье',
+  vacancies: 'Вакансии',
   travel: 'Путешествия',
 };
 

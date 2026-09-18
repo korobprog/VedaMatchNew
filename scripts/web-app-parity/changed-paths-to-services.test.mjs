@@ -69,7 +69,12 @@ test('несервисные папки веба и API не попадают в
   }
 });
 
-test('все 12 сервисов каталога распознаются (белый список литералами)', () => {
+// Раунд 003: добавлен 13-й слаг, `vacancies` («Вакансии») — свой модуль
+// API, свой маршрут и своя папка компонентов, но нет плитки в каталоге
+// навигации (`seed.cjs`) — документированное исключение, см.
+// `CATALOG_SERVICES_WITHOUT_SEED_ENTRY` в changed-paths-to-services.mjs и
+// catalog-services-sync.test.mjs.
+test('все 13 сервисов каталога распознаются (белый список литералами)', () => {
   const expected = [
     'union',
     'vedabase',
@@ -83,6 +88,7 @@ test('все 12 сервисов каталога распознаются (бе
     'notices',
     'wellness',
     'travel',
+    'vacancies',
   ];
   assert.deepEqual([...CATALOG_SERVICES].sort(), [...expected].sort());
   for (const service of expected) {

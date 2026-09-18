@@ -34,6 +34,7 @@ import {
   buildCommentBody,
 } from './card-content.mjs';
 import { findExistingCard } from './dedupe-existing-card.mjs';
+import { openCardsAcrossBoard } from './open-cards.mjs';
 
 const DEFAULT_BOARD_ID = 'f7ecf5b2-ad69-4067-ba0a-79e51643149d';
 const DEFAULT_COLUMN_ID = 'd698cd1c-6697-44fa-a061-8faa6d4806f7';
@@ -70,21 +71,6 @@ async function apiFetch({ apiUrl, apiKey, method, path, body, dryRun }) {
     throw new Error(`${method} ${path} → ${response.status}: ${text.slice(0, 500)}`);
   }
   return response.json();
-}
-
-/**
- * Карточки, среди которых ищем дубль. Раунд 001, Н4: искать нужно по всей
- * доске, не только в колонке создания («VedaMath-Native») — карточку
- * могли перетащить в «В работе»/«На доработку», пока её не закрыли, и
- * следующий PR по тому же сервису обязан увидеть её там же, а не завести
- * вторую. Закрытые колонки (`isDone`, «Выполнено») исключены осознанно:
- * закрытая карточка не дубль, а прошлая задача, новый PR должен завести
- * новую.
- */
-function openCardsAcrossBoard(board) {
-  return (board?.columns ?? [])
-    .filter((column) => !column.isDone)
-    .flatMap((column) => column.tasks ?? []);
 }
 
 export async function run(env = process.env) {
