@@ -17,6 +17,13 @@ export interface UpdateDecisionInput {
   currentVersionCode: number;
   manifest: AppManifest | null;
   dismissedUntilVersionCode: number | null;
+  /**
+   * Проверка по явному нажатию «Проверить обновление»/«Проверить ещё раз».
+   * Ручная проверка снимает отметку «Не сейчас» (`spec.md`, сценарий 6:
+   * отметка держится «до следующего ручного „Проверить обновление“ либо до
+   * выхода версии новее»); тихая проверка при открытии вкладки её уважает.
+   */
+  manual: boolean;
   now: Date;
   manifestFetchedAt: Date | null;
 }
@@ -30,7 +37,7 @@ export type UpdateDecision =
   | { kind: 'dismissed'; manifest: AppManifest };
 
 export function decideUpdate(input: UpdateDecisionInput): UpdateDecision {
-  const { selfUpdate, currentVersionCode, manifest, dismissedUntilVersionCode } = input;
+  const { selfUpdate, currentVersionCode, manifest, dismissedUntilVersionCode, manual } = input;
 
   // Политика магазинов — самый жёсткий из констрейнтов задачи: канал не
   // `site` скрывает секцию целиком, независимо от того, что в манифесте.
@@ -41,9 +48,19 @@ export function decideUpdate(input: UpdateDecisionInput): UpdateDecision {
     return { kind: 'up-to-date' };
   }
 
-  if (dismissedUntilVersionCode != null && dismissedUntilVersionCode >= manifest.versionCode) {
+  if (!manual && dismissedUntilVersionCode != null && dismissedUntilVersionCode >= manifest.versionCode) {
     return { kind: 'dismissed', manifest };
   }
 
   return { kind: 'available', manifest };
+}
+
+/**
+ * Тихая проверка при открытии вкладки раскрывает секцию только ради
+ * доступного и не отклонённого обновления. «Последняя версия», отклонённая
+ * версия и любые ошибки сети — молча: человек ничего не нажимал, сообщать ему
+ * «не получилось проверить» незачем.
+ */
+export function autoCheckReveals(decision: UpdateDecision): boolean {
+  return decision.kind === 'available';
 }

@@ -12,6 +12,12 @@ interface Props {
    * «Сервисов»: нажатие «Повторить» не давало никакого отклика).
    */
   busy?: boolean;
+  /**
+   * Надпись вместо «Повторить» для того же второстепенного действия
+   * («Отмена», «Проверить ещё раз» в секции самообновления, VED-176) — чтобы
+   * не копировать кнопку по месту ради другого текста.
+   */
+  label?: string;
 }
 
 /**
@@ -19,7 +25,7 @@ interface Props {
  * по месту в трёх экранах «Люди» (раунд оценки 004, дефект 12) — теперь
  * один компонент на всё приложение.
  */
-export function RetryButton({ onPress, busy = false }: Props) {
+export function RetryButton({ onPress, busy = false, label = 'Повторить' }: Props) {
   const { colors } = useTheme();
   return (
     <Pressable
@@ -33,7 +39,7 @@ export function RetryButton({ onPress, busy = false }: Props) {
       {busy ? (
         <ActivityIndicator color={colors.text0} />
       ) : (
-        <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
+        <Text style={[styles.retryText, { color: colors.text0 }]}>{label}</Text>
       )}
     </Pressable>
   );

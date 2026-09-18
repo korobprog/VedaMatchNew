@@ -31,6 +31,8 @@ export interface DownloadState {
    *  код не мог по ошибке передать непроверенный файл в установщик. */
   localUri: string | null;
   errorMessage: string | null;
+  /** Сколько байт файла уже прохешировано в фазе `verifying` («Проверяем файл… N %»). */
+  bytesVerified: number;
 }
 
 export const IDLE_DOWNLOAD_STATE: DownloadState = {
@@ -39,6 +41,7 @@ export const IDLE_DOWNLOAD_STATE: DownloadState = {
   totalBytes: 0,
   localUri: null,
   errorMessage: null,
+  bytesVerified: 0,
 };
 
 export type DownloadEvent =
@@ -46,9 +49,12 @@ export type DownloadEvent =
   | { type: 'network-metered-confirmed' }
   | { type: 'progress'; bytesWritten: number; totalBytes: number }
   | { type: 'download-complete'; localUri: string }
+  | { type: 'verify-progress'; bytesVerified: number }
   | { type: 'hash-verified' }
   | { type: 'hash-mismatch' }
   | { type: 'install-started' }
+  /** Системный установщик закрылся, а приложение живо — человек отказался или установка не удалась. */
+  | { type: 'install-returned' }
   | { type: 'cancel' }
   | { type: 'error'; message: string };
 
@@ -78,7 +84,13 @@ export function reduceDownloadState(state: DownloadState, event: DownloadEvent):
 
     case 'download-complete':
       if (state.phase !== 'downloading') return state;
-      return { ...state, phase: 'verifying', localUri: event.localUri };
+      return { ...state, phase: 'verifying', localUri: event.localUri, bytesVerified: 0 };
+
+    case 'verify-progress':
+      // Хеширование идёт кусками с паузами (`chunked-hash.ts`) — после отмены
+      // последний кусок ещё может отчитаться; такой прогресс игнорируется.
+      if (state.phase !== 'verifying') return state;
+      return { ...state, bytesVerified: event.bytesVerified };
 
     case 'hash-verified':
       if (state.phase !== 'verifying') return state;
@@ -93,6 +105,13 @@ export function reduceDownloadState(state: DownloadState, event: DownloadEvent):
     case 'install-started':
       if (state.phase !== 'ready') return state;
       return { ...state, phase: 'installing' };
+
+    case 'install-returned':
+      // Успешная установка перезапускает процесс, и это событие не приходит.
+      // Пришло — значит установщик закрыли без установки: возвращаем кнопку
+      // «Установить», файл уже проверен, повторно качать не нужно.
+      if (state.phase !== 'installing') return state;
+      return { ...state, phase: 'ready' };
 
     case 'cancel':
       if (NON_CANCELLABLE_PHASES.includes(state.phase)) return state;

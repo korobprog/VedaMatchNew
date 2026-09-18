@@ -159,3 +159,55 @@ describe('reduceDownloadState — повторный тап «Скачать» �
     expect(restarted.errorMessage).toBeNull();
   });
 });
+
+describe('reduceDownloadState — прогресс проверки файла (verify-progress)', () => {
+  const verifying: DownloadState = {
+    ...IDLE_DOWNLOAD_STATE,
+    phase: 'verifying',
+    bytesWritten: 100,
+    totalBytes: 100,
+    localUri: 'file:///cache/vedamatch.apk',
+  };
+
+  it('download-complete начинает проверку с нуля прохешированных байт', () => {
+    const downloading: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'downloading', bytesVerified: 77 };
+    const state = reduceDownloadState(downloading, { type: 'download-complete', localUri: 'file:///x.apk' });
+    expect(state.bytesVerified).toBe(0);
+  });
+
+  it('verifying + verify-progress — растёт bytesVerified, остальное не трогается', () => {
+    const state = reduceDownloadState(verifying, { type: 'verify-progress', bytesVerified: 40 });
+    expect(state).toEqual({ ...verifying, bytesVerified: 40 });
+  });
+
+  it('verify-progress после отмены проверки — no-op (последний кусок отчитался поздно)', () => {
+    const cancelled = reduceDownloadState(verifying, { type: 'cancel' });
+    expect(cancelled.phase).toBe('cancelled');
+    expect(reduceDownloadState(cancelled, { type: 'verify-progress', bytesVerified: 90 })).toBe(cancelled);
+  });
+
+  it('verify-progress во время закачки — no-op, не путается с прогрессом скачивания', () => {
+    const downloading: DownloadState = { ...IDLE_DOWNLOAD_STATE, phase: 'downloading', bytesWritten: 10, totalBytes: 100 };
+    expect(reduceDownloadState(downloading, { type: 'verify-progress', bytesVerified: 50 })).toBe(downloading);
+  });
+});
+
+describe('reduceDownloadState — возврат из системного установщика', () => {
+  const installing: DownloadState = {
+    ...IDLE_DOWNLOAD_STATE,
+    phase: 'installing',
+    bytesWritten: 100,
+    totalBytes: 100,
+    localUri: 'file:///cache/vedamatch.apk',
+  };
+
+  it('installing + install-returned — снова ready с тем же проверенным файлом (можно нажать «Установить» ещё раз)', () => {
+    expect(reduceDownloadState(installing, { type: 'install-returned' })).toEqual({ ...installing, phase: 'ready' });
+  });
+
+  it('install-returned вне installing — no-op', () => {
+    const ready: DownloadState = { ...installing, phase: 'ready' };
+    expect(reduceDownloadState(ready, { type: 'install-returned' })).toBe(ready);
+    expect(reduceDownloadState(IDLE_DOWNLOAD_STATE, { type: 'install-returned' })).toBe(IDLE_DOWNLOAD_STATE);
+  });
+});

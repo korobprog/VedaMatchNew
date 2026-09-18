@@ -21,16 +21,15 @@ export interface AppVariant {
   webOrigin: string;
   /**
    * Публичный адрес раздачи `latest.json`/APK для самообновления (VED-176,
-   * `self-update-client.ts`). По умолчанию совпадает с `webOrigin`, но на
-   * проде манифест реально лежит на отдельном домене S3-хранилища портала
-   * (`APP_DOWNLOAD_BASE_URL` контейнера `web`, см. `.env.example` и
-   * `portal/docker-compose.dokploy.yml` — по умолчанию берёт `S3_PUBLIC_URL`):
-   * тот же адрес нужно передать сюда переменной `APP_DOWNLOAD_BASE_URL` при
-   * сборке приложения, иначе клиент будет стучаться в путь на `vedamatch.ru`,
-   * которого там нет — сайт читает манифест из S3 только на своём сервере,
-   * страницы `/app` наружу этот URL не отдают.
+   * `self-update-client.ts`) — `APP_DOWNLOAD_BASE_URL` при сборке, тот же
+   * адрес, что `S3_PUBLIC_URL` портала. `null`, если переменная не задана:
+   * запасного значения нет намеренно. Сайт (`webOrigin`) этот путь не
+   * раздаёт — `vedamatch.ru/mobile/...` отвечает 307 на лендинг
+   * (`apps/web/src/proxy.ts`), и сборка без адреса молча получала бы вечную
+   * ошибку. С `null` секция самообновления прямо говорит «Адрес обновлений
+   * не настроен в этой сборке».
    */
-  downloadBaseUrl: string;
+  downloadBaseUrl: string | null;
   selfUpdate: boolean;
   /** Порядок важен: первый провайдер основной, остальные запасные. */
   pushProviders: PushProvider[];
@@ -119,7 +118,7 @@ export function resolveVariant(env: VariantEnv): AppVariant {
     channel,
     apiOrigin: originOverride('APP_API_ORIGIN', env.APP_API_ORIGIN) ?? ORIGINS[contour].api,
     webOrigin,
-    downloadBaseUrl: publicBaseUrlOverride('APP_DOWNLOAD_BASE_URL', env.APP_DOWNLOAD_BASE_URL) ?? webOrigin,
+    downloadBaseUrl: publicBaseUrlOverride('APP_DOWNLOAD_BASE_URL', env.APP_DOWNLOAD_BASE_URL),
     selfUpdate: channel === 'site',
     pushProviders: [...PUSH[contour]],
   };

@@ -1,4 +1,4 @@
-import { decideUpdate, type UpdateDecisionInput } from './update-decision';
+import { autoCheckReveals, decideUpdate, type UpdateDecisionInput } from './update-decision';
 import type { AppManifest } from './manifest-validation';
 
 const manifest: AppManifest = {
@@ -17,6 +17,7 @@ const base: UpdateDecisionInput = {
   currentVersionCode: 1030,
   manifest,
   dismissedUntilVersionCode: null,
+  manual: false,
   now: new Date('2026-09-18T12:00:00Z'),
   manifestFetchedAt: new Date('2026-09-18T11:59:00Z'),
 };
@@ -67,5 +68,33 @@ describe('decideUpdate', () => {
     expect(decideUpdate({ ...base, selfUpdate: false, dismissedUntilVersionCode: 1000 })).toEqual({
       kind: 'hidden',
     });
+  });
+
+  it('ручная проверка снимает «Не сейчас»: отклонённая версия снова предлагается', () => {
+    expect(decideUpdate({ ...base, dismissedUntilVersionCode: 1031, manual: true })).toEqual({
+      kind: 'available',
+      manifest,
+    });
+  });
+
+  it('ручная проверка не обходит политику магазинов и не выдумывает обновление', () => {
+    expect(decideUpdate({ ...base, selfUpdate: false, manual: true })).toEqual({ kind: 'hidden' });
+    expect(decideUpdate({ ...base, currentVersionCode: 1031, manual: true, dismissedUntilVersionCode: 1031 })).toEqual({
+      kind: 'up-to-date',
+    });
+  });
+});
+
+describe('autoCheckReveals', () => {
+  it('тихая проверка раскрывает секцию только ради доступного обновления', () => {
+    expect(autoCheckReveals({ kind: 'available', manifest })).toBe(true);
+    expect(autoCheckReveals({ kind: 'dismissed', manifest })).toBe(false);
+    expect(autoCheckReveals({ kind: 'up-to-date' })).toBe(false);
+    expect(autoCheckReveals({ kind: 'hidden' })).toBe(false);
+  });
+
+  it('«Не сейчас» + тихая проверка той же версии — секция остаётся закрытой (не спамит)', () => {
+    const decision = decideUpdate({ ...base, dismissedUntilVersionCode: 1031, manual: false });
+    expect(autoCheckReveals(decision)).toBe(false);
   });
 });

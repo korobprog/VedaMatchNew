@@ -11,6 +11,17 @@ const RFC_4648_VECTORS: [string, string][] = [
   ['Zm9vYmFy', 'foobar'],
 ];
 
+/** Детерминированный генератор (LCG), чтобы тест не зависел от случайности прогона. */
+function randomBytes(length: number, seed: number): Uint8Array {
+  const out = new Uint8Array(length);
+  let state = seed >>> 0;
+  for (let i = 0; i < length; i += 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    out[i] = state >>> 24;
+  }
+  return out;
+}
+
 function textBytes(text: string): Uint8Array {
   return new Uint8Array(Array.from(text).map((char) => char.codePointAt(0)!));
 }
@@ -26,6 +37,29 @@ describe('decodeBase64ToBytes', () => {
 
   it('переносы строк в теле base64 (частая форма ответа хранилищ) не мешают декодированию', () => {
     expect(Array.from(decodeBase64ToBytes('Zm9v\nYmFy'))).toEqual(Array.from(textBytes('foobar')));
+    expect(Array.from(decodeBase64ToBytes('Zm9v\r\nYmE=\r\n'))).toEqual(Array.from(textBytes('fooba')));
+  });
+
+  it('совпадает с Buffer из Node на случайных байтах любой длины (все 256 значений байта)', () => {
+    for (let length = 0; length < 300; length += 1) {
+      const bytes = randomBytes(length, length + 1);
+      const base64 = Buffer.from(bytes).toString('base64');
+      expect(Buffer.from(decodeBase64ToBytes(base64)).equals(Buffer.from(bytes))).toBe(true);
+    }
+  });
+
+  it('все 64 символа алфавита декодируются в свои значения', () => {
+    const allSymbols = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    expect(Buffer.from(decodeBase64ToBytes(allSymbols)).equals(Buffer.from(allSymbols, 'base64'))).toBe(true);
+  });
+
+  it('символ вне ASCII и URL-safe алфавит не принимаются', () => {
+    expect(() => decodeBase64ToBytes('Zm9vЖ')).toThrow('недопустимый символ base64');
+    expect(() => decodeBase64ToBytes('Zm9v-_')).toThrow('недопустимый символ base64');
+  });
+
+  it('данные после "=" — ошибка, а не молчаливая склейка двух кусков', () => {
+    expect(() => decodeBase64ToBytes('Zg==Zm9v')).toThrow('символ после "="');
   });
 });
 

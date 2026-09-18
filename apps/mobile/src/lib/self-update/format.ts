@@ -19,3 +19,13 @@ export function formatBuildDate(iso: string): string {
     year: 'numeric',
   }).format(date);
 }
+
+/**
+ * Целый процент 0..100 для прогресса закачки и проверки файла. Неизвестный
+ * или нулевой объём — 0 (а не NaN/Infinity в `accessibilityValue`), перебор
+ * (сервер прислал больше заявленного) обрезается до 100.
+ */
+export function percentOf(done: number, total: number): number {
+  if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0 || done <= 0) return 0;
+  return Math.min(100, Math.floor((done / total) * 100));
+}

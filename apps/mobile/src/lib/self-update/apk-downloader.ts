@@ -1,6 +1,7 @@
-import * as Crypto from 'expo-crypto';
+import { File, FileMode } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
-import { bytesToHex, decodeBase64ToBytes } from './binary-utils';
+import { decodeBase64ToBytes } from './binary-utils';
+import { DEFAULT_HASH_CHUNK_BYTES, sha256InChunks } from './chunked-hash';
 
 /**
  * Скачивание и хеширование APK на диск (VED-176) — сетевой и файловый слой,
@@ -69,26 +70,97 @@ export async function startApkDownload(url: string, callbacks: DownloadCallbacks
   };
 }
 
+/** Открытый на чтение файл: размер и чтение куска с позиции. */
+interface ApkReader {
+  size: number | null;
+  read(offset: number, length: number): Promise<Uint8Array> | Uint8Array;
+  close(): void;
+}
+
 /**
- * SHA-256 скачанного файла. `expo-crypto` не даёт потокового/инкрементального
- * дайджеста — файл читается в память целиком как base64 и хешируется одним
- * вызовом `Crypto.digest`. Приемлемо для канала `site` (релизный APK — по
- * ощутимо меньше, чем debug-сборки со звонками из README, десятки, не сотни
- * МБ) — если реальный релизный файл вырастет за ~150-200 МБ, эту функцию
- * нужно будет заменить на потоковое хеширование по чанкам (сейчас expo-crypto
- * такого API не даёт вовсе).
+ * Основной путь: `FileHandle` нового API `expo-file-system` — байты сразу
+ * `Uint8Array`, без base64, по куску за вызов.
  */
-export async function sha256OfDownloadedApk(localUri: string): Promise<string> {
-  const base64 = await FileSystem.readAsStringAsync(localUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  const bytes = decodeBase64ToBytes(base64);
-  // `Uint8Array` из чистого декодера типизирован по общему `ArrayBufferLike`
-  // (совместим и с `SharedArrayBuffer`), а `Crypto.digest` в типах expo-crypto
-  // требует именно `ArrayBuffer` — на деле здесь всегда обычный буфер,
-  // приведение типа безопасно.
-  const digestBuffer = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes as Uint8Array<ArrayBuffer>);
-  return bytesToHex(digestBuffer);
+function openWithFileHandle(localUri: string): ApkReader {
+  const handle = new File(localUri).open(FileMode.ReadOnly);
+  return {
+    size: handle.size,
+    read(offset, length) {
+      handle.offset = offset;
+      return handle.readBytes(length);
+    },
+    close() {
+      handle.close();
+    },
+  };
+}
+
+/**
+ * Запасной путь, если новый API на прошивке недоступен: старый
+ * `readAsStringAsync` с `position`/`length` отдаёт кусок base64-строкой, её
+ * раскодирует табличный `decodeBase64ToBytes`. В памяти — тоже один кусок.
+ */
+async function openWithLegacyReader(localUri: string): Promise<ApkReader> {
+  const info = await FileSystem.getInfoAsync(localUri);
+  return {
+    size: info.exists ? info.size : null,
+    async read(offset, length) {
+      const base64 = await FileSystem.readAsStringAsync(localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+        position: offset,
+        length,
+      });
+      return decodeBase64ToBytes(base64);
+    },
+    close() {},
+  };
+}
+
+async function openApk(localUri: string): Promise<ApkReader> {
+  try {
+    return openWithFileHandle(localUri);
+  } catch {
+    return openWithLegacyReader(localUri);
+  }
+}
+
+/** Размер скачанного файла на диске, `null` — система не сообщила. */
+export async function downloadedApkSize(localUri: string): Promise<number | null> {
+  const reader = await openApk(localUri);
+  try {
+    return reader.size;
+  } finally {
+    reader.close();
+  }
+}
+
+export interface HashOptions {
+  /** Сколько байт ожидается — из манифеста; нужен, если система не знает размер файла. */
+  expectedBytes: number;
+  onProgress(bytesHashed: number, totalBytes: number): void;
+  isCancelled(): boolean;
+}
+
+/**
+ * SHA-256 скачанного файла по кускам в 1 МиБ (`chunked-hash.ts`): в памяти
+ * одновременно только текущий кусок, между кусками поток отдаётся
+ * интерфейсу (прогресс «Проверяем файл… N %», кнопка «Отмена»). Итерация 1
+ * читала весь APK одной base64-строкой (~217 МБ) и декодировала её
+ * синхронно — сотни мегабайт и секунды замершего интерфейса.
+ */
+export async function sha256OfDownloadedApk(localUri: string, options: HashOptions): Promise<string> {
+  const reader = await openApk(localUri);
+  try {
+    return await sha256InChunks({
+      totalBytes: reader.size ?? options.expectedBytes,
+      readChunk: (offset, length) => reader.read(offset, length),
+      chunkSize: DEFAULT_HASH_CHUNK_BYTES,
+      onProgress: options.onProgress,
+      isCancelled: options.isCancelled,
+    });
+  } finally {
+    reader.close();
+  }
 }
 
 export async function deleteDownloadedApk(): Promise<void> {

@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
-import { formatApkSizeMb, formatBuildDate } from '@/lib/self-update/format';
+import { checkFailureText } from '@/lib/self-update/check-messages';
+import { formatApkSizeMb, formatBuildDate, percentOf } from '@/lib/self-update/format';
 import type { AppManifest } from '@/lib/self-update/manifest-validation';
 import { useSelfUpdate } from '@/lib/self-update/use-self-update';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -15,17 +16,20 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
  * рендерит этот компонент на канале `store` (критерий приёмки №1: пункт не
  * «отключён», компонент не монтируется). Одна раскрывающаяся строка в
  * стиле `styles.accountLink`, без отдельного экрана навигации.
+ *
+ * Строка — действие «Проверить», а не раскрывашка: повторный тап заново
+ * проверяет (и снимает «Не сейчас»). Тело секции видно, как только есть что
+ * показать — после ручной проверки или если тихая проверка при открытии
+ * вкладки нашла доступное обновление.
  */
 export function SelfUpdateSection() {
   const { colors } = useTheme();
   const update = useSelfUpdate();
-  const [opened, setOpened] = useState(false);
 
   const busy = update.checkState.kind === 'checking';
   const downloadBusy = update.downloadState.phase !== 'idle' && update.downloadState.phase !== 'cancelled';
 
   const onPressRow = useCallback(() => {
-    setOpened(true);
     if (!downloadBusy) void update.checkForUpdate();
   }, [downloadBusy, update]);
 
@@ -47,7 +51,7 @@ export function SelfUpdateSection() {
         {busy ? <ActivityIndicator color={colors.text1} /> : <Text style={[styles.rowArrow, { color: colors.text1 }]}>›</Text>}
       </Pressable>
 
-      {opened ? <SelfUpdateBody update={update} /> : null}
+      <SelfUpdateBody update={update} />
     </View>
   );
 }
@@ -59,10 +63,11 @@ function SelfUpdateBody({ update }: { update: ReturnType<typeof useSelfUpdate> }
   if (checkState.kind === 'idle' || checkState.kind === 'checking') return null;
 
   if (checkState.kind === 'check-error') {
+    const failure = checkFailureText(checkState.reason);
     return (
       <View style={styles.panel}>
-        <InlineError message="Не получилось проверить обновление, повторите." />
-        <RetryButton onPress={() => void update.checkForUpdate()} />
+        <InlineError message={failure.message} />
+        {failure.retryable ? <RetryButton onPress={() => void update.checkForUpdate()} /> : null}
       </View>
     );
   }
@@ -74,7 +79,9 @@ function SelfUpdateBody({ update }: { update: ReturnType<typeof useSelfUpdate> }
   if (decision.kind === 'up-to-date') {
     return (
       <View style={styles.panel}>
-        <Text style={[styles.info, { color: colors.text1 }]}>Установлена последняя версия.</Text>
+        <Text accessibilityLiveRegion="polite" style={[styles.info, { color: colors.text1 }]}>
+          Установлена последняя версия.
+        </Text>
       </View>
     );
   }
@@ -82,10 +89,10 @@ function SelfUpdateBody({ update }: { update: ReturnType<typeof useSelfUpdate> }
   if (decision.kind === 'dismissed') {
     return (
       <View style={styles.panel}>
-        <Text style={[styles.info, { color: colors.text1 }]}>
-          Обновление {decision.manifest.versionName} отклонено. Можно проверить ещё раз.
+        <Text accessibilityLiveRegion="polite" style={[styles.info, { color: colors.text1 }]}>
+          Обновление {decision.manifest.versionName} отложено. Можно проверить ещё раз.
         </Text>
-        <RetryButtonLabel label="Проверить ещё раз" onPress={() => void update.checkForUpdate()} />
+        <RetryButton label="Проверить ещё раз" onPress={() => void update.checkForUpdate()} />
       </View>
     );
   }
@@ -108,7 +115,9 @@ function AvailableUpdate({
   if (downloadState.phase === 'idle' || downloadState.phase === 'cancelled') {
     return (
       <View style={[styles.panel, styles.card, { borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}>
-        <Text style={[styles.cardTitle, { color: colors.text0 }]}>Доступно обновление {manifest.versionName}</Text>
+        <Text accessibilityLiveRegion="polite" style={[styles.cardTitle, { color: colors.text0 }]}>
+          Доступно обновление {manifest.versionName}
+        </Text>
         <Text style={[styles.cardMeta, { color: colors.text1 }]}>
           {formatApkSizeMb(manifest.sizeBytes)} · собрано {formatBuildDate(manifest.builtAt)}
         </Text>
@@ -165,33 +174,31 @@ function AvailableUpdate({
     );
   }
 
-  if (downloadState.phase === 'downloading') {
-    const percent =
-      downloadState.totalBytes > 0 ? Math.round((downloadState.bytesWritten / downloadState.totalBytes) * 100) : 0;
+  if (downloadState.phase === 'downloading' || downloadState.phase === 'verifying') {
+    const verifying = downloadState.phase === 'verifying';
+    const percent = verifying
+      ? percentOf(downloadState.bytesVerified, downloadState.totalBytes || manifest.sizeBytes)
+      : percentOf(downloadState.bytesWritten, downloadState.totalBytes);
+    const label = verifying ? `Проверяем файл… ${percent} %` : `Скачано ${percent} %`;
     return (
       <View style={styles.panel}>
         <View
           accessibilityRole="progressbar"
+          accessibilityLabel={verifying ? 'Проверка файла' : 'Скачивание обновления'}
           accessibilityValue={{ min: 0, max: 100, now: percent }}
           style={[styles.progressTrack, { backgroundColor: colors.bg2 }]}
         >
-          <View style={[styles.progressFill, { width: `${percent}%`, backgroundColor: colors.magenta }]} />
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${percent}%`, backgroundColor: verifying ? colors.cyan : colors.magenta },
+            ]}
+          />
         </View>
         <Text accessibilityLiveRegion="polite" style={[styles.info, { color: colors.text1 }]}>
-          Скачано {percent}%
+          {label}
         </Text>
-        <RetryButtonLabel label="Отмена" onPress={() => void update.cancelDownload()} />
-      </View>
-    );
-  }
-
-  if (downloadState.phase === 'verifying') {
-    return (
-      <View style={styles.panel}>
-        <View style={styles.verifyingRow}>
-          <ActivityIndicator color={colors.text1} />
-          <Text style={[styles.info, { color: colors.text1 }]}>Проверяем файл…</Text>
-        </View>
+        <RetryButton label="Отмена" onPress={() => void update.cancelDownload()} />
       </View>
     );
   }
@@ -199,7 +206,9 @@ function AvailableUpdate({
   if (downloadState.phase === 'ready') {
     return (
       <View style={[styles.panel, styles.card, { borderColor: colors.cyan, backgroundColor: colors.bg1 }]}>
-        <Text style={[styles.cardTitle, { color: colors.text0 }]}>Файл проверен, готов к установке.</Text>
+        <Text accessibilityLiveRegion="polite" style={[styles.cardTitle, { color: colors.text0 }]}>
+          Файл проверен, готов к установке.
+        </Text>
         <Text style={[styles.cardMeta, { color: colors.text1 }]}>
           Система спросит разрешение установить приложение — это ожидаемо.
         </Text>
@@ -230,23 +239,8 @@ function AvailableUpdate({
   return (
     <View style={styles.panel}>
       <InlineError message={downloadState.errorMessage ?? 'Не удалось скачать обновление.'} />
-      <RetryButtonLabel label="Повторить" onPress={() => void update.retryDownload()} />
+      <RetryButton onPress={() => void update.retryDownload()} />
     </View>
-  );
-}
-
-/** Кнопка-ссылка второстепенного действия («Отмена», «Повторить», «Проверить ещё раз») — тот же размер, что RetryButton, но своя надпись. */
-function RetryButtonLabel({ label, onPress }: { label: string; onPress: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      android_ripple={ripple(colors.glassBorder)}
-      style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.glassBorder, alignSelf: 'flex-start' }, pressedStyle(pressed)]}
-    >
-      <Text style={[styles.secondaryButtonText, { color: colors.text0 }]}>{label}</Text>
-    </Pressable>
   );
 }
 

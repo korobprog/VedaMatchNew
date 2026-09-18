@@ -7,14 +7,15 @@ describe('resolveVariant', () => {
       channel: 'site',
       apiOrigin: 'https://api.vedamatch.ru',
       webOrigin: 'https://vedamatch.ru',
-      downloadBaseUrl: 'https://vedamatch.ru',
+      downloadBaseUrl: null,
       selfUpdate: true,
       pushProviders: ['rustore', 'fcm'],
     });
   });
 
-  it('без APP_DOWNLOAD_BASE_URL раздача манифеста самообновления совпадает с сайтом', () => {
-    expect(resolveVariant({ APP_CONTOUR: 'com' }).downloadBaseUrl).toBe('https://vedamatch.com');
+  it('без APP_DOWNLOAD_BASE_URL адреса раздачи нет — сайт не подставляется молча (он отвечает 307 на лендинг)', () => {
+    expect(resolveVariant({ APP_CONTOUR: 'com' }).downloadBaseUrl).toBeNull();
+    expect(resolveVariant({ APP_DOWNLOAD_BASE_URL: '   ' }).downloadBaseUrl).toBeNull();
   });
 
   it('APP_DOWNLOAD_BASE_URL переопределяет адрес раздачи манифеста отдельно от сайта', () => {

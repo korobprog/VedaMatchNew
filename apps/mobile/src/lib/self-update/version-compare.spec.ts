@@ -1,4 +1,4 @@
-import { compareVersionCode, isNewerVersion } from './version-compare';
+import { compareVersionCode, isNewerVersion, parseInstalledVersionCode } from './version-compare';
 
 describe('compareVersionCode', () => {
   it('равные версии — 0', () => {
@@ -42,5 +42,22 @@ describe('isNewerVersion', () => {
   it('local испорчен (ноль/отрицательный) — false, даже если remote выглядит валидным', () => {
     expect(isNewerVersion(1031, 0)).toBe(false);
     expect(isNewerVersion(1031, -1)).toBe(false);
+  });
+});
+
+describe('parseInstalledVersionCode', () => {
+  it('целое положительное значение возвращается как есть', () => {
+    expect(parseInstalledVersionCode(1041)).toBe(1041);
+    expect(parseInstalledVersionCode(1)).toBe(1);
+  });
+
+  it('нет значения или оно испорчено — null, а не «версия 1»', () => {
+    expect(parseInstalledVersionCode(undefined)).toBeNull();
+    expect(parseInstalledVersionCode(null)).toBeNull();
+    expect(parseInstalledVersionCode(0)).toBeNull();
+    expect(parseInstalledVersionCode(-5)).toBeNull();
+    expect(parseInstalledVersionCode(10.5)).toBeNull();
+    expect(parseInstalledVersionCode(Number.NaN)).toBeNull();
+    expect(parseInstalledVersionCode('1041')).toBeNull();
   });
 });
