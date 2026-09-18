@@ -7,6 +7,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:web-app-parity": "node --test scripts/web-app-parity/*.test.mjs",
     "postinstall": "pnpm --filter @vedamatch/shared build || true"
   },
   "devDependencies": {

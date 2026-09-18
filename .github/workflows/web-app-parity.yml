@@ -1,0 +1,188 @@
+name: Web → App Parity
+
+# VED-215: когда PR меняет сервис на сайте (apps/web/src/app/<service>,
+# apps/web/src/components/<service> или apps/api/src/modules/<service>),
+# заводит (или дополняет комментарием, без дублей) карточку «ДОГНАТЬ» в
+# колонке VedaMath-Native доски «Работа» — чтобы агент мобильного
+# приложения увидел, что нужно догнать веб.
+#
+# Отдельный воркфлоу, не часть ci.yml: сообщить о необходимости догнать
+# нужно даже если что-то в CI покраснело — PR всё равно уже смержен.
+#
+# workflow_dispatch — тестовый прогон без реального PR (VED-215, критерий
+# приёмки №3/№4/№5): руками задать список путей и текст PR, при
+# dry_run=true скрипт только печатает, что бы сделал, без сетевых вызовов.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      changed_paths:
+        description: Изменённые пути, по одному на строку
+        type: string
+        required: true
+      pr_body:
+        description: "Текст PR (для проверки «Затрагивает приложение: да/нет»)"
+        type: string
+        default: ''
+      pr_url:
+        description: Ссылка на PR
+        type: string
+        default: ''
+      pr_title:
+        description: Заголовок PR
+        type: string
+        default: ''
+      dry_run:
+        description: Не создавать карточку на самом деле — только напечатать план
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # `gh pr view` ниже — читает описание PR того же репозитория, только читает.
+  pull-requests: read
+
+jobs:
+  parity:
+    name: догнать сервис в приложении
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Нужна полная история: `git diff` считает по диапазону before..after
+          # обычного пуша, а не по одному коммиту.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Тесты чистой логики
+        run: node --test scripts/web-app-parity/*.test.mjs
+
+      # Изменённые пути — многострочные, поэтому уходят в GITHUB_ENV через
+      # heredoc со случайным разделителем (защита от инъекции через
+      # содержимое коммита), а не через `${{ }}` в run:.
+      - name: Изменённые пути (push)
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
+        run: |
+          # Пуш новой ветки (первый пуш) даёт before = все нули — диапазона
+          # для diff нет, пропускаем без ошибки.
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "SKIP_PARITY=1" >> "$GITHUB_ENV"
+            echo "Нет предыдущего коммита для сравнения (первый пуш ветки) — пропуск."
+            exit 0
+          fi
+
+          delim="EOF_$(date +%s%N)"
+          {
+            echo "WEB_APP_PARITY_CHANGED_PATHS<<$delim"
+            git diff --name-only "$BEFORE_SHA" "$AFTER_SHA"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+
+      # У этого репозитория (проверено на живой истории main) мерж обычный,
+      # не squash: `git log -1 --format=%B` у мержевого коммита содержит
+      # только «Merge pull request #N from ветка» и заголовок PR — самого
+      # описания PR (где живёт «Затрагивает приложение: …») там нет. Это
+      # ровно риск, отмеченный в spec.md («Squash-мерж vs merge-commit»):
+      # тело PR читается через GitHub API (`gh pr view`), а не из git-лога.
+      - name: Текст PR (push)
+        if: github.event_name == 'push' && env.SKIP_PARITY != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AFTER_SHA: ${{ github.event.after }}
+        run: |
+          subject=$(git log -1 --format=%s "$AFTER_SHA")
+          # Оба формата мержа: squash подписывает заголовок «(#123)» в конце
+          # строки, обычный мерж начинает строку с «Merge pull request #123».
+          pr_number=$(printf '%s' "$subject" | grep -oE '\(#[0-9]+\)$' | grep -oE '[0-9]+' || true)
+          if [ -z "$pr_number" ]; then
+            pr_number=$(printf '%s' "$subject" | grep -oE '^Merge pull request #[0-9]+' | grep -oE '[0-9]+' || true)
+          fi
+
+          pr_title=""
+          pr_body=""
+          pr_url=""
+          if [ -n "$pr_number" ] && gh pr view "$pr_number" --json title,body,url > /tmp/pr.json 2>/tmp/pr.err; then
+            pr_title=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/tmp/pr.json','utf8')).title)")
+            pr_body=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/tmp/pr.json','utf8')).body ?? '')")
+            pr_url=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/tmp/pr.json','utf8')).url)")
+          else
+            echo "::warning::Не удалось получить описание PR #${pr_number:-?} через gh pr view ($(cat /tmp/pr.err 2>/dev/null | head -c 200)) — используется текст коммита, в нём нет пометки «Затрагивает приложение»."
+            pr_title=$(git log -1 --format=%B "$AFTER_SHA" | tail -n +3)
+            pr_body="$pr_title"
+            if [ -n "$pr_number" ]; then
+              pr_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${pr_number}"
+            else
+              pr_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${AFTER_SHA}"
+            fi
+          fi
+
+          delim="EOF_$(date +%s%N)"
+          {
+            echo "WEB_APP_PARITY_PR_TITLE<<$delim"
+            printf '%s\n' "$pr_title"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+          {
+            echo "WEB_APP_PARITY_PR_BODY<<$delim"
+            printf '%s\n' "$pr_body"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+          echo "WEB_APP_PARITY_PR_URL=$pr_url" >> "$GITHUB_ENV"
+
+      - name: Собрать входные данные (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        # Значения входов workflow_dispatch — только через env:, не строкой в
+        # run:: текст произвольного входа не должен интерпретироваться шеллом.
+        env:
+          CHANGED_PATHS_INPUT: ${{ inputs.changed_paths }}
+          PR_BODY_INPUT: ${{ inputs.pr_body }}
+          PR_URL_INPUT: ${{ inputs.pr_url }}
+          PR_TITLE_INPUT: ${{ inputs.pr_title }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          delim="EOF_$(date +%s%N)"
+          {
+            echo "WEB_APP_PARITY_CHANGED_PATHS<<$delim"
+            printf '%s\n' "$CHANGED_PATHS_INPUT"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+          {
+            echo "WEB_APP_PARITY_PR_BODY<<$delim"
+            printf '%s\n' "$PR_BODY_INPUT"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+          {
+            echo "WEB_APP_PARITY_PR_URL<<$delim"
+            printf '%s\n' "$PR_URL_INPUT"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+          {
+            echo "WEB_APP_PARITY_PR_TITLE<<$delim"
+            printf '%s\n' "$PR_TITLE_INPUT"
+            echo "$delim"
+          } >> "$GITHUB_ENV"
+          if [ "$DRY_RUN_INPUT" = "true" ]; then
+            echo "WEB_APP_PARITY_DRY_RUN=1" >> "$GITHUB_ENV"
+          else
+            echo "WEB_APP_PARITY_DRY_RUN=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Догнать сервисы на доске «Работа»
+        if: env.SKIP_PARITY != '1'
+        env:
+          # Секрет попадает в окружение процесса только здесь — никогда в
+          # текст команды `run:` через интерполяцию строки. Секрет без прав
+          # write ничего не поменяет, GitHub маскирует значение в логе сам
+          # (маскировка регистрируется для любого секрета, взятого из
+          # `secrets.*`, независимо от способа передачи).
+          VEDAMATCH_API_KEY: ${{ secrets.VEDAMATCH_API_KEY }}
+        run: node scripts/web-app-parity/run.mjs
