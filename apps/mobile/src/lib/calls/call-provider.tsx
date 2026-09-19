@@ -40,6 +40,7 @@ import {
   clearNativeCall,
   consumeLaunchCall,
   getCallConflictState,
+  reconcileNativeConnections,
   placeOutgoingCall,
   showIncomingCallFromStream,
   startOngoingCall,
@@ -321,6 +322,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
         });
         return;
       }
+      // Финал звонка, которого провайдер не ведёт (например, поднятого
+      // нативно из фона, пока JS был в простое): погасить его соединение
+      // здесь же — пуш `call.ended` мог не дойти (прод-баг 2026-09-19).
+      // `endCall` идемпотентен, лишний вызов безвреден.
+      if (event.type === 'call.ended' && event.call.id !== stateRef.current.call?.id)
+        void clearNativeCall(event.call.id, nativeEndReason('ended', event.call.status));
       dispatch({ type: 'stream', event, selfId: userId });
       // Финал с сервера: медиа закрываем сразу, не дожидаясь перерисовки.
       if (event.type === 'call.ended' && event.call.id === stateRef.current.call?.id)
@@ -338,7 +345,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const reconcile = useCallback(async () => {
     if (status !== 'signed') return;
     try {
+      const requestStartedAt = Date.now();
       const { call: activeCall } = await callsApi.active();
+      // Прод-баг 2026-09-19: соединение Telecom, о котором сервер не знает,
+      // звонило вечно и держало «занято» — сверяем и нативную сторону, не
+      // только JS-состояние. Свой текущий звонок не трогаем: он мог
+      // начаться, пока шёл запрос.
+      const local = stateRef.current;
+      reconcileNativeConnections(
+        activeCall?.id ?? null,
+        local.phase !== 'idle' && local.phase !== 'ended' ? (local.call?.id ?? null) : null,
+        Date.now() - requestStartedAt,
+      );
       if (activeCall) {
         const current = stateRef.current;
         // Из простоя — как раньше. Поверх «карточки предпросмотра»

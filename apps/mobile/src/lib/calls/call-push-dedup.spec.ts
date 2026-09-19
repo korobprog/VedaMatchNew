@@ -37,11 +37,20 @@ describe('CallLifecycleTracker', () => {
     expect(tracker.handleEnded('call-1', 1)).toBe('duplicate');
   });
 
-  it('новый call.incoming после ended (перезвонили) снова звонит', () => {
+  // Перезвон — это новый звонок с новым `callId` (сервер, `randomUUID()`);
+  // тот же `callId` после `ended` — запоздавший/переупорядоченный пуш.
+  it('call.incoming того же id после ended не звонит (прод-баг 2026-09-19)', () => {
     const tracker = new CallLifecycleTracker();
     tracker.handleIncoming('call-1', 0);
     tracker.handleEnded('call-1', 500);
-    expect(tracker.handleIncoming('call-1', 600)).toBe('ring');
+    expect(tracker.handleIncoming('call-1', 600)).toBe('duplicate');
+  });
+
+  it('call.ended обогнал свой call.incoming — входящий не поднимается', () => {
+    const tracker = new CallLifecycleTracker();
+    expect(tracker.handleEnded('call-1', 0)).toBe('end');
+    expect(tracker.handleIncoming('call-1', 50)).toBe('duplicate');
+    expect(tracker.isRinging('call-1', 60)).toBe(false);
   });
 
   it('запись стирается по TTL — тот же id после долгой паузы звонит заново', () => {

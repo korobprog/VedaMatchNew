@@ -32,14 +32,17 @@ export class CallLifecycleTracker {
    *  но не в проде), не даём карте расти вечно. */
   constructor(private readonly ttlMs = 5 * 60_000) {}
 
-  /** Первый `call.incoming` этого id, пока он ещё звонит — «звонить»;
-   *  повтор, пока состояние `ringing`, — «дубликат». Новый `call.incoming`
-   *  после того, как звонок уже завершился (например, перезвонили), снова
-   *  «звонить». */
+  /** Первый `call.incoming` этого id — «звонить»; любой следующий, пока
+   *  запись жива (звонит или уже завершён), — «дубликат». Перезвон приходит
+   *  с новым `callId`. */
   handleIncoming(callId: string, nowMs: number): CallIncomingOutcome {
     this.sweep(nowMs);
     const existing = this.records.get(callId);
-    if (existing?.state === 'ringing') return 'duplicate';
+    // `ended` — тоже не звонить: `callId` у каждого звонка свой (сервер,
+    // `randomUUID()`), а FCM не гарантирует порядок — `call.ended` мог
+    // обогнать свой же `call.incoming` (прод-баг 2026-09-19: звонок, снятый
+    // через 3 секунды, иначе поднимал соединение, которое звонило вечно).
+    if (existing) return 'duplicate';
     this.records.set(callId, { state: 'ringing', at: nowMs });
     return 'ring';
   }
