@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.telecom.PhoneAccount
+import android.telecom.DisconnectCause
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.util.Log
@@ -92,6 +93,18 @@ class VedamatchCallsModule : Module() {
     }
   }
 
+  private fun connectionSnapshot(connection: VedamatchConnection): Map<String, Any> = mapOf(
+    "callId" to connection.callId,
+    "state" to connection.stateLabel(),
+    "ageMs" to connection.ageMs().toDouble(),
+  )
+
+  private fun expireStaleConnections() {
+    for (connection in PendingCallStore.allConnections()) {
+      if (connection.expireIfStale()) Log.w(TAG, "застрявшее соединение погашено, callId=${connection.callId}")
+    }
+  }
+
   private val context: Context
     get() = appContext.reactContext?.applicationContext
       ?: throw IllegalStateException("VedamatchCalls: нет ReactContext")
@@ -166,6 +179,10 @@ class VedamatchCallsModule : Module() {
     AsyncFunction("showIncomingCall") { options: ShowIncomingCallOptions ->
       val callId = options.callId
       if (callId.isEmpty()) return@AsyncFunction
+      if (PendingCallStore.isEnded(callId, System.currentTimeMillis())) {
+        Log.w(TAG, "showIncomingCall: звонок уже завершён (call.ended пришёл раньше), не показываем, callId=$callId")
+        return@AsyncFunction
+      }
       val callerName = options.callerName
       val kind = options.kind
       val avatarUrl = options.avatarUrl
@@ -253,7 +270,13 @@ class VedamatchCallsModule : Module() {
       startNetworkWatch()
     }
 
-    AsyncFunction("endCall") { callId: String, _: String ->
+    AsyncFunction("endCall") { callId: String, reason: String ->
+      Log.i(TAG, "endCall callId=$callId reason=$reason connection=${PendingCallStore.connectionFor(callId) != null}")
+      // Прод-баг 2026-09-19: `call.ended` мог прийти, пока Telecom ещё не
+      // создал соединение (`onCreateIncomingConnection` асинхронен после
+      // `addNewIncomingCall`) — `connectionFor` тогда `null`, и созданное
+      // следом соединение звонило бы вечно. Отметка закрывает эту дверь.
+      PendingCallStore.markEnded(callId, System.currentTimeMillis())
       stopNetworkWatch()
       CallForegroundService.stop(context)
       CallNotifications.cancel(context, callId)
@@ -315,13 +338,43 @@ class VedamatchCallsModule : Module() {
      * тогда считается любой существующий `Connection`, как и раньше).
      */
     Function("callConflictState") { excludeCallId: String ->
+      // Застрявшие (не отвечены дольше `StaleCallPolicy.STALE_RING_AFTER_MS`)
+      // гасим прямо здесь — занятостью они не являются (прод-баг 2026-09-19).
+      expireStaleConnections()
       val hasOwnCall = if (excludeCallId.isEmpty())
         PendingCallStore.hasAnyConnection()
       else
         PendingCallStore.hasOtherConnection(excludeCallId)
       val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
       val systemBusy = audioManager.mode == AudioManager.MODE_IN_CALL
-      mapOf("hasOwnCall" to hasOwnCall, "systemBusy" to systemBusy)
+      val ownCalls = PendingCallStore.allConnections()
+        .filter { it.callId != excludeCallId }
+        .map { connectionSnapshot(it) }
+      mapOf("hasOwnCall" to hasOwnCall, "systemBusy" to systemBusy, "ownCalls" to ownCalls)
+    }
+
+    /** Живые self-managed соединения — для сверки с сервером
+     *  (`native-call-reconcile.ts`). Застрявшие гасятся до ответа. */
+    Function("listConnections") {
+      expireStaleConnections()
+      PendingCallStore.allConnections().map { connectionSnapshot(it) }
+    }
+
+    /** Погасить соединения, о которых сервер уже не знает (JS решил это
+     *  чистой функцией `selectConnectionsToEnd`). Вместе с уведомлением
+     *  входящего и метаданными; `call.ended`-отметка — чтобы запоздавшее
+     *  создание соединения для того же звонка не зазвонило снова. */
+    Function("endConnections") { callIds: List<String> ->
+      val now = System.currentTimeMillis()
+      for (callId in callIds) {
+        if (callId.isEmpty()) continue
+        PendingCallStore.markEnded(callId, now)
+        val connection = PendingCallStore.connectionFor(callId)
+        Log.w(TAG, "endConnections: гасим соединение, которого нет на сервере, callId=$callId state=${connection?.stateLabel()}")
+        connection?.terminateFromApp(DisconnectCause(DisconnectCause.REMOTE))
+        CallNotifications.cancel(context, callId)
+        PendingCallStore.removeInfo(callId)
+      }
     }
 
     Function("getLaunchCall") {

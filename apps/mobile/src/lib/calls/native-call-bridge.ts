@@ -15,6 +15,7 @@ import {
   type IncomingCallPresentationDecision,
 } from './incoming-call-presentation';
 import { isIncomingCallExpired, type CallEndedPush, type IncomingCallPush } from './incoming-call-push';
+import { selectConnectionsToEnd } from './stale-native-calls';
 
 /**
  * Мост между разобранным data-пушем (`incoming-call-push.ts`) и нативным
@@ -186,6 +187,40 @@ export async function startOngoingCall(callId: string, companionName: string, ki
 export function getCallConflictState(excludeCallId?: string): CallConflictState {
   if (!SUPPORTED) return { hasOwnCall: false, systemBusy: false };
   return VedamatchCalls.callConflictState(excludeCallId ?? '');
+}
+
+/**
+ * Сверка self-managed соединений с сервером (прод-баг 2026-09-19): после
+ * успешного `GET /chat/calls/active` гасит всё, о чём сервер не знает и что
+ * старше самого запроса, — осколки звонков, чей `call.ended` потерялся или
+ * разминулся с созданием соединения. Решение — `selectConnectionsToEnd`
+ * (чистая функция, `stale-native-calls.ts`). Возвращает погашенные `callId`.
+ */
+export function reconcileNativeConnections(
+  serverActiveCallId: string | null,
+  localCallId: string | null,
+  requestElapsedMs: number,
+): string[] {
+  if (!SUPPORTED) return [];
+  try {
+    const toEnd = selectConnectionsToEnd({
+      connections: VedamatchCalls.listConnections(),
+      serverActiveCallId,
+      localCallId,
+      requestElapsedMs,
+    });
+    if (toEnd.length > 0) {
+      // eslint-disable-next-line no-console -- видно в logcat релизной сборки.
+      console.warn('[calls] гасим соединения, которых нет на сервере', toEnd);
+      VedamatchCalls.endConnections(toEnd);
+    }
+    return toEnd;
+  } catch (error) {
+    // Старая нативная сторона без `listConnections` — страхует её собственный таймер.
+    // eslint-disable-next-line no-console -- диагностика.
+    console.warn('[calls] сверка нативных соединений не удалась', error);
+    return [];
+  }
 }
 
 const KNOWN_TRANSPORTS: ReadonlySet<string> = new Set(['wifi', 'cellular', 'ethernet', 'other', 'none']);

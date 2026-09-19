@@ -1,5 +1,8 @@
 package com.vedamatch.calls
 
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.telecom.Connection
 import android.telecom.DisconnectCause
 import android.util.Log
@@ -44,6 +47,58 @@ class VedamatchConnection(
 ) : Connection() {
   companion object {
     private const val TAG = "VedamatchCalls"
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+  }
+
+  /** Монотонное время создания — возраст для `StaleCallPolicy`, не зависит
+   *  от перевода часов на телефоне. */
+  private val createdAtElapsedMs: Long = SystemClock.elapsedRealtime()
+
+  fun ageMs(): Long = SystemClock.elapsedRealtime() - createdAtElapsedMs
+
+  /** Ещё не отвечен: входящий звонит, исходящий набирает (или Telecom ещё
+   *  не довёл его до этих состояний). */
+  fun isUnanswered(): Boolean = when (state) {
+    Connection.STATE_INITIALIZING, Connection.STATE_NEW, Connection.STATE_RINGING, Connection.STATE_DIALING -> true
+    else -> false
+  }
+
+  fun stateLabel(): String = when (state) {
+    Connection.STATE_RINGING, Connection.STATE_INITIALIZING, Connection.STATE_NEW -> "ringing"
+    Connection.STATE_DIALING -> "dialing"
+    Connection.STATE_ACTIVE -> "active"
+    Connection.STATE_HOLDING -> "holding"
+    Connection.STATE_DISCONNECTED -> "disconnected"
+    else -> "other"
+  }
+
+  private val ringTimeout = Runnable {
+    if (expireIfStale()) Log.w(TAG, "ring timeout: соединение не отвечено за ${StaleCallPolicy.STALE_RING_AFTER_MS} мс, погашено, callId=$callId")
+  }
+
+  /** Страховка от «звонит вечно» (прод-баг 2026-09-19): сервер кладёт
+   *  дозвон в `missed` через `SERVER_RING_TIMEOUT_MS`, и если `call.ended`
+   *  до нас не дошёл или разминулся с созданием соединения — гасим сами
+   *  чуть позже серверного таймера. Зовётся сразу после `setRinging`/`setDialing`. */
+  fun armRingTimeout() {
+    mainHandler.removeCallbacks(ringTimeout)
+    mainHandler.postDelayed(ringTimeout, StaleCallPolicy.STALE_RING_AFTER_MS)
+  }
+
+  private fun disarmRingTimeout() {
+    mainHandler.removeCallbacks(ringTimeout)
+  }
+
+  /**
+   * Погасить соединение, если оно не отвечено дольше порога
+   * (`StaleCallPolicy.isStale`). JS не извещается: к этому моменту сервер
+   * звонок уже закрыл, а свой JS-экран провайдер сверяет сам (`reconcile`).
+   */
+  fun expireIfStale(): Boolean {
+    if (!StaleCallPolicy.isStale(isUnanswered(), ageMs())) return false
+    val cause = if (state == Connection.STATE_DIALING) DisconnectCause.CANCELED else DisconnectCause.MISSED
+    terminateFromApp(DisconnectCause(cause))
+    return true
   }
 
   override fun onShowIncomingCallUi() {
@@ -54,6 +109,7 @@ class VedamatchConnection(
   }
 
   override fun onAnswer() {
+    disarmRingTimeout()
     setActive()
     VedamatchCallsModule.applicationContextOrNull()?.let { CallNotifications.cancel(it, callId) }
     onAnswerCallback(callId)
@@ -64,6 +120,7 @@ class VedamatchConnection(
   }
 
   override fun onReject() {
+    disarmRingTimeout()
     setDisconnected(DisconnectCause(DisconnectCause.REJECTED))
     destroy()
     // Симметрично `onDisconnect()`/`disconnectFromApp()` ниже: отклонение —
@@ -91,6 +148,7 @@ class VedamatchConnection(
    * ожидаем, а не гонка, которую нужно устранять.
    */
   override fun onDisconnect() {
+    disarmRingTimeout()
     setDisconnected(DisconnectCause(DisconnectCause.LOCAL))
     destroy()
     PendingCallStore.removeConnection(callId)
@@ -104,8 +162,21 @@ class VedamatchConnection(
    *  обозначает запрос ОТ Telecom, это — от нас, колбэк в JS звать не нужно
    *  (JS и так уже знает — это он попросил). */
   fun disconnectFromApp() {
+    disarmRingTimeout()
     setDisconnected(DisconnectCause(DisconnectCause.REMOTE))
     destroy()
     PendingCallStore.removeConnection(callId)
+  }
+
+  /** Сняли со стороны приложения вместе со всем, что могло остаться от
+   *  этого звонка: уведомление входящего и метаданные. Для застрявших
+   *  (`expireIfStale`) и для сверки с сервером (`endConnections`). */
+  fun terminateFromApp(cause: DisconnectCause) {
+    disarmRingTimeout()
+    setDisconnected(cause)
+    destroy()
+    PendingCallStore.removeConnection(callId)
+    PendingCallStore.removeInfo(callId)
+    VedamatchCallsModule.applicationContextOrNull()?.let { CallNotifications.cancel(it, callId) }
   }
 }

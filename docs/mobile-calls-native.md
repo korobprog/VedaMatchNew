@@ -2472,3 +2472,58 @@ idempotent `POST /signal` при любой ошибке — включая се
   быть видны и предупреждения `sendWithRetry` (повтор), и, если дубль всё же
   дошёл, `console.warn` от `webrtc-signal-guard.ts` — а не необработанное
   исключение.
+
+## 14. Входящий, звонящий вечно, и «Устройство сейчас занято другим звонком» (прод, 2026-09-19)
+
+**Симптом.** На Samsung A51 (versionCode 1016) каждый исходящий сразу падал с
+«Устройство сейчас занято другим звонком», входящие тоже не доходили.
+`dumpsys telecom`: self-managed `TC@18` в `RINGING` с 12:15:55, без
+`SET_DISCONNECTED`, до принудительной остановки приложения.
+
+**Цепочка (по logcat).**
+
+1. 12:15:51 — FCM поднял процесс (`ReactNativeFirebaseMessagingReceiver`), первое
+   сообщение — `call.incoming`; 12:15:54 — второе, `call.ended` того же звонка
+   (звонок сняли через ~3 с). Оба ушли в headless-JS почти одновременно, после
+   загрузки бандла.
+2. `handleIncomingCallPush` → `showIncomingCall`: `putInfo`, затем
+   `addNewIncomingCall` (12:15:55.505). Telecom создаёт соединение асинхронно.
+3. `handleCallEndedPush` → `endCall` пришёл в это окно: `connectionFor(callId)`
+   ещё `null` — гасить нечего, только `removeInfo`.
+4. 12:15:55.531 `onCreateIncomingConnection` → `setRinging()` + `putConnection`;
+   `onShowIncomingCallUi` не нашёл `info` (в логе нет «уведомление … показано») —
+   звонок без экрана и без кнопок, погасить его было нечем.
+5. Ни таймера у соединения, ни сверки с сервером: `reconcile()` при открытии
+   приложения (12:16:03) правил только JS-состояние.
+6. `callConflictState` → `hasAnyConnection()` = `true` навсегда →
+   `shouldDeclineAsBusy` = «занято» для исходящих (`call-provider.tsx#start`) и
+   входящих (`presentIncomingCall` → `declineCallInBackground`).
+
+Тот же исход давал и обратный порядок доставки: `callLifecycleTracker.handleIncoming`
+после `ended` возвращал «звонить».
+
+Сервер ни при чём: `finish()` шлёт `chat.call-ended` при любом финале дозвона,
+включая таймер (`RING_TIMEOUT_MS` = 45 с) — теперь это закреплено спеком
+`chat-calls.service.spec.ts`.
+
+**Исправление и страховки.**
+
+- `endCall` оставляет отметку «звонок завершён» (`EndedCallTombstones`,
+  `StaleCallPolicy.kt`); `onCreateIncoming/OutgoingConnection` и
+  `showIncomingCall` для отмеченного `callId` соединение не создают.
+- `CallLifecycleTracker.handleIncoming` после `ended` того же `callId` — «дубликат».
+- Своё соединение гасится само (`DisconnectCause.MISSED`/`CANCELED`, уведомление и
+  метаданные тоже) через `STALE_RING_AFTER_MS` = 45 + 15 с, если не отвечено.
+- «Занято» не учитывает не отвеченный звонок старше порога
+  (`hasLiveOwnCall`, `stale-native-calls.ts`); `callConflictState`/`listConnections`
+  такие соединения ещё и гасят.
+- После каждого успешного `GET /chat/calls/active` (старт, возврат из фона)
+  `reconcileNativeConnections` гасит соединения, которых нет на сервере и которые
+  старше запроса (`selectConnectionsToEnd`); свой текущий звонок не трогается.
+- `call.ended` из потока для звонка, которого провайдер не ведёт, тоже гасит
+  нативное соединение.
+- Порог в трёх местах (сервер, Kotlin, JS) сверяет `call-ring-timeout.spec.ts`.
+
+**Ждёт живого звонка вдвоём:** позвонить на A51 при убитом приложении и сбросить
+через 1–3 с — телефон не должен остаться «звонящим», следующий звонок в обе
+стороны проходит; входящий без ответа гаснет сам не позже ~60 с.

@@ -5,7 +5,8 @@ import type { ChatCallSignal } from '@vedamatch/shared';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { ChatConversationsService } from '../chat-conversations.service';
 import type { ChatEventsService } from '../chat-events.service';
-import { BUSY_TTL_ACTIVE_MS } from './call-state';
+import { CHAT_CALL_ENDED_EVENT } from '@vedamatch/shared';
+import { BUSY_TTL_ACTIVE_MS, RING_TIMEOUT_MS } from './call-state';
 import { ChatCallsService } from './chat-calls.service';
 
 /**
@@ -74,6 +75,7 @@ function buildService(row = callRow()) {
         },
       ),
       findMany: fn(() => Promise.resolve([])),
+      findFirst: fn(() => Promise.resolve(stored)),
     },
     chatMessage: { create: fn(() => Promise.reject(new Error('not used'))) },
     chatConversation: { update: fn(() => Promise.resolve({})) },
@@ -97,7 +99,7 @@ function buildService(row = callRow()) {
     bus as unknown as EventEmitter2,
     config,
   );
-  return { service, events, getRow: () => stored };
+  return { service, events, bus, getRow: () => stored };
 }
 
 const sdpOffer: ChatCallSignal = {
@@ -274,5 +276,112 @@ describe('ChatCallsService — сигналы активного звонка (V
     await expect(
       service.signal('caller', 'call-1', sdpOffer),
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * Прод-баг 2026-09-19: нативный звонок застрял в `RINGING`, и телефон
+ * отклонял все звонки как «занято». Клиент гасит соединение по data-пушу
+ * `chat.call-ended` — этот контракт сервера фиксируется здесь для каждого
+ * финала дозвона: таймаут, отмена звонившим, отказ вызываемого.
+ */
+describe('ChatCallsService — «звонок снят» уходит на телефоны при любом финале дозвона', () => {
+  function endedPushes(bus: { emit: jest.Mock }) {
+    return bus.emit.mock.calls
+      .filter(([name]) => name === CHAT_CALL_ENDED_EVENT)
+      .map(
+        ([, event]) =>
+          event as { recipientId: string; callId: string; reason: string },
+      );
+  }
+
+  it('дозвон пережил таймер (active() после рестарта) — missed обеим сторонам', async () => {
+    const { service, bus } = buildService(
+      callRow({
+        status: 'ringing',
+        answeredAt: null,
+        createdAt: new Date(Date.now() - RING_TIMEOUT_MS - 10_000),
+      }),
+    );
+    await expect(service.active('callee')).resolves.toBeNull();
+    expect(endedPushes(bus)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recipientId: 'callee',
+          callId: 'call-1',
+          reason: 'missed',
+        }),
+        expect.objectContaining({
+          recipientId: 'caller',
+          callId: 'call-1',
+          reason: 'missed',
+        }),
+      ]),
+    );
+  });
+
+  it('звонивший отменил через 3 секунды — cancelled вызываемому', async () => {
+    const { service, bus } = buildService(
+      callRow({
+        status: 'ringing',
+        answeredAt: null,
+        createdAt: new Date(Date.now() - 3_000),
+      }),
+    );
+    await service.end('caller', 'call-1');
+    expect(endedPushes(bus)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recipientId: 'callee',
+          callId: 'call-1',
+          reason: 'cancelled',
+        }),
+      ]),
+    );
+  });
+
+  it('вызываемый отклонил — declined на все его телефоны', async () => {
+    const { service, bus } = buildService(
+      callRow({
+        status: 'ringing',
+        answeredAt: null,
+        createdAt: new Date(Date.now() - 3_000),
+      }),
+    );
+    await service.decline('callee', 'call-1');
+    expect(endedPushes(bus)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recipientId: 'callee',
+          callId: 'call-1',
+          reason: 'declined',
+        }),
+      ]),
+    );
+  });
+
+  it('таймер дозвона (RING_TIMEOUT_MS) — missed вызываемому без участия клиентов', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, bus, getRow } = buildService(
+        callRow({ status: 'ringing', answeredAt: null, createdAt: new Date() }),
+      );
+      (service as unknown as { armRingTimer(id: string): void }).armRingTimer(
+        'call-1',
+      );
+      await jest.advanceTimersByTimeAsync(RING_TIMEOUT_MS);
+      expect(getRow().status).toBe('missed');
+      expect(endedPushes(bus)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            recipientId: 'callee',
+            callId: 'call-1',
+            reason: 'missed',
+          }),
+        ]),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

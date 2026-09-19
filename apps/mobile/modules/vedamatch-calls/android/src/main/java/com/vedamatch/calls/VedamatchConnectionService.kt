@@ -35,8 +35,17 @@ class VedamatchConnectionService : ConnectionService() {
   ): Connection {
     val callId = request.extras?.getString(PendingCallStore.EXTRA_CALL_ID) ?: ""
     Log.i(TAG, "onCreateIncomingConnection callId=$callId")
+    // Прод-баг 2026-09-19: `call.ended` обогнал создание соединения — `endCall`
+    // оставил отметку, звонить уже нечему (иначе `RINGING` навсегда и
+    // «занято» для всех следующих звонков).
+    if (PendingCallStore.isEnded(callId, System.currentTimeMillis())) {
+      Log.w(TAG, "onCreateIncomingConnection: звонок уже завершён, соединение не создаём, callId=$callId")
+      PendingCallStore.removeInfo(callId)
+      return Connection.createCanceledConnection()
+    }
     val connection = buildConnection(callId)
     connection.setRinging()
+    connection.armRingTimeout()
     connection.connectionProperties = Connection.PROPERTY_SELF_MANAGED
     connection.audioModeIsVoip = true
     request.extras?.getString(PendingCallStore.EXTRA_CALLER_NAME)?.let {
@@ -84,8 +93,13 @@ class VedamatchConnectionService : ConnectionService() {
     // не ждёт результата этого вызова (`placeOutgoingCall`, best-effort).
     val callId = request.extras?.getString(PendingCallStore.EXTRA_CALL_ID)
       ?: return Connection.createFailedConnection(DisconnectCause(DisconnectCause.ERROR))
+    if (PendingCallStore.isEnded(callId, System.currentTimeMillis())) {
+      Log.w(TAG, "onCreateOutgoingConnection: звонок уже завершён, callId=$callId")
+      return Connection.createCanceledConnection()
+    }
     val connection = buildConnection(callId)
     connection.setDialing()
+    connection.armRingTimeout()
     connection.connectionProperties = Connection.PROPERTY_SELF_MANAGED
     connection.audioModeIsVoip = true
     request.extras?.getString(PendingCallStore.EXTRA_CALLER_NAME)?.let {

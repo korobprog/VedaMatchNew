@@ -67,9 +67,22 @@ export interface OngoingCallOptions {
  *  («занято ли устройство») живёт в JS, чистым модулем со своим спеком
  *  (`src/lib/calls/call-busy-decision.ts`), а не здесь: этот тип — только
  *  форма ответа нативной стороны. */
+/** Снимок одного self-managed `Connection` (`listConnections`,
+ *  `callConflictState().ownCalls`). `ageMs` — по монотонным часам
+ *  (`SystemClock.elapsedRealtime`) с момента создания соединения. */
+export interface NativeConnectionInfo {
+  callId: string;
+  state: 'ringing' | 'dialing' | 'active' | 'holding' | 'disconnected' | 'other';
+  ageMs: number;
+}
+
 export interface CallConflictState {
-  /** Уже идёт свой self-managed звонок VedaMatch (`PendingCallStore`). */
+  /** Уже идёт свой self-managed звонок VedaMatch (`PendingCallStore`) —
+   *  сырой флаг, включая застрявшие; решение принимается по `ownCalls`. */
   hasOwnCall: boolean;
+  /** Свои соединения поимённо (без `excludeCallId`). Необязательно — старая
+   *  нативная сторона его не отдаёт, тогда решение падает на `hasOwnCall`. */
+  ownCalls?: NativeConnectionInfo[];
   /** Telecom считает устройство занятым чем-то ещё — сотовым разговором или
    *  другим self-managed приложением (`TelecomManager.isInCall()`). */
   systemBusy: boolean;
@@ -140,6 +153,13 @@ declare class VedamatchCallsNativeModule extends NativeModule<VedamatchCallsEven
    *  как именно мост expo-modules-core сводит пропущенный JS-аргумент с
    *  необязательным параметром на стороне Kotlin. */
   callConflictState(excludeCallId: string): CallConflictState;
+  /** Живые self-managed соединения (застрявшие нативная сторона гасит до
+   *  ответа) — для сверки с `GET /chat/calls/active`. */
+  listConnections(): NativeConnectionInfo[];
+  /** Погасить соединения этих звонков вместе с уведомлением входящего;
+   *  отсутствующие — no-op. Прод-баг 2026-09-19: соединение, о котором
+   *  сервер не знает, иначе держало «занято» до принудительной остановки. */
+  endConnections(callIds: string[]): void;
   /** Android 14+: может ли приложение показать полноэкранный intent без
    *  ручного разрешения в настройках (`NotificationManager.canUseFullScreenIntent`).
    *  На более старых версиях всегда `true` — разрешение появилось только в 14. */
