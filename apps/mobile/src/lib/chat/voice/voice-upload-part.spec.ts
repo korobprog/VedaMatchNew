@@ -11,9 +11,11 @@ import type { VoiceUploadPart } from './voice-upload-part';
  *   else { throw new Error('Unsupported FormDataPart implementation'); }
  *
  * Ту же самую ошибку увидела живая проверка сборки 1022 при отправке
- * голосового (feedback-002, блокирующий п.1) — часть формы `{uri, name,
- * type}` (`chat-upload-rules.ts: buildUploadFilePart`, которым до этой
- * правки пользовалось и голосовое) не подходит ни под одну ветку.
+ * голосового (feedback-002, блокирующий п.1), а сборка 1023 — при отправке
+ * фото тем же механизмом (feedback-003, блокирующий п.1): часть формы
+ * `{uri, name, type}` не подходит ни под одну ветку независимо от типа
+ * вложения. Тот же предикат и тот же регресс-тест — в
+ * `chat-upload-part.spec.ts`, для общего строителя `buildUploadFormPart`.
  *
  * Гонять сам `convertFormDataAsync` в этом тесте не получится честно:
  * глобальный `FormData` под `jest-expo` — не тот класс React Native/Hermes,

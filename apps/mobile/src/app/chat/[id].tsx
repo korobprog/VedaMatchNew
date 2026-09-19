@@ -28,6 +28,7 @@ import { AttachmentSheet } from '@/components/chat/attachment-sheet';
 import { CallHeaderButtons } from '@/components/calls/call-header-buttons';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { VoiceRecorderControl } from '@/components/chat/voice/voice-recorder-control';
+import { canOpenMessageMenuWhileRecording } from '@/lib/chat/voice/voice-composer-lock';
 import { ChatKeyboardAvoidingView as KeyboardAvoidingView } from '@/components/keyboard-controller-web';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { MessageMenu } from '@/components/chat/message-menu';
@@ -58,7 +59,6 @@ import { applyOptimisticReaction, rollbackReaction } from '@/lib/chat/chat-react
 import { useChatStream } from '@/lib/chat/chat-stream';
 import {
   ALLOWED_FILE_MIME,
-  buildUploadFilePart,
   canPickAttachment,
   normalizePickedDocument,
   normalizePickedImage,
@@ -67,6 +67,7 @@ import {
   validateUpload,
   type NormalizedUpload,
 } from '@/lib/chat/chat-upload-rules';
+import { buildUploadFormPart } from '@/lib/chat/chat-upload-part';
 import { setActiveConversation } from '@/lib/push/active-chat';
 import { withPlural } from '@/lib/chat/plural';
 import { isOnline } from '@/lib/chat/presence';
@@ -523,18 +524,23 @@ export default function ChatRoomScreen() {
   const performUpload = useCallback(
     async (slotId: string, candidate: NormalizedUpload) => {
       try {
+        // Байты, не `{uri,name,type}` — та форма падала под `expo`-fetch
+        // с «Unsupported FormDataPart implementation» для фото/файлов точно
+        // так же, как раньше падала для голосового (feedback-003,
+        // блокирующий п.1; разбор — `chat-upload-part.ts`).
         const form = new FormData();
-        form.append('file', buildUploadFilePart(candidate) as unknown as Blob);
+        form.append('file', (await buildUploadFormPart(candidate)) as unknown as Blob);
         const result = await chatApi.upload(conversationId, form);
         setAttachments((current) => addAttachment(current, toAttachmentInput(result, candidate.name)));
         setUploadSlots((current) => current.filter((slot) => slot.id !== slotId));
       } catch (e) {
+        // Причина — в консоль (может быть текстом стороннего fetch на
+        // английском, ничего не говорящим без контекста); человеку — всегда
+        // понятная фраза по-русски, не `e.message`.
+        // eslint-disable-next-line no-console
+        console.warn('[chat] загрузка вложения не удалась', e);
         setUploadSlots((current) =>
-          current.map((slot) =>
-            slot.id === slotId
-              ? { ...slot, status: 'error', error: e instanceof Error ? e.message : 'Файл не загрузился' }
-              : slot,
-          ),
+          current.map((slot) => (slot.id === slotId ? { ...slot, status: 'error', error: 'Файл не загрузился' } : slot)),
         );
       }
     },
@@ -660,12 +666,12 @@ export default function ChatRoomScreen() {
           message={item.message}
           mine={item.message.author.id === myId}
           showAuthor={showAuthors}
-          onLongPress={openMenu}
+          onLongPress={canOpenMessageMenuWhileRecording(voiceRecording) ? openMenu : undefined}
           onReactionPress={reactToMessage}
         />
       </View>
     ),
-    [colors, myId, showAuthors, openMenu, reactToMessage],
+    [colors, myId, showAuthors, openMenu, reactToMessage, voiceRecording],
   );
   const subtitle = detail
     ? detail.kind === 'direct'
@@ -945,7 +951,14 @@ export default function ChatRoomScreen() {
                     `VoiceRecorderControl` тут же размонтировался бы посреди
                     активной записи в обход `useFocusEffect`, единственного
                     надёжного места, которое успевает остановить рекордер
-                    ДО размонтирования (feedback-002, п.1/2). */}
+                    ДО размонтирования (feedback-002, п.1/2).
+                    `|| editing` тем же способом мог бы размонтировать
+                    контрол через вход в правку сообщения (меню долгого
+                    нажатия → «Изменить») — этот путь закрыт не здесь, а
+                    выше по цепочке: `renderRow` не даёт открыть меню вовсе,
+                    пока `voiceRecording`, см. `canOpenMessageMenuWhileRecording`
+                    (feedback-003, блокирующий п.2) — `editing` во время
+                    записи поэтому никогда не станет `true`. */}
                 {(canSubmit && !voiceRecording) || editing ? (
                   <Pressable
                     accessibilityRole="button"

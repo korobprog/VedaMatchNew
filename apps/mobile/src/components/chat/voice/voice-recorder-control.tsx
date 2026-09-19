@@ -293,10 +293,10 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
       return;
     }
     try {
-      // НЕ `buildUploadFilePart` (`chat-upload-rules.ts`, используется для
-      // фото/файлов) — та форма `{uri,name,type}` рассчитана на классический
-      // `fetch`/`FormData` React Native и не пережила отправку живьём
-      // (feedback-002, блокирующий п.1, полный разбор — `voice-upload-part.ts`).
+      // Байты, не `{uri,name,type}` — та форма (была у голосового и у
+      // фото/файлов до feedback-002/003) не пережила отправку живьём под
+      // `expo`-fetch; общий строитель и полный разбор —
+      // `chat-upload-part.ts: buildUploadFormPart`, здесь — только имя/MIME.
       const form = new FormData();
       form.append('file', (await buildVoiceUploadPart(uri)) as unknown as Blob);
       const result = await chatApi.upload(conversationId, form);

@@ -265,8 +265,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Колонка справа от кнопки: волна сверху на всю ширину, мета — строкой под ней.
-  content: { flex: 1, minWidth: 0, gap: 6 },
+  // Колонка справа от кнопки: волна сверху на всю ширину, мета — строкой
+  // под ней. `paddingRight` — волна иначе упирается в правый край пузыря
+  // (живая проверка сборки 1023, feedback-003).
+  content: { flex: 1, minWidth: 0, gap: 6, paddingRight: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   // `fonts.mono` (IBM Plex Mono, как `--font-mono` на сайте) — табличные
   // цифры, ширина знака не меняется между «0:04» и «0:46»/«1:23».

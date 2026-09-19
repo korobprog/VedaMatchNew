@@ -99,7 +99,15 @@ function inferImageMime(uri: string): string | null {
   return ext ? (EXTENSION_MIME[ext] ?? null) : null;
 }
 
-/** Часть тела `multipart/form-data` для `FormData.append('file', …)` в RN. */
+/**
+ * Локальные поля файла до отправки. НЕ форма части `FormData` — та форма
+ * (`{uri,name,type}` буквально этих же трёх полей) не пережила отправку
+ * живьём под `expo`-fetch («Unsupported FormDataPart implementation»,
+ * VED-286, feedback-002/003) — строить `FormData`-часть теперь
+ * `chat-upload-part.ts: buildUploadFormPart`, читает файл в байты. Раньше
+ * здесь же был `buildUploadFilePart`, возвращавший ровно эту тройку полей
+ * как есть — удалён вместе с багом, который тянул за собой.
+ */
 export interface UploadFilePart {
   uri: string;
   name: string;
@@ -111,10 +119,6 @@ export interface NormalizedUpload extends UploadFilePart {
   sizeBytes: number;
   width?: number;
   height?: number;
-}
-
-export function buildUploadFilePart(upload: NormalizedUpload): UploadFilePart {
-  return { uri: upload.uri, name: upload.name, type: upload.type };
 }
 
 /** Снимок ассета `expo-image-picker` — только поля, которые реально нужны. */

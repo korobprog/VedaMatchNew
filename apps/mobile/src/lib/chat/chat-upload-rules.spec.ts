@@ -4,7 +4,6 @@ import {
   MAX_IMAGE_BYTES,
   MAX_VOICE_BYTES,
   attachmentKindFor,
-  buildUploadFilePart,
   canPickAttachment,
   maxBytesFor,
   normalizePickedDocument,
@@ -76,25 +75,14 @@ describe('uploadDenialMessage', () => {
   });
 });
 
-describe('buildUploadFilePart', () => {
-  it('оставляет только uri/name/type для FormData', () => {
-    expect(
-      buildUploadFilePart({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg', sizeBytes: 100 }),
-    ).toEqual({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg' });
-  });
-
-  // VED-286, feedback-002 п.1: эта форма ({uri,name,type}) — та самая, что
-  // не пережила отправку голосового живьём («Unsupported FormDataPart
-  // implementation», разбор — `voice-upload-part.ts`). Голосовое поэтому
-  // грузится не через эту функцию, а через `voice-upload-part.ts:
-  // buildVoiceUploadPart` (сырые байты) — фото/файлы здесь не тронуты и
-  // проверка ниже просто фиксирует форму на будущее, без утверждения об
-  // общем пути с голосовым.
-  it('форма части остаётся {uri,name,type} независимо от типа вложения', () => {
-    const photoPart = buildUploadFilePart({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg', sizeBytes: 100 });
-    expect(Object.keys(photoPart).sort()).toEqual(['name', 'type', 'uri']);
-  });
-});
+// `buildUploadFilePart` ({uri,name,type} буквально) удалена вместе с багом,
+// который тянула — та форма не переживает отправку под `expo`-fetch
+// («Unsupported FormDataPart implementation», feedback-002/003). Часть
+// `FormData` теперь строит `chat-upload-part.ts: buildUploadFormPart`
+// (сырые байты) — его тест проверяет РЕАЛЬНУЮ совместимость с
+// `expo`-fetch через тот же предикат, что `voice-upload-part.spec.ts`, а не
+// сравнение ключей объекта (feedback-003, major п.3: прошлый тест здесь был
+// тавтологией — проходил и с багом, и без него).
 
 describe('normalizePickedImage', () => {
   it('использует mimeType и имя из ассета, когда они есть', () => {
