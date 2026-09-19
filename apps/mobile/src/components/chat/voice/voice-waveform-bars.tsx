@@ -54,6 +54,12 @@ export function VoiceWaveformBars({ levels, playedRatio, colorPlayed, colorRest,
     <View
       onLayout={onLayout}
       style={[styles.row, { height }]}
+      // Визуальная высота дорожки — 28dp, меньше правила «цели ≥ 44dp»
+      // (CLAUDE.md) для интерактивных элементов; когда есть перемотка,
+      // `hitSlop` расширяет зону касания до 44dp по высоте, не трогая вид
+      // столбиков (feedback-001, п.4). У рекордера `onSeek` нет — там просто
+      // индикатор уровня, hitSlop не нужен.
+      hitSlop={onSeek ? { top: 8, bottom: 8 } : undefined}
       {...(panResponder?.panHandlers ?? {})}
       accessible={false}
     >

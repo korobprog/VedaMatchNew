@@ -1,12 +1,14 @@
 import type { ChatAttachmentDto } from '@vedamatch/shared';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget } from '@/theme/tokens';
 import { releaseVoicePlayback, requestVoicePlayback } from '@/lib/chat/voice/voice-playback-registry';
+import { applyPlaybackRate } from '@/lib/chat/voice/voice-player-rate';
+import { shouldPausePlaybackForAppState } from '@/lib/chat/voice/voice-app-state-guard';
 import { formatVoiceSpeed, nextVoiceSpeed } from '@/lib/chat/voice/voice-speed';
 import { getCachedVoiceSpeed, loadVoiceSpeed, setVoiceSpeed, subscribeVoiceSpeed } from '@/lib/chat/voice/voice-speed-store';
 import { formatVoiceTime } from '@/lib/chat/voice/voice-time';
@@ -49,8 +51,22 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
   }, []);
 
   useEffect(() => {
-    player.playbackRate = speed;
+    // `player.playbackRate = speed` роняло экран переписки: в expo-audio 57
+    // на Android это свойство только для чтения (см. `voice-player-rate.ts`).
+    applyPlaybackRate(player, speed);
   }, [player, speed]);
+
+  // Уход в фон — пауза, не остановка: вернувшись, можно продолжить с того же
+  // места. `player`/`id` не меняются за жизнь компонента (один плеер на
+  // вложение), поэтому подписка не рискует протухнуть на устаревшем значении.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (!shouldPausePlaybackForAppState(next)) return;
+      player.pause();
+      releaseVoicePlayback(id);
+    });
+    return () => subscription.remove();
+  }, [player, id]);
 
   const clearLoadTimeout = () => {
     if (timeoutRef.current !== null) {
@@ -118,7 +134,7 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
     // `replace()` выше может сбросить скорость к 1× вместе с источником
     // (тот же повод, что `defaultPlaybackRate` у сайта, `chat-voice-player.tsx`) —
     // выставляем ещё раз перед стартом, не полагаясь только на эффект.
-    player.playbackRate = speed;
+    applyPlaybackRate(player, speed);
     player.play();
   };
 
@@ -163,7 +179,12 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
       </Pressable>
 
       {error ? (
-        <Text numberOfLines={2} style={[styles.errorInline, { color: colors.magenta }]}>
+        // `text0`, не `magenta`: подложка тут — цвет пузыря сообщения (`bg2`
+        // у своего, `glass` у чужого), а `magenta` на `bg2` в светлой теме
+        // даёт только 3.85:1 (feedback-001, п.3) — `text0` уже проверен на
+        // обеих поверхностях (`contrast.spec.ts`). Иконка повтора слева и так
+        // показывает, что это ошибка, не обычный текст.
+        <Text numberOfLines={2} style={[styles.errorInline, { color: colors.text0 }]}>
           {error}
         </Text>
       ) : (
