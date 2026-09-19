@@ -41,6 +41,11 @@ export function buildPendingMessage(input: {
       sizeBytes: attachment.sizeBytes,
       width: attachment.width,
       height: attachment.height,
+      // Голосовое: длительность и дорожка нужны сразу — плеер в
+      // оптимистичном пузыре не должен ждать ответа сервера, чтобы
+      // нарисовать волну и время (VED-286).
+      durationSec: attachment.durationSec,
+      waveform: attachment.waveform,
     })),
     reactions: [],
     createdAt: input.now.toISOString(),

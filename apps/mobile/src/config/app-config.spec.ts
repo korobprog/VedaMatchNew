@@ -36,6 +36,14 @@ describe('app.config', () => {
     expect(plugins).toContain('@config-plugins/react-native-webrtc');
   });
 
+  // VED-286: голосовые сообщения записывает `expo-audio` — `recordAudioAndroid:
+  // false` не запрещает RECORD_AUDIO (его и так просит плагин webrtc выше),
+  // но не даёт плагину `expo-audio` дописать `MODIFY_AUDIO_SETTINGS`.
+  it('плагин expo-audio не выключает запись на Android', () => {
+    const audio = pluginOptions(config, 'expo-audio');
+    expect(audio?.recordAudioAndroid).not.toBe(false);
+  });
+
   // VED-221: входящий звонок при свёрнутом/закрытом приложении.
   it('просит разрешения self-managed ConnectionService и полноэкранного intent', () => {
     expect(config.android?.permissions ?? []).toEqual(

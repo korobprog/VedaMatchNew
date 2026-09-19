@@ -6,11 +6,14 @@ import type { ChatAttachmentKind } from '@vedamatch/shared';
  * (`apps/api/src/modules/chat/chat-upload-rules.ts`). Контракт сервисного
  * модуля запрещает импортировать чужой модуль — числа и списки MIME
  * дублируются, чтобы отказать до сетевого запроса, а не ждать 415 от
- * сервера. Голосовые в этой задаче не нужны — тип не заводим.
+ * сервера. Голосовые (VED-286) пишутся только в одном формате
+ * (`voice-recording-options.ts`), поэтому `ALLOWED_VOICE_MIME` здесь короче
+ * серверного набора — тот принимает ещё и то, что шлёт браузер сайта.
  */
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+export const MAX_VOICE_BYTES = 15 * 1024 * 1024;
 
 export const ALLOWED_IMAGE_MIME = new Set([
   'image/jpeg',
@@ -28,7 +31,9 @@ export const ALLOWED_FILE_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
-export type UploadKind = Extract<ChatAttachmentKind, 'image' | 'file'>;
+export const ALLOWED_VOICE_MIME = new Set(['audio/mp4']);
+
+export type UploadKind = Extract<ChatAttachmentKind, 'image' | 'file' | 'voice'>;
 export type UploadDenial = 'unsupported_type' | 'file_too_large';
 
 export interface UploadCandidate {
@@ -39,11 +44,14 @@ export interface UploadCandidate {
 export function attachmentKindFor(mimeType: string): UploadKind | null {
   if (ALLOWED_IMAGE_MIME.has(mimeType)) return 'image';
   if (ALLOWED_FILE_MIME.has(mimeType)) return 'file';
+  if (ALLOWED_VOICE_MIME.has(mimeType)) return 'voice';
   return null;
 }
 
 export function maxBytesFor(kind: UploadKind): number {
-  return kind === 'image' ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
+  if (kind === 'image') return MAX_IMAGE_BYTES;
+  if (kind === 'voice') return MAX_VOICE_BYTES;
+  return MAX_FILE_BYTES;
 }
 
 /** `null` — файл принимается локальной проверкой. */

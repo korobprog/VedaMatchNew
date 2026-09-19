@@ -4,6 +4,9 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { attachmentLabel, formatTime } from '@/lib/chat/chat-format';
 import { isPendingMessage } from '@/lib/chat/chat-room-state';
+import { shouldInterruptForIncomingCall } from '@/lib/chat/voice/voice-call-guard';
+import { useChatCalls } from '@/lib/calls/chat-calls-context';
+import { VoiceMessagePlayer } from '@/components/chat/voice/voice-message-player';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
@@ -21,10 +24,13 @@ interface Props {
 
 function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionPress }: Props) {
   const { colors } = useTheme();
+  const calls = useChatCalls();
+  const interrupted = calls ? shouldInterruptForIncomingCall(calls.state.phase) : false;
   const pending = isPendingMessage(message);
   const deleted = Boolean(message.deletedAt);
   const images = message.attachments.filter((attachment) => attachment.kind === 'image' && (attachment.previewUrl || attachment.url));
-  const others = message.attachments.filter((attachment) => !images.includes(attachment));
+  const voices = message.attachments.filter((attachment) => attachment.kind === 'voice');
+  const others = message.attachments.filter((attachment) => !images.includes(attachment) && !voices.includes(attachment));
   const status = mine ? (pending ? ' · отправляется' : message.readByOthers ? ' · прочитано' : '') : '';
 
   return (
@@ -83,6 +89,9 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionP
                 recyclingKey={image.id}
                 accessibilityLabel={image.title ?? 'Фото'}
               />
+            ))}
+            {voices.map((attachment) => (
+              <VoiceMessagePlayer key={attachment.id} attachment={attachment} interrupted={interrupted} />
             ))}
             {others.map((attachment) => (
               <View key={attachment.id} style={[styles.chip, { borderColor: colors.glassBorder }]}>
