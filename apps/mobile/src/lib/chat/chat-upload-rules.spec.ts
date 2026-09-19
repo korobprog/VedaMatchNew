@@ -2,8 +2,8 @@ import { CHAT_MAX_ATTACHMENTS } from '@vedamatch/shared';
 import {
   MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_VOICE_BYTES,
   attachmentKindFor,
-  buildUploadFilePart,
   canPickAttachment,
   maxBytesFor,
   normalizePickedDocument,
@@ -14,25 +14,34 @@ import {
 } from './chat-upload-rules';
 
 describe('attachmentKindFor', () => {
-  it('распознаёт картинки и файлы, остальное — null', () => {
+  it('распознаёт картинки, файлы и голосовое, остальное — null', () => {
     expect(attachmentKindFor('image/png')).toBe('image');
     expect(attachmentKindFor('application/pdf')).toBe('file');
+    expect(attachmentKindFor('audio/mp4')).toBe('voice');
     expect(attachmentKindFor('application/zip')).toBeNull();
-    expect(attachmentKindFor('audio/mpeg')).toBeNull();
+    // На запись пишем только audio/mp4 (voice-recording-options.ts) — то,
+    // что шлёт браузер сайта (webm/ogg/mpeg), с телефона не приходит.
+    expect(attachmentKindFor('audio/webm')).toBeNull();
   });
 });
 
 describe('maxBytesFor', () => {
-  it('у картинки и файла разные лимиты', () => {
+  it('у картинки, файла и голосового разные лимиты', () => {
     expect(maxBytesFor('image')).toBe(MAX_IMAGE_BYTES);
     expect(maxBytesFor('file')).toBe(MAX_FILE_BYTES);
+    expect(maxBytesFor('voice')).toBe(MAX_VOICE_BYTES);
   });
 });
 
 describe('validateUpload', () => {
-  it('пропускает картинку и файл в пределах лимита', () => {
+  it('пропускает картинку, файл и голосовое в пределах лимита', () => {
     expect(validateUpload({ mimeType: 'image/jpeg', sizeBytes: MAX_IMAGE_BYTES })).toBeNull();
     expect(validateUpload({ mimeType: 'application/pdf', sizeBytes: MAX_FILE_BYTES })).toBeNull();
+    expect(validateUpload({ mimeType: 'audio/mp4', sizeBytes: MAX_VOICE_BYTES })).toBeNull();
+  });
+
+  it('отказывает голосовому крупнее лимита', () => {
+    expect(validateUpload({ mimeType: 'audio/mp4', sizeBytes: MAX_VOICE_BYTES + 1 })).toBe('file_too_large');
   });
 
   it('отказывает неподдержанному типу раньше проверки размера', () => {
@@ -66,13 +75,14 @@ describe('uploadDenialMessage', () => {
   });
 });
 
-describe('buildUploadFilePart', () => {
-  it('оставляет только uri/name/type для FormData', () => {
-    expect(
-      buildUploadFilePart({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg', sizeBytes: 100 }),
-    ).toEqual({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg' });
-  });
-});
+// `buildUploadFilePart` ({uri,name,type} буквально) удалена вместе с багом,
+// который тянула — та форма не переживает отправку под `expo`-fetch
+// («Unsupported FormDataPart implementation», feedback-002/003). Часть
+// `FormData` теперь строит `chat-upload-part.ts: buildUploadFormPart`
+// (сырые байты) — его тест проверяет РЕАЛЬНУЮ совместимость с
+// `expo`-fetch через тот же предикат, что `voice-upload-part.spec.ts`, а не
+// сравнение ключей объекта (feedback-003, major п.3: прошлый тест здесь был
+// тавтологией — проходил и с багом, и без него).
 
 describe('normalizePickedImage', () => {
   it('использует mimeType и имя из ассета, когда они есть', () => {

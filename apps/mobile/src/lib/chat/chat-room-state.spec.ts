@@ -56,6 +56,21 @@ describe('черновик отправки', () => {
     expect(draft.attachments[0].kind).toBe('image');
     expect(draft.replyTo?.id).toBe('orig');
   });
+
+  it('голосовое несёт длительность и дорожку — плеер рисует их до ответа сервера', () => {
+    const draft = buildPendingMessage({
+      seed: 's3',
+      conversationId: 'c1',
+      author,
+      body: '',
+      now: new Date(),
+      attachments: [
+        { kind: 'voice', url: 'https://x/v', key: 'v', mimeType: 'audio/mp4', sizeBytes: 4000, durationSec: 7, waveform: [1, 2, 3] },
+      ],
+    });
+    expect(draft.attachments[0].durationSec).toBe(7);
+    expect(draft.attachments[0].waveform).toEqual([1, 2, 3]);
+  });
 });
 
 describe('applyRoomEvent', () => {

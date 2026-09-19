@@ -192,15 +192,22 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           microphonePermission: 'VedaMatch использует микрофон для звонков.',
         },
       ],
-      // Рингтон звонка (`lib/calls/ringtone.ts`, этап 1, VED-219). Без записи
-      // звука — `recordAudioAndroid: false`, RECORD_AUDIO и так уже просит
-      // плагин webrtc выше. Без фоновой службы воспроизведения — рингтон
-      // играет, только пока приложение на экране; звонок в свёрнутом
-      // приложении — этап 2 (VED-221), другой механизм.
+      // Рингтон звонка (`lib/calls/ringtone.ts`, этап 1, VED-219) и голосовые
+      // сообщения переписки (`lib/chat/voice/**`, VED-286).
+      // `recordAudioAndroid: true` (было `false`, когда пакет отвечал
+      // только за рингтон): RECORD_AUDIO в манифесте и так уже просит плагин
+      // webrtc выше, но это разрешение самого плагина `expo-audio`
+      // управляет ещё и тем, войдёт ли `MODIFY_AUDIO_SETTINGS` в манифест
+      // (`node_modules/expo-audio/plugin/src/withAudio.ts`) — без него
+      // Android может не дать `AudioRecorder` выставить формат записи.
+      // Без фоновой службы воспроизведения — рингтон и голосовое играют,
+      // только пока приложение на экране (осознанно, «Звук из фона не
+      // нужен» для голосовых); звонок в свёрнутом приложении — отдельный
+      // механизм этапа 2 (VED-221), с записью и плеером сообщений не связан.
       [
         'expo-audio',
         {
-          recordAudioAndroid: false,
+          recordAudioAndroid: true,
           enableBackgroundPlayback: false,
         },
       ],

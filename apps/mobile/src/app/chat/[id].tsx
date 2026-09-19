@@ -27,6 +27,8 @@ import Svg, { Path } from 'react-native-svg';
 import { AttachmentSheet } from '@/components/chat/attachment-sheet';
 import { CallHeaderButtons } from '@/components/calls/call-header-buttons';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { VoiceRecorderControl } from '@/components/chat/voice/voice-recorder-control';
+import { canOpenMessageMenuWhileRecording } from '@/lib/chat/voice/voice-composer-lock';
 import { ChatKeyboardAvoidingView as KeyboardAvoidingView } from '@/components/keyboard-controller-web';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { MessageMenu } from '@/components/chat/message-menu';
@@ -57,7 +59,6 @@ import { applyOptimisticReaction, rollbackReaction } from '@/lib/chat/chat-react
 import { useChatStream } from '@/lib/chat/chat-stream';
 import {
   ALLOWED_FILE_MIME,
-  buildUploadFilePart,
   canPickAttachment,
   normalizePickedDocument,
   normalizePickedImage,
@@ -66,6 +67,7 @@ import {
   validateUpload,
   type NormalizedUpload,
 } from '@/lib/chat/chat-upload-rules';
+import { buildUploadFormPart } from '@/lib/chat/chat-upload-part';
 import { setActiveConversation } from '@/lib/push/active-chat';
 import { withPlural } from '@/lib/chat/plural';
 import { isOnline } from '@/lib/chat/presence';
@@ -145,6 +147,11 @@ export default function ChatRoomScreen() {
   // это не про файл, а про действие «открыть галерею/камеру/файл».
   const [pickError, setPickError] = useState<string | null>(null);
   const [menuMessage, setMenuMessage] = useState<ChatMessageDto | null>(null);
+  // Голосовое (VED-286): поле ввода прячется на время записи — печатать и
+  // говорить в микрофон разом нельзя (приём с сайта, `chat-composer.tsx`).
+  // Таймер и волна рисуются внутри самого `VoiceRecorderControl` — экрану
+  // нужен только факт «идёт запись», чтобы спрятать текстовое поле.
+  const [voiceRecording, setVoiceRecording] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   /**
@@ -285,6 +292,38 @@ export default function ChatRoomScreen() {
       setSendError(e instanceof Error ? e.message : 'Сообщение не отправлено');
     }
   }, [anyUploading, attachments, chatApi, conversationId, draft, replyTo, user]);
+
+  /**
+   * Голосовое уходит сразу, файл уже загружен рекордером — черновик
+   * текста и ждущие вложения не трогаем, это отдельное сообщение (приём
+   * с сайта, `chat-composer.tsx: sendVoice`).
+   */
+  const sendVoice = useCallback(
+    (attachment: ChatAttachmentInput) => {
+      if (!user) return;
+      const pending = buildPendingMessage({
+        seed: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        conversationId,
+        author: { id: user.id, name: user.name, avatarUrl: user.avatarUrl },
+        body: '',
+        now: new Date(),
+        attachments: [attachment],
+      });
+      confirmTap();
+      setSendError(null);
+      setMessages((current) => [...current, pending]);
+      void (async () => {
+        try {
+          const saved = await chatApi.send(conversationId, { attachments: [attachment] });
+          setMessages((current) => settlePendingMessage(current, pending.id, saved));
+        } catch (e) {
+          setMessages((current) => dropPendingMessage(current, pending.id));
+          setSendError(e instanceof Error ? e.message : 'Голосовое не отправилось');
+        }
+      })();
+    },
+    [chatApi, conversationId, user],
+  );
 
   const saveEdit = useCallback(async () => {
     if (!editing) return;
@@ -485,18 +524,23 @@ export default function ChatRoomScreen() {
   const performUpload = useCallback(
     async (slotId: string, candidate: NormalizedUpload) => {
       try {
+        // Байты, не `{uri,name,type}` — та форма падала под `expo`-fetch
+        // с «Unsupported FormDataPart implementation» для фото/файлов точно
+        // так же, как раньше падала для голосового (feedback-003,
+        // блокирующий п.1; разбор — `chat-upload-part.ts`).
         const form = new FormData();
-        form.append('file', buildUploadFilePart(candidate) as unknown as Blob);
+        form.append('file', (await buildUploadFormPart(candidate)) as unknown as Blob);
         const result = await chatApi.upload(conversationId, form);
         setAttachments((current) => addAttachment(current, toAttachmentInput(result, candidate.name)));
         setUploadSlots((current) => current.filter((slot) => slot.id !== slotId));
       } catch (e) {
+        // Причина — в консоль (может быть текстом стороннего fetch на
+        // английском, ничего не говорящим без контекста); человеку — всегда
+        // понятная фраза по-русски, не `e.message`.
+        // eslint-disable-next-line no-console
+        console.warn('[chat] загрузка вложения не удалась', e);
         setUploadSlots((current) =>
-          current.map((slot) =>
-            slot.id === slotId
-              ? { ...slot, status: 'error', error: e instanceof Error ? e.message : 'Файл не загрузился' }
-              : slot,
-          ),
+          current.map((slot) => (slot.id === slotId ? { ...slot, status: 'error', error: 'Файл не загрузился' } : slot)),
         );
       }
     },
@@ -622,12 +666,12 @@ export default function ChatRoomScreen() {
           message={item.message}
           mine={item.message.author.id === myId}
           showAuthor={showAuthors}
-          onLongPress={openMenu}
+          onLongPress={canOpenMessageMenuWhileRecording(voiceRecording) ? openMenu : undefined}
           onReactionPress={reactToMessage}
         />
       </View>
     ),
-    [colors, myId, showAuthors, openMenu, reactToMessage],
+    [colors, myId, showAuthors, openMenu, reactToMessage, voiceRecording],
   );
   const subtitle = detail
     ? detail.kind === 'direct'
@@ -643,7 +687,7 @@ export default function ChatRoomScreen() {
     attachmentsCount: attachments.length,
     uploading: anyUploading,
   });
-  const attachDisabled = anyUploading || !canPickAttachment(occupiedAttachmentSlots);
+  const attachDisabled = anyUploading || voiceRecording || !canPickAttachment(occupiedAttachmentSlots);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
@@ -889,55 +933,80 @@ export default function ChatRoomScreen() {
                     </Svg>
                   </Pressable>
                 ) : null}
-                <TextInput
-                  ref={inputRef}
-                  value={draft}
-                  onChangeText={onChangeDraft}
-                  placeholder={editing ? 'Новый текст сообщения' : 'Сообщение'}
-                  placeholderTextColor={colors.text1}
-                  multiline
-                  maxLength={MAX_LENGTH}
-                  style={[styles.input, { color: colors.text0, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={editing ? 'Сохранить' : 'Отправить'}
-                  accessibilityState={{ disabled: !canSubmit || sending, busy: sending }}
-                  disabled={!canSubmit || sending}
-                  onPress={onComposerSubmit}
-                  android_ripple={ripple(colors.glassBorder, true)}
-                  style={({ pressed }) => [
-                    styles.sendButton,
-                    { backgroundColor: canSubmit ? colors.mint : colors.bg2 },
-                    pressedStyle(pressed),
-                  ]}
-                >
-                  {sending ? (
-                    <ActivityIndicator size="small" color={canSubmit ? colors.onMint : colors.text1} />
-                  ) : editing ? (
-                    <Svg width={20} height={20} viewBox="0 0 24 24">
-                      <Path
-                        d="M4.5 12.5 9 17l10.5-11"
-                        stroke={canSubmit ? colors.onMint : colors.text1}
-                        strokeWidth={2.2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
-                      />
-                    </Svg>
-                  ) : (
-                    <Svg width={22} height={22} viewBox="0 0 24 24">
-                      <Path
-                        d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"
-                        stroke={canSubmit ? colors.onMint : colors.text1}
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
-                      />
-                    </Svg>
-                  )}
-                </Pressable>
+                {!voiceRecording ? (
+                  <TextInput
+                    ref={inputRef}
+                    value={draft}
+                    onChangeText={onChangeDraft}
+                    placeholder={editing ? 'Новый текст сообщения' : 'Сообщение'}
+                    placeholderTextColor={colors.text1}
+                    multiline
+                    maxLength={MAX_LENGTH}
+                    style={[styles.input, { color: colors.text0, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
+                  />
+                ) : null}
+                {/* `&& !voiceRecording`: если вложение (например, фото) доезжает
+                    из другой загрузки прямо во время записи, `canSubmit` может
+                    стать true без участия человека — без этого условия
+                    `VoiceRecorderControl` тут же размонтировался бы посреди
+                    активной записи в обход `useFocusEffect`, единственного
+                    надёжного места, которое успевает остановить рекордер
+                    ДО размонтирования (feedback-002, п.1/2).
+                    `|| editing` тем же способом мог бы размонтировать
+                    контрол через вход в правку сообщения (меню долгого
+                    нажатия → «Изменить») — этот путь закрыт не здесь, а
+                    выше по цепочке: `renderRow` не даёт открыть меню вовсе,
+                    пока `voiceRecording`, см. `canOpenMessageMenuWhileRecording`
+                    (feedback-003, блокирующий п.2) — `editing` во время
+                    записи поэтому никогда не станет `true`. */}
+                {(canSubmit && !voiceRecording) || editing ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={editing ? 'Сохранить' : 'Отправить'}
+                    accessibilityState={{ disabled: !canSubmit || sending, busy: sending }}
+                    disabled={!canSubmit || sending}
+                    onPress={onComposerSubmit}
+                    android_ripple={ripple(colors.glassBorder, true)}
+                    style={({ pressed }) => [
+                      styles.sendButton,
+                      { backgroundColor: canSubmit ? colors.mint : colors.bg2 },
+                      pressedStyle(pressed),
+                    ]}
+                  >
+                    {sending ? (
+                      <ActivityIndicator size="small" color={canSubmit ? colors.onMint : colors.text1} />
+                    ) : editing ? (
+                      <Svg width={20} height={20} viewBox="0 0 24 24">
+                        <Path
+                          d="M4.5 12.5 9 17l10.5-11"
+                          stroke={canSubmit ? colors.onMint : colors.text1}
+                          strokeWidth={2.2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    ) : (
+                      <Svg width={22} height={22} viewBox="0 0 24 24">
+                        <Path
+                          d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"
+                          stroke={canSubmit ? colors.onMint : colors.text1}
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    )}
+                  </Pressable>
+                ) : (
+                  <VoiceRecorderControl
+                    conversationId={conversationId}
+                    chatApi={chatApi}
+                    onSent={sendVoice}
+                    onRecordingChange={(recording) => setVoiceRecording(recording)}
+                  />
+                )}
               </View>
             </View>
           ) : (

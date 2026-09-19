@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { attachmentLabel, formatTime } from '@/lib/chat/chat-format';
 import { isPendingMessage } from '@/lib/chat/chat-room-state';
+import { VoiceMessageAttachment } from '@/components/chat/voice/voice-message-attachment';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
@@ -24,7 +25,8 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionP
   const pending = isPendingMessage(message);
   const deleted = Boolean(message.deletedAt);
   const images = message.attachments.filter((attachment) => attachment.kind === 'image' && (attachment.previewUrl || attachment.url));
-  const others = message.attachments.filter((attachment) => !images.includes(attachment));
+  const voices = message.attachments.filter((attachment) => attachment.kind === 'voice');
+  const others = message.attachments.filter((attachment) => !images.includes(attachment) && !voices.includes(attachment));
   const status = mine ? (pending ? ' · отправляется' : message.readByOthers ? ' · прочитано' : '') : '';
 
   return (
@@ -83,6 +85,9 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionP
                 recyclingKey={image.id}
                 accessibilityLabel={image.title ?? 'Фото'}
               />
+            ))}
+            {voices.map((attachment) => (
+              <VoiceMessageAttachment key={attachment.id} attachment={attachment} />
             ))}
             {others.map((attachment) => (
               <View key={attachment.id} style={[styles.chip, { borderColor: colors.glassBorder }]}>

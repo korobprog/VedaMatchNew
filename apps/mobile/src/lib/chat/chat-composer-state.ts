@@ -39,6 +39,27 @@ export function toAttachmentInput(result: ChatUploadResult, fileName?: string): 
 }
 
 /**
+ * Вложение голосового: сервер не знает длительность и дорожку — их считает
+ * рекордер во время записи (`voice-recorder-control.tsx`) и довозит здесь,
+ * как делает сайт (`chat-voice-recorder.tsx: onRecorded`).
+ */
+export function toVoiceAttachmentInput(
+  result: ChatUploadResult,
+  durationSec: number,
+  waveform: readonly number[],
+): ChatAttachmentInput {
+  return {
+    kind: 'voice',
+    url: result.url,
+    key: result.key,
+    mimeType: result.mimeType,
+    sizeBytes: result.sizeBytes,
+    durationSec,
+    waveform: [...waveform],
+  };
+}
+
+/**
  * Вход в правку. Черновик поля откладывается только при первом входе — если
  * правка уже открыта и человек выбрал править другое сообщение, второй раз
  * текущий текст поля (это уже текст правки) в черновик не попадает. Тот же
