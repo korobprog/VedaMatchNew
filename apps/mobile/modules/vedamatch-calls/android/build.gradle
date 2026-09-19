@@ -24,4 +24,7 @@ dependencies {
   // потребителя, нужна своя строка с тем же координатом (версия берётся из
   // общего для проекта React Native Gradle Plugin, как и у expo-modules-core).
   implementation 'com.facebook.react:react-android'
+  // JVM-тест чистых правил «звонок застрял» (`StaleCallPolicyTest`):
+  // `./gradlew :vedamatch-calls:testReleaseUnitTest` в сгенерированном `android/`.
+  testImplementation 'junit:junit:4.13.2'
 }

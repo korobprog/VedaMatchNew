@@ -34,6 +34,7 @@ object PendingCallStore {
 
   private val connections = HashMap<String, WeakReference<VedamatchConnection>>()
   private val infos = HashMap<String, CallInfo>()
+  private val endedCalls = EndedCallTombstones()
 
   @Volatile
   private var pendingLaunch: LaunchCall? = null
@@ -105,6 +106,28 @@ object PendingCallStore {
     }
     return false
   }
+
+  /** Все живые соединения — для сверки с сервером и с порогом «застрял»
+   *  (`VedamatchCallsModule.listConnections`/`endConnections`). */
+  @Synchronized
+  fun allConnections(): List<VedamatchConnection> {
+    val result = ArrayList<VedamatchConnection>()
+    val iterator = connections.entries.iterator()
+    while (iterator.hasNext()) {
+      val connection = iterator.next().value.get()
+      if (connection == null) iterator.remove() else result.add(connection)
+    }
+    return result
+  }
+
+  /** Звонок закончен, а соединения ещё нет — см. `EndedCallTombstones`. */
+  @Synchronized
+  fun markEnded(callId: String, nowMs: Long) {
+    endedCalls.mark(callId, nowMs)
+  }
+
+  @Synchronized
+  fun isEnded(callId: String, nowMs: Long): Boolean = endedCalls.isEnded(callId, nowMs)
 
   @Synchronized
   fun putInfo(info: CallInfo) {
