@@ -90,6 +90,9 @@ export const fonts = {
   bodyMedium: 'Manrope_500Medium',
   bodySemiBold: 'Manrope_600SemiBold',
   bodyBold: 'Manrope_700Bold',
+  /** Цифры (время голосового и подобное) — как `--font-mono` на сайте: IBM Plex Mono, табличные цифры. */
+  mono: 'IBMPlexMono_400Regular',
+  monoSemiBold: 'IBMPlexMono_600SemiBold',
 } as const;
 
 export const radius = { sm: 12, md: 16 } as const;

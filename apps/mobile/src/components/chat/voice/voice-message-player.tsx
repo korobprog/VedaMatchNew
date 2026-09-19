@@ -19,6 +19,9 @@ import { VoiceWaveformBars } from './voice-waveform-bars';
 /** Сколько ждать загрузку, прежде чем признать её неудачей — плеер не показывает вечный спиннер. */
 const LOAD_TIMEOUT_MS = 12_000;
 
+/** Визуальная высота волны; интерактивная зона касания шире — см. `hitSlop` в `VoiceWaveformBars`. */
+const WAVEFORM_HEIGHT = 24;
+
 interface Props {
   attachment: ChatAttachmentDto;
   /** Играет ли сейчас звонок — во время входящего плеер обязан замолчать (правило вынесено в экран). */
@@ -188,28 +191,38 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
           {error}
         </Text>
       ) : (
-        <>
+        // Волна — своей строкой на всю ширину, время и скорость — СТРОКОЙ
+        // НИЖЕ, не сбоку от неё: в один ряд с [play] «0:46»/«1×» рисовались
+        // поверх волны в узком пузыре (~530px из 1080, feedback-002, п.3) —
+        // при трёх элементах во флекс-ряду RN не сжимает соседей волны
+        // (`flexShrink` по умолчанию 0, не 1, как в вебе). Двухэтажная
+        // раскладка не может наложиться в принципе — волна и строка меты
+        // никогда не делят горизонталь.
+        <View style={styles.content}>
           <VoiceWaveformBars
             levels={waveform}
             playedRatio={progress}
             colorPlayed={colors.cyan}
             colorRest={colors.text2}
             onSeek={seek}
+            height={WAVEFORM_HEIGHT}
           />
 
-          <Text style={[styles.time, { color: colors.text1 }]}>{timeLabel}</Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.time, { color: colors.text1 }]}>{timeLabel}</Text>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Скорость ${formatVoiceSpeed(speed)}, сменить`}
-            onPress={cycleSpeed}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-            android_ripple={ripple(colors.glassBorder, true)}
-            style={[styles.speedChip, { borderColor: colors.glassBorder }]}
-          >
-            <Text style={[styles.speedText, { color: colors.text0 }]}>{formatVoiceSpeed(speed)}</Text>
-          </Pressable>
-        </>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Скорость ${formatVoiceSpeed(speed)}, сменить`}
+              onPress={cycleSpeed}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              android_ripple={ripple(colors.glassBorder, true)}
+              style={[styles.speedChip, { borderColor: colors.glassBorder }]}
+            >
+              <Text style={[styles.speedText, { color: colors.text0 }]}>{formatVoiceSpeed(speed)}</Text>
+            </Pressable>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -240,7 +253,10 @@ function PlayPauseIcon({ playing, error, color }: { playing: boolean; error: boo
 const styles = StyleSheet.create({
   wrap: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   errorText: { fontFamily: fonts.body, fontSize: 13 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 220, paddingVertical: 2 },
+  // Минимальная ширина всего плеера — под круглую кнопку и разумный минимум
+  // волны/меты, не «сколько-нибудь помещающихся элементов в один ряд»
+  // (было 220 у плоского ряда, отсюда и наложение при узком пузыре).
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 176, paddingVertical: 2 },
   playButton: {
     width: hitTarget,
     height: hitTarget,
@@ -249,7 +265,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  time: { fontFamily: fonts.bodySemiBold, fontSize: 11, fontVariant: ['tabular-nums'], minWidth: 32 },
+  // Колонка справа от кнопки: волна сверху на всю ширину, мета — строкой под ней.
+  content: { flex: 1, minWidth: 0, gap: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  // `fonts.mono` (IBM Plex Mono, как `--font-mono` на сайте) — табличные
+  // цифры, ширина знака не меняется между «0:04» и «0:46»/«1:23».
+  time: { fontFamily: fonts.mono, fontSize: 12, fontVariant: ['tabular-nums'] },
   errorInline: { flex: 1, fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
   speedChip: {
     minHeight: 28,
@@ -260,5 +281,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
-  speedText: { fontFamily: fonts.bodySemiBold, fontSize: 11 },
+  speedText: { fontFamily: fonts.monoSemiBold, fontSize: 11 },
 });

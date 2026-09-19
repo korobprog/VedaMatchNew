@@ -1,3 +1,5 @@
+import { IBMPlexMono_400Regular } from '@expo-google-fonts/ibm-plex-mono/400Regular';
+import { IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono/600SemiBold';
 import { Manrope_400Regular } from '@expo-google-fonts/manrope/400Regular';
 import { Manrope_500Medium } from '@expo-google-fonts/manrope/500Medium';
 import { Manrope_600SemiBold } from '@expo-google-fonts/manrope/600SemiBold';
@@ -32,6 +34,11 @@ export default function RootLayout() {
     Manrope_500Medium,
     Manrope_600SemiBold,
     Manrope_700Bold,
+    // Цифры голосовых сообщений (`fonts.mono`, VED-286) — тот же выбор,
+    // что `--font-mono` на сайте (`apps/web/src/app/globals.css`): IBM Plex
+    // Mono, табличные цифры фиксированной ширины, чтобы время не «прыгало».
+    IBMPlexMono_400Regular,
+    IBMPlexMono_600SemiBold,
   });
 
   useEffect(() => {

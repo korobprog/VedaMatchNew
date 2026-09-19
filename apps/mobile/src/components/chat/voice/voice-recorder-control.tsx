@@ -6,7 +6,8 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { confirmTap } from '@/lib/feedback';
@@ -14,7 +15,9 @@ import { toVoiceAttachmentInput } from '@/lib/chat/chat-composer-state';
 import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { canRecordVoice, shouldInterruptForIncomingCall } from '@/lib/chat/voice/voice-call-guard';
 import { shouldCancelRecordingForAppState } from '@/lib/chat/voice/voice-app-state-guard';
-import { VOICE_RECORDING_OPTIONS, VOICE_UPLOAD_FILE_NAME, VOICE_UPLOAD_MIME_TYPE } from '@/lib/chat/voice/voice-recording-options';
+import { describeVoiceUploadError } from '@/lib/chat/voice/voice-upload-error';
+import { buildVoiceUploadPart } from '@/lib/chat/voice/voice-upload-part';
+import { VOICE_RECORDING_OPTIONS } from '@/lib/chat/voice/voice-recording-options';
 import {
   INITIAL_VOICE_RECORDER_STATE,
   reduceVoiceRecorder,
@@ -139,25 +142,47 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `cancel` читает состояние через `phaseRef`/`finalizingRef`, не через замыкание; пересоздавать подписку незачем.
   }, []);
 
-  // Размонтирование во время записи (feedback-001, п.1, блокирующий):
-  // `useAudioRecorder` на unmount сам зовёт `.release()` нативного объекта
-  // (`useReleasingSharedObject`), а на Android `AudioRecorder.kt` делает это
-  // БЕЗ предварительного `stop()` — `MediaRecorder.release()` до `stop()`
-  // во время активной записи либо бросает, либо оставляет битый `.m4a`
-  // (контейнер дописывает `moov` только в `stop()`). Останавливаем сами,
-  // не дожидаясь сети (файл не отправляем — как при обычной отмене), и
-  // возвращаем аудиосессию, иначе `allowsRecording: true` переживёт уход с
-  // экрана переписки.
+  // Уход с экрана переписки во время записи — ОСНОВНАЯ защита
+  // (feedback-002, п.1, блокирующий; предыдущая попытка через cleanup
+  // `useEffect` при размонтировании опиралась на неверное утверждение о
+  // порядке React — см. честный разбор в cleanup ниже, который остался
+  // только второй линией).
   //
-  // Cleanup-функция React не может быть `async` и ничего не ждёт — но вызов
-  // `recorder.stop()` синхронно уходит в нативный модуль ДО того, как
-  // `useAudioRecorder` (первый хук в этом компоненте) на следующем шаге той
-  // же фазы размонтирования дойдёт до своего `.release()`: React вызывает
-  // cleanup-функции эффектов в порядке, ОБРАТНОМ регистрации, и наша —
-  // последняя из зарегистрированных, значит выполняется первой. Нативные
-  // вызовы одного объекта идут в очередь по порядку отправки, поэтому
-  // `stop` гарантированно уходит раньше `release`, даже если промис `stop()`
-  // ещё не разрешился к моменту вызова `release()`.
+  // `useFocusEffect` — не обычный `useEffect`: его cleanup вызывается на
+  // навигационное событие `blur`, которое React Navigation эмиттирует ДО
+  // фактического удаления экрана из дерева (при уходе назад JS-состояние
+  // навигации меняется синхронно первым, а React убирает компонент только
+  // следующим рендером/после анимации перехода) — то есть у нас есть
+  // гарантированный момент «ещё смонтированы, но уже знаем, что уходим»,
+  // не завязанный на порядок cleanup-функций соседних хуков вообще
+  // (`node_modules/expo-router/build/useFocusEffect.js`: внешний
+  // `React.useEffect` вызывает наш `cleanup()` и на `blur`, и на
+  // размонтирование — какое наступит раньше, не важно, оба пути стопают
+  // запись до `useAudioRecorder`.release()`).
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (phaseRef.current === 'recording') void cancel();
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- `cancel` читает состояние через `phaseRef`, не через замыкание.
+    }, []),
+  );
+
+  // Вторая линия защиты — на случай, если компонент всё же размонтируется
+  // БЕЗ смены фокуса навигации (например, композер сам решит скрыть
+  // `VoiceRecorderControl` по другой причине). Это ЛУЧШЕЕ, что можно
+  // сделать в обычном cleanup: React вызывает cleanup-функции эффектов в
+  // порядке ИХ ОБЪЯВЛЕНИЯ (не обратном — прошлая версия этого комментария
+  // ошибалась, поймано эмпирическим тестом на react-test-renderer,
+  // feedback-002), а `useAudioRecorder` — первый хук в этом компоненте, то
+  // есть его `.release()` (`useReleasingSharedObject`, без предварительного
+  // `stop()` на Android) сработает РАНЬШЕ этого cleanup, если до него вообще
+  // дойдёт очередь. Поэтому это не гарантия, а подстраховка: если запись
+  // всё ещё активна к этому моменту — значит `useFocusEffect` выше её не
+  // поймал (по построению композера таких путей нет, см.
+  // `app/chat/[id].tsx: (canSubmit && !voiceRecording)`), и попытка
+  // `stop()` на уже отпущенном объекте просто упадёт в `catch` ниже, не
+  // оставив запись зависшей навечно хотя бы по стороне JS-состояния.
   useEffect(() => {
     return () => {
       if (phaseRef.current !== 'recording') return;
@@ -268,21 +293,23 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
       return;
     }
     try {
+      // НЕ `buildUploadFilePart` (`chat-upload-rules.ts`, используется для
+      // фото/файлов) — та форма `{uri,name,type}` рассчитана на классический
+      // `fetch`/`FormData` React Native и не пережила отправку живьём
+      // (feedback-002, блокирующий п.1, полный разбор — `voice-upload-part.ts`).
       const form = new FormData();
-      form.append(
-        'file',
-        { uri, name: VOICE_UPLOAD_FILE_NAME, type: VOICE_UPLOAD_MIME_TYPE } as unknown as Blob,
-      );
+      form.append('file', (await buildVoiceUploadPart(uri)) as unknown as Blob);
       const result = await chatApi.upload(conversationId, form);
       setState(() => reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'sent' }));
       onSent(toVoiceAttachmentInput(result, durationSec, waveform));
     } catch (e) {
-      setState((current) =>
-        reduceVoiceRecorder(current, {
-          type: 'failed',
-          message: e instanceof Error ? e.message : 'Голосовое не отправилось',
-        }),
-      );
+      // Причина — в консоль для разработчика (может быть текстом стороннего
+      // fetch на английском, ничего не говорящим человеку без контекста,
+      // напр. «Unsupported FormDataPart implementation», feedback-002, п.1);
+      // человеку — всегда одна и та же понятная фраза по-русски.
+      // eslint-disable-next-line no-console
+      console.warn('[voice] загрузка голосового не удалась', e);
+      setState((current) => reduceVoiceRecorder(current, { type: 'failed', message: describeVoiceUploadError() }));
     }
   }
 
@@ -436,7 +463,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  timerText: { fontFamily: fonts.bodySemiBold, fontSize: 14, fontVariant: ['tabular-nums'] },
+  timerText: { fontFamily: fonts.monoSemiBold, fontSize: 14, fontVariant: ['tabular-nums'] },
   timerWave: { flex: 1, height: 18 },
   denied: {
     flex: 1,

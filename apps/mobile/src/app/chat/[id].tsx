@@ -939,7 +939,14 @@ export default function ChatRoomScreen() {
                     style={[styles.input, { color: colors.text0, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
                   />
                 ) : null}
-                {canSubmit || editing ? (
+                {/* `&& !voiceRecording`: если вложение (например, фото) доезжает
+                    из другой загрузки прямо во время записи, `canSubmit` может
+                    стать true без участия человека — без этого условия
+                    `VoiceRecorderControl` тут же размонтировался бы посреди
+                    активной записи в обход `useFocusEffect`, единственного
+                    надёжного места, которое успевает остановить рекордер
+                    ДО размонтирования (feedback-002, п.1/2). */}
+                {(canSubmit && !voiceRecording) || editing ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={editing ? 'Сохранить' : 'Отправить'}

@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { PanResponder, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { playedBarCount, ratioFromTouch } from '@/lib/chat/voice/voice-progress';
+import { hitTarget } from '@/theme/tokens';
 
 interface Props {
   levels: number[];
@@ -49,17 +50,20 @@ export function VoiceWaveformBars({ levels, playedRatio, colorPlayed, colorRest,
   };
 
   const played = playedRatio !== undefined ? playedBarCount(levels.length, playedRatio) : -1;
+  // Визуальная высота дорожки часто меньше правила «цели ≥ 44dp» (CLAUDE.md)
+  // для интерактивных элементов; когда есть перемотка, `hitSlop` достраивает
+  // зону касания до 44dp по вертикали, не трогая вид столбиков
+  // (feedback-001, п.4) — считается от РЕАЛЬНОЙ высоты, а не одного
+  // захардкоженного числа, иначе плеер с `height={24}` (feedback-002, п.3)
+  // снова не дотягивал бы (28 + 8 + 8 = 44, но 24 + 8 + 8 = 40 — уже мало).
+  // У рекордера `onSeek` нет — там просто индикатор уровня, hitSlop не нужен.
+  const verticalHitSlop = onSeek ? Math.max(0, (hitTarget - height) / 2) : 0;
 
   return (
     <View
       onLayout={onLayout}
       style={[styles.row, { height }]}
-      // Визуальная высота дорожки — 28dp, меньше правила «цели ≥ 44dp»
-      // (CLAUDE.md) для интерактивных элементов; когда есть перемотка,
-      // `hitSlop` расширяет зону касания до 44dp по высоте, не трогая вид
-      // столбиков (feedback-001, п.4). У рекордера `onSeek` нет — там просто
-      // индикатор уровня, hitSlop не нужен.
-      hitSlop={onSeek ? { top: 8, bottom: 8 } : undefined}
+      hitSlop={onSeek ? { top: verticalHitSlop, bottom: verticalHitSlop } : undefined}
       {...(panResponder?.panHandlers ?? {})}
       accessible={false}
     >

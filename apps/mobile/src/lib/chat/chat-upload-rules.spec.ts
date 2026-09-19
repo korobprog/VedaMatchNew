@@ -82,6 +82,18 @@ describe('buildUploadFilePart', () => {
       buildUploadFilePart({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg', sizeBytes: 100 }),
     ).toEqual({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg' });
   });
+
+  // VED-286, feedback-002 п.1: эта форма ({uri,name,type}) — та самая, что
+  // не пережила отправку голосового живьём («Unsupported FormDataPart
+  // implementation», разбор — `voice-upload-part.ts`). Голосовое поэтому
+  // грузится не через эту функцию, а через `voice-upload-part.ts:
+  // buildVoiceUploadPart` (сырые байты) — фото/файлы здесь не тронуты и
+  // проверка ниже просто фиксирует форму на будущее, без утверждения об
+  // общем пути с голосовым.
+  it('форма части остаётся {uri,name,type} независимо от типа вложения', () => {
+    const photoPart = buildUploadFilePart({ uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg', sizeBytes: 100 });
+    expect(Object.keys(photoPart).sort()).toEqual(['name', 'type', 'uri']);
+  });
 });
 
 describe('normalizePickedImage', () => {
