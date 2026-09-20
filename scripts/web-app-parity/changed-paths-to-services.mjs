@@ -122,8 +122,21 @@ function serviceSlugFromRelativePath(relativePath) {
  * известным префиксом, не сервисная папка, или сервис не входит в белый
  * список каталога (`CATALOG_SERVICES`) / входит в список исключений.
  */
+/**
+ * Тесты сервиса — не изменение самого сервиса. Проверено на живом ложном
+ * срабатывании: PR #413 (починка зависшего входящего звонка в приложении)
+ * тронул из портальной части только
+ * `apps/api/src/modules/chat/calls/chat-calls.service.spec.ts` — и бот завёл
+ * «ДОГНАТЬ. Общение» (VED-285) на работу, сделанную как раз в приложении.
+ * Поведение сервиса такой PR не меняет, догонять приложению нечего.
+ */
+export function isTestPath(path) {
+  return /(^|\/)__tests__\//.test(path) || /\.(spec|test)\.[cm]?[jt]sx?$/.test(path);
+}
+
 function catalogServiceForPath(path, catalog, excluded) {
   if (typeof path !== 'string' || path.length === 0) return null;
+  if (isTestPath(path)) return null;
 
   const prefix = SERVICE_PATH_PREFIXES.find((candidate) =>
     path.startsWith(candidate),
