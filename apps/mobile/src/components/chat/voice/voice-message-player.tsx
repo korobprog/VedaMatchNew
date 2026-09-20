@@ -7,7 +7,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget } from '@/theme/tokens';
-import { forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { canonicalVoiceUrlKey, forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
 import {
   markVoiceFinished,
   registerVoiceOrder,
@@ -103,6 +103,21 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
     if (status.isLoaded) clearLoadTimeout();
   }, [status.isLoaded]);
 
+  // Настоящая ошибка нативного плеера (`AudioStatus.error`, expo-audio) —
+  // 403 от S3, битый контейнер, обрыв сети. До этого эффекта единственным
+  // сигналом сбоя был слепой 12-секундный таймаут: любая причина, даже
+  // мгновенный отказ, тонула в спиннере на все 12 секунд и приходила с
+  // одной и той же надписью без единой зацепки в логе. Реагируем только
+  // пока реально ждём загрузку (`loadRequested`) — на отмонтированном или
+  // ещё не тронутом плеере это поле пустое само по себе.
+  useEffect(() => {
+    if (!loadRequested || !status.error || error) return;
+    clearLoadTimeout();
+    // eslint-disable-next-line no-console
+    console.warn('[voice] ошибка плеера', { url: canonicalVoiceUrlKey(url), reason: status.error });
+    setError('Не получилось загрузить запись');
+  }, [status.error, loadRequested, error, url]);
+
   // Финал: перематываем в начало и отпускаем глобальный «микрофон одного плеера»,
   // иначе повторное нажатие «Слушать» продолжало бы играть с нулевой позиции,
   // считаясь при этом всё ещё активным. `markVoiceFinished` — автопереход
@@ -110,9 +125,25 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   // есть непрослушанное, сам его запускает; `finishedRef` не даёт вызвать
   // это дважды на дребезг статуса плеера — заход в автопереход ровно один
   // раз на каждое реальное завершение.
+  //
+  // `player.pause()` ПЕРЕД `seekTo(0)` обязателен, не косметика: на Android
+  // `AudioPlayer` (`expo-audio`/ExoPlayer) естественное завершение переводит
+  // `playbackState` в `ENDED`, но НЕ трогает внутренний `playWhenReady` —
+  // тот остаётся `true`, если до этого играли обычным `player.play()`.
+  // `seekTo()` уводит плеер из `ENDED` обратно в `READY`, и раз
+  // `playWhenReady` всё ещё `true` — ExoPlayer сам возобновляет
+  // воспроизведение с нулевой позиции. Без явного `pause()` это давало
+  // бесконечный цикл ДАЖЕ на единственном голосовом в переписке (без
+  // соседей для автоперехода вообще) — живая проверка сборки 5003, Samsung
+  // A51: один и тот же клип 0:04 перезапускался каждые ~5 секунд, `logcat`
+  // показывал регулярный `AudioTrack: stop(...) delivered` → `Found a new
+  // active media playback`. `pause()` сбрасывает `playWhenReady` в `false`,
+  // и последующий `seekTo(0)` просто переставляет позицию, не запуская игру
+  // заново.
   useEffect(() => {
     if (status.didJustFinish && !finishedRef.current) {
       finishedRef.current = true;
+      player.pause();
       releaseVoicePlayback(id);
       void player.seekTo(0).catch(() => undefined);
       markVoiceFinished(id);
@@ -187,28 +218,49 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
       FileSystem.getInfoAsync(uri).then((info) => info.exists),
     );
     if (!mountedRef.current) return;
-    if (localUri && !isLocal) forgetLocalVoiceFile(url); // числился в реестре, но физически пропал
+    if (localUri && !isLocal) {
+      // eslint-disable-next-line no-console
+      console.warn('[voice] локальный файл числился в реестре, но пропал с диска', { url: canonicalVoiceUrlKey(url) });
+      forgetLocalVoiceFile(url); // числился в реестре, но физически пропал
+    }
     if (!source) {
       setError('Не удалось открыть запись');
       return;
     }
     try {
       player.replace(source);
-    } catch {
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[voice] player.replace бросил исключение', { url: canonicalVoiceUrlKey(url), isLocal, error: e });
       setError('Не удалось открыть запись');
       return;
     }
     clearLoadTimeout();
     // Таймаут неудачи — только для сетевого источника: локальный файл не
-    // ждёт сеть, вечный спиннер ему не грозит по этой причине вовсе.
+    // ждёт сеть, вечный спиннер ему не грозит по этой причине вовсе. Ставим
+    // ТОЛЬКО как подстраховку на случай, если сам плеер вообще не пришлёт ни
+    // `isLoaded`, ни `error` (реальный сбой обычно ловит эффект выше на
+    // `status.error`, быстрее и с настоящей причиной в логе).
     if (!isLocal) {
-      timeoutRef.current = setTimeout(() => setError('Не получилось загрузить запись'), LOAD_TIMEOUT_MS);
+      timeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
+        // eslint-disable-next-line no-console
+        console.warn('[voice] загрузка не уложилась в таймаут', { url: canonicalVoiceUrlKey(url), timeoutMs: LOAD_TIMEOUT_MS });
+        setError('Не получилось загрузить запись');
+      }, LOAD_TIMEOUT_MS);
     }
     if (seekToSec !== undefined) void player.seekTo(seekToSec).catch(() => undefined);
     startPlayback();
   };
 
+  // Повторный тап, пока первая загрузка ещё не дозрела (`waiting`), не
+  // должен запускать вторую параллельную `loadAndPlay` — вторая гонка со
+  // своим `player.replace()`/`seekTo()` поверх ещё не устаканившегося
+  // источника путала бы состояние (нашли на быстром двойном тапе при
+  // живой проверке). Кнопка ЛОВИТ этот тап (см. `onPress` ниже), просто
+  // ничего не делает — спиннер и так сигналит, что происходит.
   const play = () => {
+    if (waiting) return;
     setError(null);
     if (!loadRequested) {
       setLoadRequested(true);
@@ -225,7 +277,7 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   };
 
   const seek = (ratio: number) => {
-    if (totalSec <= 0) return;
+    if (totalSec <= 0 || waiting) return;
     const target = timeFromRatio(ratio, totalSec);
     if (!loadRequested) {
       setError(null);
@@ -234,6 +286,17 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
       return;
     }
     void player.seekTo(target).catch(() => undefined);
+  };
+
+  // Повтор по кнопке — одним тапом: раньше первый тап на ошибке только
+  // сбрасывал `loadRequested`/`error`, а реальная перезагрузка ждала ВТОРОГО
+  // тапа (человек видел, что кнопка стала «Слушать», и должен был нажать
+  // ещё раз) — с явной жалобой «не воспроизводится» это выглядело так,
+  // будто повтор вообще не работает.
+  const retry = () => {
+    setError(null);
+    setLoadRequested(true);
+    void loadAndPlay();
   };
 
   const cycleSpeed = () => {
@@ -248,8 +311,7 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
         accessibilityState={{ busy: waiting }}
         onPress={() => {
           if (error) {
-            setLoadRequested(false);
-            setError(null);
+            retry();
             return;
           }
           if (status.playing) pause();

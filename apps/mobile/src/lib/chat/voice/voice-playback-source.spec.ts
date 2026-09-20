@@ -22,6 +22,13 @@ describe('pickVoicePlaybackSource', () => {
     });
   });
 
+  it('серверный адрес уходит в плеер БЕЗ обрезки подписи S3 (регресс с живой проверки — своё голосовое "0:04, вчера" вместо плеера показывало "Не получилось загрузить запись"): источник обязан остаться полной подписанной ссылкой, а не укороченным ключом реестра (`canonicalVoiceUrlKey`), иначе S3 ответит 403 там, где полная ссылка отвечает 200', () => {
+    const signed = 'https://s3.example/chat/conv/file.m4a?X-Amz-Signature=abc&X-Amz-Expires=21600';
+    const result = pickVoicePlaybackSource({ localUri: null, localFileExists: false, remoteUrl: signed });
+    expect(result.source).toBe(signed);
+    expect(result.source).not.toBe('https://s3.example/chat/conv/file.m4a');
+  });
+
   it('ни локального, ни серверного — играть нечего', () => {
     expect(pickVoicePlaybackSource({ localUri: null, localFileExists: false, remoteUrl: null })).toEqual({ source: null, isLocal: false });
   });
