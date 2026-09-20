@@ -11,6 +11,7 @@ import {
   removeAttachmentAt,
   restoreReplyAfterEdit,
   toAttachmentInput,
+  toVoiceAttachmentInput,
 } from './chat-composer-state';
 
 function attachment(id: string): ChatAttachmentInput {
@@ -43,6 +44,22 @@ describe('toAttachmentInput', () => {
   it('файлу присваивает title по имени, фото — нет', () => {
     expect(toAttachmentInput(upload, 'report.pdf').title).toBe('report.pdf');
     expect(toAttachmentInput({ ...upload, kind: 'image' }, 'report.pdf').title).toBeUndefined();
+  });
+});
+
+describe('toVoiceAttachmentInput', () => {
+  it('несёт длительность и дорожку, которых нет в ответе загрузки', () => {
+    const upload: ChatUploadResult = { kind: 'voice', url: 'https://x/v', key: 'v', mimeType: 'audio/mp4', sizeBytes: 4000 };
+    const result = toVoiceAttachmentInput(upload, 12, [10, 20, 30]);
+    expect(result).toEqual({
+      kind: 'voice',
+      url: 'https://x/v',
+      key: 'v',
+      mimeType: 'audio/mp4',
+      sizeBytes: 4000,
+      durationSec: 12,
+      waveform: [10, 20, 30],
+    });
   });
 });
 

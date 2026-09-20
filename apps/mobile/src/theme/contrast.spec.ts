@@ -45,6 +45,12 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // `text1` на непрозрачной карточке `bg1`, заголовок — `text0` на `bg1`.
   { name: 'мета карточки обновления', text: 'text1', surface: 'bg1' },
   { name: 'заголовок карточки обновления', text: 'text0', surface: 'bg1' },
+  // Голосовые сообщения (VED-286): таймер записи и текст ошибки/отказа
+  // микрофона в `voice-recorder-control.tsx` — на непрозрачном `glass`,
+  // не на цвете пузыря сообщения (там magenta на `bg2` даёт в светлой теме
+  // только 3.85:1 — поэтому ошибка ПЛЕЕРА красится в `text0`, см.
+  // `voice-message-player.tsx`, а не magenta).
+  { name: 'таймер и ошибка записи голосового на стекле', text: 'magenta', surface: 'glass' },
 ];
 
 describe.each([
