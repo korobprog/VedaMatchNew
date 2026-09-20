@@ -39,7 +39,9 @@ export class MusicFavoritesService {
     private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
+    this.publicBaseUrl = musicCoverBaseUrl(
+      config.get<string>('API_PUBLIC_URL'),
+    );
   }
 
   async add(userId: string, trackId: string): Promise<{ favorited: true }> {
@@ -119,11 +121,17 @@ export class MusicFavoritesService {
    * Своё избранное. Снятые с витрины записи не показываются: сердце
    * остаётся нажатым, но отдавать скрытую по жалобе запись через избранное
    * в обход каталога нельзя.
+   *
+   * Порядок — по алфавиту (VED-273), как и в каталоге: избранное листают
+   * глазами в поисках знакомого названия, а «сначала недавно отмеченное»
+   * переставляет список под человеком после каждого нажатого сердца.
+   * `listIds` ниже остаётся на дате: там порядок не виден никому, это набор
+   * для подсветки сердец.
    */
   async list(userId: string): Promise<{ items: MusicTrackDto[] }> {
     const rows = await this.prisma.musicFavorite.findMany({
       where: { userId, track: { status: 'published' } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { track: { title: 'asc' } },
       take: MAX_FAVORITES,
       select: {
         track: {

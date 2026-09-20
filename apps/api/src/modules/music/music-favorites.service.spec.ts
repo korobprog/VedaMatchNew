@@ -135,7 +135,10 @@ describe('MusicFavoritesService.remove', () => {
 });
 
 describe('MusicFavoritesService.list', () => {
-  it('отдаёт свежие первыми', async () => {
+  // VED-273: порядок по алфавиту, как и в каталоге. «Сначала недавно
+  // отмеченное» переставляло список под человеком после каждого нажатого
+  // сердца — знакомое название приходилось искать заново.
+  it('отдаёт избранное по алфавиту', async () => {
     const prisma = prismaMock();
 
     await service(prisma).list('u1');
@@ -143,7 +146,7 @@ describe('MusicFavoritesService.list', () => {
     expect(prisma.musicFavorite.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ userId: 'u1' }),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { track: { title: 'asc' } },
       }),
     );
   });

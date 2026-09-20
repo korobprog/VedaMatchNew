@@ -1,3 +1,4 @@
+import { MUSIC_DEFAULT_TRACK_SORT } from '@vedamatch/shared';
 import {
   MUSIC_SEARCH_MAX_LENGTH,
   MUSIC_TRACKS_DEFAULT_LIMIT,
@@ -17,7 +18,8 @@ describe('normalizeMusicTrackQuery', () => {
       duration: null,
       live: null,
       lineage: null,
-      sort: 'fresh',
+      // VED-273: порядок по умолчанию — по алфавиту, а не по дате.
+      sort: MUSIC_DEFAULT_TRACK_SORT,
       cursor: null,
       limit: MUSIC_TRACKS_DEFAULT_LIMIT,
     });
@@ -68,9 +70,12 @@ describe('normalizeMusicTrackQuery', () => {
     });
   });
 
-  it('неизвестную сортировку заменяет на свежее, а не падает', () => {
-    expect(normalizeMusicTrackQuery({ sort: 'DROP TABLE' }).sort).toBe('fresh');
+  // VED-273: без параметра и с мусором в нём выдача идёт по алфавиту;
+  // явный выбор человека («сначала новое») по-прежнему принимается.
+  it('неизвестную сортировку заменяет на умолчание, а не падает', () => {
+    expect(normalizeMusicTrackQuery({ sort: 'DROP TABLE' }).sort).toBe('title');
     expect(normalizeMusicTrackQuery({ sort: 'popular' }).sort).toBe('popular');
+    expect(normalizeMusicTrackQuery({ sort: 'fresh' }).sort).toBe('fresh');
   });
 
   it('неизвестную корзину длительности отбрасывает', () => {
