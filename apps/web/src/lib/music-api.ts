@@ -9,6 +9,7 @@ import { cookies } from "next/headers";
 import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
+  MusicAudiobooksDto,
   MusicCatalogDto,
   MusicHistoryDto,
   MusicPlaybackStateDto,
@@ -49,6 +50,14 @@ async function musicGet<T>(path: string): Promise<T | null> {
 
 export function getMusicCatalog(): Promise<MusicCatalogDto | null> {
   return musicGet<MusicCatalogDto>("/music/catalog");
+}
+
+/**
+ * Раздел «Аудиокниги» (VED-237) — чтецы и их записи. В общем каталоге их
+ * нет: «отображение всех аудиокниг находится внутри этой кнопки».
+ */
+export function getMusicAudiobooks(): Promise<MusicAudiobooksDto | null> {
+  return musicGet<MusicAudiobooksDto>("/music/audiobooks");
 }
 
 /** Свои плейлисты — для рельса, каталога и страницы списка. */

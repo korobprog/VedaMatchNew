@@ -19,6 +19,7 @@ import type {
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
   MusicArtistsFromTagsRequest,
+  MusicBulkArtistAudiobookRequest,
   MusicBulkArtistRootCategoryRequest,
   MusicBulkTrackArtistRequest,
   MusicModerationDecisionRequest,
@@ -193,6 +194,19 @@ export class MusicAdminCatalogController {
     @Body() body: MusicBulkArtistRootCategoryRequest,
   ) {
     return this.catalog.setArtistsRootCategory(isAdmin(user), body);
+  }
+
+  /**
+   * Массовая отметка «это аудиокниги» (VED-237). Рядом с корневой
+   * категорией и по тем же правилам: отметка живёт у чтеца, а раздел
+   * собирается из его записей.
+   */
+  @Post('artists/audiobook')
+  setArtistsAudiobook(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: MusicBulkArtistAudiobookRequest,
+  ) {
+    return this.catalog.setArtistsAudiobook(isAdmin(user), body);
   }
 
   @Post('albums')

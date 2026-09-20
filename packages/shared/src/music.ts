@@ -144,6 +144,13 @@ export interface MusicArtistDto {
    * `MusicBulkArtistRootCategoryRequest`.
    */
   rootCategoryId: string | null;
+  /**
+   * Исполнитель раздела «Аудиокниги» (VED-237): его записи — главы книг, и
+   * в общем каталоге они не показываются. Отметка у исполнителя по той же
+   * причине, что и корневая категория выше: новая глава попадает в раздел
+   * без отдельной правки.
+   */
+  isAudiobook: boolean;
 }
 
 export interface MusicAlbumDto {
@@ -332,6 +339,8 @@ export interface CreateMusicArtistRequest {
    * категория существует, но не `kind: 'root'`.
    */
   rootCategoryId?: string | null;
+  /** Исполнитель раздела «Аудиокниги» (VED-237). */
+  isAudiobook?: boolean;
 }
 
 export type UpdateMusicArtistRequest = Partial<CreateMusicArtistRequest>;
@@ -415,6 +424,38 @@ export interface MusicBulkArtistRootCategoryRequest {
 export interface MusicBulkArtistRootCategoryResult {
   /** Сколько исполнителей поменялось. */
   updated: number;
+}
+
+/**
+ * Массовая отметка «это аудиокниги» исполнителям (VED-237). Тем же приёмом,
+ * что и корневая категория выше: чтец размечается один раз, все его записи —
+ * и уже залитые, и будущие — уходят в раздел «Аудиокниги» и пропадают из
+ * общего каталога. `isAudiobook: false` — вернуть выбранных в Медиатеку.
+ */
+export interface MusicBulkArtistAudiobookRequest {
+  artistIds: string[];
+  isAudiobook: boolean;
+}
+
+export interface MusicBulkArtistAudiobookResult {
+  /** Сколько исполнителей поменялось. */
+  updated: number;
+}
+
+/**
+ * Раздел «Аудиокниги» (VED-237) — то же устройство, что у витрины
+ * Медиатеки, только внутри кнопки: чтецы карточками и записи списком.
+ * Отдельная выдача, а не параметр витрины: общий каталог аудиокниг не
+ * показывает вовсе, и смешивать два списка в одном ответе значило бы
+ * каждый раз объяснять, какой из них сейчас нужен.
+ */
+export interface MusicAudiobooksDto {
+  /** Чтецы и авторы — карточки раздела. */
+  artists: MusicArtistDto[];
+  /** Записи раздела; порядок — общий для Музыки, по алфавиту (VED-273). */
+  tracks: MusicTrackDto[];
+  /** Сколько всего записей в разделе. */
+  totalTracks: number;
 }
 
 // ===== Загрузка (этап 2) =====

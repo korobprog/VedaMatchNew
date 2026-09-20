@@ -331,11 +331,36 @@ export default async function MusicPage({
 
       <div className="mt-6 flex flex-col gap-3">
         <MusicRootTabs categories={catalog.categories} state={filterState} />
-        <MusicFilters
-          state={filterState}
-          artists={catalog.artists}
-          categories={catalog.categories}
-        />
+        {/* «Фильтры» и «Аудиокниги» — одним рядом, как на скриншоте
+            карточки VED-237: раздел книг стоит рядом с фильтрами каталога,
+            а не прячется в меню. Сами аудиокниги в каталоге не
+            показываются — их «отображение находится внутри этой кнопки». */}
+        <div className="flex flex-wrap items-start gap-2">
+          <MusicFilters
+            state={filterState}
+            artists={catalog.artists}
+            categories={catalog.categories}
+          />
+          <Link
+            href="/music/audiobooks"
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="size-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+              <path d="M9 7h6" />
+            </svg>
+            Аудиокниги
+          </Link>
+        </div>
       </div>
 
       {/* Исполнители — до списка записей. Хвостом после подборок их не

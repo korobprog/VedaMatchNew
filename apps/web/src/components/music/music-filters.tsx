@@ -110,7 +110,10 @@ export function MusicFilters({
   const styles = categories.filter((category) => category.kind === "style");
 
   return (
-    <details className="group" open={active > 0}>
+    // `w-fit` и `open:w-full` — чтобы свёрнутый чип стоял в одном ряду с
+    // соседней кнопкой («Аудиокниги», VED-237), а раскрытая панель занимала
+    // всю ширину, а не жалась в колонку под чипом.
+    <details className="group w-fit open:w-full" open={active > 0}>
       <summary className="flex h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0">
         <svg
           viewBox="0 0 24 24"
