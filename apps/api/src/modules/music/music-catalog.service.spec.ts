@@ -43,6 +43,23 @@ const query = {
   limit: 24,
 };
 
+/**
+ * Срез «не аудиокнига» (VED-237) стоит в `AND` каждой выдачи каталога:
+ * записи отмеченных чтецов живут в своём разделе. Держим константой, чтобы
+ * проверки линии и категорий читались про своё, а не про аудиокниги.
+ */
+const NOT_AUDIOBOOK = {
+  OR: [{ artistId: null }, { artist: { isAudiobook: false } }],
+};
+
+/**
+ * Первый аргумент первого вызова мока — без `any` в глазах ESLint: у
+ * `jest.fn()` `mock.calls` типизирован как `any`, и каждое обращение к нему
+ * в тесте иначе даёт ошибку правила `no-unsafe-member-access`.
+ */
+const firstCallArg = (fn: { mock: { calls: unknown[][] } }): unknown =>
+  fn.mock.calls[0]?.[0];
+
 const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
   (
     prisma.musicTrack.findMany.mock.calls[0][0] as {
@@ -68,7 +85,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     await catalog.listTracks(query, null);
 
-    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
@@ -84,7 +101,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     await catalog.listTracks(query, 'u1');
 
-    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
@@ -99,6 +116,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     expect(whereOf(prisma).AND).toEqual([
       { OR: [{ lineage: 'sri_gopinath_gaudiya_math' }, { lineage: null }] },
+      NOT_AUDIOBOOK,
     ]);
   });
 
@@ -113,7 +131,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     await catalog.listTracks(query, 'u1');
 
-    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
   });
 
   it('явная линия в запросе сильнее всего и не ходит в базу за профилем', async () => {
@@ -124,6 +142,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     expect(whereOf(prisma).AND).toEqual([
       { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+      NOT_AUDIOBOOK,
     ]);
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
     expect(prisma.musicSettings.findUnique).not.toHaveBeenCalled();
@@ -144,6 +163,7 @@ describe('MusicCatalogService — линия слушателя', () => {
     ]);
     expect(where.AND).toEqual([
       { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+      NOT_AUDIOBOOK,
     ]);
   });
 
@@ -156,7 +176,7 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     expect(whereOf(prisma)).toMatchObject({
       status: 'published',
-      AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }],
+      AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }, NOT_AUDIOBOOK],
     });
   });
 
@@ -172,7 +192,7 @@ describe('MusicCatalogService — линия слушателя', () => {
     expect(prisma.musicTrack.count).toHaveBeenCalledWith({
       where: {
         status: 'published',
-        AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }],
+        AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }, NOT_AUDIOBOOK],
       },
     });
   });
@@ -183,12 +203,12 @@ describe('MusicCatalogService — линия слушателя', () => {
 // по-прежнему тег записи. Фильтр обязан требовать оба одновременно
 // (пересечение), а не любой из них (объединение).
 describe('MusicCatalogService — корневая категория и стиль', () => {
-  it('без обоих фильтров ничего не добавляет в where — «Все» не прячет неразмеченное', async () => {
+  it('без обоих фильтров не добавляет условий по категориям — «Все» не прячет неразмеченное', async () => {
     const { service: catalog, prisma } = service();
 
     await catalog.listTracks(query, null);
 
-    expect(whereOf(prisma)).not.toHaveProperty('AND');
+    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
   });
 
   it('root один — условие на artist.rootCategory в AND', async () => {
@@ -197,6 +217,7 @@ describe('MusicCatalogService — корневая категория и сти�
     await catalog.listTracks({ ...query, root: 'traditional' }, null);
 
     expect(whereOf(prisma).AND).toEqual([
+      NOT_AUDIOBOOK,
       { artist: { rootCategory: { slug: 'traditional' } } },
     ]);
   });
@@ -210,6 +231,7 @@ describe('MusicCatalogService — корневая категория и сти�
     );
 
     expect(whereOf(prisma).AND).toEqual([
+      NOT_AUDIOBOOK,
       { artist: { rootCategory: { slug: 'traditional' } } },
       { categories: { some: { category: { slug: 'mantra' } } } },
     ]);
@@ -227,6 +249,7 @@ describe('MusicCatalogService — корневая категория и сти�
 
     expect(whereOf(prisma).AND).toEqual([
       { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+      NOT_AUDIOBOOK,
       { artist: { rootCategory: { slug: 'modern' } } },
       { categories: { some: { category: { slug: 'bhajan' } } } },
     ]);
@@ -296,9 +319,61 @@ describe('MusicCatalogService — исполнители витрины', () => 
 
     await catalog.showcase(null);
 
-    const args = prisma.musicArtist.findMany.mock.calls[0][0] as {
+    const args = firstCallArg(prisma.musicArtist.findMany) as {
       take?: number;
     };
     expect(args.take ?? Infinity).toBeGreaterThan(8);
+  });
+});
+
+// VED-237: «отображение всех аудиокниг должно находиться внутри этой
+// кнопки» — значит, в каталоге их нет ни одной, а в разделе нет ничего,
+// кроме них. Оба среза строятся из одной отметки у исполнителя.
+describe('MusicCatalogService — раздел «Аудиокниги»', () => {
+  it('витрина, поиск и счётчик обходят записи отмеченных чтецов', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.showcase(null);
+
+    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
+    expect(prisma.musicTrack.count).toHaveBeenCalledWith({
+      where: { status: 'published', AND: [NOT_AUDIOBOOK] },
+    });
+    // Карточки чтецов на витрине тоже не нужны — у них свой раздел.
+    expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
+      where: { isAudiobook: false },
+    });
+  });
+
+  it('раздел показывает только записи чтецов и по алфавиту (VED-273)', async () => {
+    const prisma = prismaMock();
+    prisma.musicTrack.count.mockResolvedValue(42);
+    const { service: catalog } = service(prisma);
+
+    const result = await catalog.audiobooks(null);
+
+    expect(result.totalTracks).toBe(42);
+    const args = firstCallArg(prisma.musicTrack.findMany) as {
+      where: { AND: unknown[] };
+      orderBy: unknown;
+    };
+    expect(args.where.AND).toEqual([{ artist: { isAudiobook: true } }]);
+    expect(args.orderBy).toEqual([{ title: 'asc' }, { id: 'desc' }]);
+    expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
+      where: { isAudiobook: true },
+    });
+  });
+
+  it('линия слушателя действует и в разделе', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'ipbys' });
+    const { service: catalog } = service(prisma);
+
+    await catalog.audiobooks('u1');
+
+    expect(whereOf(prisma).AND).toEqual([
+      { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+      { artist: { isAudiobook: true } },
+    ]);
   });
 });

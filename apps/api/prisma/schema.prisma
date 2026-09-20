@@ -4708,6 +4708,13 @@ model MusicArtist {
   /// это проверяет сервис, а не база.
   rootCategoryId String?
   rootCategory   MusicCategory?     @relation("MusicArtistRootCategory", fields: [rootCategoryId], references: [id], onDelete: SetNull)
+  /// Раздел «Аудиокниги» (VED-237): все записи этого исполнителя — главы
+  /// книг, а не киртаны. Отметка стоит у исполнителя, а не у записи, по той
+  /// же причине, что и корневая категория выше: редакция размечает чтеца
+  /// один раз, и каждая новая его глава попадает в раздел сама. В общем
+  /// каталоге такие записи не показываются — «отображение всех аудиокниг
+  /// находится внутри кнопки», как и просили в карточке.
+  isAudiobook    Boolean            @default(false)
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -4717,6 +4724,7 @@ model MusicArtist {
 
   @@index([kind])
   @@index([rootCategoryId])
+  @@index([isAudiobook])
 }
 
 /// Альбом или программа целиком.

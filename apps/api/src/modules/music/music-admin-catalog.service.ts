@@ -10,6 +10,8 @@ import type {
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
+  MusicBulkArtistAudiobookRequest,
+  MusicBulkArtistAudiobookResult,
   MusicBulkArtistRootCategoryRequest,
   MusicBulkArtistRootCategoryResult,
   MusicBulkTrackArtistResult,
@@ -156,6 +158,9 @@ export class MusicAdminCatalogService {
         ...(body.rootCategoryId === undefined
           ? {}
           : { rootCategoryId: body.rootCategoryId }),
+        // Раздел «Аудиокниги» (VED-237): отметка стоит у чтеца и
+        // наследуется всеми его записями, включая будущие.
+        isAudiobook: body.isAudiobook ?? false,
         ...this.coverPatch(body.coverKey, null, 'artist'),
       },
     });
@@ -194,6 +199,9 @@ export class MusicAdminCatalogService {
         ...(body.rootCategoryId === undefined
           ? {}
           : { rootCategoryId: body.rootCategoryId }),
+        ...(body.isAudiobook === undefined
+          ? {}
+          : { isAudiobook: body.isAudiobook }),
       },
     });
   }
@@ -822,6 +830,43 @@ export class MusicAdminCatalogService {
     const { count } = await this.prisma.musicArtist.updateMany({
       where: { id: { in: artistIds } },
       data: { rootCategoryId: body.rootCategoryId },
+    });
+
+    return { updated: count };
+  }
+
+  /**
+   * Массовая отметка «это аудиокниги» (VED-237).
+   *
+   * Тем же приёмом и по той же причине, что корневая категория выше:
+   * разметка стоит у чтеца, одно действие переносит в раздел все его
+   * записи разом, а каждая будущая глава попадает туда сама. Снятие —
+   * тем же запросом с `isAudiobook: false`, иначе ошибочно отмеченный
+   * исполнитель возвращался бы в Медиатеку по одному.
+   */
+  async setArtistsAudiobook(
+    viewerIsAdmin: boolean,
+    body: MusicBulkArtistAudiobookRequest,
+  ): Promise<MusicBulkArtistAudiobookResult> {
+    this.assertAdmin(viewerIsAdmin);
+    const artistIds = [...new Set(body.artistIds ?? [])];
+    if (artistIds.length === 0) {
+      throw new BadRequestException('Нужно выбрать хотя бы одного исполнителя');
+    }
+
+    const found = await this.prisma.musicArtist.findMany({
+      where: { id: { in: artistIds } },
+      select: { id: true },
+    });
+    if (found.length !== artistIds.length) {
+      throw new NotFoundException(
+        'Часть исполнителей не найдена — обновите список',
+      );
+    }
+
+    const { count } = await this.prisma.musicArtist.updateMany({
+      where: { id: { in: artistIds } },
+      data: { isAudiobook: body.isAudiobook === true },
     });
 
     return { updated: count };

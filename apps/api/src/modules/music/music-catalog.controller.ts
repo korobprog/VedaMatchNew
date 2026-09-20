@@ -36,6 +36,18 @@ export class MusicCatalogController {
     return this.catalog.listCategories();
   }
 
+  /**
+   * Раздел «Аудиокниги» (VED-237). Отдельной выдачей, а не параметром
+   * витрины: обычный каталог аудиокниг не показывает вовсе, и смешивать два
+   * списка в одном ответе значило бы каждый раз объяснять, какой из них
+   * сейчас нужен. Буквальный путь регистрируется до `tracks/:id` и `:slug`
+   * по общему правилу Nest — здесь он и так выше них по файлу.
+   */
+  @Get('audiobooks')
+  audiobooks(@OptionalUser() user?: AccessTokenPayload) {
+    return this.catalog.audiobooks(user?.sub ?? null);
+  }
+
   @Get('tracks')
   tracks(
     @Query()

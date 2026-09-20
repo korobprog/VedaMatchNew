@@ -3,7 +3,10 @@ import type {
   MusicDurationBucket,
   MusicTrackSort,
 } from '@vedamatch/shared';
-import { isLineagePreference } from '@vedamatch/shared';
+import {
+  MUSIC_DEFAULT_TRACK_SORT,
+  isLineagePreference,
+} from '@vedamatch/shared';
 
 /**
  * Разбор строки запроса витрины и поиска.
@@ -133,9 +136,12 @@ export function normalizeMusicTrackQuery(query: {
     live: optionalBoolean(query.live),
     // Незнакомая линия — это «не спрашивали», а не пустая выдача.
     lineage: isLineagePreference(lineage) ? lineage : null,
+    // Незнакомое значение — это «не просили», а не повод отдать пустое:
+    // умолчание общее с витриной (`MUSIC_DEFAULT_TRACK_SORT`, VED-273) —
+    // по алфавиту.
     sort: SORTS.includes(sort as MusicTrackSort)
       ? (sort as MusicTrackSort)
-      : 'fresh',
+      : MUSIC_DEFAULT_TRACK_SORT,
     cursor: firstString(query.cursor),
     limit: clampLimit(query.limit),
   };

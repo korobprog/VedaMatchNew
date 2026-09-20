@@ -69,7 +69,10 @@ export async function countTracksByCategory(
       _count: { trackId: true },
     }),
     prisma.musicArtist.findMany({
-      where: { rootCategoryId: { not: null } },
+      // Чтецы раздела «Аудиокниги» (VED-237) в счётчик вкладок каталога не
+      // идут: их записей в каталоге нет, и число над вкладкой обещало бы
+      // список, который там не откроется.
+      where: { rootCategoryId: { not: null }, isAudiobook: false },
       select: {
         rootCategoryId: true,
         _count: { select: { tracks: { where: trackFilter } } },

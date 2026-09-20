@@ -15,6 +15,8 @@ import type {
   CreateMusicIngestBatchRequest,
   MusicArtistsFromTagsRequest,
   MusicArtistsFromTagsResult,
+  MusicBulkArtistAudiobookRequest,
+  MusicBulkArtistAudiobookResult,
   MusicBulkArtistRootCategoryRequest,
   MusicBulkArtistRootCategoryResult,
   MusicBulkTrackArtistRequest,
@@ -94,6 +96,22 @@ export const setMusicArtistsRootCategory = (
 ) =>
   send<MusicBulkArtistRootCategoryResult>(
     `/music/admin/catalog/artists/root-category`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
+
+/**
+ * Массовая отметка «это аудиокниги» выбранным исполнителям (VED-237). Тем
+ * же приёмом, что и корневая категория выше: раздел «Аудиокниги»
+ * собирается из записей отмеченных чтецов, включая будущие.
+ */
+export const setMusicArtistsAudiobook = (
+  body: MusicBulkArtistAudiobookRequest,
+) =>
+  send<MusicBulkArtistAudiobookResult>(
+    `/music/admin/catalog/artists/audiobook`,
     {
       method: "POST",
       body: JSON.stringify(body),
