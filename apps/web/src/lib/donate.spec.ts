@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildTransferPurpose, MAX_TRANSFER_PURPOSE } from "./donate";
-import { DONATE_PURPOSES } from "./donate-content";
+import {
+  buildTransferPurpose,
+  isBankFilled,
+  isRequisiteFilled,
+  MAX_TRANSFER_PURPOSE,
+  splitBanks,
+} from "./donate";
+import {
+  DONATE_BANKS,
+  DONATE_PURPOSES,
+  type DonateBank,
+} from "./donate-content";
 
 describe("buildTransferPurpose", () => {
   it("собирает цель и подпись в одну строку", () => {
@@ -60,5 +70,48 @@ describe("buildTransferPurpose", () => {
       expect(result.startsWith("Дар ")).toBe(true);
       expect(result.length).toBeLessThanOrEqual(MAX_TRANSFER_PURPOSE);
     }
+  });
+});
+
+describe("реквизиты банков", () => {
+  const bank = (lines: DonateBank["lines"]): DonateBank => ({
+    id: "x",
+    name: "Банк",
+    note: "",
+    lines,
+  });
+
+  it("пустое значение не считается заполненным", () => {
+    expect(isRequisiteFilled({ label: "Счёт", value: null })).toBe(false);
+    expect(isRequisiteFilled({ label: "Счёт", value: "   " })).toBe(false);
+    expect(isRequisiteFilled({ label: "Счёт", value: "40817" })).toBe(true);
+  });
+
+  it("банк готов, когда заполнена хотя бы одна строка", () => {
+    expect(isBankFilled(bank([{ label: "Счёт", value: null }]))).toBe(false);
+    expect(
+      isBankFilled(
+        bank([
+          { label: "Счёт", value: null },
+          { label: "БИК", value: "044525225" },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it("делит список на готовые и ожидающие данных", () => {
+    const ready = bank([{ label: "Счёт", value: "1" }]);
+    const waiting = bank([{ label: "Счёт", value: null }]);
+
+    expect(splitBanks([ready, waiting])).toEqual({
+      filled: [ready],
+      pending: [waiting],
+    });
+  });
+
+  // Пока реквизитов не дали, страница не имеет права рисовать цифры.
+  it("сегодня в справочнике нет ни одного заполненного банка", () => {
+    expect(splitBanks(DONATE_BANKS).filled).toEqual([]);
+    expect(splitBanks(DONATE_BANKS).pending).toHaveLength(DONATE_BANKS.length);
   });
 });
