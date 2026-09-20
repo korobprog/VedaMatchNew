@@ -10,6 +10,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeDeviceRequest } from './device-request';
+import { sortInboxRows } from './inbox-order';
 
 const defaults: NotificationPreferencesDto = {
   enabled: true,
@@ -241,12 +242,12 @@ export class NotificationsService {
     await this.purge(userId);
     const rows = await this.prisma.notificationItem.findMany({
       where: { userId },
-      // Непрочитанное первым, внутри групп — свежее сверху: человек приходит
-      // за новым, а прочитанное держим под рукой на случай «а что там было».
-      orderBy: [
-        { readAt: { sort: 'asc', nulls: 'first' } },
-        { createdAt: 'desc' },
-      ],
+      // Выборка — по индексу `[userId, createdAt]`, свежее сверху. Группы
+      // «непрочитанное впереди» расставляет `sortInboxRows()`: одним `orderBy`
+      // это не выразить — «сначала непрочитанное» сортировка по выражению
+      // (`readAt IS NULL`), а не по колонке. Чем прежний `readAt asc` ломал
+      // порядок прочитанного — VED-153, см. `inbox-order.ts`.
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         title: true,
@@ -257,7 +258,7 @@ export class NotificationsService {
         readAt: true,
       },
     });
-    const items: NotificationItemDto[] = rows.map((row) => ({
+    const items: NotificationItemDto[] = sortInboxRows(rows).map((row) => ({
       id: row.id,
       title: row.title,
       body: row.body,
