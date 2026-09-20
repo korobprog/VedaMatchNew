@@ -11,6 +11,7 @@ import type {
   MusicArtistPageDto,
   MusicAudiobooksDto,
   MusicCatalogDto,
+  MusicCategoryDto,
   MusicHistoryDto,
   MusicPlaybackStateDto,
   MusicPlaylistPageDto,
@@ -50,6 +51,15 @@ async function musicGet<T>(path: string): Promise<T | null> {
 
 export function getMusicCatalog(): Promise<MusicCatalogDto | null> {
   return musicGet<MusicCatalogDto>("/music/catalog");
+}
+
+/**
+ * Разделы каталога — корневые и стилевые. Отдельным запросом, а не куском
+ * витрины: странице исполнителя нужны только они, а `catalog` тянет заодно
+ * записи, подборки и всех исполнителей.
+ */
+export function getMusicCategories(): Promise<MusicCategoryDto[] | null> {
+  return musicGet<MusicCategoryDto[]>("/music/categories");
 }
 
 /**

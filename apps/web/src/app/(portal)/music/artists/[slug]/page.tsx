@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
-import { getMusicArtist } from "@/lib/music-api";
+import { getMusicArtist, getMusicCategories } from "@/lib/music-api";
+import { MusicArtistAdminCategory } from "@/components/music/artist-admin-category";
 import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
 import { MusicArtistPlayback } from "@/components/music/music-artist-playback";
 import { MusicCover } from "@/components/music/music-cover";
@@ -51,6 +52,9 @@ export default async function MusicArtistPage({
       )
     : false;
   const kind = KIND_LABELS[artist.kind] ?? "";
+  /* Разделы каталога нужны только редакции — гостю за ними не ходим: это
+     лишний запрос на каждое открытие страницы исполнителя. */
+  const categories = isMusicEditor ? ((await getMusicCategories()) ?? []) : [];
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
@@ -79,6 +83,17 @@ export default async function MusicArtistPage({
               <MusicArtistAdminRename artistId={artist.id} name={artist.name} />
             )}
           </div>
+          {/* Категория исполнителя (VED-165) — рядом с переименованием, там
+              же, где тестировщик поставил галочку на скриншоте: всё, что
+              редакция правит у карточки, собрано в одном месте. */}
+          {isMusicEditor && (
+            <MusicArtistAdminCategory
+              artistId={artist.id}
+              artistName={artist.name}
+              rootCategoryId={artist.rootCategoryId}
+              categories={categories}
+            />
+          )}
           <p className="text-sm text-text-2">
             {[kind, `${artist.trackCount} ${plural(artist.trackCount, "запись", "записи", "записей")}`]
               .filter(Boolean)
