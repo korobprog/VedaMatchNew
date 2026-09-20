@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImageUp, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/http-client";
-import { iconButton, secondaryButton } from "./ui";
+import { titleOf, uploadActionLabel } from "./post-action-labels";
+import { iconTile, secondaryButton } from "./ui";
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
@@ -30,8 +31,10 @@ export function UploadCardImage({
   postId: string;
   label?: string;
   /**
-   * Квадрат со значком без подписи — для карточки опубликованного (VED-199).
-   * Подпись уходит в `aria-label` и всплывающую подсказку.
+   * Клетка сетки действий в карточке опубликованного (VED-199): значок со
+   * словом под ним. Слова берутся из общего `post-action-labels`, чтобы
+   * подпись, `aria-label` и `title` не разошлись; `label` для этого вида
+   * не используется.
    */
   iconOnly?: boolean;
   /**
@@ -84,16 +87,17 @@ export function UploadCardImage({
           type="button"
           disabled={pending}
           onClick={() => inputRef.current?.click()}
-          aria-label={pending ? "Загружаем картинку…" : label}
-          title={pending ? "Загружаем картинку…" : label}
+          aria-label={uploadActionLabel(pending).label}
+          title={titleOf(uploadActionLabel(pending))}
           aria-busy={pending}
-          className={iconButton}
+          className={iconTile}
         >
           {pending ? (
             <Loader2 aria-hidden className="size-5 motion-safe:animate-spin" />
           ) : (
             <ImageUp aria-hidden className="size-5" />
           )}
+          <span aria-hidden>{uploadActionLabel(pending).caption}</span>
         </button>
       ) : (
         <button

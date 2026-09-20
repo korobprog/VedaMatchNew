@@ -24,6 +24,17 @@ import {
 } from "../quote-text";
 import { CategorySelect } from "./category-select";
 import { DeletePostConfirm } from "./delete-post-button";
+import {
+  deleteActionLabel,
+  editActionLabel,
+  feedActionLabel,
+  hiddenTabActionLabel,
+  hideActionLabel,
+  hideNoticeText,
+  readActionLabel,
+  searchActionLabel,
+  titleOf,
+} from "./post-action-labels";
 import { formatAttribution } from "./quote-details";
 import { ScrollNavButtons } from "./scroll-nav-buttons";
 import { UploadCardImage } from "./upload-card-image";
@@ -33,8 +44,8 @@ import {
   badgeClass,
   cardClass,
   fieldClass,
-  iconButton,
-  iconDangerButton,
+  iconTile,
+  iconTileDanger,
   labelClass,
   secondaryButton,
 } from "./ui";
@@ -266,63 +277,67 @@ export function MotivationPublishedList({
                   {post.status === "hidden" && (
                     <span className={`${badgeClass} mt-1`}>Скрыто из ленты</span>
                   )}
-
-                  <PostActions
-                    post={post}
-                    variant={variant}
-                    returning={post.id === openId}
-                    editing={editing === post.id}
-                    reading={reading === post.id}
-                    deleting={deleting === post.id}
-                    pendingAction={pending[post.id]}
-                    onEdit={() => {
-                      setReading(null);
-                      setEditing((current) =>
-                        current === post.id ? null : post.id,
-                      );
-                    }}
-                    onToggleRead={() => {
-                      setEditing(null);
-                      setDeleting(null);
-                      setReading((current) =>
-                        current === post.id ? null : post.id,
-                      );
-                    }}
-                    onFocusSearch={focusSearch}
-                    onDelete={() =>
-                      setDeleting((current) =>
-                        current === post.id ? null : post.id,
-                      )
-                    }
-                    onUploadError={(message) =>
-                      setUploadErrors((current) => ({
-                        ...current,
-                        [post.id]: message,
-                      }))
-                    }
-                    onHideToggle={(nextHidden) =>
-                      setHideNotice((current) => {
-                        // Возврат в ленту снимает подсказку: она была про то,
-                        // как отменить именно скрытие.
-                        if (!nextHidden) {
-                          if (!current[post.id]) return current;
-                          const next = { ...current };
-                          delete next[post.id];
-                          return next;
-                        }
-                        return { ...current, [post.id]: true };
-                      })
-                    }
-                    run={run}
-                  />
-
-                  {hideNotice[post.id] && (
-                    <p role="status" className="mt-2 text-sm text-text-1">
-                      Скрыто из ленты. Вернуть можно этой же кнопкой.
-                    </p>
-                  )}
                 </div>
               </div>
+
+              {/* Кнопки — под картинкой и текстом, во всю ширину карточки.
+                  Рядом с текстом они стояли, пока были голыми значками
+                  (VED-199); с подписями (VED-251) в остатке колонки им уже
+                  не хватало ширины на телефоне. */}
+              <PostActions
+                post={post}
+                variant={variant}
+                returning={post.id === openId}
+                editing={editing === post.id}
+                reading={reading === post.id}
+                deleting={deleting === post.id}
+                pendingAction={pending[post.id]}
+                onEdit={() => {
+                  setReading(null);
+                  setEditing((current) =>
+                    current === post.id ? null : post.id,
+                  );
+                }}
+                onToggleRead={() => {
+                  setEditing(null);
+                  setDeleting(null);
+                  setReading((current) =>
+                    current === post.id ? null : post.id,
+                  );
+                }}
+                onFocusSearch={focusSearch}
+                onDelete={() =>
+                  setDeleting((current) =>
+                    current === post.id ? null : post.id,
+                  )
+                }
+                onUploadError={(message) =>
+                  setUploadErrors((current) => ({
+                    ...current,
+                    [post.id]: message,
+                  }))
+                }
+                onHideToggle={(nextHidden) =>
+                  setHideNotice((current) => {
+                    // Возврат в ленту снимает подсказку: она была про то,
+                    // как отменить именно скрытие.
+                    if (!nextHidden) {
+                      if (!current[post.id]) return current;
+                      const next = { ...current };
+                      delete next[post.id];
+                      return next;
+                    }
+                    return { ...current, [post.id]: true };
+                  })
+                }
+                run={run}
+              />
+
+              {hideNotice[post.id] && (
+                <p role="status" className="mt-2 text-sm text-text-1">
+                  {hideNoticeText(true)}
+                </p>
+              )}
 
               {deleting === post.id && (
                 <div className="mt-3">
@@ -437,15 +452,15 @@ function PostActions({
      ленты) — для скрытого `?post=slug` молча ничего не подсветит. Вместо
      ссылки — неактивная кнопка на том же месте сетки (та же клетка, тот же
      размер), с подсказкой, что сначала нужно вернуть в ленту. */
-  const feedLabel = hidden
-    ? "Скрыто — сначала верните в ленту"
-    : returning
-      ? "Вернуться в ленту"
-      : "Открыть в ленте";
-  const editLabel = editing ? "Не править" : "Править текст";
-  const hideLabel = hidden ? "Вернуть в ленту" : "Скрыть из ленты";
+  const feed = feedActionLabel(hidden, returning);
+  const edit = editActionLabel(editing);
+  const hide = hideActionLabel(hidden);
+  const read = readActionLabel(reading);
   return (
-    <div className="mt-3 grid w-fit grid-cols-3 gap-2">
+    // Сетка во всю ширину карточки, а не `w-fit` рядом с текстом: подписи
+    // шире голых значков, и в остатке колонки справа от картинки им уже не
+    // хватало места на телефоне (VED-251).
+    <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
       {hidden ? (
         <button
           type="button"
@@ -453,24 +468,26 @@ function PostActions({
           // не путался с настоящей навигацией — на скрытом посте у неё нет
           // рабочего адреса вовсе.
           disabled
-          aria-label={feedLabel}
-          title={feedLabel}
-          className={iconButton}
+          aria-label={feed.label}
+          title={titleOf(feed)}
+          className={iconTile}
         >
           <ExternalLink aria-hidden className="size-5" />
+          <span aria-hidden>{feed.caption}</span>
         </button>
       ) : (
         <Link
           href={`/motivation?post=${encodeURIComponent(post.slug)}`}
-          aria-label={feedLabel}
-          title={feedLabel}
-          className={iconButton}
+          aria-label={feed.label}
+          title={titleOf(feed)}
+          className={iconTile}
         >
           {returning ? (
             <ArrowLeft aria-hidden className="size-5" />
           ) : (
             <ExternalLink aria-hidden className="size-5" />
           )}
+          <span aria-hidden>{feed.caption}</span>
         </Link>
       )}
 
@@ -478,22 +495,26 @@ function PostActions({
         type="button"
         onClick={onEdit}
         aria-expanded={editing}
-        aria-label={editLabel}
-        title={editLabel}
-        className={iconButton}
+        aria-label={edit.label}
+        title={titleOf(edit)}
+        className={iconTile}
       >
         {editing ? (
           <X aria-hidden className="size-5" />
         ) : (
           <Pencil aria-hidden className="size-5" />
         )}
+        <span aria-hidden>{edit.caption}</span>
       </button>
 
       {/* Скрыть, а не удалить: снятая с показа карточка уходит из ленты, но
           остаётся у тех, кто уже сохранил её в избранном, — и решение можно
           отменить той же кнопкой. Карточка при этом остаётся здесь же, в
           «Опубликованных» (VED-251) — раньше она в ту же секунду пропадала
-          из списка и находилась только в «Заготовках», без кнопки возврата. */}
+          из списка и находилась только в «Заготовках», без кнопки возврата.
+          Подпись «Скрыть» видна до нажатия: раньше слово жило только в
+          `title`, которого на телефоне не бывает, и перечёркнутый глаз
+          нажимали вслепую. */}
       <button
         type="button"
         disabled={pendingAction !== undefined}
@@ -506,15 +527,16 @@ function PostActions({
           });
           if (ok) onHideToggle(nextHidden);
         }}
-        aria-label={hideLabel}
-        title={hideLabel}
-        className={iconButton}
+        aria-label={hide.label}
+        title={titleOf(hide)}
+        className={iconTile}
       >
         {hidden ? (
           <Eye aria-hidden className="size-5" />
         ) : (
           <EyeOff aria-hidden className="size-5" />
         )}
+        <span aria-hidden>{hide.caption}</span>
       </button>
 
       {/* «Читать полностью» (VED-264): полный текст афоризма разворачивается
@@ -524,26 +546,22 @@ function PostActions({
         type="button"
         onClick={onToggleRead}
         aria-expanded={reading}
-        aria-label={reading ? "Свернуть текст" : "Читать полностью"}
-        title={reading ? "Свернуть текст" : "Читать полностью"}
-        className={iconButton}
+        aria-label={read.label}
+        title={titleOf(read)}
+        className={iconTile}
       >
         {reading ? (
           <X aria-hidden className="size-5" />
         ) : (
           <BookOpen aria-hidden className="size-5" />
         )}
+        <span aria-hidden>{read.caption}</span>
       </button>
 
       {/* Открытку редакция рисует сама — генерация нарисует не то. Замена
           картинки со стадией карточки ничего не делает: опубликованная
           остаётся опубликованной. */}
-      <UploadCardImage
-        postId={post.id}
-        label="Заменить картинку"
-        iconOnly
-        onError={onUploadError}
-      />
+      <UploadCardImage postId={post.id} iconOnly onError={onUploadError} />
 
       {/* Удаление в два нажатия: вопрос встаёт под карточкой во всю ширину. */}
       <button
@@ -551,11 +569,12 @@ function PostActions({
         disabled={pendingAction !== undefined}
         onClick={onDelete}
         aria-expanded={deleting}
-        aria-label="Удалить"
-        title="Удалить"
-        className={iconDangerButton}
+        aria-label={deleteActionLabel.label}
+        title={titleOf(deleteActionLabel)}
+        className={iconTileDanger}
       >
         <Trash2 aria-hidden className="size-5" />
+        <span aria-hidden>{deleteActionLabel.caption}</span>
       </button>
 
       {/* «Поиск» (VED-264): фокус на поле поиска вверху экрана, чтобы не
@@ -563,26 +582,28 @@ function PostActions({
       <button
         type="button"
         onClick={onFocusSearch}
-        aria-label="Поиск"
-        title="Поиск по цитате или автору"
-        className={iconButton}
+        aria-label={searchActionLabel.label}
+        title={titleOf(searchActionLabel)}
+        className={iconTile}
       >
         <Search aria-hidden className="size-5" />
+        <span aria-hidden>{searchActionLabel.caption}</span>
       </button>
 
       {/* «Скрытые» (VED-264): весь список снятого с показа. На самой
           вкладке «Скрытые» кнопка вела бы саму на себя — вместо ссылки там
           пустая клетка, чтобы сетка не съезжала. */}
       {variant === "hidden" ? (
-        <span aria-hidden className="size-11" />
+        <span aria-hidden className="min-h-14 w-full" />
       ) : (
         <Link
           href="/admin/motivation/hidden"
-          aria-label="Скрытые"
-          title="Все скрытые афоризмы"
-          className={iconButton}
+          aria-label={hiddenTabActionLabel.label}
+          title={titleOf(hiddenTabActionLabel)}
+          className={iconTile}
         >
           <Inbox aria-hidden className="size-5" />
+          <span aria-hidden>{hiddenTabActionLabel.caption}</span>
         </Link>
       )}
     </div>
