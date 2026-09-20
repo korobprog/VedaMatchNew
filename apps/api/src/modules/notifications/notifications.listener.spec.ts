@@ -183,8 +183,33 @@ describe('NotificationsListener.deliver', () => {
         body: 'Харе Кришна',
         url: '/union/chats/r1',
         category: 'chat',
+        // Значка у переписки нет (VED-272): он бывает только там, где
+        // событие принесло название колонки доски.
+        mark: null,
       },
     ]);
+  });
+
+  it('кладёт значок состояния в колокольчик, но не в пуш (VED-272)', async () => {
+    const { listener, inbox, sent } = createListener({
+      // `work` в наборе по умолчанию нет, а без тумблера доставка молчит.
+      preferences: { work: true } as Record<string, boolean>,
+    });
+
+    await listener.deliver({
+      name: 'work.task.status-changed',
+      recipientId: 'user-1',
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      taskTitle: 'Починить ссылки',
+      fromColumnName: 'В работе',
+      toColumnName: 'На доработку',
+      actorName: 'Санкаршан',
+    });
+
+    expect(inbox[0]).toMatchObject({ mark: 'rework' });
+    // В шторке пуша одна строка текста — размечать значок там негде.
+    expect(sent[0]?.payload).not.toHaveProperty('mark');
   });
 
   it('наполняет колокольчик даже без пуш-подписок', async () => {

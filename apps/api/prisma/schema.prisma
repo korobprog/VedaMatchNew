@@ -2179,6 +2179,11 @@ model NotificationItem {
   url       String
   /// Категория из NotificationPreference: chat | connections | support | transits.
   category  String
+  /// Значок состояния в ленте (VED-272): in_progress | testing | done | rework.
+  /// null — состояния нет или колонка доски названа не одним из этих четырёх
+  /// слов. Строкой, а не энумом: набор живёт в @vedamatch/shared и меняется
+  /// вместе с клиентами, а старые строки в базе гасит parseNotificationMark().
+  mark      String?
   createdAt DateTime  @default(now())
   readAt    DateTime?
 

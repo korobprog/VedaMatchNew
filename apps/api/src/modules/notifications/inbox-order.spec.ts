@@ -4,7 +4,10 @@ const at = (iso: string) => new Date(iso);
 
 describe('sortInboxRows', () => {
   it('ставит непрочитанное выше прочитанного', () => {
-    const read = { createdAt: at('2026-09-20T12:00:00Z'), readAt: at('2026-09-20T12:30:00Z') };
+    const read = {
+      createdAt: at('2026-09-20T12:00:00Z'),
+      readAt: at('2026-09-20T12:30:00Z'),
+    };
     const unread = { createdAt: at('2026-09-01T09:00:00Z'), readAt: null };
     expect(sortInboxRows([read, unread])).toEqual([unread, read]);
   });
@@ -51,7 +54,10 @@ describe('sortInboxRows', () => {
 
   it('не трогает исходный массив', () => {
     const rows = [
-      { createdAt: at('2026-09-01T00:00:00Z'), readAt: at('2026-09-02T00:00:00Z') },
+      {
+        createdAt: at('2026-09-01T00:00:00Z'),
+        readAt: at('2026-09-02T00:00:00Z'),
+      },
       { createdAt: at('2026-09-03T00:00:00Z'), readAt: null },
     ];
     const copy = [...rows];

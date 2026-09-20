@@ -3,6 +3,7 @@ import type {
   NotificationCategory,
   NotificationInboxResponse,
   NotificationItemDto,
+  NotificationMark,
   NotificationPreferencesDto,
   NotificationDeviceStats,
   PushSubscriptionRequest,
@@ -11,6 +12,7 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeDeviceRequest } from './device-request';
 import { sortInboxRows } from './inbox-order';
+import { parseNotificationMark } from './notification-mark';
 
 const defaults: NotificationPreferencesDto = {
   enabled: true,
@@ -48,6 +50,8 @@ export interface InboxDraft {
   body: string;
   url: string;
   category: NotificationCategory;
+  /** Значок состояния (VED-272); `null`/пусто — уведомление без значка. */
+  mark?: NotificationMark | null;
 }
 
 export interface StoredSubscription {
@@ -256,6 +260,7 @@ export class NotificationsService {
         category: true,
         createdAt: true,
         readAt: true,
+        mark: true,
       },
     });
     const items: NotificationItemDto[] = sortInboxRows(rows).map((row) => ({
@@ -266,6 +271,9 @@ export class NotificationsService {
       category: row.category as NotificationCategory,
       createdAt: row.createdAt.toISOString(),
       readAt: row.readAt?.toISOString() ?? null,
+      // Через parse, а не as: в колонке строка, и запись, сделанная сборкой с
+      // другим набором значков, не должна утекать клиенту неизвестным кодом.
+      mark: parseNotificationMark(row.mark),
     }));
     return {
       items,

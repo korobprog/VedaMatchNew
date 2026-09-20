@@ -106,6 +106,10 @@ export class WorkTasksService {
           assigneeId: true,
           createdById: true,
           space: { select: { name: true, prefix: true } },
+          // Название колонки едет в событие (VED-272): значок состояния в
+          // ленте уведомлений собирает подписчик, а дочитывать наши таблицы
+          // он не вправе.
+          column: { select: { name: true } },
         },
       }),
       this.prisma.user.findUnique({
@@ -377,6 +381,7 @@ export class WorkTasksService {
           taskTitle: notify.task.title,
           spaceName: notify.task.space.name,
           actorName: notify.actorName,
+          columnName: notify.task.column.name,
         } satisfies WorkTaskAssignedEvent);
       }
     }
@@ -616,6 +621,7 @@ export class WorkTasksService {
           taskTitle: notify.task.title,
           actorName: notify.actorName,
           excerpt: body,
+          columnName: notify.task.column.name,
         } satisfies WorkTaskCommentedEvent);
       }
     }

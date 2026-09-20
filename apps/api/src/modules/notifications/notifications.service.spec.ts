@@ -297,16 +297,16 @@ describe('NotificationsService: колокольчик', () => {
 
     const inbox = await service.listInbox('user-1');
 
-    expect(inbox.items.map((item) => item.title)).toEqual([
-      'Свежее',
-      'Старое',
-    ]);
+    expect(inbox.items.map((item) => item.title)).toEqual(['Свежее', 'Старое']);
   });
 
   it('непрочитанное стоит выше прочитанного, даже если прочитанное свежее', async () => {
     const { service, store } = createService();
     await service.addToInbox('user-1', { ...draft, title: 'Старое, но новое' });
-    await service.addToInbox('user-1', { ...draft, title: 'Свежее прочитанное' });
+    await service.addToInbox('user-1', {
+      ...draft,
+      title: 'Свежее прочитанное',
+    });
     const [unread, read] = store.inbox;
     unread.createdAt = new Date(Date.now() - 60 * 60 * 1000);
     read.readAt = new Date();
