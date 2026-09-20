@@ -1,12 +1,20 @@
 import type { ChatAttachmentDto } from '@vedamatch/shared';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget } from '@/theme/tokens';
-import { releaseVoicePlayback, requestVoicePlayback } from '@/lib/chat/voice/voice-playback-registry';
+import { forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import {
+  markVoiceFinished,
+  registerVoiceOrder,
+  releaseVoicePlayback,
+  requestVoicePlayback,
+} from '@/lib/chat/voice/voice-playback-registry';
+import { resolveVoicePlaybackSource } from '@/lib/chat/voice/voice-playback-source';
 import { applyPlaybackRate } from '@/lib/chat/voice/voice-player-rate';
 import { shouldPausePlaybackForAppState } from '@/lib/chat/voice/voice-app-state-guard';
 import { formatVoiceSpeed, nextVoiceSpeed } from '@/lib/chat/voice/voice-speed';
@@ -26,6 +34,8 @@ interface Props {
   attachment: ChatAttachmentDto;
   /** Играет ли сейчас звонок — во время входящего плеер обязан замолчать (правило вынесено в экран). */
   interrupted?: boolean;
+  /** Позиция в переписке для автоперехода (VED-289) — см. `message-bubble.tsx`. */
+  order: number;
 }
 
 /**
@@ -33,7 +43,7 @@ interface Props {
  * нажатию «Слушать» (`player.replace`, не сразу при монтировании) — иначе
  * лента из десятка голосовых открыла бы столько же сетевых закачек разом.
  */
-export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
+export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   const { colors } = useTheme();
   const player = useAudioPlayer(null, { updateInterval: 200 });
   const status = useAudioPlayerStatus(player);
@@ -42,6 +52,17 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
   const [speed, setSpeed] = useState(getCachedVoiceSpeed());
   const finishedRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Async-загрузка источника (`loadAndPlay`) может дозреть уже после
+  // размонтирования (быстрый тап и уход с экрана) — без этого флага она бы
+  // всё равно вызвала `setError` на отмонтированном компоненте.
+  const mountedRef = useRef(true);
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
+  // Последняя версия `play` — для колбэка автоперехода, регистрируемого
+  // отдельным эффектом ниже, который не должен перерегистрироваться при
+  // каждом рендере (см. `registerVoiceOrder`).
+  const playRef = useRef<() => void>(() => {});
 
   const id = attachment.id;
   const url = attachment.url;
@@ -84,12 +105,17 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
 
   // Финал: перематываем в начало и отпускаем глобальный «микрофон одного плеера»,
   // иначе повторное нажатие «Слушать» продолжало бы играть с нулевой позиции,
-  // считаясь при этом всё ещё активным.
+  // считаясь при этом всё ещё активным. `markVoiceFinished` — автопереход
+  // (VED-289): помечает голосовое прослушанным и, если ниже по переписке
+  // есть непрослушанное, сам его запускает; `finishedRef` не даёт вызвать
+  // это дважды на дребезг статуса плеера — заход в автопереход ровно один
+  // раз на каждое реальное завершение.
   useEffect(() => {
     if (status.didJustFinish && !finishedRef.current) {
       finishedRef.current = true;
       releaseVoicePlayback(id);
       void player.seekTo(0).catch(() => undefined);
+      markVoiceFinished(id);
     } else if (!status.didJustFinish) {
       finishedRef.current = false;
     }
@@ -106,6 +132,17 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
     releaseVoicePlayback(id);
   }, [id]);
 
+  // Регистрация для автоперехода (VED-289): реестр хранит только ссылку на
+  // «текущую» `play` через `playRef` — сама функция `play` пересоздаётся
+  // каждый рендер (замыкает `loadRequested`/`speed`), а перерегистрировать
+  // её в реестре при каждом рендере незачем.
+  useEffect(() => {
+    // Без адреса играть всё равно нечего («Голосовое недоступно» ниже) —
+    // не подставляем автопереходу тупиковый номер в цепочке.
+    if (!url) return undefined;
+    return registerVoiceOrder(id, order, () => playRef.current());
+  }, [id, order, url]);
+
   if (!url) {
     return (
       <View style={[styles.wrap, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
@@ -120,26 +157,67 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
   const progress = progressFromTime(status.currentTime, totalSec);
   const waiting = loadRequested && !status.isLoaded && !error;
 
-  const play = () => {
-    setError(null);
-    if (!loadRequested) {
-      setLoadRequested(true);
-      try {
-        player.replace(url);
-      } catch {
-        setError('Не удалось открыть запись');
-        return;
-      }
-      clearLoadTimeout();
-      timeoutRef.current = setTimeout(() => setError('Не получилось загрузить запись'), LOAD_TIMEOUT_MS);
-    }
+  // Старт воспроизведения после того, как источник уже выставлен
+  // (`player.replace`) — общий хвост что для первого нажатия (после
+  // `loadAndPlay`), что для повторных (источник уже загружен).
+  const startPlayback = () => {
     requestVoicePlayback(id, () => player.pause());
-    // `replace()` выше может сбросить скорость к 1× вместе с источником
-    // (тот же повод, что `defaultPlaybackRate` у сайта, `chat-voice-player.tsx`) —
+    // `replace()` может сбросить скорость к 1× вместе с источником (тот же
+    // повод, что `defaultPlaybackRate` у сайта, `chat-voice-player.tsx`) —
     // выставляем ещё раз перед стартом, не полагаясь только на эффект.
     applyPlaybackRate(player, speed);
     player.play();
   };
+
+  // Первая загрузка: своя только что записанная/отправленная запись играет
+  // с диска, а не с сервера (VED-290) — источник решает
+  // `resolveVoicePlaybackSource`, здесь только проверка существования файла
+  // через `expo-file-system` (единственное несинхронное звено, сам выбор —
+  // в чистом `voice-playback-source.ts`). Чужие записи и свои после
+  // перезапуска приложения (локального файла уже нет в реестре процесса)
+  // идут с сервера, как раньше.
+  // `seekToSec` — только для первого тапа сразу по волне (`seek()` ниже):
+  // источник грузится асинхронно, и без передачи цели сюда перемотка,
+  // вызванная СРАЗУ следом в той же функции, ушла бы в `player` без
+  // источника вообще (гонка — `replace()` из этой функции ещё не выполнился
+  // к моменту, когда снаружи вызвали бы `seekTo`).
+  const loadAndPlay = async (seekToSec?: number) => {
+    const localUri = getLocalVoiceFile(url);
+    const { source, isLocal } = await resolveVoicePlaybackSource(url, localUri, (uri) =>
+      FileSystem.getInfoAsync(uri).then((info) => info.exists),
+    );
+    if (!mountedRef.current) return;
+    if (localUri && !isLocal) forgetLocalVoiceFile(url); // числился в реестре, но физически пропал
+    if (!source) {
+      setError('Не удалось открыть запись');
+      return;
+    }
+    try {
+      player.replace(source);
+    } catch {
+      setError('Не удалось открыть запись');
+      return;
+    }
+    clearLoadTimeout();
+    // Таймаут неудачи — только для сетевого источника: локальный файл не
+    // ждёт сеть, вечный спиннер ему не грозит по этой причине вовсе.
+    if (!isLocal) {
+      timeoutRef.current = setTimeout(() => setError('Не получилось загрузить запись'), LOAD_TIMEOUT_MS);
+    }
+    if (seekToSec !== undefined) void player.seekTo(seekToSec).catch(() => undefined);
+    startPlayback();
+  };
+
+  const play = () => {
+    setError(null);
+    if (!loadRequested) {
+      setLoadRequested(true);
+      void loadAndPlay();
+      return;
+    }
+    startPlayback();
+  };
+  playRef.current = play;
 
   const pause = () => {
     player.pause();
@@ -148,8 +226,14 @@ export function VoiceMessagePlayer({ attachment, interrupted }: Props) {
 
   const seek = (ratio: number) => {
     if (totalSec <= 0) return;
-    if (!loadRequested) play();
-    void player.seekTo(timeFromRatio(ratio, totalSec)).catch(() => undefined);
+    const target = timeFromRatio(ratio, totalSec);
+    if (!loadRequested) {
+      setError(null);
+      setLoadRequested(true);
+      void loadAndPlay(target);
+      return;
+    }
+    void player.seekTo(target).catch(() => undefined);
   };
 
   const cycleSpeed = () => {

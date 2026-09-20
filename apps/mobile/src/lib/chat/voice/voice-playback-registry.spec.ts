@@ -1,13 +1,18 @@
 import {
   getActiveVoicePlaybackId,
+  isVoiceHeard,
+  markVoiceFinished,
+  registerVoiceOrder,
   releaseVoicePlayback,
   requestVoicePlayback,
+  resetVoicePlaybackOrderForTests,
   stopActiveVoicePlayback,
 } from './voice-playback-registry';
 
 afterEach(() => {
   // Синглтон переживает между тестами — гасим вручную, чтобы не подтекало.
   stopActiveVoicePlayback();
+  resetVoicePlaybackOrderForTests();
 });
 
 describe('requestVoicePlayback', () => {
@@ -52,5 +57,52 @@ describe('stopActiveVoicePlayback', () => {
 
   it('без активного плеера — no-op', () => {
     expect(() => stopActiveVoicePlayback()).not.toThrow();
+  });
+});
+
+describe('markVoiceFinished + registerVoiceOrder — автопереход (VED-289)', () => {
+  it('доиграло первое — запускает следующее смонтированное', () => {
+    const playB = jest.fn();
+    registerVoiceOrder('a', 1, jest.fn());
+    registerVoiceOrder('b', 2, playB);
+    markVoiceFinished('a');
+    expect(playB).toHaveBeenCalledTimes(1);
+    expect(isVoiceHeard('a')).toBe(true);
+  });
+
+  it('доиграло последнее — тишина, никого не запускает', () => {
+    const playA = jest.fn();
+    registerVoiceOrder('a', 1, playA);
+    markVoiceFinished('a');
+    expect(playA).not.toHaveBeenCalled();
+  });
+
+  it('уже прослушанное соседями пропускается, назад список не идёт', () => {
+    const playA = jest.fn();
+    const playC = jest.fn();
+    registerVoiceOrder('a', 1, playA);
+    registerVoiceOrder('b', 2, jest.fn());
+    markVoiceFinished('b'); // «b» помечено прослушанным раньше — кандидатов после него пока нет
+    registerVoiceOrder('c', 3, playC);
+    markVoiceFinished('a'); // доиграло «a» — кандидат «b» пропускается как прослушанный, берётся «c»
+    expect(playC).toHaveBeenCalledTimes(1);
+    expect(playA).not.toHaveBeenCalled();
+  });
+
+  it('отписка при размонтировании убирает из реестра — автопереход его больше не находит', () => {
+    const playB = jest.fn();
+    registerVoiceOrder('a', 1, jest.fn());
+    const unregister = registerVoiceOrder('b', 2, playB);
+    unregister();
+    markVoiceFinished('a');
+    expect(playB).not.toHaveBeenCalled();
+  });
+
+  it('resetVoicePlaybackOrderForTests чистит heard-список между тестами', () => {
+    registerVoiceOrder('a', 1, jest.fn());
+    markVoiceFinished('a');
+    expect(isVoiceHeard('a')).toBe(true);
+    resetVoicePlaybackOrderForTests();
+    expect(isVoiceHeard('a')).toBe(false);
   });
 });

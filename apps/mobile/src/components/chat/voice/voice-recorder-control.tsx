@@ -15,6 +15,7 @@ import { toVoiceAttachmentInput } from '@/lib/chat/chat-composer-state';
 import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { canRecordVoice, shouldInterruptForIncomingCall } from '@/lib/chat/voice/voice-call-guard';
 import { shouldCancelRecordingForAppState } from '@/lib/chat/voice/voice-app-state-guard';
+import { registerLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
 import { describeVoiceUploadError } from '@/lib/chat/voice/voice-upload-error';
 import { buildVoiceUploadPart } from '@/lib/chat/voice/voice-upload-part';
 import { VOICE_RECORDING_OPTIONS } from '@/lib/chat/voice/voice-recording-options';
@@ -35,6 +36,22 @@ import { VoiceWaveformBars } from './voice-waveform-bars';
 
 /** Сколько показывать «Запись остановлена» по возврату из фона — коротко, не модально. */
 const BACKGROUND_NOTICE_MS = 3000;
+
+/**
+ * Регистрирует локальный файл только что отправленного голосового
+ * (VED-290) и физически удаляет с диска всё, что вытеснила политика кэша
+ * (`voice-local-file-cache.ts: planVoiceCacheEviction`). Побочные эффекты
+ * (размер файла, удаление) нарочно вынесены сюда, а не в чистый модуль
+ * реестра — там их нечем было бы тестировать без мока файловой системы.
+ */
+async function registerAndSweepLocalVoiceFile(url: string | undefined, uri: string): Promise<void> {
+  const info = await FileSystem.getInfoAsync(uri);
+  if (!info.exists) return;
+  const evicted = registerLocalVoiceFile(url, uri, info.size ?? 0);
+  await Promise.all(
+    evicted.map((entry) => FileSystem.deleteAsync(entry.localUri, { idempotent: true }).catch(() => undefined)),
+  );
+}
 
 interface Props {
   conversationId: string;
@@ -301,6 +318,14 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
       form.append('file', (await buildVoiceUploadPart(uri)) as unknown as Blob);
       const result = await chatApi.upload(conversationId, form);
       setState(() => reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'sent' }));
+      // Локальный файл рекордера — то же самое, что человек только что
+      // отправил, байт-в-байт. Оставляем его на диске (запись НЕ трогаем
+      // после успешной отправки, только зарегистрировали) и связываем с
+      // адресом вложения — свой плеер проиграет отсюда мгновенно, без
+      // похода на сервер (VED-290). Вытесненные политикой кэша старые файлы
+      // удаляем с диска здесь же: `voice-local-file-cache.ts` — чистый
+      // реестр без доступа к файловой системе специально ради тестируемости.
+      void registerAndSweepLocalVoiceFile(result.url, uri).catch(() => undefined);
       onSent(toVoiceAttachmentInput(result, durationSec, waveform));
     } catch (e) {
       // Причина — в консоль для разработчика (может быть текстом стороннего

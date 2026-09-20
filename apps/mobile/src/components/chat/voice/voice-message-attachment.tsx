@@ -10,12 +10,18 @@ import { VoiceMessagePlayer } from './voice-message-player';
  * вызывался бы для КАЖДОГО пузыря в ленте (текст, фото), а не только для
  * тех, где реально есть голосовое (feedback-001, минор п.6).
  */
-export function VoiceMessageAttachment({ attachment }: { attachment: ChatAttachmentDto }) {
+interface Props {
+  attachment: ChatAttachmentDto;
+  /** Позиция в переписке для автоперехода (VED-289) — см. `message-bubble.tsx`. */
+  order: number;
+}
+
+export function VoiceMessageAttachment({ attachment, order }: Props) {
   const calls = useChatCalls();
   const interrupted = calls ? shouldInterruptForIncomingCall(calls.state.phase) : false;
   return (
     <VoiceMessageErrorBoundary>
-      <VoiceMessagePlayer attachment={attachment} interrupted={interrupted} />
+      <VoiceMessagePlayer attachment={attachment} interrupted={interrupted} order={order} />
     </VoiceMessageErrorBoundary>
   );
 }

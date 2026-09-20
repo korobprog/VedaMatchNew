@@ -29,10 +29,17 @@ export function buildPendingMessage(input: {
     author: input.author,
     body: input.body,
     replyTo: input.replyTo ?? null,
-    // Вложение ещё не имеет id с сервера — подставляем индекс, только чтобы
-    // список отрисовался; после settle заменяется настоящим сообщением.
+    // Вложение ещё не имеет id с сервера — подставляем временный, только
+    // чтобы список отрисовался; после settle заменяется настоящим
+    // сообщением. Id обязан включать `seed` сообщения, а не только индекс:
+    // индекс сам по себе одинаков у ЛЮБЫХ двух черновиков с одним
+    // вложением («pending:att-0» у первого голосового и у второго,
+    // отправленного следом, пока оба ещё не settled) — от этого ломался
+    // реестр воспроизведения (`voice-playback-registry.ts` сверяет активный
+    // плеер по строке id), два голосовых с одинаковым id переставали
+    // корректно останавливать друг друга и звучали одновременно (VED-289).
     attachments: (input.attachments ?? []).map((attachment, index) => ({
-      id: `${PENDING_PREFIX}att-${index}`,
+      id: `${PENDING_PREFIX}${input.seed}-att-${index}`,
       kind: attachment.kind,
       url: attachment.url,
       previewUrl: attachment.url,

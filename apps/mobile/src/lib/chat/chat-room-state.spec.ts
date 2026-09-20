@@ -71,6 +71,16 @@ describe('черновик отправки', () => {
     expect(draft.attachments[0].durationSec).toBe(7);
     expect(draft.attachments[0].waveform).toEqual([1, 2, 3]);
   });
+
+  it('id вложения уникален между двумя черновиками — не только «att-0» (VED-289)', () => {
+    const voice = { kind: 'voice' as const, url: 'https://x/v', key: 'v', mimeType: 'audio/mp4', sizeBytes: 4000, durationSec: 3, waveform: [1] };
+    const first = buildPendingMessage({ seed: 's4', conversationId: 'c1', author, body: '', now: new Date(), attachments: [voice] });
+    const second = buildPendingMessage({ seed: 's5', conversationId: 'c1', author, body: '', now: new Date(), attachments: [voice] });
+    // Раньше оба получали id «pending:att-0» — плееры двух голосовых
+    // подряд считались одним и тем же треком в `voice-playback-registry.ts`
+    // и переставали корректно останавливать друг друга.
+    expect(first.attachments[0].id).not.toBe(second.attachments[0].id);
+  });
 });
 
 describe('applyRoomEvent', () => {
