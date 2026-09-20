@@ -37,6 +37,7 @@ describe("proxy", () => {
       "/vaishnava",
       "/travel/s/ABC234",
       "/app",
+      "/donate",
     ]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 
