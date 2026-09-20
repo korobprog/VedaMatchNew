@@ -8,8 +8,9 @@ import { Unbounded_500Medium } from '@expo-google-fonts/unbounded/500Medium';
 import { Unbounded_700Bold } from '@expo-google-fonts/unbounded/700Bold';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RootProviders, RootStack } from '@/components/root-shell';
+import { FONT_LOAD_TIMEOUT_MS, shouldWaitForFonts } from '@/lib/font-load-guard';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -41,11 +42,37 @@ export default function RootLayout() {
     IBMPlexMono_600SemiBold,
   });
 
+  // Белый экран навсегда (регрессия на Samsung A51, `font-load-guard.ts`):
+  // `useFonts` иногда не резолвится и не реджектится — раньше `return null`
+  // ниже не имел выхода из этого состояния вообще. Если за 3 с ни `loaded`,
+  // ни `error` не пришли — рендерим приложение как есть: недогруженный
+  // шрифт откатится на системный (`fonts.body`/`fonts.display` в
+  // `theme/tokens.ts` — обычные строковые имена начертаний, отсутствующее
+  // просто не применится), что лучше вечно пустого экрана.
+  const [timedOut, setTimedOut] = useState(false);
+
   useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync().catch(() => undefined);
+    if (loaded || error) return undefined;
+    const timer = setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.warn(`[fonts] useFonts не отдал ни loaded, ни error за ${FONT_LOAD_TIMEOUT_MS} мс — рендерим приложение без ожидания`);
+      setTimedOut(true);
+    }, FONT_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
   }, [loaded, error]);
 
-  if (!loaded && !error) return null;
+  useEffect(() => {
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[fonts] useFonts вернул ошибку — рендерим приложение с тем, что успело загрузиться', error);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (loaded || error || timedOut) SplashScreen.hideAsync().catch(() => undefined);
+  }, [loaded, error, timedOut]);
+
+  if (shouldWaitForFonts(loaded, Boolean(error), timedOut)) return null;
 
   return (
     <RootProviders>
