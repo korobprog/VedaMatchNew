@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { TimeZoneSync } from "@/components/time-zone-sync";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { SessionGuard } from "@/components/session-guard";
+import { VpnNotice } from "@/components/vpn-notice";
 import { ServiceCatalogProvider } from "@/components/service-catalog-provider";
 import { MusicPlayerProvider } from "@/components/music/player/player-provider";
 import { MiniPlayer } from "@/components/music/player/mini-player";
@@ -125,6 +126,11 @@ export default async function RootLayout({
         <script async src="/pwa-install-prompt.js" />
         <ServiceWorkerRegistrar />
         <SessionGuard />
+        {/* Предупреждение про VPN (VED-275) — в корневом layout, а не в
+            layout раздела: портал не работает с туннелем на любой странице, и
+            человек должен узнать причину там, где застрял. Гостю тоже: с
+            включённым VPN не открывается и лендинг. */}
+        <VpnNotice />
         <NextIntlClientProvider>
           <ServiceCatalogProvider services={services}>
             <ThemeProvider initialPreference={preference}>
