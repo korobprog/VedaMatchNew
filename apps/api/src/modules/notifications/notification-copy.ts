@@ -2,7 +2,9 @@ import type {
   NotificationCategory,
   NotificationEvent,
   NotificationEventName,
+  NotificationMark,
 } from '@vedamatch/shared';
+import { resolveColumnMark } from './notification-mark';
 
 export type { NotificationCategory };
 
@@ -150,6 +152,12 @@ export interface NotificationContent {
   url: string;
   tag: string;
   category: NotificationCategory;
+  /**
+   * Значок состояния (VED-272). Есть только там, где событие принесло
+   * название колонки: подписчик собирает пометку из факта, дочитывать её из
+   * таблиц «Работы» он не вправе. Остальные уведомления живут без значка.
+   */
+  mark?: NotificationMark | null;
 }
 
 /**
@@ -451,6 +459,7 @@ export function buildNotification(
         // новости, и второе не должно затирать первое.
         tag: `work-task:${event.taskKey}`,
         category: 'work',
+        mark: resolveColumnMark(event.columnName),
       };
     case 'work.task.commented':
       return {
@@ -459,6 +468,7 @@ export function buildNotification(
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-comment:${event.taskKey}`,
         category: 'work',
+        mark: resolveColumnMark(event.columnName),
       };
     case 'work.task.returned':
       return {
@@ -469,6 +479,7 @@ export function buildNotification(
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-returned:${event.taskKey}`,
         category: 'work',
+        mark: resolveColumnMark(event.columnName),
       };
     case 'work.task.status-changed':
       return {
@@ -480,6 +491,8 @@ export function buildNotification(
         // Поручение (`work-task:`) она при этом не трогает: там новость иная.
         tag: `work-status:${event.taskKey}`,
         category: 'work',
+        // Колонка, в которой карточка осталась после окна дозревания.
+        mark: resolveColumnMark(event.toColumnName),
       };
     case 'work.invite.received':
       return {

@@ -19,6 +19,7 @@ import type {
 import { fetchInbox, markInboxRead } from "@/lib/notifications-api";
 import { setUnreadCount } from "@/lib/notifications-unread";
 import { NotificationIcon } from "@/components/icons/notification-icons";
+import { NotificationMarkBadge } from "./notification-mark-badge";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -161,8 +162,12 @@ function NotificationCard({
     <Link
       href={item.url}
       onClick={onOpen}
+      /* Прочитанное отличается рамкой и приглушённым текстом заголовка, а не
+         общей прозрачностью: `opacity-70` гасила заодно и подписи — вторичный
+         текст падал до 2,9:1 вместо 4,5:1, а вместе с ним погас бы и значок
+         состояния, который просили сделать заметным (VED-272). */
       className={`glass flex gap-3 rounded-2xl border p-4 transition-colors hover:border-magenta/30 ${
-        muted ? "border-glass-brd/60 opacity-70" : "border-glass-brd"
+        muted ? "border-glass-brd/60" : "border-glass-brd"
       }`}
     >
       <span className="mt-0.5 shrink-0">
@@ -170,7 +175,11 @@ function NotificationCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-3">
-          <span className="truncate font-medium text-text-0">{item.title}</span>
+          <span
+            className={`truncate font-medium ${muted ? "text-text-1" : "text-text-0"}`}
+          >
+            {item.title}
+          </span>
           <span className="shrink-0 text-xs text-text-2">
             {formatWhen(item.createdAt)}
           </span>
@@ -178,9 +187,24 @@ function NotificationCard({
         {/* Ярлык «От администрации»: у остальных категорий отправитель ясен
             из самого текста («вам ответили», «заявка принята»), а
             объявление портала приходит ниоткуда, и понять, кто его прислал,
-            по значку в углу не выходило. */}
+            по значку в углу не выходило.
+
+            Золото осталось рамкой, а слова ведёт `--vm-text-1`. Раньше здесь
+            стояло `bg-gold/10 text-gold`, и на светлой теме подпись давала
+            2,92:1 при 11px — ниже AA. Замеры в браузере, поверх фактической
+            композитной подложки карточки (стекло поверх страницы), а не
+            поверх записанного `background-color`:
+
+              bg-gold/10 + text-gold  2,92:1 светлая · 13,09:1 тёмная — мимо AA
+              text-gold без заливки   3,66:1 светлая · 13,03:1 тёмная — мимо AA
+              рамка + text-text-1     9,39:1 светлая ·  9,26:1 тёмная — годится
+
+            Само золото не вытянуть: `--vm-gold` на светлой теме #B0770E даёт
+            на стекле 3,66:1, и любая заливка роняет его ещё ниже. Приём тот
+            же, что у значка состояния ниже (VED-272): подложку не красим,
+            цвет несёт рамка. */}
         {item.category === "announcements" && (
-          <span className="mt-1 inline-flex rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[11px] font-medium text-gold">
+          <span className="mt-1 inline-flex rounded-full border border-gold/60 px-2 py-0.5 text-[11px] font-medium text-text-1">
             От администрации
           </span>
         )}
@@ -189,7 +213,19 @@ function NotificationCard({
             телефоне. Без переноса страница становилась шире экрана, Chrome
             на Android расширял под неё видимую область, и плеер, прибитый к
             её краям, уезжал вправо и вниз за экран. */}
-        <span className="mt-1 block break-words text-sm text-text-1">{item.body}</span>
+        <span
+          className={`mt-1 block break-words text-sm ${muted ? "text-text-2" : "text-text-1"}`}
+        >
+          {item.body}
+        </span>
+        {/* Значок состояния (VED-272) — справа снизу, на свободном месте
+            карточки: одна и та же задача возвращается в ленту после каждой
+            смены статуса, и без пометки её приходится открывать заново. */}
+        {item.mark && (
+          <span className="mt-2 flex justify-end">
+            <NotificationMarkBadge mark={item.mark} />
+          </span>
+        )}
       </span>
     </Link>
   );

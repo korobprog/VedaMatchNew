@@ -18,6 +18,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         taskTitle: 'Починить ссылки',
         spaceName: 'VedaMatch',
         actorName: 'Санкаршан',
+        columnName: 'В работе',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
   });
@@ -32,6 +33,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         taskTitle: 'Починить ссылки',
         actorName: 'Санкаршан',
         excerpt: 'Посмотрите ещё раз',
+        columnName: 'Тестирование',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
   });
@@ -63,6 +65,87 @@ describe('buildNotification · уведомления «Работ» ведут 
         actorName: 'Санкаршан',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
+  });
+});
+
+/**
+ * VED-272: одна и та же задача возвращается в ленту после каждой смены
+ * статуса. Значок состояния избавляет от повторного открытия карточки ради
+ * вопроса «а что там теперь».
+ */
+describe('buildNotification · значок состояния у уведомлений «Работы»', () => {
+  it('переезд помечается колонкой, в которой карточка осталась', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.status-changed',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        fromColumnName: 'В работе',
+        toColumnName: 'Тестирование',
+        actorName: 'Санкаршан',
+      }),
+    ).toMatchObject({ mark: 'testing' });
+  });
+
+  it('возврат помечается как «На доработку»', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.returned',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        columnName: 'На доработку',
+        actorName: 'Санкаршан',
+      }),
+    ).toMatchObject({ mark: 'rework' });
+  });
+
+  it('комментарий помечается колонкой, в которой карточка лежит сейчас', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.commented',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        actorName: 'Санкаршан',
+        excerpt: 'Посмотрите ещё раз',
+        columnName: 'Выполнено',
+      }),
+    ).toMatchObject({ mark: 'done' });
+  });
+
+  it('поручение помечается колонкой, в которой карточка лежит', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.assigned',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        spaceName: 'VedaMatch',
+        actorName: 'Санкаршан',
+        columnName: 'В работе',
+      }),
+    ).toMatchObject({ mark: 'in_progress' });
+  });
+
+  it('незнакомая колонка оставляет уведомление без значка', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.commented',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        actorName: 'Санкаршан',
+        excerpt: 'Посмотрите ещё раз',
+        columnName: 'Бэклог',
+      }),
+    ).toMatchObject({ mark: null });
   });
 });
 
@@ -413,7 +496,12 @@ describe('nightsWord', () => {
 
 describe('travelDecisionTitle', () => {
   it('называет решение без рода: у пола может не быть значения', () => {
-    for (const status of ['accepted', 'declined', 'checked_in', 'completed'] as const) {
+    for (const status of [
+      'accepted',
+      'declined',
+      'checked_in',
+      'completed',
+    ] as const) {
       const title = travelDecisionTitle(status);
       expect(title).not.toMatch(/(ла|лся)\b/);
       expect(title.length).toBeGreaterThan(0);

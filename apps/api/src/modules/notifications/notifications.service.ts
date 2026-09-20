@@ -3,6 +3,7 @@ import type {
   NotificationCategory,
   NotificationInboxResponse,
   NotificationItemDto,
+  NotificationMark,
   NotificationPreferencesDto,
   NotificationDeviceStats,
   PushSubscriptionRequest,
@@ -10,6 +11,8 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeDeviceRequest } from './device-request';
+import { sortInboxRows } from './inbox-order';
+import { parseNotificationMark } from './notification-mark';
 
 const defaults: NotificationPreferencesDto = {
   enabled: true,
@@ -47,6 +50,8 @@ export interface InboxDraft {
   body: string;
   url: string;
   category: NotificationCategory;
+  /** Значок состояния (VED-272); `null`/пусто — уведомление без значка. */
+  mark?: NotificationMark | null;
 }
 
 export interface StoredSubscription {
@@ -241,12 +246,12 @@ export class NotificationsService {
     await this.purge(userId);
     const rows = await this.prisma.notificationItem.findMany({
       where: { userId },
-      // Непрочитанное первым, внутри групп — свежее сверху: человек приходит
-      // за новым, а прочитанное держим под рукой на случай «а что там было».
-      orderBy: [
-        { readAt: { sort: 'asc', nulls: 'first' } },
-        { createdAt: 'desc' },
-      ],
+      // Выборка — по индексу `[userId, createdAt]`, свежее сверху. Группы
+      // «непрочитанное впереди» расставляет `sortInboxRows()`: одним `orderBy`
+      // это не выразить — «сначала непрочитанное» сортировка по выражению
+      // (`readAt IS NULL`), а не по колонке. Чем прежний `readAt asc` ломал
+      // порядок прочитанного — VED-153, см. `inbox-order.ts`.
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         title: true,
@@ -255,9 +260,10 @@ export class NotificationsService {
         category: true,
         createdAt: true,
         readAt: true,
+        mark: true,
       },
     });
-    const items: NotificationItemDto[] = rows.map((row) => ({
+    const items: NotificationItemDto[] = sortInboxRows(rows).map((row) => ({
       id: row.id,
       title: row.title,
       body: row.body,
@@ -265,6 +271,9 @@ export class NotificationsService {
       category: row.category as NotificationCategory,
       createdAt: row.createdAt.toISOString(),
       readAt: row.readAt?.toISOString() ?? null,
+      // Через parse, а не as: в колонке строка, и запись, сделанная сборкой с
+      // другим набором значков, не должна утекать клиенту неизвестным кодом.
+      mark: parseNotificationMark(row.mark),
     }));
     return {
       items,

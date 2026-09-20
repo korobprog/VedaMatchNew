@@ -1,18 +1,27 @@
 import sharp from "sharp";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
+import { ogFooterBuffer } from "@/lib/motivation-og-brand";
 import {
   OG_IMAGE_TYPE,
   encodeWithinLimit,
+  needsBrandFooter,
   ogImageSource,
+  ogPreviewLayout,
 } from "@/lib/motivation-og-image";
 
 export const runtime = "nodejs";
 
 /**
- * Превью афоризма для мессенджеров (VED-201) — лёгкий JPEG вместо
- * пятимегабайтного PNG сторис. Почему это нужно, см. motivation-og-image.ts.
+ * Превью ссылки для мессенджеров (VED-201) — лёгкий JPEG вместо
+ * пятимегабайтного PNG сторис. Почему это нужно и как считается кадр, см.
+ * `motivation-og-image.ts`.
  *
- * Адрес публичный: бот Telegram, WhatsApp или ВКонтакте приходит без
+ * Кадр собирается из двух частей: сама картинка целиком, без обрезки, и
+ * полоса с подписью бренда снизу. Раньше здесь стоял `fit: 'cover'` под
+ * жёсткие 9:16, и у открытки, принесённой готовым файлом, срезало бока
+ * вместе с надписью — «открытки отображаются урезанными» в карточке.
+ *
+ * Адрес публичный: бот Telegram, WhatsApp, Max или ВКонтакте приходит без
  * cookie, а префикс `/m/` открыт гостю в proxy.ts.
  */
 export async function GET(
@@ -30,13 +39,52 @@ export async function GET(
 
   let bytes: Uint8Array;
   try {
-    ({ bytes } = await encodeWithinLimit(({ width, height, quality }) =>
-      sharp(original)
-        .rotate()
-        .resize(width, height, { fit: "cover", position: "attention" })
-        // У JPEG нет прозрачности: без подложки прозрачные края стали бы чёрными
-        // пятнами непредсказуемой формы — берём фон сторис.
-        .flatten({ background: "#0A0614" })
+    // `rotate()` до замера: у кадра с телефона ширина и высота в метаданных
+    // записаны до поворота по EXIF, и раскладка вышла бы боком.
+    const upright = await sharp(original).rotate().toBuffer();
+    const meta = await sharp(upright).metadata();
+    if (!meta.width || !meta.height) throw new Error("no dimensions");
+    // Полоса — только там, где нашей подписи на картинке ещё нет: у
+    // сторис-кадра рилса её уже нарисовал API.
+    const withFooter = needsBrandFooter(post!);
+
+    ({ bytes } = await encodeWithinLimit(async ({ scale, quality }) => {
+      const layout = ogPreviewLayout(
+        { width: meta.width!, height: meta.height! },
+        { scale, footer: withFooter },
+      );
+      const [picture, strip] = await Promise.all([
+        sharp(upright)
+          // `inside` вместо `cover`: картинка вписывается целиком. Размеры
+          // кадра посчитаны из её же пропорций, так что полей не остаётся.
+          .resize(layout.picture.width, layout.picture.height, {
+            fit: "inside",
+          })
+          .toBuffer(),
+        withFooter
+          ? sharp(ogFooterBuffer())
+              .resize(layout.footer.width, layout.footer.height, {
+                fit: "fill",
+              })
+              .toBuffer()
+          : null,
+      ]);
+      return sharp({
+        create: {
+          width: layout.width,
+          height: layout.height,
+          channels: 3,
+          // Фон сторис: у JPEG нет прозрачности, и без подложки прозрачные
+          // края стали бы чёрными пятнами непредсказуемой формы.
+          background: "#0A0614",
+        },
+      })
+        .composite([
+          { input: picture, left: layout.picture.left, top: layout.picture.top },
+          ...(strip
+            ? [{ input: strip, left: layout.footer.left, top: layout.footer.top }]
+            : []),
+        ])
         // Базовый (не прогрессивный) JPEG: так его разбирают все боты.
         // `mozjpeg: true` здесь не годится — он включает прогрессивную
         // развёртку, поэтому берём из его набора только сжатие.
@@ -46,8 +94,8 @@ export async function GET(
           trellisQuantisation: true,
           overshootDeringing: true,
         })
-        .toBuffer(),
-    ));
+        .toBuffer();
+    }));
   } catch {
     return new Response("Unable to render preview", { status: 502 });
   }
