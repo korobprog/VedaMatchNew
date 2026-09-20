@@ -33,6 +33,11 @@ export function Footer() {
             <Link href="/support" className="hover:text-text-0 transition-colors">
               {t("support")}
             </Link>
+            {/* Раздел «Поддержать» открыт гостю (publicPages в proxy.ts):
+                жертвуют и те, кто ещё не завёл аккаунт. */}
+            <Link href="/donate" className="hover:text-text-0 transition-colors">
+              {t("donate")}
+            </Link>
             <Link href="/team" className="hover:text-text-0 transition-colors">
               {t("team")}
             </Link>

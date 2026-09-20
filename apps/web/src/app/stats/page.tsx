@@ -148,7 +148,17 @@ export default async function StatsPage() {
             Хостинг, домен и генерация иллюстраций стоят денег. Рекламы здесь
             нет и не будет.
           </p>
-          <DonateButton donation={donation} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <DonateButton donation={donation} />
+            {/* Ссылка рядом с кнопкой, а не вместо неё: шторка отвечает «куда
+                перевести», страница — «за что и на что уходит» (VED-11, VED-62). */}
+            <Link
+              href="/donate"
+              className="text-sm font-medium text-cyan underline decoration-cyan/40 underline-offset-2"
+            >
+              Реквизиты и на что уходят деньги
+            </Link>
+          </div>
         </section>
       </main>
     </div>

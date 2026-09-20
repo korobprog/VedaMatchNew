@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Home,
+  HeartHandshake,
   LifeBuoy,
   Bell,
   Gift,
@@ -409,6 +410,17 @@ export function Header({ user }: { user: UserProfile }) {
                   >
                     <LifeBuoy size={20} />
                     <span className="text-sm">{tCommon("support")}</span>
+                  </Link>
+                  {/* «Поддержать» рядом с «Поддержкой» (VED-11, VED-12,
+                      VED-62): до этого просьба о помощи жила только кнопкой
+                      внутри «Вдохновения» и статистики, и найти её было нечем. */}
+                  <Link
+                    href="/donate"
+                    onClick={closeDrawer}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-gold hover:bg-glass transition-colors"
+                  >
+                    <HeartHandshake size={20} />
+                    <span className="text-sm">{t("donate")}</span>
                   </Link>
                   <Link
                     href="/updates"

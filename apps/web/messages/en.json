@@ -43,6 +43,7 @@
     "selfIdentification": "Self-identification",
     "notifications": "Notifications",
     "rewards": "Points & invites",
+    "donate": "Support us",
     "whatsNew": "What's new",
     "assistant": "Assistant"
   },
@@ -147,6 +148,7 @@
     },
     "footer": {
       "support": "Support",
+      "donate": "Support us",
       "team": "Team",
       "whatsNew": "What's new",
       "privacy": "Privacy policy",
