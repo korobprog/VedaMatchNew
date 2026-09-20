@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildExpenseBreakdown,
   buildTransferPurpose,
+  formatRub,
   isBankFilled,
   isRequisiteFilled,
   MAX_TRANSFER_PURPOSE,
@@ -8,8 +10,10 @@ import {
 } from "./donate";
 import {
   DONATE_BANKS,
+  DONATE_EXPENSES,
   DONATE_PURPOSES,
   type DonateBank,
+  type DonateExpense,
 } from "./donate-content";
 
 describe("buildTransferPurpose", () => {
@@ -113,5 +117,73 @@ describe("реквизиты банков", () => {
   it("сегодня в справочнике нет ни одного заполненного банка", () => {
     expect(splitBanks(DONATE_BANKS).filled).toEqual([]);
     expect(splitBanks(DONATE_BANKS).pending).toHaveLength(DONATE_BANKS.length);
+  });
+});
+
+describe("buildExpenseBreakdown", () => {
+  const expenses: DonateExpense[] = [
+    { id: "a", title: "Серверы", amountRub: 6000, note: "" },
+    { id: "b", title: "Хранилище", amountRub: 2000, note: "" },
+    { id: "c", title: "Домены", amountRub: null, note: "" },
+  ];
+
+  it("считает сумму, доли и число статей без суммы", () => {
+    const result = buildExpenseBreakdown(expenses);
+
+    expect(result.total).toBe(8000);
+    expect(result.hasAmounts).toBe(true);
+    expect(result.unknownCount).toBe(1);
+    expect(result.rows.map((row) => row.share)).toEqual([75, 25, null]);
+  });
+
+  it("сохраняет порядок и поля статей", () => {
+    const result = buildExpenseBreakdown(expenses);
+
+    expect(result.rows.map((row) => row.id)).toEqual(["a", "b", "c"]);
+    expect(result.rows[0]).toMatchObject({ title: "Серверы", amountRub: 6000 });
+  });
+
+  it("округляет доли до десятой процента", () => {
+    const result = buildExpenseBreakdown([
+      { id: "a", title: "A", amountRub: 1, note: "" },
+      { id: "b", title: "B", amountRub: 2, note: "" },
+    ]);
+
+    expect(result.rows.map((row) => row.share)).toEqual([33.3, 66.7]);
+  });
+
+  it("не делит на ноль и не выдумывает доли, когда сумм нет", () => {
+    const result = buildExpenseBreakdown([
+      { id: "a", title: "A", amountRub: null, note: "" },
+      { id: "b", title: "B", amountRub: 0, note: "" },
+    ]);
+
+    expect(result).toMatchObject({ total: 0, hasAmounts: false, unknownCount: 2 });
+    expect(result.rows.every((row) => row.share === null)).toBe(true);
+  });
+
+  it("пустой список не роняет расчёт", () => {
+    expect(buildExpenseBreakdown([])).toEqual({
+      rows: [],
+      total: 0,
+      unknownCount: 0,
+      hasAmounts: false,
+    });
+  });
+
+  // Суммы в справочнике ещё не заполнены — блок обязан это показывать честно.
+  it("сегодня смета портала без сумм", () => {
+    const result = buildExpenseBreakdown(DONATE_EXPENSES);
+
+    expect(result.hasAmounts).toBe(false);
+    expect(result.unknownCount).toBe(DONATE_EXPENSES.length);
+  });
+});
+
+describe("formatRub", () => {
+  it("пишет рубли по-русски и без копеек", () => {
+    // Разделитель разрядов у Intl — узкий неразрывный пробел.
+    expect(formatRub(12400).replace(/\s/g, " ")).toBe("12 400 ₽");
+    expect(formatRub(999.6).replace(/\s/g, " ")).toBe("1 000 ₽");
   });
 });

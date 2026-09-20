@@ -6,6 +6,7 @@ import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { BankRequisites } from "@/components/donate/bank-requisites";
 import { CopyField } from "@/components/donate/copy-field";
+import { ExpenseBreakdown } from "@/components/donate/expense-breakdown";
 import { TransferPurposeForm } from "@/components/donate/transfer-purpose";
 import { getDonationSettings, getProfile } from "@/lib/api";
 import { DONATE_PURPOSE_EXPLAINER } from "@/lib/donate-content";
@@ -13,17 +14,19 @@ import { DONATE_PURPOSE_EXPLAINER } from "@/lib/donate-content";
 export const metadata: Metadata = {
   title: "Поддержать",
   description:
-    "Портал VedaMatch живёт на пожертвования. Здесь — как подписать назначение перевода, чтобы мы знали, за что он пришёл.",
+    "Портал VedaMatch живёт на пожертвования. Здесь — куда перевести, как подписать назначение платежа и на что уходят деньги.",
 };
 
 /**
- * Раздел «Поддержать» (VED-11, VED-12).
+ * Раздел «Поддержать» (VED-11, VED-12, VED-62).
  *
  * До этой страницы просьба о помощи жила одной кнопкой со шторкой реквизитов
  * (`components/donate-sheet.tsx`): человек видел номер карты и ничего больше —
- * ни за что перевод, ни куда уходят деньги. Здесь появляется главное, чего там
- * не было: просьба подписать назначение платежа (VED-11) и реквизиты, включая
- * банковские (VED-12). Статьи расходов приедут следующей карточкой.
+ * ни за что перевод, ни куда уходят деньги. Здесь всё это на одном экране:
+ *
+ * - назначение платежа, которое просим подписать (VED-11);
+ * - быстрый перевод из админки и банковские реквизиты (VED-12);
+ * - статьи расходов за месяц (VED-62).
  *
  * Открыта и гостю: просьба о помощи за входом — это просьба к тем, кто уже
  * внутри, а не ко всем. Шторка реквизитов остаётся: она нужна там, где человек
@@ -47,7 +50,8 @@ export default async function DonatePage() {
         </h1>
         <p className="mb-8 text-text-1">
           Портал держится на пожертвованиях: подписки не покрывают счета за
-          серверы, хранилище и генерацию картинок. Любая сумма помогает.
+          серверы, хранилище и генерацию картинок. Любая сумма помогает — и мы
+          показываем, на что она уходит.
         </p>
 
         {/* VED-11: главная просьба страницы — подписанное назначение. Она идёт
@@ -122,6 +126,21 @@ export default async function DonatePage() {
             из-за рубежа. Не забудьте назначение платежа из блока выше.
           </p>
           <BankRequisites />
+        </section>
+
+        {/* VED-62: смета. */}
+        <section className="mb-10" aria-labelledby="expenses">
+          <h2
+            id="expenses"
+            className="mb-2 font-display text-lg font-semibold text-text-0"
+          >
+            На что уходят деньги
+          </h2>
+          <p className="mb-4 text-sm text-text-1">
+            Это не благотворительный фонд с отчётом аудитора, но порядок трат мы
+            показываем честно: вот статьи, за которые портал платит каждый месяц.
+          </p>
+          <ExpenseBreakdown />
         </section>
 
         <p className="text-sm text-text-1">
