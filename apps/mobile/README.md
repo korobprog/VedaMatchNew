@@ -9,12 +9,15 @@
 Контур и канал задаются переменными окружения при сборке и зашиваются в
 `extra.variant` (см. `src/config/variant.ts`).
 
-| `APP_CONTOUR` | `APP_CHANNEL` | API | Где раздаётся | Самообновление |
-|---|---|---|---|---|
-| `ru` | `site` | api.vedamatch.ru | файл с vedamatch.ru | да |
-| `ru` | `store` | api.vedamatch.ru | RuStore | нет |
-| `com` | `site` | api.vedamatch.com | файл с vedamatch.com | да |
-| `com` | `store` | api.vedamatch.com | Google Play | нет |
+| `APP_CONTOUR` | `APP_CHANNEL` | API | Где раздаётся |
+|---|---|---|---|
+| `ru` | `site` | api.vedamatch.ru | файл с vedamatch.ru |
+| `ru` | `store` | api.vedamatch.ru | RuStore |
+| `com` | `site` | api.vedamatch.com | файл с vedamatch.com |
+| `com` | `store` | api.vedamatch.com | Google Play |
+
+Контур решает, куда ходить; канал — что приложению вообще можно
+(«Возможности по каналу» ниже).
 
 Для разработки против локального API: `APP_API_ORIGIN=http://10.0.2.2:4000`
 (адрес машины разработчика из эмулятора Android).
@@ -32,6 +35,78 @@
 собрать с `APP_DOWNLOAD_BASE_URL=<S3_PUBLIC_URL>/test` — тогда приложение
 смотрит в `<S3_PUBLIC_URL>/test/mobile/android/ru-site/latest.json`, куда
 кладутся тестовый манифест и APK с большим `versionCode`.
+
+## Возможности по каналу (VED-207)
+
+Сборка с сайта и сборка витрины — два разных продукта из одной кодовой базы.
+Разница описана один раз, таблицей в
+[`src/config/capabilities.ts`](src/config/capabilities.ts), и только она —
+источник правды. Разбросанные по экранам `if (channel === 'site')` запрещены:
+их невозможно пересмотреть целиком, когда ревью витрины попросит убрать ещё
+одну функцию.
+
+| Возможность | `site` | `store` | Что это в коде |
+|---|---|---|---|
+| `selfUpdate` | да | нет | Секция «Проверить обновление» и установка файла системным установщиком (VED-176). На `store` нет ни секции, ни разрешения `REQUEST_INSTALL_PACKAGES`, ни самого кода в бандле |
+| `inAppPayments` | да | нет | Экран тарифа, кнопка оплаты, цены (VED-209). Пока не реализовано нигде — возможность заведена заранее, чтобы новый экран сразу встал под гейт |
+| `paidWebLinks` | да | нет | Ссылки и призывы, ведущие в платные разделы сайта |
+| `apkDownloadPrompt` | да | нет | Предложение скачать файл приложения с сайта |
+| `siteServiceLinks` | да | да | Открытие бесплатных разделов сайта в системном браузере: каталог «Сервисы», заглушки вкладок, общины |
+
+Почему `store` беднее: правила витрин (`docs/mobile-app-store-links.md`)
+запрещают вести пользователя платить мимо встроенных покупок и ставить
+приложение мимо магазина. Ссылки на бесплатные разделы не запрещены — поэтому
+`siteServiceLinks` есть у обоих каналов. Контур (`ru`/`com`) на возможности не
+влияет: у RuStore и Google Play различается платёжный механизм, а не то, что
+приложению разрешено показывать.
+
+### Как добавить возможность
+
+1. Новое поле в `AppCapabilities` и обе строки таблицы `BY_CHANNEL` целиком
+   (`src/config/capabilities.ts`); человеческое имя — в `CAPABILITY_LABELS`
+   (`src/config/store-safety.ts`, в бандл не попадает).
+2. Ожидания на все четыре сборки — в `src/config/capabilities.spec.ts`.
+3. В экране читать `appCapabilities()` (`src/config/app-variant.ts`), в
+   `app.config.ts` — `capabilitiesFor(variant)`. Сравнивать канал напрямую
+   нельзя: это ловит проверка «решение принимается только в таблице».
+4. Если возможность тянет за собой целый модуль, добавить подмену в
+   `channel-shims/resolve.cjs` и заглушку рядом — тогда код не попадёт и в
+   бандл витрины, а не только скроется с экрана.
+5. Если у неё есть свои слова («тариф», цена, «скачать»), добавить правило в
+   `STORE_FORBIDDEN_PATTERNS` (`src/config/store-safety.ts`).
+
+### Что проверяется машиной, а что руками
+
+Проверки живут в `src/config/store-build.spec.ts` и гоняются обычным
+`pnpm --filter @vedamatch/mobile test`:
+
+- разрешения Android сборки `store` не содержат запретных (сейчас —
+  `REQUEST_INSTALL_PACKAGES`), а сборка `site` содержит: проверка различает
+  каналы, а не молчит всегда;
+- наборы плагинов у каналов совпадают — нативных модулей «только для сайта»
+  пока нет;
+- ни в одном модуле, достижимом из точки входа сборки `store`, нет цен,
+  призывов оплатить, слова «тариф», ссылок на платные разделы и строк
+  установщика. Достижимость считается обходом импортов с той же подменой
+  модулей, что делает Metro (`src/config/module-graph.ts`) — настоящий бандл
+  в юнит-тесте не собирается;
+- ветвление по каналу вне таблицы возможностей (`src/config/channel-guard.ts`).
+
+Разово, на настоящем бандле (в CI не входит — минуты и сотни мегабайт):
+
+```bash
+APP_CHANNEL=store npx expo export --platform android --output-dir /tmp/dist-store
+grep -c -a -F 'latest.json' /tmp/dist-store/_expo/static/js/android/*.hbc   # ожидаем 0
+```
+
+Русские строки так не ищутся: Hermes хранит не-ASCII в UTF-16, `grep -F` их не
+найдёт — проверяйте ASCII-признаки (`latest.json`, `INSTALL_PACKAGE`,
+`package-archive`, `mobile/android/`).
+
+Руками остаётся то, что машина не прочтёт (это VED-216): смысл текстов и
+картинок, посты бота и канала новостей, названия и адреса сервисов, которые
+приходят с сервера (`GET /services` отдаёт их из админки — в коде их нет),
+описание приложения в консоли витрины.
 
 ## Вход
 
@@ -324,6 +399,7 @@ node apps/mobile/e2e-web/telegram-frame.e2e.mjs
 ```bash
 pnpm --filter @vedamatch/mobile lint      # tsc --noEmit
 pnpm --filter @vedamatch/mobile test      # jest-expo, *.spec.ts рядом с кодом
+pnpm --filter @vedamatch/mobile test:channel-shims   # node --test, подмена модулей канала
 pnpm --filter @vedamatch/mobile start     # Metro для dev client
 pnpm --filter @vedamatch/mobile prebuild  # сгенерировать android/ (в git не хранится)
 ```

@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { appVariant } from '@/config/app-variant';
+import { appCapabilities, appVariant } from '@/config/app-variant';
+import { capabilitiesFor } from '@/config/capabilities';
 import {
   cleanUpInstalledApks,
   deleteDownloadedApk,
@@ -48,7 +49,10 @@ let autoCheckDoneThisLaunch = false;
 
 export function useSelfUpdate() {
   const variant = appVariant();
-  const { selfUpdate } = variant;
+  // Возможность канала (VED-207), а не поле варианта: таблица `capabilities.ts`
+  // — единственное место, где написано, каким сборкам самообновление вообще
+  // положено.
+  const { selfUpdate } = appCapabilities();
   const [checkState, setCheckState] = useState<CheckState>({ kind: 'idle' });
   const [downloadState, setDownloadState] = useState<DownloadState>(IDLE_DOWNLOAD_STATE);
   const handleRef = useRef<DownloadHandle | null>(null);
@@ -71,7 +75,7 @@ export function useSelfUpdate() {
    */
   const runCheck = useCallback(async (manual: boolean) => {
     const current = variantRef.current;
-    if (!current.selfUpdate) {
+    if (!capabilitiesFor(current).selfUpdate) {
       if (manual) setCheckState({ kind: 'checked', decision: { kind: 'hidden' } });
       return;
     }
@@ -94,7 +98,7 @@ export function useSelfUpdate() {
     }
     const dismissedUntilVersionCode = manual ? null : await readDismissedUntilVersionCode();
     const decision = decideUpdate({
-      selfUpdate: current.selfUpdate,
+      selfUpdate: capabilitiesFor(current).selfUpdate,
       currentVersionCode,
       manifest: result.manifest,
       dismissedUntilVersionCode,
