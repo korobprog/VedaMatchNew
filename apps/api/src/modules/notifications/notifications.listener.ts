@@ -125,6 +125,19 @@ export class NotificationsListener {
   }
 
   /**
+   * Групповой звонок в беседе. Идёт обычным конвейером — тем же, что и
+   * сообщение: в `deliver()` нет ветки на это имя, значит нативные
+   * устройства получат обычный пуш через `sendToUsers`, а не data-only
+   * вызов. Это не упущение, а условие задачи: нативный экран вызова
+   * поднимает только `chat.call-incoming`, и поднимать его на комнату
+   * нельзя (см. докстрингу события в `@vedamatch/shared`).
+   */
+  @OnEvent(notificationEventNames.portalChatGroupCallStarted)
+  onPortalChatGroupCallStarted(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  /**
    * «Звонок снят» — вне обычного конвейера уведомлений: нет строки в
    * колокольчике, нет веб-пуша, только data-пуш нативным устройствам,
    * гасящий рингтон. См. `CHAT_CALL_ENDED_EVENT` в `@vedamatch/shared`.

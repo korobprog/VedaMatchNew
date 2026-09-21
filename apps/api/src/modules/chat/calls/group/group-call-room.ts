@@ -163,6 +163,36 @@ export function peersOf(
 }
 
 /**
+ * Где сейчас идёт разговор — для отметки «идёт звонок» в списке бесед.
+ *
+ * Считает по ЖИВЫМ участникам, а не по статусу строки: комната остаётся
+ * `live` в базе до ближайшей уборки, и без этой проверки список показывал бы
+ * звонок ещё три четверти минуты после того, как все замолчали. Нажавший на
+ * такую отметку попадает в пустую комнату и решает, что портал врёт, — а он
+ * и врёт.
+ *
+ * Возвращает `conversationId → callId`. Одна живая комната на беседу держится
+ * частичным уникальным индексом; если их всё же оказалось две (индекс снесли
+ * руками), побеждает последняя в списке — тот же порядок, в каком сервис
+ * берёт комнату через `orderBy: { createdAt: 'desc' }`.
+ */
+export function liveCallByConversation(
+  rooms: readonly {
+    id: string;
+    conversationId: string;
+    participants: readonly RoomParticipant[];
+  }[],
+  now: number,
+): Map<string, string> {
+  const byConversation = new Map<string, string>();
+  for (const room of rooms) {
+    if (liveParticipants(room.participants, now).length === 0) continue;
+    byConversation.set(room.conversationId, room.id);
+  }
+  return byConversation;
+}
+
+/**
  * Сколько соединений держит вся комната. Не украшение: именно это число
  * растёт квадратично и упирает mesh в потолок — 4 человека это 6 связей и
  * по 3 на телефон, 5 было бы уже 10 и по 4.

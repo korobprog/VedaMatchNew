@@ -32,6 +32,11 @@ import { SignalSendQueue } from '@/lib/calls/call-signal-send-queue';
 import { GroupCallBanner } from '@/components/calls/group-call-banner';
 import { createGroupCallsApi } from './group-call-client';
 import { GroupCallsContext, type GroupCallsApi } from './group-call-context';
+import {
+  GROUP_CALL_HEARTBEAT_MS,
+  HEARTBEAT_LOST_MESSAGE,
+  heartbeatLost,
+} from './group-call-heartbeat';
 import { planPeers } from './group-call-peers';
 import {
   IDLE_GROUP_CALL_STATE,
@@ -74,8 +79,6 @@ import {
  * `call-provider.tsx`.
  */
 
-/** Как часто подтверждаем присутствие (сервер ждёт три таких срока). */
-const HEARTBEAT_MS = 15_000;
 /** Как часто опрашиваем уровни звука для подписи «говорит». */
 const SPEAKING_POLL_MS = 400;
 
@@ -102,6 +105,8 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
   const sendQueue = useRef(new SignalSendQueue());
   const seqState = useRef<SignalSeqState>(INITIAL_SIGNAL_SEQ_STATE);
   const speaking = useRef<SpeakingState>(EMPTY_SPEAKING_STATE);
+  /** Подряд не дошедшие подтверждения присутствия — см. `group-call-heartbeat.ts`. */
+  const heartbeatFailures = useRef(0);
 
   // ---------- сигналинг ----------
 
@@ -205,6 +210,7 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     localStream.current = null;
     speaking.current = EMPTY_SPEAKING_STATE;
     seqState.current = INITIAL_SIGNAL_SEQ_STATE;
+    heartbeatFailures.current = 0;
     if (Platform.OS !== 'web') InCallManager.stop();
   }, [closeAllLinks]);
 
@@ -223,6 +229,7 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
         localStream.current = media;
         if (Platform.OS !== 'web') InCallManager.start({ media: 'audio' });
       }
+      heartbeatFailures.current = 0;
       dispatch({ type: 'joined', call, at: Date.now() });
       reconcilePeers(call);
       router.push(`/group-call/${call.id}`);
@@ -230,19 +237,35 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     [callsApi, reconcilePeers],
   );
 
+  /**
+   * Вход не удался. Если комната нас уже приняла (микрофон не дали уже
+   * ПОСЛЕ ответа сервера), надо выйти явно: иначе мы висим в составе у
+   * остальных до истечения TTL — беззвучный и бесполезный, но занимающий
+   * одно из четырёх мест. Перенесено из веб-части (VED-293, этап 2).
+   */
+  const failEntry = useCallback(
+    (error: unknown, call: ChatGroupCallDto | null) => {
+      teardown();
+      dispatch({ type: 'failed', error: describeMediaError(error, Platform.OS) });
+      if (call) void groupApi.leave(call.id).catch(() => undefined);
+    },
+    [groupApi, teardown],
+  );
+
   const startOrJoin = useCallback(
     async (conversationId: string) => {
       if (stateRef.current.phase === 'active' || stateRef.current.phase === 'joining')
         return;
       dispatch({ type: 'joining' });
+      let call: ChatGroupCallDto | null = null;
       try {
-        await enterRoom(await groupApi.start(conversationId));
+        call = await groupApi.start(conversationId);
+        await enterRoom(call);
       } catch (error) {
-        teardown();
-        dispatch({ type: 'failed', error: describeMediaError(error, Platform.OS) });
+        failEntry(error, call);
       }
     },
-    [enterRoom, groupApi, teardown],
+    [enterRoom, failEntry, groupApi],
   );
 
   const join = useCallback(
@@ -250,14 +273,15 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       if (stateRef.current.phase === 'active' || stateRef.current.phase === 'joining')
         return;
       dispatch({ type: 'joining' });
+      let call: ChatGroupCallDto | null = null;
       try {
-        await enterRoom(await groupApi.join(callId));
+        call = await groupApi.join(callId);
+        await enterRoom(call);
       } catch (error) {
-        teardown();
-        dispatch({ type: 'failed', error: describeMediaError(error, Platform.OS) });
+        failEntry(error, call);
       }
     },
-    [enterRoom, groupApi, teardown],
+    [enterRoom, failEntry, groupApi],
   );
 
   const leave = useCallback(async () => {
@@ -332,6 +356,9 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       void groupApi
         .heartbeat(call.id)
         .then((fresh) => {
+          // Поток ожил — счётчик осечек начинается заново: связь с порталом
+          // есть, и прошлые пропуски больше ни о чём не говорят.
+          heartbeatFailures.current = 0;
           dispatch({ type: 'stream', event: { type: 'group-call.updated', call: fresh }, selfId: userId });
           reconcilePeers(fresh);
         })
@@ -349,13 +376,22 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       void groupApi
         .heartbeat(callId)
         .then((fresh) => {
+          heartbeatFailures.current = 0;
           dispatch({ type: 'stream', event: { type: 'group-call.updated', call: fresh }, selfId: userId });
           reconcilePeers(fresh);
         })
-        .catch(() => undefined);
-    }, HEARTBEAT_MS);
+        .catch(() => {
+          heartbeatFailures.current += 1;
+          // Подтверждения не доходят дольше, чем сервер готов ждать: нас
+          // там уже нет, и показывать «разговор» с бегущим таймером —
+          // врать. Одна-две осечки сюда не попадают, их сервер переживает.
+          if (!heartbeatLost(heartbeatFailures.current)) return;
+          teardown();
+          dispatch({ type: 'failed', error: HEARTBEAT_LOST_MESSAGE });
+        });
+    }, GROUP_CALL_HEARTBEAT_MS);
     return () => clearInterval(timer);
-  }, [groupApi, reconcilePeers, state.call, state.phase, userId]);
+  }, [groupApi, reconcilePeers, state.call, state.phase, teardown, userId]);
 
   // ---------- кто говорит ----------
 

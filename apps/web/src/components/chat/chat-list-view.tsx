@@ -12,6 +12,7 @@ import type {
 import { searchChat } from "@/lib/chat-client";
 import { subscribeToChat } from "@/lib/chat-stream";
 import { ChatAvatar } from "./chat-avatar";
+import { chatListPreview } from "./chat-list-preview";
 import { formatChatStamp } from "./chat-time";
 import { isOnline } from "./chat-presence";
 import { plural } from "./chat-plural";
@@ -315,7 +316,7 @@ function ConversationRow({
   conversation: ChatConversationSummary;
   highlighted?: boolean;
 }) {
-  const preview = previewOf(conversation);
+  const preview = chatListPreview(conversation);
   return (
     <Link
       href={`/chat/${conversation.id}`}
@@ -350,7 +351,17 @@ function ConversationRow({
           </span>
         </span>
         <span className="flex items-center justify-between gap-2">
-          <span className="truncate text-[13px] text-text-1">{preview}</span>
+          <span
+            className={`truncate text-[13px] ${
+              // Идущий звонок — новость беседы, и он обязан читаться
+              // сильнее последнего сообщения. Начертанием, а не акцентным
+              // цветом: --vm-cyan и --vm-mint на светлой теме мелким
+              // текстом не проходят 4.5:1 (CLAUDE.md, дизайн-система).
+              preview.live ? "font-semibold text-text-0" : "text-text-1"
+            }`}
+          >
+            {preview.text}
+          </span>
           {conversation.unreadCount > 0 ? (
             <span className="shrink-0 rounded-full bg-mint px-1.5 font-mono text-[11px] leading-[22px] text-bg-0">
               {conversation.unreadCount}
@@ -370,29 +381,6 @@ function SectionLabel({ children }: { children: string }) {
       {children}
     </p>
   );
-}
-
-/** Строка предпросмотра: у вложения показываем его вид, а не пустоту. */
-function previewOf(conversation: ChatConversationSummary): string {
-  const message = conversation.lastMessage;
-  if (!message) return "Пока ни одного сообщения";
-  if (message.deletedAt) return "Сообщение удалено";
-  const prefix =
-    conversation.kind === "direct" ? "" : `${message.author.name}: `;
-  if (message.body) return `${prefix}${message.body}`;
-
-  const kind = message.attachments[0]?.kind;
-  const label =
-    kind === "voice"
-      ? "Голосовое сообщение"
-      : kind === "image"
-        ? "Фотография"
-        : kind === "file"
-          ? "Файл"
-          : kind === "story"
-            ? "Сторис"
-            : "Вложение";
-  return `${prefix}${label}`;
 }
 
 function upsert(
