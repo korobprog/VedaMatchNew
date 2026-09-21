@@ -72,4 +72,38 @@ describe("AdminDonationForm", () => {
     expect(screen.queryByRole("textbox", { name: "Подпись реквизита 1" })).not.toBeInTheDocument();
     expect(screen.getByText("Пока ни одного — добавьте строку.")).toBeInTheDocument();
   });
+
+  // VED-12: банки рядом с номером телефона вписывает человек в админке —
+  // иначе каждый новый банк требует выкатки портала.
+  it("sends the bank note typed next to the number", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(
+      <AdminDonationForm
+        initial={{
+          enabled: true,
+          text: "",
+          requisites: [{ kind: "sbp", label: "Максим К.", value: "+79000000000" }],
+        }}
+      />,
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Примечание реквизита 1" }),
+      "Сбербанк, ВТБ, Озон-банк",
+    );
+    await user.click(screen.getByRole("button", { name: "Сохранить реквизиты" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).requisites).toEqual([
+      {
+        kind: "sbp",
+        label: "Максим К.",
+        value: "+79000000000",
+        note: "Сбербанк, ВТБ, Озон-банк",
+      },
+    ]);
+  });
 });
