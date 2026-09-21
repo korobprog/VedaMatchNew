@@ -68,10 +68,13 @@ function DonateSheet({
         <h2 id="donate-title" className="font-display text-xl font-bold">
           Поддержать развитие VedaMatch
         </h2>
-        <p className="mt-2 text-sm text-text-1">
-          {donation.text ||
-            "Генерация видео и картинок стоит реальных денег. Пожертвование идёт на развитие портала. Спасибо."}
-        </p>
+        {/* Дефолтного текста здесь больше нет: абзац «Генерация видео и
+            картинок стоит реальных денег…» заказчик вычеркнул на скриншоте
+            VED-12, а в админке текст обращения пуст — на проде виден был
+            именно дефолт. Пусто — абзаца нет вовсе, отступ тоже не остаётся. */}
+        {donation.text && (
+          <p className="mt-2 text-sm text-text-1">{donation.text}</p>
+        )}
         {/* VED-11: просьба подписать назначение стоит над реквизитами. Ниже её
             не прочитают — человек уже ушёл в приложение банка. */}
         <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-text-1">
@@ -118,6 +121,9 @@ function RequisiteRow({ item }: { item: DonationRequisite }) {
       <div className="min-w-0 flex-1">
         <div className="text-xs uppercase tracking-wide text-text-2">{item.label}</div>
         <div className="truncate font-mono text-sm text-text-0">{item.value}</div>
+        {/* Банки под номером (VED-12): человек должен видеть, куда уйдёт
+            перевод по телефону, до того как откроет приложение банка. */}
+        {item.note && <div className="mt-0.5 text-xs text-text-1">{item.note}</div>}
       </div>
       {item.kind === "link" ? (
         <a
