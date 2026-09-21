@@ -2,6 +2,7 @@ import type { LineagePreference, MusicTrackSort } from '@vedamatch/shared';
 import {
   MUSIC_DEFAULT_TRACK_SORT,
   isLineagePreference,
+  isMusicTrackSort,
 } from '@vedamatch/shared';
 
 /**
@@ -15,12 +16,6 @@ import {
 
 export const MUSIC_TRACKS_DEFAULT_LIMIT = 24;
 export const MUSIC_TRACKS_MAX_LIMIT = 60;
-
-// Без `duration` (VED-165): порядок «по длительности» убран вместе с
-// одноимённым фильтром — `durationSeconds` у части записей заполнена оценкой
-// при загрузке и расходится с файлом. Старое `?sort=duration` попадает в
-// общую ветку «незнакомое значение» и получает умолчание, а не пустую выдачу.
-const SORTS: MusicTrackSort[] = ['fresh', 'popular', 'title'];
 
 export interface NormalizedMusicTrackQuery {
   q: string | null;
@@ -115,10 +110,13 @@ export function normalizeMusicTrackQuery(query: {
     lineage: isLineagePreference(lineage) ? lineage : null,
     // Незнакомое значение — это «не просили», а не повод отдать пустое:
     // умолчание общее с витриной (`MUSIC_DEFAULT_TRACK_SORT`, VED-273) —
-    // по алфавиту.
-    sort: SORTS.includes(sort as MusicTrackSort)
-      ? (sort as MusicTrackSort)
-      : MUSIC_DEFAULT_TRACK_SORT,
+    // по алфавиту. Сам список знакомых порядков тоже общий
+    // (`MUSIC_TRACK_SORTS`): ряд «Порядок» рисует чипы по нему же, и своя
+    // копия здесь означала бы чип, который сервер молча заменит умолчанием.
+    // Без `duration` (VED-165): сортировать по `durationSeconds` нечем —
+    // у части записей колонка заполнена оценкой при загрузке и расходится с
+    // файлом, поэтому старое `?sort=duration` попадает сюда же.
+    sort: isMusicTrackSort(sort) ? sort : MUSIC_DEFAULT_TRACK_SORT,
     cursor: firstString(query.cursor),
     limit: clampLimit(query.limit),
   };
