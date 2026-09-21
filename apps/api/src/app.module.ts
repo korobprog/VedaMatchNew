@@ -39,6 +39,7 @@ import { TravelModule } from './modules/travel/travel.module';
 import { WellnessModule } from './modules/wellness/wellness.module';
 import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
 
 @Module({
   imports: [
@@ -88,6 +89,8 @@ import { AssistantModule } from './modules/assistant/assistant.module';
     WellnessModule,
     TravelModule,
     VacanciesModule,
+    // Закладки портала (VED-163): адреса чужих страниц, без записи в каталоге.
+    BookmarksModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })

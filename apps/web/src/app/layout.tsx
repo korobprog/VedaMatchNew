@@ -11,6 +11,7 @@ import { VpnNotice } from "@/components/vpn-notice";
 import { ServiceCatalogProvider } from "@/components/service-catalog-provider";
 import { MusicPlayerProvider } from "@/components/music/player/player-provider";
 import { MiniPlayer } from "@/components/music/player/mini-player";
+import { PortalWindowsTracker } from "@/components/quick/portal-windows-tracker";
 import { getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
@@ -152,6 +153,13 @@ export default async function RootLayout({
                   {/* Часовой пояс устройства — в профиль, ради утренних
                       рассылок. Только у вошедшего: гостю профиля нет. */}
                   <TimeZoneSync />
+                  {/* История окон портала (VED-118). В корневом layout, а не
+                      в группе (portal): шапка с панелью горячих кнопок есть и
+                      на страницах вне этой группы — в Образовании, во
+                      Вдохновении, в поиске, — и окно, теряющее там свою
+                      историю, вело бы себя загадочно. Гостю окон нет:
+                      переключать ему нечего. */}
+                  <PortalWindowsTracker />
                   {children}
                   <MiniPlayer />
                 </MusicPlayerProvider>
