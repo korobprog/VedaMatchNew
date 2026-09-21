@@ -8,8 +8,7 @@ import {
   encodeWithinLimit,
   ogImagePath,
   ogImageSource,
-  needsBrandFooter,
-  ogPreviewLayout,
+  ogPreviewSize,
   type OgEncoding,
 } from "./motivation-og-image";
 
@@ -74,14 +73,35 @@ describe("ogImagePath", () => {
   });
 });
 
+/**
+ * VED-201, третий заход. Владелец сравнил мессенджеры: в Max превью — чистая
+ * иллюстрация с подписью под ней, а в WhatsApp и Telegram в превью уезжал
+ * сторис-кадр с впечатанной цитатой, и текст шёл дважды (в Telegram — ещё и
+ * обрезанный на полуслове). Правило: в `og:image` не попадает картинка с
+ * наложенным текстом.
+ */
 describe("ogImageSource", () => {
-  it("берёт сторис-кадр — на нём цитата", () => {
-    expect(ogImageSource({ storyImageUrl: "s", imageUrl: "i" })).toBe("s");
+  it("берёт чистую иллюстрацию, а не сторис-кадр с впечатанной цитатой", () => {
+    expect(ogImageSource({ storyImageUrl: "story", imageUrl: "clean" })).toBe(
+      "clean",
+    );
   });
 
-  it("без сторис — фон, без обоих — ничего", () => {
-    expect(ogImageSource({ storyImageUrl: "", imageUrl: "i" })).toBe("i");
+  it("сторис-кадр не идёт в превью даже запасным вариантом", () => {
+    expect(ogImageSource({ storyImageUrl: "story", imageUrl: "" })).toBeNull();
+    expect(ogImageSource({ storyImageUrl: "story" })).toBeNull();
+  });
+
+  it("без картинки — ничего", () => {
     expect(ogImageSource({})).toBeNull();
+  });
+
+  it("открытка идёт как есть: её надпись — часть самой картинки", () => {
+    // У `captionInImage` текст напечатан в файле, который принёс человек, и
+    // `storyImageUrl` — байт в байт та же картинка. Убирать нечего.
+    expect(ogImageSource({ storyImageUrl: "same", imageUrl: "same" })).toBe(
+      "same",
+    );
   });
 });
 
@@ -90,26 +110,29 @@ describe("ogImageSource", () => {
  * урезанными». Кадр собирался жёстко под 9:16 с `fit: 'cover'`, и у готовой
  * картинки, принесённой файлом, срезало бока вместе с надписью.
  */
-describe("ogPreviewLayout", () => {
-  const ratio = (w: number, h: number) => w / h;
+describe("ogPreviewSize", () => {
+  const ratio = (size: { width: number; height: number }) =>
+    size.width / size.height;
 
   it("держит пропорции квадратной открытки — бока не срезаются", () => {
-    const layout = ogPreviewLayout({ width: 1000, height: 1000 });
-    expect(ratio(layout.picture.width, layout.picture.height)).toBeCloseTo(1, 2);
+    expect(ratio(ogPreviewSize({ width: 1000, height: 1000 }))).toBeCloseTo(
+      1,
+      2,
+    );
   });
 
   it("держит пропорции горизонтальной открытки", () => {
-    const layout = ogPreviewLayout({ width: 1600, height: 1200 });
-    expect(ratio(layout.picture.width, layout.picture.height)).toBeCloseTo(
+    expect(ratio(ogPreviewSize({ width: 1600, height: 1200 }))).toBeCloseTo(
       4 / 3,
       2,
     );
   });
 
-  it("держит пропорции вертикальной сторис 9:16", () => {
-    const layout = ogPreviewLayout({ width: 1080, height: 1920 });
-    expect(ratio(layout.picture.width, layout.picture.height)).toBeCloseTo(
-      9 / 16,
+  it("держит пропорции иллюстрации рилса 1024×1536", () => {
+    // Ровно этот кадр Max показывает целиком, и его же теперь получают
+    // остальные мессенджеры.
+    expect(ratio(ogPreviewSize({ width: 1024, height: 1536 }))).toBeCloseTo(
+      2 / 3,
       2,
     );
   });
@@ -117,96 +140,40 @@ describe("ogPreviewLayout", () => {
   it("никогда не выходит за пределы кадра", () => {
     for (const source of [
       { width: 4000, height: 3000 },
+      { width: 1024, height: 1536 },
       { width: 1080, height: 1920 },
       { width: 3000, height: 800 },
       { width: 200, height: 2000 },
     ]) {
-      const layout = ogPreviewLayout(source);
-      expect(layout.width).toBeLessThanOrEqual(OG_PREVIEW_MAX_WIDTH);
-      expect(layout.picture.height).toBeLessThanOrEqual(OG_PREVIEW_MAX_HEIGHT);
+      const size = ogPreviewSize(source);
+      expect(size.width).toBeLessThanOrEqual(OG_PREVIEW_MAX_WIDTH);
+      expect(size.height).toBeLessThanOrEqual(OG_PREVIEW_MAX_HEIGHT);
     }
   });
 
   it("мелкую картинку подтягивает до читаемой ширины", () => {
-    // Иначе полоса с подписью выходит нечитаемой, а Telegram мелкое превью
-    // показывает значком сбоку вместо большой карточки.
-    const layout = ogPreviewLayout({ width: 240, height: 240 });
-    expect(layout.width).toBeGreaterThanOrEqual(OG_PREVIEW_MIN_WIDTH);
-    expect(ratio(layout.picture.width, layout.picture.height)).toBeCloseTo(1, 2);
+    // Telegram мелкое превью показывает значком сбоку вместо большой карточки.
+    const size = ogPreviewSize({ width: 240, height: 240 });
+    expect(size.width).toBeGreaterThanOrEqual(OG_PREVIEW_MIN_WIDTH);
+    expect(ratio(size)).toBeCloseTo(1, 2);
   });
 
   it("подтягивая мелкую, не пробивает потолок высоты", () => {
-    const layout = ogPreviewLayout({ width: 60, height: 900 });
-    expect(layout.picture.height).toBeLessThanOrEqual(OG_PREVIEW_MAX_HEIGHT);
+    expect(ogPreviewSize({ width: 60, height: 900 }).height).toBeLessThanOrEqual(
+      OG_PREVIEW_MAX_HEIGHT,
+    );
   });
 
-  it("полоса с подписью лежит под картинкой во всю ширину", () => {
-    const layout = ogPreviewLayout({ width: 1000, height: 1000 });
-    expect(layout.footer.left).toBe(0);
-    expect(layout.footer.width).toBe(layout.width);
-    expect(layout.footer.top).toBe(layout.picture.height);
-    expect(layout.footer.height).toBeGreaterThan(0);
-  });
-
-  it("кадр — это картинка плюс полоса, без полей", () => {
-    const layout = ogPreviewLayout({ width: 1600, height: 900 });
-    expect(layout.picture.left).toBe(0);
-    expect(layout.picture.top).toBe(0);
-    expect(layout.picture.width).toBe(layout.width);
-    expect(layout.height).toBe(layout.picture.height + layout.footer.height);
-  });
-
-  it("ступень лестницы уменьшает кадр, не меняя пропорций картинки", () => {
-    const full = ogPreviewLayout({ width: 1200, height: 900 });
-    const small = ogPreviewLayout({ width: 1200, height: 900 }, { scale: 0.62 });
+  it("ступень лестницы уменьшает кадр, не меняя пропорций", () => {
+    const full = ogPreviewSize({ width: 1200, height: 900 });
+    const small = ogPreviewSize({ width: 1200, height: 900 }, { scale: 0.62 });
     expect(small.width).toBeLessThan(full.width);
-    expect(ratio(small.picture.width, small.picture.height)).toBeCloseTo(
-      ratio(full.picture.width, full.picture.height),
-      2,
-    );
+    expect(ratio(small)).toBeCloseTo(ratio(full), 2);
   });
 
-  it("вырожденный размер не роняет раскладку", () => {
-    const layout = ogPreviewLayout({ width: 0, height: 0 });
-    expect(layout.width).toBeGreaterThan(0);
-    expect(layout.height).toBeGreaterThan(0);
-  });
-});
-
-/**
- * Полоса с подписью — только там, где нашего знака на картинке ещё нет.
- * У сторис-кадра рилса его рисует API (`composeStoryImage`), и вторая
- * полоса дала бы два логотипа подряд — ровно на путаницу со знаком в этом
- * кадре владелец жаловался по VED-227.
- */
-describe("needsBrandFooter", () => {
-  it("открытке полоса нужна: своего знака на ней нет", () => {
-    expect(
-      needsBrandFooter({ captionInImage: true, storyImageUrl: "s" }),
-    ).toBe(true);
-  });
-
-  it("сторис-кадру рилса — не нужна, знак уже в кадре", () => {
-    expect(
-      needsBrandFooter({ captionInImage: false, storyImageUrl: "s" }),
-    ).toBe(false);
-  });
-
-  it("без сторис-кадра идёт голый фон, и полоса нужна", () => {
-    expect(needsBrandFooter({ captionInImage: false, storyImageUrl: "" })).toBe(
-      true,
-    );
-    expect(needsBrandFooter({})).toBe(true);
-  });
-});
-
-describe("ogPreviewLayout без полосы", () => {
-  it("кадр равен самой картинке", () => {
-    const layout = ogPreviewLayout(
-      { width: 1080, height: 1920 },
-      { footer: false },
-    );
-    expect(layout.footer.height).toBe(0);
-    expect(layout.height).toBe(layout.picture.height);
+  it("вырожденный размер не роняет расчёт", () => {
+    const size = ogPreviewSize({ width: 0, height: 0 });
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.height).toBeGreaterThan(0);
   });
 });
