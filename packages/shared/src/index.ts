@@ -35,6 +35,7 @@ export * from './spiritual-stage';
 export * from './work';
 export * from './wellness';
 export * from './travel';
+export * from './bookmarks';
 
 import type { BillingMode, SubscriptionState } from './support';
 

@@ -444,6 +444,7 @@ model User {
   travelReviews                      TravelReview[]                @relation("TravelReviewsWritten")
   travelCashEntries                  TravelCashEntry[]             @relation("TravelCashEntriesAuthored")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
+  bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -6607,4 +6608,35 @@ enum MotivationCategoryFeed {
   both
   art
   cards
+}
+
+// ===== Закладки портала (VED-163) =====
+
+/// Закладка человека на любую страницу портала: исполнитель в Музыке, доска
+/// в Работе, книга в Образовании.
+///
+/// Хранится путь, а не ссылка на сущность сервиса: FK на чужие модели
+/// контракт запрещает, и по смыслу закладка — «эта страница», а не «эта
+/// запись». Плата за решение честная: удалённая страница оставляет закладку,
+/// ведущую в 404, — убирает её человек.
+model BookmarksEntry {
+  id     String @id @default(uuid())
+  /// Cascade: закладки — часть человека и уходят вместе с аккаунтом.
+  userId String
+  user   User   @relation("BookmarksOwned", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Относительный адрес внутри портала, всегда с ведущей косой чертой;
+  /// якорь отброшен, запрос сохранён. Разбор — bookmark-input.ts.
+  path    String
+  title   String
+  /// Первый сегмент пути: нужен только для группировки списка по разделам.
+  service String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Повторная закладка на ту же страницу переименовывает существующую, а не
+  /// заводит вторую строку.
+  @@unique([userId, path])
+  @@index([userId, createdAt(sort: Desc)])
 }
