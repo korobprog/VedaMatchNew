@@ -445,6 +445,7 @@ model User {
   travelCashEntries                  TravelCashEntry[]             @relation("TravelCashEntriesAuthored")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
+  blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -6639,4 +6640,79 @@ model BookmarksEntry {
   /// заводит вторую строку.
   @@unique([userId, path])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+
+// ===== Blog service («Блог-лента», VED-238, VED-116) =====
+
+/// Пост блог-ленты портала: крупная картинка, короткий заголовок и текст.
+///
+/// Лента читается двумя срезами. «Текущая» — то, что показывает виджет
+/// главной: посты, у которых `feedUntil` ещё не наступил. «Вся» — архив без
+/// срока давности, его открывает нажатие на виджет. Поэтому срок хранится
+/// полем, а не считается на лету от `createdAt`: администратор меняет срок
+/// по умолчанию, и уже опубликованные посты не должны от этого исчезать
+/// задним числом (тот же приём, что у `ChatMoment.expiresAt`).
+model BlogPost {
+  id       String @id @default(uuid())
+  /// Cascade: блог участника уходит вместе с аккаунтом.
+  authorId String
+  author   User   @relation("BlogPostsWritten", fields: [authorId], references: [id], onDelete: Cascade)
+
+  /// Заголовок виден в ленте рядом с картинкой; необязателен.
+  title String?
+  text  String  @default("")
+
+  /// До какого момента пост показан в текущей ленте; null — бессрочно.
+  /// Проставляется при публикации из `BlogSettings.feedLifetimeHours`,
+  /// дальше правится только администратором.
+  feedUntil DateTime?
+  /// Закрепление наверху ленты — право администратора. Участник постит
+  /// один за другим и на порядок не влияет (VED-238).
+  pinned    Boolean   @default(false)
+
+  /// Репост: ссылка на исходный пост. SetNull — удалённый оригинал оставляет
+  /// репост в ленте, но уже без вложенной карточки.
+  repostOfId  String?
+  repostOf    BlogPost?  @relation("BlogReposts", fields: [repostOfId], references: [id], onDelete: SetNull)
+  reposts     BlogPost[] @relation("BlogReposts")
+  /// Денормализованный счётчик: в карточке он нужен всегда, а подзапрос на
+  /// каждый пост ленты — нет.
+  repostCount Int        @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images BlogPostImage[]
+
+  @@index([pinned, createdAt(sort: Desc)])
+  @@index([feedUntil])
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([repostOfId])
+}
+
+/// Картинка поста. Лежит в публичном бакете — карточки ленты уходят в SSR и
+/// обязаны кэшироваться, как у объявлений и Рынка. Порядок отдельным полем:
+/// перестановка не должна переписывать объекты в хранилище.
+model BlogPostImage {
+  id         String   @id @default(uuid())
+  postId     String
+  post       BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  storageKey String
+  url        String
+  width      Int?
+  height     Int?
+  sizeBytes  Int?
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([postId, position])
+}
+
+/// Единственная строка настроек сервиса (id всегда "global").
+model BlogSettings {
+  id String @id @default("global")
+  /// Срок нахождения поста в ленте по умолчанию, в часах. 0 — без срока.
+  feedLifetimeHours Int      @default(72)
+  updatedAt         DateTime @updatedAt
 }

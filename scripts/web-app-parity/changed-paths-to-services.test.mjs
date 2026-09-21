@@ -74,7 +74,10 @@ test('несервисные папки веба и API не попадают в
 // навигации (`seed.cjs`) — документированное исключение, см.
 // `CATALOG_SERVICES_WITHOUT_SEED_ENTRY` в changed-paths-to-services.mjs и
 // catalog-services-sync.test.mjs.
-test('все 13 сервисов каталога распознаются (белый список литералами)', () => {
+//
+// VED-238, VED-116: 14-й слаг — `blog` («Блог-лента»), обычный сервис
+// каталога с записью `Service` в сиде.
+test('все 14 сервисов каталога распознаются (белый список литералами)', () => {
   const expected = [
     'union',
     'vedabase',
@@ -89,6 +92,7 @@ test('все 13 сервисов каталога распознаются (бе
     'wellness',
     'travel',
     'vacancies',
+    'blog',
   ];
   assert.deepEqual([...CATALOG_SERVICES].sort(), [...expected].sort());
   for (const service of expected) {
