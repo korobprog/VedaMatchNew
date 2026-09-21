@@ -1,6 +1,7 @@
 "use client";
 
 import type { MotivationCategoryDto } from "@vedamatch/shared";
+import { fieldLabelClass } from "./field-label";
 
 /**
  * Выбор категории в мастере «Свой рилс» (VED-96).
@@ -38,7 +39,7 @@ export function ReelCategorySelect({
 
   return (
     <label className="block text-sm text-text-1">
-      Категория
+      <span className={fieldLabelClass()}>Категория</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
