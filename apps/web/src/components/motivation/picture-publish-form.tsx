@@ -30,11 +30,18 @@ import {
   ReelCategorySelect,
   initialReelCategory,
 } from "./reel-category-select";
+import { tapButtonClass, tapFieldClass } from "./tap-target";
 
 const API_URL = apiBase();
 
-const inputClass =
-  "mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0";
+const inputClass = tapFieldClass(
+  "mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0",
+);
+
+/** Кнопка «откуда взять картинку»: три стоят в ряд, и все три — тап-цели. */
+const pickButtonClass = tapButtonClass(
+  "rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0",
+);
 
 /**
  * «Готовая картинка с цитатой» — первым вариантом мастера (VED-97, VED-99).
@@ -169,14 +176,18 @@ export function PicturePublishForm({
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/motivation?post=${encodeURIComponent(published.slug)}`}
-            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+            className={tapButtonClass(
+              "btn-mint rounded-xl px-4 py-2 text-sm font-semibold",
+            )}
           >
             Открыть в ленте
           </Link>
           <button
             type="button"
             onClick={again}
-            className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={tapButtonClass(
+              "rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0",
+            )}
           >
             Ещё картинку
           </button>
@@ -201,14 +212,14 @@ export function PicturePublishForm({
           <button
             type="button"
             onClick={() => galleryRef.current?.click()}
-            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={pickButtonClass}
           >
             🖼️ Из галереи
           </button>
           <button
             type="button"
             onClick={() => filesRef.current?.click()}
-            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={pickButtonClass}
           >
             📁 Из файлов
           </button>
@@ -239,7 +250,7 @@ export function PicturePublishForm({
           <button
             type="button"
             onClick={pasteImage}
-            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={pickButtonClass}
           >
             📋 Вставить из буфера
           </button>
@@ -324,7 +335,9 @@ export function PicturePublishForm({
       <button
         type="submit"
         disabled={!file || pending}
-        className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        className={tapButtonClass(
+          "btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50",
+        )}
       >
         {pending ? "Публикуем…" : "Опубликовать"}
       </button>

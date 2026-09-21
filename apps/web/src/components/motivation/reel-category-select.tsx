@@ -2,6 +2,7 @@
 
 import type { MotivationCategoryDto } from "@vedamatch/shared";
 import { fieldLabelClass } from "./field-label";
+import { tapFieldClass } from "./tap-target";
 
 /**
  * Выбор категории в мастере «Свой рилс» (VED-96).
@@ -43,7 +44,9 @@ export function ReelCategorySelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+        className={tapFieldClass(
+          "mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0",
+        )}
       >
         {roots.map((root) => {
           const children = childrenOf(root.id);
