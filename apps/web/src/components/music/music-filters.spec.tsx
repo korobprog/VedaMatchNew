@@ -13,7 +13,6 @@ const baseState: MusicFilterState = {
   category: null,
   q: null,
   artist: null,
-  duration: null,
   live: null,
   sort: null,
   cursor: null,
@@ -64,11 +63,10 @@ describe("countMusicFilters", () => {
         ...baseState,
         category: "kirtan",
         artist: "gaura-das",
-        duration: "short",
         live: "true",
         sort: "popular",
       }),
-    ).toBe(5);
+    ).toBe(4);
   });
 });
 
@@ -122,6 +120,26 @@ describe("MusicFilters — порядок по умолчанию", () => {
   });
 });
 
+// VED-165: фильтр по длительности убран целиком — он приписывал
+// пятиминутным записям «больше получаса», и заказчик выбрал убрать, а не
+// чинить. Панель не должна показывать ни раздела, ни его чипов.
+describe("MusicFilters — длительности больше нет", () => {
+  it("ни раздела «Длительность», ни его чипов в панели", () => {
+    render(
+      <MusicFilters
+        state={baseState}
+        artists={[]}
+        categories={[category("kirtan", "Киртан", "style", 12)]}
+      />,
+    );
+
+    expect(screen.queryByText("Длительность")).not.toBeInTheDocument();
+    expect(screen.queryByText("До 5 минут")).not.toBeInTheDocument();
+    expect(screen.queryByText("5–30 минут")).not.toBeInTheDocument();
+    expect(screen.queryByText("Больше получаса")).not.toBeInTheDocument();
+  });
+});
+
 describe("MusicFilters — секция «Стиль»", () => {
   const artists: MusicArtistDto[] = [];
   const categories = [
@@ -139,6 +157,28 @@ describe("MusicFilters — секция «Стиль»", () => {
     expect(screen.queryByText("Традиционное")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Киртан/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Мантра/ })).toBeInTheDocument();
+  });
+
+  // VED-165: на проде «Традиционное» и «Современное» успели завести и
+  // обычными категориями — их тёзки с `kind: 'style'` попадали в панель и
+  // читались как отдельный фильтр рядом с корневыми вкладками.
+  it("отбрасывает и стиль-тёзку корневой, оставшийся от ручной разметки", () => {
+    render(
+      <MusicFilters
+        state={baseState}
+        artists={artists}
+        categories={[
+          ...categories,
+          category("modern", "Современное", "root", 6),
+          category("tradicionnoe", "Традиционное", "style", 0),
+          category("sovremennoe", "Современное", "style", 0),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Традиционное")).not.toBeInTheDocument();
+    expect(screen.queryByText("Современное")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Киртан/ })).toBeInTheDocument();
   });
 
   it("не прячет пустой стиль — показывает приглушённым с нулём (тестировщик просил не скрывать раздел)", () => {

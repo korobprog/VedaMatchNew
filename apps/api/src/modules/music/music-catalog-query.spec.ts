@@ -3,7 +3,6 @@ import {
   MUSIC_SEARCH_MAX_LENGTH,
   MUSIC_TRACKS_DEFAULT_LIMIT,
   MUSIC_TRACKS_MAX_LIMIT,
-  durationCondition,
   normalizeMusicTrackQuery,
 } from './music-catalog-query';
 
@@ -15,7 +14,6 @@ describe('normalizeMusicTrackQuery', () => {
       category: null,
       artist: null,
       language: null,
-      duration: null,
       live: null,
       lineage: null,
       // VED-273: порядок по умолчанию — по алфавиту, а не по дате.
@@ -78,13 +76,6 @@ describe('normalizeMusicTrackQuery', () => {
     expect(normalizeMusicTrackQuery({ sort: 'fresh' }).sort).toBe('fresh');
   });
 
-  it('неизвестную корзину длительности отбрасывает', () => {
-    expect(normalizeMusicTrackQuery({ duration: 'huge' }).duration).toBeNull();
-    expect(normalizeMusicTrackQuery({ duration: 'long' }).duration).toBe(
-      'long',
-    );
-  });
-
   describe('live', () => {
     it('различает «нет» и «не спрашивали»', () => {
       expect(normalizeMusicTrackQuery({}).live).toBeNull();
@@ -126,6 +117,16 @@ describe('normalizeMusicTrackQuery', () => {
     });
   });
 
+  // VED-165: фильтр по длительности убран — сервер больше не знает такого
+  // параметра, и старая ссылка `?duration=long` обязана открывать не пустую
+  // выдачу, а обычную, без молчаливого условия по секундам.
+  it('параметр duration из старой ссылки просто игнорирует', () => {
+    const normalized = normalizeMusicTrackQuery({ duration: 'long' } as never);
+
+    expect(normalized).not.toHaveProperty('duration');
+    expect(normalized).toEqual(normalizeMusicTrackQuery({}));
+  });
+
   describe('поисковая строка', () => {
     it('схлопывает пробелы', () => {
       expect(normalizeMusicTrackQuery({ q: ' джая   радха ' }).q).toBe(
@@ -140,32 +141,5 @@ describe('normalizeMusicTrackQuery', () => {
         MUSIC_SEARCH_MAX_LENGTH,
       );
     });
-  });
-});
-
-describe('durationCondition', () => {
-  it('без корзины не даёт условия', () => {
-    expect(durationCondition(null)).toBeNull();
-  });
-
-  it('короткие — до пяти минут', () => {
-    expect(durationCondition('short')).toEqual({ gte: 0, lt: 300 });
-  });
-
-  it('средние — от пяти минут до получаса', () => {
-    expect(durationCondition('medium')).toEqual({ gte: 300, lt: 1800 });
-  });
-
-  it('длинные — без верхней границы', () => {
-    expect(durationCondition('long')).toEqual({ gte: 1800 });
-  });
-
-  it('корзины стыкуются без дыр и нахлёста', () => {
-    const short = durationCondition('short');
-    const medium = durationCondition('medium');
-    const long = durationCondition('long');
-
-    expect(short?.lt).toBe(medium?.gte);
-    expect(medium?.lt).toBe(long?.gte);
   });
 });

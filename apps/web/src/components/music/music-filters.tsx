@@ -2,10 +2,10 @@ import Link from "next/link";
 import type {
   MusicArtistDto,
   MusicCategoryDto,
-  MusicDurationBucket,
   MusicTrackSort,
 } from "@vedamatch/shared";
 import { MUSIC_DEFAULT_TRACK_SORT } from "@vedamatch/shared";
+import { styleFilterCategories } from "./music-root-scope";
 
 /**
  * Фильтры каталога — тот самый чип «Фильтры» из макета `Catalog.dc.html`.
@@ -27,12 +27,6 @@ const SORTS: { value: MusicTrackSort; label: string }[] = [
   { value: "duration", label: "По длительности" },
 ];
 
-const DURATIONS: { value: MusicDurationBucket; label: string }[] = [
-  { value: "short", label: "До 5 минут" },
-  { value: "medium", label: "5–30 минут" },
-  { value: "long", label: "Больше получаса" },
-];
-
 export interface MusicFilterState {
   /**
    * Корневая категория витрины — «Традиционное»/«Современное» (VED-165).
@@ -44,7 +38,6 @@ export interface MusicFilterState {
   category: string | null;
   q: string | null;
   artist: string | null;
-  duration: string | null;
   live: string | null;
   sort: string | null;
   /** Страница выдачи. В счёт фильтров не идёт: это не выбор человека. */
@@ -77,13 +70,8 @@ export function musicFilterHref(
  * это главный выбор витрины (вкладки сверху), а не пункт панели фильтров.
  */
 export function countMusicFilters(state: MusicFilterState): number {
-  return [
-    state.category,
-    state.artist,
-    state.duration,
-    state.live,
-    state.sort,
-  ].filter(Boolean).length;
+  return [state.category, state.artist, state.live, state.sort].filter(Boolean)
+    .length;
 }
 
 const chip =
@@ -107,7 +95,11 @@ export function MusicFilters({
   // не список тегов «что уже нашлось» — редакция должна видеть весь набор
   // стилей, чтобы понимать, что вообще можно проставить, и уметь снять
   // фильтр, даже если он ссылается на пока пустой стиль.
-  const styles = categories.filter((category) => category.kind === "style");
+  //
+  // Корневые «Традиционное» и «Современное» сюда не попадают — ни настоящие,
+  // ни их тёзки из ручной разметки: они выбираются вкладками над каталогом,
+  // см. `styleFilterCategories` (VED-165).
+  const styles = styleFilterCategories(categories);
 
   return (
     // `w-fit` и `open:w-full` — чтобы свёрнутый чип стоял в одном ряду с
@@ -159,21 +151,6 @@ export function MusicFilters({
               </Link>
             );
           })}
-        </FilterRow>
-
-        <FilterRow label="Длительность">
-          {DURATIONS.map((option) => (
-            <Link
-              key={option.value}
-              href={musicFilterHref(state, {
-                duration:
-                  state.duration === option.value ? null : option.value,
-              })}
-              className={`${chip} ${state.duration === option.value ? chipOn : chipOff}`}
-            >
-              {option.label}
-            </Link>
-          ))}
         </FilterRow>
 
         <FilterRow label="Стиль">
@@ -245,7 +222,6 @@ export function MusicFilters({
             href={musicFilterHref(state, {
               category: null,
               artist: null,
-              duration: null,
               live: null,
               sort: null,
             })}

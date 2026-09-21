@@ -1,4 +1,7 @@
-import { mergeCategoryCounts } from './music-category-counts';
+import {
+  mergeCategoryCounts,
+  styleCountTrackFilter,
+} from './music-category-counts';
 
 describe('mergeCategoryCounts', () => {
   it('пустые источники — пустая карта', () => {
@@ -40,5 +43,31 @@ describe('mergeCategoryCounts', () => {
     expect(result.get('kirtan')).toBe(4);
     expect(result.get('traditional')).toBe(9);
     expect(result.size).toBe(2);
+  });
+});
+
+// VED-165: чип стиля обязан обещать ровно то, что откроется по нажатию.
+// Под корневой вкладкой выдача уже сужена, и счётчик, считающий по всему
+// каталогу, показывает «Киртан 12» там, где записей две.
+describe('styleCountTrackFilter', () => {
+  it('витрина без вкладки — только опубликованное, без среза по корневой', () => {
+    expect(styleCountTrackFilter(true, null)).toEqual({ status: 'published' });
+  });
+
+  it('справочник админки считает любые статусы', () => {
+    expect(styleCountTrackFilter(false, null)).toEqual({});
+  });
+
+  it('под вкладкой сужает тем же условием, что и выдача — по исполнителю', () => {
+    expect(styleCountTrackFilter(true, 'traditional')).toEqual({
+      status: 'published',
+      artist: { rootCategory: { slug: 'traditional' } },
+    });
+  });
+
+  it('срез по корневой не зависит от статуса', () => {
+    expect(styleCountTrackFilter(false, 'modern')).toEqual({
+      artist: { rootCategory: { slug: 'modern' } },
+    });
   });
 });
