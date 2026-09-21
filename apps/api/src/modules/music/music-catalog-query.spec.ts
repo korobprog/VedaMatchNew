@@ -69,11 +69,21 @@ describe('normalizeMusicTrackQuery', () => {
   });
 
   // VED-273: без параметра и с мусором в нём выдача идёт по алфавиту;
-  // явный выбор человека («сначала новое») по-прежнему принимается.
+  // явный выбор («сначала новое») по-прежнему принимается — витрина его не
+  // ставит, но параметр API остаётся рабочим.
   it('неизвестную сортировку заменяет на умолчание, а не падает', () => {
     expect(normalizeMusicTrackQuery({ sort: 'DROP TABLE' }).sort).toBe('title');
     expect(normalizeMusicTrackQuery({ sort: 'popular' }).sort).toBe('popular');
     expect(normalizeMusicTrackQuery({ sort: 'fresh' }).sort).toBe('fresh');
+  });
+
+  // VED-165: порядка «по длительности» больше нет. Старая ссылка
+  // `?sort=duration` обязана открыть обычную выдачу по алфавиту, а не пустую
+  // и не порядок по колонке, которой витрина уже не управляет.
+  it('старое sort=duration считает незнакомым и берёт умолчание', () => {
+    expect(normalizeMusicTrackQuery({ sort: 'duration' }).sort).toBe(
+      MUSIC_DEFAULT_TRACK_SORT,
+    );
   });
 
   describe('live', () => {
