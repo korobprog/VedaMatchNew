@@ -3,6 +3,7 @@ import type { ChatAttachmentDto } from '@vedamatch/shared';
 import { VoiceMessagePlayer } from './voice-message-player';
 import { registerLocalVoiceFile, resetVoiceLocalFileCacheForTests } from '@/lib/chat/voice/voice-local-file-cache';
 import { resetVoicePlaybackOrderForTests } from '@/lib/chat/voice/voice-playback-registry';
+import { resetVoiceRecordingGuardForTests, setRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
 
 /**
  * Регресс с живой проверки сборки 5003 (Samsung A51): своё голосовое
@@ -120,6 +121,7 @@ describe('VoiceMessagePlayer', () => {
     resetStatus();
     resetVoiceLocalFileCacheForTests();
     resetVoicePlaybackOrderForTests();
+    resetVoiceRecordingGuardForTests();
     mockPlayer.replace.mockClear();
     mockPlayer.play.mockClear();
     mockPlayer.pause.mockClear();
@@ -306,5 +308,46 @@ describe('VoiceMessagePlayer', () => {
       renderer.update(<VoiceMessagePlayer attachment={buildAttachment()} order={1} />);
     });
     expect(findPlayButton(renderer).props.accessibilityLabel).toBe('Слушать');
+  });
+
+  /**
+   * Живая проверка сборки 5004: невидимая запись держала микрофон, и
+   * попытка воспроизвести голосовое во время неё не давала звука
+   * («записал — не воспроизводится»). Панель записи теперь всегда видна
+   * (основной фикс — `voice-recorder-control.tsx`), но плеер САМ тоже не
+   * должен пытаться поднять источник, пока `voice-recording-guard.ts`
+   * сообщает об активной записи — тап по волне даёт короткую подсказку,
+   * не немой отказ.
+   */
+  it('пока идёт запись (voice-recording-guard), тап по волне не запускает загрузку — короткая подсказка вместо немого отказа', async () => {
+    setRecordingActive(true);
+    const renderer = renderPlayer(buildAttachment());
+
+    await act(async () => {
+      findPlayButton(renderer).props.onPress();
+      await flush();
+    });
+
+    expect(mockPlayer.replace).not.toHaveBeenCalled();
+    expect(mockPlayer.play).not.toHaveBeenCalled();
+    expect(findErrorText(renderer)).toBe('Сначала закончите запись');
+  });
+
+  it('когда запись закончилась (voice-recording-guard снят), тот же тап по волне запускает загрузку как обычно', async () => {
+    setRecordingActive(true);
+    const renderer = renderPlayer(buildAttachment());
+    await act(async () => {
+      findPlayButton(renderer).props.onPress();
+      await flush();
+    });
+    expect(mockPlayer.replace).not.toHaveBeenCalled();
+
+    setRecordingActive(false);
+    await act(async () => {
+      findPlayButton(renderer).props.onPress();
+      await flush();
+    });
+
+    expect(mockPlayer.replace).toHaveBeenCalledTimes(1);
   });
 });

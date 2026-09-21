@@ -8,6 +8,7 @@ import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget } from '@/theme/tokens';
 import { canonicalVoiceUrlKey, forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { isRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
 import {
   markVoiceFinished,
   registerVoiceOrder,
@@ -50,6 +51,19 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   const [loadRequested, setLoadRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(getCachedVoiceSpeed());
+  // Короткая подсказка вместо немого отказа, когда тап по волне пришёлся на
+  // время активной записи (`voice-recording-guard.ts`): панель записи и так
+  // видна человеку, но тап по чужому/своему голосовому в это время не
+  // должен выглядеть как ничего не делающая кнопка — тот же приём, что
+  // `backgroundNotice` в `voice-recorder-control.tsx`.
+  const [recordingHint, setRecordingHint] = useState(false);
+  const recordingHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (recordingHintTimeoutRef.current) clearTimeout(recordingHintTimeoutRef.current);
+    },
+    [],
+  );
   const finishedRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Async-загрузка источника (`loadAndPlay`) может дозреть уже после
@@ -259,7 +273,25 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   // источника путала бы состояние (нашли на быстром двойном тапе при
   // живой проверке). Кнопка ЛОВИТ этот тап (см. `onPress` ниже), просто
   // ничего не делает — спиннер и так сигналит, что происходит.
+  // Короткая подсказка вместо немого отказа (не заводит `error`/`loadRequested`
+  // — это не сбой загрузки, а обычный отказ стартовать, пока занят микрофон).
+  const showRecordingHint = () => {
+    setRecordingHint(true);
+    if (recordingHintTimeoutRef.current) clearTimeout(recordingHintTimeoutRef.current);
+    recordingHintTimeoutRef.current = setTimeout(() => setRecordingHint(false), 1500);
+  };
+
   const play = () => {
+    // Пока идёт запись, микрофон занят — тап по чужому/своему голосовому в
+    // ленте не должен пытаться поднять плеер поверх активного рекордера
+    // (симптом «записал — не воспроизводится» и наоборот). Останавливать
+    // чужую запись тапом по никак не связанной с ней волне было бы
+    // неожиданным — молча отказываемся стартовать, не трогая рекордер, но
+    // подсказка вместо немого молчания.
+    if (isRecordingActive()) {
+      showRecordingHint();
+      return;
+    }
     if (waiting) return;
     setError(null);
     if (!loadRequested) {
@@ -280,6 +312,10 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
     if (totalSec <= 0 || waiting) return;
     const target = timeFromRatio(ratio, totalSec);
     if (!loadRequested) {
+      if (isRecordingActive()) {
+        showRecordingHint();
+        return;
+      }
       setError(null);
       setLoadRequested(true);
       void loadAndPlay(target);
@@ -335,6 +371,14 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
         // показывает, что это ошибка, не обычный текст.
         <Text numberOfLines={2} style={[styles.errorInline, { color: colors.text0 }]}>
           {error}
+        </Text>
+      ) : recordingHint ? (
+        // Не ошибка — обычный нейтральный `text1`, тот же приём, что у
+        // «Запись остановлена» в `voice-recorder-control.tsx`. Панель записи
+        // и так видна человеку — это просто объяснение, почему тап по волне
+        // ничего не запустил, а не повод для тревожного цвета.
+        <Text numberOfLines={2} style={[styles.errorInline, { color: colors.text1 }]}>
+          Сначала закончите запись
         </Text>
       ) : (
         // Волна — своей строкой на всю ширину, время и скорость — СТРОКОЙ
