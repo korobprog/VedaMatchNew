@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MusicArtistDto, MusicCategoryDto } from "@vedamatch/shared";
 import { plural } from "@/lib/plural";
 import { selectionState, toggleAllShown } from "./bulk-artist";
+import { MusicBulkArtistAudiobookBar } from "./bulk-artist-audiobook-bar";
 import { MusicBulkArtistRootCategoryBar } from "./bulk-artist-root-category-bar";
 import { MusicReferenceList, type MusicReferenceRow } from "./reference-list";
 
@@ -46,15 +47,25 @@ export function MusicArtistCatalogPanel({
     badge: artist.isVerified ? "проверен" : null,
     coverUrl: artist.coverUrl,
     rootCategoryId: artist.rootCategoryId,
+    isAudiobook: artist.isAudiobook,
   }));
 
   return (
     <div>
-      {artists.length > 0 && roots.length > 0 && (
+      {artists.length > 0 && (
         <>
-          <MusicBulkArtistRootCategoryBar
+          {/* Корневая категория (VED-165-2) — только когда корневые заведены;
+              раздел «Аудиокниги» (VED-237) справочника не требует, отметка
+              живёт колонкой у самого исполнителя. */}
+          {roots.length > 0 && (
+            <MusicBulkArtistRootCategoryBar
+              selectedIds={selectedIds}
+              categories={categories}
+              onClear={() => setSelected(new Set())}
+            />
+          )}
+          <MusicBulkArtistAudiobookBar
             selectedIds={selectedIds}
-            categories={categories}
             onClear={() => setSelected(new Set())}
           />
           <label className="mb-2 flex min-h-9 items-center gap-2 px-1 text-sm text-text-1">
@@ -74,20 +85,16 @@ export function MusicArtistCatalogPanel({
         empty="Пока никого."
         rows={rows}
         rootCategories={roots}
-        selection={
-          roots.length > 0
-            ? {
-                selectedIds: selected,
-                onToggle: (id) =>
-                  setSelected((was) => {
-                    const next = new Set(was);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  }),
-              }
-            : undefined
-        }
+        selection={{
+          selectedIds: selected,
+          onToggle: (id) =>
+            setSelected((was) => {
+              const next = new Set(was);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            }),
+        }}
       />
     </div>
   );

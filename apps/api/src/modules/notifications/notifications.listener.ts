@@ -297,6 +297,9 @@ export class NotificationsListener {
         body: content.body,
         url: content.url,
         category: content.category,
+        // Значок состояния (VED-272) живёт только в ленте: в пуш он не едет —
+        // там одна строка текста, и места под пометку у шторки нет.
+        mark: content.mark ?? null,
       });
 
       const payload = {

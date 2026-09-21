@@ -3,7 +3,6 @@ import { buildShareMeta, type ShareMetaPost } from "./share-meta";
 
 function post(overrides: Partial<ShareMetaPost> = {}): ShareMetaPost {
   return {
-    title: "Бхагавад-гита как она есть 2.47",
     attributionSpeaker: "Шри Кришна",
     attributionWork: "Бхагавад-гита 2.47",
     categoryTitle: "Карма-йога",
@@ -12,64 +11,70 @@ function post(overrides: Partial<ShareMetaPost> = {}): ShareMetaPost {
 }
 
 describe("buildShareMeta", () => {
-  it("не повторяет текст цитаты — описание нейтральное, с категорией", () => {
-    const meta = buildShareMeta(post());
-    expect(meta.description).toBe(
-      "Цитата на Портале Саморазвития VedaMatch · Карма-йога",
+  it("описание — портал и категория, без текста цитаты", () => {
+    expect(buildShareMeta(post()).description).toBe(
+      "Портал Саморазвития VedaMatch · Карма-йога",
     );
   });
 
-  it("без категории описание остаётся нейтральным, без хвостового разделителя", () => {
-    const meta = buildShareMeta(post({ categoryTitle: "" }));
-    expect(meta.description).toBe("Цитата на Портале Саморазвития VedaMatch");
-  });
-
-  it("содержательный заголовок поста идёт в превью как есть", () => {
-    const meta = buildShareMeta(post());
-    expect(meta.title).toBe("Бхагавад-гита как она есть 2.47");
-  });
-
-  it("«Свой рилс» заменяется на источник/атрибуцию, если она есть", () => {
-    const meta = buildShareMeta(
-      post({
-        title: "Свой рилс",
-        attributionSpeaker: "Иван",
-        attributionWork: null,
-      }),
+  it("без категории описание остаётся без хвостового разделителя", () => {
+    expect(buildShareMeta(post({ categoryTitle: "" })).description).toBe(
+      "Портал Саморазвития VedaMatch",
     );
-    expect(meta.title).toBe("Иван");
   });
 
-  it("«Свой рилс» с автором и работой — обе части через точку", () => {
-    const meta = buildShareMeta(
-      post({
-        title: "Свой рилс",
-        attributionSpeaker: "Иван",
-        attributionWork: "Личный дневник",
-      }),
+  it("заголовок — источник: автор и работа через точку", () => {
+    expect(buildShareMeta(post()).title).toBe(
+      "Шри Кришна · Бхагавад-гита 2.47",
     );
-    expect(meta.title).toBe("Иван · Личный дневник");
   });
 
-  it("«Свой рилс» без источника и автора — нейтральный заголовок", () => {
-    const meta = buildShareMeta(
-      post({
-        title: "Свой рилс",
-        attributionSpeaker: null,
-        attributionWork: null,
-      }),
-    );
-    expect(meta.title).toBe("Вдохновение — VedaMatch");
+  it("известна одна часть источника — она и идёт заголовком", () => {
+    expect(
+      buildShareMeta(post({ attributionSpeaker: "Иван", attributionWork: null }))
+        .title,
+    ).toBe("Иван");
+  });
+
+  it("без источника и автора — нейтральный заголовок", () => {
+    expect(
+      buildShareMeta(
+        post({ attributionSpeaker: null, attributionWork: null }),
+      ).title,
+    ).toBe("Вдохновение");
   });
 
   it("пустые строки атрибуции считаются отсутствием источника", () => {
+    expect(
+      buildShareMeta(post({ attributionSpeaker: "   ", attributionWork: "" }))
+        .title,
+    ).toBe("Вдохновение");
+  });
+
+  /**
+   * Тот самый дубль из карточки: у открытки без текста заголовок поста —
+   * «Картинка из раздела «Философия»», и ровно он уходит в тело сообщения
+   * (`shareQuoteOf()` подставляет `post.title`, когда цитаты нет). Превью
+   * не имеет права повторить эту строку.
+   */
+  it("не повторяет строку про раздел, которая уехала в тело сообщения", () => {
     const meta = buildShareMeta(
       post({
-        title: "Свой рилс",
-        attributionSpeaker: "   ",
-        attributionWork: "",
+        attributionSpeaker: null,
+        attributionWork: null,
+        categoryTitle: "Философия",
       }),
     );
-    expect(meta.title).toBe("Вдохновение — VedaMatch");
+    const messageBody = "Картинка из раздела «Философия»";
+    expect(meta.title).not.toBe(messageBody);
+    expect(meta.title).not.toContain("раздела");
+    expect(meta.description).not.toBe(messageBody);
+  });
+
+  it("не повторяет и сам текст цитаты", () => {
+    const quote = "Как человек, снимая старые одежды, надевает новые…";
+    const meta = buildShareMeta(post());
+    expect(meta.title).not.toContain(quote);
+    expect(meta.description).not.toContain(quote);
   });
 });

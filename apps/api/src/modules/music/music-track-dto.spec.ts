@@ -203,6 +203,7 @@ describe('toMusicArtistDto', () => {
       isVerified: true,
       trackCount: 7,
       rootCategoryId: null,
+      isAudiobook: false,
     });
   });
 

@@ -22,6 +22,7 @@ function item(overrides: Partial<NotificationItemDto> = {}): NotificationItemDto
     category: "motivation",
     createdAt: new Date().toISOString(),
     readAt: null,
+    mark: null,
     ...overrides,
   };
 }
@@ -147,6 +148,49 @@ describe("NotificationList", () => {
     expect(
       await screen.findByRole("link", { name: /Что нового/ }),
     ).toHaveAttribute("href", "/updates/news");
+  });
+
+  /**
+   * VED-272: доска «Работа» возвращает задачу в ленту после каждой смены
+   * статуса, и без пометки её приходится открывать заново, только чтобы
+   * понять, что изменилось.
+   */
+  it("показывает значок состояния задачи", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item({ title: "VED-42: новый комментарий", mark: "rework" })],
+      unreadCount: 1,
+    });
+    render(<NotificationList />);
+
+    // Скринридеру значок читается целой фразой, а не голым словом.
+    expect(await screen.findByText("Статус: На доработку")).toBeInTheDocument();
+    // Смысл несёт не только цвет: рядом со словом стоит свой знак.
+    expect(screen.getByText("На доработку")).toBeInTheDocument();
+  });
+
+  it("уведомление без состояния идёт без значка", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1 });
+    render(<NotificationList />);
+
+    await screen.findByText("Кадр готов");
+    expect(screen.queryByText(/^Статус: /)).not.toBeInTheDocument();
+  });
+
+  /**
+   * Прочитанное раньше гасилось `opacity-70` целиком: подписи падали до
+   * 2,9:1 вместо 4,5:1, а с ними погас бы и значок состояния — тот самый,
+   * который просили сделать заметным.
+   */
+  it("не гасит прочитанное прозрачностью", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item({ readAt: new Date().toISOString(), mark: "done" })],
+      unreadCount: 0,
+    });
+    render(<NotificationList />);
+
+    const card = (await screen.findByText("Кадр готов")).closest("a");
+    expect(card?.className).not.toMatch(/opacity-/);
+    expect(screen.getByText("Статус: Выполнено")).toBeInTheDocument();
   });
 
   it("даёт этот путь и когда уведомлений нет — других с этой страницы нет вовсе", async () => {

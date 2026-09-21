@@ -37,6 +37,12 @@ export interface MusicReferenceRow {
    * исполнителя формой.
    */
   rootCategoryId?: string | null;
+  /**
+   * Чтец раздела «Аудиокниги» (VED-237). Только для `kind === "artist"`:
+   * отметка стоит у исполнителя, и все его записи уходят в раздел, включая
+   * будущие.
+   */
+  isAudiobook?: boolean;
 }
 
 /** Опция выбора корневой категории — ровно то, что нужно `<select>` в строке. */
@@ -192,6 +198,16 @@ function Row({
   const setRootCategory = (rootCategoryId: string) =>
     void run(() =>
       updateMusicArtist(row.id, { rootCategoryId: rootCategoryId || null }),
+    );
+
+  /**
+   * Отметка «это аудиокниги» (VED-237) — тем же приёмом, что корневая
+   * категория выше. Массовая отметка нескольким сразу — в панели над
+   * списком (`MusicBulkArtistAudiobookBar`).
+   */
+  const toggleAudiobook = () =>
+    void run(() =>
+      updateMusicArtist(row.id, { isAudiobook: !row.isAudiobook }),
     );
 
   /** Обложка есть только у исполнителя и альбома: раздел каталога — просто имя. */
@@ -369,6 +385,28 @@ function Row({
                 ))}
               </select>
             </label>
+          )}
+          {kind === "artist" && row.isAudiobook !== undefined && (
+            <button
+              type="button"
+              onClick={toggleAudiobook}
+              disabled={pending}
+              aria-label={`«${row.primary}»: записи ${
+                row.isAudiobook ? "в разделе «Аудиокниги»" : "в Медиатеке"
+              }. Нажмите, чтобы перенести ${
+                row.isAudiobook ? "в Медиатеку" : "в «Аудиокниги»"
+              }`}
+              className={`shrink-0 self-center rounded-full border px-2 text-[11px] transition-colors disabled:opacity-50 ${
+                row.isAudiobook
+                  ? // Цвет — рамкой и подложкой, а не буквами: одиннадцать
+                    // пикселей золотом не дают 4.5:1 ни в одной теме.
+                    // Состояние здесь и так названо словом, не оттенком.
+                    "border-gold/60 bg-gold/15 text-text-0"
+                  : "border-glass-brd text-text-2 hover:text-text-0"
+              }`}
+            >
+              {row.isAudiobook ? "аудиокниги" : "медиатека"}
+            </button>
           )}
           {kind === "category" && row.categoryKind && (
             <button

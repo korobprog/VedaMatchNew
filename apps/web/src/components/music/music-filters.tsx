@@ -5,6 +5,7 @@ import type {
   MusicDurationBucket,
   MusicTrackSort,
 } from "@vedamatch/shared";
+import { MUSIC_DEFAULT_TRACK_SORT } from "@vedamatch/shared";
 
 /**
  * Фильтры каталога — тот самый чип «Фильтры» из макета `Catalog.dc.html`.
@@ -109,7 +110,10 @@ export function MusicFilters({
   const styles = categories.filter((category) => category.kind === "style");
 
   return (
-    <details className="group" open={active > 0}>
+    // `w-fit` и `open:w-full` — чтобы свёрнутый чип стоял в одном ряду с
+    // соседней кнопкой («Аудиокниги», VED-237), а раскрытая панель занимала
+    // всю ширину, а не жалась в колонку под чипом.
+    <details className="group w-fit open:w-full" open={active > 0}>
       <summary className="flex h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0">
         <svg
           viewBox="0 0 24 24"
@@ -130,17 +134,31 @@ export function MusicFilters({
 
       <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-glass-brd bg-white/2 p-3">
         <FilterRow label="Порядок">
-          {SORTS.map((option) => (
-            <Link
-              key={option.value}
-              href={musicFilterHref(state, {
-                sort: state.sort === option.value ? null : option.value,
-              })}
-              className={`${chip} ${state.sort === option.value ? chipOn : chipOff}`}
-            >
-              {option.label}
-            </Link>
-          ))}
+          {SORTS.map((option) => {
+            // Порядок по умолчанию (VED-273) — тот же, что применит сервер
+            // без параметра: «По названию» горит выбранным и на чистом
+            // адресе, иначе человек видит список по алфавиту и ни одного
+            // отмеченного порядка над ним. Нажатие на него снимает параметр,
+            // а не ставит `sort=title`: умолчание не должно считаться
+            // поставленным фильтром.
+            const on =
+              state.sort === option.value ||
+              (state.sort === null && option.value === MUSIC_DEFAULT_TRACK_SORT);
+            return (
+              <Link
+                key={option.value}
+                href={musicFilterHref(state, {
+                  sort:
+                    on || option.value === MUSIC_DEFAULT_TRACK_SORT
+                      ? null
+                      : option.value,
+                })}
+                className={`${chip} ${on ? chipOn : chipOff}`}
+              >
+                {option.label}
+              </Link>
+            );
+          })}
         </FilterRow>
 
         <FilterRow label="Длительность">

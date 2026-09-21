@@ -9,7 +9,9 @@ import { cookies } from "next/headers";
 import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
+  MusicAudiobooksDto,
   MusicCatalogDto,
+  MusicCategoryDto,
   MusicHistoryDto,
   MusicPlaybackStateDto,
   MusicPlaylistPageDto,
@@ -49,6 +51,23 @@ async function musicGet<T>(path: string): Promise<T | null> {
 
 export function getMusicCatalog(): Promise<MusicCatalogDto | null> {
   return musicGet<MusicCatalogDto>("/music/catalog");
+}
+
+/**
+ * Разделы каталога — корневые и стилевые. Отдельным запросом, а не куском
+ * витрины: странице исполнителя нужны только они, а `catalog` тянет заодно
+ * записи, подборки и всех исполнителей.
+ */
+export function getMusicCategories(): Promise<MusicCategoryDto[] | null> {
+  return musicGet<MusicCategoryDto[]>("/music/categories");
+}
+
+/**
+ * Раздел «Аудиокниги» (VED-237) — чтецы и их записи. В общем каталоге их
+ * нет: «отображение всех аудиокниг находится внутри этой кнопки».
+ */
+export function getMusicAudiobooks(): Promise<MusicAudiobooksDto | null> {
+  return musicGet<MusicAudiobooksDto>("/music/audiobooks");
 }
 
 /** Свои плейлисты — для рельса, каталога и страницы списка. */

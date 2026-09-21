@@ -15,6 +15,7 @@ function artist(over: Partial<MusicArtistDto> = {}): MusicArtistDto {
     isVerified: false,
     trackCount: 3,
     rootCategoryId: null,
+    isAudiobook: false,
     ...over,
   };
 }

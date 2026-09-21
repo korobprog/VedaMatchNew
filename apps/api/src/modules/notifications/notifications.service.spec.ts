@@ -280,6 +280,45 @@ describe('NotificationsService: колокольчик', () => {
     ).not.toBeNull();
   });
 
+  /**
+   * VED-153: прочитанное оседает свежим кверху. Старое уведомление, открытое
+   * только что, не должно всплывать над свежим, прочитанным давно.
+   */
+  it('прочитанное идёт свежим сверху, а не по времени прочтения', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', { ...draft, title: 'Старое' });
+    await service.addToInbox('user-1', { ...draft, title: 'Свежее' });
+    const day = 24 * 60 * 60 * 1000;
+    const [older, newer] = store.inbox;
+    older.createdAt = new Date(Date.now() - 3 * day);
+    older.readAt = new Date(); // открыли только что
+    newer.createdAt = new Date(Date.now() - day);
+    newer.readAt = new Date(Date.now() - day + 60_000); // прочитано давно
+
+    const inbox = await service.listInbox('user-1');
+
+    expect(inbox.items.map((item) => item.title)).toEqual(['Свежее', 'Старое']);
+  });
+
+  it('непрочитанное стоит выше прочитанного, даже если прочитанное свежее', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', { ...draft, title: 'Старое, но новое' });
+    await service.addToInbox('user-1', {
+      ...draft,
+      title: 'Свежее прочитанное',
+    });
+    const [unread, read] = store.inbox;
+    unread.createdAt = new Date(Date.now() - 60 * 60 * 1000);
+    read.readAt = new Date();
+
+    const inbox = await service.listInbox('user-1');
+
+    expect(inbox.items.map((item) => item.title)).toEqual([
+      'Старое, но новое',
+      'Свежее прочитанное',
+    ]);
+  });
+
   it('удаляет прочитанное, пролежавшее дольше недели: архив не копится', async () => {
     const { service, store } = createService();
     await service.addToInbox('user-1', draft);

@@ -72,6 +72,56 @@ describe("countMusicFilters", () => {
   });
 });
 
+// VED-273: порядок по умолчанию — по алфавиту. Панель обязана показывать
+// выбранным ровно то, что применит сервер без параметра, иначе список идёт
+// по алфавиту, а отмеченного порядка над ним нет.
+describe("MusicFilters — порядок по умолчанию", () => {
+  const artists: MusicArtistDto[] = [];
+  const categories = [category("kirtan", "Киртан", "style", 12)];
+
+  it("на чистом адресе выбран «По названию», а не «Сначала новое»", () => {
+    render(
+      <MusicFilters state={baseState} artists={artists} categories={categories} />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "По названию" }).className,
+    ).toMatch(/bg-violet/);
+    expect(
+      screen.getByRole("link", { name: "Сначала новое" }).className,
+    ).not.toMatch(/bg-violet/);
+  });
+
+  it("умолчание не ставит параметр в адрес и не считается фильтром", () => {
+    render(
+      <MusicFilters state={baseState} artists={artists} categories={categories} />,
+    );
+
+    expect(screen.getByRole("link", { name: "По названию" })).toHaveAttribute(
+      "href",
+      "/music",
+    );
+    expect(countMusicFilters(baseState)).toBe(0);
+  });
+
+  it("выбранный вручную порядок остаётся выбранным", () => {
+    render(
+      <MusicFilters
+        state={{ ...baseState, sort: "fresh" }}
+        artists={artists}
+        categories={categories}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Сначала новое" }).className,
+    ).toMatch(/bg-violet/);
+    expect(
+      screen.getByRole("link", { name: "По названию" }).className,
+    ).not.toMatch(/bg-violet/);
+  });
+});
+
 describe("MusicFilters — секция «Стиль»", () => {
   const artists: MusicArtistDto[] = [];
   const categories = [

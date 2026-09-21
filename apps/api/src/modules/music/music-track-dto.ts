@@ -36,6 +36,10 @@ export interface MusicArtistRow extends MusicCoverSource {
    * без этого поля (например, в `MusicArtistRow`, вложенном в альбом или
    * трек, где оно не нужно); тогда наружу уходит `null`. */
   rootCategoryId?: string | null;
+  /** Чтец раздела «Аудиокниги» (VED-237). `undefined` — поле не выбрано
+   * (строка исполнителя, вложенная в карточку записи, о разделе не знает);
+   * тогда наружу уходит `false`. */
+  isAudiobook?: boolean;
 }
 
 export interface MusicAlbumRow extends MusicCoverSource {
@@ -172,6 +176,7 @@ export function toMusicArtistDto(
     isVerified: row.isVerified,
     trackCount,
     rootCategoryId: row.rootCategoryId ?? null,
+    isAudiobook: row.isAudiobook ?? false,
   };
 }
 

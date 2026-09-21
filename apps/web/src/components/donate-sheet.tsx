@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { DonationRequisite, DonationSettingsDto } from "@vedamatch/shared";
 import { HeartHandshake } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
+import { DONATE_PURPOSE_ASK } from "@/lib/donate-content";
 
 /**
  * Кнопка «Поддержать развитие VedaMatch» и шторка с реквизитами.
@@ -70,6 +72,11 @@ function DonateSheet({
           {donation.text ||
             "Генерация видео и картинок стоит реальных денег. Пожертвование идёт на развитие портала. Спасибо."}
         </p>
+        {/* VED-11: просьба подписать назначение стоит над реквизитами. Ниже её
+            не прочитают — человек уже ушёл в приложение банка. */}
+        <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-text-1">
+          {DONATE_PURPOSE_ASK}
+        </p>
         <ul className="mt-4 space-y-2">
           {donation.requisites.map((item, index) => (
             <li key={`${item.kind}-${index}`}>
@@ -77,6 +84,14 @@ function DonateSheet({
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-sm">
+          <Link
+            href="/donate"
+            className="font-medium text-cyan underline decoration-cyan/40 underline-offset-2"
+          >
+            Все реквизиты и на что уходят деньги
+          </Link>
+        </p>
         <button className="btn-mint mt-5 w-full rounded-xl px-4 py-2 text-sm font-semibold" value="close">
           Закрыть
         </button>
