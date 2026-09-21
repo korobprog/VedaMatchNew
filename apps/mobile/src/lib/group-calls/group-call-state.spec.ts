@@ -13,6 +13,7 @@ function participant(id: string, minute: number): ChatGroupCallParticipantDto {
     user: { id, name: id, avatarUrl: null, lastSeenAt: null },
     joinedAt: `2026-09-21T10:0${minute}:00.000Z`,
     muted: false,
+    video: false,
     host: minute === 0,
   };
 }
@@ -29,6 +30,7 @@ function room(ids: string[], over: Partial<ChatGroupCallDto> = {}): ChatGroupCal
     endedAt: null,
     participants: ids.map((id, index) => participant(id, index)),
     maxParticipants: 4,
+    maxVideoParticipants: 3,
     ...over,
   };
 }

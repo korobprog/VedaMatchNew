@@ -44,6 +44,12 @@ import {
   shouldEndRoom,
   type RoomParticipant,
 } from './group-call-room';
+import {
+  GROUP_CALL_MAX_VIDEO,
+  VIDEO_DENIAL_TEXT,
+  videoDecision,
+  videoToTurnOff,
+} from './group-call-video';
 import { GroupCallSignalStore } from './group-call-signals.store';
 
 const roomInclude = {
@@ -225,26 +231,76 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
 
     await this.prisma.chatGroupCallParticipant.updateMany({
       where: { callId, userId, state: 'joined' },
-      data: { state: 'left', leftAt: new Date() },
+      // Камера гасится вместе с выходом: иначе ушедший держал бы одно из
+      // трёх мест под видео, пока его строку не перепишет следующий вход.
+      data: { state: 'left', leftAt: new Date(), video: false },
     });
     await this.signals.clearRecipient(callId, userId);
     return this.afterRoomChanged(callId);
   }
 
-  /** Микрофон — своё состояние, которое обязаны видеть остальные. */
+  /**
+   * Микрофон и камера — своё состояние, которое обязаны видеть остальные.
+   *
+   * Меняется ТОЛЬКО то, что пришло в запросе: кнопка камеры не вправе
+   * попутно включить микрофон, который человек только что выключил.
+   *
+   * Камера, в отличие от микрофона, может получить отказ: мест под видео в
+   * комнате `GROUP_CALL_MAX_VIDEO`, и держит этот потолок сервер
+   * (`group-call-video.ts`), а не кнопка. Двое, нажавшие «камеру»
+   * одновременно на последнее свободное место, обязаны получить разные
+   * ответы, и различить их может только тот, кто видит комнату целиком.
+   *
+   * Занятие места — условный `updateMany` по ПРЕЖНЕМУ значению, а не
+   * простая запись: между решением и записью лежит запрос к базе, а API
+   * работает не в одном экземпляре. Проигравший эту гонку получает тот же
+   * 409, что и опоздавший, — а не «включилось, но у всех рассыпалось».
+   */
   async setState(
     userId: string,
     callId: string,
-    muted: boolean,
+    patch: { muted?: boolean; video?: boolean },
   ): Promise<ChatGroupCallDto> {
     const room = await this.requireRoomForMember(callId, userId);
     if (room.status === 'ended')
       throw new ConflictException(JOIN_DENIAL_TEXT.ended);
-    const updated = await this.prisma.chatGroupCallParticipant.updateMany({
-      where: { callId, userId, state: 'joined' },
-      data: { muted: Boolean(muted), lastSeenAt: new Date() },
-    });
-    if (updated.count === 0) throw new ConflictException('Вы не в этом звонке');
+
+    if (typeof patch.video === 'boolean') {
+      const decision = videoDecision(
+        toRoomParticipants(room),
+        userId,
+        patch.video,
+        Date.now(),
+        room.status,
+      );
+      if (decision.kind === 'deny')
+        throw new ConflictException(VIDEO_DENIAL_TEXT[decision.reason]);
+      if (decision.kind === 'set') {
+        const claimed = await this.prisma.chatGroupCallParticipant.updateMany({
+          where: {
+            callId,
+            userId,
+            state: 'joined',
+            // Условие по прежнему значению и есть захват места: если его
+            // уже переписал другой запрос, `count` окажется нулём.
+            video: !decision.video,
+          },
+          data: { video: decision.video, lastSeenAt: new Date() },
+        });
+        if (claimed.count === 0 && decision.video)
+          throw new ConflictException(VIDEO_DENIAL_TEXT['video-full']);
+      }
+    }
+
+    if (typeof patch.muted === 'boolean') {
+      const updated = await this.prisma.chatGroupCallParticipant.updateMany({
+        where: { callId, userId, state: 'joined' },
+        data: { muted: patch.muted, lastSeenAt: new Date() },
+      });
+      if (updated.count === 0)
+        throw new ConflictException('Вы не в этом звонке');
+    }
+
     return this.afterRoomChanged(callId);
   }
 
@@ -423,6 +479,10 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
         leftAt: null,
         lastSeenAt: now,
         muted: false,
+        // Вход всегда начинается с выключенной камеры: место под видео
+        // выпрашивается отдельным `POST /state`, и наследовать его от
+        // прошлого захода нельзя — за это время его мог занять другой.
+        video: false,
       },
     });
     // Очередь сигналов прошлого захода — не наследство нового: offer оттуда
@@ -590,8 +650,26 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     const stale = staleParticipants(participants, now);
     const nextHost = hostOf(participants, now);
     const ending = shouldEndRoom(participants, now);
+    // Штатно список пуст: выход участника мест под видео не отнимает.
+    // Непусто он бывает, когда потолок опустили правкой кода, пока комнаты
+    // уже шли, либо когда в строки залезли руками. Тогда лишние камеры
+    // гасятся сами — иначе на телефонах продолжает греться разговор,
+    // которого правила портала больше не допускают.
+    const excessVideo = videoToTurnOff(participants, now);
 
-    if (stale.length === 0 && !ending && room.hostId === nextHost) return room;
+    if (
+      stale.length === 0 &&
+      excessVideo.length === 0 &&
+      !ending &&
+      room.hostId === nextHost
+    )
+      return room;
+
+    if (excessVideo.length > 0)
+      await this.prisma.chatGroupCallParticipant.updateMany({
+        where: { callId: room.id, userId: { in: excessVideo } },
+        data: { video: false },
+      });
 
     if (stale.length > 0)
       await this.prisma.chatGroupCallParticipant.updateMany({
@@ -600,7 +678,9 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
           state: 'joined',
           userId: { in: stale.map((p) => p.userId) },
         },
-        data: { state: 'left', leftAt: new Date() },
+        // Уехавший в тоннель освобождает и место в комнате, и место под
+        // видео — по той же причине, что и вышедший сам (см. `leave`).
+        data: { state: 'left', leftAt: new Date(), video: false },
       });
 
     if (ending) {
@@ -732,10 +812,12 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
       createdAt: room.createdAt.toISOString(),
       endedAt: room.endedAt?.toISOString() ?? null,
       maxParticipants: GROUP_CALL_MAX_PARTICIPANTS,
+      maxVideoParticipants: GROUP_CALL_MAX_VIDEO,
       participants: live.map((p) => ({
         user: toUserSummary(byId.get(p.userId)!.user),
         joinedAt: new Date(p.joinedAt).toISOString(),
         muted: p.muted,
+        video: p.video,
         host: p.userId === host,
       })),
     };
@@ -751,6 +833,7 @@ function toRoomParticipants(room: RoomRow): RoomParticipant[] {
       joinedAt: p.joinedAt.getTime(),
       lastSeenAt: p.lastSeenAt.getTime(),
       muted: p.muted,
+      video: p.video,
     }));
 }
 

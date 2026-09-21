@@ -74,6 +74,15 @@ export class ChatGroupCallsController {
     return this.calls.leave(user.sub, id);
   }
 
+  /**
+   * Своё состояние: микрофон и/или камера. Поля разбираются по отдельности
+   * и применяются только те, что пришли. Прежнее `Boolean(body?.muted)`
+   * теперь было бы ошибкой: отсутствующее поле превращалось бы в `false`, и
+   * кнопка камеры попутно включала бы микрофон.
+   *
+   * Включение камеры может вернуть 409 — мест под видео в комнате три, и
+   * решает это сервер (`group-call-video.ts`).
+   */
   @Post(':id/state')
   @HttpCode(200)
   state(
@@ -81,7 +90,10 @@ export class ChatGroupCallsController {
     @Param('id') id: string,
     @Body() body: SetChatGroupCallStateRequest,
   ): Promise<ChatGroupCallDto> {
-    return this.calls.setState(user.sub, id, Boolean(body?.muted));
+    return this.calls.setState(user.sub, id, {
+      muted: typeof body?.muted === 'boolean' ? body.muted : undefined,
+      video: typeof body?.video === 'boolean' ? body.video : undefined,
+    });
   }
 
   /**
