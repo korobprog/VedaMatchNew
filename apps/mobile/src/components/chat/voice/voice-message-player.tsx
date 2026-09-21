@@ -8,6 +8,7 @@ import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget } from '@/theme/tokens';
 import { canonicalVoiceUrlKey, forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { ensurePlaybackAudioMode } from '@/lib/chat/voice/voice-playback-audio-mode';
 import { isRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
 import {
   markVoiceFinished,
@@ -205,8 +206,20 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   // Старт воспроизведения после того, как источник уже выставлен
   // (`player.replace`) — общий хвост что для первого нажатия (после
   // `loadAndPlay`), что для повторных (источник уже загружен).
-  const startPlayback = () => {
+  //
+  // `ensurePlaybackAudioMode()` — ПЕРЕД `player.play()`, не после и не
+  // «когда-нибудь»: настоящий дефект, найденный чтением исходников
+  // `expo-audio`/`expo-modules-core` (разбор целиком —
+  // `voice-playback-audio-mode.ts`). Плеер не должен быть заложником того,
+  // кто последним трогал аудиорежим — `voice-recorder-control.tsx` тоже
+  // восстанавливает его после записи, но полагаться ТОЛЬКО на рекордер
+  // означало бы, что любой другой будущий вызывающий `setAudioModeAsync` с
+  // частичным объектом сломает воспроизведение снова, и плееру придётся
+  // опять гадать, откуда тишина без единого лога.
+  const startPlayback = async () => {
     requestVoicePlayback(id, () => player.pause());
+    await ensurePlaybackAudioMode();
+    if (!mountedRef.current) return;
     // `replace()` может сбросить скорость к 1× вместе с источником (тот же
     // повод, что `defaultPlaybackRate` у сайта, `chat-voice-player.tsx`) —
     // выставляем ещё раз перед стартом, не полагаясь только на эффект.
@@ -264,7 +277,7 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
       }, LOAD_TIMEOUT_MS);
     }
     if (seekToSec !== undefined) void player.seekTo(seekToSec).catch(() => undefined);
-    startPlayback();
+    void startPlayback();
   };
 
   // Повторный тап, пока первая загрузка ещё не дозрела (`waiting`), не
@@ -300,7 +313,7 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
       void loadAndPlay();
       return;
     }
-    startPlayback();
+    void startPlayback();
   };
   playRef.current = play;
 

@@ -115,6 +115,20 @@ describe('VoiceRecorderControl — остановка записи при ухо
     await flush();
 
     expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
+    // Настоящий дефект, найденный чтением исходников `expo-audio`/
+    // `expo-modules-core` (Android): восстановление режима после записи
+    // обязано перечислять ВСЕ поля, а не одно `{allowsRecording: false}`
+    // (`RecordTypeConverter` заполняет только присланные из JS ключи,
+    // остальные остаются JVM-дефолтом, а не Kotlin-дефолтом из
+    // `AudioMode`, — `playsInSilentMode` в частности осталась бы `false`
+    // вместо `true`, и это поле глобальное для всего модуля, не только
+    // для этого рекордера). Полный разбор — `voice-playback-audio-mode.ts`.
+    expect(mockSetAudioModeAsync).toHaveBeenLastCalledWith({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      shouldRouteThroughEarpiece: false,
+      interruptionMode: 'mixWithOthers',
+    });
   });
 
   it('blur без активной записи ничего не останавливает', async () => {

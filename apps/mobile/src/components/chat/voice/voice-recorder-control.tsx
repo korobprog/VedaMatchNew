@@ -16,6 +16,7 @@ import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { canRecordVoice, shouldInterruptForIncomingCall } from '@/lib/chat/voice/voice-call-guard';
 import { shouldCancelRecordingForAppState } from '@/lib/chat/voice/voice-app-state-guard';
 import { registerLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { ensurePlaybackAudioMode } from '@/lib/chat/voice/voice-playback-audio-mode';
 import { stopActiveVoicePlayback } from '@/lib/chat/voice/voice-playback-registry';
 import { setRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
 import { describeVoiceUploadError } from '@/lib/chat/voice/voice-upload-error';
@@ -246,12 +247,19 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
     }
   }
 
+  /**
+   * ПОЛНЫЙ объект режима, не одно поле `{allowsRecording: false}` (как было)
+   * — настоящий дефект `Record`-конвертации `expo-audio`/`expo-modules-core`
+   * на Android, из-за которого частичный объект откатывал глобальное поле
+   * `playsInSilentMode` модуля в `false` вместо документированного `true` и
+   * блокировал воспроизведение ЛЮБОГО голосового в приложении на устройстве
+   * в тихом/вибро-режиме до перезапуска процесса. Разбор — целиком в
+   * `voice-playback-audio-mode.ts`, общем и для рекордера, и для плеера:
+   * несогласованный частичный объект с любой стороны воспроизвёл бы тот же
+   * дефект снова.
+   */
   async function restoreAudioMode() {
-    try {
-      await setAudioModeAsync({ allowsRecording: false });
-    } catch {
-      // Не мешаем остальному — сессия просто останется как есть до следующей настройки.
-    }
+    await ensurePlaybackAudioMode();
   }
 
   async function start() {

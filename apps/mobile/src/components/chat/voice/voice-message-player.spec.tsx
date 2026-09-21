@@ -4,6 +4,7 @@ import { VoiceMessagePlayer } from './voice-message-player';
 import { registerLocalVoiceFile, resetVoiceLocalFileCacheForTests } from '@/lib/chat/voice/voice-local-file-cache';
 import { resetVoicePlaybackOrderForTests } from '@/lib/chat/voice/voice-playback-registry';
 import { resetVoiceRecordingGuardForTests, setRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
+import { PLAYBACK_AUDIO_MODE } from '@/lib/chat/voice/voice-playback-audio-mode';
 
 /**
  * Регресс с живой проверки сборки 5003 (Samsung A51): своё голосовое
@@ -44,10 +45,13 @@ function resetStatus() {
   };
 }
 
+const mockSetAudioModeAsync = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('expo-audio', () => ({
   __esModule: true,
   useAudioPlayer: jest.fn(() => mockPlayer),
   useAudioPlayerStatus: jest.fn(() => mockStatus),
+  setAudioModeAsync: (...args: unknown[]) => mockSetAudioModeAsync(...args),
 }));
 
 jest.mock('expo-file-system/legacy', () => ({
@@ -127,6 +131,7 @@ describe('VoiceMessagePlayer', () => {
     mockPlayer.pause.mockClear();
     mockPlayer.seekTo.mockClear();
     mockPlayer.setPlaybackRate.mockClear();
+    mockSetAudioModeAsync.mockClear().mockResolvedValue(undefined);
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     renderers = [];
   });
@@ -348,5 +353,68 @@ describe('VoiceMessagePlayer', () => {
     });
 
     expect(mockPlayer.replace).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Настоящий дефект, найденный чтением исходников `expo-audio`/
+   * `expo-modules-core` (Android): частичный объект в `setAudioModeAsync`
+   * (`{ allowsRecording: false }`, как раньше в `voice-recorder-control.tsx:
+   * restoreAudioMode()`) откатывает ГЛОБАЛЬНОЕ поле модуля
+   * `playsInSilentMode` в JVM-дефолт `false` вместо документированного
+   * `true` — на устройстве в тихом/вибро-режиме это делает `player.play()`
+   * молчаливой пустышкой (`AudioModule.kt: Function("play")` тихо
+   * возвращается на `!shouldPlayInSilentMode()`, без единого лога) для
+   * ЛЮБОГО голосового во всём приложении, не только для того, что играло
+   * во время записи. Плеер не должен зависеть от того, кто последним менял
+   * аудиорежим, — сам приводит его в пригодное для игры состояние перед
+   * каждым стартом (`voice-playback-audio-mode.ts`).
+   */
+  it('перед player.play() плеер сам приводит аудиорежим в пригодный для воспроизведения — не полагаясь на то, что это уже сделал кто-то другой', async () => {
+    const renderer = renderPlayer(buildAttachment());
+    await act(async () => {
+      findPlayButton(renderer).props.onPress();
+      await flush();
+    });
+
+    expect(mockSetAudioModeAsync).toHaveBeenCalledWith(PLAYBACK_AUDIO_MODE);
+    const modeCallOrder = mockSetAudioModeAsync.mock.invocationCallOrder[0];
+    const playCallOrder = mockPlayer.play.mock.invocationCallOrder[0];
+    expect(modeCallOrder).toBeLessThan(playCallOrder);
+  });
+
+  it('повторный старт воспроизведения не зависит от того, вызывал ли кто-то ранее режим записи — режим выставляется заново на каждый play()', async () => {
+    // Имитируем, что до этого момента режим был выставлен рекордером под
+    // запись (не под игру) — плеер обязан всё равно вернуть его в
+    // пригодное для игры состояние сам, не полагаясь на то, что это уже
+    // сделал кто-то извне.
+    mockSetAudioModeAsync.mockClear();
+    const renderer = renderPlayer(buildAttachment());
+
+    await act(async () => {
+      findPlayButton(renderer).props.onPress();
+      await flush();
+    });
+    expect(mockSetAudioModeAsync).toHaveBeenLastCalledWith(PLAYBACK_AUDIO_MODE);
+
+    act(() => {
+      mockStatus = { ...mockStatus, isLoaded: true, playing: true };
+      renderer.update(<VoiceMessagePlayer attachment={buildAttachment()} order={1} />);
+    });
+    await act(async () => {
+      findPlayButton(renderer).props.onPress(); // пауза
+      await flush();
+    });
+    mockSetAudioModeAsync.mockClear();
+
+    act(() => {
+      mockStatus = { ...mockStatus, playing: false };
+      renderer.update(<VoiceMessagePlayer attachment={buildAttachment()} order={1} />);
+    });
+    await act(async () => {
+      findPlayButton(renderer).props.onPress(); // снова play, источник уже загружен
+      await flush();
+    });
+
+    expect(mockSetAudioModeAsync).toHaveBeenLastCalledWith(PLAYBACK_AUDIO_MODE);
   });
 });
