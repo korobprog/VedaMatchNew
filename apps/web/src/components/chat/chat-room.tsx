@@ -29,6 +29,7 @@ import { contextLinesOf, recipientNameOf } from "./chat-assistant-context";
 import { ChatContextBar } from "./chat-context-bar";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { CallButtons } from "./calls/call-buttons";
+import { GroupCallButton } from "./calls/group/group-call-button";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
 import { scrollDeltaToCenter } from "./scroll-to-message";
@@ -546,6 +547,14 @@ export function ChatRoom({
             disabled={!conversation.canWrite}
           />
         )}
+        {/* Групповой звонок — только в группе: решение о том, где кнопка
+            уместна, живёт в `group-call-entry.ts`, сюда она приходит уже
+            готовая (в канале и в личном диалоге вернёт null). */}
+        <GroupCallButton
+          conversationId={conversation.id}
+          kind={conversation.kind}
+          canWrite={conversation.canWrite}
+        />
         <ChatRoomMenu
           conversation={conversation}
           onChange={(patch) =>
