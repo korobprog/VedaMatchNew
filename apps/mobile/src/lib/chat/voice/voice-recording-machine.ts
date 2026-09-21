@@ -25,6 +25,19 @@ export type VoiceRecorderAction =
   | { type: 'stop' }
   | { type: 'sent' }
   | { type: 'failed'; message: string }
+  /**
+   * Отдельно от `failed`: та ветка — провал ЗАГРУЗКИ уже записанного файла
+   * (переход только из `uploading`). Эта — провал САМОГО СТАРТА записи
+   * (переход только из `idle`) — раньше `voice-recorder-control.tsx`
+   * ошибочно слал сюда же `failed`, из-за чего защитный `if (state.phase
+   * === 'uploading')` молча отбрасывал переход, и состояние осталось бы
+   * "idle" даже если нативный рекордер к этому моменту уже реально начал
+   * писать. Дефект найден чтением кода (несовпадение guard-условия
+   * реального действия), а не живым наблюдением: на устройстве до этой
+   * ветки код доходит только при исключении в процессе старта записи —
+   * такого падения в проверенных прогонах зафиксировано не было.
+   */
+  | { type: 'startFailed'; message: string }
   | { type: 'dismiss' }
   /** Входящий звонок или потеря разрешения на середине записи. */
   | { type: 'interrupt' };
@@ -50,6 +63,8 @@ export function reduceVoiceRecorder(
       return state.phase === 'uploading'
         ? { phase: 'error', elapsedSec: 0, error: action.message }
         : state;
+    case 'startFailed':
+      return state.phase === 'idle' ? { phase: 'error', elapsedSec: 0, error: action.message } : state;
     case 'dismiss':
       return state.phase === 'error' ? INITIAL_VOICE_RECORDER_STATE : state;
     case 'interrupt':

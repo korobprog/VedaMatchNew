@@ -16,6 +16,9 @@ import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { canRecordVoice, shouldInterruptForIncomingCall } from '@/lib/chat/voice/voice-call-guard';
 import { shouldCancelRecordingForAppState } from '@/lib/chat/voice/voice-app-state-guard';
 import { registerLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { ensurePlaybackAudioMode } from '@/lib/chat/voice/voice-playback-audio-mode';
+import { stopActiveVoicePlayback } from '@/lib/chat/voice/voice-playback-registry';
+import { setRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
 import { describeVoiceUploadError } from '@/lib/chat/voice/voice-upload-error';
 import { buildVoiceUploadPart } from '@/lib/chat/voice/voice-upload-part';
 import { VOICE_RECORDING_OPTIONS } from '@/lib/chat/voice/voice-recording-options';
@@ -131,6 +134,7 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
     if (state.phase !== 'recording' && state.phase !== 'uploading') return;
     finalizingRef.current = true;
     void recorder.stop().catch(() => undefined);
+    setRecordingActive(false);
     void restoreAudioMode();
     setState(() => reduceVoiceRecorder(state, { type: 'interrupt' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,6 +208,7 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
     return () => {
       if (phaseRef.current !== 'recording') return;
       finalizingRef.current = true;
+      setRecordingActive(false);
       const uriAtUnmount = recorder.uri;
       void (async () => {
         try {
@@ -242,12 +247,19 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
     }
   }
 
+  /**
+   * ПОЛНЫЙ объект режима, не одно поле `{allowsRecording: false}` (как было)
+   * — настоящий дефект `Record`-конвертации `expo-audio`/`expo-modules-core`
+   * на Android, из-за которого частичный объект откатывал глобальное поле
+   * `playsInSilentMode` модуля в `false` вместо документированного `true` и
+   * блокировал воспроизведение ЛЮБОГО голосового в приложении на устройстве
+   * в тихом/вибро-режиме до перезапуска процесса. Разбор — целиком в
+   * `voice-playback-audio-mode.ts`, общем и для рекордера, и для плеера:
+   * несогласованный частичный объект с любой стороны воспроизвёл бы тот же
+   * дефект снова.
+   */
   async function restoreAudioMode() {
-    try {
-      await setAudioModeAsync({ allowsRecording: false });
-    } catch {
-      // Не мешаем остальному — сессия просто останется как есть до следующей настройки.
-    }
+    await ensurePlaybackAudioMode();
   }
 
   async function start() {
@@ -264,11 +276,50 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
       await applyRecordingAudioMode();
       await recorder.prepareToRecordAsync();
       recorder.record({ forDuration: VOICE_RECORD_MAX_SECONDS });
-      confirmTap();
-      setState(() => reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'start' }));
+      // Своя запись не должна играть параллельно с чужим голосовым в
+      // ленте — микрофон и так занят, и это тот же принцип, что уже
+      // применён к входящему звонку (`voice-call-guard.ts`).
+      stopActiveVoicePlayback();
+      // Состояние переключаем СРАЗУ, как только нативная запись реально
+      // пошла (`recorder.record()` выше уже вызвал `MediaRecorder.start()`
+      // на Android) — не после вибрации ниже. Раньше `confirmTap()` стоял
+      // ПЕРЕД этим `setState` — скрытый дефект, найденный чтением кода
+      // (не подтверждён живым наблюдением на устройстве: до этой ветки
+      // код доходит, только если ЛЮБОЙ шаг после реального старта записи
+      // бросает исключение — такого падения на устройстве зафиксировано не
+      // было). Если бы `confirmTap()` бросил, выполнение улетело бы в
+      // `catch` ниже, который (до фикса) отправлял `failed` — действие,
+      // действующее только из фазы `uploading` (`voice-recording-
+      // machine.ts`), — и молча ничего не поменял бы: состояние осталось бы
+      // `idle`, панель записи не появилась бы, а нативный рекордер продолжал
+      // бы писать невидимо до следующего тапа по той же кнопке. Теперь UI не
+      // может остаться в `idle`, пока запись реально идёт: он обновляется ДО
+      // любого некритичного побочного эффекта, который мог бы бросить
+      // исключение.
+      setState((current) => reduceVoiceRecorder(current, { type: 'start' }));
+      setRecordingActive(true);
+      try {
+        confirmTap();
+      } catch {
+        // Вибрация — обратная связь, не критичный путь: запись уже идёт и
+        // уже отражена в UI, сбой хаптики не должен откатывать её назад.
+      }
     } catch {
-      await restoreAudioMode();
-      setState(() => reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'failed', message: 'Микрофон недоступен' }));
+      // Ни один шаг здесь не должен стоять ПЕРЕД обновлением состояния с
+      // `await` — тоже найдено чтением кода, не воспроизведено на
+      // устройстве: раньше `await restoreAudioMode()` стоял до `setState`,
+      // и если бы тот промис завис (не отклонился и не разрешился — не
+      // обязательно кинул исключение сам по себе), `setState` не выполнился
+      // бы никогда: человек увидел бы неизменный `idle`, а нативный
+      // рекордер (если `record()` выше успел реально стартовать до броска)
+      // продолжал бы писать невидимо. Порядок теперь: попытка остановить
+      // рекордер (fire-and-forget, не блокируемся на ней — мало ли сама
+      // `stop()` тоже зависнет), СРАЗУ синхронно состояние `error`, и только
+      // потом, тоже без ожидания, — восстановление аудиорежима.
+      void recorder.stop().catch(() => undefined);
+      setRecordingActive(false);
+      setState((current) => reduceVoiceRecorder(current, { type: 'startFailed', message: 'Микрофон недоступен' }));
+      void restoreAudioMode();
     }
   }
 
@@ -277,6 +328,7 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
     // Считается «уже обработанной остановкой» — авто-стоп ниже не должен
     // следом позвать `finalizeAndSend()` и отправить то, что только что отменили.
     finalizingRef.current = true;
+    setRecordingActive(false);
     const uri = recorder.uri;
     try {
       await recorder.stop();
@@ -300,6 +352,10 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
   async function finalizeAndSend() {
     if (finalizingRef.current) return;
     finalizingRef.current = true;
+    // К этому моменту `recorder.stop()` уже вызван (кнопкой «Стоп» или
+    // авто-остановкой по потолку длительности) — микрофон свободен
+    // независимо от исхода загрузки ниже.
+    setRecordingActive(false);
     setState((current) => reduceVoiceRecorder(current, { type: 'stop' }));
     const durationSec = Math.max(1, Math.round(recorder.currentTime || recorderState.durationMillis / 1000));
     const waveform = downsampleWaveform(levelsRef.current);
