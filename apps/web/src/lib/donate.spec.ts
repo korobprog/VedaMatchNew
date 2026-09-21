@@ -6,45 +6,54 @@ describe("buildTransferPurpose", () => {
   it("собирает цель и подпись в одну строку", () => {
     expect(
       buildTransferPurpose({
-        purposeLabel: "На развитие портала",
+        purposeText: "Дар на разработку и поддержку Портала VedaMatch",
         donorName: "Кришна дас",
       }),
-    ).toBe("Дар на развитие портала. От: Кришна дас");
+    ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Кришна дас");
   });
 
   it("без подписи оставляет только цель", () => {
-    expect(buildTransferPurpose({ purposeLabel: "На серверы" })).toBe(
-      "Дар на серверы",
-    );
+    expect(
+      buildTransferPurpose({
+        purposeText: "Благодарность разработчикам Портала VedaMatch",
+      }),
+    ).toBe("Благодарность разработчикам Портала VedaMatch");
+  });
+
+  it("берёт формулировку как есть, без приклеенного «Дар»", () => {
+    // Склейка ломалась о падежи: получалось «Дар на благодарность разработчикам».
+    expect(
+      buildTransferPurpose({ purposeText: "Благодарность разработчикам" }),
+    ).toBe("Благодарность разработчикам");
   });
 
   it("подставляет общую формулировку, когда цель не выбрали", () => {
-    expect(buildTransferPurpose({ purposeLabel: "  ", donorName: null })).toBe(
-      "Дар на развитие VedaMatch",
+    expect(buildTransferPurpose({ purposeText: "  ", donorName: null })).toBe(
+      "Дар на разработку и поддержку Портала VedaMatch",
     );
   });
 
   it("схлопывает переводы строк и двойные пробелы", () => {
     expect(
       buildTransferPurpose({
-        purposeLabel: "На  серверы\nи хранилище",
+        purposeText: "Дар  на разработку\nи поддержку",
         donorName: " Гопал \n дас ",
       }),
-    ).toBe("Дар на серверы и хранилище. От: Гопал дас");
+    ).toBe("Дар на разработку и поддержку. От: Гопал дас");
   });
 
   it("вычищает кавычки и служебные знаки, на которых спотыкаются платёжки", () => {
     expect(
       buildTransferPurpose({
-        purposeLabel: "На «развитие» портала",
+        purposeText: "Дар на «разработку» портала",
         donorName: 'Иван "Ваня" #1',
       }),
-    ).toBe("Дар на развитие портала. От: Иван Ваня 1");
+    ).toBe("Дар на разработку портала. От: Иван Ваня 1");
   });
 
   it("обрезает длинную подпись по границе слова", () => {
     const result = buildTransferPurpose({
-      purposeLabel: "На развитие портала",
+      purposeText: "Дар на разработку и поддержку Портала VedaMatch",
       donorName: "Абвгдеж ".repeat(40),
     });
 
@@ -56,9 +65,34 @@ describe("buildTransferPurpose", () => {
 
   it("работает на каждой цели из справочника", () => {
     for (const purpose of DONATE_PURPOSES) {
-      const result = buildTransferPurpose({ purposeLabel: purpose.label });
-      expect(result.startsWith("Дар ")).toBe(true);
+      const result = buildTransferPurpose({ purposeText: purpose.transfer });
+      // Формулировка доезжает до выписки целиком: ни обрезки, ни чистки.
+      expect(result).toBe(purpose.transfer);
       expect(result.length).toBeLessThanOrEqual(MAX_TRANSFER_PURPOSE);
     }
+  });
+
+  it("оставляет место под подпись даже с самой длинной целью", () => {
+    for (const purpose of DONATE_PURPOSES) {
+      const result = buildTransferPurpose({
+        purposeText: purpose.transfer,
+        donorName: "Кришна дас",
+      });
+
+      expect(result.endsWith("От: Кришна дас")).toBe(true);
+      expect(result.length).toBeLessThanOrEqual(MAX_TRANSFER_PURPOSE);
+    }
+  });
+});
+
+describe("DONATE_PURPOSES", () => {
+  it("ровно две цели, первая — на портал", () => {
+    // Третий круг VED-12: заказчик вычеркнул прежний список из пяти вариантов
+    // и назвал две формулировки. Новый пункт здесь — только с его слов.
+    expect(DONATE_PURPOSES).toHaveLength(2);
+    expect(DONATE_PURPOSES[0].label).toBe(
+      "На разработку и поддержку Портала VedaMatch",
+    );
+    expect(DONATE_PURPOSES[1].label).toBe("Благодарность разработчикам");
   });
 });
