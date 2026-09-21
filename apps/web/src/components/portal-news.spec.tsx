@@ -128,8 +128,8 @@ describe("PortalNews", () => {
   });
 
   it("без новостей ничего не рисует", () => {
-    // Поддержка переехала над поиском (VED-146) и от новостей не зависит —
-    // её проверяет portal-support-link.spec.tsx.
+    // Поддержка с главной убрана (VED-238): она живёт в панели горячих
+    // кнопок и в меню шапки. От новостей она не зависела и раньше.
     const { container } = render(<PortalNews items={[]} />);
 
     expect(container).toBeEmptyDOMElement();
