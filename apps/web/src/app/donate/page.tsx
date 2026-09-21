@@ -4,7 +4,6 @@ import { Header } from "@/components/header";
 import { Navbar } from "@/components/landing/Navbar";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
-import { BankRequisites } from "@/components/donate/bank-requisites";
 import { CopyField } from "@/components/donate/copy-field";
 import { ExpenseBreakdown } from "@/components/donate/expense-breakdown";
 import { TransferPurposeForm } from "@/components/donate/transfer-purpose";
@@ -25,8 +24,13 @@ export const metadata: Metadata = {
  * ни за что перевод, ни куда уходят деньги. Здесь всё это на одном экране:
  *
  * - назначение платежа, которое просим подписать (VED-11);
- * - быстрый перевод из админки и банковские реквизиты (VED-12);
- * - статьи расходов за месяц (VED-62).
+ * - быстрый перевод: имена, телефоны и карты получателей из админки (VED-12);
+ * - статьи расходов (VED-62).
+ *
+ * Каркас банковских реквизитов (счёт, БИК, корсчёт, зарубежный перевод) с
+ * страницы снят: заказчик вычеркнул его целиком при разборе прода 21.09 —
+ * счетов у портала нет, а пустые карточки «уточняется» только занимали экран.
+ * Единственный способ перевода на странице — «Быстрый перевод» из админки.
  *
  * Открыта и гостю: просьба о помощи за входом — это просьба к тем, кто уже
  * внутри, а не ко всем. Шторка реквизитов остаётся: она нужна там, где человек
@@ -113,21 +117,6 @@ export default async function DonatePage() {
           </section>
         )}
 
-        {/* VED-12: банки. */}
-        <section className="mb-10" aria-labelledby="banks">
-          <h2
-            id="banks"
-            className="mb-2 font-display text-lg font-semibold text-text-0"
-          >
-            Наши банки
-          </h2>
-          <p className="mb-4 text-sm text-text-1">
-            Перевод по реквизитам — для тех, кому так привычнее, и для платежей
-            из-за рубежа. Не забудьте назначение платежа из блока выше.
-          </p>
-          <BankRequisites />
-        </section>
-
         {/* VED-62: смета. */}
         <section className="mb-10" aria-labelledby="expenses">
           <h2
@@ -143,6 +132,9 @@ export default async function DonatePage() {
           <ExpenseBreakdown />
         </section>
 
+        {/* Ссылку на статистику заказчик вычеркнул: страница про перевод, и
+            уводить с неё в цифры портала он не захотел. Осталась поддержка —
+            единственный ответ на «а как иначе» и «нужен чек». */}
         <p className="text-sm text-text-1">
           Вопрос про перевод, нужен другой способ или чек — напишите в{" "}
           <Link
@@ -150,13 +142,6 @@ export default async function DonatePage() {
             className="font-medium text-cyan underline decoration-cyan/40 underline-offset-2"
           >
             поддержку
-          </Link>
-          . Сколько нас и как растёт портал — на странице{" "}
-          <Link
-            href="/stats"
-            className="font-medium text-cyan underline decoration-cyan/40 underline-offset-2"
-          >
-            статистики
           </Link>
           .
         </p>
