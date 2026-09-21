@@ -5,6 +5,8 @@ import { NotificationBroadcastWorkerService } from './notification-broadcast-wor
 import { NotificationBroadcastService } from './notification-broadcast.service';
 import { FcmSenderService } from './fcm-sender.service';
 import { NativePushService } from './native-push.service';
+import { NotificationDeliveryAdminController } from './notification-delivery-admin.controller';
+import { NotificationDeliveryAdminService } from './notification-delivery-admin.service';
 import { NotificationDevicesAdminController } from './notification-devices-admin.controller';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsListener } from './notifications.listener';
@@ -20,10 +22,12 @@ import { TelegramSenderService } from './telegram-sender.service';
     NotificationsController,
     NotificationBroadcastController,
     NotificationDevicesAdminController,
+    NotificationDeliveryAdminController,
     TelegramNotificationsController,
   ],
   providers: [
     NotificationsService,
+    NotificationDeliveryAdminService,
     PushSenderService,
     FcmSenderService,
     NativePushService,
