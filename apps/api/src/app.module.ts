@@ -40,6 +40,7 @@ import { WellnessModule } from './modules/wellness/wellness.module';
 import { VacanciesModule } from './modules/vacancies/vacancies.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
+import { BlogModule } from './modules/blog/blog.module';
 
 @Module({
   imports: [
@@ -91,6 +92,8 @@ import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
     VacanciesModule,
     // Закладки портала (VED-163): адреса чужих страниц, без записи в каталоге.
     BookmarksModule,
+    // Блог-лента портала (VED-238) и личный блог участника (VED-116).
+    BlogModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AdminAwareThrottlerGuard }],
 })

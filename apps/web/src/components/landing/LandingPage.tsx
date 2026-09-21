@@ -139,7 +139,7 @@ export function LandingPage({
                     записи `Service` в сиде; при добавлении сервиса правится
                     здесь. Из текстов рядом числа убраны именно поэтому. */}
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan/15 text-text-0 text-xs font-bold">
-                  11
+                  12
                 </span>
                 {t("hero.ecosystem")}
               </a>

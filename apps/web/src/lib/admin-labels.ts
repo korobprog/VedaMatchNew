@@ -23,6 +23,7 @@ export const adminServiceLabels: Record<AdminServiceSlug, string> = {
   vacancies: 'Vacancies — работа и служение',
   astro: 'Astro — ведическая астрология',
   vedabase: 'Vedabase — священные тексты',
+  blog: 'Blog — блог-лента портала',
   music: 'Music — киртаны и бхаджаны',
   assistant: 'Ассистент — ИИ-помощник портала',
   wellness: 'Здоровье — состав продуктов',
