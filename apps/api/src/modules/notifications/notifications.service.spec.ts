@@ -40,6 +40,20 @@ function createService() {
     subscriptions: [] as Array<Record<string, unknown>>,
     preference: null as Record<string, unknown> | null,
     inbox: [] as InboxRow[],
+    /** Ответы `pushSubscription.count()` для `deliveryStatus`: живые и
+     *  помеченные мёртвыми подписки считаются отдельными запросами. */
+    webCount: 0,
+    webStale: 0,
+    deviceGroups: [] as Array<{
+      provider: string;
+      _count: { _all: number };
+    }>,
+    /* Что записали в отметки живости и что удалили: тесты смотрят сюда, а не
+       в сами jest-моки — так проверяется результат, а не форма вызова. */
+    webWrites: [] as Array<Record<string, unknown>>,
+    webDeleted: [] as string[],
+    deviceWrites: [] as Array<Record<string, unknown>>,
+    deviceDeleted: [] as string[],
   };
   let nextId = 1;
   const prisma = {
@@ -100,9 +114,30 @@ function createService() {
         store.subscriptions = store.subscriptions.filter(
           (row) => row.endpoint !== where.endpoint,
         );
+        store.webDeleted.push(where.endpoint);
         return Promise.resolve({ count: 1 });
       }),
       findMany: jest.fn(() => Promise.resolve(store.subscriptions)),
+      updateMany: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        store.webWrites.push(data);
+        return Promise.resolve({ count: 1 });
+      }),
+      count: jest.fn(({ where }: { where: { deadSince?: unknown } }) =>
+        Promise.resolve(
+          where.deadSince === null ? store.webCount : store.webStale,
+        ),
+      ),
+    },
+    notificationDevice: {
+      deleteMany: jest.fn(({ where }: { where: { token: string } }) => {
+        store.deviceDeleted.push(where.token);
+        return Promise.resolve({ count: 1 });
+      }),
+      updateMany: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        store.deviceWrites.push(data);
+        return Promise.resolve({ count: 1 });
+      }),
+      groupBy: jest.fn(() => Promise.resolve(store.deviceGroups)),
     },
     notificationPreference: {
       findUnique: jest.fn(() => Promise.resolve(store.preference)),
@@ -349,5 +384,199 @@ describe('NotificationsService: колокольчик', () => {
     await service.markRead('user-1', [store.inbox[0].id]);
 
     await expect(service.countUnread('user-1')).resolves.toBe(1);
+  });
+});
+
+describe('NotificationsService.recordPushResult (VED-314)', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const subscription = {
+    id: 's1',
+    endpoint: 'https://push.example/abc',
+    p256dh: 'p',
+    auth: 'a',
+    createdAt: new Date(Date.now() - 200 * day),
+    lastSuccessAt: null,
+    failureCount: 0,
+    lastSeenAt: null,
+    deadSince: null,
+  };
+
+  it('успех отмечает приём и снимает пометку «мёртвая»', async () => {
+    const { service, store } = createService();
+
+    await service.recordPushResult(subscription, null);
+
+    expect(store.webDeleted).toEqual([]);
+    expect(store.webWrites).toHaveLength(1);
+    const written = store.webWrites[0];
+    expect(written.lastSuccessAt).toBeInstanceOf(Date);
+    expect(written.failureCount).toBe(0);
+    expect(written.deadSince).toBeNull();
+  });
+
+  it('gone — удаляем: спорить со службой доставки не о чем', async () => {
+    const { service, store } = createService();
+
+    await service.recordPushResult(subscription, 'gone');
+
+    expect(store.webDeleted).toEqual([subscription.endpoint]);
+    expect(store.webWrites).toEqual([]);
+  });
+
+  it('первая неудача только копится в счётчике', async () => {
+    const { service, store } = createService();
+
+    await service.recordPushResult(subscription, 'transient');
+
+    expect(store.webDeleted).toEqual([]);
+    expect(store.webWrites[0].failureCount).toBe(1);
+    expect(store.webWrites[0].lastFailureAt).toBeInstanceOf(Date);
+    expect(store.webWrites[0].deadSince).toBeUndefined();
+  });
+
+  it('молчит месяц и набрала неудачи — помечается, но остаётся', async () => {
+    const { service, store } = createService();
+
+    await service.recordPushResult(
+      { ...subscription, failureCount: 2 },
+      'transient',
+    );
+
+    expect(store.webDeleted).toEqual([]);
+    expect(store.webWrites[0].failureCount).toBe(3);
+    expect(store.webWrites[0].deadSince).toBeInstanceOf(Date);
+  });
+
+  it('помеченная дольше отсрочки — удаляется', async () => {
+    const { service, store } = createService();
+
+    await service.recordPushResult(
+      {
+        ...subscription,
+        failureCount: 5,
+        deadSince: new Date(Date.now() - 30 * day),
+      },
+      'transient',
+    );
+
+    expect(store.webDeleted).toEqual([subscription.endpoint]);
+    expect(store.webWrites).toEqual([]);
+  });
+
+  it('свежий браузер с неудачами не помечается: подписке всего день', async () => {
+    const { service, store } = createService();
+
+    await service.recordPushResult(
+      {
+        ...subscription,
+        createdAt: new Date(Date.now() - day),
+        failureCount: 9,
+      },
+      'transient',
+    );
+
+    expect(store.webWrites[0].failureCount).toBe(10);
+    expect(store.webWrites[0].deadSince).toBeUndefined();
+  });
+});
+
+describe('NotificationsService.recordDeviceResult (VED-314)', () => {
+  const device = {
+    token: 'fcm-token',
+    createdAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000),
+    lastSuccessAt: null,
+    failureCount: 0,
+    lastSeenAt: null,
+    deadSince: null,
+  };
+
+  it('успех отмечает приём телефона', async () => {
+    const { service, store } = createService();
+
+    await service.recordDeviceResult(device, null);
+
+    expect(store.deviceDeleted).toEqual([]);
+    expect(store.deviceWrites[0].lastSuccessAt).toBeInstanceOf(Date);
+    expect(store.deviceWrites[0].deadSince).toBeNull();
+  });
+
+  it('gone от FCM удаляет токен', async () => {
+    const { service, store } = createService();
+
+    await service.recordDeviceResult(device, 'gone');
+
+    expect(store.deviceDeleted).toEqual(['fcm-token']);
+    expect(store.deviceWrites).toEqual([]);
+  });
+
+  it('«permanent» от Bot API устройство не удаляет, а идёт в счётчик', async () => {
+    const { service, store } = createService();
+
+    await service.recordDeviceResult(device, 'permanent');
+
+    expect(store.deviceDeleted).toEqual([]);
+    expect(store.deviceWrites[0].failureCount).toBe(1);
+  });
+});
+
+describe('NotificationsService.deliveryStatus (VED-314)', () => {
+  it('ни одной точки — человеку честно «доставлять некуда»', async () => {
+    const { service } = createService();
+
+    await expect(service.deliveryStatus('user-1')).resolves.toEqual({
+      web: 0,
+      app: 0,
+      telegram: 0,
+      stale: 0,
+      reachable: false,
+    });
+  });
+
+  it('телефон и бот считаются отдельно, помеченные — не в живых', async () => {
+    const { service, store } = createService();
+    store.webCount = 1;
+    store.webStale = 2;
+    store.deviceGroups = [
+      { provider: 'fcm', _count: { _all: 2 } },
+      { provider: 'telegram', _count: { _all: 1 } },
+    ];
+
+    await expect(service.deliveryStatus('user-1')).resolves.toEqual({
+      web: 1,
+      app: 2,
+      telegram: 1,
+      stale: 2,
+      reachable: true,
+    });
+  });
+
+  it('остались только помеченные мёртвыми — недостижим', async () => {
+    const { service, store } = createService();
+    store.webStale = 3;
+
+    await expect(service.deliveryStatus('user-1')).resolves.toMatchObject({
+      reachable: false,
+      stale: 3,
+    });
+  });
+});
+
+describe('NotificationsService.saveSubscription — отметка жизни (VED-314)', () => {
+  it('пересохранение подписки браузером снимает пометку и обнуляет неудачи', async () => {
+    const { service, store } = createService();
+
+    await service.saveSubscription(
+      'user-1',
+      {
+        endpoint: 'https://push.example/abc',
+        keys: { p256dh: 'p', auth: 'a' },
+      },
+      'Chrome',
+    );
+
+    const saved = store.subscriptions[0];
+    expect(saved.lastSeenAt).toBeInstanceOf(Date);
+    expect(saved.failureCount).toBe(0);
+    expect(saved.deadSince).toBeNull();
   });
 });

@@ -6,13 +6,20 @@ import type {
   NotificationMark,
   NotificationPreferencesDto,
   NotificationDeviceStats,
+  NotificationDeliveryStatusDto,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  judgeDeliveryPoint,
+  type DeliveryPointHealth,
+} from './delivery-health';
 import { normalizeDeviceRequest } from './device-request';
 import { sortInboxRows } from './inbox-order';
 import { parseNotificationMark } from './notification-mark';
+import type { PushFailure } from './push-errors';
+import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 
 const defaults: NotificationPreferencesDto = {
   enabled: true,
@@ -54,12 +61,39 @@ export interface InboxDraft {
   mark?: NotificationMark | null;
 }
 
-export interface StoredSubscription {
+export interface StoredSubscription extends DeliveryPointHealth {
   id: string;
   endpoint: string;
   p256dh: string;
   auth: string;
 }
+
+/** Телефон или бот вместе с отметками живости: отправитель возвращает исход,
+ *  а записывает его `recordDeviceResult`. */
+export interface StoredDevice extends DeliveryPointHealth {
+  token: string;
+}
+
+/** Колонки живости, которые тянет любая выборка точек доставки. */
+export const deliveryHealthSelect = {
+  createdAt: true,
+  lastSuccessAt: true,
+  failureCount: true,
+  lastSeenAt: true,
+  deadSince: true,
+} as const;
+
+/**
+ * Клиент подтвердил точку доставки — браузер пересохранил подписку при
+ * загрузке страницы, приложение прислало токен при запуске. Это сигнал жизни
+ * не от посредника, а от самого устройства: пометка «мёртвая» снимается,
+ * счётчик неудач обнуляется.
+ */
+const seenByClient = () => ({
+  lastSeenAt: new Date(),
+  failureCount: 0,
+  deadSince: null,
+});
 
 @Injectable()
 export class NotificationsService {
@@ -78,6 +112,9 @@ export class NotificationsService {
       p256dh: dto.keys.p256dh,
       auth: dto.keys.auth,
       userAgent: userAgent ?? null,
+      // Сам факт этого запроса — свидетельство жизни браузера: страница
+      // портала пересохраняет подписку при каждой загрузке (VED-314).
+      ...seenByClient(),
     };
     await this.prisma.pushSubscription.upsert({
       where: { endpoint: dto.endpoint },
@@ -110,7 +147,9 @@ export class NotificationsService {
    */
   async saveDevice(userId: string, body: unknown): Promise<void> {
     const device = normalizeDeviceRequest(body);
-    const data = { userId, ...device };
+    // Регистрация токена — тот же сигнал жизни, что пересохранение подписки
+    // браузером: приложение запустилось и умеет принимать пуши.
+    const data = { userId, ...device, ...seenByClient() };
     await this.prisma.notificationDevice.upsert({
       where: { token: device.token },
       create: data,
@@ -158,8 +197,137 @@ export class NotificationsService {
   async listSubscriptions(userId: string): Promise<StoredSubscription[]> {
     return this.prisma.pushSubscription.findMany({
       where: { userId },
-      select: { id: true, endpoint: true, p256dh: true, auth: true },
+      select: {
+        id: true,
+        endpoint: true,
+        p256dh: true,
+        auth: true,
+        ...deliveryHealthSelect,
+      },
     });
+  }
+
+  /**
+   * Итог попытки отправки в браузер (VED-314). Раньше строка удалялась только
+   * по ответу `gone`, а всё остальное копилось годами: про отказы и про успехи
+   * не оставалось никакого следа.
+   *
+   * - успех — отметка приёма и обнуление счётчика (пометка «мёртвая» снимается);
+   * - `gone` — строку удаляет служба доставки, спорить не о чем;
+   * - прочее — неудача в счётчик, и только потом правило
+   *   `judgeDeliveryPoint()` решает: оставить, пометить или удалить.
+   */
+  async recordPushResult(
+    subscription: StoredSubscription,
+    failure: PushFailure | null,
+  ): Promise<void> {
+    if (failure === 'gone') {
+      await this.deleteSubscription(subscription.endpoint);
+      return;
+    }
+    const now = new Date();
+    if (failure === null) {
+      await this.prisma.pushSubscription.updateMany({
+        where: { endpoint: subscription.endpoint },
+        data: { lastSuccessAt: now, failureCount: 0, deadSince: null },
+      });
+      return;
+    }
+    const failureCount = subscription.failureCount + 1;
+    const verdict = judgeDeliveryPoint({ ...subscription, failureCount }, now);
+    if (verdict === 'delete') {
+      await this.deleteSubscription(subscription.endpoint);
+      return;
+    }
+    await this.prisma.pushSubscription.updateMany({
+      where: { endpoint: subscription.endpoint },
+      data: {
+        failureCount,
+        lastFailureAt: now,
+        ...(verdict === 'mark' ? { deadSince: now } : {}),
+      },
+    });
+  }
+
+  /**
+   * То же для телефона с приложением и для устройства бота. Отдельный метод, а
+   * не общий с веб-подпиской: таблицы разные, а ключ у устройства — токен.
+   */
+  async recordDeviceResult(
+    device: StoredDevice,
+    // `permanent` шлёт только Bot API: повторять и удалять устройство не за
+    // что, но в счётчик неудач такой отказ идёт наравне с остальными.
+    failure: PushFailure | 'permanent' | null,
+  ): Promise<void> {
+    if (failure === 'gone') {
+      await this.prisma.notificationDevice.deleteMany({
+        where: { token: device.token },
+      });
+      return;
+    }
+    const now = new Date();
+    if (failure === null) {
+      await this.prisma.notificationDevice.updateMany({
+        where: { token: device.token },
+        data: { lastSuccessAt: now, failureCount: 0, deadSince: null },
+      });
+      return;
+    }
+    const failureCount = device.failureCount + 1;
+    const verdict = judgeDeliveryPoint({ ...device, failureCount }, now);
+    if (verdict === 'delete') {
+      await this.prisma.notificationDevice.deleteMany({
+        where: { token: device.token },
+      });
+      return;
+    }
+    await this.prisma.notificationDevice.updateMany({
+      where: { token: device.token },
+      data: {
+        failureCount,
+        lastFailureAt: now,
+        ...(verdict === 'mark' ? { deadSince: now } : {}),
+      },
+    });
+  }
+
+  /**
+   * Есть ли человеку куда доставлять (VED-314). Нужно самому человеку в
+   * настройках: раньше он жал «включить» и оставался в уверенности, что всё
+   * работает, даже когда ни одной точки доставки у него не было — ровно это и
+   * случилось с жалобой 21.09.
+   *
+   * Помеченные мёртвыми в живые не идут: доставки от них не ждём, а человеку
+   * важно знать правду до того, как он пропустит звонок.
+   */
+  async deliveryStatus(userId: string): Promise<NotificationDeliveryStatusDto> {
+    const [web, devices, stale] = await Promise.all([
+      this.prisma.pushSubscription.count({
+        where: { userId, deadSince: null },
+      }),
+      this.prisma.notificationDevice.groupBy({
+        by: ['provider'],
+        where: { userId, deadSince: null },
+        _count: { _all: true },
+      }),
+      this.prisma.pushSubscription.count({
+        where: { userId, deadSince: { not: null } },
+      }),
+    ]);
+    let app = 0;
+    let telegram = 0;
+    for (const group of devices) {
+      if (group.provider === TELEGRAM_DEVICE_PROVIDER)
+        telegram += group._count._all;
+      else app += group._count._all;
+    }
+    return {
+      web,
+      app,
+      telegram,
+      stale,
+      reachable: web + app + telegram > 0,
+    };
   }
 
   async getPreferences(userId: string): Promise<NotificationPreferencesDto> {
