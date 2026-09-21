@@ -238,8 +238,12 @@ export default function NewCommunityScreen() {
                   displayName: result.displayName,
                 };
                 setDraft((current) => ({ ...current, location }));
-                setCityQuery(result.displayName ?? result.city);
-                setCityResults([]);
+                // В поле кладётся ровно та подпись, с которой потом
+                // сверяется `shouldSearchGeo`, — иначе форма пойдёт искать
+                // уже выбранный город и снова покажет подсказки. Гасит их
+                // тот же эффект: отдельный `setCityResults([])` здесь был бы
+                // второй, незаметной причиной того же самого.
+                setCityQuery(locationLabel(location) ?? '');
               }}
               android_ripple={ripple(colors.glassBorder)}
               style={({ pressed }) => [

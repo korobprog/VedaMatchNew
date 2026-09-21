@@ -248,6 +248,21 @@ describe('Экран «Новая община» — подсказки горо
     expect(texts(renderer)).toContain('Выбрано');
   });
 
+  it('геокодер без полного названия: город выбирается и заново не ищется', async () => {
+    mockGeoSearch.mockResolvedValue([{ city: 'Минск', country: 'Беларусь', lat: 53.9, lon: 27.56 }]);
+    const renderer = await render();
+    await typeCity(renderer, 'Минск');
+    await act(async () => {
+      byLabel(renderer, 'Минск').props.onPress();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await flush();
+    expect(mockGeoSearch).toHaveBeenCalledTimes(1);
+    expect(texts(renderer)).toContain('Выбрано');
+  });
+
   it('человек правит город после выбора — подсказки приходят снова', async () => {
     const renderer = await render();
     await typeCity(renderer, 'Минск');

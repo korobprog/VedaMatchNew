@@ -89,18 +89,23 @@ export function buildCreateCommunityRequest(draft: CommunityDraft): CreateCommun
   };
 }
 
-/**
- * Пора ли дёргать геокодер: меньше двух символов искать нечего, а повторять
- * запрос по уже выбранному городу — тем более (его название и лежит в поле).
- */
-export function shouldSearchGeo(query: string, location: ProfileLocation | null): boolean {
-  const needle = query.trim();
-  if (needle.length < 2) return false;
-  return needle !== location?.displayName;
-}
-
 /** Подпись выбранного города в форме: «Москва, Россия». */
 export function locationLabel(location: ProfileLocation | null): string | null {
   if (!location) return null;
   return location.displayName ?? [location.city, location.country].filter(Boolean).join(', ');
+}
+
+/**
+ * Пора ли дёргать геокодер: меньше двух символов искать нечего, а повторять
+ * запрос по уже выбранному городу — тем более (его подпись и лежит в поле).
+ *
+ * Сверяемся именно с `locationLabel`, а не с `displayName`: геокодер не
+ * всегда отдаёт полное название, и тогда в поле оказывается «город, страна»
+ * — при сравнении с пустым `displayName` форма искала бы заново уже
+ * выбранный город и снова показывала бы подсказки под ним.
+ */
+export function shouldSearchGeo(query: string, location: ProfileLocation | null): boolean {
+  const needle = query.trim();
+  if (needle.length < 2) return false;
+  return needle !== locationLabel(location);
 }

@@ -172,6 +172,21 @@ describe('Экран участников — права', () => {
     expect(mockPeople).not.toHaveBeenCalled();
   });
 
+  it('у рядового участника раздела «Позвать» нет вовсе', async () => {
+    mockDetail.mockResolvedValue(conversation('member'));
+    const renderer = await render();
+    expect(texts(renderer)).not.toContain('Позвать');
+    // И ни одного объяснения «звать некого» — раздела просто нет.
+    expect(texts(renderer)).not.toContain('Звать некого');
+  });
+
+  it('у администратора раздел «Позвать» есть', async () => {
+    mockDetail.mockResolvedValue(conversation('admin'));
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Позвать');
+    expect(queryByLabel(renderer, 'Ананда')).not.toBeNull();
+  });
+
   it('себя из списка не исключают', async () => {
     const renderer = await render();
     expect(queryByLabel(renderer, 'Исключить: Я')).toBeNull();

@@ -114,6 +114,11 @@ describe('shouldSearchGeo', () => {
     expect(shouldSearchGeo('Минск, Бел', minsk)).toBe(true);
   });
 
+  it('геокодер не дал полного названия — сверяемся с «город, страна»', () => {
+    const noDisplayName = { city: 'Минск', country: 'Беларусь', lat: 53.9, lon: 27.56 };
+    expect(shouldSearchGeo('Минск, Беларусь', noDisplayName)).toBe(false);
+  });
+
   it('пробелы не считаются за буквы', () => {
     expect(shouldSearchGeo('   ', null)).toBe(false);
   });

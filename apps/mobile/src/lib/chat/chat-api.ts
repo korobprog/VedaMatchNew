@@ -114,7 +114,15 @@ export function createChatApi(api: ApiClient) {
         method: 'POST',
         body: patch,
       }),
-    /** Выйти самому: маршрут `.../members/me` объявлен до `:userId`. */
+    /**
+     * Выйти самому. У этого пути на сервере отдельный обработчик
+     * (`DELETE chat/conversations/:id/members/me`), объявленный в
+     * `chat.controller.ts` непосредственно перед
+     * `DELETE .../members/:userId` — там же стоит и комментарий, почему
+     * порядок важен: Nest сверяет маршруты по порядку объявления, и при
+     * обратном «me» ушло бы в удаление участника с ответом «Участник не
+     * найден». Своего id сюда подставлять не нужно.
+     */
     leave: (conversationId: string) =>
       api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/me`, {
         method: 'DELETE',
