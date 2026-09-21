@@ -71,7 +71,7 @@ function GroupCallScreen() {
   const elapsed = useElapsed(state.phase === "active" ? state.joinedAt : null);
   const showsGrid = !ended && !joining && camerasOn(state.call) > 0;
   const camera = cameraButtonState(state.call, calls.selfId, calls.cameraOn);
-
+  const wide = useWideViewport();
 
   return (
     <div
@@ -132,7 +132,7 @@ function GroupCallScreen() {
             </p>
           )
         ) : showsGrid ? (
-          <VideoGrid calls={calls} participants={participants} />
+          <VideoGrid calls={calls} participants={participants} wide={wide} />
         ) : (
           <ul aria-label="Кто в звонке" className="flex flex-col gap-2">
             {participants.map((participant) => (
@@ -247,9 +247,11 @@ function GroupCallScreen() {
 function VideoGrid({
   calls,
   participants,
+  wide,
 }: {
   calls: GroupCallsApi;
   participants: ChatGroupCallParticipantDto[];
+  wide: boolean;
 }) {
   const { state } = calls;
   const tiles = videoTiles({
@@ -263,8 +265,7 @@ function VideoGrid({
         .map(([userId]) => userId),
     ),
   });
-  // Панель на сайте всегда широкая — плитки встают вдоль, см. `video-grid.ts`.
-  const layout = videoGridLayout(tiles.length, true);
+  const layout = videoGridLayout(tiles.length, wide);
   const byId = new Map(participants.map((p) => [p.user.id, p]));
 
   return (
@@ -471,6 +472,32 @@ function ParticipantRow({
       )}
     </li>
   );
+}
+
+/**
+ * Широкий ли экран — по нему раскладка режет сетку вдоль или поперёк
+ * (`video-grid.ts`).
+ *
+ * Не украшение и не «на всякий случай»: портал открывают и с телефона в
+ * браузере. При жёстком «панель на сайте всегда широкая» трое вставали там
+ * тремя вертикальными полосами по 120 точек, где от лица остаётся щель, —
+ * ровно тот случай, против которого написано правило в `video-grid.ts`.
+ *
+ * Порог 640 точек — граница `sm` в Tailwind, та же, по которой ломается
+ * остальная вёрстка портала. `matchMedia`, а не слушатель `resize`: он
+ * срабатывает один раз на переходе через порог, а не на каждый пиксель
+ * перетаскивания окна.
+ */
+function useWideViewport(): boolean {
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 640px)");
+    const read = () => setWide(query.matches);
+    read();
+    query.addEventListener("change", read);
+    return () => query.removeEventListener("change", read);
+  }, []);
+  return wide;
 }
 
 /** Длительность своего участия — от входа, а не от начала комнаты. */
