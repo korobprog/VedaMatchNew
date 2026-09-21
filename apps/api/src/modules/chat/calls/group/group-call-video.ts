@@ -1,5 +1,9 @@
 import { CHAT_GROUP_CALL_MAX_VIDEO } from '@vedamatch/shared';
-import { isAlive, liveParticipants, type RoomParticipant } from './group-call-room';
+import {
+  isAlive,
+  liveParticipants,
+  type RoomParticipant,
+} from './group-call-room';
 
 /**
  * Правила видео в комнате (VED-293, этап 4) — чистым модулем, рядом с

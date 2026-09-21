@@ -494,9 +494,9 @@ describe('микрофон', () => {
   it('не участник микрофоном комнаты не управляет', async () => {
     const { service } = buildService();
     const room = await service.start('a', { conversationId: 'conv-1' });
-    await expect(service.setState('b', room.id, { muted: true })).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.setState('b', room.id, { muted: true }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('камера не включается заодно с микрофоном', async () => {
@@ -518,7 +518,8 @@ describe('камера', () => {
   async function roomWithCameras(count: number) {
     const built = buildService();
     const room = await built.service.start('a', { conversationId: 'conv-1' });
-    for (const userId of ['b', 'c', 'd']) await built.service.join(userId, room.id);
+    for (const userId of ['b', 'c', 'd'])
+      await built.service.join(userId, room.id);
     for (const userId of ['a', 'b', 'c', 'd'].slice(0, count))
       await built.service.setState(userId, room.id, { video: true });
     return { ...built, room };
@@ -527,11 +528,9 @@ describe('камера', () => {
   it('трое включают камеры и это видно остальным', async () => {
     const { service, room } = await roomWithCameras(3);
     const state = await service.heartbeat('d', room.id);
-    expect(state.participants.filter((p) => p.video).map((p) => p.user.id)).toEqual([
-      'a',
-      'b',
-      'c',
-    ]);
+    expect(
+      state.participants.filter((p) => p.video).map((p) => p.user.id),
+    ).toEqual(['a', 'b', 'c']);
   });
 
   it('четвёртый получает отказ с понятным текстом, а не молчание', async () => {
@@ -543,10 +542,14 @@ describe('камера', () => {
 
   it('четвёртый остаётся в звонке голосом', async () => {
     const { service, room } = await roomWithCameras(3);
-    await service.setState('d', room.id, { video: true }).catch(() => undefined);
+    await service
+      .setState('d', room.id, { video: true })
+      .catch(() => undefined);
     const state = await service.heartbeat('d', room.id);
     expect(state.participants.map((p) => p.user.id)).toContain('d');
-    expect(state.participants.find((p) => p.user.id === 'd')!.video).toBe(false);
+    expect(state.participants.find((p) => p.user.id === 'd')!.video).toBe(
+      false,
+    );
   });
 
   it('место освобождается выключением камеры', async () => {
@@ -593,7 +596,9 @@ describe('камера', () => {
     participants
       .filter((p) => p.userId === 'c')
       .forEach((p) => {
-        p.lastSeenAt = new Date(Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000);
+        p.lastSeenAt = new Date(
+          Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000,
+        );
       });
 
     const after = await service.setState('d', room.id, { video: true });
@@ -604,7 +609,9 @@ describe('камера', () => {
     const { service, events, room } = await roomWithCameras(0);
     events.publish.mockClear();
     await service.setState('a', room.id, { video: true });
-    const sent = events.publish.mock.calls.at(-1);
+    const sent = events.publish.mock.calls.at(-1) as
+      | [string[], { type: string }]
+      | undefined;
     expect(sent?.[1]).toMatchObject({ type: 'group-call.updated' });
     expect(sent?.[0]).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
   });

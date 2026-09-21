@@ -70,7 +70,12 @@ describe('потолок камер', () => {
   });
 
   it('место освобождается, как только кто-то выключил камеру', () => {
-    const room = [p('a', 0, true), p('b', 1, true), p('c', 2, false), p('d', 3)];
+    const room = [
+      p('a', 0, true),
+      p('b', 1, true),
+      p('c', 2, false),
+      p('d', 3),
+    ];
     expect(videoDecision(room, 'd', true, NOW)).toEqual({
       kind: 'set',
       video: true,

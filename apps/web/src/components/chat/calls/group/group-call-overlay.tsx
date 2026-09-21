@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatGroupCallParticipantDto } from "@vedamatch/shared";
 import { ChatAvatar } from "../../chat-avatar";
-import { useGroupCalls } from "./group-call-context";
+import { useGroupCalls, type GroupCallsApi } from "./group-call-context";
 import { peopleLabel } from "./group-call-banner-text";
 import { peerStateLabel } from "./group-call-state";
 import {
@@ -72,87 +72,6 @@ function GroupCallScreen() {
   const showsGrid = !ended && !joining && camerasOn(state.call) > 0;
   const camera = cameraButtonState(state.call, calls.selfId, calls.cameraOn);
 
-  /** Плитки комнаты — что в какой, решает `group-video-state.ts`. */
-  function VideoGrid() {
-    const tiles = videoTiles({
-      call: state.call,
-      selfId: calls.selfId,
-      sendingVideo: calls.sendingVideo,
-      remoteStreams: new Set(Object.keys(calls.remoteStreams)),
-      remoteVideoOff: new Set(
-        Object.entries(calls.remoteVideoOff)
-          .filter(([, off]) => off)
-          .map(([userId]) => userId),
-      ),
-    });
-    // Панель на сайте всегда широкая — плитки встают вдоль, см. `video-grid.ts`.
-    const layout = videoGridLayout(tiles.length, true);
-    const byId = new Map(participants.map((p) => [p.user.id, p]));
-
-    return (
-      <ul
-        aria-label="Кто в звонке"
-        className="grid flex-1 gap-2"
-        style={{
-          gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))`,
-        }}
-      >
-        {tiles.map((tile) => {
-          const participant = byId.get(tile.userId);
-          if (!participant) return null;
-          const muted = tile.isSelf ? state.muted : participant.muted;
-          const stream = tile.isSelf
-            ? calls.localVideoStream
-            : (calls.remoteStreams[tile.userId] ?? null);
-          const speaking = state.speaking.includes(tile.userId);
-          return (
-            <li
-              key={tile.userId}
-              aria-label={spokenLabel({
-                participant,
-                isSelf: tile.isSelf,
-                muted,
-                speaking,
-                statusLine: tile.isSelf
-                  ? null
-                  : peerStateLabel(state.peerStates[tile.userId]),
-                cameraOff: tile.view === "avatar",
-              })}
-              className={`relative flex min-h-32 items-end overflow-hidden rounded-2xl border bg-bg-1 ${
-                speaking ? "border-cyan" : "border-glass-brd"
-              }`}
-            >
-              {tile.view === "video" && stream ? (
-                <VideoTile stream={stream} mirrored={tile.isSelf} />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <ChatAvatar
-                    kind="direct"
-                    user={participant.user}
-                    title={participant.user.name}
-                    size={layout.rows > 1 ? 56 : 72}
-                  />
-                </div>
-              )}
-              <p className="relative flex w-full items-center gap-1.5 bg-glass px-3 py-1.5 text-xs font-semibold text-text-0">
-                <span className="truncate">
-                  {tile.isSelf
-                    ? `${participant.user.name} (вы)`
-                    : participant.user.name}
-                </span>
-                {muted && (
-                  <span aria-hidden className="shrink-0 text-text-1">
-                    <MicIcon off size={16} />
-                  </span>
-                )}
-              </p>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }
 
   return (
     <div
@@ -213,7 +132,7 @@ function GroupCallScreen() {
             </p>
           )
         ) : showsGrid ? (
-          <VideoGrid />
+          <VideoGrid calls={calls} participants={participants} />
         ) : (
           <ul aria-label="Кто в звонке" className="flex flex-col gap-2">
             {participants.map((participant) => (
@@ -314,6 +233,102 @@ function GroupCallScreen() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Плитки комнаты — что в какой, решает `group-video-state.ts`.
+ *
+ * Компонент верхнего уровня, а не функция внутри панели: объявленный в теле
+ * другого компонента, он пересоздавался бы на каждую отрисовку, и React
+ * сбрасывал бы состояние каждой плитки — то есть `<video>` терял бы
+ * `srcObject` и картинка моргала бы на каждое событие комнаты.
+ */
+function VideoGrid({
+  calls,
+  participants,
+}: {
+  calls: GroupCallsApi;
+  participants: ChatGroupCallParticipantDto[];
+}) {
+  const { state } = calls;
+  const tiles = videoTiles({
+    call: state.call,
+    selfId: calls.selfId,
+    sendingVideo: calls.sendingVideo,
+    remoteStreams: new Set(Object.keys(calls.remoteStreams)),
+    remoteVideoOff: new Set(
+      Object.entries(calls.remoteVideoOff)
+        .filter(([, off]) => off)
+        .map(([userId]) => userId),
+    ),
+  });
+  // Панель на сайте всегда широкая — плитки встают вдоль, см. `video-grid.ts`.
+  const layout = videoGridLayout(tiles.length, true);
+  const byId = new Map(participants.map((p) => [p.user.id, p]));
+
+  return (
+    <ul
+      aria-label="Кто в звонке"
+      className="grid flex-1 gap-2"
+      style={{
+        gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))`,
+      }}
+    >
+      {tiles.map((tile) => {
+        const participant = byId.get(tile.userId);
+        if (!participant) return null;
+        const muted = tile.isSelf ? state.muted : participant.muted;
+        const stream = tile.isSelf
+          ? calls.localVideoStream
+          : (calls.remoteStreams[tile.userId] ?? null);
+        const speaking = state.speaking.includes(tile.userId);
+        return (
+          <li
+            key={tile.userId}
+            aria-label={spokenLabel({
+              participant,
+              isSelf: tile.isSelf,
+              muted,
+              speaking,
+              statusLine: tile.isSelf
+                ? null
+                : peerStateLabel(state.peerStates[tile.userId]),
+              cameraOff: tile.view === "avatar",
+            })}
+            className={`relative flex min-h-32 items-end overflow-hidden rounded-2xl border bg-bg-1 ${
+              speaking ? "border-cyan" : "border-glass-brd"
+            }`}
+          >
+            {tile.view === "video" && stream ? (
+              <VideoTile stream={stream} mirrored={tile.isSelf} />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <ChatAvatar
+                  kind="direct"
+                  user={participant.user}
+                  title={participant.user.name}
+                  size={layout.rows > 1 ? 56 : 72}
+                />
+              </div>
+            )}
+            <p className="relative flex w-full items-center gap-1.5 bg-glass px-3 py-1.5 text-xs font-semibold text-text-0">
+              <span className="truncate">
+                {tile.isSelf
+                  ? `${participant.user.name} (вы)`
+                  : participant.user.name}
+              </span>
+              {muted && (
+                <span aria-hidden className="shrink-0 text-text-1">
+                  <MicIcon off size={16} />
+                </span>
+              )}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

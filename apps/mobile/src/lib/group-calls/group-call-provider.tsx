@@ -165,7 +165,13 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     pipActive,
   });
   const sendingVideoRef = useRef(sendingVideo);
-  sendingVideoRef.current = sendingVideo;
+  // Через эффект, а не прямо в теле: запись в `ref` во время отрисовки —
+  // та же ошибка, из-за которой рядом так же синхронизируется `stateRef` в
+  // веб-провайдере. Читают этот `ref` только обработчики вне отрисовки, и
+  // они срабатывают уже после эффектов.
+  useEffect(() => {
+    sendingVideoRef.current = sendingVideo;
+  }, [sendingVideo]);
   const iceServers = useRef<ChatIceServerDto[]>([]);
   const sendQueue = useRef(new SignalSendQueue());
   const seqState = useRef<SignalSeqState>(INITIAL_SIGNAL_SEQ_STATE);

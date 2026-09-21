@@ -176,7 +176,13 @@ export function GroupCallProvider({
     hidden: tabHidden,
   });
   const sendingVideoRef = useRef(sendingVideo);
-  sendingVideoRef.current = sendingVideo;
+  // Через эффект, а не прямо в теле: запись в `ref` во время отрисовки —
+  // та же ошибка, из-за которой рядом так же синхронизируется `stateRef`.
+  // Читают этот `ref` только обработчики вне отрисовки (соединение,
+  // поднятое из пришедшего offer), и они срабатывают уже после эффекта.
+  useEffect(() => {
+    sendingVideoRef.current = sendingVideo;
+  }, [sendingVideo]);
 
   // ---------- сигналинг ----------
 
