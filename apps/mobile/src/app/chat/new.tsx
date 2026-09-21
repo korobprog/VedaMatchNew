@@ -31,12 +31,16 @@ import {
   emptyGroupDraft,
   existingChannelsHint,
   filterPeople,
+  findNameCollision,
   inactiveCommunityNote,
+  nameCollisionText,
+  shouldCheckNameCollision,
   toggleMember,
   validateGroupDraft,
   type GroupDraft,
   type GroupDraftMode,
 } from '@/lib/chat/group-draft';
+import { createCommunitiesApi } from '@/lib/communities/communities-api';
 import { withPlural } from '@/lib/chat/plural';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -44,6 +48,9 @@ import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
 const keyOf = (person: ChatUserSummary) => person.id;
+
+/** Пауза перед запросом к справочнику общин — как у геокодера на форме общины. */
+const NAME_CHECK_DEBOUNCE_MS = 350;
 
 const MODE_OPTIONS: ChipOption<GroupDraftMode>[] = [
   { value: 'group', label: 'Группа' },
@@ -66,6 +73,9 @@ export default function NewConversationScreen() {
   const headerHeight = useHeaderHeight();
   const { api } = useSession();
   const chatApi = useMemo(() => createChatApi(api), [api]);
+  // Общины — портальная инфраструктура, а не чужой сервис: справочник
+  // одинаково нужен и Чату, и вкладке «Общины».
+  const communitiesApi = useMemo(() => createCommunitiesApi(api), [api]);
 
   const [people, setPeople] = useState<ChatUserSummary[] | null>(null);
   const [communities, setCommunities] = useState<ChatChannelCommunity[] | null>(null);
@@ -74,6 +84,10 @@ export default function NewConversationScreen() {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Название группы совпало с чужой общиной, а община не выбрана: человек
+  // мог принять текст за привязку. Предупреждаем заранее, а не молчим, пока
+  // группа не потеряется без следа, — так уже случалось (см. сайт).
+  const [nameCollision, setNameCollision] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -90,6 +104,31 @@ export default function NewConversationScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Ждём, пока человек допишет название, и отменяем предыдущий запрос:
+  // ответ на «Мин» не должен прийти после ответа на «Минская ятра».
+  // Зависимости — три поля черновика, а не он сам: иначе отметка участника
+  // перезапускала бы поиск по справочнику.
+  const { mode, title: draftTitle, communityId } = draft;
+  useEffect(() => {
+    if (!shouldCheckNameCollision({ mode, title: draftTitle, communityId, description: '', memberIds: [] })) {
+      setNameCollision(null);
+      return;
+    }
+    const name = draftTitle.trim();
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      communitiesApi
+        .search({ q: name, pageSize: 5 }, controller.signal)
+        .then((found) => setNameCollision(findNameCollision(found.items, name)))
+        // Справочник недоступен — молчим: это подсказка, а не проверка.
+        .catch(() => setNameCollision(null));
+    }, NAME_CHECK_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [mode, draftTitle, communityId, communitiesApi]);
 
   const setMode = useCallback(
     (mode: GroupDraftMode) => {
@@ -204,6 +243,14 @@ export default function NewConversationScreen() {
           style={[styles.input, { color: colors.text0, borderColor: colors.glassBorder, backgroundColor: colors.bg1 }]}
         />
         <Text style={[styles.hint, { color: colors.text1 }]}>Осталось символов: {titleLeft}</Text>
+        {nameCollision ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.notice, { color: colors.text0, borderColor: colors.gold, backgroundColor: colors.bg1 }]}
+          >
+            {nameCollisionText(nameCollision)}
+          </Text>
+        ) : null}
       </View>
 
       {communityChips.length > (draft.mode === 'channel' ? 0 : 1) ? (
@@ -346,6 +393,19 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   hint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
+  // Предупреждение, а не ошибка: обводка `gold` как знак «обрати внимание»,
+  // сам текст — `text0` на `bg1`, уже проверенная пара (обводка —
+  // декоративный элемент, её порог 3:1, а не 4.5:1, как у текста).
+  notice: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 18,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    overflow: 'hidden',
+  },
   empty: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, paddingHorizontal: 20, paddingTop: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   centerText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },

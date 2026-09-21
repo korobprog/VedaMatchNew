@@ -126,6 +126,37 @@ export function inactiveCommunityNote(communities: readonly ChatChannelCommunity
   return 'Община на проверке пока недоступна: беседы в ней всё равно не видны, пока её не подтвердит администрация портала.';
 }
 
+/**
+ * Стоит ли спрашивать у справочника, нет ли общины с таким же названием.
+ * Спрашиваем только у личной группы: у канала община и так выбрана, а у
+ * группы общины — тем более. Пустое название искать нечего.
+ */
+export function shouldCheckNameCollision(draft: GroupDraft): boolean {
+  return draft.mode === 'group' && !draft.communityId && draft.title.trim().length > 0;
+}
+
+/**
+ * Нашлась ли община ровно с таким названием. Сравнение точное, без учёта
+ * регистра: похожие имена («Минская ятра» и «Ятра Минска») — обычное дело,
+ * предупреждать о каждом значило бы приучить не читать предупреждение.
+ */
+export function findNameCollision(
+  found: readonly { name: string }[],
+  title: string,
+): string | null {
+  const needle = title.trim().toLocaleLowerCase('ru');
+  if (!needle) return null;
+  return found.find((community) => community.name.trim().toLocaleLowerCase('ru') === needle)?.name ?? null;
+}
+
+/**
+ * Текст предупреждения — тот же смысл, что на сайте: название само по себе
+ * ничего не привязывает, привязать может только администрация общины.
+ */
+export function nameCollisionText(communityName: string): string {
+  return `Название совпадает с общиной «${communityName}» — но сама по себе группа с ней не свяжется. Привязать её может только администрация этой общины, выбрав общину в поле ниже.`;
+}
+
 /** Поиск по списку людей: без учёта регистра, пустой запрос — весь список. */
 export function filterPeople(people: readonly ChatUserSummary[], query: string): ChatUserSummary[] {
   const needle = query.trim().toLocaleLowerCase('ru');

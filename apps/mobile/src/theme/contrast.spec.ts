@@ -83,6 +83,10 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   // заполнение на дорожке `bg2` — magenta при скачивании, cyan при проверке файла.
   { name: 'заполнение прогресса скачивания на дорожке', graphic: 'magenta', surface: 'bg2' },
   { name: 'заполнение прогресса проверки файла на дорожке', graphic: 'cyan', surface: 'bg2' },
+  // Обводка предупреждения о совпадении названия группы с общиной
+  // (`chat/new.tsx`): это не ошибка, а «обрати внимание», поэтому `gold`, а
+  // не `magenta`. Сам текст — `text0` на `bg1`, уже закреплённая пара.
+  { name: 'обводка предупреждения о совпадении названия', graphic: 'gold', surface: 'bg1' },
 ];
 
 describe.each([

@@ -6,6 +6,7 @@ const mockReplace = jest.fn();
 const mockCreate = jest.fn();
 const mockPeople = jest.fn();
 const mockChannelCommunities = jest.fn();
+const mockSearchCommunities = jest.fn();
 
 jest.mock('expo-router', () => ({
   __esModule: true,
@@ -31,6 +32,11 @@ const fakeSession = { api: {}, user: { id: 'me' } };
 jest.mock('@/lib/auth/session', () => ({ __esModule: true, useSession: () => fakeSession }));
 
 jest.mock('@/lib/feedback', () => ({ __esModule: true, confirmTap: jest.fn(), longPressTap: jest.fn() }));
+
+jest.mock('@/lib/communities/communities-api', () => ({
+  __esModule: true,
+  createCommunitiesApi: () => ({ search: (...args: unknown[]) => mockSearchCommunities(...args) }),
+}));
 
 jest.mock('@/lib/chat/chat-api', () => ({
   __esModule: true,
@@ -79,6 +85,88 @@ beforeEach(() => {
   mockPeople.mockResolvedValue({ people: [{ id: 'u1', name: 'Мадхава' }, { id: 'u2', name: 'Радха' }] });
   mockChannelCommunities.mockResolvedValue({ communities: [] });
   mockCreate.mockResolvedValue({ id: 'conv-1' });
+  mockSearchCommunities.mockResolvedValue({ items: [] });
+});
+
+describe('Экран «Новая беседа» — совпадение названия с общиной', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  async function typeTitle(renderer: ReactTestRenderer, value: string) {
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText(value);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await flush();
+  }
+
+  it('точное совпадение — предупреждает, что привязки не произошло', async () => {
+    mockSearchCommunities.mockResolvedValue({ items: [{ id: 'c1', name: 'Минская ятра' }] });
+    const renderer = await render();
+    await typeTitle(renderer, 'Минская ятра');
+    expect(mockSearchCommunities).toHaveBeenCalledWith({ q: 'Минская ятра', pageSize: 5 }, expect.anything());
+    expect(texts(renderer)).toContain('сама по себе группа с ней не свяжется');
+  });
+
+  it('община в справочнике не нашлась — предупреждения нет', async () => {
+    const renderer = await render();
+    await typeTitle(renderer, 'Севаки');
+    expect(texts(renderer)).not.toContain('не свяжется');
+  });
+
+  it('выбрали общину — предупреждение уходит, повторно не ищем', async () => {
+    mockSearchCommunities.mockResolvedValue({ items: [{ id: 'c1', name: 'Минская ятра' }] });
+    mockChannelCommunities.mockResolvedValue({
+      communities: [{ community: { id: 'c1', slug: 'minsk', name: 'Минская ятра', status: 'active' }, channels: [] }],
+    });
+    const renderer = await render();
+    await typeTitle(renderer, 'Минская ятра');
+    expect(texts(renderer)).toContain('не свяжется');
+    await act(async () => {
+      byLabel(renderer, 'Минская ятра').props.onPress();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await flush();
+    expect(texts(renderer)).not.toContain('не свяжется');
+    expect(mockSearchCommunities).toHaveBeenCalledTimes(1);
+  });
+
+  it('справочник недоступен — форма молчит и работает дальше', async () => {
+    mockSearchCommunities.mockRejectedValue(new Error('Нет связи'));
+    const renderer = await render();
+    await typeTitle(renderer, 'Минская ятра');
+    expect(texts(renderer)).not.toContain('не свяжется');
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).toHaveBeenCalled();
+  });
+
+  it('пока человек печатает, справочник не дёргается на каждую букву', async () => {
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Ми');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Минская');
+    });
+    expect(mockSearchCommunities).not.toHaveBeenCalled();
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await flush();
+    expect(mockSearchCommunities).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Экран «Новая беседа» — загрузка и ошибка', () => {

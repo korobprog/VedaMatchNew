@@ -7,7 +7,10 @@ import {
   emptyGroupDraft,
   existingChannelsHint,
   filterPeople,
+  findNameCollision,
   inactiveCommunityNote,
+  nameCollisionText,
+  shouldCheckNameCollision,
   toggleMember,
   validateGroupDraft,
   type GroupDraft,
@@ -168,6 +171,52 @@ describe('inactiveCommunityNote', () => {
 
   it('общин нет вовсе — тоже нечего', () => {
     expect(inactiveCommunityNote([])).toBeNull();
+  });
+});
+
+describe('shouldCheckNameCollision', () => {
+  it('личная группа с названием — спрашиваем справочник', () => {
+    expect(shouldCheckNameCollision(draft({ title: 'Минская ятра' }))).toBe(true);
+  });
+
+  it('община уже выбрана — предупреждать не о чем', () => {
+    expect(shouldCheckNameCollision(draft({ title: 'Минская ятра', communityId: 'c1' }))).toBe(false);
+  });
+
+  it('у канала община обязательна — тоже не спрашиваем', () => {
+    expect(shouldCheckNameCollision(draft({ mode: 'channel', title: 'Минская ятра' }))).toBe(false);
+  });
+
+  it('пустое название искать нечего', () => {
+    expect(shouldCheckNameCollision(draft({ title: '   ' }))).toBe(false);
+  });
+});
+
+describe('findNameCollision', () => {
+  const found = [{ name: 'Минская ятра' }, { name: 'Ятра Минска' }];
+
+  it('точное совпадение находится без учёта регистра и пробелов', () => {
+    expect(findNameCollision(found, '  минская ЯТРА ')).toBe('Минская ятра');
+  });
+
+  it('похожее название не считается совпадением', () => {
+    expect(findNameCollision(found, 'Минская ятра севак')).toBeNull();
+  });
+
+  it('справочник пуст — совпадений нет', () => {
+    expect(findNameCollision([], 'Минская ятра')).toBeNull();
+  });
+
+  it('пустой запрос ничего не находит, даже если в справочнике есть пустые имена', () => {
+    expect(findNameCollision([{ name: '  ' }], '   ')).toBeNull();
+  });
+});
+
+describe('nameCollisionText', () => {
+  it('называет общину и объясняет, что привязки не произошло', () => {
+    const text = nameCollisionText('Минская ятра');
+    expect(text).toContain('«Минская ятра»');
+    expect(text).toContain('не свяжется');
   });
 });
 

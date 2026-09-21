@@ -1,11 +1,17 @@
-import type { CommunityDto, CreateCommunityRequest, GeoSearchResult, MyCommunitiesResponse } from '@vedamatch/shared';
+import type {
+  CommunityDto,
+  CommunitySearchResponse,
+  CreateCommunityRequest,
+  GeoSearchResult,
+  MyCommunitiesResponse,
+} from '@vedamatch/shared';
 import type { ApiClient } from '@/lib/api/client';
 
 /**
- * Мои общины, заведение новой и подсказки городов. Поиск по чужим общинам и
- * вступление в них по-прежнему только на сайте (вкладка «Общины», критерий
- * приёмки 1 в `spec.md`) — здесь появилось ровно то, что нужно, чтобы
- * завести свою ятру с телефона (VED-292).
+ * Мои общины, заведение новой, подсказки городов и поиск по названию.
+ * Каталог общин с картой и вступление в чужую общину по-прежнему только на
+ * сайте (вкладка «Общины», критерий приёмки 1 в `spec.md`) — здесь есть
+ * ровно то, что нужно, чтобы завести свою ятру с телефона (VED-292).
  */
 export function createCommunitiesApi(api: ApiClient) {
   return {
@@ -23,6 +29,19 @@ export function createCommunitiesApi(api: ApiClient) {
      */
     geoSearch: (query: string, signal?: AbortSignal) =>
       api.request<GeoSearchResult[]>(`/geo/search?q=${encodeURIComponent(query)}`, { signal }),
+    /**
+     * Поиск общин по названию. Нужен форме новой группы: если имя группы
+     * в точности совпало с общиной, человек мог принять его за привязку —
+     * предупреждаем до того, как группа потеряется (так уже случалось, см.
+     * `chat-new-conversation.tsx` на сайте).
+     */
+    search: (filters: { q?: string; pageSize?: number }, signal?: AbortSignal) => {
+      const params = new URLSearchParams();
+      if (filters.q) params.set('q', filters.q);
+      if (filters.pageSize) params.set('pageSize', String(filters.pageSize));
+      const qs = params.toString();
+      return api.request<CommunitySearchResponse>(`/communities${qs ? `?${qs}` : ''}`, { signal });
+    },
   };
 }
 
