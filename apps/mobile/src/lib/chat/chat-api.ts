@@ -1,12 +1,16 @@
 import type {
+  ChatChannelCommunitiesState,
   ChatConversationDetail,
+  ChatConversationVisibility,
   ChatListState,
   ChatConversationSummary,
   ChatDiscoverState,
+  ChatMemberRole,
   ChatMessageDto,
   ChatReactionSummary,
   ChatRequestsState,
   ChatUploadResult,
+  ChatUserSummary,
   CreateChatConversationRequest,
   EditChatMessageRequest,
   SendChatMessageRequest,
@@ -73,6 +77,51 @@ export function createChatApi(api: ApiClient) {
         method: 'POST',
         body: { kind: 'direct', userId } satisfies CreateChatConversationRequest,
       }),
+    /**
+     * Групповая беседа или канал общины — та же ручка, что у личного диалога,
+     * разбор по `kind` на сервере (`chat-conversations.service.ts:create`).
+     */
+    create: (body: CreateChatConversationRequest) =>
+      api.request<ChatConversationSummary>('/chat/conversations', { method: 'POST', body }),
+    /**
+     * Кого можно позвать в группу: только те, с кем уже есть личная
+     * переписка. Сервер сам отсеивает заблокированных в обе стороны.
+     */
+    people: () => api.request<{ people: ChatUserSummary[] }>('/chat/people'),
+    /** Общины, где смотрящий вправе завести канал или беседу общины. */
+    channelCommunities: () => api.request<ChatChannelCommunitiesState>('/chat/channel-communities'),
+    addMembers: (conversationId: string, userIds: string[]) =>
+      api.request<{ added: number }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members`, {
+        method: 'POST',
+        body: { userIds },
+      }),
+    removeMember: (conversationId: string, userId: string) =>
+      api.request<{ ok: true }>(
+        `/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}`,
+        { method: 'DELETE' },
+      ),
+    setMemberRole: (conversationId: string, userId: string, role: Exclude<ChatMemberRole, 'owner'>) =>
+      api.request<{ role: ChatMemberRole }>(
+        `/chat/conversations/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}/role`,
+        { method: 'POST', body: { role } },
+      ),
+    /** Название, описание и открытость беседы. */
+    updateConversation: (
+      conversationId: string,
+      patch: { title?: string; description?: string; visibility?: ChatConversationVisibility },
+    ) =>
+      api.request<ChatConversationSummary>(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+        method: 'POST',
+        body: patch,
+      }),
+    /** Выйти самому: маршрут `.../members/me` объявлен до `:userId`. */
+    leave: (conversationId: string) =>
+      api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}/members/me`, {
+        method: 'DELETE',
+      }),
+    /** Удалить беседу со всей перепиской — только владельцу. */
+    removeConversation: (conversationId: string) =>
+      api.request<{ ok: true }>(`/chat/conversations/${encodeURIComponent(conversationId)}`, { method: 'DELETE' }),
     /**
      * Каталог открытых бесед: чаты и каналы, куда можно войти самому.
      * `communityId` — фильтр по конкретной общине (вкладка «Общины», экран

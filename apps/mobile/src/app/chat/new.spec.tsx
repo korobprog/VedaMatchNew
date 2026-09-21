@@ -1,0 +1,238 @@
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import { act, create } from 'react-test-renderer';
+import NewConversationScreen from './new';
+
+const mockReplace = jest.fn();
+const mockCreate = jest.fn();
+const mockPeople = jest.fn();
+const mockChannelCommunities = jest.fn();
+
+jest.mock('expo-router', () => ({
+  __esModule: true,
+  Stack: { Screen: () => null },
+  router: { replace: (...args: unknown[]) => mockReplace(...args) },
+}));
+
+jest.mock('expo-router/react-navigation', () => ({ __esModule: true, useHeaderHeight: () => 56 }));
+
+jest.mock('react-native-safe-area-context', () => ({
+  __esModule: true,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+jest.mock('@/components/keyboard-controller-web', () => {
+  const { View } = jest.requireActual('react-native');
+  return { __esModule: true, ChatKeyboardAvoidingView: View, PersonKeyboardAwareScroll: View };
+});
+
+// Сессия отдаёт один и тот же клиент между перерисовками — как настоящая.
+// Новый объект на каждый рендер зациклил бы эффект загрузки.
+const fakeSession = { api: {}, user: { id: 'me' } };
+jest.mock('@/lib/auth/session', () => ({ __esModule: true, useSession: () => fakeSession }));
+
+jest.mock('@/lib/feedback', () => ({ __esModule: true, confirmTap: jest.fn(), longPressTap: jest.fn() }));
+
+jest.mock('@/lib/chat/chat-api', () => ({
+  __esModule: true,
+  createChatApi: () => ({
+    people: () => mockPeople(),
+    channelCommunities: () => mockChannelCommunities(),
+    create: (...args: unknown[]) => mockCreate(...args),
+  }),
+}));
+
+async function flush() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function render(): Promise<ReactTestRenderer> {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(<NewConversationScreen />);
+  });
+  await flush();
+  return renderer;
+}
+
+function byLabel(renderer: ReactTestRenderer, label: string): ReactTestInstance {
+  return renderer.root.findByProps({ accessibilityLabel: label });
+}
+
+function queryByLabel(renderer: ReactTestRenderer, label: string): ReactTestInstance | null {
+  const found = renderer.root.findAllByProps({ accessibilityLabel: label });
+  return found.length > 0 ? found[0] : null;
+}
+
+function texts(renderer: ReactTestRenderer): string {
+  return renderer.root
+    .findAllByType('Text' as never, { deep: true })
+    .map((node) => JSON.stringify(node.props.children))
+    .join(' ');
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPeople.mockResolvedValue({ people: [{ id: 'u1', name: 'Мадхава' }, { id: 'u2', name: 'Радха' }] });
+  mockChannelCommunities.mockResolvedValue({ communities: [] });
+  mockCreate.mockResolvedValue({ id: 'conv-1' });
+});
+
+describe('Экран «Новая беседа» — загрузка и ошибка', () => {
+  it('пока списки не пришли, формы и кнопки «Завести группу» ещё нет', async () => {
+    let resolvePeople: ((value: unknown) => void) | undefined;
+    mockPeople.mockReturnValue(new Promise((resolve) => {
+      resolvePeople = resolve;
+    }));
+    const renderer = await render();
+    expect(queryByLabel(renderer, 'Завести группу')).toBeNull();
+    await act(async () => {
+      resolvePeople?.({ people: [] });
+    });
+    await flush();
+    expect(queryByLabel(renderer, 'Завести группу')).not.toBeNull();
+  });
+
+  it('список не загрузился — показывает текст ошибки сервера и «Повторить»', async () => {
+    mockPeople.mockRejectedValue(new Error('Нет связи с сервером'));
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Нет связи с сервером');
+    expect(texts(renderer)).toContain('Повторить');
+    // Формы в этот момент нет: ошибка загрузки — не пустой список.
+    expect(queryByLabel(renderer, 'Название беседы')).toBeNull();
+  });
+
+  it('«Повторить» снова спрашивает оба списка', async () => {
+    mockPeople.mockRejectedValueOnce(new Error('Нет связи'));
+    const renderer = await render();
+    expect(mockPeople).toHaveBeenCalledTimes(1);
+    const retry = renderer.root.findAllByProps({ accessibilityRole: 'button' })[0];
+    await act(async () => {
+      retry.props.onPress();
+    });
+    await flush();
+    expect(mockPeople).toHaveBeenCalledTimes(2);
+    expect(queryByLabel(renderer, 'Завести группу')).not.toBeNull();
+  });
+});
+
+describe('Экран «Новая беседа» — пустой список людей', () => {
+  it('звать некого — экран честно объясняет, почему список пуст', async () => {
+    mockPeople.mockResolvedValue({ people: [] });
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Звать некого');
+  });
+
+  it('и всё же даёт завести группу — позвать можно позже', async () => {
+    mockPeople.mockResolvedValue({ people: [] });
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Севаки');
+    });
+    expect(byLabel(renderer, 'Завести группу').props.accessibilityState.disabled).toBe(false);
+  });
+});
+
+describe('Экран «Новая беседа» — название и участники', () => {
+  it('без названия кнопка заблокирована', async () => {
+    const renderer = await render();
+    expect(byLabel(renderer, 'Завести группу').props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('отмеченные люди уходят в запрос, название — без пробелов по краям', async () => {
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('  Севаки  ');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Мадхава').props.onPress();
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).toHaveBeenCalledWith({ kind: 'group', title: 'Севаки', memberIds: ['u1'] });
+  });
+
+  it('повторный тап снимает отметку с человека', async () => {
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Севаки');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Мадхава').props.onPress();
+    });
+    expect(byLabel(renderer, 'Мадхава').props.accessibilityState.checked).toBe(true);
+    await act(async () => {
+      byLabel(renderer, 'Мадхава').props.onPress();
+    });
+    expect(byLabel(renderer, 'Мадхава').props.accessibilityState.checked).toBe(false);
+  });
+
+  it('после успешного создания уводит в саму беседу', async () => {
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Севаки');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/chat/[id]', params: { id: 'conv-1' } });
+  });
+
+  it('сервер отказал — текст отказа на экране, и никуда не уводит', async () => {
+    mockCreate.mockRejectedValue(new Error('Беседу общины заводит администрация'));
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Севаки');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(texts(renderer)).toContain('Беседу общины заводит администрация');
+    expect(mockReplace).not.toHaveBeenCalled();
+    // Кнопка снова доступна: отказ — не конец формы.
+    expect(byLabel(renderer, 'Завести группу').props.accessibilityState.busy).toBe(false);
+  });
+});
+
+describe('Экран «Новая беседа» — канал общины', () => {
+  it('без общин вкладки «Канал» нет', async () => {
+    const renderer = await render();
+    expect(queryByLabel(renderer, 'Канал')).toBeNull();
+  });
+
+  it('с общиной канал доступен, и община подставляется сама', async () => {
+    mockChannelCommunities.mockResolvedValue({
+      communities: [{ community: { id: 'c1', slug: 'minsk', name: 'Минская ятра', status: 'active' }, channels: [] }],
+    });
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Канал').props.onPress();
+    });
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Объявления');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести канал').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).toHaveBeenCalledWith({ kind: 'channel', title: 'Объявления', communityId: 'c1' });
+  });
+
+  it('община не активна — экран предупреждает, что беседы в ней не видно', async () => {
+    mockChannelCommunities.mockResolvedValue({
+      communities: [{ community: { id: 'c1', slug: 'minsk', name: 'Минская ятра', status: 'pending' }, channels: [] }],
+    });
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Минская ятра (не активна)').props.onPress();
+    });
+    expect(texts(renderer)).toContain('не активна');
+  });
+});
