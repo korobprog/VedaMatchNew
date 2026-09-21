@@ -1,8 +1,4 @@
-import type {
-  LineagePreference,
-  MusicDurationBucket,
-  MusicTrackSort,
-} from '@vedamatch/shared';
+import type { LineagePreference, MusicTrackSort } from '@vedamatch/shared';
 import {
   MUSIC_DEFAULT_TRACK_SORT,
   isLineagePreference,
@@ -21,23 +17,6 @@ export const MUSIC_TRACKS_DEFAULT_LIMIT = 24;
 export const MUSIC_TRACKS_MAX_LIMIT = 60;
 
 const SORTS: MusicTrackSort[] = ['fresh', 'popular', 'title', 'duration'];
-const BUCKETS: MusicDurationBucket[] = ['short', 'medium', 'long'];
-
-/**
- * Границы корзин длительности, секунды.
- *
- * `short` — до 5 минут: бхаджан или прана́ма, помещается в дорогу до метро.
- * `medium` — до получаса: обычный киртан.
- * `long` — всё остальное: программа целиком, её слушают дома.
- */
-export const MUSIC_DURATION_BUCKETS: Record<
-  MusicDurationBucket,
-  { min: number; max: number | null }
-> = {
-  short: { min: 0, max: 300 },
-  medium: { min: 300, max: 1800 },
-  long: { min: 1800, max: null },
-};
 
 export interface NormalizedMusicTrackQuery {
   q: string | null;
@@ -51,7 +30,6 @@ export interface NormalizedMusicTrackQuery {
   category: string | null;
   artist: string | null;
   language: string | null;
-  duration: MusicDurationBucket | null;
   live: boolean | null;
   /**
    * Явный выбор линии на один запрос: идентификатор или `all`; `null` —
@@ -113,7 +91,6 @@ export function normalizeMusicTrackQuery(query: {
   category?: RawQueryValue;
   artist?: RawQueryValue;
   language?: RawQueryValue;
-  duration?: RawQueryValue;
   live?: RawQueryValue;
   lineage?: RawQueryValue;
   sort?: RawQueryValue;
@@ -121,7 +98,6 @@ export function normalizeMusicTrackQuery(query: {
   limit?: RawQueryValue;
 }): NormalizedMusicTrackQuery {
   const sort = firstString(query.sort);
-  const duration = firstString(query.duration);
   const lineage = firstString(query.lineage);
 
   return {
@@ -130,9 +106,6 @@ export function normalizeMusicTrackQuery(query: {
     category: firstString(query.category),
     artist: firstString(query.artist),
     language: firstString(query.language),
-    duration: BUCKETS.includes(duration as MusicDurationBucket)
-      ? (duration as MusicDurationBucket)
-      : null,
     live: optionalBoolean(query.live),
     // Незнакомая линия — это «не спрашивали», а не пустая выдача.
     lineage: isLineagePreference(lineage) ? lineage : null,
@@ -145,16 +118,4 @@ export function normalizeMusicTrackQuery(query: {
     cursor: firstString(query.cursor),
     limit: clampLimit(query.limit),
   };
-}
-
-/**
- * Условие по длительности для Prisma. Возвращает `null`, когда корзина не
- * выбрана, — чтобы сервис не подставлял в `where` пустой объект.
- */
-export function durationCondition(
-  bucket: MusicDurationBucket | null,
-): { gte: number; lt?: number } | null {
-  if (bucket === null) return null;
-  const { min, max } = MUSIC_DURATION_BUCKETS[bucket];
-  return max === null ? { gte: min } : { gte: min, lt: max };
 }

@@ -35,7 +35,6 @@ const query = {
   category: null,
   artist: null,
   language: null,
-  duration: null,
   live: null,
   lineage: null,
   sort: 'fresh' as const,

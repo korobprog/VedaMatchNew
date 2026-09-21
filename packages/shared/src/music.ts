@@ -279,12 +279,6 @@ export type MusicTrackSort = 'fresh' | 'popular' | 'title' | 'duration';
  */
 export const MUSIC_DEFAULT_TRACK_SORT: MusicTrackSort = 'title';
 
-/**
- * Длительность корзинами, а не парой чисел: человек ищет «что-нибудь на
- * дорогу», а не запись от 900 до 1800 секунд.
- */
-export type MusicDurationBucket = 'short' | 'medium' | 'long';
-
 export interface MusicTrackListQuery {
   q?: string;
   /**
@@ -298,7 +292,6 @@ export interface MusicTrackListQuery {
   category?: string;
   artist?: string;
   language?: string;
-  duration?: MusicDurationBucket;
   live?: boolean;
   /**
    * Явный выбор линии на один запрос: идентификатор или `'all'`. Без него

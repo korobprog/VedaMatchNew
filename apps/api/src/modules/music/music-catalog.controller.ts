@@ -27,8 +27,11 @@ export class MusicCatalogController {
    * исполнителя и альбома не фильтруются — прямая ссылка обязана открываться.
    */
   @Get('catalog')
-  showcase(@OptionalUser() user?: AccessTokenPayload) {
-    return this.catalog.showcase(user?.sub ?? null);
+  showcase(
+    @Query('root') root?: string,
+    @OptionalUser() user?: AccessTokenPayload,
+  ) {
+    return this.catalog.showcase(user?.sub ?? null, root?.trim() || null);
   }
 
   @Get('categories')

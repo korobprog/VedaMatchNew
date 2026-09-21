@@ -49,8 +49,16 @@ async function musicGet<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
-export function getMusicCatalog(): Promise<MusicCatalogDto | null> {
-  return musicGet<MusicCatalogDto>("/music/catalog");
+export function getMusicCatalog(
+  /**
+   * Выбранная корневая вкладка (VED-165). Уходит на сервер ради счётчиков
+   * стилей: под «Традиционным» чип «Киртан» обязан показывать число записей
+   * этой вкладки, а не всего каталога. Сами списки витрины от неё не зависят.
+   */
+  root: string | null = null,
+): Promise<MusicCatalogDto | null> {
+  const query = root ? `?root=${encodeURIComponent(root)}` : "";
+  return musicGet<MusicCatalogDto>(`/music/catalog${query}`);
 }
 
 /**

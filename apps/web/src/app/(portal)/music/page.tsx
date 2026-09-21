@@ -26,6 +26,10 @@ import {
 import { MusicPlaylistCard } from "@/components/music/music-playlist-card";
 import { MusicRail } from "@/components/music/music-rail";
 import { MusicRootTabs } from "@/components/music/music-root-tabs";
+import {
+  artistsInRoot,
+  findRootCategory,
+} from "@/components/music/music-root-scope";
 import { MusicSearchField } from "@/components/music/music-search-field";
 import { MusicTrackList } from "@/components/music/music-track-list";
 import { plural } from "@/lib/plural";
@@ -74,7 +78,6 @@ export default async function MusicPage({
     q?: string | string[];
     all?: string | string[];
     artist?: string | string[];
-    duration?: string | string[];
     live?: string | string[];
     lineage?: string | string[];
     sort?: string | string[];
@@ -91,7 +94,6 @@ export default async function MusicPage({
   const category = first(params.category);
   const query = first(params.q);
   const artist = first(params.artist);
-  const duration = first(params.duration);
   const live = first(params.live);
   const sort = first(params.sort);
   const cursor = first(params.cursor);
@@ -109,20 +111,12 @@ export default async function MusicPage({
     category,
     q: query,
     artist,
-    duration,
     live,
     sort,
     cursor,
   };
   const hasFilter = Boolean(
-    root ||
-      category ||
-      query ||
-      artist ||
-      duration ||
-      live ||
-      sort ||
-      cursor,
+    root || category || query || artist || live || sort || cursor,
   );
 
   // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
@@ -142,14 +136,13 @@ export default async function MusicPage({
       // этот запрос общим с generateMetadata.
       getServiceCard(SERVICE_SLUG),
       getLocale(),
-      getMusicCatalog(),
+      getMusicCatalog(root),
       hasFilter || showAll
         ? getMusicTracks({
             ...(root ? { root } : {}),
             ...(category ? { category } : {}),
             ...(query ? { q: query } : {}),
             ...(artist ? { artist } : {}),
-            ...(duration ? { duration: duration as never } : {}),
             ...(live ? { live: live === "true" } : {}),
             ...(explicitLineage ? { lineage: explicitLineage } : {}),
             ...(sort ? { sort: sort as never } : {}),
@@ -196,12 +189,17 @@ export default async function MusicPage({
 
   const activeCategory =
     catalog.categories.find((item) => item.slug === category) ?? null;
-  const activeRoot =
-    catalog.categories.find((item) => item.slug === root) ?? null;
+  const activeRoot = findRootCategory(catalog.categories, root);
+  // Вкладка сужает не только записи, но и людей (VED-165): исполнитель
+  // «второй папки» уходит с экрана вместе со своими записями — и из кружков
+  // над списком, и из ряда «Исполнитель» в панели фильтров, иначе оттуда
+  // можно выбрать исполнителя, которого в этом срезе нет, и получить пустую
+  // выдачу.
+  const rootArtists = artistsInRoot(catalog.artists, activeRoot?.id ?? null);
   const tracks = filtered ? filtered.items : catalog.fresh;
   // Заголовок обязан отвечать на «что я сейчас вижу». «Новое в каталоге» над
-  // отобранным по длительности списком — прямое враньё, и человек читает его
-  // как «фильтр не сработал». Корневая и стиль выбраны вместе (VED-165) —
+  // отобранным списком — прямое враньё, и человек читает его как «фильтр не
+  // сработал». Корневая и стиль выбраны вместе (VED-165) —
   // заголовок называет оба, а не один из них.
   const heading = query
     ? `Найдено по запросу «${query}»`
@@ -338,7 +336,7 @@ export default async function MusicPage({
         <div className="flex flex-wrap items-start gap-2">
           <MusicFilters
             state={filterState}
-            artists={catalog.artists}
+            artists={rootArtists}
             categories={catalog.categories}
           />
           <Link
@@ -365,8 +363,10 @@ export default async function MusicPage({
 
       {/* Исполнители — до списка записей. Хвостом после подборок их не
           находили: человек видел «Исполнитель не указан» у каждой строки и
-          уходил, не долистав. */}
-      {catalog.artists.length > 0 && (
+          уходил, не долистав. Секция целиком подчиняется выбранной корневой
+          вкладке (VED-165): у «Традиционного» нет ни одного современного
+          исполнителя, а не «записей нет, а кружки на месте». */}
+      {rootArtists.length > 0 && (
         <section className="mt-8" aria-labelledby="music-artists">
           <h2
             id="music-artists"
@@ -375,12 +375,13 @@ export default async function MusicPage({
             Исполнители
           </h2>
           {/* Сетка по четыре кружка в ряд, заполняется слева направо
-              (VED-103, VED-115). Витрина отдаёт всех исполнителей, и каждый
+              (VED-103, VED-115). Витрина отдаёт всех исполнителей выбранной
+              вкладки, и каждый
               следующий после восьмого встаёт новым рядом снизу (VED-224) —
               прокрутки вбок нет ни на телефоне, ни на широком экране: лента
               прятала хвост за краем. Переключатель вида — «плиткой»/«списком»
               — внутри компонента, тем же приёмом, что у записей ниже (VED-225). */}
-          <MusicArtistsSection artists={catalog.artists} />
+          <MusicArtistsSection artists={rootArtists} />
         </section>
       )}
 
