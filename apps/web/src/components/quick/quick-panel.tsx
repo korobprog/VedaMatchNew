@@ -2,17 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  Bookmark,
   Bot,
   Calculator,
   CalendarDays,
   Check,
   ChevronDown,
   ChevronUp,
+  Columns2,
   HeartHandshake,
   Info,
   LifeBuoy,
   Quote,
+  Search,
   Settings2,
   Share2,
   Sparkles,
@@ -21,6 +25,17 @@ import {
 import type { DonationSettingsDto, RewardsMeDto } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
+import { BookmarksSheet } from "@/components/bookmarks/bookmarks-sheet";
+import {
+  nextPortalWindow,
+  portalWindowButtonHint,
+  portalWindowButtonLabel,
+  portalWindowNumber,
+} from "@/lib/portal-windows";
+import {
+  switchPortalWindows,
+  usePortalWindows,
+} from "./portal-windows-store";
 import { CalculatorPad } from "./calculator-pad";
 import {
   QUICK_ACTIONS,
@@ -38,6 +53,9 @@ const STORAGE_KEY = "vedamatch:quick-panel";
 
 const ICONS: Record<QuickActionId, React.ComponentType<{ className?: string }>> =
   {
+    window: Columns2,
+    bookmarks: Bookmark,
+    search: Search,
     assistant: Bot,
     aphorism: Quote,
     collections: Sparkles,
@@ -64,6 +82,7 @@ export function QuickPanel() {
   const [open, setOpen] = useState(false);
   const [tuning, setTuning] = useState(false);
   const [ids, setIds] = useState<QuickActionId[]>([]);
+  const windows = usePortalWindows();
   const panelRef = useRef<HTMLDivElement>(null);
 
   /* Читаем эффектом: на сервере `localStorage` нет, и ленивый `useState` дал
@@ -139,8 +158,18 @@ export function QuickPanel() {
           className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd bg-bg-1 p-3 shadow-xl"
         >
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-display text-sm font-bold text-text-0">
-              {tuning ? "Настроить панель" : "Горячие кнопки"}
+            <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-bold text-text-0">
+              <span className="truncate">
+                {tuning ? "Настроить панель" : "Горячие кнопки"}
+              </span>
+              {/* Где я сейчас. Показываем, только когда человек не в первом
+                  окне: иначе это шум, а вот «почему всё не там, где я
+                  оставил» без этой подписи не объясняется ничем. */}
+              {!tuning && windows.active > 0 && (
+                <span className="shrink-0 rounded-full border border-glass-brd px-1.5 py-0.5 font-body text-[11px] font-medium text-text-1">
+                  Окно {portalWindowNumber(windows.active)}
+                </span>
+              )}
             </h2>
             <div className="flex items-center gap-1">
               <button
@@ -186,7 +215,7 @@ function QuickTiles({
   onClose: () => void;
 }) {
   const [sheet, setSheet] = useState<
-    "calculator" | "info" | "calendar" | null
+    "calculator" | "info" | "calendar" | "bookmarks" | null
   >(null);
 
   if (ids.length === 0)
@@ -206,6 +235,8 @@ function QuickTiles({
             <li key={id}>
               {id === "donate" ? (
                 <DonateTile />
+              ) : id === "window" ? (
+                <WindowTile onSwitch={onClose} />
               ) : meta.href ? (
                 <Link href={meta.href} onClick={onClose} className={tileClass}>
                   <Icon className="size-5" />
@@ -217,7 +248,9 @@ function QuickTiles({
                 <button
                   type="button"
                   onClick={() =>
-                    setSheet(id as "calculator" | "info" | "calendar")
+                    setSheet(
+                      id as "calculator" | "info" | "calendar" | "bookmarks",
+                    )
                   }
                   className={tileClass}
                 >
@@ -233,7 +266,44 @@ function QuickTiles({
       {sheet === "calculator" && <CalculatorPad onClose={() => setSheet(null)} />}
       {sheet === "info" && <InfoSheet onClose={() => setSheet(null)} />}
       {sheet === "calendar" && <CalendarSheet onClose={() => setSheet(null)} />}
+      {sheet === "bookmarks" && (
+        <BookmarksSheet onClose={() => setSheet(null)} onNavigate={onClose} />
+      )}
     </>
+  );
+}
+
+/**
+ * Второе окно портала (VED-118, VED-163).
+ *
+ * Одна и та же кнопка уводит туда и возвращает обратно, а на самой кнопке
+ * стоит номер окна, КУДА перейдёшь, — так она отвечает на вопрос «что будет,
+ * если нажать». Куда именно вести, решает модель: окно помнит свой последний
+ * адрес и положение прокрутки.
+ */
+function WindowTile({ onSwitch }: { onSwitch: () => void }) {
+  const router = useRouter();
+  const state = usePortalWindows();
+  const label = portalWindowButtonLabel(state);
+
+  return (
+    <button
+      type="button"
+      title={portalWindowButtonHint(state)}
+      aria-label={portalWindowButtonHint(state)}
+      onClick={() => {
+        const target = switchPortalWindows(
+          nextPortalWindow(state, state.windows.length),
+          window.scrollY,
+        );
+        onSwitch();
+        router.push(target.url);
+      }}
+      className={tileClass}
+    >
+      <Columns2 className="size-5" />
+      {label}
+    </button>
   );
 }
 

@@ -12,6 +12,9 @@
  */
 
 export type QuickActionId =
+  | "window"
+  | "bookmarks"
+  | "search"
   | "assistant"
   | "aphorism"
   | "collections"
@@ -32,6 +35,26 @@ export interface QuickActionMeta {
 }
 
 export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
+  {
+    id: "window",
+    label: "Окно",
+    hint: "Второе окно портала: свой адрес и своя история, первое остаётся где было",
+    // Не переход, а переключение состояния: адрес зависит от того, где
+    // второе окно оставили.
+    href: null,
+  },
+  {
+    id: "bookmarks",
+    label: "Закладки",
+    hint: "Отложенные страницы: исполнитель, доска, книга — любой уровень любого сервиса",
+    href: null,
+  },
+  {
+    id: "search",
+    label: "Поиск",
+    hint: "Поиск по VedaMatch: сразу по всем сервисам, которые умеют искать",
+    href: "/search",
+  },
   {
     id: "assistant",
     label: "Ассистент",
@@ -93,13 +116,34 @@ export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
 const KNOWN = new Set<string>(QUICK_ACTIONS.map((action) => action.id));
 
 /**
+ * Кнопки, приехавшие позже панели (VED-163).
+ *
+ * У человека, который однажды настроил панель, в хранилище лежит его набор,
+ * и новая кнопка в списке по умолчанию до него не доедет никогда. Поэтому
+ * старая запись (голый массив) один раз дополняется этими тремя, а новая
+ * (`{v:2}`) принимается как есть: выключенная кнопка обязана остаться
+ * выключенной, иначе настройка ничего не значит.
+ */
+const ADDED_QUICK_ACTIONS: readonly QuickActionId[] = [
+  "window",
+  "bookmarks",
+  "search",
+];
+
+/** Версия записи в хранилище. См. ADDED_QUICK_ACTIONS. */
+const CONFIG_VERSION = 2;
+
+/**
  * Что стоит в панели у человека, который ничего не настраивал.
  *
- * Шесть, а не все девять: панель на телефоне помещается в два ряда, а
- * заполненная до краёв с первого открытия она не читается как настраиваемая
- * — её начинают разбирать, а не собирать.
+ * Не все двенадцать: заполненная до краёв с первого открытия панель не
+ * читается как настраиваемая — её начинают разбирать, а не собирать.
+ * Окно, закладки и поиск стоят первыми и включены всегда (VED-163): это не
+ * «что держать под рукой», а три способа перемещаться по порталу, и человек,
+ * который их не включил, просто не узнает, что они есть.
  */
 export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
+  ...ADDED_QUICK_ACTIONS,
   "assistant",
   "aphorism",
   "calendar",
@@ -121,17 +165,41 @@ export function parseQuickConfig(raw: string | null): QuickActionId[] {
   } catch {
     return [...DEFAULT_QUICK_ACTIONS];
   }
-  if (!Array.isArray(parsed)) return [...DEFAULT_QUICK_ACTIONS];
-  const kept = parsed.filter(
-    (item): item is QuickActionId => typeof item === "string" && KNOWN.has(item),
-  );
-  // Дубли убираем: панель с двумя одинаковыми кнопками — это сбой хранилища,
-  // а не выбор человека.
-  return [...new Set(kept)];
+
+  // Запись новой версии: набор человека, каким он его оставил.
+  if (!Array.isArray(parsed)) {
+    const record = parsed as { v?: unknown; ids?: unknown } | null;
+    if (!record || record.v !== CONFIG_VERSION || !Array.isArray(record.ids)) {
+      return [...DEFAULT_QUICK_ACTIONS];
+    }
+    return dedupe(record.ids);
+  }
+
+  // Запись прошлой версии: дополняем кнопками, появившимися после неё, и
+  // ставим их первыми — иначе человек с настроенной панелью о них не узнает.
+  const kept = dedupe(parsed);
+  const missing = ADDED_QUICK_ACTIONS.filter((id) => !kept.includes(id));
+  return [...missing, ...kept];
 }
 
 export function serializeQuickConfig(ids: readonly QuickActionId[]): string {
-  return JSON.stringify(ids);
+  return JSON.stringify({ v: CONFIG_VERSION, ids });
+}
+
+/**
+ * Дубли убираем: панель с двумя одинаковыми кнопками — это сбой хранилища,
+ * а не выбор человека. Всё незнакомое — молча мимо: в хранилище лежит набор
+ * с прошлой версии портала, где кнопка могла называться иначе.
+ */
+function dedupe(source: readonly unknown[]): QuickActionId[] {
+  return [
+    ...new Set(
+      source.filter(
+        (item): item is QuickActionId =>
+          typeof item === "string" && KNOWN.has(item),
+      ),
+    ),
+  ];
 }
 
 /** Включить или выключить кнопку. Включённая встаёт в конец — туда, куда её и кладут. */
