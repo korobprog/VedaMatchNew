@@ -78,10 +78,6 @@ export function validateCommunityDraft(draft: CommunityDraft): string | null {
   return null;
 }
 
-export function canSubmitCommunityDraft(draft: CommunityDraft, busy: boolean): boolean {
-  return !busy && validateCommunityDraft(draft) === null;
-}
-
 export function buildCreateCommunityRequest(draft: CommunityDraft): CreateCommunityRequest {
   return {
     kind: draft.kind,

@@ -132,14 +132,51 @@ describe('Экран «Новая беседа» — пустой список �
     await act(async () => {
       byLabel(renderer, 'Название беседы').props.onChangeText('Севаки');
     });
-    expect(byLabel(renderer, 'Завести группу').props.accessibilityState.disabled).toBe(false);
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).toHaveBeenCalledWith({ kind: 'group', title: 'Севаки', memberIds: [] });
   });
 });
 
 describe('Экран «Новая беседа» — название и участники', () => {
-  it('без названия кнопка заблокирована', async () => {
+  it('пустое название: запрос не уходит, а человеку говорят, чего не хватает', async () => {
     const renderer = await render();
-    expect(byLabel(renderer, 'Завести группу').props.accessibilityState.disabled).toBe(true);
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(texts(renderer)).toContain('У группы должно быть название');
+  });
+
+  it('у канала без названия — свой текст, про канал', async () => {
+    mockChannelCommunities.mockResolvedValue({
+      communities: [{ community: { id: 'c1', slug: 'minsk', name: 'Минская ятра', status: 'active' }, channels: [] }],
+    });
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Канал').props.onPress();
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести канал').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(texts(renderer)).toContain('У канала должно быть название');
+  });
+
+  it('одни пробелы в названии — тоже отказ, а не пустая беседа', async () => {
+    const renderer = await render();
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('    ');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести группу').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('отмеченные люди уходят в запрос, название — без пробелов по краям', async () => {
@@ -225,14 +262,33 @@ describe('Экран «Новая беседа» — канал общины', (
     expect(mockCreate).toHaveBeenCalledWith({ kind: 'channel', title: 'Объявления', communityId: 'c1' });
   });
 
-  it('община не активна — экран предупреждает, что беседы в ней не видно', async () => {
+  it('неактивную общину выбрать нельзя, и экран объясняет почему', async () => {
+    mockChannelCommunities.mockResolvedValue({
+      communities: [{ community: { id: 'c1', slug: 'minsk', name: 'Минская ятра', status: 'pending' }, channels: [] }],
+    });
+    const renderer = await render();
+    const chip = byLabel(renderer, 'Минская ятра — не активна, беседы в ней не видны');
+    expect(chip.props.accessibilityState.disabled).toBe(true);
+    expect(chip.props.disabled).toBe(true);
+    expect(texts(renderer)).toContain('на проверке');
+  });
+
+  it('канал в неактивной общине не заводится: общину не подставили, запрос не ушёл', async () => {
     mockChannelCommunities.mockResolvedValue({
       communities: [{ community: { id: 'c1', slug: 'minsk', name: 'Минская ятра', status: 'pending' }, channels: [] }],
     });
     const renderer = await render();
     await act(async () => {
-      byLabel(renderer, 'Минская ятра (не активна)').props.onPress();
+      byLabel(renderer, 'Канал').props.onPress();
     });
-    expect(texts(renderer)).toContain('не активна');
+    await act(async () => {
+      byLabel(renderer, 'Название беседы').props.onChangeText('Объявления');
+    });
+    await act(async () => {
+      byLabel(renderer, 'Завести канал').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(texts(renderer)).toContain('Выберите общину');
   });
 });

@@ -77,9 +77,14 @@ beforeEach(() => {
 });
 
 describe('Экран «Новая община» — форма', () => {
-  it('без названия отправить нельзя', async () => {
+  it('без названия запрос не уходит, а человеку говорят, чего не хватает', async () => {
     const renderer = await render();
-    expect(byLabel(renderer, 'Отправить на проверку').props.accessibilityState.disabled).toBe(true);
+    await act(async () => {
+      byLabel(renderer, 'Отправить на проверку').props.onPress();
+    });
+    await flush();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(texts(renderer)).toContain('Укажите название общины');
   });
 
   it('сразу объясняет, что карточку проверяет администрация портала', async () => {
@@ -224,6 +229,32 @@ describe('Экран «Новая община» — подсказки горо
       byLabel(renderer, 'Название общины').props.onChangeText('Минская ятра');
     });
     await typeCity(renderer, 'Минск');
-    expect(byLabel(renderer, 'Отправить на проверку').props.accessibilityState.disabled).toBe(false);
+    await act(async () => {
+      byLabel(renderer, 'Отправить на проверку').props.onPress();
+    });
+    await flush();
+    expect(mockCreate.mock.calls[0][0].location).toBeNull();
+  });
+
+  it('выбранный город убирает подсказки из-под поля', async () => {
+    const renderer = await render();
+    await typeCity(renderer, 'Минск');
+    expect(queryByLabel(renderer, 'Минск, Беларусь')).not.toBeNull();
+    await act(async () => {
+      byLabel(renderer, 'Минск, Беларусь').props.onPress();
+    });
+    // Осталась только строка «Выбрано: …», нажимать больше нечего.
+    expect(queryByLabel(renderer, 'Минск, Беларусь')).toBeNull();
+    expect(texts(renderer)).toContain('Выбрано');
+  });
+
+  it('человек правит город после выбора — подсказки приходят снова', async () => {
+    const renderer = await render();
+    await typeCity(renderer, 'Минск');
+    await act(async () => {
+      byLabel(renderer, 'Минск, Беларусь').props.onPress();
+    });
+    await typeCity(renderer, 'Минская');
+    expect(queryByLabel(renderer, 'Минск, Беларусь')).not.toBeNull();
   });
 });

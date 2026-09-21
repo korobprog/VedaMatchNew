@@ -6,6 +6,12 @@ import { fonts, hitTarget } from '@/theme/tokens';
 export interface ChipOption<T extends string> {
   value: T;
   label: string;
+  /**
+   * Пункт в списке есть, но выбрать его нельзя — как `disabled` у
+   * `<option>` на сайте (община на проверке). Почему нельзя, объясняет
+   * подпись рядом с набором, а не сам погашенный чип.
+   */
+  disabled?: boolean;
 }
 
 interface Props<T extends string> {
@@ -33,13 +39,14 @@ export function OptionChips<T extends string>({ label, options, value, onChange,
       <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.row}>
         {options.map((option) => {
           const selected = option.value === value;
+          const off = disabled || option.disabled === true;
           return (
             <Pressable
               key={option.value}
               accessibilityRole="radio"
               accessibilityLabel={option.label}
-              accessibilityState={{ selected, disabled }}
-              disabled={disabled}
+              accessibilityState={{ selected, disabled: off }}
+              disabled={off}
               onPress={() => onChange(option.value)}
               android_ripple={ripple(colors.glassBorder)}
               style={({ pressed }) => [
@@ -47,7 +54,7 @@ export function OptionChips<T extends string>({ label, options, value, onChange,
                 selected
                   ? { borderColor: colors.magenta, backgroundColor: colors.bg2 }
                   : { borderColor: colors.glassBorder, backgroundColor: colors.glass },
-                disabled ? styles.disabled : pressedStyle(pressed),
+                off ? styles.disabled : pressedStyle(pressed),
               ]}
             >
               <Text style={[styles.chipText, { color: selected ? colors.text0 : colors.text1 }]}>{option.label}</Text>

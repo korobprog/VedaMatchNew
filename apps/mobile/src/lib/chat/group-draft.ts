@@ -49,10 +49,6 @@ export function validateGroupDraft(draft: GroupDraft): string | null {
   return null;
 }
 
-export function canSubmitGroupDraft(draft: GroupDraft, busy: boolean): boolean {
-  return !busy && validateGroupDraft(draft) === null;
-}
-
 export function buildCreateRequest(draft: GroupDraft): CreateChatConversationRequest {
   const title = draft.title.trim().slice(0, CHAT_GROUP_TITLE_MAX_LENGTH);
   if (draft.mode === 'channel') {
@@ -118,15 +114,16 @@ export function existingChannelsHint(
   return `В этой общине уже есть канал: ${titles}. Второй такой же обычно не нужен.`;
 }
 
-/** Предупреждение о неактивной общине — показывается рядом с выбором. */
-export function inactiveCommunityHint(
-  communities: readonly ChatChannelCommunity[],
-  communityId: string,
-): string | null {
-  if (!communityId) return null;
-  const option = communityOptions(communities).find((item) => item.id === communityId);
-  if (!option || option.active) return null;
-  return 'Община не активна — беседы в ней не видны, пока её не подтвердит администрация портала.';
+/**
+ * Пояснение к заблокированным пунктам выбора. Неактивную общину выбрать
+ * нельзя — ровно как на сайте, где такой `<option>` стоит `disabled`, — но
+ * молча гасить пункт нельзя: человек должен понимать, почему его община в
+ * списке есть, а нажать её не получается. `null`, когда гасить нечего.
+ */
+export function inactiveCommunityNote(communities: readonly ChatChannelCommunity[]): string | null {
+  const hasInactive = communityOptions(communities).some((option) => !option.active);
+  if (!hasInactive) return null;
+  return 'Община на проверке пока недоступна: беседы в ней всё равно не видны, пока её не подтвердит администрация портала.';
 }
 
 /** Поиск по списку людей: без учёта регистра, пустой запрос — весь список. */

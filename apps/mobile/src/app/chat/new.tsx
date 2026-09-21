@@ -24,7 +24,6 @@ import { createChatApi } from '@/lib/chat/chat-api';
 import {
   buildCreateRequest,
   canCreateChannel,
-  canSubmitGroupDraft,
   CHAT_GROUP_DESCRIPTION_MAX_LENGTH,
   CHAT_GROUP_TITLE_MAX_LENGTH,
   communityOptions,
@@ -32,7 +31,7 @@ import {
   emptyGroupDraft,
   existingChannelsHint,
   filterPeople,
-  inactiveCommunityHint,
+  inactiveCommunityNote,
   toggleMember,
   validateGroupDraft,
   type GroupDraft,
@@ -135,12 +134,15 @@ export default function NewConversationScreen() {
   const communityChips = useMemo<ChipOption<string>[]>(() => {
     const list: ChipOption<string>[] = options.map((option) => ({
       value: option.id,
-      label: option.active ? option.name : `${option.name} (не активна)`,
+      // Неактивную общину выбрать нельзя — как `disabled` у `<option>` на
+      // сайте: беседа в ней нигде не покажется, и молча заводить её незачем.
+      label: option.active ? option.name : `${option.name} — не активна, беседы в ней не видны`,
+      disabled: !option.active,
     }));
     return draft.mode === 'channel' ? list : [{ value: '', label: 'Без общины' }, ...list];
   }, [options, draft.mode]);
 
-  const inactiveHint = inactiveCommunityHint(communities ?? [], draft.communityId);
+  const inactiveNote = inactiveCommunityNote(communities ?? []);
   const channelsHint = draft.mode === 'channel' ? existingChannelsHint(communities ?? [], draft.communityId) : null;
   const titleLeft = CHAT_GROUP_TITLE_MAX_LENGTH - draft.title.length;
 
@@ -213,7 +215,7 @@ export default function NewConversationScreen() {
             onChange={(communityId) => setDraft((current) => ({ ...current, communityId }))}
             disabled={busy}
           />
-          {inactiveHint ? <Text style={[styles.hint, { color: colors.text1 }]}>{inactiveHint}</Text> : null}
+          {inactiveNote ? <Text style={[styles.hint, { color: colors.text1 }]}>{inactiveNote}</Text> : null}
           {channelsHint ? <Text style={[styles.hint, { color: colors.text1 }]}>{channelsHint}</Text> : null}
         </View>
       ) : null}
@@ -289,17 +291,20 @@ export default function NewConversationScreen() {
         />
         <View style={[styles.footer, { borderTopColor: colors.glassBorder, backgroundColor: colors.bg0, paddingBottom: insets.bottom + 12 }]}>
           {submitError ? <InlineError message={submitError} /> : null}
+          {/* Кнопка не гаснет от незаполненных полей — как на сайте: иначе
+              человек жмёт погашенную кнопку и не понимает, чего не хватает,
+              а текст отказа из `validateGroupDraft` не появляется никогда. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={draft.mode === 'channel' ? 'Завести канал' : 'Завести группу'}
-            accessibilityState={{ busy, disabled: !canSubmitGroupDraft(draft, busy) }}
-            disabled={!canSubmitGroupDraft(draft, busy)}
+            accessibilityState={{ busy, disabled: busy }}
+            disabled={busy}
             onPress={() => void submit()}
             android_ripple={ripple(colors.glassBorder)}
             style={({ pressed }) => [
               styles.primary,
               { backgroundColor: colors.magenta, borderColor: colors.magenta },
-              canSubmitGroupDraft(draft, busy) ? pressedStyle(pressed) : styles.busy,
+              busy ? styles.busy : pressedStyle(pressed),
             ]}
           >
             {busy ? (

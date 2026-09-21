@@ -2,13 +2,12 @@ import type { ChatChannelCommunity, ChatUserSummary } from '@vedamatch/shared';
 import {
   buildCreateRequest,
   canCreateChannel,
-  canSubmitGroupDraft,
   communityOptions,
   defaultChannelCommunityId,
   emptyGroupDraft,
   existingChannelsHint,
   filterPeople,
-  inactiveCommunityHint,
+  inactiveCommunityNote,
   toggleMember,
   validateGroupDraft,
   type GroupDraft,
@@ -70,20 +69,6 @@ describe('validateGroupDraft', () => {
 
   it('канал с общиной и названием допустим', () => {
     expect(validateGroupDraft(draft({ mode: 'channel', title: 'Киртаны', communityId: 'c1' }))).toBeNull();
-  });
-});
-
-describe('canSubmitGroupDraft', () => {
-  it('во время отправки кнопка заблокирована даже у правильного черновика', () => {
-    expect(canSubmitGroupDraft(draft({ title: 'Севаки' }), true)).toBe(false);
-  });
-
-  it('правильный черновик и не занято — можно отправлять', () => {
-    expect(canSubmitGroupDraft(draft({ title: 'Севаки' }), false)).toBe(true);
-  });
-
-  it('пустое название не пускает', () => {
-    expect(canSubmitGroupDraft(draft({ title: '' }), false)).toBe(false);
   });
 });
 
@@ -172,13 +157,17 @@ describe('existingChannelsHint', () => {
   });
 });
 
-describe('inactiveCommunityHint', () => {
-  it('предупреждает, что в неактивной общине беседы не видно', () => {
-    expect(inactiveCommunityHint([community('c2', 'Тверь', 'pending')], 'c2')).toContain('не активна');
+describe('inactiveCommunityNote', () => {
+  it('объясняет, почему неактивная община в списке есть, а выбрать её нельзя', () => {
+    expect(inactiveCommunityNote([community('c2', 'Тверь', 'pending')])).toContain('на проверке');
   });
 
-  it('у активной общины предупреждения нет', () => {
-    expect(inactiveCommunityHint([community('c1', 'Минск')], 'c1')).toBeNull();
+  it('все общины активны — объяснять нечего', () => {
+    expect(inactiveCommunityNote([community('c1', 'Минск')])).toBeNull();
+  });
+
+  it('общин нет вовсе — тоже нечего', () => {
+    expect(inactiveCommunityNote([])).toBeNull();
   });
 });
 

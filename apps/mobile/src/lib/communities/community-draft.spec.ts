@@ -1,7 +1,6 @@
 import type { ProfileLocation } from '@vedamatch/shared';
 import {
   buildCreateCommunityRequest,
-  canSubmitCommunityDraft,
   emptyCommunityDraft,
   isValidLocation,
   locationLabel,
@@ -57,20 +56,6 @@ describe('validateCommunityDraft', () => {
 
   it('заполненный черновик ошибок не даёт', () => {
     expect(validateCommunityDraft(draft())).toBeNull();
-  });
-});
-
-describe('canSubmitCommunityDraft', () => {
-  it('во время отправки кнопка заблокирована', () => {
-    expect(canSubmitCommunityDraft(draft(), true)).toBe(false);
-  });
-
-  it('правильный черновик отправляется', () => {
-    expect(canSubmitCommunityDraft(draft(), false)).toBe(true);
-  });
-
-  it('черновик с ошибкой не отправляется', () => {
-    expect(canSubmitCommunityDraft(draft({ name: '' }), false)).toBe(false);
   });
 });
 

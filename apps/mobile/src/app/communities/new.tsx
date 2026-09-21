@@ -12,7 +12,6 @@ import { createCommunitiesApi } from '@/lib/communities/communities-api';
 import { COMMUNITY_KIND_LABELS } from '@/lib/communities/community-labels';
 import {
   buildCreateCommunityRequest,
-  canSubmitCommunityDraft,
   COMMUNITY_ADDRESS_MAX_LENGTH,
   COMMUNITY_JOIN_POLICY_LABELS,
   COMMUNITY_JOIN_POLICY_ORDER,
@@ -283,17 +282,19 @@ export default function NewCommunityScreen() {
 
         {error ? <InlineError message={error} /> : null}
 
+        {/* Кнопка гаснет только на время отправки: пустое название не гасит
+            её, а объясняется текстом отказа — как на сайте. */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Отправить на проверку"
-          accessibilityState={{ busy, disabled: !canSubmitCommunityDraft(draft, busy) }}
-          disabled={!canSubmitCommunityDraft(draft, busy)}
+          accessibilityState={{ busy, disabled: busy }}
+          disabled={busy}
           onPress={() => void submit()}
           android_ripple={ripple(colors.glassBorder)}
           style={({ pressed }) => [
             styles.primary,
             { backgroundColor: colors.magenta, borderColor: colors.magenta },
-            canSubmitCommunityDraft(draft, busy) ? pressedStyle(pressed) : styles.busy,
+            busy ? styles.busy : pressedStyle(pressed),
           ]}
         >
           {busy ? (
