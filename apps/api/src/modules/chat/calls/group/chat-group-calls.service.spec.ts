@@ -563,10 +563,25 @@ describe('камера', () => {
     expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
   });
 
-  it('вернувшийся не наследует своё прежнее место под видео', async () => {
-    // Иначе двое могли бы занять одно место: пока он ходил, его отдали.
+  it('выход гасит камеру в самой строке, а не только в выдаче', async () => {
+    // Потолок считается по живым, поэтому вышедший с `video: true` в
+    // выдаче всё равно не виден — и ровно поэтому забытый флаг в строке
+    // заметить неоткуда, пока он не всплывёт при следующем входе. Значит
+    // смотреть надо строку.
     const { service, room, participants } = await roomWithCameras(1);
     await service.leave('a', room.id);
+    expect(participants.find((p) => p.userId === 'a')!.video).toBe(false);
+  });
+
+  it('вернувшийся не наследует своё прежнее место под видео', async () => {
+    // Иначе двое могли бы занять одно место: пока он ходил, его отдали.
+    // Строка портится руками намеренно — это ВТОРОЙ рубеж, и проверять
+    // его надо отдельно от первого (гашения при выходе), иначе они
+    // прикрывают друг друга и сломать можно оба сразу незамеченно.
+    const { service, room, participants } = await roomWithCameras(1);
+    await service.leave('a', room.id);
+    participants.find((p) => p.userId === 'a')!.video = true;
+
     await service.join('a', room.id);
     expect(
       participants.find((p) => p.userId === 'a' && p.state === 'joined')!.video,

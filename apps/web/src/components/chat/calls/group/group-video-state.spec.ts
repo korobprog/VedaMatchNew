@@ -213,6 +213,19 @@ describe("кнопка «камера»", () => {
     expect(cameraButtonState(room, "c", true).blocked).toBe(false);
   });
 
+  it("своё место не блокирует кнопку, пока состав ещё не обновился", () => {
+    // Человек нажал «выключить камеру»: кнопка отвечает сразу, а состав
+    // приходит событием с задержкой и всё ещё говорит «у него включена».
+    // Считать своё же место занятым значит сделать кнопку мёртвой до
+    // следующего события.
+    const room = call([
+      participant("a", true),
+      participant("b", true),
+      participant("c", true),
+    ]);
+    expect(cameraButtonState(room, "c", false).blocked).toBe(false);
+  });
+
   it("выключить свою камеру можно всегда", () => {
     const room = call([
       participant("a", true),
