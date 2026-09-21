@@ -4,7 +4,7 @@ import type {
   ChatMessageDto,
   ChatReplyPreview,
 } from '@vedamatch/shared';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
@@ -48,6 +48,7 @@ import {
 } from '@/lib/chat/chat-composer-state';
 import { attachmentLabel, formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
 import {
+  applyConversationMeta,
   applyReadByOther,
   applyRoomEvent,
   buildPendingMessage,
@@ -190,6 +191,31 @@ export default function ChatRoomScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Возврат с экрана участников: беседу могли переименовать, сменить ей
+  // описание и открытость, позвать или исключить человека — шапка обязана
+  // это показать. Перечитываем только шапку: лента и черновик остаются.
+  // Первый фокус пропускаем — его уже отработал `load()` выше.
+  const focusedBefore = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedBefore.current) {
+        focusedBefore.current = true;
+        return;
+      }
+      let alive = true;
+      chatApi
+        .detail(conversationId)
+        .then((next) => {
+          if (alive) setDetail((current) => (current ? applyConversationMeta(current, next) : next));
+        })
+        // Молча: шапка просто останется прежней, экран этим не ломается.
+        .catch(() => undefined);
+      return () => {
+        alive = false;
+      };
+    }, [chatApi, conversationId]),
+  );
 
   useEffect(() => {
     const offEvents = stream.subscribe((event) => {

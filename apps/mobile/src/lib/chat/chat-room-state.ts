@@ -1,4 +1,11 @@
-import type { ChatAttachmentInput, ChatMessageDto, ChatReplyPreview, ChatStreamEvent, ChatUserSummary } from '@vedamatch/shared';
+import type {
+  ChatAttachmentInput,
+  ChatConversationDetail,
+  ChatMessageDto,
+  ChatReplyPreview,
+  ChatStreamEvent,
+  ChatUserSummary,
+} from '@vedamatch/shared';
 
 /**
  * Лента открытой беседы. Сообщения хранятся по возрастанию времени, как их
@@ -101,6 +108,30 @@ export function applyRoomEvent(
     default:
       return [...messages];
   }
+}
+
+/**
+ * Шапку беседы могли поменять на экране участников: переименовать, сменить
+ * описание и открытость, позвать или исключить человека. Берём из свежего
+ * ответа только эти поля — лента сообщений и черновики в состоянии экрана
+ * остаются прежними, иначе возврат с экрана участников сбрасывал бы
+ * прокрутку и недописанное сообщение.
+ */
+export function applyConversationMeta(
+  current: ChatConversationDetail,
+  next: ChatConversationDetail,
+): ChatConversationDetail {
+  return {
+    ...current,
+    title: next.title,
+    description: next.description,
+    visibility: next.visibility,
+    avatarUrl: next.avatarUrl,
+    membersCount: next.membersCount,
+    members: next.members,
+    myRole: next.myRole,
+    canWrite: next.canWrite,
+  };
 }
 
 /**
