@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ChatCallSignal } from '@vedamatch/shared';
@@ -135,6 +135,36 @@ describe('ChatCallsService — сигналы активного звонка (V
       ['callee'],
       expect.objectContaining({ type: 'call.signal', seq: 2 }),
     );
+  });
+
+  it('переносит сигнал состояния камеры (VED-291) как есть', async () => {
+    const { service, events } = buildService();
+    const mediaOff: ChatCallSignal = { kind: 'media', media: { video: false } };
+
+    await service.signal('caller', 'call-1', mediaOff);
+
+    expect(events.publish).toHaveBeenCalledWith(
+      ['callee'],
+      expect.objectContaining({
+        type: 'call.signal',
+        seq: 1,
+        signal: mediaOff,
+      }),
+    );
+    expect(await service.signalsSince('callee', 'call-1', 0)).toEqual([
+      { seq: 1, fromUserId: 'caller', signal: mediaOff },
+    ]);
+  });
+
+  it('сигнал состояния камеры без булева `video` — 400, как и любая другая неверная форма', async () => {
+    const { service } = buildService();
+
+    await expect(
+      service.signal('caller', 'call-1', {
+        kind: 'media',
+        media: { video: 'off' },
+      } as unknown as ChatCallSignal),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('повтор с тем же clientSignalId (партиальный успех) не создаёт второй сигнал (VED-261, feedback-002)', async () => {
