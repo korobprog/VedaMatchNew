@@ -22,6 +22,13 @@ import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import { PortalSearchField } from "@/components/portal-search-field";
 import { PortalSupportLink } from "@/components/portal-support-link";
+import { BlogHomeWidget } from "@/components/blog/blog-home-widget";
+import { BlogFeedToggle } from "@/components/blog/blog-feed-toggle";
+import {
+  BLOG_HOME_COOKIE,
+  resolveBlogHomeVisible,
+} from "@/lib/blog-home-visibility";
+import { getBlogHomeFeed } from "@/lib/blog-api";
 import { InviteFriendTeaser } from "@/components/rewards/invite-friend-teaser";
 import {
   getUnionChats,
@@ -222,6 +229,16 @@ export default async function Home({
     featuredOptions,
   );
   const featuredRoutes = new Set(featured.map((item) => item.href));
+  // Блог-лента наверху главной (VED-238). Выбор «убрать ленту с экрана»
+  // живёт в cookie и читается здесь, на сервере: лента рисуется в SSR, и
+  // решение, известное только браузеру, дало бы главную, которая сначала
+  // показывает ленту, а потом её убирает.
+  const blogVisible = resolveBlogHomeVisible(
+    (await cookies()).get(BLOG_HOME_COOKIE)?.value,
+    user.id,
+  );
+  // Упавший сервис обязан убрать ленту, а не главную.
+  const blogFeed = blogVisible ? await getBlogHomeFeed().catch(() => null) : null;
   const unionService = services.find((s) => s.url === "/union");
   const motivationService = services.find((s) => s.url === "/motivation");
   const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
@@ -286,6 +303,15 @@ export default async function Home({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
+        {/* Блог-лента (VED-238) — на месте карточки поддержки и строки
+            поиска: по карточке задачи они оба уезжают в панель горячих
+            клавиш, освобождая место ленте. Пока поиск туда не переехал,
+            лента стоит над ними, а не вместо: убрать поиск раньше, чем он
+            появится в панели, значит на время оставить портал без поиска
+            вовсе. Что удалять следующим шагом — эти две строки ниже. */}
+        {blogFeed && (
+          <BlogHomeWidget data={blogFeed} userId={user.id} className="mb-3" />
+        )}
         {/* Поддержка — первой, над поиском (VED-146). */}
         <PortalSupportLink className="mb-3" />
         {/* Поиск по порталу — сразу под поддержкой (VED-75): человек, который
@@ -334,11 +360,20 @@ export default async function Home({
              висела отдельной строкой, а плеер между ними отрывал её от
              остальных настроек главной. */
           toolbarStart={
-            <FeaturedServicesEditor
-              userId={user.id}
-              current={featured.map((item) => item.key)}
-              options={featuredOptions.map(({ key, name }) => ({ key, name }))}
-            />
+            <>
+              <FeaturedServicesEditor
+                userId={user.id}
+                current={featured.map((item) => item.key)}
+                options={featuredOptions.map(({ key, name }) => ({
+                  key,
+                  name,
+                }))}
+              />
+              {/* Возврат спрятанной ленты — здесь, а не наверху: в
+                  спрятанном виде верх главной обязан выглядеть как раньше.
+                  Пока лента показана, кнопки нет вовсе. */}
+              <BlogFeedToggle userId={user.id} hidden={!blogVisible} />
+            </>
           }
         />
         {/* Подвал главной, под сеткой: действия людей, которые открыли
