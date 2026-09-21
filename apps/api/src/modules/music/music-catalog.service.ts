@@ -331,8 +331,9 @@ export class MusicCatalogService {
         return [{ playCount: 'desc' as const }, { id: 'desc' as const }];
       case 'title':
         return [{ title: 'asc' as const }, { id: 'desc' as const }];
-      case 'duration':
-        return [{ durationSeconds: 'asc' as const }, { id: 'desc' as const }];
+      // Порядка «по длительности» больше нет (VED-165) — убран вместе с
+      // одноимённым фильтром: сортировать по колонке, часть значений которой
+      // проставлена оценкой при загрузке, значит врать в списке.
       case 'fresh':
       default:
         return [{ publishedAt: 'desc' as const }, { id: 'desc' as const }];

@@ -16,7 +16,11 @@ import {
 export const MUSIC_TRACKS_DEFAULT_LIMIT = 24;
 export const MUSIC_TRACKS_MAX_LIMIT = 60;
 
-const SORTS: MusicTrackSort[] = ['fresh', 'popular', 'title', 'duration'];
+// Без `duration` (VED-165): порядок «по длительности» убран вместе с
+// одноимённым фильтром — `durationSeconds` у части записей заполнена оценкой
+// при загрузке и расходится с файлом. Старое `?sort=duration` попадает в
+// общую ветку «незнакомое значение» и получает умолчание, а не пустую выдачу.
+const SORTS: MusicTrackSort[] = ['fresh', 'popular', 'title'];
 
 export interface NormalizedMusicTrackQuery {
   q: string | null;

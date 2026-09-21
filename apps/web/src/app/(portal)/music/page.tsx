@@ -78,9 +78,7 @@ export default async function MusicPage({
     q?: string | string[];
     all?: string | string[];
     artist?: string | string[];
-    live?: string | string[];
     lineage?: string | string[];
-    sort?: string | string[];
     cursor?: string | string[];
   }>;
 }) {
@@ -94,8 +92,6 @@ export default async function MusicPage({
   const category = first(params.category);
   const query = first(params.q);
   const artist = first(params.artist);
-  const live = first(params.live);
-  const sort = first(params.sort);
   const cursor = first(params.cursor);
   // Явный выбор линии на один просмотр: `all` или идентификатор. Витрина
   // его не понимает — она фильтруется по профилю, — поэтому с ним сразу
@@ -111,13 +107,9 @@ export default async function MusicPage({
     category,
     q: query,
     artist,
-    live,
-    sort,
     cursor,
   };
-  const hasFilter = Boolean(
-    root || category || query || artist || live || sort || cursor,
-  );
+  const hasFilter = Boolean(root || category || query || artist || cursor);
 
   // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
   // выборка догружается только когда стоит фильтр или задан запрос.
@@ -143,9 +135,7 @@ export default async function MusicPage({
             ...(category ? { category } : {}),
             ...(query ? { q: query } : {}),
             ...(artist ? { artist } : {}),
-            ...(live ? { live: live === "true" } : {}),
             ...(explicitLineage ? { lineage: explicitLineage } : {}),
-            ...(sort ? { sort: sort as never } : {}),
             ...(cursor ? { cursor } : {}),
             limit: showAll && !hasFilter ? 60 : 30,
           })
