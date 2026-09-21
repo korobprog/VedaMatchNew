@@ -14,10 +14,23 @@
  */
 export const MAX_TRANSFER_PURPOSE = 140;
 
+/**
+ * Запасная формулировка на случай пустой цели. В форме цель всегда выбрана,
+ * но пустое назначение — ровно то безымянное поступление, от которого эта
+ * форма и спасает, так что подставляем цель по умолчанию.
+ */
+const FALLBACK_TRANSFER_PURPOSE =
+  "Дар на разработку и поддержку Портала VedaMatch";
+
 /** Что человек выбрал в форме назначения. */
 export interface TransferPurposeInput {
-  /** Цель перевода из `DONATE_PURPOSES`. */
-  purposeLabel: string;
+  /**
+   * Готовая формулировка цели — поле `transfer` выбранного пункта
+   * `DONATE_PURPOSES`, целиком и как есть. «Дар» к ней больше не
+   * приклеивается: склейка ломалась о падежи, и «Благодарность
+   * разработчикам» превращалась в «Дар на благодарность разработчикам».
+   */
+  purposeText: string;
   /** Как подписаться — необязательно. */
   donorName?: string | null;
 }
@@ -25,22 +38,21 @@ export interface TransferPurposeInput {
 /**
  * Строка для поля «назначение платежа».
  *
- * Собирается из цели и подписи: «Дар на развитие портала. От: Кришна дас».
- * Смысл карточки VED-11 ровно в этом — без подписанной цели перевод в выписке
- * выглядит как безымянное поступление, и мы не знаем ни на что его тратить,
- * ни кого благодарить.
+ * Собирается из цели и подписи: «Дар на разработку и поддержку Портала
+ * VedaMatch. От: Кришна дас». Смысл карточки VED-11 ровно в этом — без
+ * подписанной цели перевод в выписке выглядит как безымянное поступление, и
+ * мы не знаем ни на что его тратить, ни кого благодарить.
  *
  * Правила: лишние пробелы и переводы строк схлопываются (банк однострочное
  * поле переносами всё равно испортит), кавычки и символы, на которых
  * интернет-банки ругаются, вычищаются, длина ограничена по слову.
  */
 export function buildTransferPurpose({
-  purposeLabel,
+  purposeText,
   donorName,
 }: TransferPurposeInput): string {
-  const purpose = cleanPurposePart(purposeLabel);
+  const head = cleanPurposePart(purposeText) || FALLBACK_TRANSFER_PURPOSE;
   const name = cleanPurposePart(donorName ?? "");
-  const head = purpose ? `Дар ${lowerFirst(purpose)}` : "Дар на развитие VedaMatch";
   const full = name ? `${head}. От: ${name}` : head;
   return clampByWord(full, MAX_TRANSFER_PURPOSE);
 }
@@ -55,11 +67,6 @@ function cleanPurposePart(value: string): string {
     .replace(/[«»"'`<>|\\/*#№;]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-/** «На развитие портала» → «на развитие портала»: середина фразы, не начало. */
-function lowerFirst(value: string): string {
-  return value.charAt(0).toLocaleLowerCase("ru-RU") + value.slice(1);
 }
 
 /** Обрезка по границе слова: половина слова в выписке читается как опечатка. */

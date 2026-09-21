@@ -22,8 +22,10 @@ export function TransferPurposeForm() {
 
   const purpose =
     DONATE_PURPOSES.find((item) => item.id === purposeId) ?? DONATE_PURPOSES[0];
+  // В выписку идёт `transfer`, а не подпись пункта: в списке человек читает
+  // «Благодарность разработчикам», в банк уходит формулировка целиком.
   const line = buildTransferPurpose({
-    purposeLabel: purpose.label,
+    purposeText: purpose.transfer,
     donorName,
   });
 
