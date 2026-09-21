@@ -51,6 +51,14 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // только 3.85:1 — поэтому ошибка ПЛЕЕРА красится в `text0`, см.
   // `voice-message-player.tsx`, а не magenta).
   { name: 'таймер и ошибка записи голосового на стекле', text: 'magenta', surface: 'glass' },
+  // Групповой звонок (VED-293, `app/group-call/[id].tsx`): строка участника —
+  // непрозрачная карточка `bg1`, имя `text0`, состояние соединения и
+  // «Хозяин звонка» — `text1`. Подсказка про потолок в четыре человека под
+  // заголовком — `text2` на фоне экрана.
+  { name: 'имя участника группового звонка', text: 'text0', surface: 'bg1' },
+  { name: 'состояние соединения с участником', text: 'text1', surface: 'bg1' },
+  { name: 'подсказка о потолке участников', text: 'text2', surface: 'bg0' },
+  { name: 'подпись «Выйти» на кнопке magenta', text: 'onAccent', surface: 'magenta' },
 ];
 
 describe.each([
@@ -73,6 +81,10 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   // заполнение на дорожке `bg2` — magenta при скачивании, cyan при проверке файла.
   { name: 'заполнение прогресса скачивания на дорожке', graphic: 'magenta', surface: 'bg2' },
   { name: 'заполнение прогресса проверки файла на дорожке', graphic: 'cyan', surface: 'bg2' },
+  // Групповой звонок (VED-293): «кто говорит» показывается рамкой строки —
+  // это графика, а не текст, порог 3:1. Словами то же самое читает
+  // скринридер (`accessibilityLabel` строки), цветом одним не ограничиваемся.
+  { name: 'рамка «говорит» вокруг строки участника', graphic: 'cyan', surface: 'bg1' },
 ];
 
 describe.each([

@@ -385,6 +385,9 @@ model User {
   chatMemberships                    ChatMember[]                  @relation("ChatMemberships")
   chatCallsPlaced                    ChatCall[]                    @relation("ChatCallsPlaced")
   chatCallsReceived                  ChatCall[]                    @relation("ChatCallsReceived")
+  chatGroupCallsStarted              ChatGroupCall[]               @relation("ChatGroupCallsStarted")
+  chatGroupCallsHosted               ChatGroupCall[]               @relation("ChatGroupCallsHosted")
+  chatGroupCallParticipations        ChatGroupCallParticipant[]    @relation("ChatGroupCallParticipations")
   chatMessagesSent                   ChatMessage[]                 @relation("ChatMessagesSent")
   chatReactionsMade                  ChatMessageReaction[]         @relation("ChatReactionsMade")
   chatReportsMade                    ChatReport[]                  @relation("ChatReportsMade")
@@ -4139,7 +4142,8 @@ model ChatConversation {
   official  Boolean       @default(false)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
-  calls     ChatCall[]
+  calls      ChatCall[]
+  groupCalls ChatGroupCall[]
   members   ChatMember[]
   messages  ChatMessage[]
   reports   ChatReport[]
@@ -6715,4 +6719,81 @@ model BlogSettings {
   /// Срок нахождения поста в ленте по умолчанию, в часах. 0 — без срока.
   feedLifetimeHours Int      @default(72)
   updatedAt         DateTime @updatedAt
+}
+
+// ===== Групповые звонки в беседах (VED-293) =====
+
+enum ChatGroupCallStatus {
+  live
+  ended
+}
+
+/// Состояние участника комнаты. `left` — вышел сам или убран уборщиком как
+/// мёртвый (телефон уехал в тоннель и перестал слать heartbeat).
+enum ChatGroupCallParticipantState {
+  joined
+  left
+}
+
+/// Групповой звонок в беседе: комната, в которую входят и из которой выходят
+/// по ходу. Медиа идёт mesh'ем мимо сервера (каждый с каждым поверх TURN) —
+/// здесь только состав комнаты, «кто хозяин» и факт для ленты. Сигналинг
+/// (offer/answer/ICE) сюда не пишется, как и у звонка один на один: он живёт
+/// секунды в Redis/памяти (`group/group-call-signals.store.ts`).
+///
+/// Одна живая комната на беседу держится частичным уникальным индексом из
+/// миграции chat_group_calls (см. docs/prisma-raw-sql-objects.md): гонка двух
+/// «начать звонок» в одной беседе обязана дать одну комнату, а не две.
+model ChatGroupCall {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  startedById String
+  startedBy   User   @relation("ChatGroupCallsStarted", fields: [startedById], references: [id], onDelete: Cascade)
+
+  /// Кто «хозяин» прямо сейчас. Не право, а роль по умолчанию: хозяин — это
+  /// самый ранний из живых участников, и его уход комнату не закрывает.
+  hostId String?
+  host   User?   @relation("ChatGroupCallsHosted", fields: [hostId], references: [id], onDelete: SetNull)
+
+  kind   ChatCallKind        @default(audio)
+  status ChatGroupCallStatus @default(live)
+
+  createdAt DateTime  @default(now())
+  endedAt   DateTime?
+  /// Почему закончилась: empty (все вышли) | timeout (все протухли) | admin.
+  endReason String?
+
+  participants ChatGroupCallParticipant[]
+
+  @@index([conversationId, status])
+  @@index([status, createdAt])
+}
+
+/// Участие в комнате. Строка на пару (комната, человек) — повторный вход
+/// после выхода переиспользует её, а не плодит вторую.
+model ChatGroupCallParticipant {
+  id     String        @id @default(uuid())
+  callId String
+  call   ChatGroupCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  userId String
+  user   User          @relation("ChatGroupCallParticipations", fields: [userId], references: [id], onDelete: Cascade)
+
+  state ChatGroupCallParticipantState @default(joined)
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  /// Живость участника: телефон подтверждает присутствие heartbeat'ом.
+  /// Протухшая отметка — повод убрать его из комнаты, как истёкший ключ
+  /// «занят» у звонка один на один.
+  lastSeenAt DateTime @default(now())
+
+  /// Микрофон выключен самим участником — остальные видят это в списке.
+  muted Boolean @default(false)
+
+  @@unique([callId, userId])
+  @@index([callId, state])
+  @@index([state, lastSeenAt])
 }

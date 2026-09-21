@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { AttachmentSheet } from '@/components/chat/attachment-sheet';
 import { CallHeaderButtons } from '@/components/calls/call-header-buttons';
+import { GroupCallHeaderButton } from '@/components/calls/group-call-header-button';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { VoiceRecorderControl } from '@/components/chat/voice/voice-recorder-control';
 import { canOpenMessageMenuWhileRecording } from '@/lib/chat/voice/voice-composer-lock';
@@ -730,7 +731,12 @@ export default function ChatRoomScreen() {
           ),
           // Только кнопки — остальная шапка (заголовок, стрелка назад) вне
           // зоны звонков, см. VedaMatchNew-mobile-coordination.md.
-          headerRight: () => <CallHeaderButtons conversation={detail} />,
+          headerRight: () => (
+            <>
+              <CallHeaderButtons conversation={detail} />
+              <GroupCallHeaderButton conversation={detail} />
+            </>
+          ),
         }}
       />
 
