@@ -85,9 +85,27 @@ export default function ChatsScreen() {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-      <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
-        Чаты
-      </Text>
+      <View style={styles.titleRow}>
+        <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
+          Чаты
+        </Text>
+        {/* Завести группу или канал общины (VED-292) — то же, что кнопка
+            «Новая группа» в шапке списка бесед на сайте. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Новая беседа"
+          accessibilityHint="Открывает форму новой группы или канала"
+          onPress={() => router.push('/chat/new')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [
+            styles.newButton,
+            { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+            pressedStyle(pressed),
+          ]}
+        >
+          <Text style={[styles.newButtonText, { color: colors.text0 }]}>Новая</Text>
+        </Pressable>
+      </View>
       {requestsCount > 0 ? (
         <Pressable
           accessibilityRole="button"
@@ -153,7 +171,17 @@ export default function ChatsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 8, gap: 6 },
-  title: { fontFamily: fonts.displayBold, fontSize: 24 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  title: { flex: 1, fontFamily: fonts.displayBold, fontSize: 24 },
+  newButton: {
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  newButtonText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   requestsRow: {
     flexDirection: 'row',
     alignItems: 'center',

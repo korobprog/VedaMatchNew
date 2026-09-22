@@ -89,9 +89,28 @@ export default function CommunitiesScreen() {
   // `body` (список) — заголовок прыгал при появлении данных (раунд оценки
   // 006, дефект 2). Теперь он всегда одна и та же строка вне `body`.
   const header = (
-    <Text accessibilityRole="header" style={[styles.title, { color: colors.text0, paddingTop: insets.top + 16 }]}>
-      Общины
-    </Text>
+    <View style={[styles.titleRow, { paddingTop: insets.top + 16 }]}>
+      <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
+        Общины
+      </Text>
+      {/* Завести свою ятру, храм или нама-хатту (VED-292): та же форма и та
+          же портальная ручка, что у «Завести общину» на сайте. Поиск по
+          чужим общинам по-прежнему только там. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Завести общину"
+        accessibilityHint="Открывает форму новой общины"
+        onPress={() => router.push('/communities/new')}
+        android_ripple={ripple(colors.glassBorder)}
+        style={({ pressed }) => [
+          styles.newButton,
+          { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+          pressedStyle(pressed),
+        ]}
+      >
+        <Text style={[styles.newButtonText, { color: colors.text0 }]}>Завести</Text>
+      </Pressable>
+    </View>
   );
 
   if (!data && error) {
@@ -201,7 +220,24 @@ export default function CommunitiesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  title: { fontFamily: fonts.displayBold, fontSize: 24, paddingHorizontal: 20, paddingBottom: 8 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  title: { flex: 1, fontFamily: fonts.displayBold, fontSize: 24 },
+  newButton: {
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  newButtonText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   body: { paddingHorizontal: 20, gap: 8 },
   section: { gap: 2, marginTop: 12 },
   sectionTitle: { fontFamily: fonts.bodySemiBold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
