@@ -326,6 +326,30 @@ describe('NotificationsListener.deliver', () => {
     expect(nativePush.sendToUsers).not.toHaveBeenCalled();
   });
 
+  it('групповой звонок — обычный пуш, а не нативный вызов', async () => {
+    const { listener, nativePush } = createListener({});
+
+    await listener.deliver({
+      name: 'chat.group-call-started',
+      recipientId: 'user-1',
+      conversationTitle: 'Вайшнавы Москвы',
+      conversationId: 'conv-1',
+      callId: 'room-1',
+      starterName: 'Радха',
+    });
+
+    // Нативный экран вызова поднимает только `chat.call-incoming`. Комната
+    // открыта постоянно, «принять» её нечем, и трое в беседе означали бы
+    // три звонка на телефон.
+    expect(nativePush.sendCallIncoming).not.toHaveBeenCalled();
+    expect(nativePush.sendToUsers).toHaveBeenCalledWith(['user-1'], {
+      title: 'Вайшнавы Москвы',
+      body: 'Радха зовёт в групповой звонок',
+      url: '/chat/conv-1',
+      tag: 'group-call:room-1',
+    });
+  });
+
   it('прочие события всё ещё идут через sendToUsers', async () => {
     const { listener, nativePush } = createListener({});
 

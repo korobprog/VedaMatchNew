@@ -20,6 +20,7 @@ export const notificationEventNames = {
   portalChatRequestReceived: 'chat.request-received',
   portalChatCallIncoming: 'chat.call-incoming',
   portalChatCallMissed: 'chat.call-missed',
+  portalChatGroupCallStarted: 'chat.group-call-started',
   connectionRequested: 'union.connection.requested',
   connectionAccepted: 'union.connection.accepted',
   astroCompatibilityRequested: 'astro.compatibility.requested',
@@ -219,6 +220,31 @@ export function buildNotification(
             : 'Пропущенный аудиозвонок',
         url: `/chat/${event.conversationId}`,
         tag: `call-missed:${event.conversationId}`,
+        category: 'chat',
+      };
+    case 'chat.group-call-started':
+      return {
+        // Первым — название беседы: зовут не «к человеку», а в комнату, и
+        // без имени группы уведомление не говорит, куда идти.
+        title: event.conversationTitle,
+        // «зовёт», а не «начал»: формулировки портала без рода, пол у
+        // `User` необязателен.
+        body: `${event.starterName} зовёт в групповой звонок`,
+        // Без параметра `?call=`, которым ведёт звонок один на один, и это
+        // не экономия. Во-первых, в приложении `isCallRelatedPushUrl`
+        // (`apps/mobile/.../push/call-push-guard.ts`) глушит на переднем
+        // плане всё, где есть `?call=`, — групповое уведомление молча
+        // исчезло бы. Во-вторых, `sw.js` подавляет показ, сравнивая
+        // `payload.url` с `pathname` открытой вкладки: любой параметр ломает
+        // это сравнение, и пуш вылезал бы поверх уже открытой беседы.
+        // Входить в комнату параметром и не надо: в беседе есть плашка
+        // «идёт звонок», решение остаётся за человеком.
+        url: `/chat/${event.conversationId}`,
+        // Тег по комнате: повторная волна о том же звонке заменит прежнюю
+        // строку в шторке, а не ляжет второй. Префикс `group-call:`, а не
+        // `call:` — по `call:` `sw.js` рисует кнопки «Ответить/Отклонить»
+        // и держит уведомление на экране, чего групповому звонку не нужно.
+        tag: `group-call:${event.callId}`,
         category: 'chat',
       };
     case 'portal.welcome':

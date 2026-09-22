@@ -4,11 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ChatCallSignal } from '@vedamatch/shared';
 import type { PrismaService } from '../../../../prisma/prisma.service';
 import type { ChatConversationsService } from '../../chat-conversations.service';
 import type { ChatEventsService } from '../../chat-events.service';
+import type { ChatPresenceService } from '../../chat-presence.service';
 import { ChatGroupCallsService } from './chat-group-calls.service';
+import { GROUP_CALL_NOTIFY_COOLDOWN_MS } from './group-call-notify';
 import { GROUP_CALL_PARTICIPANT_TTL_MS } from './group-call-room';
 
 /**
@@ -39,6 +42,8 @@ interface CallRow {
   createdAt: Date;
   endedAt: Date | null;
   endReason: string | null;
+  /** Когда комната в последний раз будила беседу уведомлением. */
+  notifiedAt: Date | null;
 }
 
 function user(id: string) {
@@ -57,8 +62,19 @@ function matches(
 ): boolean {
   return Object.entries(where).every(([key, value]) => {
     if (value === undefined) return true;
+    // `OR: [...]` — им сервис забирает право на рассылку уведомления:
+    // «не слали ни разу ИЛИ слали давно».
+    if (key === 'OR')
+      return (value as Record<string, unknown>[]).some((branch) =>
+        matches(row, branch),
+      );
     if (value !== null && typeof value === 'object' && 'in' in value)
       return (value as { in: unknown[] }).in.includes(row[key]);
+    if (value !== null && typeof value === 'object' && 'lt' in value) {
+      const actual = row[key];
+      if (!(actual instanceof Date)) return false;
+      return actual.getTime() < (value as { lt: Date }).lt.getTime();
+    }
     return row[key] === value;
   });
 }
@@ -67,9 +83,15 @@ function buildService(
   options: {
     members?: string[];
     conversationKind?: 'direct' | 'group' | 'channel';
+    /** Кто заглушил беседу: уведомление о звонке их будить не должно. */
+    mutedMembers?: string[];
+    /** Кто смотрит беседу прямо сейчас: плашку они и так видят. */
+    viewingMembers?: string[];
   } = {},
 ) {
   const memberIds = options.members ?? ['a', 'b', 'c', 'd', 'e'];
+  const muted = new Set(options.mutedMembers ?? []);
+  const viewing = new Set(options.viewingMembers ?? []);
   const calls: CallRow[] = [];
   const participants: ParticipantRow[] = [];
   let seq = 0;
@@ -96,6 +118,7 @@ function buildService(
           createdAt: new Date(),
           endedAt: null,
           endReason: null,
+          notifiedAt: null,
         };
         calls.push(row);
         const created = (
@@ -230,8 +253,20 @@ function buildService(
     chatConversation: {
       findUnique: jest.fn(() =>
         Promise.resolve({
-          members: memberIds.map((userId) => ({ userId, leftAt: null })),
+          title: 'Вайшнавы Москвы',
+          members: memberIds.map((userId) => ({
+            userId,
+            leftAt: null,
+            mutedUntil: muted.has(userId)
+              ? new Date(Date.now() + 60 * 60_000)
+              : null,
+          })),
         }),
+      ),
+    },
+    user: {
+      findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve({ name: where.id, spiritualName: null }),
       ),
     },
     chatMember: {
@@ -262,14 +297,29 @@ function buildService(
 
   const events = { publish: jest.fn() };
   const config = { get: () => undefined } as unknown as ConfigService;
+  const presence = {
+    isViewing: jest.fn((userId: string) =>
+      Promise.resolve(viewing.has(userId)),
+    ),
+  };
+  const bus = { emit: jest.fn() };
 
   const service = new ChatGroupCallsService(
     prisma,
     conversations,
     events as unknown as ChatEventsService,
     config,
+    presence as unknown as ChatPresenceService,
+    bus as unknown as EventEmitter2,
   );
-  return { service, events, participants, calls };
+  return { service, events, participants, calls, bus, presence };
+}
+
+/** Кому ушло уведомление «идёт звонок» — по порядку вызовов шины. */
+function notified(bus: { emit: jest.Mock }): string[] {
+  return bus.emit.mock.calls
+    .filter(([name]) => name === 'chat.group-call-started')
+    .map(([, event]) => (event as { recipientId: string }).recipientId);
 }
 
 const offer: ChatCallSignal = {
@@ -527,5 +577,120 @@ describe('восстановление после перезапуска', () =>
     });
     await service.leave('b', room.id);
     await expect(service.activeForUser('b')).resolves.toBeNull();
+  });
+});
+
+/**
+ * Оповещение о звонке (VED-293, этап 3). Плашка внутри беседы видна только
+ * тому, кто в беседу смотрит; всех остальных зовёт уведомление. Проверяем
+ * не формулировку (она в `notification-copy.ts`), а кого именно сервис
+ * будит и как часто он имеет на это право.
+ */
+describe('оповещение о групповом звонке', () => {
+  it('зовёт всю беседу, кроме того, кто начал', async () => {
+    const { service, bus } = buildService();
+    await service.start('a', { conversationId: 'conv-1' });
+
+    expect(notified(bus)).toEqual(['b', 'c', 'd', 'e']);
+  });
+
+  it('шлёт своё имя события, а не входящий вызов', async () => {
+    const { service, bus } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+
+    // `chat.call-incoming` поднял бы нативный экран вызова на один callId —
+    // трое в беседе дали бы три звонка на телефон.
+    expect(bus.emit).not.toHaveBeenCalledWith(
+      'chat.call-incoming',
+      expect.anything(),
+    );
+    expect(bus.emit).toHaveBeenCalledWith('chat.group-call-started', {
+      name: 'chat.group-call-started',
+      recipientId: 'b',
+      conversationTitle: 'Вайшнавы Москвы',
+      conversationId: 'conv-1',
+      callId: room.id,
+      starterName: 'a',
+    });
+  });
+
+  it('не будит того, кто заглушил беседу', async () => {
+    const { service, bus } = buildService({ mutedMembers: ['c'] });
+    await service.start('a', { conversationId: 'conv-1' });
+
+    expect(notified(bus)).toEqual(['b', 'd', 'e']);
+  });
+
+  it('не будит того, кто смотрит беседу: плашка у него уже на экране', async () => {
+    const { service, bus } = buildService({ viewingMembers: ['d'] });
+    await service.start('a', { conversationId: 'conv-1' });
+
+    expect(notified(bus)).toEqual(['b', 'c', 'e']);
+  });
+
+  it('каждый следующий вход не рассылает новую волну', async () => {
+    const { service, bus } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    bus.emit.mockClear();
+
+    await service.join('b', room.id);
+    await service.join('c', room.id);
+
+    expect(notified(bus)).toEqual([]);
+  });
+
+  it('спустя окно тишины разговор напоминает о себе не пришедшим', async () => {
+    const { service, bus, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    bus.emit.mockClear();
+
+    // Комната идёт давно: прошлая волна уже за пределами окна.
+    calls[0].notifiedAt = new Date(
+      Date.now() - GROUP_CALL_NOTIFY_COOLDOWN_MS - 1000,
+    );
+    await service.join('c', room.id);
+
+    // Тех, кто уже в комнате, напоминание не трогает.
+    expect(notified(bus)).toEqual(['d', 'e']);
+  });
+
+  it('не будит того, кто только что вышел из комнаты', async () => {
+    const { service, bus, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.leave('b', room.id);
+    bus.emit.mockClear();
+
+    calls[0].notifiedAt = new Date(
+      Date.now() - GROUP_CALL_NOTIFY_COOLDOWN_MS - 1000,
+    );
+    await service.join('c', room.id);
+
+    expect(notified(bus)).not.toContain('b');
+  });
+
+  it('повторный вход с другого экрана беседу не будит', async () => {
+    const { service, bus, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    bus.emit.mockClear();
+    calls[0].notifiedAt = new Date(
+      Date.now() - GROUP_CALL_NOTIFY_COOLDOWN_MS - 1000,
+    );
+
+    await service.join('a', room.id);
+
+    expect(notified(bus)).toEqual([]);
+  });
+
+  it('несостоявшееся уведомление не роняет звонок', async () => {
+    const { service, bus } = buildService();
+    bus.emit.mockImplementation(() => {
+      throw new Error('шина отвалилась');
+    });
+
+    await expect(
+      service.start('a', { conversationId: 'conv-1' }),
+    ).resolves.toMatchObject({ status: 'live' });
   });
 });

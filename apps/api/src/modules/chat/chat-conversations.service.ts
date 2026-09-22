@@ -42,6 +42,7 @@ import {
 } from './chat-dto';
 import { ChatEventsService } from './chat-events.service';
 import { ChatPresenceService } from './chat-presence.service';
+import { liveCallByConversation } from './calls/group/group-call-room';
 import {
   chatConversationInclude,
   chatMessageInclude,
@@ -79,8 +80,14 @@ export class ChatConversationsService {
       take: 200,
     });
 
+    // «Идёт звонок» для всего списка — одним запросом на список, а не одним
+    // на беседу: комнат в портале единицы, а бесед у человека до двухсот.
+    const groupCalls = await this.liveGroupCalls(rows.map((row) => row.id));
+
     const conversations = await Promise.all(
-      rows.map(async (row) => this.summary(row, userId)),
+      rows.map(async (row) =>
+        this.summary(row, userId, undefined, groupCalls.get(row.id) ?? null),
+      ),
     );
     // Официальный канал VedaMatch первым, затем закреплённое человеком;
     // порядок внутри групп прежний.
@@ -951,11 +958,57 @@ export class ChatConversationsService {
     throw new ForbiddenException('Недостаточно прав');
   }
 
+  /**
+   * Где сейчас идёт групповой звонок: `conversationId → callId`.
+   *
+   * Строка со статусом `live` — ещё не разговор: комната остаётся такой до
+   * ближайшей уборки, и участники в ней могли протухнуть все разом (сеть
+   * пропала, приложения убиты). Живость считает чистый
+   * `liveCallByConversation` по тем же правилам, по которым сервис
+   * групповых звонков решает, кого убрать из комнаты.
+   */
+  private async liveGroupCalls(
+    conversationIds: string[],
+  ): Promise<Map<string, string>> {
+    if (conversationIds.length === 0) return new Map();
+    const rooms = await this.prisma.chatGroupCall.findMany({
+      where: { status: 'live', conversationId: { in: conversationIds } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        conversationId: true,
+        participants: {
+          where: { state: 'joined' },
+          select: {
+            userId: true,
+            joinedAt: true,
+            lastSeenAt: true,
+            muted: true,
+          },
+        },
+      },
+    });
+    return liveCallByConversation(
+      rooms.map((room) => ({
+        id: room.id,
+        conversationId: room.conversationId,
+        participants: room.participants.map((p) => ({
+          userId: p.userId,
+          joinedAt: p.joinedAt.getTime(),
+          lastSeenAt: p.lastSeenAt.getTime(),
+          muted: p.muted,
+        })),
+      })),
+      Date.now(),
+    );
+  }
+
   /** Общий сборщик сводки: считает непрочитанное и тянет последнее сообщение. */
   private async summary(
     row: ChatConversationRow,
     userId: string,
     knownMessageCount?: number,
+    activeGroupCallId: string | null = null,
   ) {
     const mine = row.members.find((m) => m.userId === userId);
     const unreadCount = await this.prisma.chatMessage.count({
@@ -987,6 +1040,7 @@ export class ChatConversationsService {
         ? toMessageDto(last, userId, this.othersLastReadAt(row, userId))
         : null,
       messageCount,
+      activeGroupCallId,
     });
   }
 

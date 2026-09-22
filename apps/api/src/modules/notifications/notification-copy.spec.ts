@@ -508,3 +508,57 @@ describe('travelDecisionTitle', () => {
     }
   });
 });
+
+/**
+ * Групповой звонок в беседе (VED-293, этап 3). Проверяем не только слова:
+ * адрес и тег здесь — решения, от которых зависит, увидит ли человек
+ * уведомление вообще.
+ */
+describe('групповой звонок в беседе', () => {
+  const event = {
+    name: 'chat.group-call-started',
+    recipientId: 'user-1',
+    conversationTitle: 'Вайшнавы Москвы',
+    conversationId: 'conv-1',
+    callId: 'room-1',
+    starterName: 'Радха',
+  } as const;
+
+  it('называет беседу и того, кто зовёт', () => {
+    expect(buildNotification(event)).toEqual({
+      title: 'Вайшнавы Москвы',
+      body: 'Радха зовёт в групповой звонок',
+      url: '/chat/conv-1',
+      tag: 'group-call:room-1',
+      category: 'chat',
+    });
+  });
+
+  it('пишет без рода: пол у User необязателен', () => {
+    // «начал/начала» потребовало бы знать пол — его у портала может не быть.
+    expect(buildNotification(event).body).not.toMatch(/начал|позвал/);
+  });
+
+  it('ведёт в беседу без параметра звонка', () => {
+    // `?call=` глушится в приложении (`call-push-guard.ts`), а любой
+    // параметр ломает подавление показа в `sw.js` (сравнение с pathname).
+    expect(buildNotification(event).url).not.toContain('?');
+  });
+
+  it('тег не начинается с «call:» — это не входящий вызов', () => {
+    // По `call:` service worker рисует «Ответить/Отклонить» и держит
+    // уведомление на экране; комнате это не нужно.
+    expect(buildNotification(event).tag.startsWith('call:')).toBe(false);
+  });
+
+  it('схлопывает волны об одном звонке общим тегом', () => {
+    const second = buildNotification({ ...event, recipientId: 'user-2' });
+    expect(second.tag).toBe(buildNotification(event).tag);
+  });
+
+  it('разные комнаты не схлопываются в одну строку', () => {
+    expect(buildNotification({ ...event, callId: 'room-2' }).tag).not.toBe(
+      buildNotification(event).tag,
+    );
+  });
+});

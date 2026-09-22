@@ -195,6 +195,12 @@ export function toConversationSummary(
     unreadCount: number;
     lastMessage?: ChatMessageDto | null;
     messageCount?: number;
+    /**
+     * Идущий групповой звонок в этой беседе. Параметром, а не отдельным
+     * запросом внутри: живые комнаты для всего списка берутся одним
+     * запросом, иначе на каждую беседу приходился бы свой.
+     */
+    activeGroupCallId?: string | null;
   },
 ): ChatConversationSummary {
   const mine = row.members.find((m) => m.userId === viewerId);
@@ -236,6 +242,7 @@ export function toConversationSummary(
     lastMessage: extra.lastMessage ?? null,
     lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
     context: toConversationContext(row),
+    activeGroupCallId: extra.activeGroupCallId ?? null,
   };
 }
 
