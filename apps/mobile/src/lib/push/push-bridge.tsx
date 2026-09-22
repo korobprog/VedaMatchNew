@@ -15,6 +15,7 @@ import { useSession } from '@/lib/auth/session';
 import { isConversationOpen } from './active-chat';
 import { isCallRelatedPushUrl } from './call-push-guard';
 import { CHANNEL_ID, registerThisDevice, sendDeviceToken } from './device-registration';
+import { setPushRegistration } from './push-registration';
 import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
 
 // Пока приложение открыто, пуш показывается, если только беседа из него уже
@@ -69,13 +70,24 @@ export function PushBridge() {
     // `device-registration.ts`: её же повторяет кнопка «Зарегистрировать
     // заново» в разделе доставки, и она же записывает итог, который этот
     // раздел показывает человеку (VED-329).
-    void registerThisDevice(api);
+    //
+    // Отмена обязательна: окно разрешения и выдача токена идут секундами, и
+    // выход из аккаунта в этот момент не должен закончиться регистрацией
+    // телефона на покинутый аккаунт. Флаг был здесь до выноса
+    // последовательности и вернулся вместе с ней (раунд 001, дефект 5).
+    let cancelled = false;
+    void registerThisDevice(api, () => cancelled);
 
     const rotation = onTokenRefresh(getMessaging(), (token) => {
-      if (typeof token === 'string') void sendDeviceToken(api, token);
+      if (cancelled || typeof token !== 'string') return;
+      void sendDeviceToken(api, token);
     });
     return () => {
+      cancelled = true;
       rotation();
+      // Итог относится к прежнему аккаунту: следующий человек в том же
+      // процессе не должен увидеть чужое «зарегистрирован».
+      setPushRegistration('unknown');
     };
   }, [signed, api]);
 
