@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatAvatar } from "../chat-avatar";
 import { companionOf, endedLabel, roleIn } from "./call-machine";
+import { facingFromTrackSettings, shouldMirrorVideo } from "./camera-mirror";
 import { useChatCalls } from "./call-provider";
 
 /**
@@ -55,6 +56,21 @@ function CallScreen() {
     if (localRef.current) localRef.current.srcObject = localStream;
   }, [localStream]);
 
+  // VED-347: зеркалим только фронтальную камеру. Тыловая смотрит туда же,
+  // куда и человек, — зеркало в своём окошке меняет ему стороны местами.
+  // Картинка собеседника (`<video ref={remoteRef}>` ниже) не зеркалится
+  // никогда и ни при какой камере: к нам приходит готовый кадр.
+  const mirrorLocal = useMemo(
+    () =>
+      shouldMirrorVideo({
+        surface: "local-preview",
+        facing: facingFromTrackSettings(
+          localStream?.getVideoTracks()[0]?.getSettings(),
+        ),
+      }),
+    [localStream],
+  );
+
   const elapsed = useElapsed(state.phase === "active" ? state.connectedAt : null);
 
   const statusLine =
@@ -102,7 +118,10 @@ function CallScreen() {
             className={`absolute right-3 top-3 w-28 rounded-2xl border border-glass-brd bg-bg-2 object-cover shadow-xl sm:w-40 ${
               state.cameraOff ? "opacity-0" : ""
             }`}
-            style={{ aspectRatio: "3 / 4" }}
+            style={{
+              aspectRatio: "3 / 4",
+              transform: mirrorLocal ? "scaleX(-1)" : undefined,
+            }}
           />
         )}
       </div>

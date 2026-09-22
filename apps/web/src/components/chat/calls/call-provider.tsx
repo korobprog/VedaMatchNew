@@ -481,6 +481,11 @@ export function ChatCallProvider({
   const start = useCallback(
     async (conversationId: string, kind: ChatCallKind) => {
       if (stateRef.current.phase !== "idle") return;
+      // Метка «звоним отсюда» — до запроса микрофона (VED-346): `call.ringing`
+      // о нашем же исходящем умеет прийти потоком раньше, чем ответит POST, и
+      // без метки эта вкладка приняла бы собственный вызов за звонок с чужого
+      // устройства и промолчала бы.
+      dispatch({ type: "outgoing-starting" });
       try {
         // Микрофон — до звонка: отказ в доступе не должен будить собеседника.
         const servers = await iceServers();

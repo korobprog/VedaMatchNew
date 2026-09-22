@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import type { ChatCallKind } from '@vedamatch/shared';
 import type { MediaStream } from 'react-native-webrtc';
 import type { CallState } from './call-machine';
+import type { CameraFacing } from './camera-mirror';
 
 /**
  * Контекст звонков — вынесен из `call-provider.tsx` в отдельный файл без
@@ -36,6 +37,12 @@ export interface ChatCallsApi {
    * положении — человек её не трогал.
    */
   sendingVideo: boolean;
+  /**
+   * Какая камера снимает прямо сейчас (VED-347). Нужна экрану звонка, чтобы
+   * решить, зеркалить ли своё окошко: фронтальную — да, тыловую — нет
+   * (`camera-mirror.ts`).
+   */
+  cameraFacing: CameraFacing;
   /** Открыто окно «картинка в картинке» — в нём экран звонка прячет всё, кроме видео. */
   pipActive: boolean;
   /**

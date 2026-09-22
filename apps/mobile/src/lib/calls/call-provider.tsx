@@ -27,6 +27,7 @@ import { describeMediaError } from './call-media-error';
 import { buildLaunchPreviewCall } from './call-launch-preview';
 import { CONNECTING_TIMEOUT_MS, decideConnectingTimeout } from './call-connect-timeout';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
+import type { CameraFacing } from './camera-mirror';
 import {
   admitCallSignal,
   INITIAL_SIGNAL_SEQ_STATE,
@@ -103,6 +104,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [screenVisible, setScreenVisible] = useState(false);
   /** Камера собеседника (VED-291). Молчание = включена, см. `media-state-signal.ts`. */
   const [remoteVideoOn, setRemoteVideoOn] = useState(DEFAULT_REMOTE_MEDIA.video);
+  /** Наша камера: фронтальная или тыловая (VED-347). Звонок начинается с
+   *  фронтальной, кнопка «перевернуть» ведёт состояние дальше; от него
+   *  зависит зеркало своего окошка (`camera-mirror.ts`). */
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('user');
   /** Открыто ли окно «картинка в картинке» — от него зависит, гасить ли
    *  камеру при уходе приложения в фон (`video-track-state.ts`). */
   const [pipActive, setPipActive] = useState(false);
@@ -177,6 +182,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
     // звонка встретила бы следующий.
     setRemoteVideoOn(DEFAULT_REMOTE_MEDIA.video);
     announcedVideo.current = null;
+    // VED-347: следующий звонок снова начнётся с фронтальной камеры
+    // (`startLocalMedia`), значит и зеркало своего окошка — с начала.
+    setCameraFacing('user');
   }, []);
 
   const iceServers = useCallback(async (): Promise<ChatIceServerDto[]> => {
@@ -377,6 +385,21 @@ export function CallProvider({ children }: { children: ReactNode }) {
       // `endCall` идемпотентен, лишний вызов безвреден.
       if (event.type === 'call.ended' && event.call.id !== stateRef.current.call?.id)
         void clearNativeCall(event.call.id, nativeEndReason('ended', event.call.status));
+      // Ответили на другом устройстве (VED-346): машина уберёт входящий из
+      // состояния, но нативную сторону — звонящее уведомление и Connection
+      // в Telecom — надо погасить отдельно. Сервер шлёт для этого
+      // `answered_elsewhere` data-пушем, но пуш может и опоздать: событие
+      // потока здесь — тот же факт, добытый раньше и без Firebase.
+      if (
+        event.type === 'call.accepted' &&
+        event.call.id === stateRef.current.call?.id &&
+        stateRef.current.phase === 'incoming' &&
+        // Отвечаем прямо сейчас мы сами: метка ставится синхронно в
+        // `accept()`, до сетевого запроса, и не зависит от того, успел ли
+        // React перерисоваться с фазой `connecting`.
+        acceptingCallId.current !== event.call.id
+      )
+        void clearNativeCall(event.call.id, 'answered_elsewhere');
       dispatch({ type: 'stream', event, selfId: userId });
       // Финал с сервера: медиа закрываем сразу, не дожидаясь перерисовки.
       if (event.type === 'call.ended' && event.call.id === stateRef.current.call?.id)
@@ -736,6 +759,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'failed', error: 'Устройство сейчас занято другим звонком' });
         return;
       }
+      // Метка «звоним отсюда» — до запроса камеры (VED-346): `call.ringing`
+      // о нашем же исходящем умеет прийти потоком раньше, чем ответит POST, и
+      // без метки это устройство приняло бы собственный вызов за звонок с
+      // чужого устройства и промолчало бы.
+      dispatch({ type: 'outgoing-starting' });
       try {
         // Микрофон/камера — до звонка: отказ в доступе не должен будить собеседника.
         const servers = await iceServers();
@@ -821,7 +849,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const hangUp = useCallback(() => hangUpWith('hangup'), [hangUpWith]);
   const toggleMute = useCallback(() => dispatch({ type: 'toggle-mute' }), []);
   const toggleCamera = useCallback(() => dispatch({ type: 'toggle-camera' }), []);
-  const switchCamera = useCallback(() => sessionRef.current?.switchCamera(), []);
+  /**
+   * Какая камера снимает (VED-347). Живёт в состоянии, а не читается из
+   * сессии по месту: от неё зависит зеркало своего окошка, и экран должен
+   * перерисоваться сразу после переворота камеры.
+   */
+  const switchCamera = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session) return;
+    // На вебе переключение асинхронное — камеру перечитываем после него, а
+    // не сразу, иначе зеркало отстало бы на одно нажатие.
+    void session.switchCamera().then(() => setCameraFacing(session.getCameraFacing()));
+  }, []);
   const dismiss = useCallback(() => dispatch({ type: 'reset' }), []);
 
   // ---------- нативный модуль звонков (VED-221) ----------
@@ -1094,6 +1133,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       relayed,
       remoteVideoOn,
       sendingVideo,
+      cameraFacing,
       pipActive,
       screenVisible,
       reportCallScreenMounted,
@@ -1114,6 +1154,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       relayed,
       remoteVideoOn,
       sendingVideo,
+      cameraFacing,
       pipActive,
       screenVisible,
       reportCallScreenMounted,

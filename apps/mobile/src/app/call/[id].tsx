@@ -18,6 +18,7 @@ import {
 import { shouldEnableProximity } from '@/lib/calls/audio-session-policy';
 import { isPermissionDeniedMessage } from '@/lib/calls/call-media-error';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
+import { shouldMirrorVideo } from '@/lib/calls/camera-mirror';
 import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
 import { shouldKeepScreenAwake } from '@/lib/calls/keep-awake';
@@ -249,6 +250,11 @@ export default function CallScreen() {
             streamURL={calls.remoteStream!.toURL()}
             style={StyleSheet.absoluteFill}
             objectFit="cover"
+            // Картинку собеседника не зеркалим никогда (VED-347): к нам
+            // приходит готовый кадр, отражать его — показывать чужой мир
+            // наизнанку. Прописано явно, чтобы правка «зеркала» своего
+            // окошка не расползлась сюда по невнимательности.
+            mirror={shouldMirrorVideo({ surface: 'remote' })}
           />
         ) : !inPip ? (
           <View style={styles.companion}>
@@ -273,7 +279,9 @@ export default function CallScreen() {
               { top: insets.top + 12, borderColor: colors.glassBorder, backgroundColor: colors.bg2 },
             ]}
             objectFit="cover"
-            mirror
+            // VED-347: зеркалим только фронтальную камеру. С тыловой зеркало
+            // меняет стороны местами — «ведёшь влево, а едет вправо».
+            mirror={shouldMirrorVideo({ surface: 'local-preview', facing: calls.cameraFacing })}
             zOrder={1}
           />
         ) : preview === 'placeholder' ? (
@@ -302,7 +310,12 @@ export default function CallScreen() {
         ) : null}
 
         {needsWebRemoteAudio ? (
-          <RTCView streamURL={calls.remoteStream!.toURL()} style={styles.hiddenRemoteAudio} objectFit="cover" />
+          <RTCView
+            streamURL={calls.remoteStream!.toURL()}
+            style={styles.hiddenRemoteAudio}
+            objectFit="cover"
+            mirror={shouldMirrorVideo({ surface: 'remote' })}
+          />
         ) : null}
       </View>
 

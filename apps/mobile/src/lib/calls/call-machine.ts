@@ -51,12 +51,23 @@ export interface CallState {
   muted: boolean;
   cameraOff: boolean;
   error: string | null;
+  /**
+   * Вызов начат именно на этом устройстве (VED-346). События звонка
+   * рассылаются на все устройства человека, вошедшего с нескольких:
+   * `call.ringing` о собственном исходящем приходит и во вкладку сайта, и
+   * на второй телефон, откуда никто никуда не звонил. Флаг взводится в
+   * момент нажатия «позвонить» — ещё до ответа POST, потому что событие
+   * потока умеет его обогнать, — и отличает «наш гудок» от «гудка на
+   * соседнем устройстве».
+   */
+  startedHere: boolean;
 }
 
 export const IDLE_STATE: CallState = {
   phase: 'idle',
   call: null,
   callIsPreview: false,
+  startedHere: false,
   endedStatus: null,
   connectedAt: null,
   reconnecting: false,
@@ -66,6 +77,8 @@ export const IDLE_STATE: CallState = {
 };
 
 export type CallAction =
+  /** Человек нажал «позвонить» — микрофон ещё спрашиваем, POST не ушёл. */
+  | { type: 'outgoing-starting' }
   /** POST /chat/calls вернул звонок — гудки пошли. */
   | { type: 'outgoing-started'; call: ChatCallDto }
   /** Событие из общего потока. `selfId` — кто мы, чтобы понять роль. */
@@ -93,8 +106,11 @@ export type CallAction =
 
 export function reduceCall(state: CallState, action: CallAction): CallState {
   switch (action.type) {
+    case 'outgoing-starting':
+      return state.phase === 'idle' ? { ...IDLE_STATE, startedHere: true } : state;
+
     case 'outgoing-started':
-      return { ...IDLE_STATE, phase: 'outgoing', call: action.call };
+      return { ...IDLE_STATE, phase: 'outgoing', call: action.call, startedHere: true };
 
     case 'preview':
       return state.phase === 'idle'
@@ -154,7 +170,11 @@ export function reduceCall(state: CallState, action: CallAction): CallState {
       };
 
     case 'failed':
-      if (state.phase === 'idle') return { ...state, error: action.error };
+      // Сорвалось до гудка (нет микрофона, «занято»): звонка отсюда больше
+      // нет, и метку «звоним мы» надо снять — иначе следующее чужое
+      // `call.ringing` о нашем исходящем с другого устройства подняло бы
+      // экран здесь.
+      if (state.phase === 'idle') return { ...state, startedHere: false, error: action.error };
       return {
         ...state,
         phase: 'ended',
@@ -188,13 +208,23 @@ function reduceStream(
       }
       if (event.call.callee.id === selfId)
         return { ...IDLE_STATE, phase: 'incoming', call: event.call };
-      if (event.call.caller.id === selfId)
-        return { ...IDLE_STATE, phase: 'outgoing', call: event.call };
+      // Свой же исходящий (VED-346). Экран вызова поднимаем только там, где
+      // на «позвонить» нажимали: остальные устройства человека получают это
+      // событие просто потому, что оно адресовано ему, — звонить самому себе
+      // они не должны.
+      if (event.call.caller.id === selfId && state.startedHere)
+        return { ...IDLE_STATE, phase: 'outgoing', call: event.call, startedHere: true };
       return state;
 
     case 'call.accepted':
       if (!sameCall) return state;
-      return state.phase === 'outgoing' || state.phase === 'incoming'
+      // Ответили на другом устройстве (VED-346): здесь мы всё ещё показываем
+      // «Принять», а отвечать уже нечего — отвечающее устройство к этому
+      // моменту само перешло в `connecting` (действие `accepting` уходит до
+      // POST'а). Убираем входящий, а не подменяем его экраном звонка, в
+      // котором нет ни медиа, ни сигналинга.
+      if (state.phase === 'incoming') return IDLE_STATE;
+      return state.phase === 'outgoing'
         ? { ...state, phase: 'connecting', call: event.call }
         : { ...state, call: event.call };
 

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { mediaDevices, MediaStream, RTCPeerConnection } from 'react-native-webrtc';
 import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
+import { nextCameraFacing, type CameraFacing } from './camera-mirror';
 import { describeIceServerForLog, normalizeIceServers } from './ice-server-normalize';
 import { parseCandidate } from './ice-probe';
 import { relayedFromStats, type RtcStatsReport } from './relay-stats';
@@ -404,11 +405,17 @@ export class CallSession {
    *  второе нажатие до завершения первого переключения должно ждать, а не
    *  начинать второй запрос камеры поверх незавершённого. */
   private switchingCameraOnWeb = false;
-  /** Web: какая камера выбрана последней (react-native-webrtc сам не хранит
-   *  такого состояния наружу — оно и не нужно там, `_switchCamera` работает
-   *  без него; здесь заводим своё, раз уж нам нужно решать, к чему
-   *  переключаться). */
-  private facingModeOnWeb: 'user' | 'environment' = 'user';
+  /** Какая камера снимает прямо сейчас. react-native-webrtc такого
+   *  состояния наружу не отдаёт ни на одной платформе: на вебе оно нужно,
+   *  чтобы знать, к чему переключаться, а на нативе — чтобы решать, зеркалить
+   *  ли своё окошко (VED-347, `camera-mirror.ts`). Звонок всегда начинается
+   *  с фронтальной (`startLocalMedia`: `facingMode: 'user'`). */
+  private cameraFacing: CameraFacing = 'user';
+
+  /** Какая камера снимает — для зеркала в своём окошке (`camera-mirror.ts`). */
+  getCameraFacing(): CameraFacing {
+    return this.cameraFacing;
+  }
 
   /**
    * Смена фронтальной/тыльной камеры без пересборки соединения.
@@ -429,12 +436,20 @@ export class CallSession {
    * `getUserMedia` тут не звонок ломает, а просто ничего не меняет, как и
    * нативная ветка без видеодорожки.
    */
-  switchCamera(): void {
+  async switchCamera(): Promise<void> {
     if (Platform.OS !== 'web') {
-      for (const track of this.local?.getVideoTracks() ?? []) track._switchCamera();
+      const tracks = this.local?.getVideoTracks() ?? [];
+      for (const track of tracks) track._switchCamera();
+      // Без видеодорожки переключать было нечего (аудиозвонок, камера
+      // выключена) — и запоминать нечего: иначе своё окошко перестало бы
+      // зеркалиться, хотя камера осталась фронтальной.
+      if (tracks.length > 0) this.cameraFacing = nextCameraFacing(this.cameraFacing);
       return;
     }
-    void this.switchCameraOnWeb();
+    // На вебе переключение асинхронное (новый `getUserMedia` + `replaceTrack`),
+    // и `cameraFacing` меняется только по его завершении — поэтому метод
+    // отдаёт промис: вызывающему нужно знать, когда читать камеру заново.
+    await this.switchCameraOnWeb();
   }
 
   private async switchCameraOnWeb(): Promise<void> {
@@ -443,7 +458,7 @@ export class CallSession {
     if (!oldTrack) return;
     this.switchingCameraOnWeb = true;
     try {
-      const nextFacingMode = this.facingModeOnWeb === 'user' ? 'environment' : 'user';
+      const nextFacingMode = nextCameraFacing(this.cameraFacing);
       const probeStream = await mediaDevices.getUserMedia({
         audio: false,
         video: { facingMode: nextFacingMode },
@@ -457,7 +472,7 @@ export class CallSession {
         this.local.addTrack(newTrack);
       }
       oldTrack.stop();
-      this.facingModeOnWeb = nextFacingMode;
+      this.cameraFacing = nextFacingMode;
     } catch {
       // Второй камеры нет или в доступе отказано — остаёмся на текущей,
       // тот же исход, что и у нативной ветки без видеодорожки.
