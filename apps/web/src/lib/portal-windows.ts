@@ -160,30 +160,51 @@ export function nextPortalWindow(
   return (state.active + 1) % size;
 }
 
-/** Человеческий номер окна (1-based) — тот, что стоит на кнопке. */
+/** Человеческий номер окна (1-based) — тот, что стоит в подсказке. */
 export function portalWindowNumber(index: number): number {
   return index + 1;
 }
 
+/** Адрес, где сейчас стоит окно, куда ведёт кнопка; `null` — его не открывали. */
+export function portalWindowTargetUrl(
+  state: PortalWindowsState,
+  count: number = PORTAL_WINDOW_COUNT,
+): string | null {
+  return windowUrl(state.windows[nextPortalWindow(state, count)]);
+}
+
 /**
- * Подпись кнопки: номер окна, КУДА перейдёшь, а не того, где стоишь
- * (VED-163). Кнопка отвечает на вопрос «что будет, если нажать».
+ * Подпись кнопки: НАЗВАНИЕ МЕСТА, куда перейдёшь (VED-326). Раньше стоял
+ * номер окна, и он не отвечал на единственный вопрос, который у кнопки
+ * задают, — «что там осталось». «Работа» или «Знакомства» отвечают, а заодно
+ * объясняют, зачем второе окно вообще держат открытым.
+ *
+ * `label` — как подписать адрес; в портале это `portalLocationLabel` поверх
+ * каталога сервисов, в тесте — что угодно.
  */
 export function portalWindowButtonLabel(
   state: PortalWindowsState,
+  label: (url: string | null) => string,
   count: number = PORTAL_WINDOW_COUNT,
 ): string {
-  return `Окно ${portalWindowNumber(nextPortalWindow(state, count))}`;
+  return label(portalWindowTargetUrl(state, count));
 }
 
-/** То же словами — для скринридера и подсказки. */
+/**
+ * То же словами — для скринридера и подсказки. Номера окон остаются здесь:
+ * на кнопке они шум, а в объяснении «куда я попаду» — единственное, что
+ * отличает два одинаково подписанных места друг от друга.
+ */
 export function portalWindowButtonHint(
   state: PortalWindowsState,
+  label: (url: string | null) => string,
   count: number = PORTAL_WINDOW_COUNT,
 ): string {
-  const from = portalWindowNumber(state.active);
   const to = portalWindowNumber(nextPortalWindow(state, count));
-  return `Перейти в окно ${to}. Сейчас открыто окно ${from}`;
+  const from = portalWindowNumber(state.active);
+  const there = label(portalWindowTargetUrl(state, count));
+  const here = label(windowUrl(state.windows[state.active]));
+  return `Перейти в окно ${to}: ${there}. Сейчас окно ${from}: ${here}`;
 }
 
 export function serializePortalWindows(state: PortalWindowsState): string {

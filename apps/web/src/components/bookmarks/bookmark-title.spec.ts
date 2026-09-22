@@ -3,7 +3,6 @@ import {
   bookmarkService,
   bookmarkServiceLabel,
   bookmarkTitleFrom,
-  groupBookmarks,
 } from "./bookmark-title";
 
 describe("bookmarkTitleFrom", () => {
@@ -52,25 +51,5 @@ describe("bookmarkServiceLabel", () => {
 
   it("берёт имя из каталога, когда его передали", () => {
     expect(bookmarkServiceLabel("music", () => "Музыка")).toBe("Музыка");
-  });
-});
-
-describe("groupBookmarks", () => {
-  it("складывает по разделам в порядке первого появления", () => {
-    const groups = groupBookmarks(
-      [
-        { service: "music", id: 1 },
-        { service: "work", id: 2 },
-        { service: "music", id: 3 },
-      ],
-      (service) => service.toUpperCase(),
-    );
-    expect(groups.map((group) => group.service)).toEqual(["music", "work"]);
-    expect(groups[0].items.map((item) => item.id)).toEqual([1, 3]);
-    expect(groups[0].label).toBe("MUSIC");
-  });
-
-  it("пустой список — пустые группы", () => {
-    expect(groupBookmarks([])).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,24 +13,30 @@ import {
   ChevronUp,
   Columns2,
   HeartHandshake,
+  Images,
   Info,
-  LifeBuoy,
   Quote,
   Search,
   Settings2,
   Share2,
   Sparkles,
+  Users,
   X,
 } from "lucide-react";
 import type { DonationSettingsDto, RewardsMeDto } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { BookmarksSheet } from "@/components/bookmarks/bookmarks-sheet";
+import { ServiceIcon } from "@/components/icons/service-icons";
+import {
+  useServiceCatalog,
+  useServiceNames,
+} from "@/components/service-catalog-provider";
+import { portalLocationLabel } from "@/lib/portal-location";
 import {
   nextPortalWindow,
   portalWindowButtonHint,
   portalWindowButtonLabel,
-  portalWindowNumber,
 } from "@/lib/portal-windows";
 import {
   switchPortalWindows,
@@ -38,34 +44,67 @@ import {
 } from "./portal-windows-store";
 import { CalculatorPad } from "./calculator-pad";
 import {
-  QUICK_ACTIONS,
+  BUILTIN_QUICK_ACTIONS,
+  CUSTOM_ACTION_PREFIX,
+  addCustomQuickAction,
+  customQuickActionId,
   moveQuickAction,
   parseQuickConfig,
+  quickActionCatalog,
   quickActionMeta,
+  removeCustomQuickAction,
   serializeQuickConfig,
+  serviceActionSlug,
+  serviceQuickActions,
   toggleQuickAction,
-  type QuickActionId,
+  type BuiltinQuickActionId,
+  type QuickActionMeta,
+  type QuickConfig,
 } from "./quick-actions";
 import { copyText } from "@/lib/copy-text";
 
 /** Раскладка панели живёт на устройстве — см. комментарий в quick-actions.ts. */
 const STORAGE_KEY = "vedamatch:quick-panel";
 
-const ICONS: Record<QuickActionId, React.ComponentType<{ className?: string }>> =
-  {
-    window: Columns2,
-    bookmarks: Bookmark,
-    search: Search,
-    assistant: Bot,
-    aphorism: Quote,
-    collections: Sparkles,
-    calendar: CalendarDays,
-    calculator: Calculator,
-    invite: Share2,
-    donate: HeartHandshake,
-    info: Info,
-    support: LifeBuoy,
-  };
+/*
+ * Про цвет мелких подписей внутри панели и её шторок.
+ *
+ * Панель лежит на сплошном `--vm-bg-1`: под ней не затемнение, а сама
+ * страница (см. комментарий у контейнера ниже). `--vm-text-2` подобран под
+ * `--vm-bg-0` и даёт там ровно 4,54:1; на более светлом `--vm-bg-1` тёмной
+ * темы остаётся 4,29:1 — ниже порога AA для одиннадцати пикселей. Поэтому
+ * подписи, объяснения и заголовки разделов здесь идут `--vm-text-1`
+ * (замерено поверх фактической подложки, как велит «Дизайн-система» в
+ * CLAUDE.md). `--vm-text-2` остаётся на значках: им достаточно 3:1.
+ */
+
+const ICONS: Record<
+  BuiltinQuickActionId,
+  React.ComponentType<{ className?: string }>
+> = {
+  window: Columns2,
+  bookmarks: Bookmark,
+  search: Search,
+  assistant: Bot,
+  aphorism: Quote,
+  // VED-326: «искры» открывают саму панель, и вторая такая же кнопка внутри
+  // читалась как «то же самое ещё раз».
+  collections: Images,
+  calendar: CalendarDays,
+  calculator: Calculator,
+  invite: Share2,
+  donate: HeartHandshake,
+  info: Info,
+  // VED-326: спасательный круг ничего не говорил про людей на том конце.
+  support: Users,
+};
+
+/**
+ * Один размер значка на все плитки (VED-326). Значки у lucide и у сервисов
+ * нарисованы в разных сетках, и одинаковый `size-5` давал разную видимую
+ * величину — равняемся по самому крупному.
+ */
+const TILE_ICON = "size-6";
 
 /**
  * Панель горячих кнопок: короткий путь к тому, за чем возвращаются каждый
@@ -81,9 +120,24 @@ const ICONS: Record<QuickActionId, React.ComponentType<{ className?: string }>> 
 export function QuickPanel() {
   const [open, setOpen] = useState(false);
   const [tuning, setTuning] = useState(false);
-  const [ids, setIds] = useState<QuickActionId[]>([]);
-  const windows = usePortalWindows();
+  const [config, setConfig] = useState<QuickConfig>({ ids: [], custom: [] });
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const names = useServiceNames();
+  const catalogMap = useServiceCatalog();
+  /* Каталог кнопок пересобирается только при смене каталога сервисов или
+     своих кнопок: он же ходит в зависимости у плиток и настроек. */
+  const catalog = useMemo(
+    () =>
+      quickActionCatalog(
+        config.custom,
+        serviceQuickActions({
+          available: new Set(catalogMap.keys()),
+          name: names,
+        }),
+      ),
+    [catalogMap, config.custom, names],
+  );
 
   /* Читаем эффектом: на сервере `localStorage` нет, и ленивый `useState` дал
      бы расхождение гидратации. Тем же способом читают своё `theme-provider`
@@ -91,21 +145,21 @@ export function QuickPanel() {
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
     try {
-      setIds(parseQuickConfig(window.localStorage.getItem(STORAGE_KEY)));
+      setConfig(parseQuickConfig(window.localStorage.getItem(STORAGE_KEY)));
     } catch {
-      setIds(parseQuickConfig(null));
+      setConfig(parseQuickConfig(null));
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
-  function save(next: QuickActionId[]) {
-    setIds(next);
+  const save = useCallback((next: QuickConfig) => {
+    setConfig(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, serializeQuickConfig(next));
     } catch {
       // Приватный режим: выбор работает до конца сессии.
     }
-  }
+  }, []);
 
   // Escape закрывает, как у любой шторки; клик мимо — тоже.
   useEffect(() => {
@@ -158,18 +212,11 @@ export function QuickPanel() {
           className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd bg-bg-1 p-3 shadow-xl"
         >
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-bold text-text-0">
-              <span className="truncate">
-                {tuning ? "Настроить панель" : "Горячие кнопки"}
-              </span>
-              {/* Где я сейчас. Показываем, только когда человек не в первом
-                  окне: иначе это шум, а вот «почему всё не там, где я
-                  оставил» без этой подписи не объясняется ничем. */}
-              {!tuning && windows.active > 0 && (
-                <span className="shrink-0 rounded-full border border-glass-brd px-1.5 py-0.5 font-body text-[11px] font-medium text-text-1">
-                  Окно {portalWindowNumber(windows.active)}
-                </span>
-              )}
+            {/* Номера окна в заголовке больше нет (VED-326): где человек
+                находится, теперь написано на самой кнопке окна — названием
+                места, а не цифрой. */}
+            <h2 className="min-w-0 truncate font-display text-sm font-bold text-text-0">
+              {tuning ? "Настроить панель" : "Горячие кнопки"}
             </h2>
             <div className="flex items-center gap-1">
               <button
@@ -177,29 +224,38 @@ export function QuickPanel() {
                 onClick={() => setTuning((value) => !value)}
                 aria-pressed={tuning}
                 aria-label={tuning ? "Готово" : "Настроить панель"}
-                className="flex size-8 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
               >
                 {tuning ? (
-                  <Check className="size-4" />
+                  <Check className="size-5" />
                 ) : (
-                  <Settings2 className="size-4" />
+                  <Settings2 className="size-5" />
                 )}
               </button>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Закрыть"
-                className="flex size-8 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
               >
-                <X className="size-4" />
+                <X className="size-5" />
               </button>
             </div>
           </div>
 
           {tuning ? (
-            <QuickSettings ids={ids} onChange={save} />
+            <QuickSettings
+              config={config}
+              catalog={catalog}
+              onChange={save}
+            />
           ) : (
-            <QuickTiles ids={ids} onClose={() => setOpen(false)} />
+            <QuickTiles
+              config={config}
+              catalog={catalog}
+              onChange={save}
+              onClose={() => setOpen(false)}
+            />
           )}
         </div>
       )}
@@ -208,19 +264,23 @@ export function QuickPanel() {
 }
 
 function QuickTiles({
-  ids,
+  config,
+  catalog,
+  onChange,
   onClose,
 }: {
-  ids: QuickActionId[];
+  config: QuickConfig;
+  catalog: QuickActionMeta[];
+  onChange: (next: QuickConfig) => void;
   onClose: () => void;
 }) {
   const [sheet, setSheet] = useState<
     "calculator" | "info" | "calendar" | "bookmarks" | null
   >(null);
 
-  if (ids.length === 0)
+  if (config.ids.length === 0)
     return (
-      <p className="px-1 py-2 text-sm text-text-2">
+      <p className="px-1 py-2 text-sm text-text-1">
         Панель пуста. Нажмите шестерёнку и выберите, что держать под рукой.
       </p>
     );
@@ -228,22 +288,24 @@ function QuickTiles({
   return (
     <>
       <ul className="grid grid-cols-3 gap-1.5">
-        {ids.map((id) => {
-          const meta = quickActionMeta(id);
-          const Icon = ICONS[id];
+        {config.ids.map((id) => {
+          const meta = quickActionMeta(id, catalog);
+          // Кнопки может не быть: сервис выключили, страницу закладки
+          // удалили. Молча пропускаем — чинить это человеку нечем.
+          if (!meta) return null;
           return (
             <li key={id}>
               {id === "donate" ? (
                 <DonateTile />
               ) : id === "window" ? (
                 <WindowTile onSwitch={onClose} />
-              ) : meta.href ? (
-                <Link href={meta.href} onClick={onClose} className={tileClass}>
-                  <Icon className="size-5" />
-                  {meta.label}
-                </Link>
               ) : id === "invite" ? (
                 <InviteTile />
+              ) : meta.href ? (
+                <Link href={meta.href} onClick={onClose} className={tileClass}>
+                  <ActionIcon meta={meta} />
+                  <span className="line-clamp-2">{meta.label}</span>
+                </Link>
               ) : (
                 <button
                   type="button"
@@ -254,8 +316,8 @@ function QuickTiles({
                   }
                   className={tileClass}
                 >
-                  <Icon className="size-5" />
-                  {meta.label}
+                  <ActionIcon meta={meta} />
+                  <span className="line-clamp-2">{meta.label}</span>
                 </button>
               )}
             </li>
@@ -267,54 +329,102 @@ function QuickTiles({
       {sheet === "info" && <InfoSheet onClose={() => setSheet(null)} />}
       {sheet === "calendar" && <CalendarSheet onClose={() => setSheet(null)} />}
       {sheet === "bookmarks" && (
-        <BookmarksSheet onClose={() => setSheet(null)} onNavigate={onClose} />
+        <BookmarksSheet
+          onClose={() => setSheet(null)}
+          onNavigate={onClose}
+          pinned={(path) => config.ids.includes(customQuickActionId(path))}
+          onPin={(item) =>
+            onChange(
+              addCustomQuickAction(config, {
+                label: item.title,
+                href: item.path,
+              }),
+            )
+          }
+        />
       )}
     </>
   );
 }
 
 /**
- * Второе окно портала (VED-118, VED-163).
+ * Значок кнопки: у сервиса свой, тот же, что в сетке портала, — по нему
+ * сервис узнают, а не читают подпись. У остальных — значок из списка, у
+ * своей кнопки из закладки — закладка.
+ */
+function ActionIcon({ meta }: { meta: QuickActionMeta }) {
+  if (meta.kind === "service") {
+    return (
+      <ServiceIcon
+        slug={serviceActionSlug(meta.id) ?? undefined}
+        className={TILE_ICON}
+      />
+    );
+  }
+  if (meta.kind === "custom") return <Bookmark className={TILE_ICON} />;
+  const Icon = ICONS[meta.id as BuiltinQuickActionId];
+  return <Icon className={TILE_ICON} />;
+}
+
+/**
+ * Второе окно портала (VED-118, VED-163, VED-326).
  *
  * Одна и та же кнопка уводит туда и возвращает обратно, а на самой кнопке
- * стоит номер окна, КУДА перейдёшь, — так она отвечает на вопрос «что будет,
- * если нажать». Куда именно вести, решает модель: окно помнит свой последний
- * адрес и положение прокрутки.
+ * стоит НАЗВАНИЕ МЕСТА, где второе окно стоит сейчас: «Работа», «Музыка»,
+ * «Новое окно». Номер окна отвечал только на вопрос «какое из двух», а
+ * спрашивают «что там осталось». Куда именно вести, решает модель: окно
+ * помнит свой последний адрес и положение прокрутки.
  */
 function WindowTile({ onSwitch }: { onSwitch: () => void }) {
   const router = useRouter();
   const state = usePortalWindows();
-  const label = portalWindowButtonLabel(state);
+  const names = useServiceNames();
+  const label = useCallback(
+    (url: string | null) => portalLocationLabel(url, names),
+    [names],
+  );
 
   return (
     <button
       type="button"
-      title={portalWindowButtonHint(state)}
-      aria-label={portalWindowButtonHint(state)}
+      title={portalWindowButtonHint(state, label)}
+      aria-label={portalWindowButtonHint(state, label)}
       onClick={() => {
         const target = switchPortalWindows(
           nextPortalWindow(state, state.windows.length),
           window.scrollY,
         );
         onSwitch();
-        router.push(target.url);
+        /* `replace`, а не `push` (VED-354): переключение окна — это не шаг
+           по истории, а смена того, ЧЬЮ историю мы листаем. Записью в общей
+           истории вкладки оно ломало аппаратную кнопку «назад»: она честно
+           возвращала к предыдущей записи, а предыдущая принадлежала другому
+           окну. */
+        router.replace(target.url);
       }}
       className={tileClass}
     >
-      <Columns2 className="size-5" />
-      {label}
+      <Columns2 className={TILE_ICON} />
+      <span className="line-clamp-2">
+        {portalWindowButtonLabel(state, label)}
+      </span>
     </button>
   );
 }
 
 const tileClass =
-  "flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-xl border border-glass-brd bg-white/4 px-1 text-center text-[11px] font-medium leading-tight text-text-1 transition-colors hover:text-text-0";
+  "flex h-[72px] w-full flex-col items-center justify-center gap-1 rounded-xl border border-glass-brd bg-white/4 px-1 text-center text-[11px] font-medium leading-tight text-text-1 transition-colors hover:text-text-0";
 
 /**
  * Донат — та же шторка с реквизитами, что и в остальном портале, а не своя
  * копия: реквизиты меняются в админке, и вторая копия разошлась бы с первой.
  * Настройки читаются при первом открытии панели; выключенные пожертвования
  * не рисуют ничего — так же, как везде.
+ *
+ * При открытии панели кнопка несколько раз мягко подсвечивается (VED-326):
+ * портал живёт на пожертвования, но просить об этом текстом на каждой
+ * странице — значит мешать. Движение, а не цвет и не размер: подсветка
+ * гаснет сама и ничего не двигает вокруг.
  */
 function DonateTile() {
   const [donation, setDonation] = useState<DonationSettingsDto | null>(null);
@@ -333,7 +443,13 @@ function DonateTile() {
   }, []);
 
   return (
-    <DonateButton donation={donation} label="Поддержать" className={tileClass} />
+    <DonateButton
+      donation={donation}
+      label="Поддержать"
+      /* Значок рисует сама кнопка доната, и он мельче плиточного: равняем
+         его здесь, а не в общем компоненте, — вне панели размер свой. */
+      className={`${tileClass} vm-quick-attention [&>svg]:size-6`}
+    />
   );
 }
 
@@ -360,12 +476,14 @@ function InviteTile() {
 
   return (
     <button type="button" onClick={() => void copy()} className={tileClass}>
-      <Share2 className="size-5" />
-      {state === "copied"
-        ? "Скопировано"
-        : state === "failed"
-          ? "Не вышло"
-          : "Пригласить"}
+      <Share2 className={TILE_ICON} />
+      <span className="line-clamp-2">
+        {state === "copied"
+          ? "Скопировано"
+          : state === "failed"
+            ? "Не вышло"
+            : "Пригласить"}
+      </span>
     </button>
   );
 }
@@ -390,7 +508,7 @@ function CalendarSheet({ onClose }: { onClose: () => void }) {
           >
             Афиша портала
           </Link>
-          <p className="text-xs text-text-2">
+          <p className="text-xs text-text-1">
             Программы, встречи и события, которые завели участники
           </p>
         </li>
@@ -405,7 +523,7 @@ function CalendarSheet({ onClose }: { onClose: () => void }) {
           >
             Вайшнавский календарь ↗
           </a>
-          <p className="text-xs text-text-2">
+          <p className="text-xs text-text-1">
             Экадаши, посты и дни явления — на vcalendar.ru
           </p>
         </li>
@@ -413,7 +531,7 @@ function CalendarSheet({ onClose }: { onClose: () => void }) {
       <button
         type="button"
         onClick={onClose}
-        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-2 hover:text-text-0"
+        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:text-text-0"
       >
         Закрыть
       </button>
@@ -453,7 +571,7 @@ function InfoSheet({ onClose }: { onClose: () => void }) {
       <button
         type="button"
         onClick={onClose}
-        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-2 hover:text-text-0"
+        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:text-text-0"
       >
         Закрыть
       </button>
@@ -461,74 +579,150 @@ function InfoSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
+/**
+ * Настройка панели. Список читается как сама панель: сначала включённые в
+ * своём порядке, потом остальное по разделам — портальные кнопки, сервисы
+ * (VED-326) и свои кнопки из закладок (VED-345).
+ */
 function QuickSettings({
-  ids,
+  config,
+  catalog,
   onChange,
 }: {
-  ids: QuickActionId[];
-  onChange: (next: QuickActionId[]) => void;
+  config: QuickConfig;
+  catalog: QuickActionMeta[];
+  onChange: (next: QuickConfig) => void;
 }) {
+  const chosen = config.ids
+    .map((id) => quickActionMeta(id, catalog))
+    .filter((meta): meta is QuickActionMeta => meta !== null);
+  const rest = catalog.filter((meta) => !config.ids.includes(meta.id));
+  const groups: { key: string; label: string; items: QuickActionMeta[] }[] = [
+    { key: "on", label: "В панели", items: chosen },
+    {
+      key: "builtin",
+      label: "Портал",
+      items: rest.filter((meta) => meta.kind === "builtin"),
+    },
+    {
+      key: "service",
+      label: "Сервисы",
+      items: rest.filter((meta) => meta.kind === "service"),
+    },
+    {
+      key: "custom",
+      label: "Из закладок",
+      items: rest.filter((meta) => meta.kind === "custom"),
+    },
+  ].filter((group) => group.items.length > 0);
+
   return (
-    <ul className="space-y-1">
-      {/* Сначала включённые в своём порядке, потом остальные: список должен
-          читаться как сама панель, иначе стрелки двигают вслепую. */}
-      {[
-        ...ids,
-        ...QUICK_ACTIONS.map((action) => action.id).filter(
-          (id) => !ids.includes(id),
-        ),
-      ].map((id) => {
-        const meta = quickActionMeta(id);
-        const on = ids.includes(id);
-        return (
-          <li key={id} className="flex items-center gap-1.5">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={on}
-              onClick={() => onChange(toggleQuickAction(ids, id))}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-white/4"
-            >
-              <span
-                aria-hidden="true"
-                className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                  on ? "border-mint-edge bg-mint text-on-mint" : "border-glass-brd"
-                }`}
-              >
-                {on && <Check className="size-3" />}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm text-text-0">
-                  {meta.label}
-                </span>
-                <span className="block truncate text-[11px] text-text-2">
-                  {meta.hint}
-                </span>
-              </span>
-            </button>
-            {on && (
-              <>
-                <button
-                  type="button"
-                  aria-label={`Выше: ${meta.label}`}
-                  onClick={() => onChange(moveQuickAction(ids, id, -1))}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-                >
-                  <ChevronUp className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Ниже: ${meta.label}`}
-                  onClick={() => onChange(moveQuickAction(ids, id, 1))}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-                >
-                  <ChevronDown className="size-4" />
-                </button>
-              </>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    /* Список длиннее экрана: сервисов дюжина, да ещё свои кнопки. Прокрутка
+       внутри панели, а не рост панели за край окна. */
+    <div className="max-h-[60vh] overflow-y-auto">
+      {groups.map((group) => (
+        <section key={group.key} className="mb-2 last:mb-0">
+          {/* Не заголовок разметкой: панель открывается поверх страницы, и
+              h3 внутри неё ломал бы порядок заголовков для скринридера
+              (см. «Дизайн-система» в CLAUDE.md). */}
+          <p
+            aria-hidden="true"
+            className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-1"
+          >
+            {group.label}
+          </p>
+          <ul className="space-y-1">
+            {group.items.map((meta) => {
+              const on = config.ids.includes(meta.id);
+              return (
+                <li key={meta.id} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={on}
+                    onClick={() =>
+                      onChange({
+                        ...config,
+                        ids: toggleQuickAction(config.ids, meta.id),
+                      })
+                    }
+                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-white/4"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                        on
+                          ? "border-mint-edge bg-mint text-on-mint"
+                          : "border-glass-brd"
+                      }`}
+                    >
+                      {on && <Check className="size-3" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm text-text-0">
+                        {meta.label}
+                      </span>
+                      <span className="block truncate text-[11px] text-text-1">
+                        {meta.hint}
+                      </span>
+                    </span>
+                  </button>
+                  {on && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={`Выше: ${meta.label}`}
+                        onClick={() =>
+                          onChange({
+                            ...config,
+                            ids: moveQuickAction(config.ids, meta.id, -1),
+                          })
+                        }
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                      >
+                        <ChevronUp className="size-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Ниже: ${meta.label}`}
+                        onClick={() =>
+                          onChange({
+                            ...config,
+                            ids: moveQuickAction(config.ids, meta.id, 1),
+                          })
+                        }
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                      >
+                        <ChevronDown className="size-5" />
+                      </button>
+                    </>
+                  )}
+                  {/* Свою кнопку из закладки можно убрать совсем (VED-345):
+                      галочка только выключает, а выключенная чужая страница
+                      осталась бы в списке навсегда. */}
+                  {meta.id.startsWith(CUSTOM_ACTION_PREFIX) && (
+                    <button
+                      type="button"
+                      aria-label={`Удалить из панели горячих клавиш: ${meta.label}`}
+                      onClick={() =>
+                        onChange(removeCustomQuickAction(config, meta.id))
+                      }
+                      className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                    >
+                      <X className="size-5" />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+      {catalog.length === BUILTIN_QUICK_ACTIONS.length && (
+        <p className="px-1 py-2 text-[11px] text-text-1">
+          Сервисы появятся в списке, когда портал ответит.
+        </p>
+      )}
+    </div>
   );
 }

@@ -5,13 +5,25 @@
  * короткий путь к тому, что уже работает, а не витрина обещаний: кнопка,
  * ведущая в пустоту, отнимает у панели ровно то, ради чего её открывают.
  *
+ * Кнопки бывают трёх родов:
+ *
+ * - встроенные — своё поведение в коде панели (окно, калькулятор, донат);
+ * - сервисные (`service:<слаг>`) — переход в сервис портала, список берётся
+ *   из каталога (VED-326): держать под рукой «Работу» или «Музыку» хотят не
+ *   меньше, чем поиск, а заводить руками двенадцать одинаковых записей
+ *   значит гарантированно забыть тринадцатую;
+ * - пользовательские (`custom:<путь>`) — кнопка, сделанная из закладки
+ *   (VED-345). Закладок бывает много, а под рукой нужны две-три.
+ *
  * Набор и порядок хранятся на устройстве. Это раскладка интерфейса, а не
  * данные человека: она разная на телефоне и на рабочем компьютере, и
  * тащить её на сервер значит спорить с этим. Тем же способом помнят своё
  * плотность сетки в Знакомствах и порядок рубрик в Образовании.
  */
 
-export type QuickActionId =
+import { SERVICE_CONTENT } from "@/lib/service-content";
+
+export type BuiltinQuickActionId =
   | "window"
   | "bookmarks"
   | "search"
@@ -25,8 +37,20 @@ export type QuickActionId =
   | "info"
   | "support";
 
+/**
+ * Идентификатор кнопки — строка: сервисные и пользовательские кнопки
+ * заводятся на ходу, и перечислением их не опишешь.
+ */
+export type QuickActionId = string;
+
+export const SERVICE_ACTION_PREFIX = "service:";
+export const CUSTOM_ACTION_PREFIX = "custom:";
+
+export type QuickActionKind = "builtin" | "service" | "custom";
+
 export interface QuickActionMeta {
   id: QuickActionId;
+  kind: QuickActionKind;
   label: string;
   /** Чем кнопка полезна — строкой в настройках панели. */
   hint: string;
@@ -34,9 +58,10 @@ export interface QuickActionMeta {
   href: string | null;
 }
 
-export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
+export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
   {
     id: "window",
+    kind: "builtin",
     label: "Окно",
     hint: "Второе окно портала: свой адрес и своя история, первое остаётся где было",
     // Не переход, а переключение состояния: адрес зависит от того, где
@@ -45,36 +70,44 @@ export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
   },
   {
     id: "bookmarks",
+    kind: "builtin",
     label: "Закладки",
     hint: "Отложенные страницы: исполнитель, доска, книга — любой уровень любого сервиса",
     href: null,
   },
   {
     id: "search",
+    kind: "builtin",
     label: "Поиск",
     hint: "Поиск по VedaMatch: сразу по всем сервисам, которые умеют искать",
     href: "/search",
   },
   {
     id: "assistant",
+    kind: "builtin",
     label: "Ассистент",
     hint: "Спросить ИИ-помощника: найдёт товар, цитату, материал, поможет с текстом",
     href: "/assistant",
   },
   {
     id: "aphorism",
+    kind: "builtin",
     label: "Афоризм",
     hint: "Открывает Вдохновение вперемешку — случайная цитата вместо ленты по порядку",
     href: "/motivation?order=random",
   },
   {
     id: "collections",
-    label: "Категории",
-    hint: "Цитаты по разделам: Веды, вайшнавизм, философия",
+    kind: "builtin",
+    // VED-326: было «Категории» — слово ни о чём, да и значок повторял тот,
+    // что открывает саму панель.
+    label: "Картинки",
+    hint: "Цитаты с картинками по разделам: Веды, вайшнавизм, философия",
     href: "/motivation/collections",
   },
   {
     id: "calendar",
+    kind: "builtin",
     label: "Календарь",
     hint: "Афиша портала и вайшнавский календарь",
     // Своей страницы нет: календарей два, и выбор между ними — это
@@ -83,37 +116,48 @@ export const QUICK_ACTIONS: readonly QuickActionMeta[] = [
   },
   {
     id: "calculator",
+    kind: "builtin",
     label: "Калькулятор",
     hint: "Считает прямо здесь, не уводя со страницы",
     href: null,
   },
   {
     id: "invite",
+    kind: "builtin",
     label: "Пригласить",
     hint: "Копирует вашу ссылку-приглашение в буфер",
     href: null,
   },
   {
     id: "donate",
+    kind: "builtin",
     label: "Поддержать",
     hint: "Реквизиты для помощи порталу",
     href: null,
   },
   {
     id: "info",
+    kind: "builtin",
     label: "Что нужно знать",
     hint: "Коротко о портале и куда смотреть дальше",
     href: null,
   },
   {
     id: "support",
-    label: "Написать админам",
-    hint: "Вопрос, новость или сообщение о поломке",
+    kind: "builtin",
+    // VED-326: «Написать админам» в две строки не влезало на плитку.
+    label: "Админ",
+    hint: "Вопрос, новость или сообщение о поломке — администрации портала",
     href: "/support",
   },
 ];
 
-const KNOWN = new Set<string>(QUICK_ACTIONS.map((action) => action.id));
+/** Прежнее имя списка: панель и тесты звали его так с VED-118. */
+export const QUICK_ACTIONS = BUILTIN_QUICK_ACTIONS;
+
+const BUILTIN_IDS = new Set<string>(
+  BUILTIN_QUICK_ACTIONS.map((action) => action.id),
+);
 
 /**
  * Кнопки, приехавшие позже панели (VED-163).
@@ -121,8 +165,8 @@ const KNOWN = new Set<string>(QUICK_ACTIONS.map((action) => action.id));
  * У человека, который однажды настроил панель, в хранилище лежит его набор,
  * и новая кнопка в списке по умолчанию до него не доедет никогда. Поэтому
  * старая запись (голый массив) один раз дополняется этими тремя, а новая
- * (`{v:2}`) принимается как есть: выключенная кнопка обязана остаться
- * выключенной, иначе настройка ничего не значит.
+ * (`{v:2}` и дальше) принимается как есть: выключенная кнопка обязана
+ * остаться выключенной, иначе настройка ничего не значит.
  */
 const ADDED_QUICK_ACTIONS: readonly QuickActionId[] = [
   "window",
@@ -130,8 +174,11 @@ const ADDED_QUICK_ACTIONS: readonly QuickActionId[] = [
   "search",
 ];
 
-/** Версия записи в хранилище. См. ADDED_QUICK_ACTIONS. */
-const CONFIG_VERSION = 2;
+/**
+ * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
+ * поэтому набор перестал быть просто списком идентификаторов.
+ */
+const CONFIG_VERSION = 3;
 
 /**
  * Что стоит в панели у человека, который ничего не настраивал.
@@ -152,54 +199,184 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   "support",
 ];
 
+/** Кнопка, сделанная из закладки: подпись и куда ведёт (VED-345). */
+export interface QuickCustomAction {
+  label: string;
+  href: string;
+}
+
+export interface QuickConfig {
+  ids: QuickActionId[];
+  custom: QuickCustomAction[];
+}
+
+/**
+ * Идентификатор выводится из адреса, а не выдаётся случайно: так одна и та
+ * же страница не попадает в панель дважды, а «эта уже есть» проверяется без
+ * похода в список.
+ */
+export function customQuickActionId(href: string): QuickActionId {
+  return `${CUSTOM_ACTION_PREFIX}${href}`;
+}
+
+/** Слаг сервиса из идентификатора сервисной кнопки; `null` — кнопка другая. */
+export function serviceActionSlug(id: QuickActionId): string | null {
+  return id.startsWith(SERVICE_ACTION_PREFIX)
+    ? id.slice(SERVICE_ACTION_PREFIX.length)
+    : null;
+}
+
+/**
+ * Кнопки-переходы во все сервисы портала (VED-326).
+ *
+ * `available` — слаги из каталога сервисов: выключенный или ещё не
+ * запущенный сервис в выбор не попадает, кнопка в пустоту панели не нужна.
+ * Каталога нет (API не ответил) — показываем все: пустой список выглядел бы
+ * как поломка настроек.
+ *
+ * `name` — имя из каталога; правка названия в админке обязана доезжать и
+ * сюда, поэтому имя из `service-content.ts` остаётся только запасным.
+ */
+export function serviceQuickActions(options?: {
+  available?: ReadonlySet<string>;
+  name?: (slug: string, fallback: string) => string;
+}): QuickActionMeta[] {
+  const { available, name } = options ?? {};
+  return SERVICE_CONTENT.filter(
+    (service) => !available || available.size === 0 || available.has(service.slug),
+  ).map((service) => ({
+    id: `${SERVICE_ACTION_PREFIX}${service.slug}`,
+    kind: "service" as const,
+    label: name ? name(service.slug, service.name) : service.name,
+    hint: service.tagline,
+    href: service.route,
+  }));
+}
+
+export function customQuickActions(
+  custom: readonly QuickCustomAction[],
+): QuickActionMeta[] {
+  return custom.map((action) => ({
+    id: customQuickActionId(action.href),
+    kind: "custom" as const,
+    label: action.label,
+    hint: `Ваша кнопка из закладки: ${action.href}`,
+    href: action.href,
+  }));
+}
+
+/** Всё, из чего человек выбирает: встроенные, сервисы, свои. */
+export function quickActionCatalog(
+  custom: readonly QuickCustomAction[] = [],
+  services: readonly QuickActionMeta[] = serviceQuickActions(),
+): QuickActionMeta[] {
+  return [...BUILTIN_QUICK_ACTIONS, ...services, ...customQuickActions(custom)];
+}
+
+/**
+ * Описание кнопки; `null` — такой кнопки больше нет. Панель обязана уметь
+ * это пережить: в хранилище лежит набор с прошлой версии портала, а
+ * сервисная кнопка исчезает вместе с выключенным сервисом.
+ */
+export function quickActionMeta(
+  id: QuickActionId,
+  catalog: readonly QuickActionMeta[] = quickActionCatalog(),
+): QuickActionMeta | null {
+  return catalog.find((action) => action.id === id) ?? null;
+}
+
 /**
  * Разбор сохранённого набора. Всё непонятное — молча мимо: в хранилище
  * лежит набор с прошлой версии портала, где кнопка могла называться иначе
  * или не существовать вовсе, и падать на этом панели незачем.
  */
-export function parseQuickConfig(raw: string | null): QuickActionId[] {
-  if (!raw) return [...DEFAULT_QUICK_ACTIONS];
+export function parseQuickConfig(raw: string | null): QuickConfig {
+  const fallback = (): QuickConfig => ({
+    ids: [...DEFAULT_QUICK_ACTIONS],
+    custom: [],
+  });
+  if (!raw) return fallback();
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return [...DEFAULT_QUICK_ACTIONS];
+    return fallback();
   }
 
   // Запись новой версии: набор человека, каким он его оставил.
   if (!Array.isArray(parsed)) {
-    const record = parsed as { v?: unknown; ids?: unknown } | null;
-    if (!record || record.v !== CONFIG_VERSION || !Array.isArray(record.ids)) {
-      return [...DEFAULT_QUICK_ACTIONS];
+    const record = parsed as
+      | { v?: unknown; ids?: unknown; custom?: unknown }
+      | null;
+    if (!record || !Array.isArray(record.ids)) return fallback();
+    if (record.v === CONFIG_VERSION) {
+      const custom = parseCustom(record.custom);
+      return { ids: dedupe(record.ids, custom), custom };
     }
-    return dedupe(record.ids);
+    // Вторая версия: те же идентификаторы, своих кнопок ещё не было.
+    if (record.v === 2) return { ids: dedupe(record.ids, []), custom: [] };
+    return fallback();
   }
 
-  // Запись прошлой версии: дополняем кнопками, появившимися после неё, и
+  // Запись первой версии: дополняем кнопками, появившимися после неё, и
   // ставим их первыми — иначе человек с настроенной панелью о них не узнает.
-  const kept = dedupe(parsed);
+  const kept = dedupe(parsed, []);
   const missing = ADDED_QUICK_ACTIONS.filter((id) => !kept.includes(id));
-  return [...missing, ...kept];
+  return { ids: [...missing, ...kept], custom: [] };
 }
 
-export function serializeQuickConfig(ids: readonly QuickActionId[]): string {
-  return JSON.stringify({ v: CONFIG_VERSION, ids });
+export function serializeQuickConfig(config: QuickConfig): string {
+  return JSON.stringify({
+    v: CONFIG_VERSION,
+    ids: config.ids,
+    custom: config.custom,
+  });
+}
+
+function parseCustom(source: unknown): QuickCustomAction[] {
+  if (!Array.isArray(source)) return [];
+  const kept: QuickCustomAction[] = [];
+  for (const item of source) {
+    if (!item || typeof item !== "object") continue;
+    const { label, href } = item as { label?: unknown; href?: unknown };
+    // Только внутренние пути: в хранилище мог оказаться чужой адрес, а
+    // кнопка панели — это переход внутри портала.
+    if (typeof href !== "string" || !href.startsWith("/") || href.startsWith("//"))
+      continue;
+    if (typeof label !== "string" || !label.trim()) continue;
+    if (kept.some((action) => action.href === href)) continue;
+    kept.push({ label: label.trim().slice(0, 40), href });
+  }
+  return kept;
 }
 
 /**
  * Дубли убираем: панель с двумя одинаковыми кнопками — это сбой хранилища,
- * а не выбор человека. Всё незнакомое — молча мимо: в хранилище лежит набор
- * с прошлой версии портала, где кнопка могла называться иначе.
+ * а не выбор человека. Незнакомое — молча мимо, но сервисные кнопки
+ * пропускаем по виду идентификатора, а не по списку: каталог сервисов
+ * приходит с сервера и на момент разбора ещё не известен.
  */
-function dedupe(source: readonly unknown[]): QuickActionId[] {
+function dedupe(
+  source: readonly unknown[],
+  custom: readonly QuickCustomAction[],
+): QuickActionId[] {
+  const customIds = new Set(custom.map((action) => customQuickActionId(action.href)));
   return [
     ...new Set(
       source.filter(
         (item): item is QuickActionId =>
-          typeof item === "string" && KNOWN.has(item),
+          typeof item === "string" &&
+          (BUILTIN_IDS.has(item) ||
+            isServiceId(item) ||
+            customIds.has(item)),
       ),
     ),
   ];
+}
+
+function isServiceId(id: string): boolean {
+  const slug = serviceActionSlug(id);
+  return slug !== null && SERVICE_CONTENT.some((item) => item.slug === slug);
 }
 
 /** Включить или выключить кнопку. Включённая встаёт в конец — туда, куда её и кладут. */
@@ -228,6 +405,40 @@ export function moveQuickAction(
   return next;
 }
 
-export function quickActionMeta(id: QuickActionId): QuickActionMeta {
-  return QUICK_ACTIONS.find((action) => action.id === id)!;
+/**
+ * Сделать кнопку из закладки (VED-345). Кнопка сразу встаёт в панель: её
+ * заводят, чтобы ею пользоваться, а не чтобы потом искать в настройках.
+ * Повторное добавление той же страницы только обновляет подпись — закладку
+ * могли переименовать.
+ */
+export function addCustomQuickAction(
+  config: QuickConfig,
+  action: QuickCustomAction,
+): QuickConfig {
+  const label = action.label.trim().slice(0, 40) || action.href;
+  const id = customQuickActionId(action.href);
+  const custom = [
+    ...config.custom.filter((item) => item.href !== action.href),
+    { label, href: action.href },
+  ];
+  const ids = config.ids.includes(id) ? config.ids : [...config.ids, id];
+  return { ids, custom };
+}
+
+/**
+ * Убрать свою кнопку совсем (VED-345): и из панели, и из списка настроек.
+ * Выключить её галочкой мало — выключенная кнопка остаётся в выборе
+ * навсегда, а список из сорока чужих страниц перестаёт читаться.
+ */
+export function removeCustomQuickAction(
+  config: QuickConfig,
+  id: QuickActionId,
+): QuickConfig {
+  if (!id.startsWith(CUSTOM_ACTION_PREFIX)) return config;
+  return {
+    ids: config.ids.filter((item) => item !== id),
+    custom: config.custom.filter(
+      (action) => customQuickActionId(action.href) !== id,
+    ),
+  };
 }
