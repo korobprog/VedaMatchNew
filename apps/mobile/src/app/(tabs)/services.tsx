@@ -166,8 +166,15 @@ export default function ServicesScreen() {
 
         <View style={[styles.profile, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
           <View style={styles.profileText}>
+            {/* `displayName`, а не `name`: наружу человек виден духовным
+                именем, если оно заполнено (CLAUDE.md, «Имя пользователя
+                наружу»). До VED-332 сессия знала только мирское; когда
+                `displayName` завели, эта строка осталась на прежнем поле — и
+                соседние экраны показывали одного человека двумя именами
+                («Сервисы» — «Максим Коробков», «Аккаунт» — «Маму Тхакур
+                дас», раунд оценки 001, дефект 1). */}
             <Text numberOfLines={1} style={[styles.profileName, { color: colors.text0 }]}>
-              {user?.name ?? 'Аккаунт'}
+              {user?.displayName ?? 'Аккаунт'}
             </Text>
             {user?.email ? (
               <Text numberOfLines={1} style={[styles.profileEmail, { color: colors.text1 }]}>

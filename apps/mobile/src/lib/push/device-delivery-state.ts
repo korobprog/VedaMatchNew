@@ -21,9 +21,10 @@
  */
 
 import type { NotificationDeliveryStatusDto } from '@vedamatch/shared';
+import type { MessagesChannelState } from './notification-channel';
 import type { PushRegistration } from './push-registration';
 
-/** Шесть различимых исходов раздела. */
+/** Восемь различимых исходов раздела. */
 export type DeliverySectionKind =
   /** Ответа сервера ещё нет, ошибки тоже: первый заход. */
   | 'checking'
@@ -31,10 +32,14 @@ export type DeliverySectionKind =
   | 'ok'
   /** Android запретил приложению показывать уведомления. */
   | 'no-permission'
+  /** Разрешение есть, но выключена сама категория «Сообщения». */
+  | 'channel-off'
   /** Сборка без ключей Firebase: получать пуши нечем. */
   | 'no-token'
   /** Разрешение есть, а живой точки доставки у сервера нет. */
   | 'unreachable'
+  /** Другие устройства уведомления получают, а этот телефон — нет. */
+  | 'not-this-phone'
   /** Сервер не ответил: не знаем — не пугаем. */
   | 'unknown';
 
@@ -43,6 +48,8 @@ export type DeliverySectionAction =
   | 'none'
   /** Открыть системные настройки уведомлений приложения. */
   | 'settings'
+  /** Открыть настройки самой категории «Сообщения». */
+  | 'channel-settings'
   /** Зарегистрировать телефон заново и перечитать состояние. */
   | 'retry'
   /** Просто перечитать состояние у сервера. */
@@ -63,6 +70,12 @@ export interface DeliverySectionState {
 export interface DeliverySectionInput {
   /** Чем кончилась регистрация токена в этом запуске. */
   registration: PushRegistration;
+  /**
+   * Важность канала «Сообщения» у системы. Разрешение приложения её не
+   * покрывает: человек может оставить разрешение и выключить категорию —
+   * тогда Android не покажет ничего (VED-329, раунд 001, дефект 1).
+   */
+  channel: MessagesChannelState;
   /** Ответ `GET /notifications/delivery-status`; `null` — ещё не знаем. */
   status: NotificationDeliveryStatusDto | null;
   /** Последний запрос статуса не удался (сеть, 5xx). */
@@ -77,7 +90,7 @@ const ALSO_IN_APP =
   'Сообщения и звонки внутри VedaMatch работают и без пушей — телефон просто не сообщит о них, пока приложение закрыто.';
 
 export function describeDeviceDelivery(input: DeliverySectionInput): DeliverySectionState {
-  const { registration, status, statusFailed } = input;
+  const { registration, channel, status, statusFailed } = input;
 
   // Разрешение — первым делом и до всякого сервера: причина очевидна, а
   // действие ровно одно. Сервер в этот момент может показывать живые точки
@@ -86,9 +99,24 @@ export function describeDeviceDelivery(input: DeliverySectionInput): DeliverySec
     return {
       kind: 'no-permission',
       title: 'Уведомления запрещены в настройках телефона',
-      hint: `Android не разрешил VedaMatch показывать уведомления, поэтому ни сообщения, ни звонки телефон не покажет. Откройте настройки уведомлений и включите их для VedaMatch. ${ALSO_IN_APP}`,
+      hint: `Android не разрешил VedaMatch показывать уведомления, поэтому ни сообщения, ни звонки телефон не покажет. Откройте настройки уведомлений VedaMatch и включите их. ${ALSO_IN_APP}`,
       action: 'settings',
-      actionLabel: 'Открыть настройки',
+      actionLabel: 'Открыть настройки уведомлений',
+      tone: 'warn',
+    };
+  }
+
+  // Разрешение приложения выдано, а категория «Сообщения» выключена вручную.
+  // Найдено на живом телефоне (раунд 001, снимок `ved329-06`): сервер при этом
+  // числит телефон живой точкой и доставляет, а Android молча всё прячет —
+  // самый обидный вид вранья, ради которого раздел и заведён.
+  if (channel === 'off') {
+    return {
+      kind: 'channel-off',
+      title: 'Категория «Сообщения» выключена',
+      hint: `Само приложение уведомления показывать может, но категорию «Сообщения» в настройках телефона выключили — а сервер шлёт сообщения и звонки именно в неё, так что вы ничего не увидите. Включите категорию «Сообщения» в настройках уведомлений VedaMatch. ${ALSO_IN_APP}`,
+      action: 'channel-settings',
+      actionLabel: 'Открыть категорию «Сообщения»',
       tone: 'warn',
     };
   }
@@ -127,6 +155,26 @@ export function describeDeviceDelivery(input: DeliverySectionInput): DeliverySec
       action: 'none',
       actionLabel: null,
       tone: 'muted',
+    };
+  }
+
+  // `status.app` — это «сколько живых телефонов у АККАУНТА», а не «жив ли
+  // этот» (сервер считает `groupBy` по `userId`, без привязки к токену
+  // спрашивающего). Поэтому провалившаяся регистрация важнее любого счётчика:
+  // иначе второй телефон человека (или строка, оставшаяся от переустановки)
+  // оправдывал бы обещание, которое к телефону в руках отношения не имеет
+  // (раунд 001, дефект 2).
+  if (registration === 'failed') {
+    const elsewhere = status.app > 0 || status.reachable;
+    return {
+      kind: elsewhere ? 'not-this-phone' : 'unreachable',
+      title: elsewhere
+        ? 'Этот телефон уведомления не получит'
+        : 'Уведомления включены, но доставлять их некуда',
+      hint: `${unreachableReason('failed')}${otherPoints(status)}Нажмите «Зарегистрировать заново» — телефон отправит ключ доставки ещё раз. ${ALSO_IN_APP}`,
+      action: 'retry',
+      actionLabel: 'Зарегистрировать заново',
+      tone: 'warn',
     };
   }
 
@@ -172,6 +220,9 @@ function unreachableReason(registration: PushRegistration): string {
 /** Куда уведомления всё-таки идут: иначе «некуда» звучит страшнее правды. */
 function otherPoints(status: NotificationDeliveryStatusDto): string {
   const places: string[] = [];
+  // `app` считает ВСЕ живые телефоны аккаунта. Сюда попадаем только когда этот
+  // телефон точкой не стал, значит счётчик говорит о других устройствах.
+  if (status.app > 0) places.push('на другие ваши устройства');
   if (status.web > 0) places.push('в браузер');
   if (status.telegram > 0) places.push('в Telegram');
   const elsewhere =

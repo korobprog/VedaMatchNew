@@ -47,6 +47,7 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  isAgent: true,
 } satisfies Prisma.UserSelect;
 
 /** Карточка на доске: ровно те поля, что рисуются, не открывая её. */

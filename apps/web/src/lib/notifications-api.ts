@@ -5,6 +5,8 @@ import type {
   NotificationDeliveryStatusDto,
   NotificationInboxResponse,
   NotificationPreferencesDto,
+  NotificationReadStateRequest,
+  NotificationReadStateResponse,
   NotificationUnreadCountResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
@@ -84,6 +86,24 @@ export function markInboxRead(ids?: string[]): Promise<{ ok: true }> {
   return request("/notifications/inbox/read", {
     method: "POST",
     body: JSON.stringify(ids ? { ids } : {}),
+  });
+}
+
+/**
+ * Своя отметка у одного уведомления (VED-143), в обе стороны.
+ *
+ * Не `markInboxRead([id])`: тот умеет только в одну сторону и ничего не
+ * возвращает, а кнопке на карточке нужен и откат, и свежий счётчик для
+ * колокольчика в том же ответе.
+ */
+export function setInboxItemRead(
+  id: string,
+  read: boolean,
+): Promise<NotificationReadStateResponse> {
+  const body: NotificationReadStateRequest = { read };
+  return request(`/notifications/inbox/${encodeURIComponent(id)}/read`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
   });
 }
 

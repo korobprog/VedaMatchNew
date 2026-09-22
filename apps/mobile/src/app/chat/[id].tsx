@@ -293,7 +293,12 @@ export default function ChatRoomScreen() {
     const pending = buildPendingMessage({
       seed: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       conversationId,
-      author: { id: user.id, name: user.name, avatarUrl: user.avatarUrl },
+      // Своё имя в пузыре — `displayName`, как его соберёт сервер
+      // (`chat-dto.ts`: `name: resolveDisplayName(row)`). С `user.name`
+      // отправитель до ответа сервера видел в собственном сообщении мирское
+      // имя, а после — духовное (раунд оценки 001, дефект 2). То же ниже, в
+      // голосовом.
+      author: { id: user.id, name: user.displayName, avatarUrl: user.avatarUrl },
       body: bodyText,
       now: new Date(),
       attachments,
@@ -331,7 +336,7 @@ export default function ChatRoomScreen() {
       const pending = buildPendingMessage({
         seed: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         conversationId,
-        author: { id: user.id, name: user.name, avatarUrl: user.avatarUrl },
+        author: { id: user.id, name: user.displayName, avatarUrl: user.avatarUrl },
         body: '',
         now: new Date(),
         attachments: [attachment],

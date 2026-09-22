@@ -11,13 +11,14 @@ import {
   type CreateWorkSpaceRequest,
   type UpdateWorkSpaceRequest,
   type WorkMemberRole,
+  type WorkPersonRefDto,
   type WorkSpaceDto,
   type WorkSpaceSummaryDto,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WORK_POSITION_STEP } from './work-position';
 import { assertWorkAccess, canAssignRole } from './work-roles';
-import { toWorkLabel, toWorkMember } from './work-dto';
+import { toWorkLabel, toWorkMember, toWorkPersonRef } from './work-dto';
 import {
   normalizeWorkColor,
   optionalText,
@@ -31,6 +32,7 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  isAgent: true,
 } satisfies Prisma.UserSelect;
 
 @Injectable()
@@ -265,6 +267,72 @@ export class WorkSpacesService {
     await this.prisma.workSpaceMember.update({
       where: { spaceId_userId: { spaceId, userId: targetUserId } },
       data: { role },
+    });
+  }
+
+  /**
+   * Принять в среду ИИ-агента.
+   *
+   * Отдельно от приглашений, и не ради удобства: приглашение живёт до тех
+   * пор, пока приглашённый его не примет, а служебному аккаунту принимать
+   * нечем — он не заходит на портал. Поэтому агента вводит в среду тот, кто
+   * ею распоряжается, и сразу.
+   *
+   * Роль только `member`: агент работает карточками, а раздавать роли и
+   * выгонять людей — не его дело.
+   */
+  /**
+   * Кого из ИИ-агентов можно принять в эту среду.
+   *
+   * Без такого списка функция не замыкалась: принять агента маршрут позволял,
+   * а узнать его идентификатор распорядителю было негде — из кандидатов на
+   * приглашение служебные аккаунты убраны намеренно.
+   *
+   * Список видит только тот, кто распоряжается составом среды: перечень
+   * служебных имён посторонним ни к чему. Уже принятые отсюда уходят — иначе
+   * кнопка предлагала бы сделать то, что уже сделано.
+   */
+  async agentsForSpace(
+    spaceId: string,
+    actorId: string,
+  ): Promise<WorkPersonRefDto[]> {
+    assertWorkAccess(await this.roleOf(spaceId, actorId), 'manageMembers');
+    const agents = await this.prisma.user.findMany({
+      where: {
+        isAgent: true,
+        accountStatus: 'active',
+        workMemberships: { none: { spaceId } },
+      },
+      orderBy: { name: 'asc' },
+      select: workUserSelect,
+    });
+    return agents.map(toWorkPersonRef);
+  }
+
+  async addAgent(
+    spaceId: string,
+    actorId: string,
+    agentId: string,
+  ): Promise<void> {
+    assertWorkAccess(await this.roleOf(spaceId, actorId), 'manageMembers');
+    const agent = await this.prisma.user.findUnique({
+      where: { id: agentId },
+      select: { id: true, isAgent: true },
+    });
+    // Живого человека этим путём в среду не заводят: у него есть приглашение,
+    // которое он вправе и не принять.
+    if (!agent?.isAgent) {
+      throw new BadRequestException(
+        'Так в среду принимают только ИИ-агента — человека нужно пригласить',
+      );
+    }
+    const already = await this.prisma.workSpaceMember.findUnique({
+      where: { spaceId_userId: { spaceId, userId: agentId } },
+      select: { userId: true },
+    });
+    if (already) return;
+    await this.prisma.workSpaceMember.create({
+      data: { spaceId, userId: agentId, role: 'member' },
     });
   }
 
