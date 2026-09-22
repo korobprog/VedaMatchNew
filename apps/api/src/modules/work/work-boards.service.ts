@@ -24,6 +24,7 @@ import { columnDoneChange } from './work-column-done';
 import { toWorkLabel, toWorkMember, toWorkTaskCard } from './work-dto';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
+import { resolveTaskStatusMark } from './work-task-status';
 import { WorkSpacesService } from './work-spaces.service';
 import {
   WORK_ARCHIVE_LIMIT,
@@ -202,6 +203,9 @@ export class WorkBoardsService {
         position: column.position,
         wipLimit: column.wipLimit,
         isDone: column.isDone,
+        // Тот же разбор, что и у карточек: доска переносит карточку
+        // оптимистично и берёт ярлык отсюда (VED-311, VED-320).
+        statusMark: resolveTaskStatusMark(column.name),
         tasks: column.tasks.map((task) =>
           toWorkTaskCard(task, board.space.prefix, column.name),
         ),
