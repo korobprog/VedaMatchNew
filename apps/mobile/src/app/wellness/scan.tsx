@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChatKeyboardAvoidingView as KeyboardAvoidingView } from '@/components/keyboard-controller-web';
 import { AimFrame } from '@/components/wellness/aim-frame';
 import { CameraGate } from '@/components/wellness/camera-gate';
 import { ManualBarcodeForm } from '@/components/wellness/manual-barcode-form';
@@ -66,6 +67,9 @@ export default function WellnessScanScreen() {
   const [lookup, setLookup] = useState<LookupPhase>('idle');
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [manualOpen, setManualOpen] = useState(false);
+  // Поле ручного ввода в фокусе: советы прячем, иначе даже поднятый над
+  // клавиатурой лист не помещается на экране A51.
+  const [typing, setTyping] = useState(false);
   // Тик времени: и рамка, и помощь — чистые функции от «сколько прошло», но
   // без тика перерисовки не случится. Камера просто перестаёт слать события,
   // а часы сами о себе не напоминают.
@@ -155,6 +159,7 @@ export default function WellnessScanScreen() {
     <ManualBarcodeForm
       onSubmit={(barcode) => open(barcode, 'manual')}
       busy={lookup !== 'idle'}
+      onFocusChange={setTyping}
     />
   );
 
@@ -198,7 +203,15 @@ export default function WellnessScanScreen() {
         barcodeScannerSettings={{ barcodeTypes: [...FOOD_BARCODES] }}
         onBarcodeScanned={onBarcode}
       />
-      <View style={[styles.overlay, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
+      {/* Клавиатура закрывала поле ручного ввода и кнопку «Проверить состав»
+          целиком — найдено живой проверкой на A51 (снимок `ved335-16`). Лист
+          поднимается над клавиатурой тем же способом, что формы «Общения»
+          (`chat/new.tsx`): своей обёртки ради одного экрана не заводим. */}
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={[styles.overlay, { paddingTop: insets.top + 12 }]}
+        pointerEvents="box-none"
+      >
         <View style={styles.bar} pointerEvents="box-none">
           <OverlayButton label="Назад" onPress={() => router.back()} />
           <View style={styles.barRight}>
@@ -220,7 +233,7 @@ export default function WellnessScanScreen() {
         <AimFrame state={state} />
 
         <View style={[styles.sheet, { backgroundColor: colors.bg1, paddingBottom: insets.bottom + 16 }]}>
-          {help.hints.length ? (
+          {help.hints.length && !typing ? (
             <View accessibilityLiveRegion="polite" style={styles.hints}>
               <Text style={[styles.hintsTitle, { color: colors.text0 }]}>
                 Код не читается? Попробуйте:
@@ -265,7 +278,7 @@ export default function WellnessScanScreen() {
             <Text style={[styles.secondaryText, { color: colors.text0 }]}>Последние проверки</Text>
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

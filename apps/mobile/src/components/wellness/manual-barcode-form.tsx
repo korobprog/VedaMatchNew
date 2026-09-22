@@ -19,10 +19,17 @@ export function ManualBarcodeForm({
   onSubmit,
   busy = false,
   autoFocus = false,
+  onFocusChange,
 }: {
   onSubmit(barcode: string): void;
   busy?: boolean;
   autoFocus?: boolean;
+  /**
+   * Поле получило или потеряло фокус. Нужно экрану сканера: пока открыта
+   * клавиатура, место на экране надо освобождать — иначе даже поднятый над
+   * ней лист не помещается (проверено на A51).
+   */
+  onFocusChange?(focused: boolean): void;
 }) {
   const { colors } = useTheme();
   const [value, setValue] = useState('');
@@ -45,6 +52,8 @@ export function ManualBarcodeForm({
         returnKeyType="search"
         maxLength={20}
         editable={!busy}
+        onFocus={() => onFocusChange?.(true)}
+        onBlur={() => onFocusChange?.(false)}
         onSubmitEditing={() => {
           if (ready && !busy) onSubmit(state.barcode);
         }}
