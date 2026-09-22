@@ -9,7 +9,7 @@ import { RetryButton } from '@/components/retry-button';
 import { ServiceGridSkeleton } from '@/components/skeleton';
 import { ServiceCard } from '@/components/services/service-card';
 import { SelfUpdateSection } from '@/components/self-update/self-update-section';
-import { appVariant } from '@/config/app-variant';
+import { appCapabilities, appVariant } from '@/config/app-variant';
 import { serviceUrl } from '@/config/services';
 import { useSession } from '@/lib/auth/session';
 import { createServicesApi } from '@/lib/services/services-api';
@@ -185,10 +185,13 @@ export default function ServicesScreen() {
           </Pressable>
         </View>
 
-        {/* Самообновление с сайта (VED-176): только канал `site` — на
-            `store` компонент вовсе не монтируется (не просто скрыт), это и
-            есть требуемый приёмкой гейт политики магазинов. */}
-        {appVariant().selfUpdate ? <SelfUpdateSection /> : null}
+        {/* Самообновление с сайта (VED-176): возможность `selfUpdate`
+            таблицы каналов (VED-207) — на `store` компонент вовсе не
+            монтируется (не просто скрыт), это и есть требуемый приёмкой гейт
+            политики магазинов. Вторая линия защиты — подмена самого модуля
+            на заглушку при сборке `store` (`channel-shims/resolve.cjs`):
+            в бандл витрины код самообновления не попадает вообще. */}
+        {appCapabilities().selfUpdate ? <SelfUpdateSection /> : null}
 
         {/* Экран «Аккаунт и способы входа» (VED-379, веха 3): список
             привязанных Google/Яндекс/Telegram, привязка и отвязка. */}

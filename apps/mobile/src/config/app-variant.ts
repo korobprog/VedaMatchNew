@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { TurboModuleRegistry } from 'react-native';
+import { capabilitiesFor, type AppCapabilities } from './capabilities';
 import { devApiOrigin } from './dev-origin';
 import { PRODUCTION_API_ORIGINS, type AppVariant } from './variant';
 import { variantFromExtra } from './variant-from-extra';
@@ -20,4 +21,14 @@ export function appVariant(): AppVariant {
   const sourceCode = TurboModuleRegistry.get<{ getConstants(): { scriptURL: string } }>('SourceCode');
   const scriptUrl = sourceCode?.getConstants().scriptURL;
   return { ...variant, apiOrigin: devApiOrigin(scriptUrl, variant.apiOrigin, PRODUCTION_API_ORIGINS) };
+}
+
+/**
+ * Возможности этой сборки (VED-207) — единственный способ спросить в рантайме
+ * «можно ли здесь самообновление / оплата / ссылка на платный раздел».
+ * Считается из канала таблицей `capabilities.ts`, а не хранится в `extra`
+ * отдельным полем: два источника одного ответа рано или поздно разойдутся.
+ */
+export function appCapabilities(): AppCapabilities {
+  return capabilitiesFor(appVariant());
 }

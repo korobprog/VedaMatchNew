@@ -7,6 +7,12 @@
  * Play запрещает разрешение на установку пакетов, поэтому самообновление есть
  * только у файла, скачанного с сайта.
  *
+ * Что каналу разрешено делать — не здесь, а в `capabilities.ts` (VED-207):
+ * вариант описывает, ЧЕМ собрана сборка (контур, канал, адреса), а таблица
+ * возможностей — что из этого следует. Раньше тут жил флаг `selfUpdate`;
+ * он переехал в `AppCapabilities.selfUpdate`, чтобы у оплаты (VED-209) и
+ * ссылок на платные разделы (VED-216) не появилось по такому же полю.
+ *
  * Модуль чистый: его читает и `app.config.ts` в Node во время сборки, и тесты.
  */
 
@@ -30,7 +36,6 @@ export interface AppVariant {
    * не настроен в этой сборке».
    */
   downloadBaseUrl: string | null;
-  selfUpdate: boolean;
   /** Порядок важен: первый провайдер основной, остальные запасные. */
   pushProviders: PushProvider[];
 }
@@ -119,7 +124,6 @@ export function resolveVariant(env: VariantEnv): AppVariant {
     apiOrigin: originOverride('APP_API_ORIGIN', env.APP_API_ORIGIN) ?? ORIGINS[contour].api,
     webOrigin,
     downloadBaseUrl: publicBaseUrlOverride('APP_DOWNLOAD_BASE_URL', env.APP_DOWNLOAD_BASE_URL),
-    selfUpdate: channel === 'site',
     pushProviders: [...PUSH[contour]],
   };
 }
