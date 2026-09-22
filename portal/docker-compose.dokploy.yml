@@ -108,6 +108,17 @@ services:
       MOTIVATION_MUSIC_MODEL: ${MOTIVATION_MUSIC_MODEL:-}
       ASTRO_AI_BASE_URL: ${ASTRO_AI_BASE_URL:-${MOTIVATION_AI_BASE_URL:-${NEUROGATE_BASE_URL:-https://r-api.vibemod.pro/v1}}}
       ASTRO_AI_API_KEY: ${ASTRO_AI_API_KEY:-${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}}
+      # Распознавание снимка состава в «Здоровье» (VED-335) и ИИ-ассистент
+      # портала. Ключи заданы в Dokploy, но контейнер получает только то, что
+      # перечислено здесь, — без этих строк сервисы отвечают «не настроено»
+      # (те же грабли, что были с FIREBASE_SERVICE_ACCOUNT, PR #332).
+      # Запасные значения — общий ключ портала, как у «Астрологии» выше.
+      WELLNESS_AI_BASE_URL: ${WELLNESS_AI_BASE_URL:-${MOTIVATION_AI_BASE_URL:-${NEUROGATE_BASE_URL:-https://r-api.vibemod.pro/v1}}}
+      WELLNESS_AI_API_KEY: ${WELLNESS_AI_API_KEY:-${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}}
+      ASSISTANT_AI_BASE_URL: ${ASSISTANT_AI_BASE_URL:-${MOTIVATION_AI_BASE_URL:-${NEUROGATE_BASE_URL:-https://r-api.vibemod.pro/v1}}}
+      ASSISTANT_AI_API_KEY: ${ASSISTANT_AI_API_KEY:-${MOTIVATION_AI_API_KEY:-${NEUROGATE_API_KEY}}}
+      ASSISTANT_AI_USD_CENTS_PER_MTOK_IN: ${ASSISTANT_AI_USD_CENTS_PER_MTOK_IN:-}
+      ASSISTANT_AI_USD_CENTS_PER_MTOK_OUT: ${ASSISTANT_AI_USD_CENTS_PER_MTOK_OUT:-}
       ASTRO_TEXT_MODEL: ${ASTRO_TEXT_MODEL:-${MOTIVATION_TEXT_MODEL:-gpt-5.4-mini}}
       NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
