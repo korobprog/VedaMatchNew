@@ -61,6 +61,19 @@ export interface CallState {
    * соседнем устройстве».
    */
   startedHere: boolean;
+  /**
+   * На «Принять» нажали именно здесь (VED-358). Зеркало `startedHere` для
+   * входящего: `call.accepted` о звонке, на который мы всё ещё показываем
+   * «Принять», по умолчанию читается как «ответили на другом устройстве» и
+   * убирает входящий (VED-346) — но ровно то же событие приходит и
+   * отвечающему устройству, пока оно не успело перейти в `connecting`.
+   * Между нажатием и `accepting` лежат два ожидания — список ICE-серверов
+   * по сети и `getUserMedia` с системным запросом доступа к камере, — и
+   * всё это время фаза здесь ещё `incoming`. Метка ставится синхронно в
+   * момент нажатия и говорит: этот `call.accepted` про нас, звонок не
+   * гасить.
+   */
+  answeringHere: boolean;
 }
 
 export const IDLE_STATE: CallState = {
@@ -68,6 +81,7 @@ export const IDLE_STATE: CallState = {
   call: null,
   callIsPreview: false,
   startedHere: false,
+  answeringHere: false,
   endedStatus: null,
   connectedAt: null,
   reconnecting: false,
@@ -93,6 +107,14 @@ export type CallAction =
    * из фонового запуска — не повод его перебивать.
    */
   | { type: 'preview'; call: ChatCallDto }
+  /**
+   * Человек нажал «Принять» — микрофон/камеру ещё спрашиваем, POST не ушёл
+   * (VED-358). Отдельно от `accepting`: тот переводит фазу и потому уходит
+   * уже после `getUserMedia`, а метка «отвечаем здесь» нужна синхронно с
+   * нажатием — иначе `call.accepted`, прилетевший в эту дырку, погасил бы
+   * звонок на отвечающем же устройстве.
+   */
+  | { type: 'answering' }
   /** Человек нажал «ответить» — сервер ещё не подтвердил. */
   | { type: 'accepting' }
   | { type: 'connected'; at: number }
@@ -135,9 +157,12 @@ export function reduceCall(state: CallState, action: CallAction): CallState {
     case 'stream':
       return reduceStream(state, action.event, action.selfId);
 
+    case 'answering':
+      return state.phase === 'incoming' ? { ...state, answeringHere: true } : state;
+
     case 'accepting':
       return state.phase === 'incoming'
-        ? { ...state, phase: 'connecting' }
+        ? { ...state, phase: 'connecting', answeringHere: true }
         : state;
 
     case 'connected':
@@ -223,7 +248,17 @@ function reduceStream(
       // моменту само перешло в `connecting` (действие `accepting` уходит до
       // POST'а). Убираем входящий, а не подменяем его экраном звонка, в
       // котором нет ни медиа, ни сигналинга.
-      if (state.phase === 'incoming') return IDLE_STATE;
+      //
+      // VED-358: «к этому моменту само перешло в `connecting`» — неправда.
+      // Между нажатием «Принять» и `accepting` лежат запрос ICE-серверов по
+      // сети и `getUserMedia` (на первом видеозвонке — ещё и системный
+      // вопрос о доступе к камере, который ждёт человека), а фаза всё это
+      // время `incoming`. Отличаем «ответили там» от «отвечаем здесь» по
+      // метке `answeringHere`, которую `accept()` ставит синхронно с
+      // нажатием, а не по фазе.
+      if (state.phase === 'incoming' && !state.answeringHere) return IDLE_STATE;
+      if (state.phase === 'incoming')
+        return { ...state, phase: 'connecting', call: event.call };
       return state.phase === 'outgoing'
         ? { ...state, phase: 'connecting', call: event.call }
         : { ...state, call: event.call };

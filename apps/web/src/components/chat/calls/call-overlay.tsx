@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatAvatar } from "../chat-avatar";
 import { companionOf, endedLabel, roleIn } from "./call-machine";
 import { facingFromTrackSettings, shouldMirrorVideo } from "./camera-mirror";
+import { decideRemoteMediaView } from "./remote-media-view";
 import { useChatCalls } from "./call-provider";
 
 /**
@@ -48,6 +49,18 @@ function CallScreen() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const localRef = useRef<HTMLVideoElement>(null);
 
+  // VED-359: куда класть поток собеседника — `remote-media-view.ts`. Оба
+  // элемента, которым предстоит его принять, теперь живут в документе с
+  // начала звонка, поэтому эффекту ниже достаточно зависимости от самого
+  // потока. Раньше `<video>` появлялся только в фазе `active`, то есть
+  // позже единственного срабатывания эффекта, — картинка собеседника не
+  // привязывалась никогда, оставался один звук.
+  const remoteView = decideRemoteMediaView({
+    kind: call.kind,
+    hasRemoteStream: Boolean(remoteStream),
+    phase: state.phase,
+  });
+
   useEffect(() => {
     if (remoteRef.current) remoteRef.current.srcObject = remoteStream;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
@@ -91,18 +104,27 @@ function CallScreen() {
       aria-label={`${isVideo ? "Видеозвонок" : "Аудиозвонок"}: ${companion.name}`}
       className="fixed inset-0 z-[70] flex flex-col bg-bg-0 text-text-0"
     >
-      {/* Звук идёт через отдельный <audio>: у аудиозвонка <video> нет. */}
-      <audio ref={remoteAudioRef} autoPlay playsInline hidden={isVideo} />
+      {/* Звук идёт через отдельный <audio> только у аудиозвонка: у
+          видеозвонка тот же поток играет через <video>, и второй элемент на
+          нём дал бы эхо (VED-359). */}
+      {remoteView.mountAudio && <audio ref={remoteAudioRef} autoPlay playsInline hidden />}
 
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-        {isVideo && remoteStream && state.phase === "active" ? (
+        {/* `hidden`, а не условный рендер: элемент должен быть в документе
+            уже в фазе «соединяемся», иначе поток некуда привязывать —
+            `remote-media-view.ts`. Спрятанный <video> продолжает играть
+            звук, поэтому голос собеседника не теряется и до картинки. */}
+        {remoteView.mountVideo && (
           <video
             ref={remoteRef}
+            data-testid="remote-video"
             autoPlay
             playsInline
+            hidden={!remoteView.showVideo}
             className="h-full w-full object-cover"
           />
-        ) : (
+        )}
+        {!remoteView.showVideo && (
           <div className="flex flex-col items-center gap-4 px-6 text-center">
             <ChatAvatar kind="direct" user={companion} title={companion.name} size={112} />
             <h2 className="font-display text-2xl font-bold">{companion.name}</h2>
