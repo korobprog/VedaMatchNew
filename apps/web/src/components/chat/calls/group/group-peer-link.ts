@@ -7,6 +7,10 @@ import {
   remoteAudioLevel,
   type StatsEntry,
 } from "./speaking-state";
+import {
+  withVideoEncoding,
+  type VideoEncoding,
+} from "./group-video-quality";
 import type { PeerConnectionState } from "./group-call-state";
 
 /**
@@ -22,6 +26,21 @@ import type { PeerConnectionState } from "./group-call-state";
  *   останавливает — иначе выход одного собеседника выключал бы микрофон
  *   для остальных. Это главная ловушка mesh'а, и она здесь именно поэтому
  *   вынесена в комментарий, а не подразумевается.
+ *
+ * Видео (VED-293, этап 4) заводится ЗАРАНЕЕ и пустым:
+ * `addTransceiver("video")` без дорожки при создании соединения, дальше
+ * камера включается и выключается через `sender.replaceTrack(track | null)`.
+ * Это главное решение видео в mesh'е. Добавление дорожки в работающее
+ * соединение (`addTrack`) требует нового offer/answer, а инициатор пары
+ * назначен раз и навсегда (`group-call-peers.ts`): отвечающей стороне
+ * пришлось бы либо просить соседа пересогласовать, либо выставлять
+ * встречный offer — то есть ровно тот glare, от которого правило
+ * инициатора и спасает. Умножьте на три пары и на то, что камеру щёлкают
+ * туда-сюда. `replaceTrack` пересогласования не требует вовсе.
+ *
+ * Цена названа честно: в SDP всегда есть видеосекция, даже в разговоре,
+ * где камеру никто не включит. Это сотни байт при установке соединения и
+ * ноль трафика дальше — дорожки нет, кодер не работает.
  *
  * В jsdom не запускается: склейка вокруг браузерного API. Чистое —
  * `group-call-peers.ts` (кто кому шлёт offer), `speaking-state.ts` (разбор
@@ -46,6 +65,8 @@ export class GroupPeerLink {
   private restartingIce = false;
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  /** Отправитель пустой видеосекции — см. шапку класса. */
+  private readonly videoSender: RTCRtpSender;
 
   constructor(
     readonly userId: string,
@@ -97,8 +118,13 @@ export class GroupPeerLink {
       }
     };
 
-    for (const track of localStream.getTracks())
+    for (const track of localStream.getAudioTracks())
       this.pc.addTrack(track, localStream);
+    // Пустая видеосекция заводится сразу — см. шапку класса.
+    // `sendrecv`: кто из пары включит камеру первым, заранее неизвестно.
+    this.videoSender = this.pc.addTransceiver("video", {
+      direction: "sendrecv",
+    }).sender;
     handlers.onStateChange("connecting");
   }
 
@@ -170,6 +196,43 @@ export class GroupPeerLink {
   }
 
   /** Уровень входящего звука этого собеседника — для подписи «говорит». */
+  /**
+   * Включить/выключить свою картинку в ЭТОЙ паре — без пересогласования
+   * (видеосекция заведена при создании соединения, см. шапку класса).
+   *
+   * Дорожка одна на всю комнату: камера захватывается один раз в
+   * провайдере и раздаётся во все соединения, как и микрофон. Поэтому
+   * `null` здесь дорожку НЕ останавливает — иначе выход одного собеседника
+   * гасил бы камеру для остальных.
+   */
+  async setVideoTrack(track: MediaStreamTrack | null): Promise<void> {
+    if (this.closed) return;
+    try {
+      await this.videoSender.replaceTrack(track);
+    } catch {
+      // Соединение уже закрывается — пересчёт состава уберёт его.
+    }
+  }
+
+  /**
+   * Потолок качества исходящего видео (`group-video-quality.ts`). Ставится
+   * на каждое изменение состава: втроём браузер кодирует кадр дважды, и
+   * потолок пары здесь означал бы удвоенный трафик вверх. `setParameters`
+   * меняет параметры кодера без пересогласования — собеседнику ничего не
+   * приходит.
+   */
+  async applyVideoEncoding(target: VideoEncoding): Promise<void> {
+    if (this.closed) return;
+    try {
+      const next = withVideoEncoding(this.videoSender.getParameters(), target);
+      if (!next) return;
+      await this.videoSender.setParameters(next);
+    } catch {
+      // Параметры не приняли — картинка останется как есть, следующий
+      // пересчёт состава попробует снова.
+    }
+  }
+
   async audioLevel(): Promise<number> {
     return this.levelFrom(remoteAudioLevel);
   }

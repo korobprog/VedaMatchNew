@@ -30,6 +30,7 @@ interface ParticipantRow {
   leftAt: Date | null;
   lastSeenAt: Date;
   muted: boolean;
+  video: boolean;
 }
 
 interface CallRow {
@@ -134,6 +135,7 @@ function buildService(
             leftAt: null,
             lastSeenAt: new Date(),
             muted: false,
+            video: false,
           });
         return Promise.resolve(withIncludes(row));
       }),
@@ -230,6 +232,7 @@ function buildService(
               leftAt: null,
               lastSeenAt: (create.lastSeenAt as Date) ?? new Date(),
               muted: false,
+              video: false,
             });
           return Promise.resolve({});
         },
@@ -481,7 +484,7 @@ describe('микрофон', () => {
     const room = await service.start('a', { conversationId: 'conv-1' });
     await service.join('b', room.id);
 
-    const after = await service.setState('b', room.id, true);
+    const after = await service.setState('b', room.id, { muted: true });
     expect(after.participants.find((p) => p.user.id === 'b')?.muted).toBe(true);
     expect(after.participants.find((p) => p.user.id === 'a')?.muted).toBe(
       false,
@@ -491,9 +494,142 @@ describe('микрофон', () => {
   it('не участник микрофоном комнаты не управляет', async () => {
     const { service } = buildService();
     const room = await service.start('a', { conversationId: 'conv-1' });
-    await expect(service.setState('b', room.id, true)).rejects.toBeInstanceOf(
-      ConflictException,
+    await expect(
+      service.setState('b', room.id, { muted: true }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('камера не включается заодно с микрофоном', async () => {
+    // Запрос меняет только то, что в нём пришло: иначе кнопка микрофона
+    // гасила бы камеру, а кнопка камеры — включала микрофон.
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.setState('a', room.id, { video: true });
+
+    const after = await service.setState('a', room.id, { muted: true });
+    const self = after.participants.find((p) => p.user.id === 'a')!;
+    expect(self.muted).toBe(true);
+    expect(self.video).toBe(true);
+  });
+});
+
+describe('камера', () => {
+  /** Комната, где `count` человек уже включили камеру. */
+  async function roomWithCameras(count: number) {
+    const built = buildService();
+    const room = await built.service.start('a', { conversationId: 'conv-1' });
+    for (const userId of ['b', 'c', 'd'])
+      await built.service.join(userId, room.id);
+    for (const userId of ['a', 'b', 'c', 'd'].slice(0, count))
+      await built.service.setState(userId, room.id, { video: true });
+    return { ...built, room };
+  }
+
+  it('трое включают камеры и это видно остальным', async () => {
+    const { service, room } = await roomWithCameras(3);
+    const state = await service.heartbeat('d', room.id);
+    expect(
+      state.participants.filter((p) => p.video).map((p) => p.user.id),
+    ).toEqual(['a', 'b', 'c']);
+  });
+
+  it('четвёртый получает отказ с понятным текстом, а не молчание', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await expect(
+      service.setState('d', room.id, { video: true }),
+    ).rejects.toThrow(/В групповом видео могут участвовать трое/);
+  });
+
+  it('четвёртый остаётся в звонке голосом', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await service
+      .setState('d', room.id, { video: true })
+      .catch(() => undefined);
+    const state = await service.heartbeat('d', room.id);
+    expect(state.participants.map((p) => p.user.id)).toContain('d');
+    expect(state.participants.find((p) => p.user.id === 'd')!.video).toBe(
+      false,
     );
+  });
+
+  it('место освобождается выключением камеры', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await service.setState('c', room.id, { video: false });
+    const after = await service.setState('d', room.id, { video: true });
+    expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
+  });
+
+  it('выход из звонка освобождает место под видео', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await service.leave('c', room.id);
+    const after = await service.setState('d', room.id, { video: true });
+    expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
+  });
+
+  it('выход гасит камеру в самой строке, а не только в выдаче', async () => {
+    // Потолок считается по живым, поэтому вышедший с `video: true` в
+    // выдаче всё равно не виден — и ровно поэтому забытый флаг в строке
+    // заметить неоткуда, пока он не всплывёт при следующем входе. Значит
+    // смотреть надо строку.
+    const { service, room, participants } = await roomWithCameras(1);
+    await service.leave('a', room.id);
+    expect(participants.find((p) => p.userId === 'a')!.video).toBe(false);
+  });
+
+  it('вернувшийся не наследует своё прежнее место под видео', async () => {
+    // Иначе двое могли бы занять одно место: пока он ходил, его отдали.
+    // Строка портится руками намеренно — это ВТОРОЙ рубеж, и проверять
+    // его надо отдельно от первого (гашения при выходе), иначе они
+    // прикрывают друг друга и сломать можно оба сразу незамеченно.
+    const { service, room, participants } = await roomWithCameras(1);
+    await service.leave('a', room.id);
+    participants.find((p) => p.userId === 'a')!.video = true;
+
+    await service.join('a', room.id);
+    expect(
+      participants.find((p) => p.userId === 'a' && p.state === 'joined')!.video,
+    ).toBe(false);
+  });
+
+  it('мёртвый участник место под видео не держит', async () => {
+    const { service, room, participants } = await roomWithCameras(3);
+    participants
+      .filter((p) => p.userId === 'c')
+      .forEach((p) => {
+        p.lastSeenAt = new Date(
+          Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000,
+        );
+      });
+
+    const after = await service.setState('d', room.id, { video: true });
+    expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
+  });
+
+  it('изменение камеры рассылается всей беседе', async () => {
+    const { service, events, room } = await roomWithCameras(0);
+    events.publish.mockClear();
+    await service.setState('a', room.id, { video: true });
+    const sent = events.publish.mock.calls.at(-1) as
+      | [string[], { type: string }]
+      | undefined;
+    expect(sent?.[1]).toMatchObject({ type: 'group-call.updated' });
+    expect(sent?.[0]).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
+  });
+
+  it('потолок камер сообщается клиенту числом, а не подразумевается', async () => {
+    const { service, room } = await roomWithCameras(0);
+    const state = await service.heartbeat('a', room.id);
+    expect(state.maxVideoParticipants).toBe(3);
+    expect(state.maxVideoParticipants).toBeLessThan(state.maxParticipants);
+  });
+
+  it('в закрытой комнате камера не включается', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.leave('a', room.id);
+    await expect(
+      service.setState('a', room.id, { video: true }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
 

@@ -28,6 +28,24 @@ export interface GroupCallsApi {
   join: (callId: string) => Promise<void>;
   leave: () => Promise<void>;
   toggleMute: () => void;
+  /** Человек хочет камеру включённой (кнопка). */
+  cameraOn: boolean;
+  /**
+   * Картинка реально уходит. Отличается от `cameraOn`, когда вкладку
+   * увели: место под видео за нами остаётся, кадры не идут
+   * (`group-video-state.ts`).
+   */
+  sendingVideo: boolean;
+  /** Включить/выключить камеру. Может закончиться отказом сервера. */
+  toggleCamera: () => Promise<void>;
+  /** Своя картинка — для плитки «вы». `null`, когда камера не снимает. */
+  localVideoStream: MediaStream | null;
+  /** Потоки собеседников: из них берутся и звук, и картинка. */
+  remoteStreams: Record<string, MediaStream>;
+  /** Кто сообщил, что сейчас не снимает (скрыл вкладку, выключил камеру). */
+  remoteVideoOff: Record<string, boolean>;
+  /** Отказ прочитан. */
+  clearActionError: () => void;
   /** Свернуть панель в плашку / развернуть обратно. */
   setExpanded: (expanded: boolean) => void;
   dismiss: () => void;

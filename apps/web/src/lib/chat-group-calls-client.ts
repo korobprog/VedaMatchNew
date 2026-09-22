@@ -84,6 +84,22 @@ export function setGroupCallMuted(
   });
 }
 
+/**
+ * Попросить место под камеру. Именно попросить: мест в комнате три, а
+ * участников четыре, и включение может вернуть 409 с текстом отказа —
+ * решает сервер (`group-call-video.ts`). В теле только `video`: запрос
+ * меняет то, что в нём пришло, и микрофон трогать не должен.
+ */
+export function setGroupCallVideo(
+  callId: string,
+  video: boolean,
+): Promise<ChatGroupCallDto> {
+  return send<ChatGroupCallDto>(`/chat/group-calls/${callId}/state`, {
+    method: "POST",
+    body: JSON.stringify({ video }),
+  });
+}
+
 /** «Я ещё здесь» — и заодно свежий состав комнаты. */
 export function heartbeatGroupCall(
   callId: string,

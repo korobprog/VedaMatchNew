@@ -26,6 +26,7 @@ import {
   leaveGroupCall,
   sendGroupCallSignal,
   setGroupCallMuted,
+  setGroupCallVideo,
   startGroupCall,
 } from "@/lib/chat-group-calls-client";
 import { subscribeToChat, subscribeToChatReconnect } from "@/lib/chat-stream";
@@ -44,6 +45,17 @@ import {
   heartbeatLost,
 } from "./group-call-heartbeat";
 import { planPeers } from "./group-call-peers";
+import {
+  buildMediaSignal,
+  readMediaSignal,
+  shouldAnnounceMedia,
+} from "./media-state-signal";
+import {
+  encodingChanged,
+  groupVideoEncoding,
+  type VideoEncoding,
+} from "./group-video-quality";
+import { shouldSendGroupVideo } from "./group-video-state";
 import {
   IDLE_GROUP_CALL_STATE,
   reduceGroupCall,
@@ -121,6 +133,23 @@ export function GroupCallProvider({
   const [remoteStreams, setRemoteStreams] = useState<
     Record<string, MediaStream>
   >({});
+  /**
+   * Камера (VED-293, этап 4). Отдельно от `localStream`: микрофон
+   * захватывается один раз на весь звонок, а камера включается и гаснет по
+   * ходу — по кнопке и когда вкладку увели. Держать её внутри общего потока
+   * значило бы либо не гасить её вовсе, либо каждый раз пересобирать
+   * микрофон.
+   */
+  const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(
+    null,
+  );
+  /** Человек хочет камеру включённой. Что реально уходит — `shouldSendGroupVideo`. */
+  const [cameraOn, setCameraOn] = useState(false);
+  /** Кто сообщил `{kind:"media"}`, что сейчас не снимает. */
+  const [remoteVideoOff, setRemoteVideoOff] = useState<
+    Record<string, boolean>
+  >({});
+  const [tabHidden, setTabHidden] = useState(false);
 
   const links = useRef(new Map<string, GroupPeerLink>());
   const localStream = useRef<MediaStream | null>(null);
@@ -129,6 +158,31 @@ export function GroupCallProvider({
   const seqState = useRef<SignalSeqState>(INITIAL_SIGNAL_SEQ_STATE);
   const speaking = useRef<SpeakingState>(EMPTY_SPEAKING_STATE);
   const heartbeatFailures = useRef(0);
+  const cameraTrack = useRef<MediaStreamTrack | null>(null);
+  /** Последнее применённое качество — чтобы не звать `setParameters` впустую. */
+  const appliedEncoding = useRef<VideoEncoding | null>(null);
+  /** Что мы в последний раз сообщили о своей камере каждому собеседнику. */
+  const announcedMedia = useRef(new Map<string, boolean>());
+
+  /**
+   * Уходит ли наша картинка — решает чистый `shouldSendGroupVideo`
+   * (`group-video-state.ts`), а не разбросанные по провайдеру условия.
+   * `ref` рядом нужен обработчикам вне рендера (соединение, поднятое из
+   * пришедшего offer).
+   */
+  const sendingVideo = shouldSendGroupVideo({
+    phase: state.phase,
+    cameraOn,
+    hidden: tabHidden,
+  });
+  const sendingVideoRef = useRef(sendingVideo);
+  // Через эффект, а не прямо в теле: запись в `ref` во время отрисовки —
+  // та же ошибка, из-за которой рядом так же синхронизируется `stateRef`.
+  // Читают этот `ref` только обработчики вне отрисовки (соединение,
+  // поднятое из пришедшего offer), и они срабатывают уже после эффекта.
+  useEffect(() => {
+    sendingVideoRef.current = sendingVideo;
+  }, [sendingVideo]);
 
   // ---------- сигналинг ----------
 
@@ -146,6 +200,20 @@ export function GroupCallProvider({
     },
     [],
   );
+
+  /**
+   * Потолок качества по составу комнаты (`group-video-quality.ts`).
+   * Пересчитывается и на вход, и на выход: втроём браузер кодирует кадр
+   * дважды, а разошлись — картинка обязана вернуться, а не доживать
+   * разговор на 360p.
+   */
+  const applyVideoQuality = useCallback((participantCount: number) => {
+    const target = groupVideoEncoding(participantCount);
+    if (!encodingChanged(appliedEncoding.current, target)) return;
+    appliedEncoding.current = target;
+    for (const link of links.current.values())
+      void link.applyVideoEncoding(target);
+  }, []);
 
   const linkFor = useCallback(
     (
@@ -170,11 +238,24 @@ export function GroupCallProvider({
                 ? current
                 : { ...current, [peerId]: remote },
             ),
-          onStateChange: (peerState) =>
-            dispatch({ type: "peer-state", userId: peerId, state: peerState }),
+          onStateChange: (peerState) => {
+            dispatch({ type: "peer-state", userId: peerId, state: peerState });
+            // Связь встала (в том числе заново после перезапуска ICE) —
+            // состояние камеры сообщаем ещё раз: прошлый сигнал мог не
+            // дойти, а молчание собеседник считает за «камера снимает».
+            if (peerState === "connected") announcedMedia.current.delete(peerId);
+          },
         },
       );
       links.current.set(peerId, link);
+      // Новому соединению сразу отдаём и камеру, и потолок качества: без
+      // этого вошедший четвёртым видел бы пустые плитки до первого
+      // изменения состава.
+      void link.setVideoTrack(
+        sendingVideoRef.current ? cameraTrack.current : null,
+      );
+      if (appliedEncoding.current)
+        void link.applyVideoEncoding(appliedEncoding.current);
       return link;
     },
     [sendSignal],
@@ -183,7 +264,16 @@ export function GroupCallProvider({
   const closeLink = useCallback((peerId: string) => {
     links.current.get(peerId)?.close();
     links.current.delete(peerId);
+    announcedMedia.current.delete(peerId);
     setRemoteStreams((current) => {
+      if (!(peerId in current)) return current;
+      const next = { ...current };
+      delete next[peerId];
+      return next;
+    });
+    // «Его камера выключена» уходит вместе с соединением: иначе плитка
+    // вернувшегося осталась бы заглушкой навсегда.
+    setRemoteVideoOff((current) => {
       if (!(peerId in current)) return current;
       const next = { ...current };
       delete next[peerId];
@@ -194,7 +284,9 @@ export function GroupCallProvider({
   const closeAllLinks = useCallback(() => {
     for (const link of links.current.values()) link.close();
     links.current.clear();
+    announcedMedia.current.clear();
     setRemoteStreams({});
+    setRemoteVideoOff({});
   }, []);
 
   /**
@@ -212,8 +304,11 @@ export function GroupCallProvider({
         const link = linkFor(call.id, peerId, initiator);
         if (link && initiator) void link.makeOffer();
       }
+      // Состав изменился — потолок качества считается заново. И на вход, и
+      // на выход: разошлись — картинка обязана вернуться.
+      applyVideoQuality(call.participants.length);
     },
-    [closeLink, linkFor, userId],
+    [applyVideoQuality, closeLink, linkFor, userId],
   );
 
   const applySignal = useCallback(
@@ -227,6 +322,18 @@ export function GroupCallProvider({
       if (!admission.admit) return;
       const call = stateRef.current.call;
       if (!call) return;
+      // «Моя камера сейчас не снимает» — не для WebRTC, а для плитки
+      // собеседника (`media-state-signal.ts`). В соединение не несём:
+      // `handleSignal` про такой вид ничего не знает.
+      const media = readMediaSignal(signal);
+      if (media) {
+        setRemoteVideoOff((current) =>
+          current[fromUserId] === !media.video
+            ? current
+            : { ...current, [fromUserId]: !media.video },
+        );
+        return;
+      }
       // Соединения с этим человеком ещё нет — значит offer пришёл раньше,
       // чем до нас доехал новый состав комнаты. Поднимаем отвечающую
       // сторону сразу: ждать события `group-call.updated` значит терять
@@ -259,6 +366,14 @@ export function GroupCallProvider({
     closeAllLinks();
     for (const track of localStream.current?.getTracks() ?? []) track.stop();
     localStream.current = null;
+    // Камера отпускает железо вместе с концом звонка — иначе индикатор
+    // камеры во вкладке продолжает гореть после выхода.
+    cameraTrack.current?.stop();
+    cameraTrack.current = null;
+    setLocalVideoStream(null);
+    setCameraOn(false);
+    announcedMedia.current.clear();
+    appliedEncoding.current = null;
     speaking.current = EMPTY_SPEAKING_STATE;
     seqState.current = INITIAL_SIGNAL_SEQ_STATE;
     sendQueue.current = new SignalSendQueue();
@@ -363,6 +478,144 @@ export function GroupCallProvider({
         // следующего подтверждения, звук при этом уже выключен.
       });
   }, []);
+
+  // ---------- камера ----------
+
+  /**
+   * Сообщить собеседникам, снимаем ли мы сейчас (`media-state-signal.ts`).
+   *
+   * Без этого скрытая вкладка показывала бы остальным замёрзший кадр:
+   * место под видео сервер держит за человеком, пока тот в звонке, а кадры
+   * идти перестали. Повторов не будет — `shouldAnnounceMedia` пропускает
+   * только изменившееся состояние (и всё заново после `connected`).
+   */
+  const announceMedia = useCallback(() => {
+    const call = stateRef.current.call;
+    if (!call) return;
+    for (const peerId of links.current.keys()) {
+      const last = announcedMedia.current.get(peerId) ?? null;
+      if (!shouldAnnounceMedia(last, sendingVideoRef.current)) continue;
+      announcedMedia.current.set(peerId, sendingVideoRef.current);
+      sendSignal(call.id, peerId, buildMediaSignal(sendingVideoRef.current));
+    }
+  }, [sendSignal]);
+
+  /**
+   * Включить или выключить камеру. Решение принимает СЕРВЕР: мест под видео
+   * в комнате три, а участников четыре, и между «нажал» и «дошло» место мог
+   * занять сосед. Поэтому порядок такой — сперва спрашиваем разрешение
+   * (`POST /state`), и только получив его, трогаем камеру.
+   *
+   * Обратный порядок («включим, а сервер потом подтвердит») выглядел бы
+   * отзывчивее и был бы неверен: четвёртый успел бы увидеть свою картинку,
+   * прежде чем она погаснет, — а остальным его кадры при этом не пошли бы
+   * вовсе. Честный отказ лучше мигнувшей картинки.
+   *
+   * Выключение сервера не спрашивает: гасим сразу, сообщаем следом.
+   * Отказать в выключении своей камеры невозможно по смыслу, а ждать сети,
+   * чтобы перестать снимать, — лишние секунды работы кодера.
+   */
+  const toggleCamera = useCallback(async () => {
+    const call = stateRef.current.call;
+    if (!call || stateRef.current.phase !== "active") return;
+    const next = !cameraOn;
+
+    if (!next) {
+      setCameraOn(false);
+      void setGroupCallVideo(call.id, false).catch(() => {
+        // Сервер не узнал — место освободится вместе с подтверждением
+        // присутствия или выходом. Картинка у остальных уже погасла.
+      });
+      return;
+    }
+
+    try {
+      await setGroupCallVideo(call.id, true);
+    } catch (error) {
+      // Текст отказа пришёл с сервера — показываем его, а не свой пересказ
+      // правила, которое сервер вправе поменять без нас.
+      dispatch({
+        type: "failed-action",
+        error: describeGroupCallError(error).message,
+      });
+      return;
+    }
+    setCameraOn(true);
+  }, [cameraOn]);
+
+  /**
+   * Привести камеру в соответствие решению `shouldSendGroupVideo`:
+   * захватить её, раздать во все соединения и сообщить об этом
+   * собеседникам — либо остановить.
+   *
+   * Дорожка именно ОСТАНАВЛИВАЕТСЯ, а не глушится `enabled = false`:
+   * выключенная камера обязана отпустить железо (во вкладке гаснет
+   * индикатор), иначе экономии, ради которой всё затевалось, не будет.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (sendingVideo) {
+        if (!cameraTrack.current) {
+          try {
+            const media = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { facingMode: "user" },
+            });
+            const [track] = media.getVideoTracks();
+            if (!track) return;
+            if (cancelled) {
+              for (const t of media.getTracks()) t.stop();
+              return;
+            }
+            cameraTrack.current = track;
+            setLocalVideoStream(media);
+          } catch (error) {
+            // Камеру не дали — место под видео сервер держать не должен.
+            if (cancelled) return;
+            setCameraOn(false);
+            const call = stateRef.current.call;
+            if (call)
+              void setGroupCallVideo(call.id, false).catch(() => undefined);
+            dispatch({
+              type: "failed-action",
+              error: describeGroupCallError(error).message,
+            });
+            return;
+          }
+        }
+        for (const link of links.current.values())
+          void link.setVideoTrack(cameraTrack.current);
+      } else {
+        for (const link of links.current.values())
+          void link.setVideoTrack(null);
+        cameraTrack.current?.stop();
+        cameraTrack.current = null;
+        setLocalVideoStream(null);
+      }
+      announceMedia();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [announceMedia, sendingVideo]);
+
+  /**
+   * Вкладку увели — камеру гасим (`group-video-state.ts`). Звук при этом
+   * идёт дальше: разговор в свёрнутой вкладке — нормальный сценарий, а вот
+   * кодировать картинку, которую никто не смотрит, незачем.
+   */
+  useEffect(() => {
+    const read = () => setTabHidden(document.visibilityState === "hidden");
+    read();
+    document.addEventListener("visibilitychange", read);
+    return () => document.removeEventListener("visibilitychange", read);
+  }, []);
+
+  const clearActionError = useCallback(
+    () => dispatch({ type: "clear-action-error" }),
+    [],
+  );
 
   const dismiss = useCallback(() => {
     teardown();
@@ -553,17 +806,31 @@ export function GroupCallProvider({
       join,
       leave,
       toggleMute,
+      cameraOn,
+      sendingVideo,
+      toggleCamera,
+      localVideoStream,
+      remoteStreams,
+      remoteVideoOff,
+      clearActionError,
       setExpanded,
       dismiss,
     }),
     [
       callInConversation,
+      cameraOn,
+      clearActionError,
       dismiss,
       expanded,
       join,
       leave,
+      localVideoStream,
+      remoteStreams,
+      remoteVideoOff,
+      sendingVideo,
       startOrJoin,
       state,
+      toggleCamera,
       toggleMute,
       userId,
       watchConversation,

@@ -41,6 +41,12 @@ export interface GroupCallState {
   /** Когда мы вошли (ms) — для таймера на экране. */
   joinedAt: number | null;
   error: string | null;
+  /**
+   * Отказ на действие внутри звонка («мест под видео нет», «камеру не
+   * дали»). Живёт отдельно от `error`: тот означает, что звонка больше нет,
+   * этот — что не вышло одно нажатие, а разговор продолжается.
+   */
+  actionError: string | null;
 }
 
 export const IDLE_GROUP_CALL_STATE: GroupCallState = {
@@ -51,6 +57,7 @@ export const IDLE_GROUP_CALL_STATE: GroupCallState = {
   muted: false,
   joinedAt: null,
   error: null,
+  actionError: null,
 };
 
 export type GroupCallAction =
@@ -68,6 +75,15 @@ export type GroupCallAction =
   /** Мы вышли сами. */
   | { type: 'left' }
   | { type: 'failed'; error: string }
+  /**
+   * Отказ на действие ВНУТРИ звонка (не дали включить камеру, мест нет).
+   * Отдельно от `failed`: тот завершает звонок, а этот — нет. Человек,
+   * которому не досталось места под видео, остаётся в разговоре голосом, и
+   * выкидывать его из комнаты за это было бы наказанием за нажатие кнопки.
+   */
+  | { type: 'failed-action'; error: string }
+  /** Отказ прочитан — убрать сообщение. */
+  | { type: 'clear-action-error' }
   | { type: 'reset' };
 
 export function reduceGroupCall(
@@ -119,10 +135,22 @@ export function reduceGroupCall(
     case 'left':
       return state.phase === 'idle'
         ? state
-        : { ...state, phase: 'ended', peerStates: {}, speaking: [] };
+        : {
+            ...state,
+            phase: 'ended',
+            peerStates: {},
+            speaking: [],
+            actionError: null,
+          };
 
     case 'failed':
       return { ...state, phase: 'ended', error: action.error, peerStates: {}, speaking: [] };
+
+    case 'failed-action':
+      return { ...state, actionError: action.error };
+
+    case 'clear-action-error':
+      return state.actionError === null ? state : { ...state, actionError: null };
 
     case 'reset':
       return IDLE_GROUP_CALL_STATE;

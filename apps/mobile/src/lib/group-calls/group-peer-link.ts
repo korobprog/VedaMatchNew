@@ -1,6 +1,11 @@
-import { MediaStream, RTCPeerConnection } from 'react-native-webrtc';
+import { MediaStream, MediaStreamTrack, RTCPeerConnection } from 'react-native-webrtc';
 import type { ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
 import { normalizeIceServers } from '@/lib/calls/ice-server-normalize';
+import {
+  withVideoEncoding,
+  type SenderParameters,
+  type VideoEncoding,
+} from '@/lib/calls/video-encoding';
 import { decideSdpApply, type SignalingState } from '@/lib/calls/webrtc-signal-guard';
 import { localAudioLevel, remoteAudioLevel, type StatsEntry } from './speaking-state';
 
@@ -18,10 +23,29 @@ import { localAudioLevel, remoteAudioLevel, type StatsEntry } from './speaking-s
  *   для остальных. Это главная ловушка mesh'а, и она здесь именно поэтому
  *   вынесена в комментарий, а не подразумевается.
  *
+ * Видео (VED-293, этап 4) заводится ЗАРАНЕЕ и пустым:
+ * `addTransceiver('video')` без дорожки при создании соединения, дальше
+ * камера включается и выключается через `sender.replaceTrack(track | null)`.
+ * Это главное решение видео в mesh'е, и вот почему оно такое. Добавление
+ * дорожки в уже работающее соединение (`addTrack`) требует нового
+ * offer/answer, а инициатор пары назначен раз и навсегда
+ * (`group-call-peers.ts`): тому, кто в паре отвечающий, пришлось бы либо
+ * просить соседа пересогласовать, либо выставлять встречный offer — то есть
+ * ровно тот glare, от которого правило инициатора и спасает. Умножьте на
+ * три пары и на то, что камеру щёлкают туда-сюда. `replaceTrack`
+ * пересогласования не требует вовсе, и включение камеры остаётся мгновенным
+ * и безопасным при любом числе собеседников.
+ *
+ * Цена решения названа честно: в SDP всегда есть видеосекция, даже в
+ * разговоре, где камеру никто не включит. Это несколько сотен байт на
+ * соединение при его установке и ноль трафика дальше — дорожки нет, кодер
+ * не работает.
+ *
  * Не тестируется в jest-expo: склейка вокруг нативного модуля. Чистое —
  * `group-call-peers.ts` (кто кому шлёт offer), `speaking-state.ts` (разбор
- * уровней) и `webrtc-signal-guard.ts` (когда применять SDP), у всех свои
- * спеки. Тот же приём, что у `webrtc-session.ts`.
+ * уровней), `group-video-quality.ts` (потолок качества по составу) и
+ * `webrtc-signal-guard.ts` (когда применять SDP), у всех свои спеки. Тот же
+ * приём, что у `webrtc-session.ts`.
  */
 
 export interface PeerHandlers {
@@ -37,6 +61,21 @@ interface TrackEvent {
   streams: MediaStream[];
 }
 
+/**
+ * Форма отправителя, которая нас интересует. Опубликованные типы
+ * `react-native-webrtc` описывают `getParameters` по-своему и не дают
+ * положить туда наш `SenderParameters` (он намеренно с индексной
+ * сигнатурой, чтобы сохранить незнакомые поля дословно). Приведение
+ * `unknown` — ровно то же, что делает `webrtc-session.ts` звонка один на
+ * один; узкий интерфейс рядом с ним оставляет проверку на опечатку в том
+ * единственном месте, где мы вообще трогаем видео.
+ */
+interface VideoSender {
+  replaceTrack(track: MediaStreamTrack | null): Promise<void>;
+  getParameters(): unknown;
+  setParameters(params: unknown): Promise<void>;
+}
+
 /** Столько же, сколько у звонка один на один. */
 const DISCONNECT_GRACE_MS = 15_000;
 
@@ -48,6 +87,8 @@ export class GroupPeerLink {
   private restartingIce = false;
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  /** Отправитель пустой видеосекции — см. шапку класса. */
+  private readonly videoSender: VideoSender;
 
   constructor(
     readonly userId: string,
@@ -105,7 +146,14 @@ export class GroupPeerLink {
       }
     }) as typeof this.pc.onconnectionstatechange;
 
-    for (const track of localStream.getTracks()) this.pc.addTrack(track, localStream);
+    for (const track of localStream.getAudioTracks())
+      this.pc.addTrack(track, localStream);
+    // Пустая видеосекция заводится сразу — см. шапку класса. Направление
+    // `sendrecv`: мы вправе и показывать, и смотреть, а кто из пары включит
+    // камеру первым, заранее неизвестно.
+    this.videoSender = this.pc.addTransceiver('video', {
+      direction: 'sendrecv',
+    }).sender as unknown as VideoSender;
     handlers.onStateChange('connecting');
   }
 
@@ -163,6 +211,43 @@ export class GroupPeerLink {
       return;
     }
     await this.pc.addIceCandidate(signal.candidate).catch(() => undefined);
+  }
+
+  /**
+   * Включить/выключить свою картинку в ЭТОЙ паре. Без пересогласования:
+   * видеосекция заведена при создании соединения (см. шапку класса).
+   *
+   * Дорожка одна на всю комнату — камера захватывается один раз в
+   * провайдере и раздаётся во все соединения, как и микрофон. Поэтому
+   * `null` здесь дорожку НЕ останавливает: её остановка — дело провайдера,
+   * иначе выход одного собеседника гасил бы камеру для остальных.
+   */
+  async setVideoTrack(track: MediaStreamTrack | null): Promise<void> {
+    if (this.closed) return;
+    try {
+      await this.videoSender.replaceTrack(track);
+    } catch {
+      // Соединение уже закрывается — следующий пересчёт состава уберёт его.
+    }
+  }
+
+  /**
+   * Потолок качества исходящего видео (`group-video-quality.ts`). Ставится
+   * на каждое изменение состава: втроём кодировать приходится дважды, и
+   * потолок пары здесь означал бы удвоенный трафик и нагрев.
+   * `setParameters` меняет параметры кодера без пересогласования SDP —
+   * собеседнику ничего не приходит.
+   */
+  async applyVideoEncoding(target: VideoEncoding): Promise<void> {
+    if (this.closed) return;
+    try {
+      const params = this.videoSender.getParameters() as SenderParameters;
+      const next = withVideoEncoding(params, target);
+      if (!next) return;
+      await this.videoSender.setParameters(next);
+    } catch {
+      // Параметры не приняли — картинка просто останется как есть.
+    }
   }
 
   /** Уровень входящего звука этого собеседника — для подписи «говорит». */

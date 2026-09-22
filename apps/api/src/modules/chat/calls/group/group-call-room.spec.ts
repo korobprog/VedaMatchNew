@@ -27,6 +27,7 @@ function p(
     joinedAt: NOW + joinedAtOffset,
     lastSeenAt: NOW + lastSeenOffset,
     muted: false,
+    video: false,
   };
 }
 

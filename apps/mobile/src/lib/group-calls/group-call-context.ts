@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { MediaStream } from 'react-native-webrtc';
 import type { ChatGroupCallDto } from '@vedamatch/shared';
 import type { GroupCallState } from './group-call-state';
 
@@ -25,6 +26,28 @@ export interface GroupCallsApi {
   join: (callId: string) => Promise<void>;
   leave: () => Promise<void>;
   toggleMute: () => void;
+  /** Человек хочет камеру включённой (кнопка). */
+  cameraOn: boolean;
+  /**
+   * Картинка реально уходит. Отличается от `cameraOn`, когда приложение в
+   * фоне: место под видео за нами остаётся, кадры не идут
+   * (`group-video-state.ts`).
+   */
+  sendingVideo: boolean;
+  /** Своя картинка — для плитки «вы». `null`, когда камера не снимает. */
+  localVideoStream: MediaStream | null;
+  /** Включить/выключить камеру. Может закончиться отказом сервера. */
+  toggleCamera: () => Promise<void>;
+  /** Передняя/задняя камера. */
+  switchCamera: () => void;
+  /** Потоки собеседников — из них экран берёт картинку. */
+  remoteStreams: Record<string, MediaStream>;
+  /** Кто сообщил, что сейчас не снимает (свернул приложение, выключил камеру). */
+  remoteVideoOff: Record<string, boolean>;
+  /** Открыто окно «картинка в картинке» — экран прячет кнопки. */
+  pipActive: boolean;
+  /** Отказ прочитан. */
+  clearActionError: () => void;
   /** Экран группового звонка сообщает о своей видимости. */
   reportScreenMounted: (visible: boolean) => void;
   dismiss: () => void;
