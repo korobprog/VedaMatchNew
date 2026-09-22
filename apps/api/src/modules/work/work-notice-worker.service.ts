@@ -16,6 +16,7 @@ import {
   type WorkTaskStatusChangedEvent,
 } from './work-events';
 import { WORK_NOTICE_CLAIM_TIMEOUT_MS, resolveWorkNotice } from './work-notice';
+import { resolveTaskStatusMark } from './work-task-status';
 import { workTaskKey } from './work-validate';
 
 /**
@@ -184,6 +185,11 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
         taskKey: workTaskKey(task.space.prefix, task.number),
         taskTitle: task.title,
         actorName,
+        // Состояние считаем мы, а не подписчик (VED-320): колонки наши, и
+        // только по ним видно, какая значит «тестирование». Берём ту, где
+        // карточка лежит на момент отправки, — ту же, о которой говорят слова
+        // уведомления.
+        statusMark: resolveTaskStatusMark(task.column.name),
       };
 
       if (outcome.kind === 'commented') {

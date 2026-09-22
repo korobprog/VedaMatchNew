@@ -11,6 +11,7 @@ import {
   type WorkTaskCardDto,
   type WorkTaskPriority,
 } from '@vedamatch/shared';
+import { resolveTaskStatusMark } from './work-task-status';
 import { workTaskKey } from './work-validate';
 
 /**
@@ -85,10 +86,18 @@ export interface WorkTaskRow {
  * Карточка на доске — то, что видно, не открывая её. Описание сюда не едет,
  * только признак «текст есть»: доска на сотню задач иначе тянет мегабайт,
  * который никто не читает.
+ *
+ * `columnName` — отдельным аргументом, а не полем строки: в выборке доски
+ * задачи приезжают вложенными в колонку, и её имя лежит на уровень выше. Оно
+ * нужно для ярлыка состояния (VED-311) — разбор названия один на портал
+ * (`work-task-status.ts`), чтобы ярлык на карточке и пометка в ленте
+ * уведомлений не разъехались (VED-320). `null` — название неизвестно, ярлыка
+ * не будет.
  */
 export function toWorkTaskCard(
   task: WorkTaskRow,
   prefix: string,
+  columnName: string | null,
 ): WorkTaskCardDto {
   return {
     id: task.id,
@@ -108,6 +117,7 @@ export function toWorkTaskCard(
     attachmentCount: task._count.attachments,
     hasDescription: task.description.trim().length > 0,
     createdAt: task.createdAt.toISOString(),
+    statusMark: resolveTaskStatusMark(columnName),
   };
 }
 

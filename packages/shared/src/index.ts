@@ -32,6 +32,7 @@ export * from './profile-name';
 export * from './assistant';
 export * from './lineage';
 export * from './spiritual-stage';
+export * from './task-status';
 export * from './work';
 export * from './wellness';
 export * from './travel';

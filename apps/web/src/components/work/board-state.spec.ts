@@ -15,6 +15,7 @@ function card(id: string): WorkTaskCardDto {
     key: `VM-${id}`,
     number: Number(id.replace(/\D/g, "")) || 1,
     columnId: "",
+    statusMark: null,
     title: id,
     position: 0,
     priority: "normal",
@@ -47,6 +48,8 @@ function board(): WorkBoardDto {
         position: 0,
         wipLimit: 0,
         isDone: false,
+        // «Надо» не из нашей четвёрки — у её карточек ярлыка нет.
+        statusMark: null,
         tasks: [
           { ...card("t1"), columnId: "todo" },
           { ...card("t2"), columnId: "todo" },
@@ -58,7 +61,8 @@ function board(): WorkBoardDto {
         position: 1,
         wipLimit: 2,
         isDone: false,
-        tasks: [{ ...card("t3"), columnId: "doing" }],
+        statusMark: "in_progress",
+        tasks: [{ ...card("t3"), columnId: "doing", statusMark: "in_progress" }],
       },
       {
         id: "done",
@@ -66,6 +70,7 @@ function board(): WorkBoardDto {
         position: 2,
         wipLimit: 0,
         isDone: true,
+        statusMark: "done",
         tasks: [],
       },
     ],
@@ -83,6 +88,18 @@ describe("moveTaskLocally", () => {
   it("переставляет внутри своей колонки", () => {
     const next = moveTaskLocally(board(), "t2", "todo", 0);
     expect(next.columns[0].tasks.map((t) => t.id)).toEqual(["t2", "t1"]);
+  });
+
+  it("ярлык состояния уезжает вместе с карточкой", () => {
+    // Доску после переноса никто не перечитывает: ярлык, оставшийся от прежней
+    // колонки, врал бы до перезагрузки страницы (VED-311, VED-320).
+    const next = moveTaskLocally(board(), "t1", "doing", 0);
+    expect(next.columns[1].tasks[0].statusMark).toBe("in_progress");
+  });
+
+  it("в колонке без состояния карточка остаётся без ярлыка", () => {
+    const moved = moveTaskLocally(board(), "t3", "todo", 0);
+    expect(moved.columns[0].tasks[0].statusMark).toBeNull();
   });
 
   it("колонка «готово» закрывает задачу", () => {

@@ -74,18 +74,23 @@ function taskRow(overrides: Partial<WorkTaskRow> = {}): WorkTaskRow {
 
 describe('toWorkTaskCard', () => {
   it('собирает читаемый номер из префикса среды', () => {
-    expect(toWorkTaskCard(taskRow(), 'VM').key).toBe('VM-14');
+    expect(toWorkTaskCard(taskRow(), 'VM', 'В работе').key).toBe('VM-14');
   });
 
   it('описание на доску не едет — только признак, что оно есть', () => {
-    const card = toWorkTaskCard(taskRow({ description: 'Много текста' }), 'VM');
+    const card = toWorkTaskCard(
+      taskRow({ description: 'Много текста' }),
+      'VM',
+      'В работе',
+    );
     expect(card.hasDescription).toBe(true);
     expect(Object.keys(card)).not.toContain('description');
   });
 
   it('описание из одних пробелов описанием не считается', () => {
     expect(
-      toWorkTaskCard(taskRow({ description: '   ' }), 'VM').hasDescription,
+      toWorkTaskCard(taskRow({ description: '   ' }), 'VM', 'В работе')
+        .hasDescription,
     ).toBe(false);
   });
 
@@ -93,6 +98,7 @@ describe('toWorkTaskCard', () => {
     const card = toWorkTaskCard(
       taskRow({ checklist: [{ done: true }, { done: false }, { done: true }] }),
       'VM',
+      'В работе',
     );
     expect(card.checklistDone).toBe(2);
     expect(card.checklistTotal).toBe(3);
@@ -100,7 +106,8 @@ describe('toWorkTaskCard', () => {
 
   it('исполнитель показывается духовным именем', () => {
     expect(
-      toWorkTaskCard(taskRow({ assignee: devotee }), 'VM').assignee?.name,
+      toWorkTaskCard(taskRow({ assignee: devotee }), 'VM', 'В работе').assignee
+        ?.name,
     ).toBe('Мадхава дас');
   });
 
@@ -110,6 +117,7 @@ describe('toWorkTaskCard', () => {
         labels: [{ label: { id: 'l1', name: 'срочно', color: 'gold' } }],
       }),
       'VM',
+      'В работе',
     );
     expect(card.labels).toEqual([{ id: 'l1', name: 'срочно', color: 'gold' }]);
   });
@@ -118,8 +126,25 @@ describe('toWorkTaskCard', () => {
     const card = toWorkTaskCard(
       taskRow({ createdAt: new Date('2026-09-05T08:30:00.000Z') }),
       'VM',
+      'В работе',
     );
     expect(card.createdAt).toBe('2026-09-05T08:30:00.000Z');
+  });
+
+  it('подписывает карточку состоянием по названию колонки (VED-311)', () => {
+    // Слово и цвет собирает клиент, сервер отдаёт код — и отдаёт его один на
+    // портал, чтобы ярлык на доске совпал с пометкой в ленте (VED-320).
+    expect(toWorkTaskCard(taskRow(), 'VM', 'Тестерование').statusMark).toBe(
+      'testing',
+    );
+    expect(toWorkTaskCard(taskRow(), 'VM', 'На доработку').statusMark).toBe(
+      'rework',
+    );
+  });
+
+  it('незнакомая колонка оставляет карточку без ярлыка', () => {
+    expect(toWorkTaskCard(taskRow(), 'VM', 'Бэклог').statusMark).toBeNull();
+    expect(toWorkTaskCard(taskRow(), 'VM', null).statusMark).toBeNull();
   });
 });
 
@@ -206,9 +231,9 @@ describe('toWorkAgendaResponse', () => {
 describe('признак ИИ-агента', () => {
   it('едет наружу и у исполнителя карточки, и у участника среды', () => {
     // Без него агент рисуется тем же кружком с буквой, что и живой человек.
-    expect(toWorkTaskCard(taskRow({ assignee: agent }), 'VM').assignee).toEqual(
-      expect.objectContaining({ name: 'Севак', isAgent: true }),
-    );
+    expect(
+      toWorkTaskCard(taskRow({ assignee: agent }), 'VM', 'В работе').assignee,
+    ).toEqual(expect.objectContaining({ name: 'Севак', isAgent: true }));
     expect(
       toWorkMember({ role: 'member', joinedAt: new Date(), user: agent })
         .isAgent,
@@ -218,7 +243,8 @@ describe('признак ИИ-агента', () => {
   it('у людей остаётся false', () => {
     expect(toWorkPerson(devotee).isAgent).toBe(false);
     expect(
-      toWorkTaskCard(taskRow({ assignee: worldly }), 'VM').assignee?.isAgent,
+      toWorkTaskCard(taskRow({ assignee: worldly }), 'VM', 'В работе').assignee
+        ?.isAgent,
     ).toBe(false);
   });
 

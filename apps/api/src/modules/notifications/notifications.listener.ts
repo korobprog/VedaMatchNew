@@ -6,12 +6,14 @@ import type {
   ChatCallEndedEvent,
   NotificationEvent,
   UserRegisteredEvent,
+  WorkTaskMarkRefreshedEvent,
 } from '@vedamatch/shared';
 import {
   AUTH_TELEGRAM_CONNECTED_EVENT,
   AUTH_TELEGRAM_DISCONNECTED_EVENT,
   CHAT_CALL_ENDED_EVENT,
   USER_REGISTERED_EVENT,
+  WORK_TASK_MARK_REFRESHED_EVENT,
   resolveDisplayName,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -445,6 +447,26 @@ export class NotificationsListener {
   @OnEvent(notificationEventNames.workTaskStatusChanged)
   onWorkTaskStatusChanged(event: NotificationEvent): void {
     void this.deliver(event);
+  }
+
+  /**
+   * Карточка переехала — пометка состояния у уже лежащих уведомлений об этой
+   * задаче догоняет её (VED-320).
+   *
+   * Не новость, а поправка: ничего не создаётся и никуда не отправляется,
+   * поэтому мимо `deliver()`. Осечка тут не должна валить перенос карточки на
+   * доске — у «Работы» это синхронный вызов в обработчике запроса, — поэтому
+   * только запись в лог.
+   */
+  @OnEvent(WORK_TASK_MARK_REFRESHED_EVENT)
+  onWorkTaskMarkRefreshed(event: WorkTaskMarkRefreshedEvent): void {
+    void this.notifications
+      .refreshWorkTaskMark(event.spaceId, event.taskKey, event.statusMark)
+      .catch((error) =>
+        this.logger.warn(
+          `Пометка состояния ${event.taskKey} не обновлена: ${String(error)}`,
+        ),
+      );
   }
 
   @OnEvent(notificationEventNames.workInviteReceived)

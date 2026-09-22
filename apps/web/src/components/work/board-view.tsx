@@ -28,6 +28,7 @@ import type {
   WorkTaskPriority,
 } from "@vedamatch/shared";
 import {
+  attachWorkFile,
   createWorkColumn,
   createWorkTask,
   deleteWorkColumn,
@@ -74,7 +75,13 @@ import {
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
-import { descriptionHasWholeText, splitTaskDraft } from "./task-title";
+import { StatusMarkBadge } from "@/components/status-mark-badge";
+import {
+  MAX_FILES_AT_ONCE,
+  uploadInTurn,
+  uploadProblemMessage,
+} from "./attach-files";
+import { deriveTaskTitle, taskFromDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 import { groupTasksByPriority } from "./task-grouping";
 import { groupTasksByCreatedDate } from "./task-created-grouping";
@@ -115,7 +122,26 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   /** Архив доски (VED-61): выполненные и убранные карточки. */
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [composerColumn, setComposerColumn] = useState<string | null>(null);
+  /* Черновик новой задачи — это ОПИСАНИЕ, а не название (VED-324): человек
+     пишет задачу как думает, заголовок собирается сам. Свой заголовок живёт
+     отдельным состоянием, и `null` в нём значит «собери сам»: пустая строка
+     значила бы «человек стёр заголовок» и затирала бы выведенный. */
   const [draft, setDraft] = useState("");
+  const [draftTitle, setDraftTitle] = useState<string | null>(null);
+  /* Обе кнопки переключения заголовка исчезают от собственного нажатия: поле
+     правки и строка с выведенным заголовком показываются по очереди. Фокус
+     при этом падал на `body` — с клавиатуры человек терял место, а скринридер
+     не узнавал, что появилось поле. Поэтому фокус переносим руками: в поле,
+     когда открыли правку, и обратно на «Изменить», когда вернулись к
+     выведенному заголовку (WCAG 2.2, SC 2.4.3). */
+  const editTitleRef = useRef<HTMLButtonElement>(null);
+  const returnFocusToEditTitle = useRef(false);
+  /* Скриншоты, выбранные до создания карточки. Сервер принимает вложения
+     только к существующей задаче, поэтому файлы ждут здесь и уходят сразу
+     после неё — иначе «специально заходить в недоделанную задачу» остаётся,
+     а именно от этого и просили избавить. */
+  const [draftFiles, setDraftFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
   // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
   const [draftAssignee, setDraftAssignee] = useState("");
   const [draftDue, setDraftDue] = useState("");
@@ -219,6 +245,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     setSpace(loaded.space);
     setBoard(loaded.board);
   }, [spaceId]);
+
+  /* Вернулись к выведенному заголовку — вернуть и фокус на кнопку, которой
+     это сделали: она пересоздаётся, и без этого фокус остаётся на `body`.
+     Флагом, а не по самому `draftTitle`: открытие формы тоже ставит `null`, а
+     там фокус принадлежит полю описания. */
+  useEffect(() => {
+    if (draftTitle === null && returnFocusToEditTitle.current) {
+      returnFocusToEditTitle.current = false;
+      editTitleRef.current?.focus();
+    }
+  }, [draftTitle]);
 
   const canEdit =
     board?.role === "owner" ||
@@ -336,6 +373,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   function openComposer(columnId: string) {
     setComposerColumn(columnId);
     setDraft("");
+    setDraftTitle(null);
+    setDraftFiles([]);
     setDraftAssignee(
       board?.members.some((member) => member.userId === board.viewerId)
         ? board.viewerId
@@ -348,15 +387,22 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     setDraftPriority("normal");
   }
 
+  /**
+   * Завести задачу по написанному описанию (VED-324).
+   *
+   * Порядок — карточка, потом файлы: вложение сервер принимает только к
+   * существующей задаче. Сбой загрузки карточку не отменяет — она уже заведена
+   * и текст в ней есть, — но и молчать о нём нельзя: человек думает, что
+   * скриншот приложен, а его нет.
+   */
   async function addTask(columnId: string) {
-    if (!board || !draft.trim()) return;
+    if (!board || !draft.trim() || saving) return;
     const dueAt = dueFromInput(draftDue);
-    /* Поле подписано как название, но пишут в него задачу целиком. Длинный
-       текст делится сам: начало остаётся названием, а текст — в описании
-       (при разрезанной строке целиком) — см. splitTaskDraft. */
-    const { title, description } = splitTaskDraft(draft);
+    const { title, description } = taskFromDraft(draft, draftTitle);
+    const files = draftFiles;
+    setSaving(true);
     try {
-      await createWorkTask(board.id, {
+      const task = await createWorkTask(board.id, {
         columnId,
         title,
         description: description || undefined,
@@ -364,11 +410,24 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         dueAt: dueAt ?? null,
         priority: draftPriority,
       });
+      if (files.length > 0) {
+        const result = await uploadInTurn(files, (file) =>
+          attachWorkFile(task.id, file),
+        );
+        const problem = uploadProblemMessage(result);
+        setError(problem ? `${task.key}: ${problem}` : null);
+      } else {
+        setError(null);
+      }
       setDraft("");
+      setDraftTitle(null);
+      setDraftFiles([]);
       setDraftPriority("normal");
       setBoard(await getWorkBoard(board.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не получилось");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -500,9 +559,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     );
   }
 
-  /** Что станет названием, а что описанием, — считаем на каждом нажатии
-      клавиши: подсказка под полем должна показывать правду, а не обещание. */
-  const draftSplit = splitTaskDraft(draft);
+  /** Заголовок, который получится из написанного, — считаем на каждом нажатии
+      клавиши: строка под полем должна показывать правду, а не обещание. */
+  const autoTitle = deriveTaskTitle(draft);
 
   /* «Сегодня» для группировки по дате создания (VED-160) — момент рендера,
      местное время браузера: границы дня у человека в Красноярске и на
@@ -968,41 +1027,89 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                         void addTask(column.id);
                       }}
                     >
+                      {/* Поле — описание, а не название (VED-324). Enter без
+                          Shift больше не отправляет: в описание пишут
+                          абзацами, и отправка по Enter обрывала бы его на
+                          первой же мысли. Отправляют кнопкой и Ctrl/⌘+Enter. */}
                       <textarea
                         autoFocus
                         value={draft}
                         onChange={(event) => setDraft(event.target.value)}
                         onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.shiftKey) {
+                          if (
+                            event.key === "Enter" &&
+                            (event.metaKey || event.ctrlKey)
+                          ) {
                             event.preventDefault();
                             void addTask(column.id);
                           }
                           if (event.key === "Escape") setComposerColumn(null);
                         }}
-                        rows={2}
+                        rows={4}
                         maxLength={2000}
-                        placeholder="Что нужно сделать"
-                        aria-label={`Новая задача в разделе «${column.name}»`}
+                        placeholder="Опишите задачу: что не так, где и что должно быть"
+                        aria-label={`Описание новой задачи в разделе «${column.name}»`}
                         className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
                       />
-                      {/* Говорим заранее, что произойдёт: молча разрезанный
-                          текст выглядел бы как потеря половины написанного.
+                      {/* Что станет заголовком — видно до отправки, и правится
+                          на месте. Молча собранный заголовок человек искал бы
+                          глазами на доске и не понимал, откуда он взялся.
 
-                          Сам будущий заголовок переносится по буквам: в него
-                          попадает то, что написал человек, а сплошная строка
-                          без пробелов вылезала за край колонки. Переносим
-                          только его — обычные слова подсказки от `break-all`
-                          рвались бы на середине. */}
-                      {draftSplit.description && (
-                        <p className="mt-1 text-xs text-text-2">
-                          Длинно для названия. В нём останется{" "}
-                          <span className="break-all text-text-1">
-                            «{draftSplit.title}»
-                          </span>{" "}
-                          {descriptionHasWholeText(draftSplit)
-                            ? "— а весь текст сохранится в описании."
-                            : "— остальное уедет в описание."}
+                          Переносится `overflow-wrap: anywhere`, а не
+                          `break-all`: в заголовок попадает то, что написал
+                          человек, и сплошная строка без пробелов не должна
+                          вылезать за край колонки — но обычные слова от
+                          `break-all` рвались посередине («открывает о/кно»). */}
+                      {draft.trim() && draftTitle === null && (
+                        <p className="mt-1 flex flex-wrap items-baseline gap-1 text-xs text-text-2">
+                          <span>Заголовок:</span>
+                          <span className="text-text-1 [overflow-wrap:anywhere]">
+                            «{autoTitle}»
+                          </span>
+                          {/* py-1 не для красоты: без него цель нажатия 16px
+                              высотой, а WCAG 2.2 просит 24 (SC 2.5.8). */}
+                          <button
+                            type="button"
+                            ref={editTitleRef}
+                            onClick={() => setDraftTitle(autoTitle)}
+                            className="py-1 font-semibold text-text-1 underline"
+                          >
+                            Изменить
+                          </button>
                         </p>
+                      )}
+                      {draftTitle !== null && (
+                        // Кнопка — рядом с `label`, а не внутри: подпись поля
+                        // прочиталась бы вместе с её текстом, а нажатие на
+                        // подпись уводило бы фокус в поле мимо кнопки.
+                        <div className="mt-1">
+                          <label className="block text-xs text-text-1">
+                            Заголовок
+                            {/* Фокус сразу в поле: правку открыли нажатием
+                                кнопки, которая от этого исчезла. Поле
+                                появляется только по этому нажатию, поэтому
+                                `autoFocus` ничего не перехватывает. */}
+                            <input
+                              autoFocus
+                              value={draftTitle}
+                              onChange={(event) =>
+                                setDraftTitle(event.target.value)
+                              }
+                              maxLength={200}
+                              className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              returnFocusToEditTitle.current = true;
+                              setDraftTitle(null);
+                            }}
+                            className="mt-1 py-1 text-xs text-text-2 underline"
+                          >
+                            Собрать из описания
+                          </button>
+                        </div>
                       )}
                       <div className="mt-2 grid gap-2">
                         <label className="text-xs text-text-1">
@@ -1059,12 +1166,43 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           </select>
                         </label>
                       </div>
+                      {/* Скриншоты прикладываются здесь же (VED-324): ради
+                          них и приходилось заходить в только что заведённую
+                          карточку. Уйдут сразу после её создания — сервер
+                          принимает вложения только к существующей задаче. */}
+                      <label className="mt-2 block text-xs text-text-1">
+                        Скриншоты и файлы
+                        <input
+                          type="file"
+                          multiple
+                          /* Ключ по числу файлов: после отправки список
+                             очищается, поле пересоздаётся и перестаёт
+                             показывать имя уже приложенного файла. */
+                          key={draftFiles.length === 0 ? "empty" : "picked"}
+                          onChange={(event) =>
+                            setDraftFiles(
+                              Array.from(event.target.files ?? []).slice(
+                                0,
+                                MAX_FILES_AT_ONCE,
+                              ),
+                            )
+                          }
+                          className="mt-1 block w-full text-xs text-text-2 file:mr-2 file:rounded-lg file:border file:border-glass-brd file:bg-bg-1 file:px-2 file:py-1 file:text-xs file:text-text-1"
+                        />
+                      </label>
+                      {draftFiles.length > 0 && (
+                        <p className="mt-1 text-xs text-text-2">
+                          Приложится{" "}
+                          {draftFiles.map((file) => file.name).join(", ")}
+                        </p>
+                      )}
                       <div className="mt-2 flex gap-2">
                         <button
                           type="submit"
-                          className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white"
+                          disabled={saving}
+                          className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                         >
-                          Добавить
+                          {saving ? "Добавляем…" : "Добавить"}
                         </button>
                         <button
                           type="button"
@@ -1294,6 +1432,12 @@ function TaskCard({
 
       <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-5 text-xs text-text-2">
         <span className="font-mono">{task.key}</span>
+        {/* Состояние — сразу за номером (VED-311): «в каком состоянии задача»
+            человек спрашивает первым, и ответ должен попасться раньше срока и
+            счётчиков. Тот же компонент, что в ленте уведомлений, и тот же код
+            от сервера: расхождение между лентой и доской было отдельной
+            жалобой (VED-320). */}
+        <StatusMarkBadge mark={task.statusMark} />
         {/* Точка и слово вместе: цветного края мало — на солнце и при
             дальтонизме золото от пурпура не отличить. */}
         {mark && (

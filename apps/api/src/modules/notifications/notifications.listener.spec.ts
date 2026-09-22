@@ -4,6 +4,7 @@ import {
   AUTH_TELEGRAM_CONNECTED_EVENT,
   AUTH_TELEGRAM_DISCONNECTED_EVENT,
   CHAT_CALL_ENDED_EVENT,
+  WORK_TASK_MARK_REFRESHED_EVENT,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NativePushService } from './native-push.service';
@@ -220,6 +221,7 @@ describe('NotificationsListener.deliver', () => {
       fromColumnName: 'В работе',
       toColumnName: 'На доработку',
       actorName: 'Санкаршан',
+      statusMark: 'rework',
     });
 
     expect(inbox[0]).toMatchObject({ mark: 'rework' });
@@ -662,6 +664,45 @@ describe('NotificationsListener wiring', () => {
       'user-1',
       'call-1',
       'ended',
+    );
+
+    await app.close();
+  });
+
+  it('has a live @OnEvent handler for work.task.mark-refreshed', async () => {
+    // VED-320: без этого обработчика пометка в ленте молча остаётся снимком
+    // прошлой колонки — ровно той жалобой, с которой всё началось.
+    const notifications = {
+      refreshWorkTaskMark: jest.fn(() => Promise.resolve(1)),
+    };
+    const moduleRef = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
+      providers: [
+        NotificationsListener,
+        { provide: NotificationsService, useValue: notifications },
+        { provide: PushSenderService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+        { provide: NativePushService, useValue: {} },
+        { provide: TelegramNotificationsService, useValue: {} },
+        { provide: TelegramSenderService, useValue: {} },
+      ],
+    }).compile();
+
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    const emitter = moduleRef.get(EventEmitter2);
+
+    emitter.emit(WORK_TASK_MARK_REFRESHED_EVENT, {
+      name: WORK_TASK_MARK_REFRESHED_EVENT,
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      statusMark: 'testing',
+    });
+
+    expect(notifications.refreshWorkTaskMark).toHaveBeenCalledWith(
+      'space-1',
+      'VED-42',
+      'testing',
     );
 
     await app.close();
