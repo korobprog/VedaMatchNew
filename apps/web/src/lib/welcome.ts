@@ -1,3 +1,4 @@
+import { getSafeReturnTo } from "@/lib/return-to";
 import type { UserProfile } from "@vedamatch/shared";
 
 /**
@@ -34,4 +35,20 @@ export function welcomeSteps(user: {
 }): WelcomeStep[] {
   if (!user.spiritualStage) return ["Знакомство", "Город", "Фото", "Этап пути"];
   return ["Знакомство"];
+}
+
+/**
+ * Адрес мастера новичка с сохранённым путём возврата.
+ *
+ * Без него ссылка, по которой человек пришёл регистрироваться, терялась
+ * навсегда: `redirect("/welcome")` не нёс `returnTo`, а мастер заканчивался
+ * жёстким `router.push("/")`. Для «зарегался и сразу в комнате» (VED-360)
+ * это и есть разница между «попал» и «оказался на главной, ищи сам».
+ *
+ * Путь проверяется тем же `getSafeReturnTo`, что и везде: в мастер нельзя
+ * протащить чужой домен.
+ */
+export function welcomeHref(returnTo?: string | null): string {
+  const safe = getSafeReturnTo(returnTo);
+  return safe === "/" ? "/welcome" : `/welcome?returnTo=${encodeURIComponent(safe)}`;
 }

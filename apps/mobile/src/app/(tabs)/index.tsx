@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConversationRow } from '@/components/chat/conversation-row';
+import { QuickConferenceRow } from '@/components/chat/quick-conference-row';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { ChatListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
@@ -127,6 +128,10 @@ export default function ChatsScreen() {
           <Text style={[styles.newButtonText, { color: colors.text0 }]}>Новая</Text>
         </Pressable>
       </View>
+      {/* Быстрая конференция (VED-360) — строкой под заголовком, а не
+          значком в ряду: у неё есть что сказать словами, включая потолок
+          в четыре человека, а значок этого не скажет. */}
+      <QuickConferenceRow />
       {requestsCount > 0 ? (
         <Pressable
           accessibilityRole="button"

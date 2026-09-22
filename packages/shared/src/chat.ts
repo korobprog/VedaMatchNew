@@ -952,3 +952,87 @@ export interface ChatOfficialChannelStats {
 export interface ChatOfficialChannelSyncResult extends ChatOfficialChannelStats {
   added: number;
 }
+
+// ===== Быстрая конференция по ссылке (VED-360) =====
+
+/**
+ * Путь короткой ссылки на конференцию: `https://vedamatch.ru/j/<токен>`.
+ *
+ * Короткий и без имени сервиса нарочно — ссылку пересылают в мессенджер и
+ * диктуют вслух, а `/chat/conference/join/<токен>` в такой роли не живёт.
+ * Прецедент в портале уже есть: `/m/<id>` — короткая ссылка на профиль.
+ * Маршруты API при этом остаются под префиксом сервиса (`chat/conference/*`).
+ */
+export const CHAT_CONFERENCE_LINK_PATH = '/j/';
+
+/**
+ * Токен ссылки: 24 случайных байта в base64url — ровно 32 символа из
+ * `[A-Za-z0-9_-]`. 192 бита: ссылку не подобрать ни перебором, ни по
+ * соседнему токену.
+ */
+export const CHAT_CONFERENCE_TOKEN_LENGTH = 32;
+
+/**
+ * Сколько живёт ссылка. Конференция — про «сейчас»: встречу назначают на
+ * сегодня-завтра, и дверь, открытая на неделю, — это дверь, о которой забыли.
+ * Полсуток покрывают и «созвонимся вечером», и часовые пояса внутри страны.
+ */
+export const CHAT_CONFERENCE_LINK_TTL_HOURS = 12;
+
+/**
+ * Что со ссылкой. `full` сюда не входит: заполненность — это про комнату в
+ * конкретную секунду, а не про саму ссылку, и освободившееся место снова
+ * делает вход возможным.
+ */
+export type ChatConferenceLinkState = 'active' | 'expired' | 'revoked';
+
+/** Комната конференции глазами того, кто уже внутри: чем поделиться. */
+export interface ChatConferenceDto {
+  /** Комната — обычная групповая беседа; это её id. */
+  conversationId: string;
+  title: string;
+  /** Полный адрес для кнопки «скопировать». */
+  url: string;
+  state: ChatConferenceLinkState;
+  expiresAt: string;
+  revokedAt: string | null;
+  /** Сколько мест занято и сколько их всего (потолок mesh'а). */
+  seatsTaken: number;
+  maxParticipants: number;
+  /** Идёт ли прямо сейчас разговор в комнате. */
+  callLive: boolean;
+}
+
+/**
+ * Что видит открывший ссылку — в том числе гость, который ещё не вошёл.
+ * Наружу отдаётся минимум: кто зовёт, сколько уже внутри и сколько мест
+ * осталось. Переписки и состава беседы здесь нет и быть не может.
+ */
+export interface ChatConferenceInviteDto {
+  title: string;
+  host: ChatUserSummary;
+  state: ChatConferenceLinkState;
+  expiresAt: string;
+  seatsTaken: number;
+  maxParticipants: number;
+  callLive: boolean;
+  /**
+   * Спрашивающий уже в комнате — кнопка говорит «вернуться», а не
+   * «присоединиться». У гостя всегда `false`.
+   */
+  alreadyMember: boolean;
+  /**
+   * Человеческая причина, почему войти нельзя прямо сейчас; `null` — можно.
+   * Собирается сервером: причина одна и та же на сайте и в приложении.
+   */
+  denial: string | null;
+}
+
+/** `POST /chat/conference` — завести конференцию. Тело не нужно. */
+export interface CreateChatConferenceRequest {
+  /**
+   * Название комнаты. Пустое — сервер соберёт сам («Конференция · Имя»):
+   * быстрая конференция не должна начинаться с формы.
+   */
+  title?: string;
+}
