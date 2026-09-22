@@ -12,10 +12,13 @@ function configMock(env: Record<string, string> = S3_ENV) {
   return { get: (name: string) => env[name] };
 }
 
-function prismaMock(previousKey: string | null = null) {
+function prismaMock(previousKey: string | null = null, custom = false) {
   return {
     libraryEntry: {
-      findUnique: jest.fn().mockResolvedValue({ previewKey: previousKey }),
+      findUnique: jest.fn().mockResolvedValue({
+        previewKey: previousKey,
+        previewIsCustom: custom,
+      }),
       update: jest.fn().mockResolvedValue({}),
     },
   };
@@ -121,6 +124,36 @@ describe('LibraryPreviewsService', () => {
       Bucket: 'vedamatch',
       Key: 'library/previews/entry-1.webp',
     });
+  });
+
+  // VED-344/VED-355: формы шлют приложенную картинку сразу за созданием
+  // записи, то есть ровно тогда, когда фоновое обогащение ещё качает
+  // картинку со страницы источника. Без этой проверки оно затирало бы
+  // выбранную человеком через пару секунд после публикации.
+  it('не затирает картинку, загруженную человеком', async () => {
+    global.fetch = fetchReturning(PNG_PIXEL) as never;
+    const prisma = prismaMock('library/previews/entry-1-abcdef12.webp', true);
+    const service = new LibraryPreviewsService(
+      prisma as never,
+      configMock() as never,
+    );
+    const send = jest.fn<
+      Promise<unknown>,
+      [{ input: Record<string, unknown> }]
+    >(() => Promise.resolve({}));
+    (service as unknown as { s3Client: { send: unknown } }).s3Client = { send };
+
+    await service.capture(
+      'entry-1',
+      'https://example.com/article',
+      'https://example.com/og.jpg',
+    );
+
+    expect(prisma.libraryEntry.update).not.toHaveBeenCalled();
+    // Скачанное уже легло в бакет — убираем его, а не ручную копию.
+    const [put, remove] = send.mock.calls.map((call) => call[0].input);
+    expect(put.Key).toMatch(FRESH_KEY);
+    expect(remove).toEqual({ Bucket: 'vedamatch', Key: put.Key });
   });
 
   it('keeps the entry untouched when the download fails', async () => {

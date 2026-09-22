@@ -80,8 +80,19 @@ export class LibraryPreviewsService {
       if (!stored) return;
       const before = await this.prisma.libraryEntry.findUnique({
         where: { id: entryId },
-        select: { previewKey: true },
+        select: { previewKey: true, previewIsCustom: true },
       });
+      /* Своя картинка автору дороже найденной на чужой странице. Правка это
+         уже учитывала, а обогащение при создании — нет. Формы теперь шлют
+         картинку сразу за созданием записи (VED-344, VED-355), то есть
+         ровно тогда, когда фоновое обогащение ещё идёт: без этой проверки
+         оно затирало бы приложенную картинку через пару секунд после
+         публикации. Скачанное складываем в бакет и тут же убираем: раньше
+         про ручную загрузку узнать нельзя — она идёт параллельно. */
+      if (before?.previewIsCustom) {
+        await this.remove(stored.key);
+        return;
+      }
       await this.prisma.libraryEntry.update({
         where: { id: entryId },
         data: {
