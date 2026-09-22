@@ -128,6 +128,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
      значила бы «человек стёр заголовок» и затирала бы выведенный. */
   const [draft, setDraft] = useState("");
   const [draftTitle, setDraftTitle] = useState<string | null>(null);
+  /* Обе кнопки переключения заголовка исчезают от собственного нажатия: поле
+     правки и строка с выведенным заголовком показываются по очереди. Фокус
+     при этом падал на `body` — с клавиатуры человек терял место, а скринридер
+     не узнавал, что появилось поле. Поэтому фокус переносим руками: в поле,
+     когда открыли правку, и обратно на «Изменить», когда вернулись к
+     выведенному заголовку (WCAG 2.2, SC 2.4.3). */
+  const editTitleRef = useRef<HTMLButtonElement>(null);
+  const returnFocusToEditTitle = useRef(false);
   /* Скриншоты, выбранные до создания карточки. Сервер принимает вложения
      только к существующей задаче, поэтому файлы ждут здесь и уходят сразу
      после неё — иначе «специально заходить в недоделанную задачу» остаётся,
@@ -237,6 +245,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     setSpace(loaded.space);
     setBoard(loaded.board);
   }, [spaceId]);
+
+  /* Вернулись к выведенному заголовку — вернуть и фокус на кнопку, которой
+     это сделали: она пересоздаётся, и без этого фокус остаётся на `body`.
+     Флагом, а не по самому `draftTitle`: открытие формы тоже ставит `null`, а
+     там фокус принадлежит полю описания. */
+  useEffect(() => {
+    if (draftTitle === null && returnFocusToEditTitle.current) {
+      returnFocusToEditTitle.current = false;
+      editTitleRef.current?.focus();
+    }
+  }, [draftTitle]);
 
   const canEdit =
     board?.role === "owner" ||
@@ -1051,6 +1070,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                               высотой, а WCAG 2.2 просит 24 (SC 2.5.8). */}
                           <button
                             type="button"
+                            ref={editTitleRef}
                             onClick={() => setDraftTitle(autoTitle)}
                             className="py-1 font-semibold text-text-1 underline"
                           >
@@ -1065,7 +1085,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                         <div className="mt-1">
                           <label className="block text-xs text-text-1">
                             Заголовок
+                            {/* Фокус сразу в поле: правку открыли нажатием
+                                кнопки, которая от этого исчезла. Поле
+                                появляется только по этому нажатию, поэтому
+                                `autoFocus` ничего не перехватывает. */}
                             <input
+                              autoFocus
                               value={draftTitle}
                               onChange={(event) =>
                                 setDraftTitle(event.target.value)
@@ -1076,7 +1101,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           </label>
                           <button
                             type="button"
-                            onClick={() => setDraftTitle(null)}
+                            onClick={() => {
+                              returnFocusToEditTitle.current = true;
+                              setDraftTitle(null);
+                            }}
                             className="mt-1 py-1 text-xs text-text-2 underline"
                           >
                             Собрать из описания
