@@ -179,3 +179,45 @@ export function badgeLabel(unreadCount: number): string | null {
   if (unreadCount <= 0) return null;
   return unreadCount > 99 ? '99+' : `${unreadCount}`;
 }
+
+/**
+ * Потолок перезагрузки после «Прочитать все» — тот же, что у сервера
+ * (`MAX_INBOX_PAGE_SIZE` в `apps/api/.../inbox-page.ts`): просить больше
+ * бессмысленно, он всё равно обрежет.
+ */
+export const MAX_RELOAD = 100;
+
+/**
+ * Сколько карточек просить, перечитывая ленту после «Прочитать все»
+ * (VED-330, раунд оценки 001, дефект 5).
+ *
+ * Перечитывать надо: строки переехали из потока непрочитанного в поток
+ * прочитанного, и прежний курсор показывает уже не туда. Но перечитывать
+ * ОДНОЙ порцией нельзя — человек, долиставший до сотни, возвращался к
+ * двадцати и терял место. Просим столько же, сколько было показано.
+ */
+export function reloadSize(shown: number): number {
+  const wanted = Number.isFinite(shown) ? Math.trunc(shown) : 0;
+  return Math.min(Math.max(wanted, INBOX_PAGE_SIZE), MAX_RELOAD);
+}
+
+/**
+ * Число рядом с заголовком «Новое» (VED-330, раунд оценки 001, дефект 1).
+ *
+ * Берётся от сервера, а не считается по загруженным карточкам: порция —
+ * двадцать, и при двадцати одном непрочитанном колокольчик показывал 21, а
+ * заголовок 20 (снимок `ved330-02-inbox-top.png`). Два числа об одном и том
+ * же на соседних экранах расходились тем сильнее, чем больше
+ * непрочитанного.
+ *
+ * Исключение — выдача поиска: там показано ровно то, что нашлось, и
+ * серверное «всё непрочитанное» к этому списку отношения не имеет.
+ */
+export function unreadSectionCount(params: {
+  items: readonly NotificationItemDto[];
+  /** `unreadCount` из ответа сервера — всё непрочитанное человека. */
+  total: number;
+  searchActive: boolean;
+}): number {
+  return params.searchActive ? countUnreadItems(params.items) : params.total;
+}

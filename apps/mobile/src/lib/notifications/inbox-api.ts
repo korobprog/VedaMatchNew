@@ -16,6 +16,12 @@ export interface InboxQuery {
   /** Курсор следующей порции из прошлого ответа (VED-267). */
   cursor?: string | null;
   limit?: number;
+  /**
+   * Поиск по заголовку и тексту (VED-267, `?q`). Серверный, а не отбор по
+   * загруженному: тот искал бы только среди пришедших порций и отвечал бы
+   * «ничего не нашлось» о том, до чего человек не долистал.
+   */
+  query?: string | null;
 }
 
 /**
@@ -33,6 +39,10 @@ export function inboxPath(query: InboxQuery = {}): string {
   const params = new URLSearchParams();
   params.set('limit', `${query.limit ?? INBOX_PAGE_SIZE}`);
   if (query.cursor) params.set('cursor', query.cursor);
+  // Пробелы по краям режем здесь, а не на экране: запрос из одних пробелов
+  // не поиск, а обычная лента, и гонять его на сервер незачем.
+  const search = query.query?.trim();
+  if (search) params.set('q', search);
   return `/notifications/inbox?${params.toString()}`;
 }
 

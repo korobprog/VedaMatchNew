@@ -1,6 +1,9 @@
 import type { NotificationItemDto } from '@vedamatch/shared';
 import {
   badgeLabel,
+  MAX_RELOAD,
+  reloadSize,
+  unreadSectionCount,
   buildInboxSections,
   countUnreadItems,
   dayTitle,
@@ -207,5 +210,56 @@ describe('badgeLabel', () => {
     expect(badgeLabel(1)).toBe('1');
     expect(badgeLabel(99)).toBe('99');
     expect(badgeLabel(100)).toBe('99+');
+  });
+});
+
+describe('reloadSize', () => {
+  it('просит столько же, сколько было показано', () => {
+    // Раунд оценки 001, дефект 5: долистал до сотни, нажал «Прочитать все»
+    // — и вернулся к двадцати, потеряв место в ленте.
+    expect(reloadSize(100)).toBe(100);
+    expect(reloadSize(60)).toBe(60);
+  });
+
+  it('меньше порции не просит: пустая лента не должна ужать запрос до нуля', () => {
+    expect(reloadSize(0)).toBe(20);
+    expect(reloadSize(1)).toBe(20);
+    expect(reloadSize(-5)).toBe(20);
+  });
+
+  it('не просит больше, чем отдаст сервер', () => {
+    expect(reloadSize(500)).toBe(MAX_RELOAD);
+    expect(MAX_RELOAD).toBe(100);
+  });
+
+  it('мусор не ломает запрос', () => {
+    expect(reloadSize(Number.NaN)).toBe(20);
+    expect(reloadSize(20.7)).toBe(20);
+  });
+});
+
+describe('unreadSectionCount', () => {
+  const twenty = Array.from({ length: 20 }, (_, index) => item(`n-${index}`));
+
+  it('обычная лента: число от сервера, а не длина порции', () => {
+    // Живой случай: колокольчик показывал 21, заголовок — 20, потому что
+    // порция ровно двадцать (раунд оценки 001, дефект 1).
+    expect(unreadSectionCount({ items: twenty, total: 21, searchActive: false })).toBe(21);
+  });
+
+  it('в выдаче поиска считается найденное: серверное «всё» к ней не относится', () => {
+    expect(unreadSectionCount({ items: [item('a')], total: 21, searchActive: true })).toBe(1);
+    expect(
+      unreadSectionCount({
+        items: [item('a'), item('b', { readAt: '2026-09-22T09:00:00.000Z' })],
+        total: 21,
+        searchActive: true,
+      }),
+    ).toBe(1);
+  });
+
+  it('ноль непрочитанного остаётся нулём в обоих случаях', () => {
+    expect(unreadSectionCount({ items: [], total: 0, searchActive: false })).toBe(0);
+    expect(unreadSectionCount({ items: [], total: 0, searchActive: true })).toBe(0);
   });
 });
