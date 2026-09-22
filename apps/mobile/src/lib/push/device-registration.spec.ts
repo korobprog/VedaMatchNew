@@ -18,6 +18,7 @@ import { pushRegistration, resetPushRegistration } from './push-registration';
  */
 
 const mockPermissions = { granted: false, canAskAgain: true };
+const mockEnsureCallChannel = jest.fn();
 const mockState = {
   requestedGranted: false,
   token: 'token-1' as string | null,
@@ -39,6 +40,10 @@ jest.mock('@react-native-firebase/messaging', () => ({
     if (mockState.tokenThrows) throw new Error('нет google-services.json');
     return mockState.token;
   }),
+}));
+
+jest.mock('@/lib/calls/native-call-bridge', () => ({
+  ensureCallNotificationChannel: () => mockEnsureCallChannel(),
 }));
 
 jest.mock('@/config/app-variant', () => ({
@@ -180,9 +185,10 @@ describe('категории уведомлений', () => {
   beforeEach(() => {
     // Вызовы копятся на весь файл: здесь важен именно этот запуск.
     jest.mocked(Notifications.setNotificationChannelAsync).mockClear();
+    mockEnsureCallChannel.mockClear();
   });
 
-  it('заводит обе: «Сообщения» и «Звонки»', async () => {
+  it('заводит обе: «Сообщения» через expo, «Звонки» — нативным модулем', async () => {
     mockPermissions.granted = true;
 
     await registerThisDevice({} as ApiClient);
@@ -190,29 +196,34 @@ describe('категории уведомлений', () => {
     const created = jest
       .mocked(Notifications.setNotificationChannelAsync)
       .mock.calls.map(([id, options]) => ({ id, name: options.name }));
-    expect(created).toEqual([
-      { id: CHANNEL_ID, name: 'Сообщения' },
-      { id: CALLS_CHANNEL_ID, name: 'Звонки' },
-    ]);
+    expect(created).toEqual([{ id: CHANNEL_ID, name: 'Сообщения' }]);
+    // Канал звонков заводит нативная сторона: только там есть системный
+    // рингтон и показ на экране блокировки. Создать его здесь попроще
+    // означало бы подменить нативное определение худшим — Android оставляет
+    // то, что создано первым.
+    expect(mockEnsureCallChannel).toHaveBeenCalledTimes(1);
   });
 
-  it('у звонков важность выше, чем у сообщений: вызов обязан пробиться баннером', async () => {
+  it('категория «Звонки» заводится до первого звонка, а не при нём', async () => {
+    // Раньше канал `calls` создавался в `showIncomingCall`: в системных
+    // настройках его не было вовсе, а пуш сервера в этот канал Android клал
+    // в служебный `fallback`.
     mockPermissions.granted = true;
 
     await registerThisDevice({} as ApiClient);
 
-    const byId = new Map(
-      jest
-        .mocked(Notifications.setNotificationChannelAsync)
-        .mock.calls.map(([id, options]) => [id, options]),
-    );
-    expect(byId.get(CALLS_CHANNEL_ID)?.importance).toBe(
-      Notifications.AndroidImportance.MAX,
-    );
-    expect(byId.get(CHANNEL_ID)?.importance).toBe(
-      Notifications.AndroidImportance.HIGH,
-    );
-    expect(byId.get(CALLS_CHANNEL_ID)?.enableVibrate).toBe(true);
+    expect(mockEnsureCallChannel).toHaveBeenCalled();
+  });
+
+  it('у канала сообщений прежняя важность: человек мог понизить её сам', async () => {
+    mockPermissions.granted = true;
+
+    await registerThisDevice({} as ApiClient);
+
+    const messages = jest
+      .mocked(Notifications.setNotificationChannelAsync)
+      .mock.calls.find(([id]) => id === CHANNEL_ID);
+    expect(messages?.[1].importance).toBe(Notifications.AndroidImportance.HIGH);
   });
 
   it('идентификаторы совпадают с теми, что шлёт сервер', () => {

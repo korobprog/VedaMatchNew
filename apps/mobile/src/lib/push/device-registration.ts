@@ -1,6 +1,7 @@
 import { getMessaging, getToken } from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
 import { appVariant } from '@/config/app-variant';
+import { ensureCallNotificationChannel } from '@/lib/calls/native-call-bridge';
 import type { ApiClient } from '@/lib/api/client';
 import { registerDevice } from './push-api';
 import { setPushRegistration, type PushRegistration } from './push-registration';
@@ -59,11 +60,16 @@ const never = (): boolean => false;
 /**
  * Две категории уведомлений: «Сообщения» и «Звонки» (VED-361).
  *
- * Звонковому каналу — `MAX` и вибрация: это вызов, он обязан пробиться
- * баннером поверх экрана, а не лечь строкой в шторку. Прежним «Сообщениям»
- * важность не меняем: у кого канал уже заведён, Android всё равно оставит
- * ту, что человек выбрал сам, — важность канала после создания принадлежит
- * ему, а не приложению.
+ * «Сообщения» заводит `expo-notifications` — как и раньше. «Звонки» заводит
+ * нативный модуль звонков: канал `calls` у него уже есть (рингтон, вибрация,
+ * показ на экране блокировки, `CallNotifications.kt`), но создавался он
+ * лениво — при первом входящем. Из-за этого категории не было в системных
+ * настройках, пока человеку впервые не позвонят, а пуш сервера в канал
+ * `calls` (пропущенный, зов в комнату, фолбэк) Android клал в служебный
+ * `fallback`. Завести его тут своими руками нельзя: `expo-notifications` не
+ * умеет ни системный рингтон, ни `VISIBILITY_PUBLIC`, а канал, созданный
+ * первым, потом уже не переопределить — нативное определение оказалось бы
+ * подменено худшим.
  *
  * Отдельная функция, а не строки внутри `attempt`: каналы заводятся и при
  * первом запуске, и по кнопке «Зарегистрировать заново», и проверяются
@@ -75,15 +81,7 @@ export async function createChannels(): Promise<void> {
     description: 'Переписка, заявки и новости. Звонки — отдельная категория.',
     importance: Notifications.AndroidImportance.HIGH,
   });
-  await Notifications.setNotificationChannelAsync(CALLS_CHANNEL_ID, {
-    name: 'Звонки',
-    description: 'Входящие и пропущенные звонки, приглашения в групповой звонок.',
-    importance: Notifications.AndroidImportance.MAX,
-    // Звонок без вибрации на беззвучном телефоне пропускают: рингтон
-    // выключен, а экран человек в этот момент не смотрит.
-    vibrationPattern: [0, 400, 250, 400],
-    enableVibrate: true,
-  });
+  ensureCallNotificationChannel();
 }
 
 async function attempt(
