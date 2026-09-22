@@ -1,46 +1,46 @@
-import type { LineageId } from "./lineage";
-export * from "./vedabase";
-export * from "./gitabase";
-export * from "./union";
-export * from "./library";
-export * from "./video-embed";
-export * from "./motivation";
-export * from "./moderation";
-export * from "./contacts";
-export * from "./support";
-export * from "./team-applications";
-export * from "./notifications";
-export * from "./astro";
-export * from "./astro-chart";
-export * from "./astro-reading";
-export * from "./astro-admin";
-export * from "./astro-compatibility";
-export * from "./astro-subject";
-export * from "./astro-transit";
-export * from "./changelog";
-export * from "./market";
-export * from "./community";
-export * from "./notices";
-export * from "./vacancies";
-export * from "./audit";
-export * from "./chat";
-export * from "./pwa";
-export * from "./activity";
-export * from "./rewards";
-export * from "./music";
-export * from "./profile-name";
-export * from "./assistant";
-export * from "./lineage";
-export * from "./spiritual-stage";
-export * from "./work";
-export * from "./wellness";
-export * from "./travel";
-export * from "./bookmarks";
-export * from "./blog";
+import type { LineageId } from './lineage';
+export * from './vedabase';
+export * from './gitabase';
+export * from './union';
+export * from './library';
+export * from './video-embed';
+export * from './motivation';
+export * from './moderation';
+export * from './contacts';
+export * from './support';
+export * from './team-applications';
+export * from './notifications';
+export * from './astro';
+export * from './astro-chart';
+export * from './astro-reading';
+export * from './astro-admin';
+export * from './astro-compatibility';
+export * from './astro-subject';
+export * from './astro-transit';
+export * from './changelog';
+export * from './market';
+export * from './community';
+export * from './notices';
+export * from './vacancies';
+export * from './audit';
+export * from './chat';
+export * from './pwa';
+export * from './activity';
+export * from './rewards';
+export * from './music';
+export * from './profile-name';
+export * from './assistant';
+export * from './lineage';
+export * from './spiritual-stage';
+export * from './work';
+export * from './wellness';
+export * from './travel';
+export * from './bookmarks';
+export * from './blog';
 
-import type { BillingMode, SubscriptionState } from "./support";
+import type { BillingMode, SubscriptionState } from './support';
 
-export type Role = "user" | "admin" | "service-admin";
+export type Role = 'user' | 'admin' | 'service-admin';
 
 /**
  * Сервисы, у которых есть собственный раздел админки. Роль `service-admin`
@@ -49,29 +49,29 @@ export type Role = "user" | "admin" | "service-admin";
  * changelog, настройки) в список не входят — они только для роли `admin`.
  */
 export const ADMIN_SERVICE_SLUGS = [
-  "union",
-  "chat",
-  "market",
-  "motivation",
-  "library",
-  "notices",
-  "vacancies",
-  "astro",
-  "vedabase",
-  "music",
-  "assistant",
-  "wellness",
-  "travel",
+  'union',
+  'chat',
+  'market',
+  'motivation',
+  'library',
+  'notices',
+  'vacancies',
+  'astro',
+  'vedabase',
+  'music',
+  'assistant',
+  'wellness',
+  'travel',
   // «Блог-лента» (VED-238): админ задаёт срок жизни поста в ленте и
   // закрепляет посты, остальные просто постят один за другим.
-  "blog",
+  'blog',
 ] as const;
 
 export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];
 
 /** Есть ли у аккаунта доступ хоть к какой-то части админки. */
 export function isPortalAdmin(user: { role: Role }): boolean {
-  return user.role === "admin" || user.role === "service-admin";
+  return user.role === 'admin' || user.role === 'service-admin';
 }
 
 /**
@@ -86,7 +86,7 @@ export function isPortalAdmin(user: { role: Role }): boolean {
  * (`'admin'`), поэтому функция принимает обычную строку.
  */
 export function isPortalStaff(role: string | null | undefined): boolean {
-  return role === "admin";
+  return role === 'admin';
 }
 
 /**
@@ -99,32 +99,32 @@ export function canAdminService(
   user: { role: Role; adminServices?: string[] },
   slug: AdminServiceSlug,
 ): boolean {
-  if (user.role === "admin") return true;
-  if (user.role !== "service-admin") return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'service-admin') return false;
   return (user.adminServices ?? []).includes(slug);
 }
 
-export type ServiceStatus = "active" | "coming_soon" | "disabled";
+export type ServiceStatus = 'active' | 'coming_soon' | 'disabled';
 
-export type SpiritualStage = "seeker" | "practitioner" | "yogi" | "devotee";
+export type SpiritualStage = 'seeker' | 'practitioner' | 'yogi' | 'devotee';
 
-export type PortalUseStage = Exclude<SpiritualStage, "devotee">;
+export type PortalUseStage = Exclude<SpiritualStage, 'devotee'>;
 
 export type DevoteeVerificationStatus =
-  | "self_identified"
-  | "awaiting_mentor"
-  | "mentor_submitted"
-  | "awaiting_admin"
-  | "confirmed"
-  | "rejected"
-  | "needs_clarification";
+  | 'self_identified'
+  | 'awaiting_mentor'
+  | 'mentor_submitted'
+  | 'awaiting_admin'
+  | 'confirmed'
+  | 'rejected'
+  | 'needs_clarification';
 
-export type StageChangeActor = "system" | "user" | "admin";
+export type StageChangeActor = 'system' | 'user' | 'admin';
 
-export type UserAccountStatus = "active" | "blocked" | "deleted";
+export type UserAccountStatus = 'active' | 'blocked' | 'deleted';
 
 /** Пол. Необязателен: у части аккаунтов он не заполнен. */
-export type Gender = "male" | "female";
+export type Gender = 'male' | 'female';
 
 /**
  * Имя, под которым человека видят остальные. Духовное имя перекрывает обычное:
@@ -219,7 +219,7 @@ export interface UserProfile {
 
 /** Состояние проверки фото: заявка пользователя и решение администрации. */
 export interface PhotoVerificationState {
-  status: "none" | "requested" | "verified";
+  status: 'none' | 'requested' | 'verified';
   requestedAt: string | null;
   verifiedAt: string | null;
 }
@@ -245,12 +245,12 @@ export interface UserGalleryState {
 }
 
 export type UserPhotoUploadFailureCode =
-  | "unsupported_type"
-  | "file_too_large"
-  | "invalid_image"
-  | "quota_exceeded"
-  | "processing_failed"
-  | "storage_error";
+  | 'unsupported_type'
+  | 'file_too_large'
+  | 'invalid_image'
+  | 'quota_exceeded'
+  | 'processing_failed'
+  | 'storage_error';
 
 export interface UserPhotoUploadFailure {
   fileName: string;
@@ -387,10 +387,9 @@ export interface AccessTokenPayload {
 }
 
 export interface SelfIdentificationAnswers {
-  interest: "beginning" | "learning" | "deepening" | "devotional_service";
-  regularPractice: "none" | "sometimes" | "daily" | "strict_daily";
-  currentFocus:
-    "curiosity" | "basic_practice" | "deep_practice" | "service_community";
+  interest: 'beginning' | 'learning' | 'deepening' | 'devotional_service';
+  regularPractice: 'none' | 'sometimes' | 'daily' | 'strict_daily';
+  currentFocus: 'curiosity' | 'basic_practice' | 'deep_practice' | 'service_community';
   hasMentor: boolean;
   hasCommunity: boolean;
   hasSpiritualName: boolean;
@@ -662,7 +661,10 @@ export const CITY_PRIVACY_THRESHOLD = 3;
 /** Одна строка очереди на главной админки: сколько ждёт разбора и куда идти. */
 export interface AdminQueueCounter {
   key:
-    "userReports" | "supportTickets" | "verificationRequests" | "communities";
+    | 'userReports'
+    | 'supportTickets'
+    | 'verificationRequests'
+    | 'communities';
   count: number;
 }
 
@@ -672,14 +674,14 @@ export interface AdminQueueCounter {
  * `LoginAudit.client` рядом с `provider` (google/yandex/telegram/…) —
  * `provider` называет способ входа, `client` называет площадку.
  */
-export type LoginClient = "site" | "web-app" | "telegram" | "android";
+export type LoginClient = 'site' | 'web-app' | 'telegram' | 'android';
 
 /** Полный список источников входа в фиксированном порядке для таблиц и графиков. */
 export const LOGIN_CLIENTS: readonly LoginClient[] = [
-  "site",
-  "web-app",
-  "telegram",
-  "android",
+  'site',
+  'web-app',
+  'telegram',
+  'android',
 ];
 
 /** Входы и уникальные люди по источнику за период. */
@@ -761,20 +763,20 @@ export interface AdminServiceCardDto {
 export type UpdateAdminServiceRequest = Partial<
   Pick<
     AdminServiceCardDto,
-    | "name"
-    | "description"
-    | "iconUrl"
-    | "url"
-    | "status"
-    | "category"
-    | "nameEn"
-    | "sortOrder"
-    | "public"
-    | "seekerVisible"
-    | "practitionerVisible"
-    | "yogiVisible"
-    | "devoteeSelfIdentifiedVisible"
-    | "devoteeVerifiedVisible"
+    | 'name'
+    | 'description'
+    | 'iconUrl'
+    | 'url'
+    | 'status'
+    | 'category'
+    | 'nameEn'
+    | 'sortOrder'
+    | 'public'
+    | 'seekerVisible'
+    | 'practitionerVisible'
+    | 'yogiVisible'
+    | 'devoteeSelfIdentifiedVisible'
+    | 'devoteeVerifiedVisible'
   >
 >;
 
@@ -791,7 +793,7 @@ export interface CreateAdminServiceRequest extends UpdateAdminServiceRequest {
 // ===== Настройки платформы (админка) =====
 
 /** Приём новых аккаунтов. `closed` не мешает входить уже заведённым. */
-export type RegistrationMode = "open" | "closed";
+export type RegistrationMode = 'open' | 'closed';
 
 /**
  * Внешняя интеграция глазами администрации. Значения ключей наружу не уходят
@@ -800,13 +802,13 @@ export type RegistrationMode = "open" | "closed";
  */
 export interface AdminIntegrationStatus {
   key:
-    | "google-oauth"
-    | "storage"
-    | "push"
-    | "redis"
-    | "motivation-ai"
-    | "motivation-media"
-    | "astro-ai";
+    | 'google-oauth'
+    | 'storage'
+    | 'push'
+    | 'redis'
+    | 'motivation-ai'
+    | 'motivation-media'
+    | 'astro-ai';
   /** Все обязательные переменные окружения заданы. */
   configured: boolean;
   /** Каких переменных не хватает. Имена, не значения. */
@@ -835,9 +837,9 @@ export const REGISTRATION_NOTE_MAX_LENGTH = 300;
  * в каталоге админки доезжала везде одинаково.
  */
 export function serviceCardName(
-  service: Pick<ServiceCard, "name" | "nameEn">,
+  service: Pick<ServiceCard, 'name' | 'nameEn'>,
   locale: string,
 ): string {
-  if (locale !== "en") return service.name;
+  if (locale !== 'en') return service.name;
   return service.nameEn?.trim() || service.name;
 }
