@@ -10,6 +10,7 @@ import {
 } from "@/lib/chat-conference-api";
 import { ChatAvatar } from "@/components/chat/chat-avatar";
 import {
+  conferenceAppLink,
   conferenceCallLine,
   conferenceExpiryLine,
   conferenceJoinStep,
@@ -141,6 +142,16 @@ export function ConferenceJoinView({
         Отдельной регистрации нет: первый вход создаёт аккаунт и сразу
         возвращает вас сюда.
       </p>
+      {/* Обычная ссылка на телефоне открывается браузером: проверенных
+          app-links у домена нет. Этот переход отдаёт ту же комнату
+          приложению; если его не установили, ничего не произойдёт и
+          человек останется здесь. */}
+      <a
+        href={conferenceAppLink(token)}
+        className="mt-4 flex min-h-11 items-center justify-center rounded-xl border border-glass-brd px-4 text-sm text-text-0"
+      >
+        Открыть в приложении
+      </a>
     </section>
   );
 }

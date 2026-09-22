@@ -26,6 +26,7 @@ import {
   conferenceTitle,
   createConferenceToken,
 } from './conference-link';
+import { conferenceGoneText } from './conference-retention';
 
 const linkInclude = {
   createdBy: { select: chatUserSelect },
@@ -138,7 +139,7 @@ export class ChatConferenceService {
           },
           include: linkInclude,
         });
-        return this.toDto(link, now);
+        return this.toDto(link, now, userId);
       } catch (error) {
         // Совпадение 192-битных токенов практически невозможно, но если
         // база сказала «занято» — честнее взять другой, чем отдать чужую
@@ -240,7 +241,7 @@ export class ChatConferenceService {
       });
     }
 
-    return this.toDto(await this.requireLink(token), now);
+    return this.toDto(await this.requireLink(token), now, userId);
   }
 
   /** Ссылка своей комнаты: её надо мочь скопировать ещё раз по ходу разговора. */
@@ -249,7 +250,7 @@ export class ChatConferenceService {
     userId: string,
   ): Promise<ChatConferenceDto> {
     const link = await this.requireLinkForMember(conversationId, userId);
-    return this.toDto(link, new Date());
+    return this.toDto(link, new Date(), userId);
   }
 
   /**
@@ -270,6 +271,7 @@ export class ChatConferenceService {
     return this.toDto(
       await this.requireLinkForMember(conversationId, userId),
       new Date(),
+      userId,
     );
   }
 
@@ -303,6 +305,7 @@ export class ChatConferenceService {
     return this.toDto(
       await this.requireLinkForMember(conversationId, userId),
       now,
+      userId,
     );
   }
 
@@ -317,7 +320,10 @@ export class ChatConferenceService {
       where: { token },
       include: linkInclude,
     });
-    if (!link) throw new NotFoundException('Такой конференции нет');
+    // Текст один на «токена не было» и «комнату убрали как пустую»
+    // (см. `conference-retention.ts`): пришедший по ссылке не сделал
+    // ничего неправильного, и ему нужен следующий шаг, а не диагноз.
+    if (!link) throw new NotFoundException(conferenceGoneText());
     return link;
   }
 
@@ -389,7 +395,14 @@ export class ChatConferenceService {
     return 'http://localhost:3000';
   }
 
-  private toDto(link: LinkRow, now: Date): ChatConferenceDto {
+  private toDto(
+    link: LinkRow,
+    now: Date,
+    viewerId: string | null = null,
+  ): ChatConferenceDto {
+    const mine = viewerId
+      ? link.conversation.members.find((m) => m.userId === viewerId)
+      : null;
     return {
       conversationId: link.conversationId,
       title: link.conversation.title ?? 'Быстрая конференция',
@@ -400,6 +413,7 @@ export class ChatConferenceService {
       seatsTaken: link.conversation.members.length,
       maxParticipants: CONFERENCE_MAX_PARTICIPANTS,
       callLive: link.conversation.groupCalls.length > 0,
+      canManage: mine?.role === 'owner' || mine?.role === 'admin',
     };
   }
 }

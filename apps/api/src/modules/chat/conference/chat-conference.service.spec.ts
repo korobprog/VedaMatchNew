@@ -605,3 +605,104 @@ describe('срок и отзыв', () => {
     expect(invite.denial).toBeNull();
   });
 });
+
+/**
+ * Панель в комнате: кому показывать «закрыть вход» и «выдать новую
+ * ссылку». Право считает сервер и кладёт в `canManage` — два клиента,
+ * выводящие его каждый по-своему, разойдутся с сервером на первой правке.
+ */
+describe('право распоряжаться ссылкой', () => {
+  const tokenOf = (url: string) => url.split('/').pop()!;
+
+  it('хозяин распоряжается своей ссылкой', async () => {
+    const { service } = buildService();
+    const room = await service.create('u1');
+    expect(room.canManage).toBe(true);
+    await expect(
+      service.forConversation(room.conversationId, 'u1'),
+    ).resolves.toMatchObject({ canManage: true });
+  });
+
+  it('вошедший по ссылке ссылку видит, но ею не распоряжается', async () => {
+    const { service } = buildService();
+    const room = await service.create('u1');
+    const joined = await service.join(tokenOf(room.url), 'u2');
+    expect(joined.canManage).toBe(false);
+    // Ссылку копировать можно — её же и переслали ему самому.
+    expect(joined.url).toBe(room.url);
+    await expect(
+      service.revoke(room.conversationId, 'u2'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('отзыв и новая ссылка тоже отвечают с правом', async () => {
+    const { service } = buildService();
+    const room = await service.create('u1');
+    await expect(
+      service.revoke(room.conversationId, 'u1'),
+    ).resolves.toMatchObject({ canManage: true, state: 'revoked' });
+    await expect(
+      service.rotate(room.conversationId, 'u1'),
+    ).resolves.toMatchObject({ canManage: true, state: 'active' });
+  });
+});
+
+/**
+ * Тексты, которые читает опоздавший. Проверяются здесь, а не только в
+ * `conference-link.spec.ts`: важно, что до человека доезжает именно
+ * человеческая фраза, а не код состояния и не имя исключения.
+ */
+describe('что читает опоздавший', () => {
+  const tokenOf = (url: string) => url.split('/').pop()!;
+  const HOUR_MS = 60 * 60 * 1000;
+
+  it('просроченная ссылка объясняет срок и следующий шаг', async () => {
+    const { service, links } = buildService();
+    const room = await service.create('u1');
+    links[0].expiresAt = new Date(Date.now() - HOUR_MS);
+    const invite = await service.invite(tokenOf(room.url), null);
+    expect(invite.state).toBe('expired');
+    expect(invite.denial).toBe(
+      'Срок ссылки истёк. Попросите новую у того, кто вас позвал.',
+    );
+  });
+
+  it('отозванная ссылка говорит про закрытый вход, а не про срок', async () => {
+    const { service } = buildService();
+    const room = await service.create('u1');
+    await service.revoke(room.conversationId, 'u1');
+    const invite = await service.invite(tokenOf(room.url), null);
+    expect(invite.state).toBe('revoked');
+    expect(invite.denial).toBe(
+      'Вход по этой ссылке закрыли. Попросите новую у того, кто вас позвал.',
+    );
+  });
+
+  it('пятому называет число мест и предлагает выход', async () => {
+    const { service } = buildService();
+    const room = await service.create('u1');
+    const token = tokenOf(room.url);
+    for (const id of ['u2', 'u3', 'u4']) await service.join(token, id);
+    const invite = await service.invite(token, null);
+    expect(invite.seatsTaken).toBe(CONFERENCE_MAX_PARTICIPANTS);
+    expect(invite.denial).toContain('это предел');
+    expect(invite.denial).toContain(String(CONFERENCE_MAX_PARTICIPANTS));
+  });
+
+  it('несуществующей комнаты нет — и текст про новую ссылку, а не про 404', async () => {
+    const { service } = buildService();
+    await expect(service.invite('a'.repeat(32), null)).rejects.toThrow(
+      'Этой конференции больше нет. Попросите новую ссылку у того, кто вас позвал.',
+    );
+  });
+
+  it('ни один отказ не говорит на языке техники', async () => {
+    const { service, links } = buildService();
+    const room = await service.create('u1');
+    links[0].expiresAt = new Date(Date.now() - HOUR_MS);
+    const invite = await service.invite(tokenOf(room.url), null);
+    expect(invite.denial).not.toMatch(
+      /токен|token|404|409|conversation|id\b|null|undefined/i,
+    );
+  });
+});

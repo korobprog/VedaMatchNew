@@ -260,6 +260,13 @@ export class ChatConversationsService {
     });
 
     const summary = await this.summary(row, userId, messageCount);
+    // Беседу завели быстрой конференцией? Отдельный запрос по уникальному
+    // индексу вместо поля в общем include: подробности ссылки нужны одному
+    // экрану, а список бесед ими грузить незачем.
+    const conferenceLink = await this.prisma.chatConferenceLink.findUnique({
+      where: { conversationId },
+      select: { id: true },
+    });
 
     return {
       ...summary,
@@ -273,6 +280,7 @@ export class ChatConversationsService {
       ),
       hasMore,
       myRole: mine?.role ?? 'member',
+      isConference: Boolean(conferenceLink),
     };
   }
 

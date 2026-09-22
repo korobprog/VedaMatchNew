@@ -43,5 +43,15 @@ export function createConferenceApi(api: ApiClient) {
         `/chat/conference/${encodeURIComponent(conversationId)}/revoke`,
         { method: 'POST' },
       ),
+
+    /**
+     * Выдать новую ссылку взамен прежней: старая перестаёт работать в ту
+     * же секунду. Это и «передумал закрывать», и «ссылка ушла не туда».
+     */
+    rotate: (conversationId: string) =>
+      api.request<ChatConferenceDto>(
+        `/chat/conference/${encodeURIComponent(conversationId)}/link`,
+        { method: 'POST' },
+      ),
   };
 }

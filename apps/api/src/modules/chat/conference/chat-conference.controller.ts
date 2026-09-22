@@ -23,6 +23,7 @@ import {
 } from '../../auth/auth.guard';
 import { ChatConferenceService } from './chat-conference.service';
 import { normalizeConferenceToken } from './conference-link';
+import { conferenceGoneText } from './conference-retention';
 
 /**
  * Быстрая конференция по ссылке (VED-360).
@@ -119,6 +120,6 @@ export class ChatConferenceController {
  */
 function requireToken(value: string): string {
   const token = normalizeConferenceToken(value);
-  if (!token) throw new NotFoundException('Такой конференции нет');
+  if (!token) throw new NotFoundException(conferenceGoneText());
   return token;
 }

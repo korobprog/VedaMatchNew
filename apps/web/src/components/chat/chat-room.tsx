@@ -27,6 +27,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { ChatComposer } from "./chat-composer";
 import { contextLinesOf, recipientNameOf } from "./chat-assistant-context";
 import { ChatContextBar } from "./chat-context-bar";
+import { ConferenceRoomPanel } from "./conference/conference-room-panel";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { CallButtons } from "./calls/call-buttons";
 import { GroupCallButton } from "./calls/group/group-call-button";
@@ -563,6 +564,12 @@ export function ChatRoom({
           onThemeChange={setTheme}
         />
       </header>
+
+      {/* Комната быстрой конференции: ссылка, её срок и кнопки хозяина.
+          В обычной беседе `isConference` = false и панели нет. */}
+      {conversation.isConference && (
+        <ConferenceRoomPanel conversationId={conversation.id} />
+      )}
 
       {conversation.context && (
         <ChatContextBar
