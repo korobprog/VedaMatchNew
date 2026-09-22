@@ -81,3 +81,25 @@ describe('isIncomingCallExpired', () => {
     expect(isIncomingCallExpired({ ...push, expiresAt: 'не дата' }, Date.now())).toBe(true);
   });
 });
+
+/**
+ * Оповещение о групповом звонке (VED-293) приходит обычным пушем: у него
+ * есть блок `notification`, а в `data` — только `{ url, tag }`
+ * (`apps/api/.../notifications/fcm.ts`, `buildFcmMessage`). Распознаться как
+ * нативный вызов оно не должно ни при каких обстоятельствах: полноэкранный
+ * входящий с рингтоном на комнату, в которую входят и выходят по ходу, —
+ * ровно то, чего этап 3 избегает.
+ */
+describe('групповой звонок нативным вызовом не притворяется', () => {
+  it('обычный пуш о звонке в беседе не разбирается как вызов', () => {
+    expect(
+      parseCallPush({ url: '/chat/conv-1', tag: 'group-call:room-1' }),
+    ).toBeNull();
+  });
+
+  it('незнакомый type не разбирается как вызов', () => {
+    expect(
+      parseCallPush({ type: 'group-call.started', callId: 'room-1' }),
+    ).toBeNull();
+  });
+});

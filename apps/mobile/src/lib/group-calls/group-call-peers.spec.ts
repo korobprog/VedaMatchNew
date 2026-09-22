@@ -6,6 +6,7 @@ function participant(id: string, minute: number): ChatGroupCallParticipantDto {
     user: { id, name: id, avatarUrl: null, lastSeenAt: null },
     joinedAt: `2026-09-21T10:0${minute}:00.000Z`,
     muted: false,
+    video: false,
     host: false,
   };
 }

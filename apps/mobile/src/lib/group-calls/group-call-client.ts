@@ -47,6 +47,18 @@ export function createGroupCallsApi(api: ApiClient) {
         body: { muted },
       }),
 
+    /**
+     * Попросить место под камеру. Именно попросить: мест в комнате три, а
+     * участников четыре, и включение может вернуть 409 с текстом отказа —
+     * решает сервер (`group-call-video.ts`). В теле только `video`: запрос
+     * меняет то, что в нём пришло, и микрофон трогать не должен.
+     */
+    setVideo: (callId: string, video: boolean) =>
+      api.request<ChatGroupCallDto>(`/chat/group-calls/${callId}/state`, {
+        method: 'POST',
+        body: { video },
+      }),
+
     /** «Я ещё здесь» — и заодно свежий состав комнаты. */
     heartbeat: (callId: string) =>
       api.request<ChatGroupCallDto>(`/chat/group-calls/${callId}/heartbeat`, {

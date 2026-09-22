@@ -4,11 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { ChatCallSignal } from '@vedamatch/shared';
 import type { PrismaService } from '../../../../prisma/prisma.service';
 import type { ChatConversationsService } from '../../chat-conversations.service';
 import type { ChatEventsService } from '../../chat-events.service';
+import type { ChatPresenceService } from '../../chat-presence.service';
 import { ChatGroupCallsService } from './chat-group-calls.service';
+import { GROUP_CALL_NOTIFY_COOLDOWN_MS } from './group-call-notify';
 import { GROUP_CALL_PARTICIPANT_TTL_MS } from './group-call-room';
 
 /**
@@ -27,6 +30,7 @@ interface ParticipantRow {
   leftAt: Date | null;
   lastSeenAt: Date;
   muted: boolean;
+  video: boolean;
 }
 
 interface CallRow {
@@ -39,6 +43,8 @@ interface CallRow {
   createdAt: Date;
   endedAt: Date | null;
   endReason: string | null;
+  /** Когда комната в последний раз будила беседу уведомлением. */
+  notifiedAt: Date | null;
 }
 
 function user(id: string) {
@@ -57,8 +63,19 @@ function matches(
 ): boolean {
   return Object.entries(where).every(([key, value]) => {
     if (value === undefined) return true;
+    // `OR: [...]` — им сервис забирает право на рассылку уведомления:
+    // «не слали ни разу ИЛИ слали давно».
+    if (key === 'OR')
+      return (value as Record<string, unknown>[]).some((branch) =>
+        matches(row, branch),
+      );
     if (value !== null && typeof value === 'object' && 'in' in value)
       return (value as { in: unknown[] }).in.includes(row[key]);
+    if (value !== null && typeof value === 'object' && 'lt' in value) {
+      const actual = row[key];
+      if (!(actual instanceof Date)) return false;
+      return actual.getTime() < (value as { lt: Date }).lt.getTime();
+    }
     return row[key] === value;
   });
 }
@@ -67,9 +84,15 @@ function buildService(
   options: {
     members?: string[];
     conversationKind?: 'direct' | 'group' | 'channel';
+    /** Кто заглушил беседу: уведомление о звонке их будить не должно. */
+    mutedMembers?: string[];
+    /** Кто смотрит беседу прямо сейчас: плашку они и так видят. */
+    viewingMembers?: string[];
   } = {},
 ) {
   const memberIds = options.members ?? ['a', 'b', 'c', 'd', 'e'];
+  const muted = new Set(options.mutedMembers ?? []);
+  const viewing = new Set(options.viewingMembers ?? []);
   const calls: CallRow[] = [];
   const participants: ParticipantRow[] = [];
   let seq = 0;
@@ -96,6 +119,7 @@ function buildService(
           createdAt: new Date(),
           endedAt: null,
           endReason: null,
+          notifiedAt: null,
         };
         calls.push(row);
         const created = (
@@ -111,6 +135,7 @@ function buildService(
             leftAt: null,
             lastSeenAt: new Date(),
             muted: false,
+            video: false,
           });
         return Promise.resolve(withIncludes(row));
       }),
@@ -207,6 +232,7 @@ function buildService(
               leftAt: null,
               lastSeenAt: (create.lastSeenAt as Date) ?? new Date(),
               muted: false,
+              video: false,
             });
           return Promise.resolve({});
         },
@@ -230,8 +256,20 @@ function buildService(
     chatConversation: {
       findUnique: jest.fn(() =>
         Promise.resolve({
-          members: memberIds.map((userId) => ({ userId, leftAt: null })),
+          title: 'Вайшнавы Москвы',
+          members: memberIds.map((userId) => ({
+            userId,
+            leftAt: null,
+            mutedUntil: muted.has(userId)
+              ? new Date(Date.now() + 60 * 60_000)
+              : null,
+          })),
         }),
+      ),
+    },
+    user: {
+      findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve({ name: where.id, spiritualName: null }),
       ),
     },
     chatMember: {
@@ -262,14 +300,29 @@ function buildService(
 
   const events = { publish: jest.fn() };
   const config = { get: () => undefined } as unknown as ConfigService;
+  const presence = {
+    isViewing: jest.fn((userId: string) =>
+      Promise.resolve(viewing.has(userId)),
+    ),
+  };
+  const bus = { emit: jest.fn() };
 
   const service = new ChatGroupCallsService(
     prisma,
     conversations,
     events as unknown as ChatEventsService,
     config,
+    presence as unknown as ChatPresenceService,
+    bus as unknown as EventEmitter2,
   );
-  return { service, events, participants, calls };
+  return { service, events, participants, calls, bus, presence };
+}
+
+/** Кому ушло уведомление «идёт звонок» — по порядку вызовов шины. */
+function notified(bus: { emit: jest.Mock }): string[] {
+  return bus.emit.mock.calls
+    .filter(([name]) => name === 'chat.group-call-started')
+    .map(([, event]) => (event as { recipientId: string }).recipientId);
 }
 
 const offer: ChatCallSignal = {
@@ -431,7 +484,7 @@ describe('микрофон', () => {
     const room = await service.start('a', { conversationId: 'conv-1' });
     await service.join('b', room.id);
 
-    const after = await service.setState('b', room.id, true);
+    const after = await service.setState('b', room.id, { muted: true });
     expect(after.participants.find((p) => p.user.id === 'b')?.muted).toBe(true);
     expect(after.participants.find((p) => p.user.id === 'a')?.muted).toBe(
       false,
@@ -441,9 +494,141 @@ describe('микрофон', () => {
   it('не участник микрофоном комнаты не управляет', async () => {
     const { service } = buildService();
     const room = await service.start('a', { conversationId: 'conv-1' });
-    await expect(service.setState('b', room.id, true)).rejects.toBeInstanceOf(
-      ConflictException,
+    await expect(
+      service.setState('b', room.id, { muted: true }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('камера не включается заодно с микрофоном', async () => {
+    // Запрос меняет только то, что в нём пришло: иначе кнопка микрофона
+    // гасила бы камеру, а кнопка камеры — включала микрофон.
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.setState('a', room.id, { video: true });
+
+    const after = await service.setState('a', room.id, { muted: true });
+    const self = after.participants.find((p) => p.user.id === 'a')!;
+    expect(self.muted).toBe(true);
+    expect(self.video).toBe(true);
+  });
+});
+
+describe('камера', () => {
+  /** Комната, где `count` человек уже включили камеру. */
+  async function roomWithCameras(count: number) {
+    const built = buildService();
+    const room = await built.service.start('a', { conversationId: 'conv-1' });
+    for (const userId of ['b', 'c', 'd'])
+      await built.service.join(userId, room.id);
+    for (const userId of ['a', 'b', 'c', 'd'].slice(0, count))
+      await built.service.setState(userId, room.id, { video: true });
+    return { ...built, room };
+  }
+
+  it('трое включают камеры и это видно остальным', async () => {
+    const { service, room } = await roomWithCameras(3);
+    const state = await service.heartbeat('d', room.id);
+    expect(
+      state.participants.filter((p) => p.video).map((p) => p.user.id),
+    ).toEqual(['a', 'b', 'c']);
+  });
+
+  it('четвёртый получает отказ с понятным текстом, а не молчание', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await expect(
+      service.setState('d', room.id, { video: true }),
+    ).rejects.toThrow(/В групповом видео могут участвовать трое/);
+  });
+
+  it('четвёртый остаётся в звонке голосом', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await service
+      .setState('d', room.id, { video: true })
+      .catch(() => undefined);
+    const state = await service.heartbeat('d', room.id);
+    expect(state.participants.map((p) => p.user.id)).toContain('d');
+    expect(state.participants.find((p) => p.user.id === 'd')!.video).toBe(
+      false,
     );
+  });
+
+  it('место освобождается выключением камеры', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await service.setState('c', room.id, { video: false });
+    const after = await service.setState('d', room.id, { video: true });
+    expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
+  });
+
+  it('выход из звонка освобождает место под видео', async () => {
+    const { service, room } = await roomWithCameras(3);
+    await service.leave('c', room.id);
+    const after = await service.setState('d', room.id, { video: true });
+    expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
+  });
+
+  it('выход гасит камеру в самой строке, а не только в выдаче', async () => {
+    // Потолок считается по живым, поэтому вышедший с `video: true` в
+    // выдаче всё равно не виден — и ровно поэтому забытый флаг в строке
+    // заметить неоткуда, пока он не всплывёт при следующем входе. Значит
+    // смотреть надо строку.
+    const { service, room, participants } = await roomWithCameras(1);
+    await service.leave('a', room.id);
+    expect(participants.find((p) => p.userId === 'a')!.video).toBe(false);
+  });
+
+  it('вернувшийся не наследует своё прежнее место под видео', async () => {
+    // Иначе двое могли бы занять одно место: пока он ходил, его отдали.
+    // Строка портится руками намеренно — это ВТОРОЙ рубеж, и проверять
+    // его надо отдельно от первого (гашения при выходе), иначе они
+    // прикрывают друг друга и сломать можно оба сразу незамеченно.
+    const { service, room, participants } = await roomWithCameras(1);
+    await service.leave('a', room.id);
+    participants.find((p) => p.userId === 'a')!.video = true;
+
+    await service.join('a', room.id);
+    expect(
+      participants.find((p) => p.userId === 'a' && p.state === 'joined')!.video,
+    ).toBe(false);
+  });
+
+  it('мёртвый участник место под видео не держит', async () => {
+    const { service, room, participants } = await roomWithCameras(3);
+    participants
+      .filter((p) => p.userId === 'c')
+      .forEach((p) => {
+        p.lastSeenAt = new Date(
+          Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000,
+        );
+      });
+
+    const after = await service.setState('d', room.id, { video: true });
+    expect(after.participants.find((p) => p.user.id === 'd')!.video).toBe(true);
+  });
+
+  it('изменение камеры рассылается всей беседе', async () => {
+    const { service, events, room } = await roomWithCameras(0);
+    events.publish.mockClear();
+    await service.setState('a', room.id, { video: true });
+    const sent = events.publish.mock.calls.at(-1) as
+      [string[], { type: string }] | undefined;
+    expect(sent?.[1]).toMatchObject({ type: 'group-call.updated' });
+    expect(sent?.[0]).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
+  });
+
+  it('потолок камер сообщается клиенту числом, а не подразумевается', async () => {
+    const { service, room } = await roomWithCameras(0);
+    const state = await service.heartbeat('a', room.id);
+    expect(state.maxVideoParticipants).toBe(3);
+    expect(state.maxVideoParticipants).toBeLessThan(state.maxParticipants);
+  });
+
+  it('в закрытой комнате камера не включается', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.leave('a', room.id);
+    await expect(
+      service.setState('a', room.id, { video: true }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
 
@@ -527,5 +712,120 @@ describe('восстановление после перезапуска', () =>
     });
     await service.leave('b', room.id);
     await expect(service.activeForUser('b')).resolves.toBeNull();
+  });
+});
+
+/**
+ * Оповещение о звонке (VED-293, этап 3). Плашка внутри беседы видна только
+ * тому, кто в беседу смотрит; всех остальных зовёт уведомление. Проверяем
+ * не формулировку (она в `notification-copy.ts`), а кого именно сервис
+ * будит и как часто он имеет на это право.
+ */
+describe('оповещение о групповом звонке', () => {
+  it('зовёт всю беседу, кроме того, кто начал', async () => {
+    const { service, bus } = buildService();
+    await service.start('a', { conversationId: 'conv-1' });
+
+    expect(notified(bus)).toEqual(['b', 'c', 'd', 'e']);
+  });
+
+  it('шлёт своё имя события, а не входящий вызов', async () => {
+    const { service, bus } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+
+    // `chat.call-incoming` поднял бы нативный экран вызова на один callId —
+    // трое в беседе дали бы три звонка на телефон.
+    expect(bus.emit).not.toHaveBeenCalledWith(
+      'chat.call-incoming',
+      expect.anything(),
+    );
+    expect(bus.emit).toHaveBeenCalledWith('chat.group-call-started', {
+      name: 'chat.group-call-started',
+      recipientId: 'b',
+      conversationTitle: 'Вайшнавы Москвы',
+      conversationId: 'conv-1',
+      callId: room.id,
+      starterName: 'a',
+    });
+  });
+
+  it('не будит того, кто заглушил беседу', async () => {
+    const { service, bus } = buildService({ mutedMembers: ['c'] });
+    await service.start('a', { conversationId: 'conv-1' });
+
+    expect(notified(bus)).toEqual(['b', 'd', 'e']);
+  });
+
+  it('не будит того, кто смотрит беседу: плашка у него уже на экране', async () => {
+    const { service, bus } = buildService({ viewingMembers: ['d'] });
+    await service.start('a', { conversationId: 'conv-1' });
+
+    expect(notified(bus)).toEqual(['b', 'c', 'e']);
+  });
+
+  it('каждый следующий вход не рассылает новую волну', async () => {
+    const { service, bus } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    bus.emit.mockClear();
+
+    await service.join('b', room.id);
+    await service.join('c', room.id);
+
+    expect(notified(bus)).toEqual([]);
+  });
+
+  it('спустя окно тишины разговор напоминает о себе не пришедшим', async () => {
+    const { service, bus, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    bus.emit.mockClear();
+
+    // Комната идёт давно: прошлая волна уже за пределами окна.
+    calls[0].notifiedAt = new Date(
+      Date.now() - GROUP_CALL_NOTIFY_COOLDOWN_MS - 1000,
+    );
+    await service.join('c', room.id);
+
+    // Тех, кто уже в комнате, напоминание не трогает.
+    expect(notified(bus)).toEqual(['d', 'e']);
+  });
+
+  it('не будит того, кто только что вышел из комнаты', async () => {
+    const { service, bus, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.leave('b', room.id);
+    bus.emit.mockClear();
+
+    calls[0].notifiedAt = new Date(
+      Date.now() - GROUP_CALL_NOTIFY_COOLDOWN_MS - 1000,
+    );
+    await service.join('c', room.id);
+
+    expect(notified(bus)).not.toContain('b');
+  });
+
+  it('повторный вход с другого экрана беседу не будит', async () => {
+    const { service, bus, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    bus.emit.mockClear();
+    calls[0].notifiedAt = new Date(
+      Date.now() - GROUP_CALL_NOTIFY_COOLDOWN_MS - 1000,
+    );
+
+    await service.join('a', room.id);
+
+    expect(notified(bus)).toEqual([]);
+  });
+
+  it('несостоявшееся уведомление не роняет звонок', async () => {
+    const { service, bus } = buildService();
+    bus.emit.mockImplementation(() => {
+      throw new Error('шина отвалилась');
+    });
+
+    await expect(
+      service.start('a', { conversationId: 'conv-1' }),
+    ).resolves.toMatchObject({ status: 'live' });
   });
 });

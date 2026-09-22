@@ -10,20 +10,29 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import Redis from 'ioredis';
 import type {
   ChatCallSignal,
   ChatGroupCallDto,
   ChatGroupCallSignalEnvelope,
+  NotificationEvent,
   StartChatGroupCallRequest,
 } from '@vedamatch/shared';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { denyWrite, WRITE_DENIAL_TEXT } from '../../chat-access';
 import { ChatConversationsService } from '../../chat-conversations.service';
 import { toUserSummary } from '../../chat-dto';
 import { ChatEventsService } from '../../chat-events.service';
+import { ChatPresenceService } from '../../chat-presence.service';
 import { chatUserSelect } from '../../chat-selects';
+import {
+  groupCallNotifyTargets,
+  notifyCooldownThreshold,
+  type NotifyCandidate,
+} from './group-call-notify';
 import {
   GROUP_CALL_HEARTBEAT_MS,
   GROUP_CALL_MAX_PARTICIPANTS,
@@ -35,6 +44,12 @@ import {
   shouldEndRoom,
   type RoomParticipant,
 } from './group-call-room';
+import {
+  GROUP_CALL_MAX_VIDEO,
+  VIDEO_DENIAL_TEXT,
+  videoDecision,
+  videoToTurnOff,
+} from './group-call-video';
 import { GroupCallSignalStore } from './group-call-signals.store';
 
 const roomInclude = {
@@ -86,6 +101,8 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     private readonly conversations: ChatConversationsService,
     private readonly events: ChatEventsService,
     private readonly config: ConfigService,
+    private readonly presence: ChatPresenceService,
+    private readonly bus: EventEmitter2,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -190,6 +207,9 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
       type: 'group-call.started',
       call: room,
     });
+    // Плашку видит только тот, кто в беседу смотрит. Остальных зовёт
+    // уведомление — обычное, не нативный вызов.
+    await this.announce(created.id, userId);
     return room;
   }
 
@@ -211,26 +231,76 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
 
     await this.prisma.chatGroupCallParticipant.updateMany({
       where: { callId, userId, state: 'joined' },
-      data: { state: 'left', leftAt: new Date() },
+      // Камера гасится вместе с выходом: иначе ушедший держал бы одно из
+      // трёх мест под видео, пока его строку не перепишет следующий вход.
+      data: { state: 'left', leftAt: new Date(), video: false },
     });
     await this.signals.clearRecipient(callId, userId);
     return this.afterRoomChanged(callId);
   }
 
-  /** Микрофон — своё состояние, которое обязаны видеть остальные. */
+  /**
+   * Микрофон и камера — своё состояние, которое обязаны видеть остальные.
+   *
+   * Меняется ТОЛЬКО то, что пришло в запросе: кнопка камеры не вправе
+   * попутно включить микрофон, который человек только что выключил.
+   *
+   * Камера, в отличие от микрофона, может получить отказ: мест под видео в
+   * комнате `GROUP_CALL_MAX_VIDEO`, и держит этот потолок сервер
+   * (`group-call-video.ts`), а не кнопка. Двое, нажавшие «камеру»
+   * одновременно на последнее свободное место, обязаны получить разные
+   * ответы, и различить их может только тот, кто видит комнату целиком.
+   *
+   * Занятие места — условный `updateMany` по ПРЕЖНЕМУ значению, а не
+   * простая запись: между решением и записью лежит запрос к базе, а API
+   * работает не в одном экземпляре. Проигравший эту гонку получает тот же
+   * 409, что и опоздавший, — а не «включилось, но у всех рассыпалось».
+   */
   async setState(
     userId: string,
     callId: string,
-    muted: boolean,
+    patch: { muted?: boolean; video?: boolean },
   ): Promise<ChatGroupCallDto> {
     const room = await this.requireRoomForMember(callId, userId);
     if (room.status === 'ended')
       throw new ConflictException(JOIN_DENIAL_TEXT.ended);
-    const updated = await this.prisma.chatGroupCallParticipant.updateMany({
-      where: { callId, userId, state: 'joined' },
-      data: { muted: Boolean(muted), lastSeenAt: new Date() },
-    });
-    if (updated.count === 0) throw new ConflictException('Вы не в этом звонке');
+
+    if (typeof patch.video === 'boolean') {
+      const decision = videoDecision(
+        toRoomParticipants(room),
+        userId,
+        patch.video,
+        Date.now(),
+        room.status,
+      );
+      if (decision.kind === 'deny')
+        throw new ConflictException(VIDEO_DENIAL_TEXT[decision.reason]);
+      if (decision.kind === 'set') {
+        const claimed = await this.prisma.chatGroupCallParticipant.updateMany({
+          where: {
+            callId,
+            userId,
+            state: 'joined',
+            // Условие по прежнему значению и есть захват места: если его
+            // уже переписал другой запрос, `count` окажется нулём.
+            video: !decision.video,
+          },
+          data: { video: decision.video, lastSeenAt: new Date() },
+        });
+        if (claimed.count === 0 && decision.video)
+          throw new ConflictException(VIDEO_DENIAL_TEXT['video-full']);
+      }
+    }
+
+    if (typeof patch.muted === 'boolean') {
+      const updated = await this.prisma.chatGroupCallParticipant.updateMany({
+        where: { callId, userId, state: 'joined' },
+        data: { muted: patch.muted, lastSeenAt: new Date() },
+      });
+      if (updated.count === 0)
+        throw new ConflictException('Вы не в этом звонке');
+    }
+
     return this.afterRoomChanged(callId);
   }
 
@@ -409,12 +479,24 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
         leftAt: null,
         lastSeenAt: now,
         muted: false,
+        // Вход всегда начинается с выключенной камеры: место под видео
+        // выпрашивается отдельным `POST /state`, и наследовать его от
+        // прошлого захода нельзя — за это время его мог занять другой.
+        video: false,
       },
     });
     // Очередь сигналов прошлого захода — не наследство нового: offer оттуда
     // уже протух.
     await this.signals.clearRecipient(room.id, userId);
-    return this.afterRoomChanged(room.id);
+    const dto = await this.afterRoomChanged(room.id);
+    // Пришёл кто-то новый. Уведомление уйдёт, только если прошлая волна
+    // была давно (`GROUP_CALL_NOTIFY_COOLDOWN_MS`): вход второго и третьего
+    // не должен рассылать беседе ещё две волны. Зато разговор, который
+    // тянется полчаса, имеет право напомнить о себе тому, кто так и не
+    // пришёл. `rejoin` сюда не попадает: тот же человек с другого экрана —
+    // не повод будить беседу.
+    await this.announce(room.id, userId);
+    return dto;
   }
 
   /**
@@ -444,6 +526,117 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Позвать в звонок тех, кого в беседе сейчас нет. Никогда не бросает:
+   * непришедшее уведомление — не повод уронить сам звонок, ради которого
+   * человек нажал кнопку.
+   */
+  private async announce(callId: string, actorId: string): Promise<void> {
+    try {
+      await this.notifyConversation(callId, actorId);
+    } catch (error) {
+      this.logger.warn(
+        `Уведомление о групповом звонке ${callId} не разослано: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Уведомление «в беседе идёт звонок».
+   *
+   * Обычное уведомление, а не нативный вызов: `chat.call-incoming` поднял бы
+   * полноэкранный входящий на один `callId`, а комната — это не дозвон, её
+   * нечем «принять», и трое в беседе дали бы три звонка на телефон. Своё имя
+   * события (`chat.group-call-started`) идёт общим конвейером модуля
+   * уведомлений — колокольчик, веб-пуш, FCM, Telegram — и ведёт в беседу,
+   * где решение войти остаётся за человеком.
+   *
+   * Наружу — только факты: название беседы и имя зовущего едут в событии,
+   * формулировку собирает `notification-copy.ts`.
+   */
+  private async notifyConversation(
+    callId: string,
+    actorId: string,
+  ): Promise<void> {
+    const now = Date.now();
+    // Право на рассылку забирается ДО всякой работы и условным апдейтом:
+    // так и от повторных волн защищает, и гонку двух инстансов решает —
+    // рассылает тот, кто первым переписал отметку.
+    const claimed = await this.prisma.chatGroupCall.updateMany({
+      where: {
+        id: callId,
+        status: 'live',
+        OR: [
+          { notifiedAt: null },
+          { notifiedAt: { lt: notifyCooldownThreshold(now) } },
+        ],
+      },
+      data: { notifiedAt: new Date(now) },
+    });
+    if (claimed.count === 0) return;
+
+    const room = await this.prisma.chatGroupCall.findUnique({
+      where: { id: callId },
+      include: roomInclude,
+    });
+    if (!room || room.status !== 'live') return;
+
+    const conversation = await this.prisma.chatConversation.findUnique({
+      where: { id: room.conversationId },
+      select: {
+        title: true,
+        members: {
+          select: { userId: true, leftAt: true, mutedUntil: true },
+        },
+      },
+    });
+    if (!conversation) return;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { name: true, spiritualName: true },
+    });
+    if (!actor) return;
+
+    const live = new Set(
+      liveParticipants(toRoomParticipants(room), now).map((p) => p.userId),
+    );
+    const leftRoomAt = new Map(
+      room.participants.map((p) => [p.userId, p.leftAt?.getTime() ?? null]),
+    );
+
+    const candidates: NotifyCandidate[] = [];
+    for (const member of conversation.members) {
+      candidates.push({
+        userId: member.userId,
+        leftConversation: Boolean(member.leftAt),
+        mutedUntil: member.mutedUntil?.getTime() ?? null,
+        inRoom: live.has(member.userId),
+        leftRoomAt: leftRoomAt.get(member.userId) ?? null,
+        // Смотрящего беседу будить нечем: плашка «идёт звонок» у него уже
+        // на экране. Присутствие спрашиваем только у тех, кто дошёл до
+        // этого места, — остальных отсеяли дешёвые проверки выше.
+        viewing: live.has(member.userId)
+          ? false
+          : await this.presence.isViewing(member.userId, room.conversationId),
+      });
+    }
+
+    const starterName = resolveDisplayName(actor);
+    const conversationTitle = conversation.title?.trim() || 'Групповая беседа';
+    for (const recipientId of groupCallNotifyTargets(candidates, now)) {
+      const event: NotificationEvent = {
+        name: 'chat.group-call-started',
+        recipientId,
+        conversationTitle,
+        conversationId: room.conversationId,
+        callId: room.id,
+        starterName,
+      };
+      this.bus.emit(event.name, event);
+    }
+  }
+
+  /**
    * Уборка мёртвых участников и, если живых не осталось, закрытие комнаты.
    * Лениво при каждом обращении — тот же приём, что у `expireIfStale`
    * звонка один на один: отдельный источник состояния не заводится,
@@ -457,8 +650,26 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     const stale = staleParticipants(participants, now);
     const nextHost = hostOf(participants, now);
     const ending = shouldEndRoom(participants, now);
+    // Штатно список пуст: выход участника мест под видео не отнимает.
+    // Непусто он бывает, когда потолок опустили правкой кода, пока комнаты
+    // уже шли, либо когда в строки залезли руками. Тогда лишние камеры
+    // гасятся сами — иначе на телефонах продолжает греться разговор,
+    // которого правила портала больше не допускают.
+    const excessVideo = videoToTurnOff(participants, now);
 
-    if (stale.length === 0 && !ending && room.hostId === nextHost) return room;
+    if (
+      stale.length === 0 &&
+      excessVideo.length === 0 &&
+      !ending &&
+      room.hostId === nextHost
+    )
+      return room;
+
+    if (excessVideo.length > 0)
+      await this.prisma.chatGroupCallParticipant.updateMany({
+        where: { callId: room.id, userId: { in: excessVideo } },
+        data: { video: false },
+      });
 
     if (stale.length > 0)
       await this.prisma.chatGroupCallParticipant.updateMany({
@@ -467,7 +678,9 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
           state: 'joined',
           userId: { in: stale.map((p) => p.userId) },
         },
-        data: { state: 'left', leftAt: new Date() },
+        // Уехавший в тоннель освобождает и место в комнате, и место под
+        // видео — по той же причине, что и вышедший сам (см. `leave`).
+        data: { state: 'left', leftAt: new Date(), video: false },
       });
 
     if (ending) {
@@ -599,10 +812,12 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
       createdAt: room.createdAt.toISOString(),
       endedAt: room.endedAt?.toISOString() ?? null,
       maxParticipants: GROUP_CALL_MAX_PARTICIPANTS,
+      maxVideoParticipants: GROUP_CALL_MAX_VIDEO,
       participants: live.map((p) => ({
         user: toUserSummary(byId.get(p.userId)!.user),
         joinedAt: new Date(p.joinedAt).toISOString(),
         muted: p.muted,
+        video: p.video,
         host: p.userId === host,
       })),
     };
@@ -618,6 +833,7 @@ function toRoomParticipants(room: RoomRow): RoomParticipant[] {
       joinedAt: p.joinedAt.getTime(),
       lastSeenAt: p.lastSeenAt.getTime(),
       muted: p.muted,
+      video: p.video,
     }));
 }
 

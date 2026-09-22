@@ -5,6 +5,7 @@ import {
   hostOf,
   isAlive,
   joinDecision,
+  liveCallByConversation,
   liveParticipants,
   meshConnectionCount,
   offerTargets,
@@ -26,6 +27,7 @@ function p(
     joinedAt: NOW + joinedAtOffset,
     lastSeenAt: NOW + lastSeenOffset,
     muted: false,
+    video: false,
   };
 }
 
@@ -189,5 +191,67 @@ describe('подпись в ленте', () => {
 
   it('никого не было — звонок не состоялся', () => {
     expect(groupCallSummaryBody(0, 0)).toBe('Групповой звонок не состоялся');
+  });
+});
+
+/**
+ * «Идёт звонок» в списке бесед. Считается по живым участникам, а не по
+ * статусу строки: комната остаётся `live` до ближайшей уборки, и отметка на
+ * замолчавшей комнате уводила бы человека в пустой звонок.
+ */
+describe('где идёт разговор', () => {
+  const room = (
+    id: string,
+    conversationId: string,
+    participants: RoomParticipant[],
+  ) => ({ id, conversationId, participants });
+
+  it('называет комнату, в которой кто-то есть', () => {
+    expect([
+      ...liveCallByConversation([room('r1', 'c1', [p('a', 0)])], NOW),
+    ]).toEqual([['c1', 'r1']]);
+  });
+
+  it('комнату, где все протухли, звонком не считает', () => {
+    expect(
+      liveCallByConversation(
+        [room('r1', 'c1', [p('a', 0, -GROUP_CALL_PARTICIPANT_TTL_MS - 1)])],
+        NOW,
+      ).size,
+    ).toBe(0);
+  });
+
+  it('комнату без участников звонком не считает', () => {
+    expect(liveCallByConversation([room('r1', 'c1', [])], NOW).size).toBe(0);
+  });
+
+  it('разводит беседы по своим комнатам', () => {
+    const map = liveCallByConversation(
+      [room('r1', 'c1', [p('a', 0)]), room('r2', 'c2', [p('b', 0)])],
+      NOW,
+    );
+    expect(map.get('c1')).toBe('r1');
+    expect(map.get('c2')).toBe('r2');
+  });
+
+  it('при двух живых комнатах в беседе берёт последнюю', () => {
+    expect(
+      liveCallByConversation(
+        [room('r1', 'c1', [p('a', 0)]), room('r2', 'c1', [p('b', 0)])],
+        NOW,
+      ).get('c1'),
+    ).toBe('r2');
+  });
+
+  it('мёртвая комната не перебивает живую', () => {
+    expect(
+      liveCallByConversation(
+        [
+          room('r1', 'c1', [p('a', 0)]),
+          room('r2', 'c1', [p('b', 0, -GROUP_CALL_PARTICIPANT_TTL_MS - 1)]),
+        ],
+        NOW,
+      ).get('c1'),
+    ).toBe('r1');
   });
 });

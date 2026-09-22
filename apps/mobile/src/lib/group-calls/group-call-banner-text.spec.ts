@@ -12,10 +12,12 @@ function room(ids: string[], over: Partial<ChatGroupCallDto> = {}): ChatGroupCal
     createdAt: '2026-09-21T10:00:00.000Z',
     endedAt: null,
     maxParticipants: 4,
+    maxVideoParticipants: 3,
     participants: ids.map((id, index) => ({
       user: { id, name: id, avatarUrl: null, lastSeenAt: null },
       joinedAt: `2026-09-21T10:0${index}:00.000Z`,
       muted: false,
+      video: false,
       host: index === 0,
     })),
     ...over,
