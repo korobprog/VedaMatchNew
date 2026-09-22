@@ -3,9 +3,11 @@ import {
   AIM_STATES,
   HELP_AFTER_MS,
   MANUAL_AFTER_MS,
+  SAME_CODE_COOLDOWN_MS,
   aimState,
   describeAim,
   scanHelp,
+  shouldAcceptBarcode,
   type AimState,
 } from './aim-state';
 
@@ -99,6 +101,58 @@ describe('describeAim', () => {
   it('состояния перечислены полностью', () => {
     const all: AimState[] = ['searching', 'unstable', 'read'];
     expect([...AIM_STATES].sort()).toEqual(all.sort());
+  });
+});
+
+describe('shouldAcceptBarcode', () => {
+  // Дефект найден живой проверкой на A51: «Проверить ещё продукт» отскакивал
+  // обратно на тот же ответ, потому что упаковка оставалась в кадре.
+  const base = { lastBarcode: '4607017099360', lastHandedAt: NOW - 100, now: NOW };
+
+  it('первый код после входа на экран принимается всегда', () => {
+    expect(
+      shouldAcceptBarcode({
+        barcode: '4607017099360',
+        lastBarcode: null,
+        lastHandedAt: null,
+        now: NOW,
+      }),
+    ).toBe(true);
+  });
+
+  it('тот же код сразу после возврата игнорируется', () => {
+    expect(shouldAcceptBarcode({ ...base, barcode: '4607017099360' })).toBe(false);
+  });
+
+  it('другой код принимается немедленно: взяли вторую пачку', () => {
+    expect(shouldAcceptBarcode({ ...base, barcode: '4600680000596' })).toBe(true);
+  });
+
+  it('после паузы тот же код снова принимается — перепроверить не запрещено', () => {
+    expect(
+      shouldAcceptBarcode({
+        barcode: '4607017099360',
+        lastBarcode: '4607017099360',
+        lastHandedAt: NOW - SAME_CODE_COOLDOWN_MS - 1,
+        now: NOW,
+      }),
+    ).toBe(true);
+  });
+
+  it('на самой границе паузы код ещё не принимается', () => {
+    expect(
+      shouldAcceptBarcode({
+        barcode: '4607017099360',
+        lastBarcode: '4607017099360',
+        lastHandedAt: NOW - SAME_CODE_COOLDOWN_MS,
+        now: NOW,
+      }),
+    ).toBe(false);
+  });
+
+  it('пауза короткая: телефон успевают отвести, но ждать её не приходится', () => {
+    expect(SAME_CODE_COOLDOWN_MS).toBeGreaterThanOrEqual(1_000);
+    expect(SAME_CODE_COOLDOWN_MS).toBeLessThanOrEqual(5_000);
   });
 });
 

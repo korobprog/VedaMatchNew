@@ -7,7 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AimFrame } from '@/components/wellness/aim-frame';
 import { CameraGate } from '@/components/wellness/camera-gate';
 import { ManualBarcodeForm } from '@/components/wellness/manual-barcode-form';
-import { aimState, scanHelp, type LookupPhase } from '@/lib/wellness/aim-state';
+import {
+  aimState,
+  scanHelp,
+  shouldAcceptBarcode,
+  type LookupPhase,
+} from '@/lib/wellness/aim-state';
 import { barcodeFromScan } from '@/lib/wellness/barcode';
 import { cameraAccess } from '@/lib/wellness/camera-access';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -69,6 +74,11 @@ export default function WellnessScanScreen() {
   // экран ответа второй раз: камера шлёт событие по нескольку раз в секунду.
   const handed = useRef(false);
 
+  // С каким кодом уже уходили на экран ответа и когда. Нужно, чтобы возврат
+  // не отскакивал обратно: упаковка при этом ещё в кадре — дефект найден
+  // живой проверкой на A51 (`shouldAcceptBarcode`).
+  const lastHanded = useRef<{ barcode: string; at: number } | null>(null);
+
   const restart = useCallback(() => {
     handed.current = false;
     setLookup('idle');
@@ -96,6 +106,7 @@ export default function WellnessScanScreen() {
   const open = useCallback((barcode: string, kind: 'barcode' | 'manual') => {
     if (handed.current) return;
     handed.current = true;
+    lastHanded.current = { barcode, at: Date.now() };
     setLookup('pending');
     // Один отклик на одно действие, в тот же момент, что и зелёная рамка.
     // Не единственная обратная связь: рамка и слово меняются всегда.
@@ -112,6 +123,18 @@ export default function WellnessScanScreen() {
         // или это вообще не про товар. Рамка жёлтая — «вижу, но не прочитал».
         setSawAt(Date.now());
         setNow(Date.now());
+        return;
+      }
+      // Тот же код сразу после возврата с ответа не принимаем: иначе до
+      // ручного ввода и истории не дотянуться, экран отскакивает раньше.
+      if (
+        !shouldAcceptBarcode({
+          barcode,
+          lastBarcode: lastHanded.current?.barcode ?? null,
+          lastHandedAt: lastHanded.current?.at ?? null,
+          now: Date.now(),
+        })
+      ) {
         return;
       }
       open(barcode, 'barcode');

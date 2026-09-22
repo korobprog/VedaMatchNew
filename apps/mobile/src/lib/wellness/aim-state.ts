@@ -114,6 +114,41 @@ export const HELP_AFTER_MS = 8_000;
  */
 export const MANUAL_AFTER_MS = 13_000;
 
+/**
+ * Сколько игнорируем ТОТ ЖЕ код после возврата с экрана ответа.
+ *
+ * Найдено живой проверкой на A51: человек нажимает «Проверить ещё продукт»,
+ * упаковка всё ещё в кадре — и сканер мгновенно уносит его обратно на тот же
+ * ответ. До кнопок «Ввести код вручную» и «Последние проверки» дотянуться
+ * нельзя вовсе: экран отскакивает раньше, чем палец доходит.
+ *
+ * Пауза короткая и снимается сама: за две с половиной секунды телефон
+ * успевают отвести, а перепроверить тот же продукт человеку никто не мешает —
+ * достаточно подержать код в кадре чуть дольше.
+ */
+export const SAME_CODE_COOLDOWN_MS = 2_500;
+
+/**
+ * Принимать ли прочитанный код. ДРУГОЙ код принимается сразу: взяли вторую
+ * пачку — ответ должен прийти немедленно, а не через паузу.
+ */
+export function shouldAcceptBarcode({
+  barcode,
+  lastBarcode,
+  lastHandedAt,
+  now,
+}: {
+  barcode: string;
+  /** Последний код, с которым уже уходили на экран ответа. */
+  lastBarcode: string | null;
+  lastHandedAt: number | null;
+  now: number;
+}): boolean {
+  if (lastBarcode === null || lastHandedAt === null) return true;
+  if (barcode !== lastBarcode) return true;
+  return now - lastHandedAt > SAME_CODE_COOLDOWN_MS;
+}
+
 export interface ScanHelp {
   /** Советы по порядку — что попробовать. Пусто, пока помогать рано. */
   hints: string[];
