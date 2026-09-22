@@ -48,6 +48,18 @@ describe('describeScanError', () => {
     const failure = describeScanError(api(503));
     expect(failure.kind).toBe('server');
     expect(failure.retryable).toBe(true);
+    expect(failure.message).toContain('недоступен');
+  });
+
+  it('503 с объяснением сервера показывает объяснение, а не «попробуйте позже»', () => {
+    // Живая проверка на A51: распознавание снимков отвечает именно так, когда
+    // провайдер не настроен, и «попробуйте позже» отправляло человека ждать
+    // того, что само не починится.
+    const failure = describeScanError(
+      api(503, 'Распознавание снимков не настроено — введите состав вручную'),
+    );
+    expect(failure.message).toContain('введите состав вручную');
+    expect(failure.message).not.toContain('позже');
   });
 
   it('кнопка «Повторить» показывается только там, где повтор помогает', () => {
