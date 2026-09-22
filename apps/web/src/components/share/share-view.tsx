@@ -29,6 +29,7 @@ import { shareFileName, toJpeg } from "./share-file";
 export function ShareView({
   text,
   source,
+  sourceInPreview = false,
   link,
   previewUrl,
   filePath,
@@ -36,6 +37,18 @@ export function ShareView({
 }: {
   text: string;
   source: string | null;
+  /**
+   * Строка источника уже стоит заголовком превью самой ссылки — тогда в тело
+   * сообщения её дописывать нельзя (VED-357: «Исключи любой дубляж текста при
+   * отображении рилса во время пересылки»). На экране она всё равно видна, и
+   * в карточку для чата уезжает как была: дубль возникает только в
+   * мессенджере, где строка стоит и в тексте, и заголовком превью.
+   *
+   * Знает об этом только сервис: что попадёт в заголовок превью, решает его
+   * собственный `generateMetadata()`, а этот экран портальный и чужих
+   * метатегов не читает.
+   */
+  sourceInPreview?: boolean;
   link: string;
   previewUrl: string | null;
   /** Путь к файлу на нашем домене; null — картинки у карточки нет. */
@@ -49,7 +62,9 @@ export function ShareView({
   const [prepared, setPrepared] = useState<{ file: File; url: string } | null>(
     null,
   );
-  const message = shareText({ text, source, link });
+  /** Источник для тела сообщения: пусто, если он уже в заголовке превью. */
+  const messageSource = sourceInPreview ? null : source;
+  const message = shareText({ text, source: messageSource, link });
   const file = isOwnFile(filePath) ? filePath : null;
 
   /* Готовим картинку сразу при открытии экрана (VED-156): шторка
@@ -159,7 +174,7 @@ export function ShareView({
   ) {
     // Текст без ссылки: в схеме приложения адрес идёт отдельным полем — так
     // же, как в адресе сайта выше, иначе ссылка уедет в сообщение дважды.
-    const app = messengerAppLink(target, link, shareText({ text, source }));
+    const app = messengerAppLink(target, link, shareText({ text, source: messageSource }));
     const mode = detectDisplayMode(
       (query) => window.matchMedia(query),
       (window.navigator as { standalone?: boolean }).standalone,
@@ -252,7 +267,7 @@ export function ShareView({
           {MESSENGERS.map((target) => (
             <a
               key={target}
-              href={messengerLink(target, link, shareText({ text, source }))}
+              href={messengerLink(target, link, shareText({ text, source: messageSource }))}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(event) => openMessenger(event, target)}

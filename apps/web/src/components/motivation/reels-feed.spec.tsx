@@ -368,6 +368,25 @@ describe("ReelsFeed", () => {
     expect(query.get("file")).toBe("/m/a/story");
   });
 
+  /**
+   * VED-357: «Исключи любой дубляж текста при отображении рилса во время
+   * пересылки». Источник уже стоит заголовком превью ссылки `/m/<slug>` —
+   * его ставит `buildShareMeta()`. Значит, в тело сообщения он не идёт, и
+   * экрану «Поделиться» об этом говорит сам адрес: чужих метатегов тот не
+   * читает.
+   */
+  it("источник не уезжает в текст сообщения — он уже заголовок превью", () => {
+    fetchOk({});
+    render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
+
+    const href = screen.getByRole("link", { name: "Поделиться афоризмом" }).getAttribute("href") ?? "";
+    const query = new URLSearchParams(href.slice(href.indexOf("?") + 1));
+    expect(query.get("subtitleInPreview")).toBe("1");
+    // Сам источник из адреса не пропадает: он нужен карточке для чата и
+    // подписью на экране «Поделиться» — там превью ссылки нет.
+    expect(query.get("subtitle")).toBe("Кришна · Бхагавад-гита · 2.47");
+  });
+
   it("открытка без набранного текста делится заголовком, а не пустотой (VED-205)", () => {
     // Экран /share без text уводит на главную — у открытки текст на картинке.
     fetchOk({});

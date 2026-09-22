@@ -5,6 +5,8 @@ import { categoryLink } from "@/components/motivation/feed-style";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 import {
   OG_IMAGE_TYPE,
+  OG_PREVIEW_HEIGHT,
+  OG_PREVIEW_WIDTH,
   ogImagePath,
   ogImageSource,
 } from "@/lib/motivation-og-image";
@@ -37,11 +39,21 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: post.videoUrl ? "video.other" : "article",
       title: shareTitle,
       description,
-      // Без `width`/`height`: кадр превью повторяет пропорции самой
-      // картинки и у каждого поста свой (VED-201). Соврать про размер хуже,
-      // чем промолчать, — бот читает настоящий из файла.
+      // Размеры объявлены (VED-357). Раньше их здесь не было: кадр повторял
+      // пропорции картинки и у каждого поста был свой, а врать про размер
+      // хуже, чем молчать. Но молчание стоило дорого — WhatsApp сворачивал
+      // вертикальную карточку в миниатюру сбоку. Теперь кадр у всех один,
+      // альбомный 1200×630 (`motivation-og-image.ts`), и числа честные.
       images: poster
-        ? [{ url: poster, type: OG_IMAGE_TYPE, alt: shareTitle }]
+        ? [
+            {
+              url: poster,
+              type: OG_IMAGE_TYPE,
+              width: OG_PREVIEW_WIDTH,
+              height: OG_PREVIEW_HEIGHT,
+              alt: shareTitle,
+            },
+          ]
         : [],
       ...(post.videoUrl
         ? { videos: [{ url: post.videoUrl, type: "video/mp4", width: 1080, height: 1920 }] }
