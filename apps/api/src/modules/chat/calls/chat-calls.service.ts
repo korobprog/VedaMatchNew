@@ -305,7 +305,11 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
       type: 'call.ringing',
       call: dtoOut,
     });
-    this.notifyIncoming(row, companion.mutedUntil);
+    // Беззвучная беседа звонок больше не гасит (VED-361): «без звука» — это
+    // про поток сообщений, а вызов ждать до утра нельзя. Выключить звонки
+    // человек может отдельным тумблером «Звонки» в настройках уведомлений —
+    // его уважает доставка (`notifications/delivery-rule.ts`).
+    this.notifyIncoming(row);
     this.armRingTimer(row.id);
     return dtoOut;
   }
@@ -730,8 +734,7 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     return Boolean(block);
   }
 
-  private notifyIncoming(row: ChatCallRow, mutedUntil: Date | null): void {
-    if (mutedUntil && mutedUntil > new Date()) return;
+  private notifyIncoming(row: ChatCallRow): void {
     const event: NotificationEvent = {
       name: 'chat.call-incoming',
       recipientId: row.calleeId,

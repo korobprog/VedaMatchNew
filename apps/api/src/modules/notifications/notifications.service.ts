@@ -42,6 +42,7 @@ import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 const defaults: NotificationPreferencesDto = {
   enabled: true,
   chat: true,
+  calls: true,
   connections: true,
   support: true,
   transits: true,
@@ -369,6 +370,7 @@ export class NotificationsService {
     return {
       enabled: row.enabled,
       chat: row.chat,
+      calls: row.calls,
       connections: row.connections,
       support: row.support,
       transits: row.transits,
@@ -391,6 +393,7 @@ export class NotificationsService {
     const next: NotificationPreferencesDto = {
       enabled: patch.enabled ?? current.enabled,
       chat: patch.chat ?? current.chat,
+      calls: patch.calls ?? current.calls,
       connections: patch.connections ?? current.connections,
       support: patch.support ?? current.support,
       transits: patch.transits ?? current.transits,

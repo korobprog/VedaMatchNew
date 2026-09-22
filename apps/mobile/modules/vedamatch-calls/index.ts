@@ -160,6 +160,10 @@ declare class VedamatchCallsNativeModule extends NativeModule<VedamatchCallsEven
    *  отсутствующие — no-op. Прод-баг 2026-09-19: соединение, о котором
    *  сервер не знает, иначе держало «занято» до принудительной остановки. */
   endConnections(callIds: string[]): void;
+  /** VED-361: завести категорию уведомлений «Звонки» заранее — до первого
+   *  звонка. Идемпотентно. Без неё категории нет в системных настройках, а
+   *  пуш сервера в канал `calls` Android кладёт в служебный `fallback`. */
+  ensureCallChannel(): void;
   /** Android 14+: может ли приложение показать полноэкранный intent без
    *  ручного разрешения в настройках (`NotificationManager.canUseFullScreenIntent`).
    *  На более старых версиях всегда `true` — разрешение появилось только в 14. */

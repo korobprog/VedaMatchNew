@@ -24,6 +24,9 @@ const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   announcements: 'От администрации',
   notices: 'Объявления',
   chat: 'Общение',
+  // Своя подпись, а не «Общение» (VED-361): у звонков свой выключатель, и в
+  // ленте они должны отличаться от переписки так же, как в настройках.
+  calls: 'Звонки',
   connections: 'Союз',
   support: 'Поддержка',
   transits: 'Астрология',

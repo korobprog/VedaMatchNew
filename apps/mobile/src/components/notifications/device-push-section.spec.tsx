@@ -16,6 +16,9 @@ import { DevicePushSection } from './device-push-section';
 const mockStatus = jest.fn<Promise<NotificationDeliveryStatusDto>, []>();
 const mockRegister = jest.fn(async () => 'registered' as const);
 const mockChannel = jest.fn(async () => 'on' as 'on' | 'off' | 'unknown');
+/** Категория «Звонки» (VED-361); по умолчанию такая же, как «Сообщения». */
+const mockCallsChannel = jest.fn(async () => 'on' as 'on' | 'off' | 'unknown');
+const mockOpenCallsChannelSettings = jest.fn(async () => undefined);
 const mockOpenSettings = jest.fn(async () => undefined);
 const mockOpenChannelSettings = jest.fn(async () => undefined);
 
@@ -51,9 +54,13 @@ jest.mock('@/lib/push/device-registration', () => ({
 
 jest.mock('@/lib/push/notification-channel', () => ({
   __esModule: true,
-  readMessagesChannel: () => mockChannel(),
+  readNotificationChannels: async () => ({
+    messages: await mockChannel(),
+    calls: await mockCallsChannel(),
+  }),
   openNotificationSettings: () => mockOpenSettings(),
   openMessagesChannelSettings: () => mockOpenChannelSettings(),
+  openCallsChannelSettings: () => mockOpenCallsChannelSettings(),
 }));
 
 const nothing: NotificationDeliveryStatusDto = {
@@ -105,6 +112,9 @@ beforeEach(() => {
   mockRegister.mockClear();
   mockChannel.mockClear();
   mockChannel.mockResolvedValue('on');
+  mockCallsChannel.mockClear();
+  mockCallsChannel.mockResolvedValue('on');
+  mockOpenCallsChannelSettings.mockClear();
   mockOpenSettings.mockClear();
   mockOpenChannelSettings.mockClear();
   // Нативная сборка — Android; на iOS раздел не рисуется вовсе.
@@ -178,10 +188,42 @@ describe('DevicePushSection', () => {
 
     const renderer = await render();
     expect(texts(renderer)).toContain('Категория «Сообщения» выключена');
+    // VED-361: звонки при этом звонят, и раздел обязан это сказать.
+    expect(texts(renderer)).toContain('Звонки при этом продолжат звонить');
 
     await act(async () => button(renderer)?.props.onPress());
     expect(mockOpenChannelSettings).toHaveBeenCalledTimes(1);
     expect(mockOpenSettings).not.toHaveBeenCalled();
+    expect(mockOpenCallsChannelSettings).not.toHaveBeenCalled();
+  });
+
+  it('категория «Звонки» выключена — ведёт в её настройки, а не в «Сообщения»', async () => {
+    mockStatus.mockResolvedValue({ ...nothing, app: 1, reachable: true });
+    mockCallsChannel.mockResolvedValue('off');
+    setPushRegistration('registered');
+
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Категория «Звонки» выключена');
+    expect(texts(renderer)).toContain('Сообщения при этом приходят');
+
+    await act(async () => button(renderer)?.props.onPress());
+    expect(mockOpenCallsChannelSettings).toHaveBeenCalledTimes(1);
+    expect(mockOpenChannelSettings).not.toHaveBeenCalled();
+  });
+
+  it('выключены обе категории — ведём на экран уведомлений, где они обе', async () => {
+    mockStatus.mockResolvedValue({ ...nothing, app: 1, reachable: true });
+    mockChannel.mockResolvedValue('off');
+    mockCallsChannel.mockResolvedValue('off');
+    setPushRegistration('registered');
+
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Категории «Сообщения» и «Звонки» выключены');
+
+    await act(async () => button(renderer)?.props.onPress());
+    expect(mockOpenSettings).toHaveBeenCalledTimes(1);
+    expect(mockOpenChannelSettings).not.toHaveBeenCalled();
+    expect(mockOpenCallsChannelSettings).not.toHaveBeenCalled();
   });
 
   it('сборка без ключей Firebase — ни кнопки, ни ложных обещаний', async () => {

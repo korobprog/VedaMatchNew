@@ -1,4 +1,5 @@
 import { createSign } from 'node:crypto';
+import { ANDROID_MESSAGES_CHANNEL_ID } from './android-channel';
 import type { PushFailure } from './push-errors';
 
 /**
@@ -12,8 +13,12 @@ import type { PushFailure } from './push-errors';
 
 export const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-/** Канал уведомлений Android, его же создаёт приложение. */
-export const ANDROID_CHANNEL_ID = 'messages';
+/**
+ * Канал уведомлений Android по умолчанию — «Сообщения», его же создаёт
+ * приложение. Звонки с VED-361 идут своим каналом: идентификаторы и правило
+ * выбора живут в `android-channel.ts`, сюда канал приходит аргументом.
+ */
+export const ANDROID_CHANNEL_ID = ANDROID_MESSAGES_CHANNEL_ID;
 
 /** Тип в `data` FCM-сообщения — им приложение различает пуши между собой. */
 export const CALL_PUSH_TYPE_INCOMING = 'call.incoming';
@@ -102,7 +107,17 @@ export function signServiceAccountAssertion(
  * Сообщение для одного телефона. Значения `data` в FCM обязаны быть строками.
  * `tag` склеивает уведомления одной беседы в одно, как у веб-пушей.
  */
-export function buildFcmMessage(token: string, payload: PushPayload) {
+export function buildFcmMessage(
+  token: string,
+  payload: PushPayload,
+  /**
+   * Категория уведомлений Android. По умолчанию «Сообщения» — так вели себя
+   * все пуши до VED-361, и так же ведут себя те, кому канал не выбрали.
+   * Звонковый пуш обязан приходить со своим каналом: иначе выключенные
+   * «Сообщения» гасят и его.
+   */
+  channelId: string = ANDROID_MESSAGES_CHANNEL_ID,
+) {
   return {
     message: {
       token,
@@ -110,7 +125,7 @@ export function buildFcmMessage(token: string, payload: PushPayload) {
       data: { url: payload.url, tag: payload.tag },
       android: {
         priority: 'high',
-        notification: { channel_id: ANDROID_CHANNEL_ID, tag: payload.tag },
+        notification: { channel_id: channelId, tag: payload.tag },
       },
     },
   };

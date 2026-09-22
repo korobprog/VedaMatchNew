@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
+import type { NotificationPreferencesDto } from '@vedamatch/shared';
 import {
   AUTH_TELEGRAM_CONNECTED_EVENT,
   AUTH_TELEGRAM_DISCONNECTED_EVENT,
@@ -24,14 +25,12 @@ const chatEvent = {
 } as const;
 
 function createListener(options: {
-  preferences?: Partial<{
-    enabled: boolean;
-    chat: boolean;
-    connections: boolean;
-    support: boolean;
-    announcements: boolean;
-    telegram: boolean;
-  }>;
+  /**
+   * Тумблеры берутся из общего типа, а не перечисляются здесь руками: список
+   * полей вручную уже отстал от жизни на «Звонках» (VED-361) — тест
+   * компилировался, а CI падал. Новая категория теперь ломает сборку сама.
+   */
+  preferences?: Partial<NotificationPreferencesDto>;
   sendResult?: 'gone' | 'rate-limited' | 'transient' | null;
   /** Пустой массив — устройство не подписано на пуш. */
   subscriptions?: Array<{
@@ -56,6 +55,9 @@ function createListener(options: {
       Promise.resolve({
         enabled: true,
         chat: true,
+        // Звонки — своя категория (VED-361): без неё `preferences.calls`
+        // был бы `undefined`, и доставка молча гасила бы вызовы.
+        calls: true,
         connections: true,
         support: true,
         telegram: true,
@@ -209,7 +211,7 @@ describe('NotificationsListener.deliver', () => {
   it('кладёт значок состояния в колокольчик, но не в пуш (VED-272)', async () => {
     const { listener, inbox, sent } = createListener({
       // `work` в наборе по умолчанию нет, а без тумблера доставка молчит.
-      preferences: { work: true } as Record<string, boolean>,
+      preferences: { work: true },
     });
 
     await listener.deliver({
@@ -309,6 +311,85 @@ describe('NotificationsListener.deliver', () => {
     await expect(listener.deliver(chatEvent)).resolves.toBeUndefined();
   });
 
+  /**
+   * VED-361: тумблеры «Сообщения» и «Звонки» независимы. Раньше звонок шёл
+   * категорией `chat`, и человек, выключивший переписку, о входящем при
+   * закрытом приложении не узнавал вовсе.
+   */
+  const callEvent = {
+    name: 'chat.call-incoming',
+    recipientId: 'user-1',
+    callerName: 'Радха',
+    callerAvatarUrl: null,
+    callId: 'call-1',
+    conversationId: 'conv-1',
+    callKind: 'audio',
+    expiresAt: '2026-09-17T10:00:45.000Z',
+  } as const;
+
+  it('звонок звонит, когда выключены «Сообщения»', async () => {
+    const { listener, nativePush, inbox } = createListener({
+      preferences: { chat: false, calls: true },
+    });
+
+    await listener.deliver(callEvent);
+
+    expect(nativePush.sendCallIncoming).toHaveBeenCalledTimes(1);
+    expect(inbox).toHaveLength(1);
+  });
+
+  it('звонок молчит, когда выключены «Звонки»', async () => {
+    const { listener, nativePush, sender, inbox } = createListener({
+      preferences: { calls: false },
+    });
+
+    await listener.deliver(callEvent);
+
+    expect(nativePush.sendCallIncoming).not.toHaveBeenCalled();
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(inbox).toEqual([]);
+  });
+
+  it('сообщение приходит, когда выключены «Звонки»', async () => {
+    const { listener, sender } = createListener({
+      preferences: { calls: false },
+    });
+
+    await listener.deliver(chatEvent);
+
+    expect(sender.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('обе категории выключены — не приходит ничего', async () => {
+    const { listener, nativePush, sender } = createListener({
+      preferences: { chat: false, calls: false },
+    });
+
+    await listener.deliver(callEvent);
+    await listener.deliver(chatEvent);
+
+    expect(nativePush.sendCallIncoming).not.toHaveBeenCalled();
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it('пропущенный звонок выключается тумблером звонков, а не переписки', async () => {
+    const missed = {
+      name: 'chat.call-missed',
+      recipientId: 'user-1',
+      callerName: 'Радха',
+      conversationId: 'conv-1',
+      callKind: 'audio',
+    } as const;
+
+    const quietChat = createListener({ preferences: { chat: false } });
+    await quietChat.listener.deliver(missed);
+    expect(quietChat.sender.send).toHaveBeenCalledTimes(1);
+
+    const quietCalls = createListener({ preferences: { calls: false } });
+    await quietCalls.listener.deliver(missed);
+    expect(quietCalls.sender.send).not.toHaveBeenCalled();
+  });
+
   it('входящий звонок идёт через sendCallIncoming, а не sendToUsers', async () => {
     const { listener, nativePush } = createListener({});
 
@@ -359,12 +440,18 @@ describe('NotificationsListener.deliver', () => {
     // открыта постоянно, «принять» её нечем, и трое в беседе означали бы
     // три звонка на телефон.
     expect(nativePush.sendCallIncoming).not.toHaveBeenCalled();
-    expect(nativePush.sendToUsers).toHaveBeenCalledWith(['user-1'], {
-      title: 'Вайшнавы Москвы',
-      body: 'Радха зовёт в групповой звонок',
-      url: '/chat/conv-1',
-      tag: 'group-call:room-1',
-    });
+    expect(nativePush.sendToUsers).toHaveBeenCalledWith(
+      ['user-1'],
+      {
+        title: 'Вайшнавы Москвы',
+        body: 'Радха зовёт в групповой звонок',
+        url: '/chat/conv-1',
+        tag: 'group-call:room-1',
+      },
+      // Канал «Звонки» (VED-361): обычный пуш, но выключается он вместе с
+      // остальными звонками, а не вместе с перепиской.
+      'calls',
+    );
   });
 
   it('прочие события всё ещё идут через sendToUsers', async () => {

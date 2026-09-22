@@ -15,6 +15,7 @@ import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { InlineError } from '@/components/inline-error';
 import { DevicePushSection } from '@/components/notifications/device-push-section';
+import { NotificationSwitchesSection } from '@/components/notifications/notification-switches-section';
 import { RetryButton } from '@/components/retry-button';
 import {
   accountEmailLabel,
@@ -417,6 +418,11 @@ export default function AccountScreen() {
             сделать (VED-329). Разные файлы рядом, Metro выбирает по
             платформе. */}
         <DevicePushSection />
+
+        {/* О чём уведомлять: «Сообщения» и «Звонки» порознь (VED-361).
+            Остальные категории остаются на сайте — сюда вынесены те два
+            тумблера, ради которых человек и открывает настройки на телефоне. */}
+        <NotificationSwitchesSection />
 
         <TelegramNotificationsSection
           connected={telegramStatus?.connected ?? false}

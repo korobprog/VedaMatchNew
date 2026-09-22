@@ -582,7 +582,17 @@ Expo Modules API (Kotlin), локальный модуль (автолинкуе
   системными средствами (гарнитура, Bluetooth, Android Auto), не наша
   кнопка в уведомлении (та отвечает напрямую, см. ниже).
 - `CallNotifications.kt` — канал «Звонки» (`IMPORTANCE_HIGH`, вибрация,
-  системный рингтон по умолчанию — см. «Отклонение» ниже про WAV),
+  системный рингтон по умолчанию — см. «Отклонение» ниже про WAV). С VED-361
+  он заводится не при первом звонке, а при регистрации телефона точкой
+  доставки: `ensureCallChannel` у модуля → `native-call-bridge.ts` →
+  `push/device-registration.ts`. Причина — сервер с той же карточки шлёт
+  звонковые пуши (`chat.call-incoming` для устройств без нативного экрана,
+  `chat.call-missed`, `chat.group-call-started`) в канал `calls`, а пуш в
+  незаведённый канал Android кладёт в служебный `fallback`: ни звука
+  звонка, ни тумблера в списке категорий приложения. Заводить канал из JS
+  нельзя — `expo-notifications` не умеет ни системный рингтон, ни
+  `VISIBILITY_PUBLIC`, а канал, созданный первым, Android потом уже не
+  переопределяет. Сам файл строит
   `NotificationCompat.CallStyle.forIncomingCall` на API 31+, обычные две
   кнопки действий на более старых, `fullScreenIntent` на главную `Activity`
   приложения (берётся через `getLaunchIntentForPackage`, не по имени класса:

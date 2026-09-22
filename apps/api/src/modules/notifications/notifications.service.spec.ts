@@ -272,6 +272,7 @@ describe('NotificationsService.getPreferences', () => {
     await expect(service.getPreferences('user-1')).resolves.toEqual({
       enabled: true,
       chat: true,
+      calls: true,
       connections: true,
       support: true,
       transits: true,
@@ -315,6 +316,9 @@ describe('NotificationsService.updatePreferences', () => {
     ).resolves.toEqual({
       enabled: true,
       chat: false,
+      // Патч про переписку звонков не касается (VED-361): они остаются
+      // включёнными, даже когда «Сообщения» выключили.
+      calls: true,
       connections: true,
       support: true,
       transits: true,

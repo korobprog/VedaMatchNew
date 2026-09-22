@@ -1,12 +1,25 @@
 import { getMessaging, getToken } from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
 import { appVariant } from '@/config/app-variant';
+import { ensureCallNotificationChannel } from '@/lib/calls/native-call-bridge';
 import type { ApiClient } from '@/lib/api/client';
 import { registerDevice } from './push-api';
 import { setPushRegistration, type PushRegistration } from './push-registration';
 
 /** Тот же идентификатор канала, что шлёт сервер в `android.notification.channel_id`. */
 export const CHANNEL_ID = 'messages';
+
+/**
+ * Категория «Звонки» (VED-361). Отдельный канал, а не важность внутри
+ * «Сообщений»: категория — единица, которой Android даёт человеку тумблер,
+ * звук и режим «не беспокоить». Пока канал был один, выключенные «Сообщения»
+ * гасили и входящий вызов, причём молча — сервер честно слал, система прятала.
+ *
+ * Идентификатор совпадает со строкой сервера
+ * (`apps/api/.../notifications/android-channel.ts`): пуш в незаведённый канал
+ * Android кладёт в служебный `fallback`, где ни звука звонка, ни настройки.
+ */
+export const CALLS_CHANNEL_ID = 'calls';
 
 /**
  * Регистрация телефона точкой доставки: канал Android, разрешение, токен FCM
@@ -44,15 +57,39 @@ export async function registerThisDevice(
 
 const never = (): boolean => false;
 
+/**
+ * Две категории уведомлений: «Сообщения» и «Звонки» (VED-361).
+ *
+ * «Сообщения» заводит `expo-notifications` — как и раньше. «Звонки» заводит
+ * нативный модуль звонков: канал `calls` у него уже есть (рингтон, вибрация,
+ * показ на экране блокировки, `CallNotifications.kt`), но создавался он
+ * лениво — при первом входящем. Из-за этого категории не было в системных
+ * настройках, пока человеку впервые не позвонят, а пуш сервера в канал
+ * `calls` (пропущенный, зов в комнату, фолбэк) Android клал в служебный
+ * `fallback`. Завести его тут своими руками нельзя: `expo-notifications` не
+ * умеет ни системный рингтон, ни `VISIBILITY_PUBLIC`, а канал, созданный
+ * первым, потом уже не переопределить — нативное определение оказалось бы
+ * подменено худшим.
+ *
+ * Отдельная функция, а не строки внутри `attempt`: каналы заводятся и при
+ * первом запуске, и по кнопке «Зарегистрировать заново», и проверяются
+ * тестом (`device-registration.spec.ts`) без всей регистрации целиком.
+ */
+export async function createChannels(): Promise<void> {
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    name: 'Сообщения',
+    description: 'Переписка, заявки и новости. Звонки — отдельная категория.',
+    importance: Notifications.AndroidImportance.HIGH,
+  });
+  ensureCallNotificationChannel();
+}
+
 async function attempt(
   api: ApiClient,
   isCancelled: () => boolean,
 ): Promise<PushRegistration> {
-  // Канал нужен до запроса разрешения: без него Android 13 не покажет окно.
-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: 'Сообщения',
-    importance: Notifications.AndroidImportance.HIGH,
-  });
+  // Каналы нужны до запроса разрешения: без них Android 13 не покажет окно.
+  await createChannels();
   const current = await Notifications.getPermissionsAsync();
   const granted =
     current.granted || (current.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);

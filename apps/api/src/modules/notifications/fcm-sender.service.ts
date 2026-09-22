@@ -54,9 +54,14 @@ export class FcmSenderService {
   }
 
   /** Никогда не бросает: вызывается из слушателей событий и воркера. */
-  async send(token: string, payload: PushPayload): Promise<PushFailure | null> {
+  async send(
+    token: string,
+    payload: PushPayload,
+    /** Канал Android; по умолчанию «Сообщения» (`android-channel.ts`). */
+    channelId?: string,
+  ): Promise<PushFailure | null> {
     if (!this.account) return 'transient';
-    return this.post(buildFcmMessage(token, payload));
+    return this.post(buildFcmMessage(token, payload, channelId));
   }
 
   /**

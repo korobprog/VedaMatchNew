@@ -148,9 +148,11 @@ describe('NativePushService.sendCallIncoming', () => {
     expect(fcm.sendRaw.mock.calls[0][0].message.data.type).toBe(
       'call.incoming',
     );
-    // Обычному — тот же payload, что ушёл бы веб-браузеру.
+    // Обычному — тот же payload, что ушёл бы веб-браузеру, но каналом
+    // «Звонки» (VED-361): в канале «Сообщения» его прятал бы выключенный
+    // тумблер переписки.
     expect(fcm.send).toHaveBeenCalledTimes(1);
-    expect(fcm.send).toHaveBeenCalledWith('legacy1', payload);
+    expect(fcm.send).toHaveBeenCalledWith('legacy1', payload, 'calls');
   });
 
   it('мёртвый токен нативного устройства уходит в конвейер как gone', async () => {

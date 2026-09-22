@@ -250,6 +250,21 @@ export function consumeLaunchCall(): LaunchCall | null {
   return VedamatchCalls.getLaunchCall();
 }
 
+/**
+ * VED-361: категория уведомлений «Звонки» заводится при регистрации телефона,
+ * а не при первом звонке.
+ *
+ * Определение канала целиком нативное (`CallNotifications.ensureChannel`):
+ * системный рингтон и показ на экране блокировки из `expo-notifications` не
+ * выставить, а канал, созданный первым, Android потом уже не переопределяет —
+ * заведи его отсюда попроще, и полноэкранный входящий зазвучал бы обычным
+ * уведомлением. Вне Android — молча ничего: там нет ни модуля, ни каналов.
+ */
+export function ensureCallNotificationChannel(): void {
+  if (!SUPPORTED) return;
+  VedamatchCalls.ensureCallChannel();
+}
+
 export function canUseFullScreenIntent(): boolean {
   if (!SUPPORTED) return true;
   return VedamatchCalls.canUseFullScreenIntent();

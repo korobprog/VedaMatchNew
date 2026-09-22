@@ -239,7 +239,9 @@ export function buildNotification(
         // покажет экран входящего, даже если поток событий ещё не поднялся.
         url: `/chat/${event.conversationId}?call=${event.callId}`,
         tag: `call:${event.callId}`,
-        category: 'chat',
+        // Не `chat` (VED-361): выключенные «Сообщения» гасили и входящий
+        // звонок — при закрытом приложении телефон о нём не узнавал вовсе.
+        category: 'calls',
       };
     case 'chat.call-missed':
       return {
@@ -250,7 +252,9 @@ export function buildNotification(
             : 'Пропущенный аудиозвонок',
         url: `/chat/${event.conversationId}`,
         tag: `call-missed:${event.conversationId}`,
-        category: 'chat',
+        // Пропущенный — тот же разговор про звонки: с входящим он обязан
+        // включаться и выключаться одним тумблером (VED-361).
+        category: 'calls',
       };
     case 'chat.group-call-started':
       return {
@@ -275,7 +279,10 @@ export function buildNotification(
         // `call:` — по `call:` `sw.js` рисует кнопки «Ответить/Отклонить»
         // и держит уведомление на экране, чего групповому звонку не нужно.
         tag: `group-call:${event.callId}`,
-        category: 'chat',
+        // Зов в комнату — тоже звонок (VED-361). Заглушённая беседа его
+        // по-прежнему не поднимает: это приглашение группы, а не вызов лично
+        // тебе, — см. `group-call-notify.ts`.
+        category: 'calls',
       };
     case 'portal.welcome':
       return {
