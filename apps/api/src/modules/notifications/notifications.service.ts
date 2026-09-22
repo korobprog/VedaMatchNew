@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   NotificationCategory,
   NotificationInboxResponse,
@@ -7,6 +11,7 @@ import type {
   NotificationPreferencesDto,
   NotificationDeviceStats,
   NotificationDeliveryStatusDto,
+  NotificationReadStateResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
 } from '@vedamatch/shared';
@@ -536,5 +541,52 @@ export class NotificationsService {
       },
       data: { readAt: new Date() },
     });
+  }
+
+  /**
+   * Своя отметка у одного уведомления (VED-143), в обе стороны.
+   *
+   * Зачем отдельный маршрут, когда есть `markRead(userId, [id])`: тот умеет
+   * только в одну сторону и ничего не возвращает. Кнопка на карточке обязана
+   * откатываться — промах по соседней карточке на телефоне обычнее попадания,
+   * — и обязана сразу гасить значок на колокольчике, а для этого ей нужен
+   * счётчик в том же ответе.
+   *
+   * Чужое уведомление не найдётся: `userId` стоит в условии выборки, а не
+   * проверяется после неё, поэтому по чужому `id` приходит 404, а не 403 —
+   * отличать «нет такого» от «есть, но не ваше» посторонний не должен.
+   *
+   * `readAt` у уже прочитанного не переставляется: повторное нажатие на ту же
+   * сторону — не событие. На порядок ленты это не влияет (VED-153 сортирует по
+   * `createdAt`), но дата прочтения — это ответ на вопрос «когда я это
+   * видел», и обновлять её задним числом незачем.
+   */
+  async setReadState(
+    userId: string,
+    id: string,
+    read: boolean,
+  ): Promise<NotificationReadStateResponse> {
+    const current = await this.prisma.notificationItem.findFirst({
+      where: { id, userId },
+      select: { id: true, readAt: true },
+    });
+    if (!current) throw new NotFoundException('Уведомление не найдено');
+
+    const readAt = read ? (current.readAt ?? new Date()) : null;
+    if (readAt?.getTime() !== current.readAt?.getTime()) {
+      await this.prisma.notificationItem.update({
+        where: { id: current.id },
+        data: { readAt },
+      });
+    }
+
+    return {
+      id: current.id,
+      readAt: readAt?.toISOString() ?? null,
+      // Счётчик перечитывается, а не считается арифметикой от прежнего: между
+      // открытием страницы и нажатием кнопки уведомления приходят и гаснут в
+      // других вкладках, и «минус один» разошёлся бы с колокольчиком.
+      unreadCount: await this.countUnread(userId),
+    };
   }
 }

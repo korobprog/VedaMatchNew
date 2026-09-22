@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Headers,
+  Param,
   Patch,
   Post,
   Query,
@@ -15,6 +17,8 @@ import type {
   NotificationDeliveryStatusDto,
   NotificationInboxResponse,
   NotificationPreferencesDto,
+  NotificationReadStateRequest,
+  NotificationReadStateResponse,
   NotificationUnreadCountResponse,
   PushSubscriptionRequest,
   RegisterNotificationDeviceRequest,
@@ -120,6 +124,31 @@ export class NotificationsController {
   ): Promise<{ ok: true }> {
     await this.notifications.markRead(user.sub, body?.ids);
     return { ok: true };
+  }
+
+  /**
+   * Своя отметка у одного уведомления (VED-143), в обе стороны.
+   *
+   * Отдельно от `POST inbox/read`: тот помечает пачку и только прочитанным, а
+   * здесь нужен откат («Вернуть в непрочитанные») и свежий счётчик в ответе —
+   * значок на колокольчике гаснет и загорается вместе с кнопкой, без второго
+   * запроса и без перезагрузки страницы.
+   *
+   * `read` проверяется руками, а не `ParseBoolPipe`: тело приходит из JSON,
+   * где `true`/`false` уже булевы, и строка «true» здесь означала бы, что
+   * клиент шлёт не то, что обещал. Молча считать её истиной нельзя — отметка
+   * не должна ставиться от опечатки.
+   */
+  @UseGuards(AuthGuard)
+  @Patch('inbox/:id/read')
+  setReadState(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: NotificationReadStateRequest,
+  ): Promise<NotificationReadStateResponse> {
+    if (typeof body?.read !== 'boolean')
+      throw new BadRequestException('Поле read должно быть true или false');
+    return this.notifications.setReadState(user.sub, id, body.read);
   }
 
   /**

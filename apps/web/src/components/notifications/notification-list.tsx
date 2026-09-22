@@ -8,6 +8,16 @@
  * а остальных нет, хотя до них ещё не дошли руки. Прочитанное не исчезает
  * сразу, а лежит ниже, приглушённое, неделю; погасить всё разом можно кнопкой.
  *
+ * У каждой карточки своя отметка (VED-143) — кнопка справа, в обе стороны.
+ * Оптом было только «Отметить все прочитанными», а человеку нужно разобрать
+ * ленту по одному: одно прочитал, к другому вернётся. Кнопка обратима, потому
+ * что промахнуться по соседней карточке на телефоне проще, чем попасть.
+ *
+ * Нажатая карточка остаётся на месте и меняет вид, а не место: уехать в
+ * «Прочитанное» по правилу VED-153 значило бы прыгнуть из-под пальца вниз за
+ * экран вместе со своей кнопкой отката. Порядок применится при следующем
+ * чтении ленты, удержание живёт до него (`InboxHolds` в `notifications-inbox`).
+ *
  * Лента приходит порциями (VED-267). Раньше сервер отдавал её целиком, и две
  * сотни карточек рисовались разом — каждая со стеклом, то есть с собственным
  * `backdrop-filter`: на телефоне это и есть тот самый «очень сильно тормозит».
@@ -20,19 +30,27 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BellOff, Search, X } from "lucide-react";
+import { BellOff, Check, Circle, Search, X } from "lucide-react";
 import type {
   NotificationItemDto,
   NotificationCategory,
 } from "@vedamatch/shared";
-import { fetchInbox, markInboxRead } from "@/lib/notifications-api";
 import {
+  fetchInbox,
+  markInboxRead,
+  setInboxItemRead,
+} from "@/lib/notifications-api";
+import {
+  appendInboxPage,
   countUnreadItems,
   INBOX_PAGE_SIZE,
-  markAllItemsRead,
-  markItemRead,
-  mergeInboxPages,
+  inboxFeedFromPage,
+  markInboxAllRead,
+  openInboxItem,
   splitInbox,
+  toggleInboxRead,
+  withUnreadTotal,
+  type InboxFeedState,
 } from "@/lib/notifications-inbox";
 import { setUnreadCount } from "@/lib/notifications-unread";
 import { NotificationIcon } from "@/components/icons/notification-icons";
@@ -58,10 +76,14 @@ function formatWhen(iso: string): string {
 }
 
 export function NotificationList() {
-  const [items, setItems] = useState<NotificationItemDto[] | null>(null);
+  /**
+   * Показанные карточки, удержания и счётчик — одним состоянием: нажатие на
+   * кнопку карточки меняет все три разом, и разъехавшись хоть на одну
+   * отрисовку, они показали бы «Новое · 5» над шестью новыми карточками.
+   * `null` — ленту ещё не прочитали ни разу.
+   */
+  const [feed, setFeed] = useState<InboxFeedState | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  /** Всё непрочитанное человека: его считает сервер, а не длина порции. */
-  const [unreadTotal, setUnreadTotal] = useState(0);
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
@@ -69,6 +91,13 @@ export function NotificationList() {
   const [query, setQuery] = useState("");
   const [applied, setApplied] = useState("");
   const [searching, setSearching] = useState(false);
+  /**
+   * Что сказать вслух после нажатия кнопки на карточке (VED-143). Подпись
+   * кнопки меняется на противоположную, но скринридер сам её не перечитает:
+   * человек услышал «Пометить прочитанным», нажал — и не узнал, получилось ли.
+   * Сюда же уходит сообщение о неудаче.
+   */
+  const [readAnnounce, setReadAnnounce] = useState("");
   /** Ответ на устаревший запрос не должен перебить свежий: гонку при быстром
    *  наборе гасит счётчик, а не отмена fetch. */
   const requestId = useRef(0);
@@ -94,9 +123,8 @@ export function NotificationList() {
     void fetchInbox({ query: search, limit })
       .then((page) => {
         if (id !== requestId.current) return;
-        setItems(page.items);
+        setFeed(inboxFeedFromPage(page));
         setNextCursor(page.nextCursor ?? null);
-        setUnreadTotal(page.unreadCount);
         setUnreadCount(page.unreadCount);
         setFailed(false);
         setMoreFailed(false);
@@ -121,9 +149,10 @@ export function NotificationList() {
     void fetchInbox({ query: applied, cursor: nextCursor })
       .then((page) => {
         if (id !== requestId.current) return;
-        setItems((current) => mergeInboxPages(current ?? [], page.items));
+        setFeed((current) =>
+          current ? appendInboxPage(current, page) : inboxFeedFromPage(page),
+        );
         setNextCursor(page.nextCursor ?? null);
-        setUnreadTotal(page.unreadCount);
       })
       .catch(() => {
         if (id === requestId.current) setMoreFailed(true);
@@ -133,15 +162,57 @@ export function NotificationList() {
       });
   }
 
+  /** Новое состояние ленты — и сразу же значок на колокольчике. */
+  function applyFeed(next: InboxFeedState) {
+    setFeed(next);
+    setUnreadCount(next.unreadTotal);
+  }
+
   /**
    * Помечаем прочитанным сразу в состоянии и не ждём сервер: переход по ссылке
    * уводит со страницы, и ответ пришёл бы уже некуда.
    */
   function markOne(id: string) {
-    setItems((current) => (current ? markItemRead(current, id) : null));
-    setUnreadTotal((total) => Math.max(0, total - 1));
-    setUnreadCount(Math.max(0, unreadTotal - 1));
+    if (!feed) return;
+    applyFeed(openInboxItem(feed, id));
     void markInboxRead([id]).catch(() => undefined);
+  }
+
+  /**
+   * Кнопка на карточке (VED-143): прочитано — и обратно.
+   *
+   * Состояние меняется сразу, ответа не ждём: нажатие должно ощущаться
+   * мгновенно, а счётчик и колокольчик — меняться вместе с ним. Ответ приносит
+   * точное число непрочитанного (в другой вкладке могло прийти новое), а
+   * неудача откатывает и карточку, и счётчик — тем же чистым переходом в
+   * обратную сторону, чтобы откат не разошёлся с прямым ходом.
+   *
+   * Ленту при этом не перечитываем, и курсор остаётся годным: одна карточка
+   * переезжает между потоками сервера, а дубли на границе потоков и так
+   * отбрасывает `mergeInboxPages` (VED-267).
+   */
+  function toggleRead(id: string, read: boolean) {
+    if (!feed) return;
+    const next = toggleInboxRead(feed, id, read);
+    if (!next.changed) return;
+    applyFeed(next.state);
+    setReadAnnounce(
+      read ? "Уведомление отмечено прочитанным" : "Уведомление возвращено в непрочитанные",
+    );
+    void setInboxItemRead(id, read)
+      .then((state) => {
+        setFeed((current) =>
+          current ? withUnreadTotal(current, state.unreadCount) : current,
+        );
+        setUnreadCount(state.unreadCount);
+      })
+      .catch(() => {
+        setFeed((current) =>
+          current ? toggleInboxRead(current, id, !read).state : current,
+        );
+        setUnreadCount(feed.unreadTotal);
+        setReadAnnounce("Не удалось изменить отметку. Попробуйте ещё раз.");
+      });
   }
 
   /**
@@ -152,10 +223,9 @@ export function NotificationList() {
    * теряется.
    */
   function markAll() {
-    const loaded = Math.min(Math.max(items?.length ?? 0, 1), MAX_RELOAD);
-    setItems((current) => (current ? markAllItemsRead(current) : null));
-    setUnreadTotal(0);
-    setUnreadCount(0);
+    const loaded = Math.min(Math.max(feed?.items.length ?? 0, 1), MAX_RELOAD);
+    if (feed) applyFeed(markInboxAllRead(feed));
+    else setUnreadCount(0);
     void markInboxRead()
       .then(() => load(applied, loaded))
       .catch(() => undefined);
@@ -183,8 +253,9 @@ export function NotificationList() {
       </p>
     );
 
-  if (items === null) return <p className="text-sm text-text-2">Загружаем…</p>;
+  if (feed === null) return <p className="text-sm text-text-2">Загружаем…</p>;
 
+  const { items, holds, unreadTotal } = feed;
   const searchActive = applied.trim().length > 0;
 
   if (items.length === 0)
@@ -222,11 +293,18 @@ export function NotificationList() {
       </div>
     );
 
-  const { unread, read } = splitInbox(items);
+  const { unread, read } = splitInbox(items, holds);
 
   return (
     <div className="space-y-6">
       {searchBox}
+
+      {/* Итог нажатия кнопки на карточке — вслух. Пустая область живёт в
+          разметке всегда: создать её вместе с сообщением значит не дать
+          скринридеру её заметить. */}
+      <p aria-live="polite" className="sr-only">
+        {readAnnounce}
+      </p>
 
       {unread.length > 0 && (
         <section aria-label="Непрочитанные">
@@ -251,7 +329,11 @@ export function NotificationList() {
           <ul className="space-y-3">
             {unread.map((item) => (
               <li key={item.id}>
-                <NotificationCard item={item} onOpen={() => markOne(item.id)} />
+                <NotificationCard
+                  item={item}
+                  onOpen={() => markOne(item.id)}
+                  onToggleRead={(read) => toggleRead(item.id, read)}
+                />
               </li>
             ))}
           </ul>
@@ -268,7 +350,10 @@ export function NotificationList() {
           <ul className="space-y-3">
             {read.map((item) => (
               <li key={item.id}>
-                <NotificationCard item={item} muted />
+                <NotificationCard
+                  item={item}
+                  onToggleRead={(next) => toggleRead(item.id, next)}
+                />
               </li>
             ))}
           </ul>
@@ -351,86 +436,161 @@ function SearchBox({
   );
 }
 
+/**
+ * Карточка ленты.
+ *
+ * Ссылка больше не обнимает карточку целиком: рядом с ней стоит кнопка
+ * отметки (VED-143), а кнопку внутрь `<a>` не положить — это вложенные
+ * интерактивные элементы, и клавиатура с скринридером на них спотыкаются.
+ * Поэтому рамка и стекло переехали на обёртку, а ссылкой осталась содержимая
+ * часть — то, по чему человек и целится, когда хочет открыть уведомление.
+ */
 function NotificationCard({
   item,
-  muted = false,
   onOpen,
+  onToggleRead,
 }: {
   item: NotificationItemDto;
-  /** Прочитанное: остаётся читаемым, но не спорит за внимание с новым. */
-  muted?: boolean;
   onOpen?: () => void;
+  /** Нажали кнопку отметки; `read` — в какую сторону. */
+  onToggleRead?: (read: boolean) => void;
 }) {
+  /* Прочитанное приглушено по своему же `readAt`, а не по тому, в какой группе
+     оно показано: нажатую карточку мы держим на месте (VED-143), и узнать, что
+     отметка встала, человек может только по её виду. */
+  const muted = item.readAt !== null;
   return (
-    <Link
-      href={item.url}
-      onClick={onOpen}
+    <div
       /* Прочитанное отличается рамкой и приглушённым текстом заголовка, а не
          общей прозрачностью: `opacity-70` гасила заодно и подписи — вторичный
          текст падал до 2,9:1 вместо 4,5:1, а вместе с ним погас бы и значок
          состояния, который просили сделать заметным (VED-272). */
-      className={`glass flex gap-3 rounded-2xl border p-4 transition-colors hover:border-magenta/30 ${
+      className={`glass flex items-start gap-1 rounded-2xl border p-4 transition-colors hover:border-magenta/30 ${
         muted ? "border-glass-brd/60" : "border-glass-brd"
       }`}
     >
-      <span className="mt-0.5 shrink-0">
-        <NotificationIcon category={item.category as NotificationCategory} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-3">
+      <Link
+        href={item.url}
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 gap-3"
+      >
+        <span className="mt-0.5 shrink-0">
+          <NotificationIcon category={item.category as NotificationCategory} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-3">
+            <span
+              className={`truncate font-medium ${muted ? "text-text-1" : "text-text-0"}`}
+            >
+              {item.title}
+            </span>
+            <span className="shrink-0 text-xs text-text-2">
+              {formatWhen(item.createdAt)}
+            </span>
+          </span>
+          {/* Ярлык «От администрации»: у остальных категорий отправитель ясен
+              из самого текста («вам ответили», «заявка принята»), а
+              объявление портала приходит ниоткуда, и понять, кто его прислал,
+              по значку в углу не выходило.
+
+              Золото осталось рамкой, а слова ведёт `--vm-text-1`. Раньше здесь
+              стояло `bg-gold/10 text-gold`, и на светлой теме подпись давала
+              2,92:1 при 11px — ниже AA. Замеры в браузере, поверх фактической
+              композитной подложки карточки (стекло поверх страницы), а не
+              поверх записанного `background-color`:
+
+                bg-gold/10 + text-gold  2,92:1 светлая · 13,09:1 тёмная — мимо AA
+                text-gold без заливки   3,66:1 светлая · 13,03:1 тёмная — мимо AA
+                рамка + text-text-1     9,39:1 светлая ·  9,26:1 тёмная — годится
+
+              Само золото не вытянуть: `--vm-gold` на светлой теме #B0770E даёт
+              на стекле 3,66:1, и любая заливка роняет его ещё ниже. Приём тот
+              же, что у значка состояния ниже (VED-272): подложку не красим,
+              цвет несёт рамка. */}
+          {item.category === "announcements" && (
+            <span className="mt-1 inline-flex rounded-full border border-gold/60 px-2 py-0.5 text-[11px] font-medium text-text-1">
+              От администрации
+            </span>
+          )}
+          {/* `break-words` (VED-152): в текст попадают ссылки из комментариев
+              — «https://github.com/…/pull/324» одним словом шире карточки на
+              телефоне. Без переноса страница становилась шире экрана, Chrome
+              на Android расширял под неё видимую область, и плеер, прибитый к
+              её краям, уезжал вправо и вниз за экран. */}
           <span
-            className={`truncate font-medium ${muted ? "text-text-1" : "text-text-0"}`}
+            className={`mt-1 block break-words text-sm ${muted ? "text-text-2" : "text-text-1"}`}
           >
-            {item.title}
+            {item.body}
           </span>
-          <span className="shrink-0 text-xs text-text-2">
-            {formatWhen(item.createdAt)}
-          </span>
+          {/* Значок состояния (VED-272) — справа снизу, на свободном месте
+              карточки: одна и та же задача возвращается в ленту после каждой
+              смены статуса, и без пометки её приходится открывать заново. */}
+          {item.mark && (
+            <span className="mt-2 flex justify-end">
+              <NotificationMarkBadge mark={item.mark} />
+            </span>
+          )}
         </span>
-        {/* Ярлык «От администрации»: у остальных категорий отправитель ясен
-            из самого текста («вам ответили», «заявка принята»), а
-            объявление портала приходит ниоткуда, и понять, кто его прислал,
-            по значку в углу не выходило.
+      </Link>
+      {onToggleRead && <ReadToggle read={muted} onToggle={onToggleRead} />}
+    </div>
+  );
+}
 
-            Золото осталось рамкой, а слова ведёт `--vm-text-1`. Раньше здесь
-            стояло `bg-gold/10 text-gold`, и на светлой теме подпись давала
-            2,92:1 при 11px — ниже AA. Замеры в браузере, поверх фактической
-            композитной подложки карточки (стекло поверх страницы), а не
-            поверх записанного `background-color`:
-
-              bg-gold/10 + text-gold  2,92:1 светлая · 13,09:1 тёмная — мимо AA
-              text-gold без заливки   3,66:1 светлая · 13,03:1 тёмная — мимо AA
-              рамка + text-text-1     9,39:1 светлая ·  9,26:1 тёмная — годится
-
-            Само золото не вытянуть: `--vm-gold` на светлой теме #B0770E даёт
-            на стекле 3,66:1, и любая заливка роняет его ещё ниже. Приём тот
-            же, что у значка состояния ниже (VED-272): подложку не красим,
-            цвет несёт рамка. */}
-        {item.category === "announcements" && (
-          <span className="mt-1 inline-flex rounded-full border border-gold/60 px-2 py-0.5 text-[11px] font-medium text-text-1">
-            От администрации
-          </span>
-        )}
-        {/* `break-words` (VED-152): в текст попадают ссылки из комментариев
-            — «https://github.com/…/pull/324» одним словом шире карточки на
-            телефоне. Без переноса страница становилась шире экрана, Chrome
-            на Android расширял под неё видимую область, и плеер, прибитый к
-            её краям, уезжал вправо и вниз за экран. */}
-        <span
-          className={`mt-1 block break-words text-sm ${muted ? "text-text-2" : "text-text-1"}`}
-        >
-          {item.body}
+/**
+ * Своя отметка прочтения у карточки (VED-143).
+ *
+ * Состояние видно по самому знаку, а не по его цвету: у прочитанного внутри
+ * кружка стоит галка, у непрочитанного кружок пуст. Цветом состояние не
+ * различается вовсе — оба знака ведёт `--vm-text-1`, — так что признак
+ * переживает и чёрно-белую печать, и дальтонизм, и подслеповатый экран на
+ * солнце. Разница цветом на карточке всё равно остаётся (приглушённый
+ * заголовок, бледная рамка), но она здесь вторая примета, а не единственная.
+ *
+ * Подпись называет действие, а не состояние: «Пометить прочитанным» и
+ * «Вернуть в непрочитанные». `aria-pressed` намеренно нет — с ним скринридер
+ * читал бы «Пометить прочитанным, нажато», и понять, прочитано ли
+ * уведомление, стало бы вдвое труднее. Что отметка встала, говорит область
+ * `aria-live` в списке.
+ *
+ * 44×44 — тап-цель: кнопка стоит вплотную к ссылке, которая уводит со
+ * страницы, и промах по ней стоит человеку потерянного места в ленте. Эти
+ * сорок четыре пикселя кнопка отбирает у заголовка, и на телефоне это видно:
+ * `-mr-2 -mt-1` возвращают часть, заезжая в поле карточки — место там всё
+ * равно пустое, а укоротить саму цель нельзя.
+ */
+function ReadToggle({
+  read,
+  onToggle,
+}: {
+  read: boolean;
+  onToggle: (read: boolean) => void;
+}) {
+  const label = read ? "Вернуть в непрочитанные" : "Пометить прочитанным";
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(!read)}
+      aria-label={label}
+      title={label}
+      className="-mr-2 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+    >
+      {read ? (
+        // Кружок с галкой рисуем двумя фигурами, а не готовым `CircleCheck`:
+        // у того галка вписана внутрь обводки и на 20 пикселях сливается с
+        // ней в пятно.
+        <span className="relative flex h-5 w-5 items-center justify-center">
+          <Circle className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+          <Check
+            className="absolute h-3 w-3"
+            strokeWidth={3}
+            aria-hidden="true"
+          />
         </span>
-        {/* Значок состояния (VED-272) — справа снизу, на свободном месте
-            карточки: одна и та же задача возвращается в ленту после каждой
-            смены статуса, и без пометки её приходится открывать заново. */}
-        {item.mark && (
-          <span className="mt-2 flex justify-end">
-            <NotificationMarkBadge mark={item.mark} />
-          </span>
-        )}
-      </span>
-    </Link>
+      ) : (
+        <Circle className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+      )}
+    </button>
   );
 }
 
