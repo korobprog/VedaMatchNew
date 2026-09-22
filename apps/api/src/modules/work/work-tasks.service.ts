@@ -25,12 +25,7 @@ import {
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  WORK_EVENTS,
-  workTaskRecipients,
-  type WorkTaskAssignedEvent,
-  type WorkTaskCommentedEvent,
-} from './work-events';
+import { WORK_EVENTS, type WorkTaskAssignedEvent } from './work-events';
 import { WorkNoticesService } from './work-notices.service';
 import { newTaskColumnQuery } from './work-task-column';
 import {
@@ -454,11 +449,12 @@ export class WorkTasksService {
       });
     }
 
-    // Уведомление не уходит по клику: перенос — единственное действие, которое
-    // человек отменяет через минуту («поставил в тест, а там не дописано»), и
-    // пуш, ушедший сразу, к этому моменту уже врёт. Кладём в очередь, а через
-    // окно воркер посмотрит, где карточка осталась на самом деле, и решит,
-    // есть ли вообще новость. См. work-notice.ts.
+    // Уведомление не уходит по клику: перенос человек отменяет через минуту
+    // («поставил в тест, а там не дописано»), и пуш, ушедший сразу, к этому
+    // моменту уже врёт. Кладём в очередь, а через окно воркер посмотрит, где
+    // карточка осталась на самом деле, и решит, есть ли вообще новость. В то же
+    // окно попадает комментарий того же человека — одно действие, одно
+    // уведомление (VED-298). См. work-notice.ts.
     if (wasDone && wasDone.columnId !== column.id) {
       const task = await this.prisma.workTask.findUnique({
         where: { id: taskId },
@@ -610,21 +606,15 @@ export class WorkTasksService {
       }),
     ]);
 
-    const notify = await this.notifyContext(taskId, userId);
-    if (notify) {
-      for (const recipientId of workTaskRecipients(notify.task, userId)) {
-        this.events.emit(WORK_EVENTS.taskCommented, {
-          name: WORK_EVENTS.taskCommented,
-          recipientId,
-          spaceId: notify.task.spaceId,
-          taskKey: notify.taskKey,
-          taskTitle: notify.task.title,
-          actorName: notify.actorName,
-          excerpt: body,
-          columnName: notify.task.column.name,
-        } satisfies WorkTaskCommentedEvent);
-      }
-    }
+    // Комментарий не уведомляет по клику, а ложится в ту же очередь, что и
+    // переезд карточки (VED-298). Пока окно не закрылось, «прокомментировал и
+    // тут же перенёс» остаётся одним действием, а не двумя новостями подряд;
+    // решение, что из этого сказать, принимает воркер — см. work-notice.ts.
+    const task = await this.prisma.workTask.findUnique({
+      where: { id: taskId },
+      select: { id: true, assigneeId: true, createdById: true },
+    });
+    if (task) await this.notices.enqueueComment(task, userId, body);
 
     return this.get(taskId, userId);
   }

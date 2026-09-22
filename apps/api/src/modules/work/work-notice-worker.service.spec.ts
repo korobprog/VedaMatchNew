@@ -18,6 +18,10 @@ function createWorker(options: {
   column: Column;
   /** Колонка, откуда уехали — записана в очереди. */
   fromColumn: Column | null;
+  /** `true` — движения в окне не было вовсе, строку завёл комментарий. */
+  withoutMove?: boolean;
+  commentBody?: string | null;
+  commentCount?: number;
   archivedAt?: Date | null;
   member?: boolean;
 }) {
@@ -30,7 +34,11 @@ function createWorker(options: {
       findUnique: jest.fn(() =>
         Promise.resolve({
           recipientId: 'recipient',
-          fromColumnId: options.fromColumn?.id ?? 'col-gone',
+          fromColumnId: options.withoutMove
+            ? null
+            : (options.fromColumn?.id ?? 'col-gone'),
+          commentBody: options.commentBody ?? null,
+          commentCount: options.commentCount ?? 0,
           actor: { name: 'Гопал', spiritualName: null },
           task: {
             id: 'task-1',
@@ -137,6 +145,79 @@ describe('WorkNoticeWorkerService.tick', () => {
     await worker.tick();
     expect(emit).not.toHaveBeenCalled();
     expect(deleted).toEqual(['notice-1']);
+  });
+
+  it('комментарий без переноса — уведомление о комментарии', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: null,
+      withoutMove: true,
+      commentBody: 'Когда посмотрите?',
+      commentCount: 1,
+    });
+    await worker.tick();
+    expect(emit).toHaveBeenCalledWith(
+      'work.task.commented',
+      expect.objectContaining({
+        recipientId: 'recipient',
+        taskKey: 'VED-5',
+        excerpt: 'Когда посмотрите?',
+        commentCount: 1,
+        columnName: 'Тестирование',
+      }),
+    );
+  });
+
+  it('прокомментировал и перенёс — одно событие о смене с текстом реплики', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      commentBody: 'Проверьте, пожалуйста',
+      commentCount: 1,
+    });
+    await worker.tick();
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith(
+      'work.task.status-changed',
+      expect.objectContaining({
+        toColumnName: 'Тестирование',
+        commentExcerpt: 'Проверьте, пожалуйста',
+        commentCount: 1,
+      }),
+    );
+  });
+
+  it('вернул из «готово» со словами — причина едет с возвратом', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: done,
+      commentBody: 'Не открывается на телефоне',
+      commentCount: 2,
+    });
+    await worker.tick();
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith(
+      'work.task.returned',
+      expect.objectContaining({
+        columnName: 'Тестирование',
+        commentExcerpt: 'Не открывается на телефоне',
+        commentCount: 2,
+      }),
+    );
+  });
+
+  it('перенёс туда и обратно, но высказался — остаётся комментарий', async () => {
+    const { worker, emit } = createWorker({
+      column: todo,
+      fromColumn: todo,
+      commentBody: 'Ошибся колонкой',
+      commentCount: 1,
+    });
+    await worker.tick();
+    expect(emit).toHaveBeenCalledWith(
+      'work.task.commented',
+      expect.objectContaining({ excerpt: 'Ошибся колонкой' }),
+    );
   });
 
   it('запись занял другой инстанс — молча уступаем', async () => {

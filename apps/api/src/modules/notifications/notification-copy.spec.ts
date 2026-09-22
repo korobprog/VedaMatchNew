@@ -1,5 +1,6 @@
 import {
   buildNotification,
+  commentsWord,
   nightsWord,
   toExcerpt,
   travelDecisionTitle,
@@ -33,6 +34,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         taskTitle: 'Починить ссылки',
         actorName: 'Санкаршан',
         excerpt: 'Посмотрите ещё раз',
+        commentCount: 1,
         columnName: 'Тестирование',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
@@ -65,6 +67,116 @@ describe('buildNotification · уведомления «Работ» ведут 
         actorName: 'Санкаршан',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
+  });
+});
+
+/**
+ * VED-298: комментарий и перенос, сделанные одним человеком в одно окно,
+ * приезжают одним событием. Формулировку из двух частей собирает подписчик —
+ * издатель прислал факт: колонки, текст реплики и их число.
+ */
+describe('buildNotification · склейка комментария с переездом', () => {
+  const move = {
+    name: 'work.task.status-changed',
+    recipientId: 'u1',
+    spaceId: 'space-1',
+    taskKey: 'VED-42',
+    taskTitle: 'Починить ссылки',
+    fromColumnName: 'В работе',
+    toColumnName: 'Тестирование',
+    actorName: 'Санкаршан',
+  } as const;
+
+  it('перенесли молча — текст прежний, без хвоста', () => {
+    expect(buildNotification(move).body).toBe(
+      'Санкаршан: «Починить ссылки» — из «В работе»',
+    );
+  });
+
+  it('перенесли со словами — реплика дописана к переезду', () => {
+    expect(
+      buildNotification({
+        ...move,
+        commentExcerpt: 'Проверьте, пожалуйста',
+        commentCount: 1,
+      }).body,
+    ).toBe(
+      'Санкаршан: «Починить ссылки» — из «В работе». Комментарий: Проверьте, пожалуйста',
+    );
+  });
+
+  it('несколько реплик за окно — счёт словом, а не цифрой рядом', () => {
+    expect(
+      buildNotification({
+        ...move,
+        commentExcerpt: 'И ещё вот это',
+        commentCount: 3,
+      }).body,
+    ).toContain('3 комментария: И ещё вот это');
+  });
+
+  it('возврат из «готово» несёт причину', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.returned',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        columnName: 'На доработку',
+        actorName: 'Санкаршан',
+        commentExcerpt: 'Не открывается на телефоне',
+        commentCount: 1,
+      }).body,
+    ).toContain('Комментарий: Не открывается на телефоне');
+  });
+
+  it('пачка реплик без переноса — заголовок говорит сколько их', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.commented',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        actorName: 'Санкаршан',
+        excerpt: 'Последняя мысль',
+        commentCount: 2,
+        columnName: 'Тестирование',
+      }),
+    ).toMatchObject({
+      title: 'VED-42: 2 комментария',
+      body: 'Санкаршан: Последняя мысль',
+    });
+  });
+
+  it('одиночная реплика читается как раньше', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.commented',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        actorName: 'Санкаршан',
+        excerpt: 'Посмотрите ещё раз',
+        commentCount: 1,
+        columnName: 'Тестирование',
+      }).title,
+    ).toBe('VED-42: новый комментарий');
+  });
+});
+
+describe('commentsWord', () => {
+  it.each([
+    [1, '1 комментарий'],
+    [2, '2 комментария'],
+    [5, '5 комментариев'],
+    [11, '11 комментариев'],
+    [21, '21 комментарий'],
+    [102, '102 комментария'],
+  ])('%i — «%s»', (count, expected) => {
+    expect(commentsWord(count)).toBe(expected);
   });
 });
 
@@ -113,6 +225,7 @@ describe('buildNotification · значок состояния у уведомл
         taskTitle: 'Починить ссылки',
         actorName: 'Санкаршан',
         excerpt: 'Посмотрите ещё раз',
+        commentCount: 1,
         columnName: 'Выполнено',
       }),
     ).toMatchObject({ mark: 'done' });
@@ -143,6 +256,7 @@ describe('buildNotification · значок состояния у уведомл
         taskTitle: 'Починить ссылки',
         actorName: 'Санкаршан',
         excerpt: 'Посмотрите ещё раз',
+        commentCount: 1,
         columnName: 'Бэклог',
       }),
     ).toMatchObject({ mark: null });
