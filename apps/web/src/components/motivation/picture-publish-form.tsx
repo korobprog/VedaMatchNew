@@ -24,6 +24,7 @@ import {
   REEL_IMAGE_MIME,
   withImageTypeFromName,
 } from "./clipboard-image";
+import { imageSizeRejection, readImageSize } from "./image-dimensions";
 import { categoriesAcceptingStyle } from "./feed-style";
 import { fieldLabelClass } from "./field-label";
 import {
@@ -86,11 +87,28 @@ export function PicturePublishForm({
     null,
   );
 
-  /** Берём только то, что примет сервер: отказ после отправки обиднее. */
-  const acceptImage = useCallback((next: File | null) => {
+  /**
+   * Берём только то, что примет сервер: отказ после отправки обиднее.
+   *
+   * Сторону кадра меряем прямо здесь (VED-328), а не оставляем серверу на
+   * публикацию: иначе человек узнаёт про мелкую картинку, уже набрав
+   * категорию, автора и текст, и у самой кнопки «Опубликовать». Замер
+   * асинхронный, поэтому у каждого выбора свой номер: пока мерили первый
+   * файл, человек мог выбрать второй, и ответ про старый не должен перебить
+   * новый.
+   */
+  const pickNonce = useRef(0);
+  const acceptImage = useCallback(async (next: File | null) => {
+    const pick = (pickNonce.current += 1);
     const rejection = pastedImageRejection(next);
-    setImageError(rejection);
-    if (!rejection) setFile(next);
+    if (rejection || !next) {
+      setImageError(rejection);
+      return;
+    }
+    const tooSmall = imageSizeRejection(await readImageSize(next));
+    if (pick !== pickNonce.current) return;
+    setImageError(tooSmall);
+    if (!tooSmall) setFile(next);
   }, []);
 
   // Ctrl+V где угодно на экране: вставляют туда, куда смотрят.
@@ -100,7 +118,7 @@ export function PicturePublishForm({
       const picked = pickPastedImage(event.clipboardData?.files);
       if (!picked) return;
       event.preventDefault();
-      acceptImage(picked);
+      void acceptImage(picked);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -120,10 +138,12 @@ export function PicturePublishForm({
         const type = pickClipboardType(item.types);
         if (!type) continue;
         const blob = await item.getType(type);
-        acceptImage(new File([blob], pastedImageName(type, new Date()), { type }));
+        await acceptImage(
+          new File([blob], pastedImageName(type, new Date()), { type }),
+        );
         return;
       }
-      acceptImage(null);
+      void acceptImage(null);
     } catch {
       setImageError("Не удалось прочитать буфер. Разрешите доступ или выберите файл.");
     }
@@ -230,7 +250,7 @@ export function PicturePublishForm({
             accept={REEL_IMAGE_MIME.join(",")}
             aria-label="Картинка с цитатой из галереи"
             onChange={(e) => {
-              acceptImage(e.target.files?.[0] ?? null);
+              void acceptImage(e.target.files?.[0] ?? null);
               e.target.value = "";
             }}
           />
@@ -241,7 +261,7 @@ export function PicturePublishForm({
             aria-label="Картинка с цитатой из файлов"
             onChange={(e) => {
               const picked = e.target.files?.[0];
-              acceptImage(picked ? withImageTypeFromName(picked) : null);
+              void acceptImage(picked ? withImageTypeFromName(picked) : null);
               e.target.value = "";
             }}
           />
@@ -263,8 +283,13 @@ export function PicturePublishForm({
             Картинка взята: {file.name} · {formatImageSize(file.size)}
           </p>
         )}
+        {/* Отказ по картинке блокирует публикацию, поэтому он `alert`, как
+            и ошибка отправки ниже, а не тихий `status`: человек обязан
+            узнать, почему кнопка не срабатывает. Замерено в браузере поверх
+            фактической подложки (--vm-bg-0, 12px): --vm-magenta даёт 4,62:1
+            на светлой и 6,13:1 на тёмной — выше порога AA 4,5:1. */}
         {imageError && (
-          <p role="status" className="text-xs text-magenta">
+          <p role="alert" className="text-xs text-magenta">
             {imageError}
           </p>
         )}

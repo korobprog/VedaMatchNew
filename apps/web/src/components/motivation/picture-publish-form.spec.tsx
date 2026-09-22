@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PicturePublishForm } from "./picture-publish-form";
 import { ReelWizard } from "./reel-wizard";
 import { fieldLabelClass } from "./field-label";
@@ -152,6 +152,76 @@ describe("PicturePublishForm (VED-97)", () => {
 
     expect(screen.getByText(/Картинка взята: Download\.jpeg/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Опубликовать" })).toBeEnabled();
+  });
+
+  /**
+   * VED-328. Раньше сторону кадра знал только сервер, и отказ приходил на
+   * «Опубликовать» — после того, как человек набрал категорию, автора и текст
+   * с картинки. Теперь отказ приходит у поля, сразу, и называет размер.
+   */
+  describe("мелкая картинка (VED-328)", () => {
+    const stubSize = (width: number, height: number) =>
+      vi.stubGlobal("createImageBitmap", async () => ({
+        width,
+        height,
+        close: () => {},
+      }));
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("отказывает сразу при выборе и называет настоящий размер", async () => {
+      stubSize(320, 240);
+      const fetchMock = routeFetch({ "/motivation/pictures": () => ({}) });
+      const user = userEvent.setup();
+      render(<PicturePublishForm categories={categories} />);
+
+      await user.upload(
+        screen.getByLabelText("Картинка с цитатой из галереи"),
+        picture(),
+      );
+
+      await screen.findByText(
+        "Картинка 320×240 — нужна сторона хотя бы 400 точек",
+      );
+      // Кадр не принят: публиковать нечего, и заполнять форму незачем.
+      expect(screen.queryByText(/Картинка взята/)).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Опубликовать" }),
+      ).toBeDisabled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("ровно 400 по короткой стороне проходит", async () => {
+      stubSize(400, 1200);
+      const user = userEvent.setup();
+      render(<PicturePublishForm categories={categories} />);
+
+      await user.upload(
+        screen.getByLabelText("Картинка с цитатой из галереи"),
+        picture(),
+      );
+
+      await screen.findByText(/Картинка взята: cita\.png/);
+      expect(screen.queryByText(/нужна сторона/)).toBeNull();
+      expect(screen.getByRole("button", { name: "Опубликовать" })).toBeEnabled();
+    });
+
+    // Нулевые размеры — «картинку ещё не загрузили», а не «картинка мелкая».
+    it("не выдаёт непрочитанный кадр за мелкий", async () => {
+      stubSize(0, 0);
+      const user = userEvent.setup();
+      render(<PicturePublishForm categories={categories} />);
+
+      await user.upload(
+        screen.getByLabelText("Картинка с цитатой из галереи"),
+        picture(),
+      );
+
+      await screen.findByText(
+        "Не удалось прочитать картинку — попробуйте другой файл",
+      );
+      expect(screen.queryByText(/нужна сторона/)).toBeNull();
+    });
   });
 });
 

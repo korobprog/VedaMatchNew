@@ -19,7 +19,8 @@ export type ReelImageProblem =
   | 'image_required'
   | 'unsupported_image_type'
   | 'image_file_too_large'
-  | 'image_too_small';
+  | 'image_too_small'
+  | 'image_unreadable';
 
 export interface UploadedReelImage {
   buffer: Buffer;
@@ -38,6 +39,54 @@ export function validateReelImage(
   return null;
 }
 
+/**
+ * Размеры кадра так, как их называет распаковщик. `undefined`/`null` — их не
+ * назвали вовсе: у sharp `metadata()` не обязана знать ширину и высоту.
+ */
+export interface ReelImageSize {
+  width?: number | null;
+  height?: number | null;
+}
+
+/**
+ * Годятся ли размеры кадра. `null` — годятся.
+ *
+ * Нечитаемый кадр отделён от мелкого намеренно (VED-328): нулевая или
+ * отсутствующая сторона значит, что картинку не разобрали, и сказать про неё
+ * «слишком маленькая» — соврать человеку о его файле. Ровно
+ * `MIN_REEL_IMAGE_SIDE` — проходит: граница включительная.
+ */
+export function validateReelImageSize(
+  size: ReelImageSize | null | undefined,
+): 'image_too_small' | 'image_unreadable' | null {
+  const width = size?.width ?? 0;
+  const height = size?.height ?? 0;
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  )
+    return 'image_unreadable';
+  if (Math.min(width, height) < MIN_REEL_IMAGE_SIDE) return 'image_too_small';
+  return null;
+}
+
+/**
+ * Отказ по размеру с настоящими размерами кадра. «Нужна сторона хотя бы 400»
+ * без «картинка 320×240» человек читает как придирку: он не видит, какая у
+ * его файла сторона и насколько он промахнулся.
+ */
+export function reelImageSizeMessage(
+  problem: 'image_too_small' | 'image_unreadable',
+  size: ReelImageSize | null | undefined,
+): string {
+  if (problem === 'image_unreadable') return reelImageMessage(problem);
+  const width = Math.round(size?.width ?? 0);
+  const height = Math.round(size?.height ?? 0);
+  return `Картинка ${width}×${height} — нужна сторона хотя бы ${MIN_REEL_IMAGE_SIDE} точек`;
+}
+
 /** Сообщение человеку: коды наружу не выносим. */
 export function reelImageMessage(problem: ReelImageProblem): string {
   switch (problem) {
@@ -49,6 +98,8 @@ export function reelImageMessage(problem: ReelImageProblem): string {
       return `Файл больше ${Math.round(MAX_REEL_IMAGE_BYTES / (1024 * 1024))} МБ — уменьшите его`;
     case 'image_too_small':
       return `Картинка слишком маленькая: нужна сторона хотя бы ${MIN_REEL_IMAGE_SIDE} точек`;
+    case 'image_unreadable':
+      return 'Не удалось прочитать картинку — попробуйте другой файл';
   }
 }
 

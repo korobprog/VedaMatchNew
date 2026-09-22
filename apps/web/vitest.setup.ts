@@ -50,6 +50,21 @@ if (!("ResizeObserver" in globalThis)) {
     SilentResizeObserver;
 }
 
+/**
+ * jsdom не декодирует картинки: ни `createImageBitmap`, ни `naturalWidth` у
+ * `<img>` там не работают. А формы, которые берут картинку у человека, теперь
+ * меряют её сторону прямо при выборе (VED-328) — без заглушки любая из них в
+ * тесте отвечает «не удалось прочитать картинку».
+ *
+ * Заглушка отдаёт заведомо годный кадр: размер в этих тестах не проверяют.
+ * Тест про сам отказ по размеру подменяет её своим ответом — так проверка
+ * границы остаётся видимой в спеке, а не прячется здесь.
+ */
+if (!("createImageBitmap" in globalThis)) {
+  (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap =
+    async () => ({ width: 1080, height: 1350, close: () => {} });
+}
+
 // jsdom не реализует matchMedia; компоненты с адаптивной логикой полагаются на него.
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = ((query: string) => ({

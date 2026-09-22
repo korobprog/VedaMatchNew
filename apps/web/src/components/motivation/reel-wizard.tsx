@@ -42,6 +42,7 @@ import {
   pickClipboardType,
   pickPastedImage,
 } from "./clipboard-image";
+import { imageSizeRejection, readImageSize } from "./image-dimensions";
 import {
   MAX_TEXT,
   MIN_TEXT,
@@ -199,11 +200,25 @@ export function ReelWizard({
    * Кадр принимаем только тот, который примет сервер: отказ уже после
    * отправки человек читает как «портал сломался», а набранное к тому
    * времени жалко.
+   *
+   * Сторону кадра меряем здесь же (VED-328) — иначе про мелкую картинку
+   * сервер сообщает только на публикации, через два шага мастера. Замер
+   * асинхронный, поэтому у каждого выбора свой номер: пока мерили первый
+   * файл, человек мог выбрать второй, и ответ про старый не должен перебить
+   * новый.
    */
-  const acceptImage = useCallback((next: File | null) => {
+  const pickNonce = useRef(0);
+  const acceptImage = useCallback(async (next: File | null) => {
+    const pick = (pickNonce.current += 1);
     const rejection = pastedImageRejection(next);
-    setImageError(rejection);
-    if (!rejection) setFile(next);
+    if (rejection || !next) {
+      setImageError(rejection);
+      return;
+    }
+    const tooSmall = imageSizeRejection(await readImageSize(next));
+    if (pick !== pickNonce.current) return;
+    setImageError(tooSmall);
+    if (!tooSmall) setFile(next);
   }, []);
 
   /**
@@ -219,7 +234,7 @@ export function ReelWizard({
       // Своё поведение только когда в буфере правда картинка: иначе пусть
       // вставляется текст, как обычно.
       event.preventDefault();
-      acceptImage(picked);
+      void acceptImage(picked);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -244,12 +259,12 @@ export function ReelWizard({
         const type = pickClipboardType(item.types);
         if (!type) continue;
         const blob = await item.getType(type);
-        acceptImage(
+        await acceptImage(
           new File([blob], pastedImageName(type, new Date()), { type }),
         );
         return;
       }
-      acceptImage(null);
+      void acceptImage(null);
     } catch {
       // Отказ в доступе выглядит так же, как пустой буфер, — различить их
       // браузер не даёт, поэтому говорим про оба пути сразу.
@@ -654,7 +669,7 @@ export function ReelWizard({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => acceptImage(e.target.files?.[0] ?? null)}
+                  onChange={(e) => void acceptImage(e.target.files?.[0] ?? null)}
                   className={fieldClass}
                 />
               </label>
@@ -682,8 +697,14 @@ export function ReelWizard({
                   Кадр взят: {file.name} · {formatImageSize(file.size)}
                 </p>
               )}
+              {/* Отказ по картинке блокирует публикацию, поэтому он
+                  `alert`, как и ошибка отправки ниже, а не тихий `status`:
+                  человек обязан узнать, почему кнопка не срабатывает.
+                  Замерено в браузере поверх фактической подложки (--vm-bg-0,
+                  12px): --vm-magenta даёт 4,62:1 на светлой и 6,13:1 на
+                  тёмной — выше порога AA 4,5:1. */}
               {imageError && (
-                <p role="status" className="text-xs text-magenta">
+                <p role="alert" className="text-xs text-magenta">
                   {imageError}
                 </p>
               )}
@@ -1233,7 +1254,14 @@ function ReelStatus({
       {reel.stage === "rejected" && (
         <div className="space-y-3 rounded-2xl border border-magenta/40 bg-magenta/5 p-4">
           <div>
-            <div className="text-xs font-bold uppercase tracking-wide text-gold">Почему</div>
+            {/* Не --vm-gold и не --vm-magenta: подпись 12px жирным — мелкий
+                текст, а подложка здесь не --vm-bg-0, а магентовая заливка
+                самой карточки, и она поднимает фон к цвету букв. Замерено в
+                браузере поверх неё, светлая / тёмная: gold 3,37:1 / 12,55:1,
+                magenta 4,26:1 / 5,91:1 — обе на светлой ниже порога AA
+                4,5:1. --vm-text-1 даёт 8,64:1 / 8,92:1. Смысл карточки несут
+                её рамка и заливка, а не цвет этого слова. */}
+            <div className="text-xs font-bold uppercase tracking-wide text-text-1">Почему</div>
             <p className="mt-1 text-sm text-text-0">{reel.reason ?? "Текст не подходит для ленты вдохновения."}</p>
             <p className="mt-1 text-xs text-text-2">Лимит дня не потрачен: можно исправить и отправить снова.</p>
           </div>
