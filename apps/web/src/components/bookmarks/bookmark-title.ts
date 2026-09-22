@@ -50,32 +50,3 @@ export function bookmarkServiceLabel(
   if (!known) return "Портал";
   return fallbackNames ? fallbackNames(known.slug, known.name) : known.name;
 }
-
-export interface BookmarkGroup<T> {
-  service: string;
-  label: string;
-  items: T[];
-}
-
-/**
- * Разложить закладки по разделам, сохранив порядок прихода внутри группы.
- * Группы идут в порядке первого появления: список читается как история —
- * недавно добавленное сверху.
- */
-export function groupBookmarks<T extends { service: string }>(
-  items: readonly T[],
-  label: (service: string) => string = bookmarkServiceLabel,
-): BookmarkGroup<T>[] {
-  const groups: BookmarkGroup<T>[] = [];
-  for (const item of items) {
-    const existing = groups.find((group) => group.service === item.service);
-    if (existing) existing.items.push(item);
-    else
-      groups.push({
-        service: item.service,
-        label: label(item.service),
-        items: [item],
-      });
-  }
-  return groups;
-}

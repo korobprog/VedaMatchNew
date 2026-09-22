@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { BookmarkPlus, Loader2, Trash2 } from "lucide-react";
+import { BookmarkPlus, Loader2, Trash2, Zap } from "lucide-react";
 import type { BookmarkDto } from "@vedamatch/shared";
 import {
   addBookmark,
@@ -11,11 +11,7 @@ import {
 } from "@/lib/bookmarks-api";
 import { isAbort } from "@/lib/is-abort";
 import { useServiceNames } from "@/components/service-catalog-provider";
-import {
-  bookmarkServiceLabel,
-  bookmarkTitleFrom,
-  groupBookmarks,
-} from "./bookmark-title";
+import { bookmarkServiceLabel, bookmarkTitleFrom } from "./bookmark-title";
 
 /**
  * Список закладок и кнопка «положить сюда текущую страницу» (VED-163).
@@ -26,13 +22,27 @@ import {
  * заводить и поддерживать по одной. Адрес и заголовок вкладки браузер знает
  * сам, поэтому страницы ради закладок ничего не объявляют.
  */
+/*
+ * Мелкие подписи здесь идут `--vm-text-1`, а не `--vm-text-2`: шторка лежит
+ * на `--vm-bg-1`, где второй текстовый токен даёт 4,29:1 в тёмной теме —
+ * ниже AA. Разбор замера — в шапке `components/quick/quick-panel.tsx`.
+ */
 export function BookmarksSheet({
   onClose,
   onNavigate,
+  onPin,
+  pinned,
 }: {
   onClose: () => void;
   /** Переход по закладке закрывает и шторку, и саму панель. */
   onNavigate: () => void;
+  /**
+   * Сделать из закладки горячую кнопку (VED-345). Закладок со временем
+   * десятки, а под рукой нужны две-три — панель их и держит.
+   */
+  onPin?: (item: BookmarkDto) => void;
+  /** Эта закладка уже стоит в панели. */
+  pinned?: (path: string) => boolean;
 }) {
   const names = useServiceNames();
   const [items, setItems] = useState<BookmarkDto[] | null>(null);
@@ -106,10 +116,6 @@ export function BookmarksSheet({
     }
   }, []);
 
-  const groups = groupBookmarks(items ?? [], (service) =>
-    bookmarkServiceLabel(service, names),
-  );
-
   return (
     <div className="mt-3 rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm text-text-1">
       <button
@@ -128,7 +134,7 @@ export function BookmarksSheet({
         </span>
       </button>
       {here && (
-        <p className="mt-1 truncate px-1 text-[11px] text-text-2" title={here.title}>
+        <p className="mt-1 truncate px-1 text-[11px] text-text-1" title={here.title}>
           {here.title}
         </p>
       )}
@@ -147,55 +153,77 @@ export function BookmarksSheet({
 
       <div className="mt-3 max-h-[46vh] overflow-y-auto">
         {items === null ? (
-          <p className="px-1 py-2 text-xs text-text-2">Загружаем…</p>
+          <p className="px-1 py-2 text-xs text-text-1">Загружаем…</p>
         ) : items.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-text-2">
+          <p className="px-1 py-2 text-xs text-text-1">
             Пока пусто. Откройте нужную страницу — исполнителя, доску, книгу —
             и нажмите «Добавить эту страницу».
           </p>
         ) : (
-          groups.map((group) => (
-            <section key={group.service || "portal"} className="mb-2 last:mb-0">
-              {/* Не заголовок разметкой: панель открывается поверх страницы,
-                  и h3 внутри неё ломал бы порядок заголовков для
-                  скринридера (см. «Дизайн-система» в CLAUDE.md). */}
-              <p
-                aria-hidden="true"
-                className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-2"
-              >
-                {group.label}
-              </p>
-              <ul className="space-y-0.5">
-                {group.items.map((item) => (
-                  <li key={item.id} className="flex items-center gap-1">
-                    <Link
-                      href={item.path}
-                      onClick={onNavigate}
-                      title={`${group.label}: ${item.title}`}
-                      className="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-sm text-text-1 transition-colors hover:bg-white/4 hover:text-text-0"
-                    >
-                      {item.title}
-                    </Link>
+          /* Одна строка на закладку: сначала её имя, потом раздел (VED-326).
+             Заголовками разделов список распадался на полтора десятка
+             однострочных групп, и на телефоне в шторку помещалось три
+             закладки из десяти. */
+          <ul className="space-y-0.5">
+            {items.map((item) => {
+              const service = bookmarkServiceLabel(item.service, names);
+              const here = pinned?.(item.path) ?? false;
+              return (
+                <li key={item.id} className="flex items-center gap-1">
+                  <Link
+                    href={item.path}
+                    onClick={onNavigate}
+                    title={`${item.title} — ${service}`}
+                    className="flex min-h-11 min-w-0 flex-1 items-baseline gap-1.5 rounded-lg px-2 py-1.5 text-sm text-text-1 transition-colors hover:bg-white/4 hover:text-text-0"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                    <span className="shrink-0 text-[11px] text-text-1">
+                      {service}
+                    </span>
+                  </Link>
+                  {onPin && (
                     <button
                       type="button"
-                      onClick={() => void drop(item)}
-                      aria-label={`Удалить закладку: ${item.title}`}
-                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-2 transition-colors hover:text-text-0"
+                      onClick={() => onPin(item)}
+                      disabled={here}
+                      aria-label={
+                        here
+                          ? `Уже в панели горячих клавиш: ${item.title}`
+                          : `Создать горячую клавишу: ${item.title}`
+                      }
+                      title={
+                        here
+                          ? "Уже в панели горячих клавиш"
+                          : "Создать горячую клавишу"
+                      }
+                      className={`flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${
+                        here
+                          ? "text-mint-edge"
+                          : "text-text-2 hover:text-text-0"
+                      }`}
                     >
-                      <Trash2 className="size-4" />
+                      <Zap className="size-4" />
                     </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void drop(item)}
+                    aria-label={`Удалить закладку: ${item.title}`}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 transition-colors hover:text-text-0"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
       <button
         type="button"
         onClick={onClose}
-        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-2 transition-colors hover:text-text-0"
+        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 transition-colors hover:text-text-0"
       >
         Закрыть
       </button>
