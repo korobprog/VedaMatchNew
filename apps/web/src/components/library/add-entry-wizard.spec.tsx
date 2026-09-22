@@ -200,4 +200,86 @@ describe("AddEntryWizard", () => {
     expect(screen.getByText("Первый абзац лекции.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
   });
+
+  it("у статьи есть и ссылка, и поле текста (VED-355)", async () => {
+    // Заказчик просил в статье «большой объём текста как в катхе»: то же
+    // поле, но необязательное — статья бывает и просто ссылкой.
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "article");
+
+    expect(screen.getByLabelText("Адрес ссылки")).toBeInTheDocument();
+    expect(screen.getByLabelText("Текст целиком здесь")).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://example.com/article",
+    );
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "О смирении",
+    );
+    // Текст необязателен — «Далее» не ждёт его.
+    expect(screen.getByRole("button", { name: "Далее" })).toBeEnabled();
+    await user.type(
+      screen.getByRole("textbox", { name: /^Текст/ }),
+      "Первый абзац статьи.",
+    );
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    await user.click(screen.getByLabelText("Шрила Прабхупада"));
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
+  });
+
+  it("статью можно написать прямо здесь, без ссылки и источника", async () => {
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "article");
+
+    await user.click(screen.getByLabelText("Текст целиком здесь"));
+    expect(screen.queryByLabelText("Адрес ссылки")).not.toBeInTheDocument();
+
+    await user.type(
+      screen.getByRole("textbox", { name: /^Текст/ }),
+      "Весь текст статьи.",
+    );
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "О смирении",
+    );
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    await user.click(screen.getByLabelText("Шрила Прабхупада"));
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    expect(screen.getByText("Весь текст статьи.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
+  });
+
+  it("картинку предлагает и материалу со ссылкой (VED-344)", async () => {
+    // Раньше поле пряталось у всего, к чему есть ссылка: обогащение
+    // приносит картинку не всегда и не ту, а своя теперь его переживает.
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "article");
+
+    await user.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://example.com/article",
+    );
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "О смирении",
+    );
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+    await user.click(screen.getByLabelText("Шрила Прабхупада"));
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    expect(screen.getByLabelText(/Картинка/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Картинку покажем целиком — её не обрежут/),
+    ).toBeInTheDocument();
+  });
 });

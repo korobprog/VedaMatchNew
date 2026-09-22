@@ -403,6 +403,63 @@ describe('LibraryEntriesService.create', () => {
     expect(data.enrichmentStatus).toBe('not_applicable');
   });
 
+  // VED-355: текст перестал быть привилегией катхи — статью с ним пишут
+  // прямо на портале, и рядом со ссылкой он тоже законен (перепечатка).
+  it('хранит текст статьи вместе с её ссылкой', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await service.create(
+      'user-1',
+      validBody({
+        type: 'article',
+        url: 'https://example.com/article',
+        body: 'Первый абзац.\r\n\r\nВторой.',
+      }),
+    );
+
+    const createCalls = prisma.libraryEntry.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const { data } = createCalls[0][0];
+    expect(data.type).toBe('article');
+    expect(data.body).toBe('Первый абзац.\n\nВторой.');
+    expect(data.url).toBe('https://example.com/article');
+  });
+
+  it('принимает статью с одним текстом, без ссылки и источника', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    await service.create(
+      'user-1',
+      validBody({ type: 'article', url: null, body: 'Весь текст статьи.' }),
+    );
+
+    const createCalls = prisma.libraryEntry.create.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    const { data } = createCalls[0][0];
+    expect(data.body).toBe('Весь текст статьи.');
+    expect(data.url).toBeNull();
+    // Обогащать нечего: страницы источника нет.
+    expect(data.enrichmentStatus).toBe('not_applicable');
+  });
+
   it('refuses a katha without text even when it has a link', async () => {
     const prisma = prismaMock();
     const service = new LibraryEntriesService(

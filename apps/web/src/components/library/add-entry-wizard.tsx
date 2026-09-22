@@ -13,7 +13,8 @@ import {
   type LineageId,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
-import { COVER_IMAGE_ACCEPT, isCoverImage } from "./cover-image";
+import { CoverField } from "./cover-field";
+import { uploadEntryCover } from "./cover-upload";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
 import { insertIntoTree, renameInTree } from "./category-tree";
@@ -28,11 +29,13 @@ import {
   failureText,
   isWizardStepReady,
   locatorForType,
+  locatorOptions,
   MAX_BODY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_SOURCE_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
+  supportsBody,
   validateEntryDraft,
   WIZARD_STEPS,
   type EntryLocator,
@@ -41,6 +44,13 @@ import {
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
+
+/** Подпись каждого положения переключателя «как указать материал». */
+const LOCATOR_LABELS: Record<EntryLocator, LibraryTextKey> = {
+  url: "add.locatorUrl",
+  source: "add.locatorSource",
+  body: "add.locatorBody",
+};
 
 /** Заголовок и подсказка каждого шага — порядок задаёт номер шага. */
 const STEPS: { title: LibraryTextKey; hint: LibraryTextKey }[] = [
@@ -83,7 +93,6 @@ export function AddEntryWizard({
   const [requestOpen, setRequestOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverRejected, setCoverRejected] = useState(false);
 
   const [draft, setDraft] = useState<LibraryEntryDraft>({
     url: "",
@@ -186,19 +195,9 @@ export function AddEntryWizard({
 
       const created = (await res.json()) as { id: string };
 
-      // Обложка уезжает уже к созданной записи: отдельного эндпоинта на
+      // Картинка уезжает уже к созданной записи: отдельного эндпоинта на
       // «загрузить до создания» нет, а этот переиспользуется как есть.
-      // Неудача не отменяет добавление — запись уже существует, и на её
-      // странице загрузку можно повторить.
-      if (coverFile) {
-        const cover = new FormData();
-        cover.append("file", coverFile);
-        await apiFetch(`${API_URL}/library/entries/${created.id}/preview`, {
-          method: "POST",
-          credentials: "include",
-          body: cover,
-        }).catch(() => null);
-      }
+      if (coverFile) await uploadEntryCover(API_URL, created.id, coverFile);
 
       // `replace` и пометка `created` (VED-91): мастер не остаётся позади в
       // истории, и «Назад» на странице материала ведёт в портал.
@@ -213,6 +212,7 @@ export function AddEntryWizard({
 
   // У катхи второй шаг — не «где найти», а сам текст: заголовок шага
   // говорит о том, что на нём просят.
+  const locatorChoices = locatorOptions(draft.type);
   const current =
     step === 2 && draft.locator === "body"
       ? ({ title: "add.stepText", hint: "add.stepTextHint" } as const)
@@ -283,55 +283,8 @@ export function AddEntryWizard({
         {step === 2 && (
           <>
             {/* Катхе переключатель ни к чему: указывать ей есть на что одно —
-                на собственный текст. Без maxLength у текста: на вставке он
-                молча обрезал бы длинную лекцию, а так превышение видно в
-                подсказке, и «Далее» не пускает дальше. */}
-            {draft.locator === "body" && (
-              <>
-                <div>
-                  <label className="text-sm text-text-1">
-                    {t(locale, "add.body")}
-                    <textarea
-                      value={draft.body}
-                      onChange={(event) => patch({ body: event.target.value })}
-                      rows={12}
-                      lang={draft.contentLanguage}
-                      aria-describedby="wizard-body-hint"
-                      className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-                    />
-                  </label>
-                  <span
-                    id="wizard-body-hint"
-                    className="mt-1 block text-xs text-text-2"
-                  >
-                    {draft.body.trim().length > MAX_BODY_LENGTH
-                      ? t(locale, "add.bodyTooLong")
-                      : t(locale, "add.hintBody")}{" "}
-                    · {draft.body.length}/{MAX_BODY_LENGTH}
-                  </span>
-                </div>
-                <div>
-                  <label className="text-sm text-text-1">
-                    {t(locale, "add.source")}
-                    <input
-                      value={draft.source}
-                      onChange={(event) => patch({ source: event.target.value })}
-                      maxLength={MAX_SOURCE_LENGTH}
-                      aria-describedby="wizard-katha-source-hint"
-                      className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-                    />
-                  </label>
-                  <span
-                    id="wizard-katha-source-hint"
-                    className="mt-1 block text-xs text-text-2"
-                  >
-                    {t(locale, "add.hintKathaSource")}
-                  </span>
-                </div>
-              </>
-            )}
-
-            {draft.locator !== "body" && (
+                на собственный текст, и вариант у неё один (locatorOptions). */}
+            {locatorChoices.length > 1 && (
               <fieldset className="text-sm text-text-1">
                 {/* Легенда скрыта: на экране она повторяла бы заголовок шага,
                     а скринридеру нужна, чтобы сгруппировать переключатели. */}
@@ -339,20 +292,21 @@ export function AddEntryWizard({
                   {t(locale, "add.locatorLegend")}
                 </legend>
                 <div className="flex flex-wrap gap-4">
-                  {(["url", "source"] as const).map((value) => (
-                    <label key={value} className="flex items-center gap-2">
+                  {locatorChoices.map((value) => (
+                    <label
+                      key={value}
+                      // min-h-6: цель нажатия — вся подпись, и по WCAG 2.2
+                      // (2.5.8) ей нужно 24px по меньшей стороне. Строка в
+                      // 20px не дотягивала ещё до третьего варианта.
+                      className="flex min-h-6 items-center gap-2"
+                    >
                       <input
                         type="radio"
                         name="wizard-locator"
                         checked={draft.locator === value}
                         onChange={() => changeLocator(value)}
                       />
-                      {t(
-                        locale,
-                        value === "url"
-                          ? "add.locatorUrl"
-                          : "add.locatorSource",
-                      )}
+                      {t(locale, LOCATOR_LABELS[value])}
                     </label>
                   ))}
                 </div>
@@ -361,7 +315,26 @@ export function AddEntryWizard({
 
             {/* Подсказка — сиблинг label, а не её содержимое: внутри она вошла
                 бы в доступное имя поля, и скринридер назвал бы поле фразой. */}
-            {draft.locator === "body" ? null : draft.locator === "url" ? (
+            {draft.locator === "body" ? (
+              <div>
+                <label className="text-sm text-text-1">
+                  {t(locale, "add.source")}
+                  <input
+                    value={draft.source}
+                    onChange={(event) => patch({ source: event.target.value })}
+                    maxLength={MAX_SOURCE_LENGTH}
+                    aria-describedby="wizard-katha-source-hint"
+                    className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+                  />
+                </label>
+                <span
+                  id="wizard-katha-source-hint"
+                  className="mt-1 block text-xs text-text-2"
+                >
+                  {t(locale, "add.hintKathaSource")}
+                </span>
+              </div>
+            ) : draft.locator === "url" ? (
               <div>
                 <label className="text-sm text-text-1">
                   {t(locale, "add.url")}
@@ -428,6 +401,47 @@ export function AddEntryWizard({
                 {t(locale, "add.hintTitle")}
               </span>
             </div>
+
+            {/* Текст материала (VED-355). У катхи он обязателен и заменяет
+                собой ссылку, у статьи бывает и в придачу к ней — перепечатка
+                рядом с оригиналом. Без maxLength: на вставке он молча
+                обрезал бы длинную лекцию, а так превышение видно в подсказке,
+                и «Далее» не пускает дальше. */}
+            {supportsBody(draft.type) && (
+              <div>
+                <label className="text-sm text-text-1">
+                  {t(locale, "add.body")}
+                  {draft.locator !== "body" && (
+                    <span className="text-text-2">
+                      {" "}
+                      — {t(locale, "add.optional")}
+                    </span>
+                  )}
+                  <textarea
+                    value={draft.body}
+                    onChange={(event) => patch({ body: event.target.value })}
+                    rows={12}
+                    lang={draft.contentLanguage}
+                    aria-describedby="wizard-body-hint"
+                    className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+                  />
+                </label>
+                <span
+                  id="wizard-body-hint"
+                  className="mt-1 block text-xs text-text-2"
+                >
+                  {draft.body.trim().length > MAX_BODY_LENGTH
+                    ? t(locale, "add.bodyTooLong")
+                    : t(
+                        locale,
+                        draft.locator === "body"
+                          ? "add.hintBody"
+                          : "add.hintBodyOptional",
+                      )}{" "}
+                  · {draft.body.length}/{MAX_BODY_LENGTH}
+                </span>
+              </div>
+            )}
           </>
         )}
 
@@ -539,47 +553,19 @@ export function AddEntryWizard({
               />
             </dl>
 
-            {/* Обложку предлагаем только материалу без ссылки — книге и
-                катхе: у остальных картинку тянет обогащение со страницы
-                источника. */}
-            {draft.locator !== "url" && (
-              <div>
-                <label className="text-sm text-text-1">
-                  {t(locale, "add.cover")}{" "}
-                  <span className="text-text-2">
-                    — {t(locale, "add.optional")}
-                  </span>
-                  <input
-                    type="file"
-                    accept={COVER_IMAGE_ACCEPT}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      // Через файловый менеджер можно выбрать что угодно
-                      // (VED-134), а загрузка обложки после создания молчит
-                      // о неудаче — неподходящий файл отсекаем здесь.
-                      const unsupported = file !== null && !isCoverImage(file);
-                      setCoverRejected(unsupported);
-                      setCoverFile(unsupported ? null : file);
-                      if (unsupported) event.target.value = "";
-                    }}
-                    aria-describedby="wizard-cover-hint"
-                    className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-sm text-text-0"
-                  />
-                </label>
-                <span
-                  id="wizard-cover-hint"
-                  className="mt-1 block text-xs text-text-2"
-                >
-                  {t(locale, "add.coverHint")}
-                  {coverFile && ` · ${t(locale, "add.coverChosen")}: ${coverFile.name}`}
-                </span>
-                {coverRejected && (
-                  <span role="alert" className="mt-1 block text-xs text-magenta">
-                    {t(locale, "entry.previewUnsupportedType")}
-                  </span>
-                )}
-              </div>
-            )}
+            {/* Картинку предлагаем всякому материалу (VED-344, VED-355).
+                Раньше поле прятали у материала со ссылкой — картинку ему
+                тянет обогащение со страницы источника. Но обогащение
+                приносит не всегда и не то, а своя картинка теперь переживает
+                его (previewIsCustom), так что прятать поле незачем. */}
+            <CoverField
+              locale={locale}
+              file={coverFile}
+              onChange={setCoverFile}
+              hasLink={draft.locator === "url"}
+              idPrefix="wizard"
+              disabled={pending}
+            />
 
             {/* Файл книги — не здесь: сотня мегабайт льётся минутами, и
                 держать ради неё мастер незаконченным незачем. Страница

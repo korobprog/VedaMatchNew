@@ -6,6 +6,8 @@ import {
   failureText,
   isWizardStepReady,
   locatorForType,
+  locatorOptions,
+  supportsBody,
   validateEntryDraft,
   type LibraryEntryDraft,
 } from "./entry-draft";
@@ -257,6 +259,82 @@ describe("катха", () => {
     expect(await entrySubmitFailure(response)).toEqual({
       key: "add.bodyRequired",
     });
+  });
+});
+
+describe("статья с текстом (VED-355)", () => {
+  function articleDraft(
+    over: Partial<LibraryEntryDraft> = {},
+  ): LibraryEntryDraft {
+    return draft({ type: "article", titleRu: "О смирении", ...over });
+  }
+
+  it("текст принимают катха и статья, остальные типы — нет", () => {
+    expect(supportsBody("katha")).toBe(true);
+    expect(supportsBody("article")).toBe(true);
+    expect(supportsBody("video")).toBe(false);
+    expect(supportsBody("book")).toBe(false);
+  });
+
+  it("у статьи три положения переключателя, у катхи одно", () => {
+    expect(locatorOptions("article")).toEqual(["url", "source", "body"]);
+    expect(locatorOptions("katha")).toEqual(["body"]);
+    expect(locatorOptions("video")).toEqual(["url", "source"]);
+  });
+
+  it("статью принимают с одним текстом, без адреса и источника", () => {
+    const written = articleDraft({
+      locator: "body",
+      url: "",
+      body: "Длинный текст статьи",
+    });
+    expect(validateEntryDraft(written)).toBeNull();
+    expect(buildCreateEntryBody(written).body).toBe("Длинный текст статьи");
+    expect(buildCreateEntryBody(written).url).toBeNull();
+  });
+
+  it("при переключателе «текст» текст обязателен", () => {
+    expect(
+      validateEntryDraft(articleDraft({ locator: "body", url: "", body: " " })),
+    ).toBe("add.bodyRequired");
+  });
+
+  it("текст едет и вместе со ссылкой — перепечатка рядом с оригиналом", () => {
+    const body = buildCreateEntryBody(
+      articleDraft({ body: "  Перепечатка  " }),
+    );
+    expect(body.url).toBe("https://example.com/kirtan");
+    expect(body.body).toBe("Перепечатка");
+  });
+
+  it("рядом со ссылкой текст необязателен", () => {
+    expect(validateEntryDraft(articleDraft())).toBeNull();
+    expect(buildCreateEntryBody(articleDraft()).body).toBeNull();
+  });
+
+  it("предел длины действует и без переключателя «текст»", () => {
+    expect(validateEntryDraft(articleDraft({ body: "я".repeat(200_001) }))).toBe(
+      "add.bodyTooLong",
+    );
+    expect(isWizardStepReady(2, articleDraft({ body: "я".repeat(200_001) }))).toBe(
+      false,
+    );
+  });
+
+  it("текст, набранный до смены типа, в запись не попадает", () => {
+    // Показать его у видео негде, и молча сохранённый текст всплыл бы
+    // потом на странице материала непонятно откуда.
+    expect(
+      buildCreateEntryBody(articleDraft({ type: "video", body: "остаток" }))
+        .body,
+    ).toBeNull();
+  });
+
+  it("между катхой и статьёй переключатель остаётся на тексте", () => {
+    // Иначе смена типа уводила бы набранную лекцию с экрана.
+    expect(locatorForType("article", "body", true)).toBe("body");
+    expect(locatorForType("katha", "body", true)).toBe("body");
+    expect(locatorForType("video", "body", true)).toBe("url");
   });
 });
 

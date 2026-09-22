@@ -20,7 +20,7 @@ export const MAX_TITLE_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 1000;
 export const MAX_CATEGORIES = 5;
 export const MAX_SOURCE_LENGTH = 300;
-/** Текст катхи: лекция, беседа, глава — но не книга целиком. См. entry-body.ts в API. */
+/** Текст материала: лекция, беседа, глава — но не книга целиком. См. entry-body.ts в API. */
 export const MAX_BODY_LENGTH = 200_000;
 
 /** Адрес принимаем только абсолютный: относительный некуда открыть. */
@@ -129,13 +129,14 @@ export interface LibraryEntryDraft {
    * необязательная подпись к тексту: где и когда прозвучало.
    */
   source: string;
-  /** Текст катхи целиком. */
+  /** Текст материала целиком — у катхи и статьи, см. LONG_TEXT_TYPES. */
   body: string;
   /**
    * Что заполняет человек. Не выводится из типа: «книга» бывает и
    * бумажной, и на сайте, «статья» — и в журнале, и в блоге. Тип задаёт
-   * лишь начальное положение — см. defaultLocator. Исключение — катха: у неё
-   * положение одно, «текст», и переключателя нет вовсе.
+   * лишь начальное положение — см. defaultLocator, а набор положений —
+   * locatorOptions. Исключение — катха: у неё положение одно, «текст», и
+   * переключателя нет вовсе.
    */
   locator: EntryLocator;
   type: LibraryEntryType;
@@ -153,6 +154,34 @@ export interface LibraryEntryDraft {
 
 export type EntryLocator = "url" | "source" | "body";
 
+/**
+ * Типы, у которых материал целиком живёт на портале собственным текстом
+ * (VED-355). Катха такой была с самого начала; статья попросилась к ней
+ * следом — «большой объём текста как в катхе» и есть katha-поле `body`,
+ * заводить ради статьи второе хранилище текста незачем.
+ *
+ * У катхи текст обязателен, у статьи — нет: статья бывает и просто ссылкой
+ * на чужой сайт. Разницу держит `locator`, а не этот список.
+ */
+export const LONG_TEXT_TYPES: LibraryEntryType[] = ["katha", "article"];
+
+/** Принимает ли тип собственный текст материала. */
+export function supportsBody(type: LibraryEntryType): boolean {
+  return LONG_TEXT_TYPES.includes(type);
+}
+
+/**
+ * Что предлагаем в переключателе «как указать материал».
+ *
+ * Катхе выбирать не из чего — указывать ей есть на что одно. Статье
+ * доступны все три: она бывает и ссылкой на чужой сайт, и цитатой из
+ * книги, и текстом, написанным прямо здесь.
+ */
+export function locatorOptions(type: LibraryEntryType): EntryLocator[] {
+  if (type === "katha") return ["body"];
+  return supportsBody(type) ? ["url", "source", "body"] : ["url", "source"];
+}
+
 /** Катхе нужен текст, книге по умолчанию хватает источника, остальным — адрес. */
 export function defaultLocator(type: LibraryEntryType): EntryLocator {
   if (type === "katha") return "body";
@@ -162,10 +191,12 @@ export function defaultLocator(type: LibraryEntryType): EntryLocator {
 /**
  * Положение переключателя после смены типа.
  *
- * Катхе нужен только текст. Уходя с катхи, возвращаемся к положению по
- * типу: «текста» у остальных типов в формах нет. В прочих случаях ручной
- * выбор человека тип не перебивает — иначе «книга, но по ссылке»
- * сбрасывалась бы при каждом возврате на первый шаг.
+ * Катхе нужен только текст. Набранный текст переживает смену типа, пока
+ * новый тип его принимает: катха и статья — одно и то же поле, и переход
+ * между ними не должен уводить написанное с экрана. Тип, текста не
+ * принимающий, возвращает переключатель к своему положению. В прочих
+ * случаях ручной выбор человека тип не перебивает — иначе «книга, но по
+ * ссылке» сбрасывалась бы при каждом возврате на первый шаг.
  */
 export function locatorForType(
   type: LibraryEntryType,
@@ -173,7 +204,10 @@ export function locatorForType(
   touched: boolean,
 ): EntryLocator {
   if (type === "katha") return "body";
-  if (current === "body" || !touched) return defaultLocator(type);
+  if (current === "body") {
+    return supportsBody(type) ? "body" : defaultLocator(type);
+  }
+  if (!touched) return defaultLocator(type);
   return current;
 }
 
@@ -199,11 +233,26 @@ function locatorError(draft: LibraryEntryDraft): LibraryTextKey | null {
     return null;
   }
 
-  const body = draft.body.trim();
-  if (!body) return "add.bodyRequired";
-  if (body.length > MAX_BODY_LENGTH) return "add.bodyTooLong";
-  // Источник у катхи необязателен, но и безразмерным не бывает.
+  // Переключатель на «текст»: указывать материал будет сам текст, и его
+  // проверяет bodyError. Источник здесь необязателен, но и безразмерным
+  // не бывает — это подпись «где прозвучало», а не пересказ.
   if (source.length > MAX_SOURCE_LENGTH) return "add.sourceTooLong";
+  return null;
+}
+
+/**
+ * Ошибка в тексте материала; `null` — всё на месте.
+ *
+ * Отдельно от локатора, потому что текст перестал быть только «тем, на что
+ * материал указывает»: у статьи он бывает и в придачу к ссылке — перепечатка
+ * рядом с оригиналом. Обязателен он ровно тогда, когда указывать больше не
+ * на что, то есть при локаторе «текст».
+ */
+function bodyError(draft: LibraryEntryDraft): LibraryTextKey | null {
+  const body = draft.body.trim();
+  if (draft.locator === "body" && !body) return "add.bodyRequired";
+  if (!supportsBody(draft.type)) return null;
+  if (body.length > MAX_BODY_LENGTH) return "add.bodyTooLong";
   return null;
 }
 
@@ -213,6 +262,9 @@ export function validateEntryDraft(
 ): LibraryTextKey | null {
   const locator = locatorError(draft);
   if (locator) return locator;
+
+  const body = bodyError(draft);
+  if (body) return body;
 
   if (!draft.titleRu.trim() && !draft.titleEn.trim())
     return "add.titleRequired";
@@ -246,7 +298,11 @@ export function buildCreateEntryBody(
     // У катхи источник — необязательная подпись к тексту, поэтому пустой
     // уезжает как `null`, а не как пустая строка.
     source: draft.locator === "url" ? null : draft.source.trim() || null,
-    body: draft.locator === "body" ? draft.body.trim() : null,
+    // Текст уезжает у всякого типа, который его принимает, а не только при
+    // локаторе «текст»: у статьи он бывает и рядом со ссылкой. А вот
+    // набранный до смены типа текст у типа без текста остаётся на экране,
+    // но в запись не попадает — показать его всё равно будет негде.
+    body: supportsBody(draft.type) ? draft.body.trim() || null : null,
     type: draft.type,
     contentLanguage: draft.contentLanguage,
     titleRu: draft.titleRu.trim() || null,
@@ -284,7 +340,12 @@ export function isWizardStepReady(
       draft.titleRu.trim().length > MAX_TITLE_LENGTH ||
       draft.titleEn.trim().length > MAX_TITLE_LENGTH;
 
-    return locatorError(draft) === null && hasTitle && !titleTooLong;
+    return (
+      locatorError(draft) === null &&
+      bodyError(draft) === null &&
+      hasTitle &&
+      !titleTooLong
+    );
   }
 
   if (step === 3)

@@ -14,10 +14,12 @@ import {
   type LineageId,
 } from "@vedamatch/shared";
 import { CategoryPicker } from "./category-picker";
+import { CoverField } from "./cover-field";
+import { uploadEntryCover } from "./cover-upload";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
 import { insertIntoTree, renameInTree } from "./category-tree";
-import { entryTypeLabel, t } from "./i18n";
+import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
   buildCreateEntryBody,
@@ -26,11 +28,13 @@ import {
   entrySubmitFailure,
   failureText,
   locatorForType,
+  locatorOptions,
   MAX_BODY_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_SOURCE_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
+  supportsBody,
   validateEntryDraft,
   type EntryLocator,
   type LibraryEntryDraft,
@@ -38,6 +42,13 @@ import {
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
+
+/** Подпись каждого положения переключателя «как указать материал». */
+const LOCATOR_LABELS: Record<EntryLocator, LibraryTextKey> = {
+  url: "add.locatorUrl",
+  source: "add.locatorSource",
+  body: "add.locatorBody",
+};
 
 export function AddEntryForm({
   locale,
@@ -79,6 +90,10 @@ export function AddEntryForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
+  /** Картинка материала: уезжает вторым запросом, см. uploadEntryCover. */
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+
+  const locatorChoices = locatorOptions(type);
 
   function toggleCategory(category: LibraryCategoryDto) {
     setSelected((current) =>
@@ -157,6 +172,11 @@ export function AddEntryForm({
       }
 
       const created = (await res.json()) as { id: string };
+
+      // Картинка — к уже созданной записи: эндпоинт обложки требует её
+      // идентификатор. Неудача не отменяет публикацию, повторить загрузку
+      // можно на странице материала.
+      if (coverFile) await uploadEntryCover(API_URL, created.id, coverFile);
       // `replace` и пометка `created` (VED-91): форма не остаётся позади в
       // истории, и «Назад» на странице материала ведёт в портал, а не в
       // редакцию.
@@ -176,57 +196,19 @@ export function AddEntryForm({
           и скринридер называет поле целой фразой. Описание вешаем через
           aria-describedby — оно читается отдельно от имени. */}
       {/* Катхе переключатель ни к чему: указывать ей есть на что одно — на
-          собственный текст. Без maxLength у текста: на вставке он молча
-          обрезал бы длинную лекцию, а так превышение видно в подсказке. */}
-      {locator === "body" && (
-        <>
-          <div>
-            <label className="text-sm text-text-1">
-              {t(locale, "add.body")}
-              <textarea
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                rows={12}
-                lang={contentLanguage}
-                aria-describedby="add-body-hint"
-                required
-                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-              />
-            </label>
-            <span id="add-body-hint" className="mt-1 block text-xs text-text-2">
-              {text.trim().length > MAX_BODY_LENGTH
-                ? t(locale, "add.bodyTooLong")
-                : t(locale, "add.hintBody")}{" "}
-              · {text.length}/{MAX_BODY_LENGTH}
-            </span>
-          </div>
-          <div>
-            <label className="text-sm text-text-1">
-              {t(locale, "add.source")}
-              <input
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-                maxLength={MAX_SOURCE_LENGTH}
-                aria-describedby="add-katha-source-hint"
-              />
-            </label>
-            <span
-              id="add-katha-source-hint"
-              className="mt-1 block text-xs text-text-2"
-            >
-              {t(locale, "add.hintKathaSource")}
-            </span>
-          </div>
-        </>
-      )}
-
-      {locator !== "body" && (
+          собственный текст, и вариант у неё один (locatorOptions). */}
+      {locatorChoices.length > 1 && (
         <fieldset className="text-sm text-text-1">
           <legend className="mb-2">{t(locale, "add.locatorLegend")}</legend>
           <div className="flex flex-wrap gap-4">
-            {(["url", "source"] as const).map((value) => (
-              <label key={value} className="flex items-center gap-2">
+            {locatorChoices.map((value) => (
+              <label
+                      key={value}
+                      // min-h-6: цель нажатия — вся подпись, и по WCAG 2.2
+                      // (2.5.8) ей нужно 24px по меньшей стороне. Строка в
+                      // 20px не дотягивала ещё до третьего варианта.
+                      className="flex min-h-6 items-center gap-2"
+                    >
                 <input
                   type="radio"
                   name="add-locator"
@@ -236,17 +218,33 @@ export function AddEntryForm({
                     setLocator(value);
                   }}
                 />
-                {t(
-                  locale,
-                  value === "url" ? "add.locatorUrl" : "add.locatorSource",
-                )}
+                {t(locale, LOCATOR_LABELS[value])}
               </label>
             ))}
           </div>
         </fieldset>
       )}
 
-      {locator === "body" ? null : locator === "url" ? (
+      {locator === "body" ? (
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.source")}
+            <input
+              value={source}
+              onChange={(event) => setSource(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+              maxLength={MAX_SOURCE_LENGTH}
+              aria-describedby="add-katha-source-hint"
+            />
+          </label>
+          <span
+            id="add-katha-source-hint"
+            className="mt-1 block text-xs text-text-2"
+          >
+            {t(locale, "add.hintKathaSource")}
+          </span>
+        </div>
+      ) : locator === "url" ? (
         <div>
           <label className="text-sm text-text-1">
             {t(locale, "add.url")}
@@ -380,6 +378,49 @@ export function AddEntryForm({
           </span>
         </label>
       </div>
+
+      {/* Текст материала (VED-355): у катхи обязателен и заменяет ссылку, у
+          статьи бывает и в придачу к ней. Без maxLength: на вставке он молча
+          обрезал бы длинную лекцию, а так превышение видно в подсказке. */}
+      {supportsBody(type) && (
+        <div>
+          <label className="text-sm text-text-1">
+            {t(locale, "add.body")}
+            {locator !== "body" && (
+              <span className="text-text-2"> — {t(locale, "add.optional")}</span>
+            )}
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={12}
+              lang={contentLanguage}
+              aria-describedby="add-body-hint"
+              required={locator === "body"}
+              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
+            />
+          </label>
+          <span id="add-body-hint" className="mt-1 block text-xs text-text-2">
+            {text.trim().length > MAX_BODY_LENGTH
+              ? t(locale, "add.bodyTooLong")
+              : t(
+                  locale,
+                  locator === "body" ? "add.hintBody" : "add.hintBodyOptional",
+                )}{" "}
+            · {text.length}/{MAX_BODY_LENGTH}
+          </span>
+        </div>
+      )}
+
+      {/* Картинка — здесь же, а не только в мастере (VED-344): из «Профи»
+          катху публиковали без неё, потому что поля не было вовсе. */}
+      <CoverField
+        locale={locale}
+        file={coverFile}
+        onChange={setCoverFile}
+        hasLink={locator === "url"}
+        idPrefix="add"
+        disabled={pending}
+      />
 
       <CategoryPicker
         locale={locale}
