@@ -610,8 +610,7 @@ describe('камера', () => {
     events.publish.mockClear();
     await service.setState('a', room.id, { video: true });
     const sent = events.publish.mock.calls.at(-1) as
-      | [string[], { type: string }]
-      | undefined;
+      [string[], { type: string }] | undefined;
     expect(sent?.[1]).toMatchObject({ type: 'group-call.updated' });
     expect(sent?.[0]).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
   });
