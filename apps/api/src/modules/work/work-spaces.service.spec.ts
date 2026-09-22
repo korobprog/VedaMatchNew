@@ -10,6 +10,7 @@ function createService(options: {
   actorRole?: string | null;
   agent?: { id: string; isAgent: boolean } | null;
   alreadyMember?: boolean;
+  agents?: unknown[];
 }) {
   const memberFindUnique = jest.fn(
     ({ where }: { where: { spaceId_userId: { userId: string } } }) => {
@@ -25,12 +26,58 @@ function createService(options: {
     },
   );
   const memberCreate = jest.fn().mockResolvedValue({});
+  const userFindMany = jest.fn().mockResolvedValue(options.agents ?? []);
   const prisma = {
     workSpaceMember: { findUnique: memberFindUnique, create: memberCreate },
-    user: { findUnique: jest.fn().mockResolvedValue(options.agent ?? null) },
+    user: {
+      findUnique: jest.fn().mockResolvedValue(options.agent ?? null),
+      findMany: userFindMany,
+    },
   } as unknown as PrismaService;
-  return { service: new WorkSpacesService(prisma), memberCreate };
+  return { service: new WorkSpacesService(prisma), memberCreate, userFindMany };
 }
+
+describe('WorkSpacesService.agentsForSpace', () => {
+  it('список видит только тот, кто распоряжается составом среды', async () => {
+    const { service, userFindMany } = createService({ actorRole: 'member' });
+    await expect(service.agentsForSpace('s1', 'u1')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(userFindMany).not.toHaveBeenCalled();
+  });
+
+  it('людей в списке нет, а уже принятые из него уходят', async () => {
+    const { service, userFindMany } = createService({ actorRole: 'owner' });
+    await service.agentsForSpace('s1', 'u1');
+    // Кнопка не должна предлагать сделать то, что уже сделано.
+    expect(userFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isAgent: true,
+          workMemberships: { none: { spaceId: 's1' } },
+        }),
+      }),
+    );
+  });
+
+  it('имя агента наружу едет духовное, как у любого профиля', async () => {
+    const { service } = createService({
+      actorRole: 'admin',
+      agents: [
+        {
+          id: 'sevak',
+          name: 'Sevak',
+          spiritualName: 'Севак',
+          avatarUrl: null,
+          isAgent: true,
+        },
+      ],
+    });
+    await expect(service.agentsForSpace('s1', 'u1')).resolves.toEqual([
+      { userId: 'sevak', name: 'Севак', isAgent: true },
+    ]);
+  });
+});
 
 describe('WorkSpacesService.addAgent', () => {
   const agent = { id: 'sevak', isAgent: true };
