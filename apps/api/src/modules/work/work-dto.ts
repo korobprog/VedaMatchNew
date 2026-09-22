@@ -6,6 +6,8 @@ import {
   type WorkLabelDto,
   type WorkMemberDto,
   type WorkMemberRole,
+  type WorkPersonDto,
+  type WorkPersonRefDto,
   type WorkTaskCardDto,
   type WorkTaskPriority,
 } from '@vedamatch/shared';
@@ -23,18 +25,23 @@ export interface WorkUserRow {
   name: string;
   spiritualName: string | null;
   avatarUrl: string | null;
+  /** Служебный аккаунт ИИ-агента. Выборка обязана тянуть его рядом с именем. */
+  isAgent: boolean;
 }
 
-export function toWorkPerson(user: WorkUserRow): {
-  userId: string;
-  name: string;
-  avatarUrl: string | null;
-} {
+export function toWorkPerson(user: WorkUserRow): WorkPersonDto {
   return {
     userId: user.id,
     name: resolveDisplayName(user),
     avatarUrl: user.avatarUrl,
+    isAgent: user.isAgent,
   };
+}
+
+/** Тот же человек там, где аватар не рисуется: автор карточки, лицо в истории. */
+export function toWorkPersonRef(user: WorkUserRow): WorkPersonRefDto {
+  const { userId, name, isAgent } = toWorkPerson(user);
+  return { userId, name, isAgent };
 }
 
 export function toWorkMember(row: {

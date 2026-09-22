@@ -23,6 +23,7 @@ import type {
   WorkInviteDto,
   WorkInvitePreviewDto,
   WorkLabelDto,
+  WorkPersonRefDto,
   WorkSpaceDto,
   WorkSpaceSummaryDto,
   WorkTaskDto,
@@ -98,6 +99,16 @@ export const deleteWorkSpace = (spaceId: string) =>
 
 export const leaveWorkSpace = (spaceId: string, userId: string) =>
   send<void>(`/work/spaces/${spaceId}/members/${userId}`, "DELETE");
+
+/**
+ * ИИ-агенты, которых можно принять в среду. Пусто — либо все уже приняты,
+ * либо смотрящий не распоряжается её составом.
+ */
+export const listWorkSpaceAgents = (spaceId: string) =>
+  request<WorkPersonRefDto[]>(`/work/spaces/${spaceId}/agents`);
+
+export const addWorkSpaceAgent = (spaceId: string, agentId: string) =>
+  send<void>(`/work/spaces/${spaceId}/agents/${agentId}`, "POST");
 
 // ===== Приглашения =====
 

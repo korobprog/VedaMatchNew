@@ -117,6 +117,11 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // пар не принёс: заголовок — `text0` на стекле, объяснения — `text1` на
   // стекле, кнопки-ссылки — `text0` на непрозрачном `bg1`; всё три уже
   // закреплены строками выше.
+  // Поиск по ленте (`components/notifications/inbox-search-box.tsx`): поле
+  // на непрозрачном `bg1` — набранное `text0`, подсказка внутри поля
+  // `text1`. «Ищем…» рядом с полем — `text1` на фоне экрана.
+  { name: 'набранное в поле поиска уведомлений', text: 'text0', surface: 'bg1' },
+  { name: 'подсказка внутри поля поиска', text: 'text1', surface: 'bg1' },
 ];
 
 describe.each([
@@ -170,6 +175,9 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   // на том же `bg1`.
   { name: 'обводка неверного поля профиля', graphic: 'magenta', surface: 'bg1' },
   { name: 'обводка плашки «Профиль сохранён»', graphic: 'cyan', surface: 'bg1' },
+  // Рамка поля поиска, когда в нём что-то набрано: подсказка «здесь
+  // фильтр», а не замена обводке фокуса — её рисует система.
+  { name: 'рамка заполненного поля поиска', graphic: 'magenta', surface: 'bg1' },
 ];
 
 describe.each([

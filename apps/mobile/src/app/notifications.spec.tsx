@@ -167,8 +167,38 @@ async function render(): Promise<ReactTestRenderer> {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // `clearAllMocks` не разбирает очередь `...Once`: недоеденный
+  // `mockRejectedValueOnce` одного теста иначе достаётся следующему и
+  // роняет его чужой ошибкой.
+  mockInbox.mockReset();
   resetUnreadCount();
 });
+
+/**
+ * Дать отработать промисам. С поддельными таймерами `advanceTimersByTime`
+ * двигает только таймеры: ответ сервера — это микрозадача, и без прокрутки
+ * очереди состояние экрана остаётся прежним.
+ */
+async function settle(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+/** Набрать запрос в поле и дождаться, пока он уйдёт и вернётся. */
+async function search(renderer: ReactTestRenderer, text: string): Promise<void> {
+  await act(async () => {
+    labelled(renderer, 'Поиск по уведомлениям')[0].props.onChangeText(text);
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS + 50);
+  });
+  await settle();
+}
+
+/** Та же пауза, что в экране: тест не должен угадывать её значение. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 // Экран отписывается при размонтировании; без уборки незавершённый запрос
 // одного теста доезжает до следующего и роняет его чужой ошибкой.
@@ -182,10 +212,10 @@ describe('экран уведомлений', () => {
   it('просит порцию, а не ленту целиком', async () => {
     mockInbox.mockResolvedValue(page([item('a')]));
     await render();
-    // Первая порция просится без курсора; `limit` подставляет сам
-    // `inbox-api.ts` — запрос совсем без параметров сервер считает старым
-    // клиентом и отдаёт ленту целиком.
-    expect(mockInbox.mock.calls[0]).toEqual([]);
+    // Первая порция просится без курсора и без своего размера; `limit`
+    // подставляет сам `inbox-api.ts` — запрос совсем без параметров сервер
+    // считает старым клиентом и отдаёт ленту целиком.
+    expect(mockInbox.mock.calls[0]).toEqual([{ query: '', limit: undefined }]);
   });
 
   it('пока лента не пришла, показывает скелетон, а не «уведомлений нет»', async () => {
@@ -203,10 +233,15 @@ describe('экран уведомлений', () => {
     expect(texts(renderer)).toContain('Уведомлений нет');
   });
 
-  it('ошибка первой загрузки даёт текст и «Повторить», а вторая попытка — ленту', async () => {
-    mockInbox.mockRejectedValueOnce(new Error('Нет связи с сервером'));
+  it('ошибка первой загрузки даёт русский текст и «Повторить», а вторая попытка — ленту', async () => {
+    // В офлайне `fetch` бросает `java.net.UnknownHostException` — на экран
+    // такое не выносим (раунд оценки 001, дефект 2).
+    mockInbox.mockRejectedValueOnce(
+      new TypeError('fetch failed: java.net.UnknownHostException: Unable to resolve host'),
+    );
     const renderer = await render();
-    expect(texts(renderer)).toContain('Нет связи с сервером');
+    expect(texts(renderer)).toContain('Нет соединения с сервером.');
+    expect(texts(renderer)).not.toMatch(/java|fetch failed|Exception/);
 
     mockInbox.mockResolvedValue(page([item('a')]));
     await act(async () => byText(renderer, 'Повторить').props.onPress());
@@ -300,7 +335,7 @@ describe('экран уведомлений', () => {
     mockInbox.mockResolvedValueOnce(page([item('b')], { nextCursor: null }));
     await act(async () => byText(renderer, 'Показать ещё').props.onPress());
 
-    expect(mockInbox).toHaveBeenLastCalledWith({ cursor: 'cur-1' });
+    expect(mockInbox).toHaveBeenLastCalledWith({ cursor: 'cur-1', query: '' });
     const shown = texts(renderer);
     expect(shown).toContain('Заголовок a');
     expect(shown).toContain('Заголовок b');
@@ -325,5 +360,131 @@ describe('экран уведомлений', () => {
     // Пере-рендер сам по себе ленту не роняет; проверяем через обновление.
     const shown = texts(renderer);
     expect(shown).toContain('Заголовок a');
+  });
+
+  it('счётчик «Новое» берётся от сервера, а не от длины порции', async () => {
+    // Порция ровно 20, непрочитанного 21: раньше колокольчик показывал 21,
+    // а заголовок 20 (раунд оценки 001, дефект 1).
+    const twenty = Array.from({ length: 20 }, (_, index) => item(`n-${index}`));
+    mockInbox.mockResolvedValue(page(twenty, { unreadCount: 21, nextCursor: 'cur-1' }));
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Новое · 21');
+    expect(texts(renderer)).not.toContain('Новое · 20');
+  });
+
+  it('«Прочитать все» перечитывает столько же, сколько было показано', async () => {
+    const sixty = Array.from({ length: 60 }, (_, index) => item(`n-${index}`));
+    mockInbox.mockResolvedValueOnce(page(sixty, { unreadCount: 60 }));
+    const renderer = await render();
+
+    mockInbox.mockResolvedValue(page([], { unreadCount: 0 }));
+    await act(async () => byLabel(renderer, 'Отметить все прочитанными')[0].props.onPress());
+
+    // Раньше здесь уходил запрос на одну порцию, и человек, долиставший до
+    // шестидесяти, возвращался к двадцати (раунд оценки 001, дефект 5).
+    expect(mockInbox).toHaveBeenLastCalledWith({ query: '', limit: 60 });
+  });
+
+  it('набор в поле уходит на сервер после паузы, а не на каждую букву', async () => {
+    jest.useFakeTimers();
+    try {
+      mockInbox.mockResolvedValue(page([item('a')]));
+      const renderer = await render();
+      const calls = mockInbox.mock.calls.length;
+
+      const field = labelled(renderer, 'Поиск по уведомлениям')[0];
+      await act(async () => {
+        field.props.onChangeText('за');
+        field.props.onChangeText('зая');
+        field.props.onChangeText('заявка');
+      });
+      // Пауза ещё не вышла — сервер не потревожен ни разу.
+      expect(mockInbox.mock.calls.length).toBe(calls);
+      // «Ищем…» видно сразу, не дожидаясь запроса.
+      expect(texts(renderer)).toContain('Ищем…');
+
+      await act(async () => {
+        jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS + 50);
+      });
+      await settle();
+      expect(mockInbox).toHaveBeenLastCalledWith({ query: 'заявка', limit: undefined });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('поиск серверный: подгружает продолжение тем же запросом', async () => {
+    jest.useFakeTimers();
+    try {
+      mockInbox.mockResolvedValue(page([item('a')], { nextCursor: 'cur-1' }));
+      const renderer = await render();
+      await search(renderer, 'заявка');
+      await act(async () => byText(renderer, 'Показать ещё').props.onPress());
+      // Без `q` сервер продолжил бы другую ленту: курсор считан внутри
+      // выдачи этого запроса.
+      expect(mockInbox).toHaveBeenLastCalledWith({ cursor: 'cur-1', query: 'заявка' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('поиск ничего не нашёл — так и говорит, а не «уведомлений нет»', async () => {
+    jest.useFakeTimers();
+    try {
+      mockInbox.mockResolvedValue(page([item('a')]));
+      const renderer = await render();
+      mockInbox.mockResolvedValue(page([], { unreadCount: 7 }));
+      await search(renderer, 'щука');
+      const shown = texts(renderer);
+      expect(shown).toContain('Ничего не нашлось');
+      expect(shown).toContain('щука');
+      expect(shown).not.toContain('Уведомлений нет');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('в выдаче поиска «Прочитать все» не предлагается', async () => {
+    jest.useFakeTimers();
+    try {
+      mockInbox.mockResolvedValue(page([item('a')], { unreadCount: 9 }));
+      const renderer = await render();
+      expect(byLabel(renderer, 'Отметить все прочитанными')).toHaveLength(1);
+
+      await search(renderer, 'заявка');
+      // Кнопка гасила бы и то, что в выдачу не попало.
+      expect(byLabel(renderer, 'Отметить все прочитанными')).toHaveLength(0);
+      // А счётчик в выдаче считает найденное, а не серверные девять.
+      expect(texts(renderer)).toContain('Новое · 1');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('«Что нового» ведёт на сайт и предупреждает об этом', async () => {
+    mockInbox.mockResolvedValue(page([]));
+    const renderer = await render();
+    const news = byLabel(renderer, 'Что нового')[0];
+    expect(news.props.accessibilityHint).toContain('сайт');
+
+    await act(async () => news.props.onPress());
+    expect(mockOpenBrowser).toHaveBeenCalledWith('https://vedamatch.ru/updates/news');
+  });
+
+  it('с пустой ленты есть куда уйти: «Что нового» показывается и там', async () => {
+    mockInbox.mockResolvedValue(page([]));
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Уведомлений нет');
+    expect(byLabel(renderer, 'Что нового')).toHaveLength(1);
+  });
+
+  it('ошибка продолжения тоже по-русски', async () => {
+    mockInbox.mockResolvedValueOnce(page([item('a')], { nextCursor: 'cur-1' }));
+    const renderer = await render();
+    mockInbox.mockRejectedValueOnce(new TypeError('java.net.SocketTimeoutException'));
+    await act(async () => byText(renderer, 'Показать ещё').props.onPress());
+    const shown = texts(renderer);
+    expect(shown).toContain('Нет соединения с сервером.');
+    expect(shown).not.toMatch(/java|Exception/);
   });
 });

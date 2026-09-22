@@ -4,13 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NotificationItemDto } from "@vedamatch/shared";
 import { NotificationList } from "./notification-list";
 
-const { fetchInbox, markInboxRead, setUnreadCount } = vi.hoisted(() => ({
-  fetchInbox: vi.fn(),
-  markInboxRead: vi.fn(),
-  setUnreadCount: vi.fn(),
-}));
+const { fetchInbox, markInboxRead, setInboxItemRead, setUnreadCount } =
+  vi.hoisted(() => ({
+    fetchInbox: vi.fn(),
+    markInboxRead: vi.fn(),
+    setInboxItemRead: vi.fn(),
+    setUnreadCount: vi.fn(),
+  }));
 
-vi.mock("@/lib/notifications-api", () => ({ fetchInbox, markInboxRead }));
+vi.mock("@/lib/notifications-api", () => ({
+  fetchInbox,
+  markInboxRead,
+  setInboxItemRead,
+}));
 vi.mock("@/lib/notifications-unread", () => ({ setUnreadCount }));
 
 function item(overrides: Partial<NotificationItemDto> = {}): NotificationItemDto {
@@ -30,6 +36,13 @@ function item(overrides: Partial<NotificationItemDto> = {}): NotificationItemDto
 beforeEach(() => {
   vi.clearAllMocks();
   markInboxRead.mockResolvedValue({ ok: true });
+  setInboxItemRead.mockImplementation((id: string, read: boolean) =>
+    Promise.resolve({
+      id,
+      readAt: read ? new Date().toISOString() : null,
+      unreadCount: 0,
+    }),
+  );
 });
 
 describe("NotificationList", () => {
@@ -366,5 +379,180 @@ describe("NotificationList: страницы и поиск (VED-267)", () => {
       cursor: "курсор-2",
     });
     expect(await screen.findByText("VED-267: страницы")).toBeInTheDocument();
+  });
+});
+
+/**
+ * VED-143: своя отметка у каждого уведомления. Заказчик видел на своей ленте
+ * только «Отметить все прочитанными» — оптом, — а разбирать ленту нужно по
+ * одному и с возможностью передумать.
+ */
+describe("NotificationList: своя отметка у карточки (VED-143)", () => {
+  it("помечает прочитанным одно уведомление и не трогает соседнее", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item(), item({ id: "n2", title: "Ответ поддержки" })],
+      unreadCount: 2,
+    });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Кадр готов");
+
+    const buttons = screen.getAllByRole("button", {
+      name: "Пометить прочитанным",
+    });
+    await user.click(buttons[0]);
+
+    expect(setInboxItemRead).toHaveBeenCalledWith("n1", true);
+    // У соседней карточки подпись не изменилась.
+    expect(
+      screen.getAllByRole("button", { name: "Пометить прочитанным" }),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "Вернуть в непрочитанные" }),
+    ).toBeInTheDocument();
+  });
+
+  it("отмеченная карточка остаётся на месте, а не прыгает вниз", async () => {
+    // Уехав в «Прочитанное», она уносит с собой и кнопку отката: проверить,
+    // что нажал, и исправить промах становится нечем.
+    fetchInbox.mockResolvedValue({
+      items: [item(), item({ id: "n2", title: "Ответ поддержки" })],
+      unreadCount: 2,
+    });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Кадр готов");
+
+    await user.click(
+      screen.getAllByRole("button", { name: "Пометить прочитанным" })[0],
+    );
+
+    const unread = screen.getByRole("region", { name: "Непрочитанные" });
+    expect(within(unread).getByText("Кадр готов")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Прочитанные" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("возвращает уведомление в непрочитанные", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item({ readAt: new Date().toISOString() })],
+      unreadCount: 0,
+    });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Вернуть в непрочитанные" }),
+    );
+
+    expect(setInboxItemRead).toHaveBeenCalledWith("n1", false);
+    expect(
+      screen.getByRole("button", { name: "Пометить прочитанным" }),
+    ).toBeInTheDocument();
+  });
+
+  it("счётчик «Новое» и колокольчик меняются сразу, без перезагрузки", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item(), item({ id: "n2", title: "Ответ поддержки" })],
+      unreadCount: 37,
+    });
+    setInboxItemRead.mockResolvedValue({
+      id: "n1",
+      readAt: new Date().toISOString(),
+      unreadCount: 36,
+    });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Новое · 37");
+
+    await user.click(
+      screen.getAllByRole("button", { name: "Пометить прочитанным" })[0],
+    );
+
+    expect(await screen.findByText("Новое · 36")).toBeInTheDocument();
+    expect(setUnreadCount).toHaveBeenLastCalledWith(36);
+    // Ленту при этом не перечитываем: курсор остаётся годным (VED-267).
+    expect(fetchInbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("точное число от сервера перебивает арифметику клиента", async () => {
+    // Пока человек нажимал, в другой вкладке пришло новое уведомление.
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 37 });
+    setInboxItemRead.mockResolvedValue({
+      id: "n1",
+      readAt: new Date().toISOString(),
+      unreadCount: 40,
+    });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Новое · 37");
+
+    await user.click(
+      screen.getByRole("button", { name: "Пометить прочитанным" }),
+    );
+
+    expect(await screen.findByText("Новое · 40")).toBeInTheDocument();
+  });
+
+  it("сбой сервера откатывает и карточку, и счётчик", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 37 });
+    setInboxItemRead.mockRejectedValue(new Error("offline"));
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Новое · 37");
+
+    await user.click(
+      screen.getByRole("button", { name: "Пометить прочитанным" }),
+    );
+
+    expect(await screen.findByText(/Не удалось изменить отметку/)).toBeInTheDocument();
+    expect(screen.getByText("Новое · 37")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Пометить прочитанным" }),
+    ).toBeInTheDocument();
+  });
+
+  it("подгрузка следующей порции после отметки продолжает с того же курсора", async () => {
+    fetchInbox
+      .mockResolvedValueOnce({
+        items: [item()],
+        unreadCount: 37,
+        nextCursor: "курсор-1",
+      })
+      .mockResolvedValueOnce({
+        items: [item({ id: "n2", title: "Вторая порция" })],
+        unreadCount: 36,
+        nextCursor: null,
+      });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Кадр готов");
+
+    await user.click(
+      screen.getByRole("button", { name: "Пометить прочитанным" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Показать ещё" }));
+
+    expect(fetchInbox).toHaveBeenLastCalledWith({
+      query: "",
+      cursor: "курсор-1",
+    });
+    expect(await screen.findByText("Вторая порция")).toBeInTheDocument();
+    // Удержание пережило подгрузку: отмеченная карточка всё там же.
+    expect(
+      within(screen.getByRole("region", { name: "Непрочитанные" })).getByText(
+        "Кадр готов",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("«Отметить все прочитанными» осталось на месте", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1 });
+    render(<NotificationList />);
+
+    expect(
+      await screen.findByRole("button", { name: "Отметить все прочитанными" }),
+    ).toBeInTheDocument();
   });
 });

@@ -25,18 +25,14 @@ import {
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  WORK_EVENTS,
-  workTaskRecipients,
-  type WorkTaskAssignedEvent,
-  type WorkTaskCommentedEvent,
-} from './work-events';
+import { WORK_EVENTS, type WorkTaskAssignedEvent } from './work-events';
 import { WorkNoticesService } from './work-notices.service';
 import { newTaskColumnQuery } from './work-task-column';
 import {
   toWorkAgendaItem,
   toWorkAgendaResponse,
   toWorkPerson,
+  toWorkPersonRef,
   toWorkTaskCard,
   workAgendaBucket,
 } from './work-dto';
@@ -69,6 +65,7 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  isAgent: true,
 } satisfies Prisma.UserSelect;
 
 const taskCardInclude = {
@@ -154,7 +151,10 @@ export class WorkTasksService {
         activity: {
           orderBy: { createdAt: 'desc' },
           take: ACTIVITY_LIMIT,
-          include: { actor: { select: workUserSelect } },
+          include: {
+            actor: { select: workUserSelect },
+            onBehalfOf: { select: workUserSelect },
+          },
         },
       },
     });
@@ -173,12 +173,7 @@ export class WorkTasksService {
       boardId: task.boardId,
       spaceId: task.spaceId,
       description: task.description,
-      createdBy: task.createdBy
-        ? {
-            userId: toWorkPerson(task.createdBy).userId,
-            name: toWorkPerson(task.createdBy).name,
-          }
-        : null,
+      createdBy: task.createdBy ? toWorkPersonRef(task.createdBy) : null,
       checklist: task.checklist.map((item) => ({
         id: item.id,
         text: item.text,
@@ -196,12 +191,8 @@ export class WorkTasksService {
       activity: task.activity.map((entry) => ({
         id: entry.id,
         kind: entry.kind,
-        actor: entry.actor
-          ? {
-              userId: entry.actor.id,
-              name: toWorkPerson(entry.actor).name,
-            }
-          : null,
+        actor: entry.actor ? toWorkPersonRef(entry.actor) : null,
+        onBehalfOf: entry.onBehalfOf ? toWorkPersonRef(entry.onBehalfOf) : null,
         payload: (entry.payload ?? {}) as Record<string, unknown>,
         createdAt: entry.createdAt.toISOString(),
       })),
@@ -215,6 +206,7 @@ export class WorkTasksService {
     boardId: string,
     userId: string,
     request: CreateWorkTaskRequest,
+    onBehalfOfId: string | null = null,
   ): Promise<WorkTaskDto> {
     const board = await this.prisma.workBoard.findUnique({
       where: { id: boardId },
@@ -286,6 +278,7 @@ export class WorkTasksService {
           spaceId: board.spaceId,
           taskId: task.id,
           actorId: userId,
+          onBehalfOfId,
           kind: 'task_created',
           payload: { title },
         },
@@ -300,6 +293,7 @@ export class WorkTasksService {
     taskId: string,
     userId: string,
     request: UpdateWorkTaskRequest,
+    onBehalfOfId: string | null = null,
   ): Promise<WorkTaskDto> {
     const context = await this.taskContext(taskId);
     assertWorkAccess(
@@ -350,6 +344,7 @@ export class WorkTasksService {
             spaceId: context.spaceId,
             taskId,
             actorId: userId,
+            onBehalfOfId,
             kind: 'task_assigned',
             payload: { assigneeId: request.assigneeId },
           },
@@ -361,6 +356,7 @@ export class WorkTasksService {
             spaceId: context.spaceId,
             taskId,
             actorId: userId,
+            onBehalfOfId,
             kind: 'task_due_set',
             payload: { dueAt: request.dueAt },
           },
@@ -397,6 +393,7 @@ export class WorkTasksService {
     taskId: string,
     userId: string,
     request: MoveWorkTaskRequest,
+    onBehalfOfId: string | null = null,
   ): Promise<WorkTaskDto> {
     const context = await this.taskContext(taskId);
     assertWorkAccess(
@@ -448,17 +445,19 @@ export class WorkTasksService {
           spaceId: context.spaceId,
           taskId,
           actorId: userId,
+          onBehalfOfId,
           kind: column.isDone ? 'task_completed' : 'task_moved',
           payload: { from: wasDone.columnId, to: column.id },
         },
       });
     }
 
-    // Уведомление не уходит по клику: перенос — единственное действие, которое
-    // человек отменяет через минуту («поставил в тест, а там не дописано»), и
-    // пуш, ушедший сразу, к этому моменту уже врёт. Кладём в очередь, а через
-    // окно воркер посмотрит, где карточка осталась на самом деле, и решит,
-    // есть ли вообще новость. См. work-notice.ts.
+    // Уведомление не уходит по клику: перенос человек отменяет через минуту
+    // («поставил в тест, а там не дописано»), и пуш, ушедший сразу, к этому
+    // моменту уже врёт. Кладём в очередь, а через окно воркер посмотрит, где
+    // карточка осталась на самом деле, и решит, есть ли вообще новость. В то же
+    // окно попадает комментарий того же человека — одно действие, одно
+    // уведомление (VED-298). См. work-notice.ts.
     if (wasDone && wasDone.columnId !== column.id) {
       const task = await this.prisma.workTask.findUnique({
         where: { id: taskId },
@@ -494,7 +493,11 @@ export class WorkTasksService {
   }
 
   /** Удаление — это архив: «куда делась карточка» не должно быть вопросом. */
-  async archive(taskId: string, userId: string): Promise<void> {
+  async archive(
+    taskId: string,
+    userId: string,
+    onBehalfOfId: string | null = null,
+  ): Promise<void> {
     const context = await this.taskContext(taskId);
     assertWorkAccess(
       await this.spaces.roleOf(context.spaceId, userId),
@@ -510,6 +513,7 @@ export class WorkTasksService {
           spaceId: context.spaceId,
           taskId,
           actorId: userId,
+          onBehalfOfId,
           kind: 'task_archived',
           payload: {},
         },
@@ -523,7 +527,11 @@ export class WorkTasksService {
    * (каскад), так что раз карточка есть — есть и колонка. Уже стоящую на
    * доске не трогаем — повтор безвреден.
    */
-  async restore(taskId: string, userId: string): Promise<WorkTaskDto> {
+  async restore(
+    taskId: string,
+    userId: string,
+    onBehalfOfId: string | null = null,
+  ): Promise<WorkTaskDto> {
     const context = await this.taskContext(taskId);
     assertWorkAccess(
       await this.spaces.roleOf(context.spaceId, userId),
@@ -539,6 +547,7 @@ export class WorkTasksService {
           spaceId: context.spaceId,
           taskId,
           actorId: userId,
+          onBehalfOfId,
           kind: 'task_restored',
           payload: {},
         },
@@ -587,6 +596,7 @@ export class WorkTasksService {
     taskId: string,
     userId: string,
     request: CreateWorkCommentRequest,
+    onBehalfOfId: string | null = null,
   ): Promise<WorkTaskDto> {
     const context = await this.taskContext(taskId);
     assertWorkAccess(
@@ -604,27 +614,22 @@ export class WorkTasksService {
           spaceId: context.spaceId,
           taskId,
           actorId: userId,
+          onBehalfOfId,
           kind: 'comment_added',
           payload: {},
         },
       }),
     ]);
 
-    const notify = await this.notifyContext(taskId, userId);
-    if (notify) {
-      for (const recipientId of workTaskRecipients(notify.task, userId)) {
-        this.events.emit(WORK_EVENTS.taskCommented, {
-          name: WORK_EVENTS.taskCommented,
-          recipientId,
-          spaceId: notify.task.spaceId,
-          taskKey: notify.taskKey,
-          taskTitle: notify.task.title,
-          actorName: notify.actorName,
-          excerpt: body,
-          columnName: notify.task.column.name,
-        } satisfies WorkTaskCommentedEvent);
-      }
-    }
+    // Комментарий не уведомляет по клику, а ложится в ту же очередь, что и
+    // переезд карточки (VED-298). Пока окно не закрылось, «прокомментировал и
+    // тут же перенёс» остаётся одним действием, а не двумя новостями подряд;
+    // решение, что из этого сказать, принимает воркер — см. work-notice.ts.
+    const task = await this.prisma.workTask.findUnique({
+      where: { id: taskId },
+      select: { id: true, assigneeId: true, createdById: true },
+    });
+    if (task) await this.notices.enqueueComment(task, userId, body);
 
     return this.get(taskId, userId);
   }

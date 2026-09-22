@@ -61,12 +61,28 @@ export const WORK_DEFAULT_COLUMNS = [
   { name: 'Готово', isDone: true },
 ] as const;
 
-/** Участник среды глазами остальных участников. */
-export interface WorkMemberDto {
+/**
+ * Человек или ИИ-агент в «Работе»: исполнитель, автор карточки, лицо в
+ * истории.
+ *
+ * Признак `isAgent` едет наружу не ради значка: агенту нечем заполнить аватар,
+ * и без пометки он рисуется тем же кружком с буквой, что и живой участник, —
+ * то есть программа выдаётся за человека.
+ */
+export interface WorkPersonDto {
   userId: string;
   /** Всегда результат resolveDisplayName(): духовное имя перекрывает мирское. */
   name: string;
   avatarUrl: string | null;
+  /** Служебный аккаунт ИИ. У людей `false`. */
+  isAgent: boolean;
+}
+
+/** То же там, где аватар не рисуется: автор карточки, лицо в истории. */
+export type WorkPersonRefDto = Omit<WorkPersonDto, 'avatarUrl'>;
+
+/** Участник среды глазами остальных участников. */
+export interface WorkMemberDto extends WorkPersonDto {
   role: WorkMemberRole;
   joinedAt: string;
 }
@@ -87,7 +103,7 @@ export interface WorkChecklistItemDto {
 export interface WorkCommentDto {
   id: string;
   body: string;
-  author: { userId: string; name: string; avatarUrl: string | null } | null;
+  author: WorkPersonDto | null;
   createdAt: string;
   editedAt: string | null;
 }
@@ -107,7 +123,13 @@ export interface WorkAttachmentDto {
 export interface WorkActivityDto {
   id: string;
   kind: WorkActivityKind;
-  actor: { userId: string; name: string } | null;
+  actor: WorkPersonRefDto | null;
+  /**
+   * Человек, чьим ключом действовал агент. Заполнено только у записей ИИ:
+   * аккаунт у него один на всех, и «кто это сделал» без поручителя отвечает
+   * лишь наполовину.
+   */
+  onBehalfOf: WorkPersonRefDto | null;
   payload: Record<string, unknown>;
   createdAt: string;
 }
@@ -127,7 +149,7 @@ export interface WorkTaskCardDto {
   priority: WorkTaskPriority;
   dueAt: string | null;
   completedAt: string | null;
-  assignee: { userId: string; name: string; avatarUrl: string | null } | null;
+  assignee: WorkPersonDto | null;
   labels: WorkLabelDto[];
   /** Сколько пунктов чек-листа отмечено из скольких. */
   checklistDone: number;
@@ -146,7 +168,7 @@ export interface WorkTaskDto extends WorkTaskCardDto {
   boardId: string;
   spaceId: string;
   description: string;
-  createdBy: { userId: string; name: string } | null;
+  createdBy: WorkPersonRefDto | null;
   checklist: WorkChecklistItemDto[];
   comments: WorkCommentDto[];
   attachments: WorkAttachmentDto[];

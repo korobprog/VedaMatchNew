@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import {
   ActivityIndicator,
   AppState,
-  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,6 +18,12 @@ import {
   type DeliverySectionState,
 } from '@/lib/push/device-delivery-state';
 import { registerThisDevice } from '@/lib/push/device-registration';
+import {
+  openMessagesChannelSettings,
+  openNotificationSettings,
+  readMessagesChannel,
+  type MessagesChannelState,
+} from '@/lib/push/notification-channel';
 import { pushRegistration, subscribePushRegistration } from '@/lib/push/push-registration';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -65,6 +70,10 @@ function DeviceDeliveryCard() {
   const [status, setStatus] = useState<NotificationDeliveryStatusDto | null>(null);
   const [statusFailed, setStatusFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Важность канала «Сообщения»: её человек меняет в системных настройках, и
+  // приложение узнаёт об этом, только когда спросит. Спрашиваем по тем же
+  // поводам, что и сервер, — это дешёвый локальный вызов.
+  const [channel, setChannel] = useState<MessagesChannelState>('unknown');
 
   // Момент последнего УДАЧНОГО ответа: по нему решается, дёргать ли сервер на
   // этом заходе. Ref, а не state: от него ничего не рисуется.
@@ -87,7 +96,9 @@ function DeviceDeliveryCard() {
       } catch {
         if (request.current !== id) return;
         // Ответа нет — прежний показывать нечестно: он мог устареть ровно
-        // сейчас. Раздел скажет «не удалось проверить» и предложит повтор.
+        // сейчас, и тогда человеку снова обещали бы доставку, про которую
+        // приложение уже ничего не знает. Раздел скажет «не удалось
+        // проверить» и предложит повтор.
         setStatus(null);
         setStatusFailed(true);
       }
@@ -95,12 +106,20 @@ function DeviceDeliveryCard() {
     [deliveryApi],
   );
 
+  /** Состояние целиком: канал у системы (локально) и точки доставки у сервера. */
+  const refresh = useCallback(
+    async (reason: DeliveryRefreshReason) => {
+      await Promise.all([readMessagesChannel().then(setChannel), load(reason)]);
+    },
+    [load],
+  );
+
   // Экран открылся (или вернулся в фокус) — спрашиваем, но не чаще раза в
   // минуту: раздел листают туда-сюда, а доставка так быстро не меняется.
   useFocusEffect(
     useCallback(() => {
-      void load('focus');
-    }, [load]),
+      void refresh('focus');
+    }, [refresh]),
   );
 
   useEffect(() => {
@@ -112,45 +131,58 @@ function DeviceDeliveryCard() {
         // Вернулись из настроек уведомлений: заново спрашиваем разрешение и
         // токен — только это превратит свежее «разрешить» в живую точку
         // доставки, само по себе оно на сервер не попадёт.
-        void registerThisDevice(api).finally(() => void load('manual'));
+        void registerThisDevice(api).finally(() => void refresh('manual'));
         return;
       }
-      void load('foreground');
+      void refresh('foreground');
     });
     return () => subscription.remove();
-  }, [api, load]);
+  }, [api, refresh]);
 
-  const section = describeDeviceDelivery({ registration, status, statusFailed });
+  const section = describeDeviceDelivery({ registration, channel, status, statusFailed });
 
-  const openSettings = useCallback(() => {
+  /**
+   * Уводим человека в настройки. Флаг «мы его туда отправили» снимается, если
+   * открыть не вышло: иначе он остался бы взведённым навсегда и следующий
+   * возврат на передний план по любому поводу зря дёргал бы регистрацию.
+   */
+  const goToSettings = useCallback(async (channelScreen: boolean) => {
     fromSettings.current = true;
-    void Linking.openSettings();
+    setBusy(true);
+    try {
+      await (channelScreen ? openMessagesChannelSettings() : openNotificationSettings());
+    } catch {
+      fromSettings.current = false;
+    } finally {
+      setBusy(false);
+    }
   }, []);
 
   const retry = useCallback(async () => {
     setBusy(true);
     try {
       await registerThisDevice(api);
-      await load('manual');
+      await refresh('manual');
     } finally {
       setBusy(false);
     }
-  }, [api, load]);
+  }, [api, refresh]);
 
   const recheck = useCallback(async () => {
     setBusy(true);
     try {
-      await load('manual');
+      await refresh('manual');
     } finally {
       setBusy(false);
     }
-  }, [load]);
+  }, [refresh]);
 
   const press = useCallback(() => {
-    if (section.action === 'settings') openSettings();
+    if (section.action === 'settings') void goToSettings(false);
+    else if (section.action === 'channel-settings') void goToSettings(true);
     else if (section.action === 'retry') void retry();
     else if (section.action === 'recheck') void recheck();
-  }, [section.action, openSettings, retry, recheck]);
+  }, [section.action, goToSettings, retry, recheck]);
 
   return (
     <View style={styles.section}>

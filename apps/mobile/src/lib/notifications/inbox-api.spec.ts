@@ -29,6 +29,27 @@ describe('inboxPath', () => {
   it('свой размер порции уважается', () => {
     expect(inboxPath({ limit: 50 })).toContain('limit=50');
   });
+
+  it('поиск уходит параметром `q` — сервер ищет по всей ленте, не по порции', () => {
+    expect(inboxPath({ query: 'заявка' })).toContain('q=%D0%B7%D0%B0%D1%8F%D0%B2%D0%BA%D0%B0');
+    expect(inboxPath({ query: 'заявка' })).toContain(`limit=${INBOX_PAGE_SIZE}`);
+  });
+
+  it('поиск повторяется и в продолжении: без `q` сервер продолжил бы другую ленту', () => {
+    const path = inboxPath({ cursor: 'c', query: 'заявка' });
+    expect(path).toContain('cursor=c');
+    expect(path).toContain('q=');
+  });
+
+  it('пустой запрос и одни пробелы поиском не считаются', () => {
+    expect(inboxPath({ query: '' })).not.toContain('q=');
+    expect(inboxPath({ query: '   ' })).not.toContain('q=');
+    expect(inboxPath({ query: null })).not.toContain('q=');
+  });
+
+  it('пробелы по краям режутся, внутри — нет', () => {
+    expect(inboxPath({ query: '  две слова  ' })).toContain('q=%D0%B4%D0%B2%D0%B5+%D1%81%D0%BB%D0%BE%D0%B2%D0%B0');
+  });
 });
 
 describe('createInboxApi', () => {

@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   apiKeyHint,
@@ -19,7 +20,7 @@ const LAST_USED_THROTTLE_MS = 5 * 60 * 1000;
  * `forbidden` — ключ жив, но прав на этот запрос у него нет.
  */
 export type ApiKeyResolution =
-  | { ok: true; userId: string; scopes: string[] }
+  | { ok: true; userId: string; agentId: string | null; scopes: string[] }
   | { ok: false; reason: 'unusable' }
   | { ok: false; reason: 'forbidden'; scopes: string[] };
 
@@ -30,6 +31,8 @@ export interface IssuedApiKey {
   token: string;
   scopes: string[];
   expiresAt: Date | null;
+  /** Служебный аккаунт, от имени которого ходит ключ. Пусто — ключ личный. */
+  agentId: string | null;
 }
 
 @Injectable()
@@ -39,11 +42,17 @@ export class ApiKeysService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Выпуск ключа. `agentId` превращает его в агентский: запросы таким ключом
+   * идут от имени служебного аккаунта, а владелец остаётся тем, кто за ключ
+   * отвечает и кого показывает история «Работы» рядом с именем агента.
+   */
   async issue(
     userId: string,
     name: string,
     scopes: string[],
     expiresAt: Date | null,
+    agent: { id: string; issuerRole: string } | null = null,
   ): Promise<IssuedApiKey> {
     const live = await this.prisma.userApiKey.count({
       where: { userId, revoked: false },
@@ -56,10 +65,13 @@ export class ApiKeysService {
       );
     }
 
+    const agentId = agent ? await this.resolveAgentAccount(agent) : null;
+
     const { token, hash } = generateApiKey();
     const key = await this.prisma.userApiKey.create({
       data: {
         userId,
+        agentId,
         name,
         tokenHash: hash,
         hint: apiKeyHint(token),
@@ -68,11 +80,44 @@ export class ApiKeysService {
       },
       select: { id: true },
     });
-    return { id: key.id, name, token, scopes, expiresAt };
+    return { id: key.id, name, token, scopes, expiresAt, agentId };
+  }
+
+  /**
+   * Проверка перед выпуском агентского ключа.
+   *
+   * Выпускать его позволено только администрации, и это не перестраховка:
+   * агент состоит в чужих рабочих средах, поэтому ключ на него — доступ к
+   * доскам людей, которые выпускающего туда не звали. Личный ключ такого
+   * свойства не имеет: он не выводит владельца за пределы его собственных
+   * сред.
+   *
+   * Второй проверкой отсекается аккаунт живого человека: ключ «на Стаса» —
+   * это чужое имя, а не служебное, сколько бы прав ни было у выпускающего.
+   */
+  private async resolveAgentAccount(agent: {
+    id: string;
+    issuerRole: string;
+  }): Promise<string> {
+    if (agent.issuerRole !== 'admin') {
+      throw new ForbiddenException(
+        'Ключ для ИИ-агента выпускает администрация: он открывает доступ к средам, где состоит агент',
+      );
+    }
+    const account = await this.prisma.user.findUnique({
+      where: { id: agent.id },
+      select: { id: true, isAgent: true },
+    });
+    if (!account || !account.isAgent) {
+      throw new ForbiddenException(
+        'Такого служебного аккаунта нет: ключ от имени живого человека не выпускается',
+      );
+    }
+    return account.id;
   }
 
   async list(userId: string) {
-    return this.prisma.userApiKey.findMany({
+    const keys = await this.prisma.userApiKey.findMany({
       where: { userId, revoked: false },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -83,8 +128,15 @@ export class ApiKeysService {
         lastUsedAt: true,
         expiresAt: true,
         createdAt: true,
+        agent: { select: { id: true, name: true, spiritualName: true } },
       },
     });
+    // Имя агента наружу — через resolveDisplayName, как у любого профиля:
+    // правило портала не знает исключений для служебных аккаунтов.
+    return keys.map(({ agent, ...key }) => ({
+      ...key,
+      agent: agent ? { id: agent.id, name: resolveDisplayName(agent) } : null,
+    }));
   }
 
   /**
@@ -96,6 +148,23 @@ export class ApiKeysService {
       where: { id: keyId, userId },
       data: { revoked: true },
     });
+  }
+
+  /**
+   * Служебные аккаунты ИИ-агентов — чтобы форма выпуска показала, на кого
+   * ключ вообще можно выписать. Имя — через resolveDisplayName.
+   */
+  async listAgents(actorRole: string) {
+    assertAdmin(actorRole);
+    const agents = await this.prisma.user.findMany({
+      where: { isAgent: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, spiritualName: true },
+    });
+    return agents.map((agent) => ({
+      id: agent.id,
+      name: resolveDisplayName(agent),
+    }));
   }
 
   /**
@@ -155,6 +224,7 @@ export class ApiKeysService {
       select: {
         id: true,
         userId: true,
+        agentId: true,
         scopes: true,
         revoked: true,
         expiresAt: true,
@@ -171,7 +241,12 @@ export class ApiKeysService {
       return { ok: false, reason: 'forbidden', scopes: key.scopes };
     }
     this.touchLastUsed(key.id, now);
-    return { ok: true, userId: key.userId, scopes: key.scopes };
+    return {
+      ok: true,
+      userId: key.userId,
+      agentId: key.agentId,
+      scopes: key.scopes,
+    };
   }
 
   /** Отметка об использовании не должна задерживать или ронять запрос. */

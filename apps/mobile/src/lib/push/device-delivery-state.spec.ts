@@ -19,6 +19,7 @@ const alive: NotificationDeliveryStatusDto = { ...nothing, app: 1, reachable: tr
 describe('describeDeviceDelivery', () => {
   it('нет разрешения Android — зовём в системные настройки, а не пугаем', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'no-permission',
       status: alive,
       statusFailed: false,
@@ -26,14 +27,15 @@ describe('describeDeviceDelivery', () => {
 
     expect(section.kind).toBe('no-permission');
     expect(section.action).toBe('settings');
-    expect(section.actionLabel).toBe('Открыть настройки');
-    expect(section.hint).toContain('Откройте настройки уведомлений');
+    expect(section.actionLabel).toBe('Открыть настройки уведомлений');
+    expect(section.hint).toContain('Откройте настройки уведомлений VedaMatch');
     expect(section.tone).toBe('warn');
   });
 
   it('разрешение важнее ответа сервера: живая точка другого устройства не повод обещать пуши здесь', () => {
     expect(
       describeDeviceDelivery({
+        channel: 'on',
         registration: 'no-permission',
         status: { ...alive, app: 2 },
         statusFailed: false,
@@ -41,8 +43,79 @@ describe('describeDeviceDelivery', () => {
     ).toBe('no-permission');
   });
 
+  it('категория «Сообщения» выключена — сервер доставляет, а Android прячет', () => {
+    // Найдено на живом телефоне (раунд 001, снимок ved329-06): разрешение
+    // приложения на месте, точка доставки живая — и ни одного уведомления.
+    const section = describeDeviceDelivery({
+      channel: 'off',
+      registration: 'registered',
+      status: alive,
+      statusFailed: false,
+    });
+
+    expect(section.kind).toBe('channel-off');
+    expect(section.title).toBe('Категория «Сообщения» выключена');
+    expect(section.action).toBe('channel-settings');
+    expect(section.actionLabel).toBe('Открыть категорию «Сообщения»');
+    expect(section.tone).toBe('warn');
+    expect(section.hint).toContain('категорию «Сообщения»');
+  });
+
+  it('про канал ничего не известно — молчим о нём: «не знаем» не повод пугать', () => {
+    expect(
+      describeDeviceDelivery({
+        channel: 'unknown',
+        registration: 'registered',
+        status: alive,
+        statusFailed: false,
+      }).kind,
+    ).toBe('ok');
+  });
+
+  it('запрет приложения важнее выключенной категории: чинить надо с него', () => {
+    expect(
+      describeDeviceDelivery({
+        channel: 'off',
+        registration: 'no-permission',
+        status: alive,
+        statusFailed: false,
+      }).kind,
+    ).toBe('no-permission');
+  });
+
+  it('ключ ЭТОГО телефона не дошёл, а другое устройство живо — не обещаем доставку сюда', () => {
+    // `status.app` считает все живые телефоны аккаунта, а не этот: второй
+    // телефон человека оправдывал бы обещание, которое к телефону в руках
+    // отношения не имеет (раунд 001, дефект 2).
+    const section = describeDeviceDelivery({
+      channel: 'on',
+      registration: 'failed',
+      status: alive,
+      statusFailed: false,
+    });
+
+    expect(section.kind).toBe('not-this-phone');
+    expect(section.title).toBe('Этот телефон уведомления не получит');
+    expect(section.hint).toContain('на другие ваши устройства');
+    expect(section.action).toBe('retry');
+  });
+
+  it('ключ не дошёл и других точек нет — это уже «доставлять некуда»', () => {
+    const section = describeDeviceDelivery({
+      channel: 'on',
+      registration: 'failed',
+      status: nothing,
+      statusFailed: false,
+    });
+
+    expect(section.kind).toBe('unreachable');
+    expect(section.title).toContain('некуда');
+    expect(section.hint).not.toContain('на другие ваши устройства');
+  });
+
   it('сборка без google-services.json — объясняем, что кнопкой это не лечится', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'no-token',
       status: nothing,
       statusFailed: false,
@@ -57,6 +130,7 @@ describe('describeDeviceDelivery', () => {
 
   it('ответа сервера ещё нет — «проверяем», без обещаний и без ругани', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'unknown',
       status: null,
       statusFailed: false,
@@ -69,6 +143,7 @@ describe('describeDeviceDelivery', () => {
 
   it('сервер не ответил — не знаем, значит не пугаем: правило с сайта', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'registered',
       status: null,
       statusFailed: true,
@@ -83,6 +158,7 @@ describe('describeDeviceDelivery', () => {
 
   it('точка доставки живая и зарегистрирована этим телефоном — говорим прямо про него', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'registered',
       status: alive,
       statusFailed: false,
@@ -96,6 +172,7 @@ describe('describeDeviceDelivery', () => {
 
   it('телефон у сервера есть, но регистрации в этом запуске не было — обещаем осторожнее', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'unknown',
       status: alive,
       statusFailed: false,
@@ -108,6 +185,7 @@ describe('describeDeviceDelivery', () => {
 
   it('токен не дошёл до сервера — виним связь и предлагаем повтор', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'failed',
       status: nothing,
       statusFailed: false,
@@ -122,6 +200,7 @@ describe('describeDeviceDelivery', () => {
 
   it('токен ушёл, а сервер точки не видит — повтор регистрации снимает пометку', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'registered',
       status: nothing,
       statusFailed: false,
@@ -133,6 +212,7 @@ describe('describeDeviceDelivery', () => {
 
   it('про телефон ничего не известно, точек нет — говорим, что ключ не дошёл', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'unknown',
       status: nothing,
       statusFailed: false,
@@ -144,18 +224,22 @@ describe('describeDeviceDelivery', () => {
 
   it('уведомления идут в браузер и Telegram — называем их, иначе «некуда» звучит страшнее правды', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'failed',
       status: { ...nothing, web: 1, telegram: 1, reachable: true },
       statusFailed: false,
     });
 
-    expect(section.kind).toBe('unreachable');
+    // Живые точки есть, значит «некуда» — неправда: заголовок про этот телефон.
+    expect(section.kind).toBe('not-this-phone');
+    expect(section.title).toBe('Этот телефон уведомления не получит');
     expect(section.hint).toContain('в браузер и в Telegram');
     expect(section.hint).toContain('но не на этот телефон');
   });
 
   it('помеченные мёртвыми подписки браузера упоминаются отдельно', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'failed',
       status: { ...nothing, stale: 2 },
       statusFailed: false,
@@ -164,9 +248,40 @@ describe('describeDeviceDelivery', () => {
     expect(section.hint).toContain('пометил мёртвыми');
   });
 
+  it('одна мёртвая подписка — тоже повод сказать: это самый частый случай', () => {
+    // Граница `stale > 0`: с единственной мёртвой подписки всё и начинается.
+    expect(
+      describeDeviceDelivery({
+        channel: 'on',
+        registration: 'failed',
+        status: { ...nothing, stale: 1 },
+        statusFailed: false,
+      }).hint,
+    ).toContain('пометил мёртвыми');
+  });
+
+  it('мёртвых нет — про них и не заговариваем', () => {
+    expect(
+      describeDeviceDelivery({
+        channel: 'on',
+        registration: 'failed',
+        status: nothing,
+        statusFailed: false,
+      }).hint,
+    ).not.toContain('пометил мёртвыми');
+  });
+
   it('в каждом плохом исходе напоминаем, что переписка работает и без пушей', () => {
     const bad = (['no-permission', 'no-token', 'failed'] as const).map((registration) =>
-      describeDeviceDelivery({ registration, status: nothing, statusFailed: false }),
+      describeDeviceDelivery({ registration, channel: 'on', status: nothing, statusFailed: false }),
+    );
+    bad.push(
+      describeDeviceDelivery({
+        channel: 'off',
+        registration: 'registered',
+        status: alive,
+        statusFailed: false,
+      }),
     );
 
     for (const section of bad) {
@@ -176,6 +291,7 @@ describe('describeDeviceDelivery', () => {
 
   it('у хорошего исхода ни кнопки, ни оправданий', () => {
     const section = describeDeviceDelivery({
+      channel: 'on',
       registration: 'registered',
       status: alive,
       statusFailed: false,

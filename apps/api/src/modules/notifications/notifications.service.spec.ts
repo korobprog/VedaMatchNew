@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { INBOX_PAGE_SIZE, LEGACY_INBOX_LIMIT } from './inbox-page';
 import { NotificationsService } from './notifications.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -20,7 +20,7 @@ interface InboxWhere {
   userId?: string;
   readAt?: null | { lt: Date } | { not: null };
   createdAt?: Date | { lt: Date };
-  id?: { in: string[] } | { lt: string };
+  id?: string | { in: string[] } | { lt: string };
   title?: { contains: string; mode?: string };
   body?: { contains: string; mode?: string };
   OR?: InboxWhere[];
@@ -43,9 +43,21 @@ function matchesInbox(row: InboxRow, where: InboxWhere): boolean {
     if (row.createdAt.getTime() !== where.createdAt.getTime()) return false;
   } else if (where.createdAt && row.createdAt >= where.createdAt.lt)
     return false;
-  if (where.id && 'in' in where.id && !where.id.in.includes(row.id))
+  if (typeof where.id === 'string' && row.id !== where.id) return false;
+  if (
+    where.id &&
+    typeof where.id === 'object' &&
+    'in' in where.id &&
+    !where.id.in.includes(row.id)
+  )
     return false;
-  if (where.id && 'lt' in where.id && !(row.id < where.id.lt)) return false;
+  if (
+    where.id &&
+    typeof where.id === 'object' &&
+    'lt' in where.id &&
+    !(row.id < where.id.lt)
+  )
+    return false;
   if (
     where.title &&
     !row.title.toLowerCase().includes(where.title.contains.toLowerCase())
@@ -76,6 +88,9 @@ function createService() {
     inbox: [] as InboxRow[],
     /** Сколько раз лента что-то удаляла: чистка ушла с чтения (VED-267). */
     inboxDeletes: 0,
+    /** Сколько раз переписывалась одна запись: повторное нажатие на ту же
+     *  сторону кнопки не должно доходить до базы (VED-143). */
+    inboxUpdates: 0,
     /** Ответы `pushSubscription.count()` для `deliveryStatus`: живые и
      *  помеченные мёртвыми подписки считаются отдельными запросами. */
     webCount: 0,
@@ -117,6 +132,26 @@ function createService() {
               .sort(compareInboxFixtures)
               .slice(0, take),
           ),
+      ),
+      findFirst: jest.fn(({ where }: { where: InboxWhere }) =>
+        Promise.resolve(
+          store.inbox.find((row) => matchesInbox(row, where)) ?? null,
+        ),
+      ),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { readAt: Date | null };
+        }) => {
+          const row = store.inbox.find((item) => item.id === where.id);
+          if (!row) throw new Error(`нет записи ${where.id}`);
+          row.readAt = data.readAt;
+          store.inboxUpdates += 1;
+          return Promise.resolve(row);
+        },
       ),
       updateMany: jest.fn(
         ({ where, data }: { where: InboxWhere; data: { readAt: Date } }) => {
@@ -420,6 +455,98 @@ describe('NotificationsService: колокольчик', () => {
     await service.markRead('user-1', [store.inbox[0].id]);
 
     await expect(service.countUnread('user-1')).resolves.toBe(1);
+  });
+});
+
+/**
+ * VED-143: своя отметка у каждого уведомления. Оптом было только «отметить
+ * все», а человеку нужно разобрать ленту по одному — и передумать.
+ */
+describe('NotificationsService.setReadState (VED-143)', () => {
+  const draft = {
+    title: 'Ямуна ответила',
+    body: 'Открыть переписку',
+    url: '/chat/1',
+    category: 'chat' as const,
+  };
+
+  it('гасит одно уведомление и сразу отдаёт счётчик для колокольчика', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', draft);
+    await service.addToInbox('user-1', { ...draft, title: 'Мадхава' });
+
+    const result = await service.setReadState(
+      'user-1',
+      store.inbox[0].id,
+      true,
+    );
+
+    expect(result.id).toBe(store.inbox[0].id);
+    expect(result.readAt).not.toBeNull();
+    expect(result.unreadCount).toBe(1);
+    expect(store.inbox[1].readAt).toBeNull();
+  });
+
+  it('возвращает уведомление в непрочитанные', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', draft);
+    const id = store.inbox[0].id;
+    await service.setReadState('user-1', id, true);
+
+    const result = await service.setReadState('user-1', id, false);
+
+    expect(result.readAt).toBeNull();
+    expect(result.unreadCount).toBe(1);
+    await expect(service.countUnread('user-1')).resolves.toBe(1);
+  });
+
+  it('повторное нажатие на ту же сторону не двигает дату прочтения', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', draft);
+    const id = store.inbox[0].id;
+    const first = await service.setReadState('user-1', id, true);
+    const updatesAfterFirst = store.inboxUpdates;
+
+    const second = await service.setReadState('user-1', id, true);
+
+    expect(second.readAt).toBe(first.readAt);
+    // До базы повторное нажатие не доходит вовсе.
+    expect(store.inboxUpdates).toBe(updatesAfterFirst);
+  });
+
+  it('чужое уведомление не найдётся', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', draft);
+
+    await expect(
+      service.setReadState('user-2', store.inbox[0].id, true),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(store.inbox[0].readAt).toBeNull();
+  });
+
+  it('несуществующий id — 404, а не молчаливое «ок»', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.setReadState('user-1', 'нет-такого', true),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('возвращённое в непрочитанные снова стоит выше прочитанного', async () => {
+    // Порядок VED-153 держится на самом `readAt`, а не на отдельной колонке:
+    // откат обязан возвращать запись в первый поток ленты, иначе «вернуть»
+    // означало бы только смену вида.
+    const { service, store } = createService();
+    await service.addToInbox('user-1', { ...draft, title: 'Старое' });
+    await service.addToInbox('user-1', { ...draft, title: 'Свежее' });
+    store.inbox[0].createdAt = new Date('2026-09-20T10:00:00.000Z');
+    store.inbox[1].createdAt = new Date('2026-09-22T10:00:00.000Z');
+    await service.setReadState('user-1', store.inbox[1].id, true);
+
+    await service.setReadState('user-1', store.inbox[1].id, false);
+    const { items } = await service.listInbox('user-1');
+
+    expect(items.map((row) => row.title)).toEqual(['Свежее', 'Старое']);
   });
 });
 
