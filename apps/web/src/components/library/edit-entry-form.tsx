@@ -14,11 +14,12 @@ import type {
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
 import { COVER_IMAGE_ACCEPT } from "./cover-image";
+import { CoverPicture } from "./cover-picture";
 import { LineageSelect } from "@/components/lineage-picker";
 import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
-import { MAX_BODY_LENGTH } from "./entry-draft";
+import { MAX_BODY_LENGTH, supportsBody } from "./entry-draft";
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
@@ -153,12 +154,12 @@ function PreviewUploader({
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
       {entry.previewUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- обложка лежит в нашем S3
-        <img
-          src={entry.previewUrl}
-          alt=""
-          className="h-16 w-28 rounded-lg border border-glass-brd object-cover"
-        />
+        // Тем же CoverPicture, что и на странице: миниатюра с object-cover
+        // кадрировала картинку, и автор правил обрезку, которой на самом
+        // деле нет (VED-344).
+        <span className="block w-28 overflow-hidden rounded-lg border border-glass-brd">
+          <CoverPicture src={entry.previewUrl} alt={t(locale, "entry.preview")} />
+        </span>
       )}
       <div>
         <label className="inline-block cursor-pointer rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0">
@@ -208,9 +209,10 @@ function EntryFieldsForm({
   const [descriptionRu, setDescriptionRu] = useState(entry.descriptionRu ?? "");
   const [descriptionEn, setDescriptionEn] = useState(entry.descriptionEn ?? "");
   const [text, setText] = useState(entry.body ?? "");
-  // Текст правится у катхи — и у материала, который её перестал быть: иначе
-  // сменой типа текст оказывался бы вне досягаемости формы.
-  const showBody = type === "katha" || Boolean(entry.body);
+  // Текст правится у типов, которые его принимают (катха, статья), — и у
+  // материала, который таким быть перестал: иначе сменой типа текст
+  // оказывался бы вне досягаемости формы.
+  const showBody = supportsBody(type) || Boolean(entry.body);
   const [communityId, setCommunityId] = useState(entry.community?.id ?? "");
   /** Пустая строка — для всех линий. */
   const [lineage, setLineage] = useState<string>(entry.lineage ?? "");

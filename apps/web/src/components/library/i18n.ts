@@ -109,9 +109,14 @@ const ui = {
       "Материал в сети — дайте ссылку; из книги — укажите источник",
     "entry.openCategory": "Где опубликовано",
     "entry.addMore": "Добавить ещё материал",
-    "add.cover": "Обложка",
+    "add.cover": "Картинка",
     "add.coverHint":
       "У материала без ссылки картинку взять неоткуда — можно загрузить свою",
+    "add.coverHintUrl":
+      "Со страницы по ссылке картинку возьмём сами — приложите свою, если хотите другую",
+    "add.coverFits": "Картинку покажем целиком — её не обрежут",
+    "add.coverPreview": "Так картинка будет выглядеть в карточке",
+    "add.coverClear": "Убрать картинку",
     "add.coverChosen": "Выбрано",
     "add.sectionRequest": "Попросить раздел",
     "add.sectionRequestHint":
@@ -129,6 +134,7 @@ const ui = {
     "add.locatorLegend": "Как указать материал",
     "add.locatorUrl": "Есть ссылка",
     "add.locatorSource": "Только источник",
+    "add.locatorBody": "Текст целиком здесь",
     "add.source": "Источник",
     "add.hintSource":
       "Откуда материал: «Бхагавад-гита 9.22, комментарий Прабхупады»",
@@ -139,7 +145,9 @@ const ui = {
       "Вставьте текст целиком — лекцию, беседу, главу. Абзацы разделяйте пустой строкой",
     "add.hintKathaSource":
       "Где и когда прозвучало: «Лекция по Бхагаватам 1.2.6, Лондон, 1972» — необязательно",
-    "add.bodyRequired": "Вставьте текст катхи",
+    "add.hintBodyOptional":
+      "Можно вставить текст целиком — его прочитают прямо здесь, без перехода по ссылке. Не обязательно",
+    "add.bodyRequired": "Вставьте текст материала",
     "add.bodyTooLong": "Текст длиннее 200 000 символов",
     "add.stepText": "Текст и название",
     "add.stepTextHint":
@@ -376,9 +384,14 @@ const ui = {
       "Material on the web — give a link; from a book — name the source",
     "entry.openCategory": "Where it is published",
     "entry.addMore": "Add another material",
-    "add.cover": "Cover",
+    "add.cover": "Picture",
     "add.coverHint":
       "There is no picture to take for a material without a link — upload your own",
+    "add.coverHintUrl":
+      "We take the picture from the linked page ourselves — attach your own if you want another one",
+    "add.coverFits": "The picture is shown whole — nothing gets cropped",
+    "add.coverPreview": "This is how the picture will look on the card",
+    "add.coverClear": "Remove the picture",
     "add.coverChosen": "Chosen",
     "add.sectionRequest": "Ask for a section",
     "add.sectionRequestHint":
@@ -396,6 +409,7 @@ const ui = {
     "add.locatorLegend": "How to point to the material",
     "add.locatorUrl": "There is a link",
     "add.locatorSource": "Source only",
+    "add.locatorBody": "The whole text is here",
     "add.source": "Source",
     "add.hintSource":
       "Where the material comes from: “Bhagavad-gita 9.22, Prabhupada’s purport”",
@@ -406,7 +420,9 @@ const ui = {
       "Paste the whole text — a lecture, a talk, a chapter. Separate paragraphs with an empty line",
     "add.hintKathaSource":
       "Where and when it was given: “Lecture on Bhagavatam 1.2.6, London, 1972” — optional",
-    "add.bodyRequired": "Paste the text of the katha",
+    "add.hintBodyOptional":
+      "You may paste the whole text — it will be read right here, without following the link. Optional",
+    "add.bodyRequired": "Paste the text of the material",
     "add.bodyTooLong": "The text is longer than 200,000 characters",
     "add.stepText": "The text and its title",
     "add.stepTextHint":
