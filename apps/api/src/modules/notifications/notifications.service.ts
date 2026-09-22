@@ -22,7 +22,9 @@ import {
   clampInboxLimit,
   inboxFetchSize,
   inboxSections,
+  isPaginationRequested,
   INBOX_ORDER_BY,
+  LEGACY_INBOX_LIMIT,
   parseInboxCursor,
   sliceInboxPage,
 } from './inbox-page';
@@ -429,12 +431,22 @@ export class NotificationsService {
   }
 
   /**
-   * Порция ленты (VED-267).
+   * Лента (VED-267): порцией или целиком — по тому, о чём попросил клиент.
    *
    * Было: чистка первой строкой, следом `findMany` без `take`. Человек ждал
    * удаления просроченного, чтобы получить свою ленту целиком — сколько бы её
    * ни накопилось, и вся она разом рисовалась на вебе. Чистку забрал
-   * `NotificationPurgeWorkerService`, лента читается страницами.
+   * `NotificationPurgeWorkerService`.
+   *
+   * Развилка на входе: просят курсор или размер порции — отдаём страницу;
+   * не просят — всю ленту, как раньше. Это не задел на будущее, а
+   * совместимость с установленным приложением: оно про постраничность не
+   * знает, придёт за лентой один раз и второй раз не придёт. Двадцать записей
+   * вместо ста девяноста выглядели бы у него как пропавшие уведомления.
+   *
+   * Потолок стоит в обоих случаях. У ленты целиком он свой, большой
+   * (`LEGACY_INBOX_LIMIT`), и если сработал — ответ честно говорит об этом
+   * полем `truncated`, а не обрезает молча.
    *
    * Порядок VED-153 сохранён и выражен прямо в запросе: лента — два потока
    * подряд, непрочитанное и следом прочитанное, каждый по индексу
@@ -451,7 +463,10 @@ export class NotificationsService {
     if (parsed.kind === 'invalid')
       throw new BadRequestException('Некорректный курсор ленты');
     const cursor = parsed.kind === 'cursor' ? parsed.cursor : null;
-    const limit = clampInboxLimit(options.limit);
+    const paginated = isPaginationRequested(options.cursor, options.limit);
+    const limit = paginated
+      ? clampInboxLimit(options.limit)
+      : LEGACY_INBOX_LIMIT;
     const searchClauses = buildInboxSearchClauses(
       parseInboxSearch(options.query),
     );
@@ -494,7 +509,12 @@ export class NotificationsService {
     }));
     return {
       items,
+      // Клиенту, который постраничность не просил, курсор ни к чему: он за
+      // ним не придёт. Но если лента упёрлась в потолок, об этом надо сказать
+      // — и словом `truncated`, и курсором, чтобы продолжение было хотя бы
+      // возможно.
       nextCursor: page.nextCursor,
+      ...(!paginated && page.nextCursor !== null ? { truncated: true } : {}),
       // Счётчик — отдельным запросом по индексу `[userId, readAt]`, а не по
       // отданной порции: в порции их двадцать, а колокольчик обязан
       // показывать всё непрочитанное. От поиска он не зависит — это счётчик

@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { INBOX_PAGE_SIZE, LEGACY_INBOX_LIMIT } from './inbox-page';
 import { NotificationsService } from './notifications.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 
@@ -546,6 +547,128 @@ describe('NotificationsService.listInbox: постранично (VED-267)', () 
     await expect(
       service.listInbox('user-1', { cursor: 'не курсор' }),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+/**
+ * VED-267: постраничность не навязывается. Установленное приложение просит
+ * ленту без параметров и второй раз не приходит — ему она отдаётся целиком,
+ * ровно как до постраничности. Ломается это незаметно, поэтому обе ветки
+ * развилки проверяются здесь.
+ */
+describe('NotificationsService.listInbox: старый клиент (VED-267)', () => {
+  /** Кладём строки прямо в хранилище: две сотни `addToInbox` — это две сотни
+   *  записей с одинаковой меткой времени и лишняя секунда на прогон. */
+  function fill(store: { inbox: InboxRow[] }, count: number, unread = 14) {
+    const base = Date.parse('2026-09-20T12:00:00.000Z');
+    for (let i = 0; i < count; i += 1)
+      store.inbox.push({
+        id: `n${String(i).padStart(5, '0')}`,
+        userId: 'user-1',
+        title: `Уведомление ${i}`,
+        body: 'Текст',
+        url: '/notifications',
+        category: 'chat',
+        createdAt: new Date(base - i * 60_000),
+        readAt: i < unread ? null : new Date(base + 1000),
+      });
+  }
+
+  it('без параметров отдаёт всю ленту, как до постраничности', async () => {
+    const { service, store } = createService();
+    fill(store, 220);
+
+    const inbox = await service.listInbox('user-1');
+
+    expect(inbox.items).toHaveLength(220);
+    expect(inbox.unreadCount).toBe(14);
+    expect(inbox.truncated).toBeUndefined();
+  });
+
+  it('порядок ленты целиком тот же: непрочитанное впереди', async () => {
+    const { service, store } = createService();
+    fill(store, 220);
+
+    const inbox = await service.listInbox('user-1');
+
+    expect(inbox.items.slice(0, 14).every((item) => item.readAt === null)).toBe(
+      true,
+    );
+    expect(inbox.items[14].readAt).not.toBeNull();
+  });
+
+  it('пустые параметры — тот же старый клиент, а не просьба о порции', async () => {
+    const { service, store } = createService();
+    fill(store, 220);
+
+    const inbox = await service.listInbox('user-1', { cursor: '', limit: '' });
+
+    expect(inbox.items).toHaveLength(220);
+  });
+
+  it('просьба о порции разбирается как порция', async () => {
+    const { service, store } = createService();
+    fill(store, 220);
+
+    const inbox = await service.listInbox('user-1', { limit: 20 });
+
+    expect(inbox.items).toHaveLength(20);
+    expect(inbox.nextCursor).toEqual(expect.any(String));
+    expect(inbox.truncated).toBeUndefined();
+  });
+
+  it('и курсора одного достаточно, чтобы это была порция', async () => {
+    const { service, store } = createService();
+    fill(store, 220);
+    const first = await service.listInbox('user-1', { limit: 20 });
+
+    const second = await service.listInbox('user-1', {
+      cursor: first.nextCursor,
+    });
+
+    expect(second.items).toHaveLength(INBOX_PAGE_SIZE);
+  });
+
+  /**
+   * Потолок стоит не ради клиента, а ради сервера: выборка без ограничения у
+   * аккаунта с десятью тысячами уведомлений кладёт его всем. Но обрезать
+   * молча нельзя — иначе пропажу не от чего отличить.
+   */
+  it('упёршись в потолок, говорит об этом, а не обрезает молча', async () => {
+    const { service, store } = createService();
+    fill(store, LEGACY_INBOX_LIMIT + 5);
+
+    const inbox = await service.listInbox('user-1');
+
+    expect(inbox.items).toHaveLength(LEGACY_INBOX_LIMIT);
+    expect(inbox.truncated).toBe(true);
+    // Продолжение всё-таки возможно: клиент поновее дочитает курсором.
+    expect(inbox.nextCursor).toEqual(expect.any(String));
+  });
+
+  it('лента в потолок не упёрлась — признака нет', async () => {
+    const { service, store } = createService();
+    fill(store, LEGACY_INBOX_LIMIT);
+
+    const inbox = await service.listInbox('user-1');
+
+    expect(inbox.items).toHaveLength(LEGACY_INBOX_LIMIT);
+    expect(inbox.truncated).toBeUndefined();
+    expect(inbox.nextCursor).toBeNull();
+  });
+
+  it('поиск без размера порции ищет по всей ленте старого клиента', async () => {
+    const { service, store } = createService();
+    fill(store, 220);
+    store.inbox[219].title = 'Совсем особое уведомление';
+
+    const found = await service.listInbox('user-1', {
+      query: 'совсем особое',
+    });
+
+    expect(found.items.map((item) => item.title)).toEqual([
+      'Совсем особое уведомление',
+    ]);
   });
 });
 

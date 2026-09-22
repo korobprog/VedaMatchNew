@@ -4,7 +4,9 @@ import {
   encodeInboxCursor,
   inboxFetchSize,
   inboxSections,
+  isPaginationRequested,
   INBOX_PAGE_SIZE,
+  LEGACY_INBOX_LIMIT,
   MAX_INBOX_PAGE_SIZE,
   parseInboxCursor,
   sliceInboxPage,
@@ -222,5 +224,37 @@ describe('sliceInboxPage', () => {
 
   it('пустая выдача поиска обходится без курсора', () => {
     expect(sliceInboxPage([], 20)).toEqual({ items: [], nextCursor: null });
+  });
+});
+
+/**
+ * Совместимость со старыми клиентами (VED-267). Установленное приложение про
+ * постраничность не знает: оно придёт за лентой один раз, без параметров, и
+ * второй раз не придёт. Двадцать записей вместо ста девяноста выглядели бы у
+ * него как пропавшие уведомления.
+ */
+describe('isPaginationRequested', () => {
+  it('без курсора и без размера порции — не просил', () => {
+    expect(isPaginationRequested(undefined, undefined)).toBe(false);
+  });
+
+  /** `?cursor=&limit=` получается сам собой у клиента с пустыми значениями. */
+  it('пустые значения — тоже не просил', () => {
+    expect(isPaginationRequested('', '')).toBe(false);
+    expect(isPaginationRequested('   ', null)).toBe(false);
+  });
+
+  it('курсор — просил', () => {
+    expect(isPaginationRequested('cmVhZHw...', undefined)).toBe(true);
+  });
+
+  it('размер порции — тоже просил', () => {
+    expect(isPaginationRequested(undefined, '20')).toBe(true);
+    expect(isPaginationRequested(undefined, 20)).toBe(true);
+  });
+
+  it('потолок ленты целиком берёт сегодняшние ленты с большим запасом', () => {
+    // На проде у самого нагруженного человека 190 уведомлений.
+    expect(LEGACY_INBOX_LIMIT).toBeGreaterThanOrEqual(1000);
   });
 });

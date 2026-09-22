@@ -225,13 +225,19 @@ describe("NotificationList", () => {
  * часть спрятать… сделай поиск».
  */
 describe("NotificationList: страницы и поиск (VED-267)", () => {
-  it("первым запросом просит первую порцию без поиска", async () => {
+  /**
+   * Размер порции веб называет всегда. Молчание — это просьба отдать ленту
+   * целиком, и так API отвечает сборкам приложения, которые не умеют просить
+   * продолжение: незаметно перейти на молчание значило бы вернуть двести
+   * карточек разом.
+   */
+  it("первым запросом просит первую порцию и называет её размер", async () => {
     fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1, nextCursor: null });
 
     render(<NotificationList />);
 
     await screen.findByText("Кадр готов");
-    expect(fetchInbox).toHaveBeenCalledWith({ query: "", limit: undefined });
+    expect(fetchInbox).toHaveBeenCalledWith({ query: "", limit: 20 });
   });
 
   it("кнопки «показать ещё» нет, когда лента кончилась", async () => {
@@ -295,7 +301,7 @@ describe("NotificationList: страницы и поиск (VED-267)", () => {
     await user.type(screen.getByLabelText("Поиск по уведомлениям"), "кадр");
 
     await waitFor(() =>
-      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "кадр", limit: undefined }),
+      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "кадр", limit: 20 }),
     );
   });
 
@@ -307,12 +313,12 @@ describe("NotificationList: страницы и поиск (VED-267)", () => {
 
     await user.type(field, "кадр");
     await waitFor(() =>
-      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "кадр", limit: undefined }),
+      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "кадр", limit: 20 }),
     );
     await user.click(screen.getByRole("button", { name: "Очистить поиск" }));
 
     await waitFor(() =>
-      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "", limit: undefined }),
+      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "", limit: 20 }),
     );
   });
 

@@ -28,6 +28,7 @@ import type {
 import { fetchInbox, markInboxRead } from "@/lib/notifications-api";
 import {
   countUnreadItems,
+  INBOX_PAGE_SIZE,
   markAllItemsRead,
   markItemRead,
   mergeInboxPages,
@@ -85,8 +86,11 @@ export function NotificationList() {
    * признак обработчик набора, а гасит здешний `finally`: из тела эффекта
    * состояние менять напрямую нельзя, это лишний каскад отрисовок.
    */
-  const load = useCallback((search: string, limit?: number) => {
+  const load = useCallback((search: string, limit = INBOX_PAGE_SIZE) => {
     const id = ++requestId.current;
+    // Размер порции называем всегда: молчание означало бы «отдай всю ленту»
+    // — так API отвечает старым сборкам приложения, которые не умеют просить
+    // продолжение.
     void fetchInbox({ query: search, limit })
       .then((page) => {
         if (id !== requestId.current) return;
