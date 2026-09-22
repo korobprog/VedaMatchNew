@@ -15,6 +15,17 @@ export interface ApiKeyDto {
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+  /**
+   * Служебный аккаунт, от имени которого ходит ключ. `null` — ключ личный, и
+   * всё сделанное им числится за владельцем.
+   */
+  agent: { id: string; name: string } | null;
+}
+
+/** Служебный аккаунт ИИ-агента, на который можно выписать ключ. */
+export interface ApiKeyAgentDto {
+  id: string;
+  name: string;
 }
 
 export interface IssuedApiKeyDto {
@@ -49,10 +60,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const fetchApiKeys = () => request<ApiKeyDto[]>("/auth/api-keys");
 
+/**
+ * Служебные аккаунты для формы выпуска. Открыто только администрации, поэтому
+ * обычному человеку отвечают отказом — это не поломка, и форма просто не
+ * показывает выбор.
+ */
+export const fetchApiKeyAgents = () =>
+  request<ApiKeyAgentDto[]>("/auth/api-keys/agents").catch(
+    () => [] as ApiKeyAgentDto[],
+  );
+
 export const createApiKey = (body: {
   name: string;
   scopes: string[];
   expiresInDays?: number;
+  /** Выпустить ключ от имени ИИ-агента, а не от своего. */
+  agentId?: string;
 }) =>
   request<IssuedApiKeyDto>("/auth/api-keys", {
     method: "POST",
