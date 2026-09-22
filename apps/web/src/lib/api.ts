@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { clientIpHeaders } from "@/lib/client-ip";
 import type {
   AdminSupportTicketDto,
   AdminSupportTicketListResponse,
@@ -63,7 +64,9 @@ async function apiGet<T>(
   if (!token) return null;
 
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    // Адрес посетителя — чтобы лимит запросов API считался на него, а не
+    // на контейнер веба (см. lib/client-ip.ts).
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401 || absentStatuses.includes(res.status)) return null;
@@ -72,7 +75,10 @@ async function apiGet<T>(
 }
 
 async function apiGetPublic<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: await clientIpHeaders(),
+    cache: "no-store",
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
   const text = await res.text();

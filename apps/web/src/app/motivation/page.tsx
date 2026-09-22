@@ -61,10 +61,17 @@ export default async function MotivationPage({
      готовые картинки с напечатанным текстом. Список остаётся общим: у него
      нет вкладок, и прятать там половину публикаций было бы нечем объяснить. */
   const style = view === "reels" ? feedStyleOf(tab) : undefined;
-  const [user, feed, donation, stats, audio, categories] = await Promise.all([
+  const [user, feedResult, donation, stats, audio, categories] =
+    await Promise.all([
     getProfile(),
     // `?post=slug` открывает ленту на конкретном рилсе — так работает переход
     // из мастера и из «Моих рилсов».
+    //
+    // Отказ ленты откладываем, а не бросаем сразу: у новичка без этапа пути
+    // API отвечает 400 «Сначала пройдите самоидентификацию», а запрос идёт
+    // параллельно с профилем — и страница падала в «Страница не открылась»
+    // раньше, чем редирект в мастер успевал сработать. Сначала решаем, куда
+    // вести человека, и только потом поднимаем настоящую ошибку.
     getMotivationFeed(
       tab === "saved" ? "favorites" : "all",
       params.post,
@@ -73,6 +80,9 @@ export default async function MotivationPage({
       undefined,
       style,
       attribution,
+    ).then(
+      (value) => ({ value, error: null }),
+      (error: unknown) => ({ value: null, error }),
     ),
     getDonationSettings(),
     getMotivationStats(),
@@ -89,6 +99,8 @@ export default async function MotivationPage({
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
   if (needsWelcome(user)) redirect("/welcome");
+  if (feedResult.error) throw feedResult.error;
+  const feed = feedResult.value;
   const isAdmin = user.role === "admin" || user.role === "service-admin";
   const initial = feed ?? { items: [], nextCursor: null };
 

@@ -98,7 +98,12 @@ export default async function RootLayout({
   const locale = await getLocale();
   // Названия сервисов приходят из каталога, а не из копирайта в коде:
   // так правка имени в админке доезжает и до лендинга, и до шапки.
-  const services = (await getPublicServices()) ?? [];
+  //
+  // Каталог — не повод ронять страницу. Layout общий для всего портала, и
+  // отказ API здесь (429 от троттлера, перезапуск при деплое) превращал любой
+  // адрес — приглашение в «Работу», ленту Вдохновения — в «Страница не
+  // открылась». Без каталога шапка покажет имена из service-content.ts.
+  const services = (await getPublicServices().catch(() => null)) ?? [];
 
   return (
     <html

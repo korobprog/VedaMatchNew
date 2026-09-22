@@ -5,6 +5,7 @@
 // голое имя `communities-api.ts` уже занято браузерным клиентом.
 import { cookies } from "next/headers";
 import type { MyCommunitiesResponse } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -15,7 +16,7 @@ export async function getMyCommunitiesServer(): Promise<MyCommunitiesResponse | 
   if (!token) return null;
 
   const res = await fetch(`${API_URL}/communities/me`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401 || res.status === 404) return null;

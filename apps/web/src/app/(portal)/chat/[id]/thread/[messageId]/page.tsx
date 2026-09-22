@@ -6,6 +6,7 @@ import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatThreadView } from "@/components/chat/chat-thread-view";
 import { requireUser } from "@/lib/require-user";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -14,7 +15,10 @@ async function getThread(messageId: string): Promise<ChatThreadState | null> {
   if (!token) return null;
   const res = await fetch(
     `${API_URL}/chat/messages/${encodeURIComponent(messageId)}/thread`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+    {
+      headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
+      cache: "no-store",
+    },
   );
   if (!res.ok) return null;
   return (await res.json()) as ChatThreadState;

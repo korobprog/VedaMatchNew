@@ -21,12 +21,13 @@ const SERVER_API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 /** null — не авторизован или раздел недоступен. Молча, как в notices-server-api. */
 async function rewardsGet<T>(path: string): Promise<T | null> {
   const { cookies } = await import("next/headers");
+  const { clientIpHeaders } = await import("@/lib/client-ip");
   const cookieStore = await cookies();
   const token = cookieStore.get("access_token")?.value;
   if (!token) return null;
 
   const res = await fetch(`${SERVER_API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401 || res.status === 403 || res.status === 404) {

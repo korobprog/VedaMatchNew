@@ -24,6 +24,7 @@ import type {
   MyMusicPlaylistsDto,
   MyMusicUploadsDto,
 } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -41,7 +42,10 @@ async function musicGet<T>(path: string): Promise<T | null> {
   const token = cookieStore.get("access_token")?.value;
 
   const res = await fetch(`${API_URL}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(await clientIpHeaders()),
+    },
     cache: "no-store",
   });
   if (res.status === 401 || res.status === 404) return null;

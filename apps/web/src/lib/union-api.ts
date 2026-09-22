@@ -17,6 +17,7 @@ import type {
   UnionShowcaseResponse,
   UserBlocksState,
 } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -27,7 +28,7 @@ async function unionGet<T>(path: string): Promise<T | null> {
   if (!token) return null;
 
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401) return null;
@@ -43,7 +44,10 @@ async function unionGet<T>(path: string): Promise<T | null> {
  * посетителю картинки с истёкшей подписью.
  */
 export async function getUnionShowcase(): Promise<UnionShowcaseResponse | null> {
-  const res = await fetch(`${API_URL}/union/showcase`, { cache: "no-store" });
+  const res = await fetch(`${API_URL}/union/showcase`, {
+    headers: await clientIpHeaders(),
+    cache: "no-store",
+  });
   if (!res.ok) return null;
   return (await res.json()) as UnionShowcaseResponse;
 }

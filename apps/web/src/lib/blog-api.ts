@@ -9,6 +9,7 @@ import type {
   BlogHomeFeedResponse,
   BlogSettingsDto,
 } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -20,7 +21,7 @@ async function blogGet<T>(path: string): Promise<T | null> {
 
   try {
     const res = await fetch(`${API_URL}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
       cache: "no-store",
     });
     if (!res.ok) return null;
