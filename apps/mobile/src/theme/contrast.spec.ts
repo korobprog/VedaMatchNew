@@ -73,6 +73,13 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // только внутри поля ввода чата и потому не были перечислены явно.
   { name: 'подпись и счётчик символов в поле формы', text: 'text1', surface: 'bg1' },
   { name: 'название общины в подсказке геокодера', text: 'text0', surface: 'bg1' },
+  // Раздел «Уведомления на этом устройстве» (VED-329,
+  // `components/notifications/device-push-section.tsx`): карточка на стекле —
+  // заголовок состояния `text0`, объяснение 13px — `text1`. `text2` здесь не
+  // годится: на стекле в тёмной теме он даёт 4.06:1, ниже порога.
+  { name: 'заголовок состояния доставки на стекле', text: 'text0', surface: 'glass' },
+  { name: 'объяснение состояния доставки на стекле', text: 'text1', surface: 'glass' },
+  { name: 'подпись кнопки раздела доставки', text: 'onAccent', surface: 'magenta' },
 ];
 
 describe.each([
@@ -103,6 +110,12 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   // (`chat/new.tsx`): это не ошибка, а «обрати внимание», поэтому `gold`, а
   // не `magenta`. Сам текст — `text0` на `bg1`, уже закреплённая пара.
   { name: 'обводка предупреждения о совпадении названия', graphic: 'gold', surface: 'bg1' },
+  // Точка состояния доставки (VED-329): украшение рядом с заголовком. Цветом
+  // смысл не передаётся — то же самое написано словами в заголовке и
+  // объяснении, а скринридеру точка не читается вовсе.
+  { name: 'точка «доставка работает» на стекле', graphic: 'cyan', surface: 'glass' },
+  { name: 'точка «доставлять некуда» на стекле', graphic: 'magenta', surface: 'glass' },
+  { name: 'точка «проверяем» на стекле', graphic: 'text1', surface: 'glass' },
 ];
 
 describe.each([
