@@ -271,7 +271,38 @@ const services = [
   },
 ];
 
+/**
+ * Служебный аккаунт ИИ-агента сервиса «Работа».
+ *
+ * Заводится сидом, а не руками в базе: исполнитель карточки — ссылка на
+ * пользователя, и без этой строки помощник, подключённый по MCP, снова
+ * числился бы владельцем своего ключа. Адрес технический и никому не
+ * принадлежит — войти этим аккаунтом нельзя, у него нет ни пароля, ни Google.
+ *
+ * Имя обновлением не трогаем: переименовать агента — дело администрации, и
+ * сид не должен возвращать «Севака» на каждом рестарте контейнера.
+ */
+const WORK_AGENT_EMAIL = 'sevak@agents.vedamatch.ru';
+
+async function seedWorkAgent() {
+  const agent = await prisma.user.upsert({
+    where: { email: WORK_AGENT_EMAIL },
+    update: { isAgent: true },
+    create: {
+      email: WORK_AGENT_EMAIL,
+      name: 'Севак',
+      isAgent: true,
+      // Обязателен и без значения по умолчанию. Персональных данных у
+      // служебного аккаунта нет, поэтому контур общий.
+      dataResidency: 'global',
+    },
+    select: { id: true, name: true },
+  });
+  console.log(`Work agent: ${agent.name} (${agent.id})`);
+}
+
 async function main() {
+  await seedWorkAgent();
   await prisma.$transaction(async (transaction) => {
     await transaction.service.deleteMany({
       where: {

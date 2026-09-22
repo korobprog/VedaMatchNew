@@ -31,6 +31,7 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  isAgent: true,
 } satisfies Prisma.UserSelect;
 
 @Injectable()
@@ -265,6 +266,44 @@ export class WorkSpacesService {
     await this.prisma.workSpaceMember.update({
       where: { spaceId_userId: { spaceId, userId: targetUserId } },
       data: { role },
+    });
+  }
+
+  /**
+   * Принять в среду ИИ-агента.
+   *
+   * Отдельно от приглашений, и не ради удобства: приглашение живёт до тех
+   * пор, пока приглашённый его не примет, а служебному аккаунту принимать
+   * нечем — он не заходит на портал. Поэтому агента вводит в среду тот, кто
+   * ею распоряжается, и сразу.
+   *
+   * Роль только `member`: агент работает карточками, а раздавать роли и
+   * выгонять людей — не его дело.
+   */
+  async addAgent(
+    spaceId: string,
+    actorId: string,
+    agentId: string,
+  ): Promise<void> {
+    assertWorkAccess(await this.roleOf(spaceId, actorId), 'manageMembers');
+    const agent = await this.prisma.user.findUnique({
+      where: { id: agentId },
+      select: { id: true, isAgent: true },
+    });
+    // Живого человека этим путём в среду не заводят: у него есть приглашение,
+    // которое он вправе и не принять.
+    if (!agent?.isAgent) {
+      throw new BadRequestException(
+        'Так в среду принимают только ИИ-агента — человека нужно пригласить',
+      );
+    }
+    const already = await this.prisma.workSpaceMember.findUnique({
+      where: { spaceId_userId: { spaceId, userId: agentId } },
+      select: { userId: true },
+    });
+    if (already) return;
+    await this.prisma.workSpaceMember.create({
+      data: { spaceId, userId: agentId, role: 'member' },
     });
   }
 
