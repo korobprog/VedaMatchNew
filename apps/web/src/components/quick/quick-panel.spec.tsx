@@ -7,9 +7,10 @@ import { QuickPanel } from "./quick-panel";
 import { resetPortalWindowsForTests } from "./portal-windows-store";
 
 const push = vi.fn();
+const replace = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh: vi.fn() }),
+  useRouter: () => ({ push, replace, refresh: vi.fn() }),
 }));
 
 const STORAGE_KEY = "vedamatch:quick-panel";
@@ -54,6 +55,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   resetPortalWindowsForTests();
   push.mockClear();
+  replace.mockClear();
   stubFetch();
 });
 
@@ -76,7 +78,11 @@ async function openPanel() {
 
 describe("QuickPanel", () => {
   it("закрыта, пока её не открыли: панель не должна занимать экран", () => {
-    render(<QuickPanel />);
+    render(
+      <NextIntlClientProvider locale="ru" messages={ru}>
+        <QuickPanel />
+      </NextIntlClientProvider>,
+    );
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -205,16 +211,21 @@ describe("QuickPanel", () => {
   });
 
   // VED-118, VED-163: три кнопки перемещения по порталу.
-  it("кнопка окна показывает номер окна, куда перейдёшь", async () => {
+  // VED-326: на кнопке название места, а не номер окна.
+  it("кнопка окна показывает, что осталось во втором окне", async () => {
     window.localStorage.setItem(STORAGE_KEY, '{"v":2,"ids":["window"]}');
     const user = await openPanel();
 
     const button = screen.getByRole("button", { name: /Перейти в окно 2/ });
-    expect(button).toHaveTextContent("Окно 2");
+    expect(button).toHaveTextContent("Новое окно");
 
     await user.click(button);
-    // Второе окно ещё не открывали — оно начинает с главной.
-    expect(push).toHaveBeenCalledWith("/");
+    // Второе окно ещё не открывали — оно начинает с главной. `replace`, а не
+    // `push`: переключение окна не должно оставлять запись в истории
+    // браузера, иначе аппаратная кнопка «назад» уводит в соседнее окно
+    // (VED-354).
+    expect(replace).toHaveBeenCalledWith("/");
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("закладки открываются списком и ведут на страницу", async () => {
@@ -223,9 +234,84 @@ describe("QuickPanel", () => {
 
     await user.click(screen.getByRole("button", { name: /Закладки/ }));
 
+    // Одной строкой: сначала имя закладки, потом раздел (VED-326).
+    const link = await screen.findByRole("link", { name: /Шрила Прабхупада/ });
+    expect(link).toHaveAttribute("href", "/music/artists/1");
+    expect(link).toHaveTextContent("Музыка");
+  });
+
+  // VED-345: горячая кнопка из закладки.
+  it("делает из закладки горячую кнопку и убирает её крестиком", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":2,"ids":["bookmarks"]}');
+    const user = await openPanel();
+
+    await user.click(screen.getByRole("button", { name: /^Закладки/ }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Создать горячую клавишу: Шрила Прабхупада",
+      }),
+    );
+
+    // Кнопка сразу в панели: её заводят, чтобы ею пользоваться.
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.ids).toContain("custom:/music/artists/1");
+    expect(saved.custom).toEqual([
+      { label: "Шрила Прабхупада", href: "/music/artists/1" },
+    ]);
+    // Убирается через настройки — совсем, а не галочкой.
+    await user.click(screen.getByRole("button", { name: "Настроить панель" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Удалить из панели горячих клавиш: Шрила Прабхупада",
+      }),
+    );
+    const after = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+    expect(after.ids).not.toContain("custom:/music/artists/1");
+    expect(after.custom).toEqual([]);
+  });
+
+  // VED-326: сервисы в выборе кнопок.
+  it("в выбор попадают все сервисы портала", async () => {
+    const user = await openPanel();
+
+    await user.click(screen.getByRole("button", { name: "Настроить панель" }));
+    await user.click(screen.getByRole("switch", { name: /Работа/ }));
+
     expect(
-      await screen.findByRole("link", { name: "Шрила Прабхупада" }),
-    ).toHaveAttribute("href", "/music/artists/1");
+      JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids,
+    ).toContain("service:work");
+  });
+
+  it("сервисная кнопка ведёт в сервис", async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      '{"v":3,"ids":["service:work"],"custom":[]}',
+    );
+    await openPanel();
+
+    expect(screen.getByRole("link", { name: /Работа/ })).toHaveAttribute(
+      "href",
+      "/work",
+    );
+  });
+
+  it("выключенного сервиса в панели нет, но она не падает", async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      '{"v":3,"ids":["service:work","custom:/нет-такой"],"custom":[]}',
+    );
+    await openPanel();
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /нет-такой/ })).not.toBeInTheDocument();
+  });
+
+  // VED-326: номер окна в заголовке больше не нужен.
+  it("в заголовке панели нет номера окна", async () => {
+    await openPanel();
+
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    expect(within(panel).queryByText(/^Окно \d$/)).not.toBeInTheDocument();
   });
 
   it("поиск по порталу — ссылка на страницу выдачи", async () => {

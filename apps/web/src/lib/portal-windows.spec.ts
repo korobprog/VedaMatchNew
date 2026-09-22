@@ -6,6 +6,7 @@ import {
   parsePortalWindows,
   portalWindowButtonHint,
   portalWindowButtonLabel,
+  portalWindowTargetUrl,
   recordPortalNavigation,
   rememberPortalScroll,
   serializePortalWindows,
@@ -132,24 +133,32 @@ describe("switchPortalWindow", () => {
 });
 
 describe("подпись кнопки", () => {
-  it("показывает номер окна, куда перейдёшь", () => {
-    const first = createPortalWindows("/music");
-    expect(portalWindowButtonLabel(first)).toBe("Окно 2");
-    const second = switchPortalWindow(first, 1).state;
-    expect(portalWindowButtonLabel(second)).toBe("Окно 1");
+  /** В портале это `portalLocationLabel` поверх каталога сервисов. */
+  const label = (url: string | null) => url ?? "Новое окно";
+
+  it("показывает место, куда перейдёшь, а не номер окна", () => {
+    // VED-326: «Окно 2» не отвечало на единственный вопрос, который у
+    // кнопки задают, — что там осталось.
+    let state = createPortalWindows("/music");
+    expect(portalWindowButtonLabel(state, label)).toBe("Новое окно");
+    state = switchPortalWindow(state, 1).state;
+    state = recordPortalNavigation(state, "/work/boards/1");
+    expect(portalWindowButtonLabel(state, label)).toBe("/music");
+    expect(portalWindowTargetUrl(state)).toBe("/music");
   });
 
   it("при трёх окнах идёт по кругу", () => {
     const state = createPortalWindows("/", 3);
     expect(nextPortalWindow(state, 3)).toBe(1);
-    expect(portalWindowButtonLabel(state, 3)).toBe("Окно 2");
+    expect(portalWindowTargetUrl(state, 3)).toBeNull();
     const third = switchPortalWindow(state, 2, 3).state;
-    expect(portalWindowButtonLabel(third, 3)).toBe("Окно 1");
+    expect(portalWindowTargetUrl(third, 3)).toBe("/");
   });
 
-  it("подсказка называет и текущее окно", () => {
-    expect(portalWindowButtonHint(createPortalWindows("/"))).toBe(
-      "Перейти в окно 2. Сейчас открыто окно 1",
+  it("подсказка называет оба окна и их номера", () => {
+    const state = switchPortalWindow(createPortalWindows("/music"), 1).state;
+    expect(portalWindowButtonHint(state, label)).toBe(
+      "Перейти в окно 1: /music. Сейчас окно 2: /",
     );
   });
 });
