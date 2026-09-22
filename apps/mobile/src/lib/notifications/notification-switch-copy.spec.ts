@@ -1,5 +1,6 @@
 import {
   notificationSwitchCopy,
+  notificationSwitchValues,
   notificationSwitchesHint,
 } from './notification-switch-copy';
 
@@ -86,5 +87,27 @@ describe('notificationSwitchesHint', () => {
     const hint = notificationSwitchesHint(false);
     expect(hint).toContain('не придёт ни сообщение, ни звонок');
     expect(hint).toContain('сохранены');
+  });
+});
+
+describe('notificationSwitchValues', () => {
+  it('сервер прислал оба поля — берём как есть', () => {
+    expect(notificationSwitchValues({ chat: true, calls: false })).toEqual({
+      chat: true,
+      calls: false,
+    });
+  });
+
+  it('сервер старше сборки: звонки повторяют «Сообщения», а не гаснут', () => {
+    // До VED-361 звонки шли под категорией «Сообщения»: это и есть правда
+    // такого сервера. Показать выключённые «Звонки» значило бы соврать.
+    expect(notificationSwitchValues({ chat: true })).toEqual({
+      chat: true,
+      calls: true,
+    });
+    expect(notificationSwitchValues({ chat: false })).toEqual({
+      chat: false,
+      calls: false,
+    });
   });
 });

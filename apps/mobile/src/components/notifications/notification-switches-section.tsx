@@ -5,6 +5,7 @@ import { useSession } from '@/lib/auth/session';
 import { createNotificationPreferencesApi } from '@/lib/notifications/notification-preferences-api';
 import {
   notificationSwitchCopy,
+  notificationSwitchValues,
   notificationSwitchesHint,
   type NotificationSwitchKey,
 } from '@/lib/notifications/notification-switch-copy';
@@ -92,10 +93,10 @@ export function NotificationSwitchesSection() {
     ) : null;
   }
 
-  const rows = notificationSwitchCopy({
-    chat: preferences.chat,
-    calls: preferences.calls,
-  });
+  // Не `preferences` напрямую: сервер старше этой сборки поля `calls` не
+  // пришлёт вовсе, и тумблер показал бы выключённые звонки вместо правды.
+  const values = notificationSwitchValues(preferences);
+  const rows = notificationSwitchCopy(values);
 
   return (
     <View style={styles.section}>
@@ -130,10 +131,10 @@ export function NotificationSwitchesSection() {
             accessibilityHint={row.note}
             accessibilityState={{
               disabled: !preferences.enabled || busy === row.key,
-              checked: preferences[row.key],
+              checked: values[row.key],
             }}
             disabled={!preferences.enabled || busy === row.key}
-            value={preferences[row.key]}
+            value={values[row.key]}
             onValueChange={(next) => void toggle(row.key, next)}
             trackColor={{ false: colors.glassBorder, true: colors.cyan }}
             thumbColor={colors.onAccent}

@@ -14,6 +14,23 @@
 
 export type NotificationSwitchKey = 'chat' | 'calls';
 
+/**
+ * Положение тумблеров по ответу сервера.
+ *
+ * Установленная сборка приложения живёт дольше одного развёртывания портала и
+ * может оказаться новее сервера: тот ответит настройками БЕЗ поля `calls`.
+ * Показать в этом случае выключённые «Звонки» — соврать: на таком сервере они
+ * ещё идут под «Сообщениями», и правдивое положение тумблера — то же, что у
+ * переписки. Патч с `calls` старый сервер молча проигнорирует, и тумблер
+ * вернётся туда, где был, — это честнее выключенного вида.
+ */
+export function notificationSwitchValues(preferences: {
+  chat: boolean;
+  calls?: boolean;
+}): { chat: boolean; calls: boolean } {
+  return { chat: preferences.chat, calls: preferences.calls ?? preferences.chat };
+}
+
 export interface NotificationSwitchCopy {
   key: NotificationSwitchKey;
   /** Подпись тумблера. */
