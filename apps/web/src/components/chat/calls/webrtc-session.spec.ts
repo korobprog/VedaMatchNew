@@ -201,4 +201,31 @@ describe("CallSession.handleSignal — таблица состояний signali
     ]);
     expect(warnSpy).not.toHaveBeenCalled();
   });
+
+  // ---- VED-359: сигнал о камере собеседника, которого веб не знает ----
+
+  it("сигнал `media` с телефона молча пропускается и не ломает следующий offer", async () => {
+    // Телефон сообщает о своей выключенной камере отдельным сигналом
+    // (`kind: "media"`, `apps/mobile/src/lib/calls/media-state-signal.ts`).
+    // Веб про него не знает и знать пока не обязан — но обязан пережить:
+    // иначе один такой сигнал уронил бы обработку очереди и переговоры
+    // встали бы. Проверяем именно это: после `media` обычный offer
+    // по-прежнему применяется и порождает answer.
+    const h = handlers();
+    const session = new CallSession([], "callee", h);
+    const pc = (session as unknown as { pc: FakeRTCPeerConnection }).pc;
+
+    await expect(
+      session.handleSignal({ kind: "media", media: { video: false } }),
+    ).resolves.toBeUndefined();
+    expect(pc.setRemoteDescriptionCalls).toHaveLength(0);
+    expect(h.sent).toEqual([]);
+
+    await session.handleSignal({
+      kind: "sdp",
+      sdp: { type: "offer", sdp: "remote-offer" },
+    });
+    expect(pc.createAnswerCalls).toBe(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
 });

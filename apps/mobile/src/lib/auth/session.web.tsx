@@ -11,7 +11,8 @@ import { hasSessionMarker } from './session-marker';
 import { resolveWebSessionStrategy } from './telegram-web-session-strategy';
 import { tokenAuthority } from './token-authority';
 import { telegramLaunch } from '@/lib/telegram/web-app';
-import type { Session, SessionStatus, SessionUser } from './session';
+import type { Session, SessionStatus } from './session';
+import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
 
 /**
  * Сессия веб-версии приложения (`ios.vedamatch.com`). Какую именно сессию
@@ -38,12 +39,6 @@ const BEFORE_SIGN_OUT_TIMEOUT_MS = 2000;
 
 const SessionContext = createContext<Session | null>(null);
 
-interface ProfileResponse {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl?: string | null;
-}
 
 function currentPath(): string {
   const { pathname, search } = window.location;
@@ -82,12 +77,7 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
 
   const loadProfile = useCallback(async () => {
     const profile = await api.request<ProfileResponse>('/users/me');
-    setUser({
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      avatarUrl: profile.avatarUrl ?? null,
-    });
+    setUser(toSessionUser(profile));
     setStatus('signed');
   }, [api]);
 
@@ -152,6 +142,7 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       signInDev,
       signOut,
       registerBeforeSignOut,
+      reloadUser: loadProfile,
     }),
     [
       status,
@@ -166,6 +157,7 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       signInDev,
       signOut,
       registerBeforeSignOut,
+      loadProfile,
     ],
   );
 
@@ -262,12 +254,7 @@ function TelegramTokenSessionProvider({
 
   const loadProfile = useCallback(async () => {
     const profile = await api.request<ProfileResponse>('/users/me');
-    setUser({
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      avatarUrl: profile.avatarUrl ?? null,
-    });
+    setUser(toSessionUser(profile));
     setStatus('signed');
   }, [api]);
 
@@ -384,8 +371,9 @@ function TelegramTokenSessionProvider({
       signInDev,
       signOut,
       registerBeforeSignOut,
+      reloadUser: loadProfile,
     }),
-    [status, user, api, apiOrigin, loginError, getAccessToken, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut],
+    [status, user, api, apiOrigin, loginError, getAccessToken, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut, loadProfile],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

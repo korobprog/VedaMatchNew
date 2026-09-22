@@ -363,10 +363,13 @@ export class NotificationsListener {
       let delivered = native.delivered;
       for (const subscription of subscriptions) {
         const failure = await this.sender.send(subscription, payload);
-        if (failure === null) delivered += 1;
-        if (failure === 'gone') {
-          await this.notifications.deleteSubscription(subscription.endpoint);
+        // Итог попытки — в базу (VED-314): успех отмечает приём, отказ идёт в
+        // счётчик, а протухшую подписку `recordPushResult` удаляет сам. Без
+        // ключей VAPID попытки не было — записывать подписке нечего.
+        if (this.sender.vapidConfigured) {
+          await this.notifications.recordPushResult(subscription, failure);
         }
+        if (failure === null) delivered += 1;
       }
 
       if (telegramDevices.length > 0) {
@@ -378,15 +381,17 @@ export class NotificationsListener {
             body: text.body,
             notificationUrl: content.url,
           });
+          await this.notifications.recordDeviceResult(device, failure);
           if (failure === null) delivered += 1;
-          if (failure === 'gone') {
-            await this.telegramNotifications.deleteDevice(device.token);
-          }
         }
       }
 
+      // «Принято», а не «доставлено» (VED-314): служба доставки браузера и FCM
+      // принимают пуш и для браузера, который не открывали месяц. Прежняя
+      // формулировка «доставлено 6 из 6» соседствовала с жалобой «не приходят
+      // пуши» — и читавший лог считал, что всё в порядке.
       this.logger.log(
-        `${event.name} для ${event.recipientId}: доставлено ${delivered} из ${
+        `${event.name} для ${event.recipientId}: службы доставки приняли ${delivered} из ${
           subscriptions.length + native.devices + telegramDevices.length
         }`,
       );

@@ -43,3 +43,77 @@ describe('createChatApi().subscribe', () => {
     expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1/subscribe', { method: 'POST' });
   });
 });
+
+/**
+ * Группы и каналы (VED-292): маршруты те же, что у сайта
+ * (`apps/web/src/lib/chat-client.ts`). Новых ручек на сервере не заводилось,
+ * поэтому контракт закрепляем здесь — опечатка в пути иначе всплывёт только
+ * на телефоне.
+ */
+describe('createChatApi() — группы и каналы', () => {
+  it('create шлёт тело запроса как есть на общую ручку бесед', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).create({ kind: 'group', title: 'Севаки', memberIds: ['u1'] });
+    expect(request).toHaveBeenCalledWith('/chat/conversations', {
+      method: 'POST',
+      body: { kind: 'group', title: 'Севаки', memberIds: ['u1'] },
+    });
+  });
+
+  it('people и channelCommunities — обычные GET без query', async () => {
+    const { client, request } = fakeApi();
+    const chat = createChatApi(client);
+    await chat.people();
+    await chat.channelCommunities();
+    expect(request).toHaveBeenNthCalledWith(1, '/chat/people');
+    expect(request).toHaveBeenNthCalledWith(2, '/chat/channel-communities');
+  });
+
+  it('addMembers складывает id в тело, а не в путь', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).addMembers('conv-1', ['u1', 'u2']);
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1/members', {
+      method: 'POST',
+      body: { userIds: ['u1', 'u2'] },
+    });
+  });
+
+  it('removeMember уходит DELETE-ом на участника', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).removeMember('conv-1', 'u1');
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1/members/u1', { method: 'DELETE' });
+  });
+
+  it('setMemberRole шлёт роль телом', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).setMemberRole('conv-1', 'u1', 'admin');
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1/members/u1/role', {
+      method: 'POST',
+      body: { role: 'admin' },
+    });
+  });
+
+  it('leave бьёт в .../members/me, а не в свой id', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).leave('conv-1');
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1/members/me', { method: 'DELETE' });
+  });
+
+  it('removeConversation удаляет саму беседу', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).removeConversation('conv-1');
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1', { method: 'DELETE' });
+  });
+
+  it('updateConversation шлёт только переданные поля', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).updateConversation('conv-1', { title: 'Севаки' });
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv-1', { method: 'POST', body: { title: 'Севаки' } });
+  });
+
+  it('id в пути экранируется: чужой слеш не уводит запрос на другую ручку', async () => {
+    const { client, request } = fakeApi();
+    await createChatApi(client).removeMember('conv/1', 'u 1');
+    expect(request).toHaveBeenCalledWith('/chat/conversations/conv%2F1/members/u%201', { method: 'DELETE' });
+  });
+});

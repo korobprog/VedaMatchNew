@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { capabilitiesFor } from './src/config/capabilities.ts';
 import { resolveVariant } from './src/config/variant.ts';
 import { resolveVersionCode, resolveVersionName } from './src/config/app-version.ts';
 import { version as packageVersion } from './package.json';
@@ -11,6 +12,10 @@ import { version as packageVersion } from './package.json';
  */
 export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = resolveVariant(process.env);
+  // Что этой сборке разрешено (VED-207). Разрешения манифеста и плагины
+  // гейтятся той же таблицей, что и экраны, — иначе «в интерфейсе выключено,
+  // а в манифесте просим» расходятся и ловятся уже на ревью витрины.
+  const capabilities = capabilitiesFor(variant);
   // Настройки Firebase не в репозитории: локально файл лежит рядом (он в
   // .gitignore), в CI путь приходит переменной. Без файла сборка всё равно
   // собирается, только без пушей FCM.
@@ -112,12 +117,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         // экран «Разрешить установку неизвестных приложений» и завершится,
         // не установив файл. Только канал `site` — на `store` (RuStore,
         // Google Play) секции «Проверить обновление» вовсе нет
-        // (`variant.selfUpdate`), и это разрешение там не нужно и не должно
+        // (`capabilities.selfUpdate`), и это разрешение там не нужно и не должно
         // просить пользователя: Google Play отдельно проверяет использование
         // REQUEST_INSTALL_PACKAGES декларацией назначения в консоли и не
         // пропустит его без обоснования у приложения, которое само не умеет
         // ставить APK на этом канале.
-        ...(variant.selfUpdate ? ['android.permission.REQUEST_INSTALL_PACKAGES'] : []),
+        ...(capabilities.selfUpdate ? ['android.permission.REQUEST_INSTALL_PACKAGES'] : []),
       ],
     },
     plugins: [

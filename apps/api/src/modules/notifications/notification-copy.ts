@@ -116,6 +116,37 @@ export function workTaskUrl(spaceId: string, taskKey: string): string {
 }
 
 /**
+ * «3 комментария» — с правильным окончанием, по той же причине, что и ночи.
+ *
+ * Счёт приезжает в событии числом, а слово подбирает подписчик: издатель
+ * сообщает факт, формулировку собираем здесь — правило контракта.
+ */
+export function commentsWord(count: number): string {
+  const tail = count % 100;
+  const last = count % 10;
+  if (tail >= 11 && tail <= 14) return `${count} комментариев`;
+  if (last === 1) return `${count} комментарий`;
+  if (last >= 2 && last <= 4) return `${count} комментария`;
+  return `${count} комментариев`;
+}
+
+/**
+ * Хвост уведомления о переезде, когда человек ещё и сказал что-то (VED-298).
+ *
+ * Отдельным уведомлением комментарий в этом случае не едет — он приложен к
+ * переезду, и в тексте ему отводится вторая фраза. Пусто, когда перенесли
+ * молча: точка после «из «Надо»» и так на месте.
+ */
+export function workCommentTail(
+  excerpt: string | null | undefined,
+  count: number | undefined,
+): string {
+  if (!excerpt) return '';
+  const label = (count ?? 1) > 1 ? commentsWord(count ?? 1) : 'Комментарий';
+  return `. ${label}: ${toExcerpt(excerpt)}`;
+}
+
+/**
  * «3 ночи» — с правильным окончанием: подпись читает человек, а «3 ночь» в
  * пуше выглядит как ошибка сервиса, а не как экономия на склонении.
  */
@@ -489,7 +520,12 @@ export function buildNotification(
       };
     case 'work.task.commented':
       return {
-        title: `${event.taskKey}: новый комментарий`,
+        // Несколько реплик за окно дозревания — одна новость, и заголовок
+        // говорит сколько, чтобы «новый комментарий» не обманывал (VED-298).
+        title:
+          event.commentCount > 1
+            ? `${event.taskKey}: ${commentsWord(event.commentCount)}`
+            : `${event.taskKey}: новый комментарий`,
         body: `${event.actorName}: ${toExcerpt(event.excerpt)}`,
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-comment:${event.taskKey}`,
@@ -501,7 +537,7 @@ export function buildNotification(
         title: 'Задачу вернули в работу',
         // Без рода: у `User.gender` его может не быть, а «перенёс» на женском
         // имени читается как чужая ошибка — правило всего файла.
-        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в разделе «${event.columnName}»`,
+        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в разделе «${event.columnName}»${workCommentTail(event.commentExcerpt, event.commentCount)}`,
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-returned:${event.taskKey}`,
         category: 'work',
@@ -510,7 +546,7 @@ export function buildNotification(
     case 'work.task.status-changed':
       return {
         title: `${event.taskKey}: «${event.toColumnName}»`,
-        body: `${event.actorName}: «${toExcerpt(event.taskTitle)}» — из «${event.fromColumnName}»`,
+        body: `${event.actorName}: «${toExcerpt(event.taskTitle)}» — из «${event.fromColumnName}»${workCommentTail(event.commentExcerpt, event.commentCount)}`,
         url: workTaskUrl(event.spaceId, event.taskKey),
         // Свой тег, общий для всех переездов задачи: вторая смена колонки
         // затирает первую в шторке — это одна и та же новость, обновившаяся.

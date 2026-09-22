@@ -27,6 +27,8 @@ import { describeMediaError } from './call-media-error';
 import { buildLaunchPreviewCall } from './call-launch-preview';
 import { CONNECTING_TIMEOUT_MS, decideConnectingTimeout } from './call-connect-timeout';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
+import { routeRingingEvent } from './call-ringing-routing';
+import type { CameraFacing } from './camera-mirror';
 import {
   admitCallSignal,
   INITIAL_SIGNAL_SEQ_STATE,
@@ -37,6 +39,15 @@ import { sendWithRetry } from './call-signal-retry';
 import { SignalSendQueue } from './call-signal-send-queue';
 import { shouldRestartIceOnNetworkChange } from './ice-restart-policy';
 import {
+  buildMediaSignal,
+  DEFAULT_REMOTE_MEDIA,
+  readMediaSignal,
+  reconnectRestored,
+  shouldAnnounceMedia,
+} from './media-state-signal';
+import { shouldSendVideo } from './video-track-state';
+import { videoEncodingFor } from './video-encoding';
+import {
   clearNativeCall,
   consumeLaunchCall,
   getCallConflictState,
@@ -46,6 +57,7 @@ import {
   startOngoingCall,
   subscribeToNativeCallEvents,
   subscribeToNetworkTransportChanges,
+  subscribeToPipModeChanges,
 } from './native-call-bridge';
 import { navigatedCallIdAfterPhase, nextNavigatedCallId, shouldAutoNavigateToCallScreen } from './call-screen-return';
 import { PendingCallAnswer } from './pending-call-answer';
@@ -91,6 +103,24 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [relayed, setRelayed] = useState<boolean | null>(null);
   const [screenVisible, setScreenVisible] = useState(false);
+  /** Камера собеседника (VED-291). Молчание = включена, см. `media-state-signal.ts`. */
+  const [remoteVideoOn, setRemoteVideoOn] = useState(DEFAULT_REMOTE_MEDIA.video);
+  /** Наша камера: фронтальная или тыловая (VED-347). Звонок начинается с
+   *  фронтальной, кнопка «перевернуть» ведёт состояние дальше; от него
+   *  зависит зеркало своего окошка (`camera-mirror.ts`). */
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('user');
+  /** Открыто ли окно «картинка в картинке» — от него зависит, гасить ли
+   *  камеру при уходе приложения в фон (`video-track-state.ts`). */
+  const [pipActive, setPipActive] = useState(false);
+  /** `AppState`, приведённый к трём значениям `shouldSendVideo`. */
+  const [appState, setAppState] = useState<'active' | 'background' | 'inactive'>(() =>
+    AppState.currentState === 'background' || AppState.currentState === 'inactive'
+      ? AppState.currentState
+      : 'active',
+  );
+  /** Что мы последний раз сообщили собеседнику о своей камере; `null` —
+   *  «в этом соединении ещё ничего», в том числе сразу после `connected`. */
+  const announcedVideo = useRef<boolean | null>(null);
 
   const stateRef = useRef(state);
   // Обработчики читают свежее состояние через ref: обновляем его после
@@ -148,6 +178,14 @@ export function CallProvider({ children }: { children: ReactNode }) {
     setLocalStream(null);
     setRemoteStream(null);
     setRelayed(null);
+    // VED-291: новое соединение — заново «камера собеседника включена» и
+    // «мы ещё ничего о своей не сообщали». Иначе заглушка от прошлого
+    // звонка встретила бы следующий.
+    setRemoteVideoOn(DEFAULT_REMOTE_MEDIA.video);
+    announcedVideo.current = null;
+    // VED-347: следующий звонок снова начнётся с фронтальной камеры
+    // (`startLocalMedia`), значит и зеркало своего окошка — с начала.
+    setCameraFacing('user');
   }, []);
 
   const iceServers = useCallback(async (): Promise<ChatIceServerDto[]> => {
@@ -199,28 +237,39 @@ export function CallProvider({ children }: { children: ReactNode }) {
     [callsApi, closeSession, finishLocally],
   );
 
+  /**
+   * Отправка сигнала второй стороне. Общая точка и для переговоров
+   * (offer/answer/ICE из `CallSession`), и для состояния камеры (VED-291):
+   * очередь и идемпотентный ключ должны быть одни и те же, иначе сигнал о
+   * камере мог бы обогнать `answer`.
+   */
+  const sendSignal = useCallback(
+    (signal: ChatCallSignal) => {
+      const id = stateRef.current.call?.id;
+      if (!id) return;
+      // Один ключ на сигнал, не на попытку (VED-261, feedback-002,
+      // блокирующий п.1): partial-success ретрай («сервер сохранил,
+      // ответ потерялся») с тем же clientSignalId — идемпотентный
+      // no-op на сервере, а не второй offer/answer с новым seq.
+      const clientSignalId = randomUUID();
+      // Очередь — следующий сигнал этой сессии стартует только после
+      // того, как этот полностью разрешится, иначе параллельные
+      // ретраи могут обогнать друг друга по порядку доставки.
+      void sendQueueRef.current.enqueue(() =>
+        // VED-261: сервер отвечает 503, если сигнал не удалось надёжно
+        // сохранить (временный сбой Redis) — это явная просьба
+        // повторить, а не молчаливая потеря.
+        sendWithRetry(() => callsApi.signal(id, signal, clientSignalId)),
+      );
+    },
+    [callsApi],
+  );
+
   const createSession = useCallback(
     (role: 'caller' | 'callee', servers: ChatIceServerDto[]) => {
       closeSession();
       const session = new CallSession(servers, role, {
-        onSignal: (signal) => {
-          const id = stateRef.current.call?.id;
-          if (!id) return;
-          // Один ключ на сигнал, не на попытку (VED-261, feedback-002,
-          // блокирующий п.1): partial-success ретрай («сервер сохранил,
-          // ответ потерялся») с тем же clientSignalId — идемпотентный
-          // no-op на сервере, а не второй offer/answer с новым seq.
-          const clientSignalId = randomUUID();
-          // Очередь — следующий сигнал этой сессии стартует только после
-          // того, как этот полностью разрешится, иначе параллельные
-          // ретраи могут обогнать друг друга по порядку доставки.
-          void sendQueueRef.current.enqueue(() =>
-            // VED-261: сервер отвечает 503, если сигнал не удалось надёжно
-            // сохранить (временный сбой Redis) — это явная просьба
-            // повторить, а не молчаливая потеря.
-            sendWithRetry(() => callsApi.signal(id, signal, clientSignalId)),
-          );
-        },
+        onSignal: sendSignal,
         onRemoteStream: (remote) => setRemoteStream(remote),
         onConnected: () => dispatch({ type: 'connected', at: Date.now() }),
         onDisconnected: () => dispatch({ type: 'disconnected' }),
@@ -229,7 +278,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       sessionRef.current = session;
       return session;
     },
-    [callsApi, closeSession, hangUpWith],
+    [closeSession, hangUpWith, sendSignal],
   );
 
   const drainQueuedSignals = useCallback(async () => {
@@ -250,6 +299,15 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const { admit, next } = admitCallSignal(signalSeqRef.current, seq);
     if (!admit) return;
     signalSeqRef.current = next;
+    // Состояние камеры собеседника (VED-291) — это про экран, не про
+    // переговоры: применяем сразу и НЕ откладываем в `queuedSignals`, даже
+    // если сессия ещё не поднята. Отложенный сигнал о камере применился бы
+    // позже offer/answer и на мгновение показал бы не то.
+    const media = readMediaSignal(signal);
+    if (media) {
+      setRemoteVideoOn(media.video);
+      return;
+    }
     const session = sessionRef.current;
     if (session) await session.handleSignal(signal).catch(logHandleSignalError);
     else queuedSignals.current.push(signal);
@@ -302,25 +360,34 @@ export function CallProvider({ children }: { children: ReactNode }) {
       // JS-баннера/рингтона, которых за блокировкой никто не видел и не
       // слышал (`decideIncomingCallPresentation`,
       // `incoming-call-presentation.ts`); только Android — на iOS нет
-      // альтернативы нативному пути вовсе, там `dispatch` идёт как раньше.
-      // Только из простоя (не мешаем уже идущему разговору) — дедуп по
-      // `callId` внутри `showIncomingCallFromStream` (`callLifecycleTracker`,
-      // общий с пуш-путём) защищает от повторного вызова на каждый ре-рендер
-      // потока.
-      if (
-        Platform.OS === 'android' &&
-        event.type === 'call.ringing' &&
-        stateRef.current.phase === 'idle' &&
-        event.call.callee.id === userId &&
-        AppState.currentState !== 'active'
-      ) {
-        void showIncomingCallFromStream({
-          callId: event.call.id,
-          callerName: event.call.caller.name,
-          kind: event.call.kind,
-          avatarUrl: event.call.caller.avatarUrl,
+      // альтернативы нативному пути вовсе. Только из простоя (не мешаем уже
+      // идущему разговору) — дедуп по `callId` внутри
+      // `showIncomingCallFromStream` (`callLifecycleTracker`, общий с
+      // пуш-путём) защищает от повторного вызова на каждое событие потока.
+      //
+      // VED-358: нативный экран — способ ДОЗВОНИТЬСЯ до человека мимо
+      // приложения, а не замена знанию приложения о звонке. Раньше эта
+      // ветка заканчивалась `return`, и `dispatch` до машины состояний не
+      // доходил вовсе: полноэкранный intent тут же выводил приложение на
+      // передний план, а там не было ни баннера, ни кнопки «Принять» —
+      // ровно то, что нашлось живой проверкой (в браузере окно было).
+      // Решение — `routeRingingEvent` (`call-ringing-routing.ts`), и
+      // «только нативный, мимо машины» среди его исходов больше нет.
+      if (event.type === 'call.ringing') {
+        const routing = routeRingingEvent({
+          platform: Platform.OS,
+          appState: AppState.currentState,
+          phase: stateRef.current.phase,
+          isCallee: event.call.callee.id === userId,
         });
-        return;
+        if (routing.showNative)
+          void showIncomingCallFromStream({
+            callId: event.call.id,
+            callerName: event.call.caller.name,
+            kind: event.call.kind,
+            avatarUrl: event.call.caller.avatarUrl,
+          });
+        if (!routing.trackInMachine) return;
       }
       // Финал звонка, которого провайдер не ведёт (например, поднятого
       // нативно из фона, пока JS был в простое): погасить его соединение
@@ -328,6 +395,21 @@ export function CallProvider({ children }: { children: ReactNode }) {
       // `endCall` идемпотентен, лишний вызов безвреден.
       if (event.type === 'call.ended' && event.call.id !== stateRef.current.call?.id)
         void clearNativeCall(event.call.id, nativeEndReason('ended', event.call.status));
+      // Ответили на другом устройстве (VED-346): машина уберёт входящий из
+      // состояния, но нативную сторону — звонящее уведомление и Connection
+      // в Telecom — надо погасить отдельно. Сервер шлёт для этого
+      // `answered_elsewhere` data-пушем, но пуш может и опоздать: событие
+      // потока здесь — тот же факт, добытый раньше и без Firebase.
+      if (
+        event.type === 'call.accepted' &&
+        event.call.id === stateRef.current.call?.id &&
+        stateRef.current.phase === 'incoming' &&
+        // Отвечаем прямо сейчас мы сами: метка ставится синхронно в
+        // `accept()`, до сетевого запроса, и не зависит от того, успел ли
+        // React перерисоваться с фазой `connecting`.
+        acceptingCallId.current !== event.call.id
+      )
+        void clearNativeCall(event.call.id, 'answered_elsewhere');
       dispatch({ type: 'stream', event, selfId: userId });
       // Финал с сервера: медиа закрываем сразу, не дожидаясь перерисовки.
       if (event.type === 'call.ended' && event.call.id === stateRef.current.call?.id)
@@ -610,9 +692,70 @@ export function CallProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     sessionRef.current?.setMuted(state.muted);
   }, [state.muted, localStream]);
+  // ---------- видео (VED-291) ----------
+
+  // `AppState` и «картинка в картинке» нужны здесь, а не только на экране
+  // звонка: экран умеет сворачиваться по «назад», не завершая разговор
+  // (`call-screen-return.ts`), а камеру гасить надо в любом случае.
   useEffect(() => {
-    sessionRef.current?.setCameraOff(state.cameraOff);
-  }, [state.cameraOff, localStream]);
+    const sub = AppState.addEventListener('change', (next) =>
+      setAppState(next === 'background' || next === 'inactive' ? next : 'active'),
+    );
+    return () => sub.remove();
+  }, []);
+  useEffect(() => subscribeToPipModeChanges(setPipActive), []);
+
+  /**
+   * Единственное место, где решается судьба исходящей картинки: кнопка
+   * «камера», уход приложения в фон (батарея — `video-track-state.ts`) и
+   * фаза звонка сходятся в один флаг, он же дословно уходит собеседнику
+   * (`media-state-signal.ts`), чтобы тот видел заглушку с аватаром, а не
+   * замёрзший кадр.
+   *
+   * `localStream` в зависимостях — чтобы применить состояние к дорожкам,
+   * как только они появились (сессия создаётся раньше, чем `getUserMedia`
+   * успевает вернуть поток).
+   */
+  const sendingVideo = shouldSendVideo({
+    kind: state.call?.kind ?? 'audio',
+    phase: state.phase,
+    cameraOff: state.cameraOff,
+    appState,
+    pipActive,
+  });
+  const wasReconnecting = useRef(false);
+  useEffect(() => {
+    const session = sessionRef.current;
+    // Связь вернулась после обрыва/перезапуска ICE — наш прошлый сигнал мог
+    // не доехать, забываем отметку и сообщаем состояние заново.
+    if (reconnectRestored(wasReconnecting.current, state.reconnecting))
+      announcedVideo.current = null;
+    wasReconnecting.current = state.reconnecting;
+    if (!session) return;
+    session.setCameraOff(!sendingVideo);
+    if (!session.hasVideoTrack()) return;
+    if (!shouldAnnounceMedia(announcedVideo.current, sendingVideo)) return;
+    announcedVideo.current = sendingVideo;
+    sendSignal(buildMediaSignal(sendingVideo));
+  }, [sendingVideo, localStream, sendSignal, state.reconnecting]);
+
+  /**
+   * Потолок качества исходящего видео под текущую сеть (`video-encoding.ts`).
+   * Пересчитывается на каждую смену транспорта (Wi-Fi ↔ LTE — отслеживается
+   * ниже тем же подписчиком, что и перезапуск ICE) и на выход из
+   * переподключения: после ICE restart отправитель пересобирается, и
+   * прежние `encodings` могли не пережить это.
+   */
+  const videoTransport = useRef<NetworkTransport | null>(null);
+  const applyVideoEncoding = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session || !session.hasVideoTrack()) return;
+    void session.applyVideoEncoding(videoEncodingFor(videoTransport.current));
+  }, []);
+  useEffect(() => {
+    if (state.phase !== 'active' || state.reconnecting) return;
+    applyVideoEncoding();
+  }, [state.phase, state.reconnecting, localStream, applyVideoEncoding]);
 
   // ---------- действия ----------
 
@@ -626,6 +769,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'failed', error: 'Устройство сейчас занято другим звонком' });
         return;
       }
+      // Метка «звоним отсюда» — до запроса камеры (VED-346): `call.ringing`
+      // о нашем же исходящем умеет прийти потоком раньше, чем ответит POST, и
+      // без метки это устройство приняло бы собственный вызов за звонок с
+      // чужого устройства и промолчало бы.
+      dispatch({ type: 'outgoing-starting' });
       try {
         // Микрофон/камера — до звонка: отказ в доступе не должен будить собеседника.
         const servers = await iceServers();
@@ -668,6 +816,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
     acceptingCallId.current = call.id;
     answerAttemptCallId.current = call.id;
+    // Метка «отвечаем отсюда» — до запроса камеры (VED-358): между нажатием
+    // и `accepting` ниже лежат сеть и системный вопрос о доступе к камере,
+    // а `call.accepted` за это время уже может прийти потоком. Без метки
+    // машина приняла бы его за «ответили на другом устройстве» и погасила
+    // бы звонок ровно на том устройстве, где на «Принять» и нажали.
+    dispatch({ type: 'answering' });
     // eslint-disable-next-line no-console
     console.warn('[calls] accept: начат', { callId: call.id });
     try {
@@ -711,7 +865,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const hangUp = useCallback(() => hangUpWith('hangup'), [hangUpWith]);
   const toggleMute = useCallback(() => dispatch({ type: 'toggle-mute' }), []);
   const toggleCamera = useCallback(() => dispatch({ type: 'toggle-camera' }), []);
-  const switchCamera = useCallback(() => sessionRef.current?.switchCamera(), []);
+  /**
+   * Какая камера снимает (VED-347). Живёт в состоянии, а не читается из
+   * сессии по месту: от неё зависит зеркало своего окошка, и экран должен
+   * перерисоваться сразу после переворота камеры.
+   */
+  const switchCamera = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session) return;
+    // На вебе переключение асинхронное — камеру перечитываем после него, а
+    // не сразу, иначе зеркало отстало бы на одно нажатие.
+    void session.switchCamera().then(() => setCameraFacing(session.getCameraFacing()));
+  }, []);
   const dismiss = useCallback(() => dispatch({ type: 'reset' }), []);
 
   // ---------- нативный модуль звонков (VED-221) ----------
@@ -960,6 +1125,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
     return subscribeToNetworkTransportChanges((transport) => {
       const previous = lastTransport.current;
       lastTransport.current = transport;
+      // VED-291: потолок видео — по текущему транспорту. В отличие от
+      // перезапуска ICE, это делают обе стороны и на любой фазе: ушли с
+      // Wi-Fi в сотовую — сузились, вернулись — расширились обратно.
+      videoTransport.current = transport;
+      applyVideoEncoding();
       const now = Date.now();
       if (
         shouldRestartIceOnNetworkChange(stateRef.current.phase, role ?? 'callee', previous, transport, now, lastIceRestartAt.current)
@@ -968,7 +1138,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         void sessionRef.current?.restartIce();
       }
     });
-  }, [role]);
+  }, [role, applyVideoEncoding]);
 
   const apiValue = useMemo<ChatCallsApi>(
     () => ({
@@ -977,6 +1147,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
       localStream,
       remoteStream,
       relayed,
+      remoteVideoOn,
+      sendingVideo,
+      cameraFacing,
+      pipActive,
       screenVisible,
       reportCallScreenMounted,
       start,
@@ -994,6 +1168,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
       localStream,
       remoteStream,
       relayed,
+      remoteVideoOn,
+      sendingVideo,
+      cameraFacing,
+      pipActive,
       screenVisible,
       reportCallScreenMounted,
       start,

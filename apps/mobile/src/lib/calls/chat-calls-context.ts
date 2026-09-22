@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import type { ChatCallKind } from '@vedamatch/shared';
 import type { MediaStream } from 'react-native-webrtc';
 import type { CallState } from './call-machine';
+import type { CameraFacing } from './camera-mirror';
 
 /**
  * Контекст звонков — вынесен из `call-provider.tsx` в отдельный файл без
@@ -22,6 +23,28 @@ export interface ChatCallsApi {
   remoteStream: MediaStream | null;
   /** Пошёл ли разговор через TURN — обновляется, пока `phase === 'active'`. */
   relayed: boolean | null;
+  /**
+   * Включена ли камера у собеседника (VED-291). Пока он молчит — считаем,
+   * что включена: клиент, не знающий про сигнал `media` (сайт до своей
+   * правки), не шлёт его вовсе, и его видео должно показываться как
+   * раньше. `media-state-signal.ts`.
+   */
+  remoteVideoOn: boolean;
+  /**
+   * Уходит ли прямо сейчас наша картинка. Это НЕ просто `!state.cameraOff`:
+   * в фоне без «картинки в картинке» камера гасится ради батареи
+   * (`video-track-state.ts`), а кнопка при этом остаётся в прежнем
+   * положении — человек её не трогал.
+   */
+  sendingVideo: boolean;
+  /**
+   * Какая камера снимает прямо сейчас (VED-347). Нужна экрану звонка, чтобы
+   * решить, зеркалить ли своё окошко: фронтальную — да, тыловую — нет
+   * (`camera-mirror.ts`).
+   */
+  cameraFacing: CameraFacing;
+  /** Открыто окно «картинка в картинке» — в нём экран звонка прячет всё, кроме видео. */
+  pipActive: boolean;
   /**
    * Открыт ли сейчас полноэкранный `app/call/[id].tsx`. Системное «назад»
    * снимает этот экран (feedback-001.md, блокирующий пункт 1), но не

@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConversationRow } from '@/components/chat/conversation-row';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { ChatListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import { applyListEvent, sortConversations } from '@/lib/chat/chat-list-state';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import { createInboxApi } from '@/lib/notifications/inbox-api';
+import { setUnreadCount } from '@/lib/notifications/unread-store';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -25,6 +28,7 @@ export default function ChatsScreen() {
   const { api, user } = useSession();
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
+  const inboxApi = useMemo(() => createInboxApi(api), [api]);
   const [conversations, setConversations] = useState<ChatConversationSummary[] | null>(null);
   const [requestsCount, setRequestsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +51,19 @@ export default function ChatsScreen() {
     useCallback(() => {
       void load();
     }, [load]),
+  );
+
+  // Значок на колокольчике (VED-330). Отдельный лёгкий запрос, как на сайте:
+  // число нужно и тому, кто в ленту не заходил. Молча глохнет при ошибке —
+  // ради значка показывать человеку баннер поверх списка бесед незачем, а
+  // следующий возврат на вкладку попробует снова.
+  useFocusEffect(
+    useCallback(() => {
+      void inboxApi
+        .unreadCount()
+        .then((response) => setUnreadCount(response.unreadCount))
+        .catch(() => undefined);
+    }, [inboxApi]),
   );
 
   useEffect(() => {
@@ -85,9 +102,31 @@ export default function ChatsScreen() {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-      <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
-        Чаты
-      </Text>
+      <View style={styles.titleRow}>
+        <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
+          Чаты
+        </Text>
+        {/* Колокольчик уведомлений (VED-330) — здесь, а не шестой вкладкой
+            внизу: «Чаты» открываются при запуске, значок непрочитанного
+            попадается на глаза сам. Обоснование целиком — у компонента. */}
+        <NotificationBell />
+        {/* Завести группу или канал общины (VED-292) — то же, что кнопка
+            «Новая группа» в шапке списка бесед на сайте. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Новая беседа"
+          accessibilityHint="Открывает форму новой группы или канала"
+          onPress={() => router.push('/chat/new')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [
+            styles.newButton,
+            { borderColor: colors.glassBorder, backgroundColor: colors.glass },
+            pressedStyle(pressed),
+          ]}
+        >
+          <Text style={[styles.newButtonText, { color: colors.text0 }]}>Новая</Text>
+        </Pressable>
+      </View>
       {requestsCount > 0 ? (
         <Pressable
           accessibilityRole="button"
@@ -153,7 +192,17 @@ export default function ChatsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 8, gap: 6 },
-  title: { fontFamily: fonts.displayBold, fontSize: 24 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  title: { flex: 1, fontFamily: fonts.displayBold, fontSize: 24 },
+  newButton: {
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  newButtonText: { fontFamily: fonts.bodySemiBold, fontSize: 14 },
   requestsRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -122,7 +122,13 @@ export class WorkContactsService {
     // е — одна буква. Кандидаты уже ограничены графом знакомств, так что
     // читать их целиком не дорого.
     const people = await this.prisma.user.findMany({
-      where: { id: { in: [...known] }, accountStatus: 'active' },
+      // Служебных аккаунтов здесь быть не должно: приглашение ждёт согласия,
+      // а агента в среду вводит распорядитель (WorkSpacesService.addAgent).
+      where: {
+        id: { in: [...known] },
+        accountStatus: 'active',
+        isAgent: false,
+      },
       select: { id: true, name: true, spiritualName: true, avatarUrl: true },
     });
     return people.filter((person) => matchesContactQuery(person, search));
@@ -149,6 +155,7 @@ export class WorkContactsService {
       SELECT u."id", u."name", u."spiritualName", u."avatarUrl"
       FROM "User" u
       WHERE u."accountStatus" = 'active'
+        AND u."isAgent" = false
         AND u."id" <> ${userId}
         AND NOT EXISTS (
           SELECT 1 FROM "WorkSpaceMember" m

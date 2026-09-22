@@ -1,17 +1,30 @@
 import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
 
+/**
+ * Разбор пути целиком живёт в `lib/notifications/notification-target.ts` и
+ * проверен там: таблица одна на пуш и на ленту уведомлений. Здесь — что
+ * `pushTarget` действительно её зовёт, и главное — что раздел вне беседы
+ * больше не приземляется на список чатов.
+ *
+ * Прежний тест закреплял ровно обратное: `{ kind: 'home' }` на всё, кроме
+ * беседы. Это и был баг VED-330 — пуш про Рынок, объявление или «Работу»
+ * молча открывал чаты, и человек не узнавал, что произошло.
+ */
 describe('pushTarget', () => {
   it('беседа и звонок ведут в беседу', () => {
     expect(pushTarget('/chat/c-1')).toEqual({ kind: 'chat', conversationId: 'c-1' });
     expect(pushTarget('/chat/c-1?call=k')).toEqual({ kind: 'chat', conversationId: 'c-1' });
   });
 
-  it('служебные разделы и чужие сервисы ведут на главную', () => {
-    expect(pushTarget('/chat/requests')).toEqual({ kind: 'home' });
-    expect(pushTarget('/chat/with/u-1')).toEqual({ kind: 'home' });
-    expect(pushTarget('/notifications')).toEqual({ kind: 'home' });
-    expect(pushTarget('/market/chats/m-1')).toEqual({ kind: 'home' });
-    expect(pushTarget(undefined)).toEqual({ kind: 'home' });
+  it('служебные разделы чата различаются, а не сваливаются в одну кучу', () => {
+    expect(pushTarget('/chat/requests')).toEqual({ kind: 'chat-requests' });
+    expect(pushTarget('/chat/with/u-1')).toEqual({ kind: 'person', userId: 'u-1' });
+  });
+
+  it('чужие сервисы больше не ведут на список чатов', () => {
+    expect(pushTarget('/market/chats/m-1')).toEqual({ kind: 'site', path: '/market/chats/m-1' });
+    expect(pushTarget('/notifications')).toEqual({ kind: 'inbox' });
+    expect(pushTarget(undefined)).toEqual({ kind: 'inbox' });
   });
 });
 

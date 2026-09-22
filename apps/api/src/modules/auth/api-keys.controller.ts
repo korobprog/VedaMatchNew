@@ -41,11 +41,29 @@ export class ApiKeysController {
     return { scopes: [...ALLOWED_API_KEY_SCOPES] };
   }
 
+  /**
+   * Служебные аккаунты, на которые можно выписать ключ, — для той же формы.
+   *
+   * Только администрации: выпускать агентский ключ всё равно позволено лишь
+   * ей, а список служебных имён без этого стал бы ещё одним способом узнать,
+   * что на портале вообще есть.
+   */
+  @Get('agents')
+  agents(@CurrentUser() user: AccessTokenPayload) {
+    return this.keys.listAgents(user.role);
+  }
+
   @Post()
   async create(
     @CurrentUser() user: AccessTokenPayload,
     @Body()
-    body: { name?: string; scopes?: unknown[]; expiresInDays?: number },
+    body: {
+      name?: string;
+      scopes?: unknown[];
+      expiresInDays?: number;
+      /** Выпустить ключ от имени служебного аккаунта ИИ-агента. */
+      agentId?: string;
+    },
   ) {
     const name = (body.name ?? '').trim();
     if (!name) throw new BadRequestException('Назовите ключ');
@@ -59,7 +77,14 @@ export class ApiKeysController {
       throw new BadRequestException('Выберите хотя бы одно право');
 
     const expiresAt = resolveExpiry(body.expiresInDays);
-    const issued = await this.keys.issue(user.sub, name, scopes, expiresAt);
+    const agentId = (body.agentId ?? '').trim();
+    const issued = await this.keys.issue(
+      user.sub,
+      name,
+      scopes,
+      expiresAt,
+      agentId ? { id: agentId, issuerRole: user.role } : null,
+    );
     // Ключ уезжает целиком ровно один раз: дальше в базе только хеш, и
     // «покажите ещё раз» будет невыполнимо — об этом предупреждает интерфейс.
     return issued;

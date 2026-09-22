@@ -14,6 +14,7 @@ import { AppState } from 'react-native';
 import { appVariant } from '@/config/app-variant';
 import { createApiClient, type ApiClient, type SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AppTokens } from './auth-api';
+import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
@@ -31,12 +32,10 @@ import { unregisterDevice } from '@/lib/push/push-api';
  * `vedamatch://auth`, приложение меняет его на токены с PKCE-верификатором.
  */
 
-export interface SessionUser {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl: string | null;
-}
+/** Сам тип живёт в `session-user.ts` — туда он переехал в VED-333, чтобы обе
+ *  веб-сессии и сессия на токенах складывали пользователя одной функцией.
+ *  Имя по-прежнему импортируют отсюда. */
+export type { SessionUser };
 
 export type SessionStatus = 'loading' | 'guest' | 'signed';
 
@@ -83,6 +82,13 @@ export interface Session {
    * отписка — возвращаемой функцией.
    */
   registerBeforeSignOut(hook: () => Promise<void>): () => void;
+  /**
+   * Перечитать `GET /users/me` и обновить `user` (VED-332). Нужен экрану
+   * профиля: после смены имени или фотографии стоявшее в сессии значение
+   * протухает, и «Аккаунт», справочник и шапки продолжали бы показывать
+   * старое имя до перезапуска приложения.
+   */
+  reloadUser(): Promise<void>;
 }
 
 /** Сколько максимум ждать все `registerBeforeSignOut`-колбэки в сумме,
@@ -101,12 +107,6 @@ const pkceCrypto = {
     }),
 };
 
-interface ProfileResponse {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl?: string | null;
-}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { apiOrigin } = appVariant();
@@ -241,12 +241,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = useCallback(async () => {
     const profile = await api.request<ProfileResponse>('/users/me');
-    setUser({
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      avatarUrl: profile.avatarUrl ?? null,
-    });
+    setUser(toSessionUser(profile));
     setStatus('signed');
   }, [api]);
 
@@ -383,6 +378,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signInDev,
       signOut,
       registerBeforeSignOut,
+      reloadUser: loadProfile,
     }),
     [
       status,
@@ -396,6 +392,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signInDev,
       signOut,
       registerBeforeSignOut,
+      loadProfile,
     ],
   );
 

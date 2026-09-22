@@ -267,6 +267,22 @@ export default function PersonScreen() {
                   Это ваша карточка
                 </Text>
                 <Text style={[styles.cardText, { color: colors.text1 }]}>Так вас видят другие участники справочника.</Text>
+                {/* Второй вход в профиль (VED-332): человек уже смотрит на
+                    себя чужими глазами — здесь и возникает желание что-то
+                    поправить. Первый вход — карточка сверху «Аккаунта». */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Изменить профиль"
+                  onPress={() => router.push('/profile')}
+                  android_ripple={ripple(colors.glassBorder)}
+                  style={({ pressed }) => [
+                    styles.primary,
+                    { backgroundColor: colors.magenta, borderColor: colors.magenta },
+                    pressedStyle(pressed),
+                  ]}
+                >
+                  <Text style={[styles.primaryText, { color: colors.onAccent }]}>Изменить профиль</Text>
+                </Pressable>
               </View>
             ) : hintLoading ? (
               // Пока не пришёл ответ requests() — ни формы, ни блока статуса:

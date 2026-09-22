@@ -18,12 +18,14 @@ import {
 import { shouldEnableProximity } from '@/lib/calls/audio-session-policy';
 import { isPermissionDeniedMessage } from '@/lib/calls/call-media-error';
 import { companionOf, endedLabel, roleIn } from '@/lib/calls/call-machine';
+import { shouldMirrorVideo } from '@/lib/calls/camera-mirror';
 import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { backMinimizesCall } from '@/lib/calls/call-screen-return';
 import { shouldKeepScreenAwake } from '@/lib/calls/keep-awake';
-import { setCallScreenActive, setPipEligible, subscribeToPipModeChanges } from '@/lib/calls/native-call-bridge';
+import { setCallScreenActive, setPipEligible } from '@/lib/calls/native-call-bridge';
 import { isPipEligible } from '@/lib/calls/pip-eligibility';
 import { needsSeparateRemoteAudioElement } from '@/lib/calls/remote-audio-playback';
+import { localPreviewView, stageView } from '@/lib/calls/video-track-state';
 import { useElapsedLabel } from '@/lib/calls/use-elapsed-label';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -109,7 +111,19 @@ export default function CallScreen() {
   }, [calls, state?.phase]);
 
   const isVideo = call?.kind === 'video';
-  const [speakerOn, setSpeakerOn] = useState(isVideo);
+  /**
+   * `null` — «человек кнопку не трогал»: тогда показываем то, что и так
+   * выбрала система при `InCallManager.start({media})` — громкую связь для
+   * видео, разговорный динамик для аудио (`InCallManagerModule.java`,
+   * `start()`). Раньше это было обычным `useState(isVideo)` с вычислением
+   * один раз при монтировании, а экран может смонтироваться РАНЬШЕ, чем
+   * провайдер восстановит `call` (возврат в живой звонок после перезапуска
+   * приложения, `restore` в `call-machine.ts`): подпись тогда навсегда
+   * застревала на «Громкая связь: выкл» у видеозвонка, который на самом
+   * деле звучал на громкой.
+   */
+  const [manualSpeaker, setManualSpeaker] = useState<boolean | null>(null);
+  const speakerOn = manualSpeaker ?? isVideo;
   const [audioRoute, setAudioRoute] = useState<AudioRouteState>(EMPTY_AUDIO_ROUTE_STATE);
   const [routeMenuOpen, setRouteMenuOpen] = useState(false);
 
@@ -155,25 +169,25 @@ export default function CallScreen() {
   // (`isPipEligible`, `setPipEligible`), и запретить при любом отклонении от
   // этих условий (ушли «назад», разговор кончился, дозвон ещё идёт) — иначе
   // человек мог бы неожиданно провалиться в PiP на «Вызов…» без картинки.
-  const [inPip, setInPip] = useState(false);
   useEffect(() => {
     const eligible = call && state ? isPipEligible(call.kind, state.phase, true) : false;
     setPipEligible(eligible);
     return () => setPipEligible(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call?.id, call?.kind, state?.phase]);
-  useEffect(() => subscribeToPipModeChanges(setInPip), []);
+  // Факт «мы в PiP» берётся у провайдера (VED-291): он подписан на то же
+  // событие и по нему же гасит камеру в фоне — два независимых подписчика
+  // с разными мнениями о том, открыт ли PiP, рано или поздно разошлись бы.
+  const inPip = calls?.pipActive ?? false;
 
   const showsRoutePicker = shouldShowRoutePicker(audioRoute);
   const routeLabel = currentRouteLabel(audioRoute, speakerOn);
 
   const toggleSpeaker = () => {
     confirmTap();
-    setSpeakerOn((prev) => {
-      const next = !prev;
-      InCallManager.setForceSpeakerphoneOn(next);
-      return next;
-    });
+    const next = !speakerOn;
+    InCallManager.setForceSpeakerphoneOn(next);
+    setManualSpeaker(next);
   };
 
   const selectAudioRoute = (route: CallAudioRoute) => {
@@ -199,8 +213,26 @@ export default function CallScreen() {
             ? 'Переподключение…'
             : elapsed;
 
-  const showsRemoteVideo = isVideo && calls.remoteStream && state!.phase === 'active';
-  const showsLocalPreview = isVideo && calls.localStream && state!.phase !== 'ended';
+  // Что показывать — `video-track-state.ts` (+spec), не набор условий по
+  // месту: ровно те же правила нужны и для решения «гасить ли камеру»,
+  // и врозь они бы разъехались.
+  const stage = stageView({
+    kind: call.kind,
+    phase: state!.phase,
+    hasRemoteStream: Boolean(calls.remoteStream),
+    remoteVideoOn: calls.remoteVideoOn,
+  });
+  const preview = localPreviewView({
+    kind: call.kind,
+    phase: state!.phase,
+    hasLocalStream: Boolean(calls.localStream),
+    sendingVideo: calls.sendingVideo,
+    pipActive: inPip,
+  });
+  /** Видеозвонок идёт, но картинки собеседника нет именно потому, что он
+   *  выключил камеру, — это надо назвать словами, иначе карточка с
+   *  аватаром читается как «ещё соединяемся». */
+  const remoteCameraOff = isVideo && state!.phase === 'active' && !calls.remoteVideoOn;
   const permissionDenied = state!.phase === 'ended' && isPermissionDeniedMessage(state!.error);
   // Веб: без картинки (аудиозвонок) звук собеседника всё равно должен
   // звучать — `RTCView` тут не рендерится вовсе, значит нужен отдельный
@@ -213,31 +245,60 @@ export default function CallScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
       <View style={styles.stage}>
-        {showsRemoteVideo ? (
+        {stage === 'remote-video' ? (
           <RTCView
             streamURL={calls.remoteStream!.toURL()}
             style={StyleSheet.absoluteFill}
             objectFit="cover"
+            // Картинку собеседника не зеркалим никогда (VED-347): к нам
+            // приходит готовый кадр, отражать его — показывать чужой мир
+            // наизнанку. Прописано явно, чтобы правка «зеркала» своего
+            // окошка не расползлась сюда по невнимательности.
+            mirror={shouldMirrorVideo({ surface: 'remote' })}
           />
         ) : !inPip ? (
           <View style={styles.companion}>
             <ChatAvatar id={companion.id} name={companion.name} uri={companion.avatarUrl} size={112} />
             <Text style={[styles.companionName, { color: colors.text0 }]}>{companion.name}</Text>
+            {remoteCameraOff ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[styles.companionNote, { color: colors.text1 }]}
+              >
+                Камера выключена
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
-        {showsLocalPreview && !inPip ? (
+        {preview === 'video' ? (
           <RTCView
             streamURL={calls.localStream!.toURL()}
             style={[
               styles.localPreview,
               { top: insets.top + 12, borderColor: colors.glassBorder, backgroundColor: colors.bg2 },
-              state!.cameraOff ? styles.localPreviewHidden : null,
             ]}
             objectFit="cover"
-            mirror
+            // VED-347: зеркалим только фронтальную камеру. С тыловой зеркало
+            // меняет стороны местами — «ведёшь влево, а едет вправо».
+            mirror={shouldMirrorVideo({ surface: 'local-preview', facing: calls.cameraFacing })}
             zOrder={1}
           />
+        ) : preview === 'placeholder' ? (
+          // Своя камера выключена. Раньше окошко просто делалось прозрачным
+          // (`opacity: 0`) — на его месте проступал кусок видео собеседника,
+          // обрезанный рамкой, и это читалось как дефект отрисовки.
+          <View
+            accessibilityRole="image"
+            accessibilityLabel="Ваша камера выключена"
+            style={[
+              styles.localPreview,
+              styles.localPreviewPlaceholder,
+              { top: insets.top + 12, borderColor: colors.glassBorder, backgroundColor: colors.bg2 },
+            ]}
+          >
+            <CameraIcon off color={colors.text1} />
+          </View>
         ) : null}
 
         {calls.relayed && state!.phase === 'active' && !inPip ? (
@@ -249,7 +310,12 @@ export default function CallScreen() {
         ) : null}
 
         {needsWebRemoteAudio ? (
-          <RTCView streamURL={calls.remoteStream!.toURL()} style={styles.hiddenRemoteAudio} objectFit="cover" />
+          <RTCView
+            streamURL={calls.remoteStream!.toURL()}
+            style={styles.hiddenRemoteAudio}
+            objectFit="cover"
+            mirror={shouldMirrorVideo({ surface: 'remote' })}
+          />
         ) : null}
       </View>
 
@@ -500,6 +566,7 @@ const styles = StyleSheet.create({
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   companion: { alignItems: 'center', gap: 14, paddingHorizontal: 24 },
   companionName: { fontFamily: fonts.displayBold, fontSize: 22, textAlign: 'center' },
+  companionNote: { fontFamily: fonts.bodySemiBold, fontSize: 14, textAlign: 'center' },
   localPreview: {
     position: 'absolute',
     right: 12,
@@ -509,7 +576,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
-  localPreviewHidden: { opacity: 0 },
+  localPreviewPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   // Только веб (`needsWebRemoteAudio`): звук собеседника на аудиозвонке без
   // видимого видео — картинка не нужна, 1×1 и вне потока разметки, лишь бы
   // элемент был смонтирован и играл.

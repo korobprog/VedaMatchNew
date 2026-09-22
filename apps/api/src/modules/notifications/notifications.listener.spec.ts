@@ -77,8 +77,23 @@ function createListener(options: {
       deleted.push(endpoint);
       return Promise.resolve();
     }),
+    /* Итог попытки в отметки живости (VED-314). Мёртвую подписку и мёртвое
+       устройство удаляет сам конвейер, поэтому набор ведёт учёт здесь. */
+    recordPushResult: jest.fn(
+      (subscription: { endpoint: string }, failure: string | null) => {
+        if (failure === 'gone') deleted.push(subscription.endpoint);
+        return Promise.resolve();
+      },
+    ),
+    recordDeviceResult: jest.fn(
+      (device: { token: string }, failure: string | null) => {
+        if (failure === 'gone') telegramDeleted.push(device.token);
+        return Promise.resolve();
+      },
+    ),
   } as unknown as NotificationsService;
   const sender = {
+    vapidConfigured: true,
     send: jest.fn((subscription: { endpoint: string }, payload: unknown) => {
       sent.push({ endpoint: subscription.endpoint, payload });
       return Promise.resolve(options.sendResult ?? null);

@@ -8,7 +8,6 @@ describe('resolveVariant', () => {
       apiOrigin: 'https://api.vedamatch.ru',
       webOrigin: 'https://vedamatch.ru',
       downloadBaseUrl: null,
-      selfUpdate: true,
       pushProviders: ['rustore', 'fcm'],
     });
   });
@@ -31,16 +30,14 @@ describe('resolveVariant', () => {
     expect(() => resolveVariant({ APP_DOWNLOAD_BASE_URL: 'не-адрес' })).toThrow('не является адресом');
   });
 
-  it('глобальная сборка для магазина не обновляет себя и шлёт пуши через FCM', () => {
+  // Что каналу разрешено — не здесь, а в `capabilities.spec.ts` (VED-207):
+  // вариант отвечает только за адреса и провайдеров пушей.
+  it('глобальная сборка для магазина ходит в com-контур и шлёт пуши через FCM', () => {
     const variant = resolveVariant({ APP_CONTOUR: 'com', APP_CHANNEL: 'store' });
     expect(variant.apiOrigin).toBe('https://api.vedamatch.com');
     expect(variant.webOrigin).toBe('https://vedamatch.com');
-    expect(variant.selfUpdate).toBe(false);
+    expect(variant.channel).toBe('store');
     expect(variant.pushProviders).toEqual(['fcm']);
-  });
-
-  it('российская сборка для RuStore тоже без самообновления', () => {
-    expect(resolveVariant({ APP_CONTOUR: 'ru', APP_CHANNEL: 'store' }).selfUpdate).toBe(false);
   });
 
   it('пустые и пробельные значения считаются неуказанными', () => {

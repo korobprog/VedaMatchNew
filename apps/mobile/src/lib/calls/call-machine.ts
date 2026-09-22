@@ -51,12 +51,37 @@ export interface CallState {
   muted: boolean;
   cameraOff: boolean;
   error: string | null;
+  /**
+   * Вызов начат именно на этом устройстве (VED-346). События звонка
+   * рассылаются на все устройства человека, вошедшего с нескольких:
+   * `call.ringing` о собственном исходящем приходит и во вкладку сайта, и
+   * на второй телефон, откуда никто никуда не звонил. Флаг взводится в
+   * момент нажатия «позвонить» — ещё до ответа POST, потому что событие
+   * потока умеет его обогнать, — и отличает «наш гудок» от «гудка на
+   * соседнем устройстве».
+   */
+  startedHere: boolean;
+  /**
+   * На «Принять» нажали именно здесь (VED-358). Зеркало `startedHere` для
+   * входящего: `call.accepted` о звонке, на который мы всё ещё показываем
+   * «Принять», по умолчанию читается как «ответили на другом устройстве» и
+   * убирает входящий (VED-346) — но ровно то же событие приходит и
+   * отвечающему устройству, пока оно не успело перейти в `connecting`.
+   * Между нажатием и `accepting` лежат два ожидания — список ICE-серверов
+   * по сети и `getUserMedia` с системным запросом доступа к камере, — и
+   * всё это время фаза здесь ещё `incoming`. Метка ставится синхронно в
+   * момент нажатия и говорит: этот `call.accepted` про нас, звонок не
+   * гасить.
+   */
+  answeringHere: boolean;
 }
 
 export const IDLE_STATE: CallState = {
   phase: 'idle',
   call: null,
   callIsPreview: false,
+  startedHere: false,
+  answeringHere: false,
   endedStatus: null,
   connectedAt: null,
   reconnecting: false,
@@ -66,6 +91,8 @@ export const IDLE_STATE: CallState = {
 };
 
 export type CallAction =
+  /** Человек нажал «позвонить» — микрофон ещё спрашиваем, POST не ушёл. */
+  | { type: 'outgoing-starting' }
   /** POST /chat/calls вернул звонок — гудки пошли. */
   | { type: 'outgoing-started'; call: ChatCallDto }
   /** Событие из общего потока. `selfId` — кто мы, чтобы понять роль. */
@@ -80,6 +107,14 @@ export type CallAction =
    * из фонового запуска — не повод его перебивать.
    */
   | { type: 'preview'; call: ChatCallDto }
+  /**
+   * Человек нажал «Принять» — микрофон/камеру ещё спрашиваем, POST не ушёл
+   * (VED-358). Отдельно от `accepting`: тот переводит фазу и потому уходит
+   * уже после `getUserMedia`, а метка «отвечаем здесь» нужна синхронно с
+   * нажатием — иначе `call.accepted`, прилетевший в эту дырку, погасил бы
+   * звонок на отвечающем же устройстве.
+   */
+  | { type: 'answering' }
   /** Человек нажал «ответить» — сервер ещё не подтвердил. */
   | { type: 'accepting' }
   | { type: 'connected'; at: number }
@@ -93,8 +128,11 @@ export type CallAction =
 
 export function reduceCall(state: CallState, action: CallAction): CallState {
   switch (action.type) {
+    case 'outgoing-starting':
+      return state.phase === 'idle' ? { ...IDLE_STATE, startedHere: true } : state;
+
     case 'outgoing-started':
-      return { ...IDLE_STATE, phase: 'outgoing', call: action.call };
+      return { ...IDLE_STATE, phase: 'outgoing', call: action.call, startedHere: true };
 
     case 'preview':
       return state.phase === 'idle'
@@ -119,9 +157,12 @@ export function reduceCall(state: CallState, action: CallAction): CallState {
     case 'stream':
       return reduceStream(state, action.event, action.selfId);
 
+    case 'answering':
+      return state.phase === 'incoming' ? { ...state, answeringHere: true } : state;
+
     case 'accepting':
       return state.phase === 'incoming'
-        ? { ...state, phase: 'connecting' }
+        ? { ...state, phase: 'connecting', answeringHere: true }
         : state;
 
     case 'connected':
@@ -154,7 +195,11 @@ export function reduceCall(state: CallState, action: CallAction): CallState {
       };
 
     case 'failed':
-      if (state.phase === 'idle') return { ...state, error: action.error };
+      // Сорвалось до гудка (нет микрофона, «занято»): звонка отсюда больше
+      // нет, и метку «звоним мы» надо снять — иначе следующее чужое
+      // `call.ringing` о нашем исходящем с другого устройства подняло бы
+      // экран здесь.
+      if (state.phase === 'idle') return { ...state, startedHere: false, error: action.error };
       return {
         ...state,
         phase: 'ended',
@@ -188,13 +233,33 @@ function reduceStream(
       }
       if (event.call.callee.id === selfId)
         return { ...IDLE_STATE, phase: 'incoming', call: event.call };
-      if (event.call.caller.id === selfId)
-        return { ...IDLE_STATE, phase: 'outgoing', call: event.call };
+      // Свой же исходящий (VED-346). Экран вызова поднимаем только там, где
+      // на «позвонить» нажимали: остальные устройства человека получают это
+      // событие просто потому, что оно адресовано ему, — звонить самому себе
+      // они не должны.
+      if (event.call.caller.id === selfId && state.startedHere)
+        return { ...IDLE_STATE, phase: 'outgoing', call: event.call, startedHere: true };
       return state;
 
     case 'call.accepted':
       if (!sameCall) return state;
-      return state.phase === 'outgoing' || state.phase === 'incoming'
+      // Ответили на другом устройстве (VED-346): здесь мы всё ещё показываем
+      // «Принять», а отвечать уже нечего — отвечающее устройство к этому
+      // моменту само перешло в `connecting` (действие `accepting` уходит до
+      // POST'а). Убираем входящий, а не подменяем его экраном звонка, в
+      // котором нет ни медиа, ни сигналинга.
+      //
+      // VED-358: «к этому моменту само перешло в `connecting`» — неправда.
+      // Между нажатием «Принять» и `accepting` лежат запрос ICE-серверов по
+      // сети и `getUserMedia` (на первом видеозвонке — ещё и системный
+      // вопрос о доступе к камере, который ждёт человека), а фаза всё это
+      // время `incoming`. Отличаем «ответили там» от «отвечаем здесь» по
+      // метке `answeringHere`, которую `accept()` ставит синхронно с
+      // нажатием, а не по фазе.
+      if (state.phase === 'incoming' && !state.answeringHere) return IDLE_STATE;
+      if (state.phase === 'incoming')
+        return { ...state, phase: 'connecting', call: event.call };
+      return state.phase === 'outgoing'
         ? { ...state, phase: 'connecting', call: event.call }
         : { ...state, call: event.call };
 

@@ -9,7 +9,7 @@ import { RetryButton } from '@/components/retry-button';
 import { ServiceGridSkeleton } from '@/components/skeleton';
 import { ServiceCard } from '@/components/services/service-card';
 import { SelfUpdateSection } from '@/components/self-update/self-update-section';
-import { appVariant } from '@/config/app-variant';
+import { appCapabilities, appVariant } from '@/config/app-variant';
 import { serviceUrl } from '@/config/services';
 import { useSession } from '@/lib/auth/session';
 import { createServicesApi } from '@/lib/services/services-api';
@@ -166,8 +166,15 @@ export default function ServicesScreen() {
 
         <View style={[styles.profile, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
           <View style={styles.profileText}>
+            {/* `displayName`, а не `name`: наружу человек виден духовным
+                именем, если оно заполнено (CLAUDE.md, «Имя пользователя
+                наружу»). До VED-332 сессия знала только мирское; когда
+                `displayName` завели, эта строка осталась на прежнем поле — и
+                соседние экраны показывали одного человека двумя именами
+                («Сервисы» — «Максим Коробков», «Аккаунт» — «Маму Тхакур
+                дас», раунд оценки 001, дефект 1). */}
             <Text numberOfLines={1} style={[styles.profileName, { color: colors.text0 }]}>
-              {user?.name ?? 'Аккаунт'}
+              {user?.displayName ?? 'Аккаунт'}
             </Text>
             {user?.email ? (
               <Text numberOfLines={1} style={[styles.profileEmail, { color: colors.text1 }]}>
@@ -185,10 +192,13 @@ export default function ServicesScreen() {
           </Pressable>
         </View>
 
-        {/* Самообновление с сайта (VED-176): только канал `site` — на
-            `store` компонент вовсе не монтируется (не просто скрыт), это и
-            есть требуемый приёмкой гейт политики магазинов. */}
-        {appVariant().selfUpdate ? <SelfUpdateSection /> : null}
+        {/* Самообновление с сайта (VED-176): возможность `selfUpdate`
+            таблицы каналов (VED-207) — на `store` компонент вовсе не
+            монтируется (не просто скрыт), это и есть требуемый приёмкой гейт
+            политики магазинов. Вторая линия защиты — подмена самого модуля
+            на заглушку при сборке `store` (`channel-shims/resolve.cjs`):
+            в бандл витрины код самообновления не попадает вообще. */}
+        {appCapabilities().selfUpdate ? <SelfUpdateSection /> : null}
 
         {/* Экран «Аккаунт и способы входа» (VED-379, веха 3): список
             привязанных Google/Яндекс/Telegram, привязка и отвязка. */}

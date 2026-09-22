@@ -86,6 +86,7 @@ jobs:
           APP_CHANNEL: store
         run: |
           pnpm --filter @vedamatch/mobile test:web-shims
+          pnpm --filter @vedamatch/mobile test:sw-push
           pnpm --filter @vedamatch/mobile export:web
 
   docker:

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getLocale } from "next-intl/server";
 import {
   isLineagePreference,
+  isMusicTrackSort,
   resolveContentLineage,
   serviceCardName,
 } from "@vedamatch/shared";
@@ -79,6 +80,7 @@ export default async function MusicPage({
     all?: string | string[];
     artist?: string | string[];
     lineage?: string | string[];
+    sort?: string | string[];
     cursor?: string | string[];
   }>;
 }) {
@@ -92,6 +94,13 @@ export default async function MusicPage({
   const category = first(params.category);
   const query = first(params.q);
   const artist = first(params.artist);
+  // Порядок выдачи — ряд «Порядок» в панели фильтров (VED-165). Незнакомое
+  // значение отсеивается здесь же и становится «не просили»: старая ссылка
+  // `?sort=duration` обязана открыть обычную выдачу, а не подсветить чип,
+  // которого нет, и не повиснуть в адресе следующих ссылок. Сервер поступает
+  // ровно так же — `isMusicTrackSort` у нас с ним общий.
+  const rawSort = first(params.sort);
+  const sort = isMusicTrackSort(rawSort) ? rawSort : null;
   const cursor = first(params.cursor);
   // Явный выбор линии на один просмотр: `all` или идентификатор. Витрина
   // его не понимает — она фильтруется по профилю, — поэтому с ним сразу
@@ -107,9 +116,12 @@ export default async function MusicPage({
     category,
     q: query,
     artist,
+    sort,
     cursor,
   };
-  const hasFilter = Boolean(root || category || query || artist || cursor);
+  const hasFilter = Boolean(
+    root || category || query || artist || sort || cursor,
+  );
 
   // Витрина нужна всегда — из неё чипы разделов и исполнители для фильтра;
   // выборка догружается только когда стоит фильтр или задан запрос.
@@ -136,6 +148,7 @@ export default async function MusicPage({
             ...(query ? { q: query } : {}),
             ...(artist ? { artist } : {}),
             ...(explicitLineage ? { lineage: explicitLineage } : {}),
+            ...(sort ? { sort } : {}),
             ...(cursor ? { cursor } : {}),
             limit: showAll && !hasFilter ? 60 : 30,
           })

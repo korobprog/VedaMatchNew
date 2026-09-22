@@ -1,9 +1,11 @@
 import { Platform } from 'react-native';
 import { mediaDevices, MediaStream, RTCPeerConnection } from 'react-native-webrtc';
 import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
+import { nextCameraFacing, type CameraFacing } from './camera-mirror';
 import { describeIceServerForLog, normalizeIceServers } from './ice-server-normalize';
 import { parseCandidate } from './ice-probe';
 import { relayedFromStats, type RtcStatsReport } from './relay-stats';
+import { withVideoEncoding, type SenderParameters, type VideoEncoding } from './video-encoding';
 import { decideSdpApply, type SignalingState } from './webrtc-signal-guard';
 
 /**
@@ -345,6 +347,12 @@ export class CallSession {
         await this.pc.addIceCandidate(candidate).catch(() => undefined);
       return;
     }
+    // Состояние камеры собеседника (VED-291) к переговорам отношения не
+    // имеет — его разбирает `call-provider.tsx` ДО вызова сессии. Ветка
+    // явная, а не «провалится в кандидата и молча выйдет по
+    // `candidate === undefined`»: так намерение видно, и следующий вид
+    // сигнала не начнёт случайно работать как «конец сбора кандидатов».
+    if (signal.kind === 'media') return;
     if (!signal.candidate) return; // конец сбора у собеседника
     if (!this.remoteSet || this.answerInFlight) {
       this.pending.push(signal.candidate);
@@ -361,15 +369,53 @@ export class CallSession {
     for (const track of this.local?.getVideoTracks() ?? []) track.enabled = !off;
   }
 
+  /** Есть ли что показывать собеседнику — отличает видеозвонок от аудио на
+   *  уровне дорожек, не полагаясь на `call.kind` (VED-291). */
+  hasVideoTrack(): boolean {
+    return (this.local?.getVideoTracks().length ?? 0) > 0;
+  }
+
+  /**
+   * Потолок качества исходящего видео под текущую сеть (VED-291,
+   * `video-encoding.ts`). Без пересогласования SDP — `setParameters` меняет
+   * только настройки кодировщика на нашей стороне, собеседнику ничего не
+   * приходит, картинка не моргает.
+   *
+   * Ошибки глотаются намеренно: потолок — оптимизация, а не условие
+   * разговора. `setParameters` штатно отвергает параметры, устаревшие
+   * относительно последнего `getParameters` (гонка с реегоциацией/ICE
+   * restart) — следующий вызов (смена сети, `connected` после перезапуска)
+   * возьмёт свежие и поставит потолок заново.
+   */
+  async applyVideoEncoding(target: VideoEncoding): Promise<void> {
+    if (this.closed) return;
+    try {
+      const sender = this.pc.getSenders().find((candidate) => candidate.track?.kind === 'video');
+      if (!sender) return;
+      const params = sender.getParameters() as unknown as SenderParameters;
+      const next = withVideoEncoding(params, target);
+      if (!next) return;
+      await sender.setParameters(next as unknown as Parameters<typeof sender.setParameters>[0]);
+    } catch {
+      // См. шапку метода — следующий вызов повторит.
+    }
+  }
+
   /** Web: `getUserMedia({facingMode})` + `replaceTrack` идут параллельно —
    *  второе нажатие до завершения первого переключения должно ждать, а не
    *  начинать второй запрос камеры поверх незавершённого. */
   private switchingCameraOnWeb = false;
-  /** Web: какая камера выбрана последней (react-native-webrtc сам не хранит
-   *  такого состояния наружу — оно и не нужно там, `_switchCamera` работает
-   *  без него; здесь заводим своё, раз уж нам нужно решать, к чему
-   *  переключаться). */
-  private facingModeOnWeb: 'user' | 'environment' = 'user';
+  /** Какая камера снимает прямо сейчас. react-native-webrtc такого
+   *  состояния наружу не отдаёт ни на одной платформе: на вебе оно нужно,
+   *  чтобы знать, к чему переключаться, а на нативе — чтобы решать, зеркалить
+   *  ли своё окошко (VED-347, `camera-mirror.ts`). Звонок всегда начинается
+   *  с фронтальной (`startLocalMedia`: `facingMode: 'user'`). */
+  private cameraFacing: CameraFacing = 'user';
+
+  /** Какая камера снимает — для зеркала в своём окошке (`camera-mirror.ts`). */
+  getCameraFacing(): CameraFacing {
+    return this.cameraFacing;
+  }
 
   /**
    * Смена фронтальной/тыльной камеры без пересборки соединения.
@@ -390,12 +436,20 @@ export class CallSession {
    * `getUserMedia` тут не звонок ломает, а просто ничего не меняет, как и
    * нативная ветка без видеодорожки.
    */
-  switchCamera(): void {
+  async switchCamera(): Promise<void> {
     if (Platform.OS !== 'web') {
-      for (const track of this.local?.getVideoTracks() ?? []) track._switchCamera();
+      const tracks = this.local?.getVideoTracks() ?? [];
+      for (const track of tracks) track._switchCamera();
+      // Без видеодорожки переключать было нечего (аудиозвонок, камера
+      // выключена) — и запоминать нечего: иначе своё окошко перестало бы
+      // зеркалиться, хотя камера осталась фронтальной.
+      if (tracks.length > 0) this.cameraFacing = nextCameraFacing(this.cameraFacing);
       return;
     }
-    void this.switchCameraOnWeb();
+    // На вебе переключение асинхронное (новый `getUserMedia` + `replaceTrack`),
+    // и `cameraFacing` меняется только по его завершении — поэтому метод
+    // отдаёт промис: вызывающему нужно знать, когда читать камеру заново.
+    await this.switchCameraOnWeb();
   }
 
   private async switchCameraOnWeb(): Promise<void> {
@@ -404,7 +458,7 @@ export class CallSession {
     if (!oldTrack) return;
     this.switchingCameraOnWeb = true;
     try {
-      const nextFacingMode = this.facingModeOnWeb === 'user' ? 'environment' : 'user';
+      const nextFacingMode = nextCameraFacing(this.cameraFacing);
       const probeStream = await mediaDevices.getUserMedia({
         audio: false,
         video: { facingMode: nextFacingMode },
@@ -418,7 +472,7 @@ export class CallSession {
         this.local.addTrack(newTrack);
       }
       oldTrack.stop();
-      this.facingModeOnWeb = nextFacingMode;
+      this.cameraFacing = nextFacingMode;
     } catch {
       // Второй камеры нет или в доступе отказано — остаёмся на текущей,
       // тот же исход, что и у нативной ветки без видеодорожки.

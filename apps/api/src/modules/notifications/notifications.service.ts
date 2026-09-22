@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   NotificationCategory,
   NotificationInboxResponse,
@@ -6,13 +10,33 @@ import type {
   NotificationMark,
   NotificationPreferencesDto,
   NotificationDeviceStats,
+  NotificationDeliveryStatusDto,
+  NotificationReadStateResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  judgeDeliveryPoint,
+  type DeliveryPointHealth,
+} from './delivery-health';
 import { normalizeDeviceRequest } from './device-request';
 import { sortInboxRows } from './inbox-order';
+import {
+  buildInboxWhere,
+  clampInboxLimit,
+  inboxFetchSize,
+  inboxSections,
+  isPaginationRequested,
+  INBOX_ORDER_BY,
+  LEGACY_INBOX_LIMIT,
+  parseInboxCursor,
+  sliceInboxPage,
+} from './inbox-page';
+import { buildInboxSearchClauses, parseInboxSearch } from './inbox-search';
 import { parseNotificationMark } from './notification-mark';
+import type { PushFailure } from './push-errors';
+import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 
 const defaults: NotificationPreferencesDto = {
   enabled: true,
@@ -31,19 +55,32 @@ const defaults: NotificationPreferencesDto = {
 };
 
 /**
- * Сколько прочитанное живёт до удаления. Не ноль: иначе перезагрузка страницы
- * сразу после открытия списка показала бы пустоту, и человек решил бы, что
- * уведомление потерялось. Не сутки: колокольчик — список непрочитанного,
- * а не архив.
+ * Сроки хранения переехали в `inbox-retention.ts`, а сама чистка — в
+ * `NotificationPurgeWorkerService` (VED-267): на чтении ленты ей делать
+ * нечего, человек ждал удалений вместо своего списка.
  */
-/**
- * Прочитанное живёт неделю, а не четверть часа: список показывает его ниже
- * непрочитанного, и вернуться к уже открытому уведомлению — обычное дело.
- */
-const readRetentionMs = 7 * 24 * 60 * 60 * 1000;
 
-/** Непрочитанное тоже не копится вечно: неактивный аккаунт иначе растит таблицу. */
-const unreadRetentionMs = 30 * 24 * 60 * 60 * 1000;
+/** Колонки, из которых собирается карточка ленты. */
+interface InboxSelectedRow {
+  id: string;
+  title: string;
+  body: string;
+  url: string;
+  category: string;
+  createdAt: Date;
+  readAt: Date | null;
+  mark: string | null;
+}
+
+/** Чего просит клиент у ленты: порцию с такого-то места и, может быть, поиск. */
+export interface ListInboxOptions {
+  /** Курсор предыдущей порции; пусто — первая. */
+  cursor?: unknown;
+  /** Размер порции; пусто — `INBOX_PAGE_SIZE`. */
+  limit?: unknown;
+  /** Поисковый запрос; пусто — обычная лента. */
+  query?: unknown;
+}
 
 export interface InboxDraft {
   title: string;
@@ -54,12 +91,39 @@ export interface InboxDraft {
   mark?: NotificationMark | null;
 }
 
-export interface StoredSubscription {
+export interface StoredSubscription extends DeliveryPointHealth {
   id: string;
   endpoint: string;
   p256dh: string;
   auth: string;
 }
+
+/** Телефон или бот вместе с отметками живости: отправитель возвращает исход,
+ *  а записывает его `recordDeviceResult`. */
+export interface StoredDevice extends DeliveryPointHealth {
+  token: string;
+}
+
+/** Колонки живости, которые тянет любая выборка точек доставки. */
+export const deliveryHealthSelect = {
+  createdAt: true,
+  lastSuccessAt: true,
+  failureCount: true,
+  lastSeenAt: true,
+  deadSince: true,
+} as const;
+
+/**
+ * Клиент подтвердил точку доставки — браузер пересохранил подписку при
+ * загрузке страницы, приложение прислало токен при запуске. Это сигнал жизни
+ * не от посредника, а от самого устройства: пометка «мёртвая» снимается,
+ * счётчик неудач обнуляется.
+ */
+const seenByClient = () => ({
+  lastSeenAt: new Date(),
+  failureCount: 0,
+  deadSince: null,
+});
 
 @Injectable()
 export class NotificationsService {
@@ -78,6 +142,9 @@ export class NotificationsService {
       p256dh: dto.keys.p256dh,
       auth: dto.keys.auth,
       userAgent: userAgent ?? null,
+      // Сам факт этого запроса — свидетельство жизни браузера: страница
+      // портала пересохраняет подписку при каждой загрузке (VED-314).
+      ...seenByClient(),
     };
     await this.prisma.pushSubscription.upsert({
       where: { endpoint: dto.endpoint },
@@ -110,7 +177,9 @@ export class NotificationsService {
    */
   async saveDevice(userId: string, body: unknown): Promise<void> {
     const device = normalizeDeviceRequest(body);
-    const data = { userId, ...device };
+    // Регистрация токена — тот же сигнал жизни, что пересохранение подписки
+    // браузером: приложение запустилось и умеет принимать пуши.
+    const data = { userId, ...device, ...seenByClient() };
     await this.prisma.notificationDevice.upsert({
       where: { token: device.token },
       create: data,
@@ -158,8 +227,137 @@ export class NotificationsService {
   async listSubscriptions(userId: string): Promise<StoredSubscription[]> {
     return this.prisma.pushSubscription.findMany({
       where: { userId },
-      select: { id: true, endpoint: true, p256dh: true, auth: true },
+      select: {
+        id: true,
+        endpoint: true,
+        p256dh: true,
+        auth: true,
+        ...deliveryHealthSelect,
+      },
     });
+  }
+
+  /**
+   * Итог попытки отправки в браузер (VED-314). Раньше строка удалялась только
+   * по ответу `gone`, а всё остальное копилось годами: про отказы и про успехи
+   * не оставалось никакого следа.
+   *
+   * - успех — отметка приёма и обнуление счётчика (пометка «мёртвая» снимается);
+   * - `gone` — строку удаляет служба доставки, спорить не о чем;
+   * - прочее — неудача в счётчик, и только потом правило
+   *   `judgeDeliveryPoint()` решает: оставить, пометить или удалить.
+   */
+  async recordPushResult(
+    subscription: StoredSubscription,
+    failure: PushFailure | null,
+  ): Promise<void> {
+    if (failure === 'gone') {
+      await this.deleteSubscription(subscription.endpoint);
+      return;
+    }
+    const now = new Date();
+    if (failure === null) {
+      await this.prisma.pushSubscription.updateMany({
+        where: { endpoint: subscription.endpoint },
+        data: { lastSuccessAt: now, failureCount: 0, deadSince: null },
+      });
+      return;
+    }
+    const failureCount = subscription.failureCount + 1;
+    const verdict = judgeDeliveryPoint({ ...subscription, failureCount }, now);
+    if (verdict === 'delete') {
+      await this.deleteSubscription(subscription.endpoint);
+      return;
+    }
+    await this.prisma.pushSubscription.updateMany({
+      where: { endpoint: subscription.endpoint },
+      data: {
+        failureCount,
+        lastFailureAt: now,
+        ...(verdict === 'mark' ? { deadSince: now } : {}),
+      },
+    });
+  }
+
+  /**
+   * То же для телефона с приложением и для устройства бота. Отдельный метод, а
+   * не общий с веб-подпиской: таблицы разные, а ключ у устройства — токен.
+   */
+  async recordDeviceResult(
+    device: StoredDevice,
+    // `permanent` шлёт только Bot API: повторять и удалять устройство не за
+    // что, но в счётчик неудач такой отказ идёт наравне с остальными.
+    failure: PushFailure | 'permanent' | null,
+  ): Promise<void> {
+    if (failure === 'gone') {
+      await this.prisma.notificationDevice.deleteMany({
+        where: { token: device.token },
+      });
+      return;
+    }
+    const now = new Date();
+    if (failure === null) {
+      await this.prisma.notificationDevice.updateMany({
+        where: { token: device.token },
+        data: { lastSuccessAt: now, failureCount: 0, deadSince: null },
+      });
+      return;
+    }
+    const failureCount = device.failureCount + 1;
+    const verdict = judgeDeliveryPoint({ ...device, failureCount }, now);
+    if (verdict === 'delete') {
+      await this.prisma.notificationDevice.deleteMany({
+        where: { token: device.token },
+      });
+      return;
+    }
+    await this.prisma.notificationDevice.updateMany({
+      where: { token: device.token },
+      data: {
+        failureCount,
+        lastFailureAt: now,
+        ...(verdict === 'mark' ? { deadSince: now } : {}),
+      },
+    });
+  }
+
+  /**
+   * Есть ли человеку куда доставлять (VED-314). Нужно самому человеку в
+   * настройках: раньше он жал «включить» и оставался в уверенности, что всё
+   * работает, даже когда ни одной точки доставки у него не было — ровно это и
+   * случилось с жалобой 21.09.
+   *
+   * Помеченные мёртвыми в живые не идут: доставки от них не ждём, а человеку
+   * важно знать правду до того, как он пропустит звонок.
+   */
+  async deliveryStatus(userId: string): Promise<NotificationDeliveryStatusDto> {
+    const [web, devices, stale] = await Promise.all([
+      this.prisma.pushSubscription.count({
+        where: { userId, deadSince: null },
+      }),
+      this.prisma.notificationDevice.groupBy({
+        by: ['provider'],
+        where: { userId, deadSince: null },
+        _count: { _all: true },
+      }),
+      this.prisma.pushSubscription.count({
+        where: { userId, deadSince: { not: null } },
+      }),
+    ]);
+    let app = 0;
+    let telegram = 0;
+    for (const group of devices) {
+      if (group.provider === TELEGRAM_DEVICE_PROVIDER)
+        telegram += group._count._all;
+      else app += group._count._all;
+    }
+    return {
+      web,
+      app,
+      telegram,
+      stale,
+      reachable: web + app + telegram > 0,
+    };
   }
 
   async getPreferences(userId: string): Promise<NotificationPreferencesDto> {
@@ -238,32 +436,71 @@ export class NotificationsService {
   }
 
   /**
-   * Отдаёт непрочитанное и попутно подчищает хвост: прочитанное старше
-   * `readRetentionMs` и совсем древнее непрочитанное. Чистка привязана к чтению
-   * списка, а не к крону — отдельный планировщик ради этого не нужен.
+   * Лента (VED-267): порцией или целиком — по тому, о чём попросил клиент.
+   *
+   * Было: чистка первой строкой, следом `findMany` без `take`. Человек ждал
+   * удаления просроченного, чтобы получить свою ленту целиком — сколько бы её
+   * ни накопилось, и вся она разом рисовалась на вебе. Чистку забрал
+   * `NotificationPurgeWorkerService`.
+   *
+   * Развилка на входе: просят курсор или размер порции — отдаём страницу;
+   * не просят — всю ленту, как раньше. Это не задел на будущее, а
+   * совместимость с установленным приложением: оно про постраничность не
+   * знает, придёт за лентой один раз и второй раз не придёт. Двадцать записей
+   * вместо ста девяноста выглядели бы у него как пропавшие уведомления.
+   *
+   * Потолок стоит в обоих случаях. У ленты целиком он свой, большой
+   * (`LEGACY_INBOX_LIMIT`), и если сработал — ответ честно говорит об этом
+   * полем `truncated`, а не обрезает молча.
+   *
+   * Порядок VED-153 сохранён и выражен прямо в запросе: лента — два потока
+   * подряд, непрочитанное и следом прочитанное, каждый по индексу
+   * `[userId, createdAt]`. Порция набирается из первого потока, а когда он
+   * кончился — добирается из второго; какая строка последняя и в каком она
+   * потоке, помнит курсор (`inbox-page.ts`). `sortInboxRows()` остаётся: на
+   * границе потоков в порцию попадают строки обоих.
    */
-  async listInbox(userId: string): Promise<NotificationInboxResponse> {
-    await this.purge(userId);
-    const rows = await this.prisma.notificationItem.findMany({
-      where: { userId },
-      // Выборка — по индексу `[userId, createdAt]`, свежее сверху. Группы
-      // «непрочитанное впереди» расставляет `sortInboxRows()`: одним `orderBy`
-      // это не выразить — «сначала непрочитанное» сортировка по выражению
-      // (`readAt IS NULL`), а не по колонке. Чем прежний `readAt asc` ломал
-      // порядок прочитанного — VED-153, см. `inbox-order.ts`.
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        body: true,
-        url: true,
-        category: true,
-        createdAt: true,
-        readAt: true,
-        mark: true,
-      },
-    });
-    const items: NotificationItemDto[] = sortInboxRows(rows).map((row) => ({
+  async listInbox(
+    userId: string,
+    options: ListInboxOptions = {},
+  ): Promise<NotificationInboxResponse> {
+    const parsed = parseInboxCursor(options.cursor);
+    if (parsed.kind === 'invalid')
+      throw new BadRequestException('Некорректный курсор ленты');
+    const cursor = parsed.kind === 'cursor' ? parsed.cursor : null;
+    const paginated = isPaginationRequested(options.cursor, options.limit);
+    const limit = paginated
+      ? clampInboxLimit(options.limit)
+      : LEGACY_INBOX_LIMIT;
+    const searchClauses = buildInboxSearchClauses(
+      parseInboxSearch(options.query),
+    );
+
+    const rows: InboxSelectedRow[] = [];
+    let remaining = inboxFetchSize(limit);
+    for (const section of inboxSections(cursor)) {
+      if (remaining <= 0) break;
+      const chunk = await this.prisma.notificationItem.findMany({
+        where: buildInboxWhere({ userId, section, cursor, searchClauses }),
+        orderBy: INBOX_ORDER_BY,
+        take: remaining,
+        select: {
+          id: true,
+          title: true,
+          body: true,
+          url: true,
+          category: true,
+          createdAt: true,
+          readAt: true,
+          mark: true,
+        },
+      });
+      rows.push(...chunk);
+      remaining -= chunk.length;
+    }
+
+    const page = sliceInboxPage(sortInboxRows(rows), limit);
+    const items: NotificationItemDto[] = page.items.map((row) => ({
       id: row.id,
       title: row.title,
       body: row.body,
@@ -277,7 +514,17 @@ export class NotificationsService {
     }));
     return {
       items,
-      unreadCount: items.filter((item) => item.readAt === null).length,
+      // Клиенту, который постраничность не просил, курсор ни к чему: он за
+      // ним не придёт. Но если лента упёрлась в потолок, об этом надо сказать
+      // — и словом `truncated`, и курсором, чтобы продолжение было хотя бы
+      // возможно.
+      nextCursor: page.nextCursor,
+      ...(!paginated && page.nextCursor !== null ? { truncated: true } : {}),
+      // Счётчик — отдельным запросом по индексу `[userId, readAt]`, а не по
+      // отданной порции: в порции их двадцать, а колокольчик обязан
+      // показывать всё непрочитанное. От поиска он не зависит — это счётчик
+      // человека, а не выдачи.
+      unreadCount: await this.countUnread(userId),
     };
   }
 
@@ -296,16 +543,50 @@ export class NotificationsService {
     });
   }
 
-  private async purge(userId: string): Promise<void> {
-    const now = Date.now();
-    await this.prisma.notificationItem.deleteMany({
-      where: {
-        userId,
-        OR: [
-          { readAt: { lt: new Date(now - readRetentionMs) } },
-          { createdAt: { lt: new Date(now - unreadRetentionMs) } },
-        ],
-      },
+  /**
+   * Своя отметка у одного уведомления (VED-143), в обе стороны.
+   *
+   * Зачем отдельный маршрут, когда есть `markRead(userId, [id])`: тот умеет
+   * только в одну сторону и ничего не возвращает. Кнопка на карточке обязана
+   * откатываться — промах по соседней карточке на телефоне обычнее попадания,
+   * — и обязана сразу гасить значок на колокольчике, а для этого ей нужен
+   * счётчик в том же ответе.
+   *
+   * Чужое уведомление не найдётся: `userId` стоит в условии выборки, а не
+   * проверяется после неё, поэтому по чужому `id` приходит 404, а не 403 —
+   * отличать «нет такого» от «есть, но не ваше» посторонний не должен.
+   *
+   * `readAt` у уже прочитанного не переставляется: повторное нажатие на ту же
+   * сторону — не событие. На порядок ленты это не влияет (VED-153 сортирует по
+   * `createdAt`), но дата прочтения — это ответ на вопрос «когда я это
+   * видел», и обновлять её задним числом незачем.
+   */
+  async setReadState(
+    userId: string,
+    id: string,
+    read: boolean,
+  ): Promise<NotificationReadStateResponse> {
+    const current = await this.prisma.notificationItem.findFirst({
+      where: { id, userId },
+      select: { id: true, readAt: true },
     });
+    if (!current) throw new NotFoundException('Уведомление не найдено');
+
+    const readAt = read ? (current.readAt ?? new Date()) : null;
+    if (readAt?.getTime() !== current.readAt?.getTime()) {
+      await this.prisma.notificationItem.update({
+        where: { id: current.id },
+        data: { readAt },
+      });
+    }
+
+    return {
+      id: current.id,
+      readAt: readAt?.toISOString() ?? null,
+      // Счётчик перечитывается, а не считается арифметикой от прежнего: между
+      // открытием страницы и нажатием кнопки уведомления приходят и гаснут в
+      // других вкладках, и «минус один» разошёлся бы с колокольчиком.
+      unreadCount: await this.countUnread(userId),
+    };
   }
 }

@@ -74,6 +74,54 @@ describe("reduceCall", () => {
     expect(next.phase).toBe("outgoing");
   });
 
+  // ---- VED-346: несколько своих устройств в одном аккаунте ----
+
+  it("свой исходящий с другого устройства не поднимает звонок здесь", () => {
+    // Вкладка сайта у того же человека, что звонит с телефона: события
+    // рассылаются на все его устройства, но вызов идёт не отсюда.
+    const mine = call({ caller: me, callee: other });
+    const next = reduceCall(IDLE_STATE, {
+      type: "stream",
+      event: { type: "call.ringing", call: mine },
+      selfId: "me",
+    });
+    expect(next.phase).toBe("idle");
+    expect(next.call).toBeNull();
+  });
+
+  it("свой исходящий отсюда поднимается и тогда, когда событие обогнало ответ POST", () => {
+    const mine = call({ caller: me, callee: other });
+    const starting = reduceCall(IDLE_STATE, { type: "outgoing-starting" });
+    expect(starting.phase).toBe("idle");
+    const next = reduceCall(starting, {
+      type: "stream",
+      event: { type: "call.ringing", call: mine },
+      selfId: "me",
+    });
+    expect(next.phase).toBe("outgoing");
+    expect(next.call?.id).toBe("c1");
+  });
+
+  it("ответили на другом устройстве — «Принять» здесь исчезает", () => {
+    const next = reduceCall(incoming(), {
+      type: "stream",
+      event: { type: "call.accepted", call: call({ status: "accepted" }) },
+      selfId: "me",
+    });
+    expect(next).toEqual(IDLE_STATE);
+  });
+
+  it("ответившее устройство на том же событии остаётся в звонке", () => {
+    const answering = reduceCall(incoming(), { type: "accepting" });
+    const next = reduceCall(answering, {
+      type: "stream",
+      event: { type: "call.accepted", call: call({ status: "accepted" }) },
+      selfId: "me",
+    });
+    expect(next.phase).toBe("connecting");
+    expect(next.call?.status).toBe("accepted");
+  });
+
   it("принятие входящего: accepting → connecting, дальше как обычно", () => {
     let state = reduceCall(incoming(), { type: "accepting" });
     expect(state.phase).toBe("connecting");

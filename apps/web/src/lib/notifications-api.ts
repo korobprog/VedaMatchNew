@@ -2,8 +2,11 @@
 // идут в API своего контура (lib/api-base) с cookie, а не через серверные
 // хелперы lib/api.ts.
 import type {
+  NotificationDeliveryStatusDto,
   NotificationInboxResponse,
   NotificationPreferencesDto,
+  NotificationReadStateRequest,
+  NotificationReadStateResponse,
   NotificationUnreadCountResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
@@ -52,8 +55,30 @@ export function fetchUnreadCount(): Promise<NotificationUnreadCountResponse> {
   return request("/notifications/unread-count");
 }
 
-export function fetchInbox(): Promise<NotificationInboxResponse> {
-  return request("/notifications/inbox");
+/** Что просим у ленты: порцию с такого-то места и, может быть, поиск. */
+export interface InboxQuery {
+  /** Курсор из прошлого ответа; пусто — первая порция. */
+  cursor?: string | null;
+  /** Поиск по заголовку и тексту; пусто — обычная лента. */
+  query?: string;
+  /** Размер порции; пусто — сколько решит сервер. */
+  limit?: number;
+}
+
+/**
+ * Порция ленты (VED-267). Поиск и подгрузка — параметры запроса, а не отбор
+ * среди уже загруженного: лента приходит частями, и фильтр на клиенте искал
+ * бы только в том, до чего человек долистал.
+ */
+export function fetchInbox(
+  options: InboxQuery = {},
+): Promise<NotificationInboxResponse> {
+  const params = new URLSearchParams();
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.query) params.set("q", options.query);
+  if (options.limit) params.set("limit", String(options.limit));
+  const search = params.toString();
+  return request(`/notifications/inbox${search ? `?${search}` : ""}`);
 }
 
 /** Без `ids` помечает прочитанным всё непрочитанное. */
@@ -62,6 +87,33 @@ export function markInboxRead(ids?: string[]): Promise<{ ok: true }> {
     method: "POST",
     body: JSON.stringify(ids ? { ids } : {}),
   });
+}
+
+/**
+ * Своя отметка у одного уведомления (VED-143), в обе стороны.
+ *
+ * Не `markInboxRead([id])`: тот умеет только в одну сторону и ничего не
+ * возвращает, а кнопке на карточке нужен и откат, и свежий счётчик для
+ * колокольчика в том же ответе.
+ */
+export function setInboxItemRead(
+  id: string,
+  read: boolean,
+): Promise<NotificationReadStateResponse> {
+  const body: NotificationReadStateRequest = { read };
+  return request(`/notifications/inbox/${encodeURIComponent(id)}/read`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Есть ли куда доставлять уведомления этому человеку (VED-314). Настройки
+ * спрашивают об этом сами: разрешение браузера и живая подписка на сервере —
+ * разные вещи, и раньше расхождение между ними было видно только в логах.
+ */
+export function fetchDeliveryStatus(): Promise<NotificationDeliveryStatusDto> {
+  return request("/notifications/delivery-status");
 }
 
 export function fetchPreferences(): Promise<NotificationPreferencesDto> {

@@ -46,6 +46,10 @@
   --color-blue: var(--vm-blue);
   --color-chart-income: var(--vm-chart-income);
   --color-chart-expense: var(--vm-chart-expense);
+  --color-mark-progress: var(--vm-mark-progress);
+  --color-mark-testing: var(--vm-mark-testing);
+  --color-mark-done: var(--vm-mark-done);
+  --color-mark-rework: var(--vm-mark-rework);
 
   /* Text colors */
   --color-text-0: var(--vm-text-0);
@@ -151,6 +155,30 @@
   --vm-chart-income: #1F5FBF;
   --vm-chart-expense: #D71A80;
 
+  /* Значки состояния задачи в ленте уведомлений (VED-312). Цвета названы
+     заказчиком по светлой теме, в которой он смотрит портал: «на доработку —
+     тёмно-красный, тестирование — зелёный, изумрудный, выполнено —
+     тёмно-синий, в работе — тёмно-коричневый». Поэтому здесь ровно эти
+     четыре тона, а не акценты палитры.
+
+     Темнота — половина требования: тёмно-синее слово на тёмной теме не
+     читается вовсе, поэтому у каждого состояния пара токенов, и тёмная тема
+     берёт осветлённый тон той же краски. Замеры в браузере, поверх
+     фактической композитной подложки карточки (стекло поверх страницы), а не
+     поверх записанного `background-color`; подпись 11px, порог AA 4,5:1:
+
+       --vm-mark-rework    8,02:1 светлая ·  8,20:1 тёмная
+       --vm-mark-testing   5,76:1 светлая · 10,97:1 тёмная
+       --vm-mark-done     11,14:1 светлая ·  9,24:1 тёмная
+       --vm-mark-progress  8,41:1 светлая ·  8,51:1 тёмная
+
+     Заливки у значка по-прежнему нет — цвет несут рамка и слово: у ярлыка
+     «От администрации» выше видно, чем заливка кончается для контраста. */
+  --vm-mark-progress: #6B4220;
+  --vm-mark-testing: #07734F;
+  --vm-mark-done: #15357F;
+  --vm-mark-rework: #9B1B1B;
+
   --vm-text-0: #180F2C;
   --vm-text-1: #4B3B6C;
   --vm-text-2: #766591;
@@ -238,6 +266,14 @@
   --vm-chart-income: #5B93E8;
   --vm-chart-expense: #F0358F;
 
+  /* Значки состояния задачи (VED-312) — осветлённые тона тех же красок, что
+     на светлой теме; замеры и причину пары см. в светлом блоке. Краснее и
+     синее взять нельзя: тёмно-красное слово на #0A0614 даёт 1,7:1. */
+  --vm-mark-progress: #DBA372;
+  --vm-mark-testing: #3FDFA8;
+  --vm-mark-done: #8FB6FF;
+  --vm-mark-rework: #FF8A85;
+
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
   /* #7C6D9C давал 4.31:1 на --vm-bg-0 — ниже AA. Осветлён до 4.54:1.
@@ -307,6 +343,12 @@
     --vm-blue: #7FB4FF;
     --vm-chart-income: #5B93E8;
     --vm-chart-expense: #F0358F;
+
+    /* Значки состояния задачи (VED-312) — зеркало тёмного блока. */
+    --vm-mark-progress: #DBA372;
+    --vm-mark-testing: #3FDFA8;
+    --vm-mark-done: #8FB6FF;
+    --vm-mark-rework: #FF8A85;
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;

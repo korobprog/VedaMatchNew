@@ -1,18 +1,24 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Headers,
+  Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   AccessTokenPayload,
+  NotificationDeliveryStatusDto,
   NotificationInboxResponse,
   NotificationPreferencesDto,
+  NotificationReadStateRequest,
+  NotificationReadStateResponse,
   NotificationUnreadCountResponse,
   PushSubscriptionRequest,
   RegisterNotificationDeviceRequest,
@@ -90,12 +96,23 @@ export class NotificationsController {
     return { unreadCount: await this.notifications.countUnread(user.sub) };
   }
 
+  /**
+   * Порция ленты (VED-267). `cursor` — строка из прошлого ответа, `q` — поиск
+   * по заголовку и тексту, `limit` — размер порции. Без них приходит первая
+   * страница обычной ленты, как и раньше.
+   *
+   * Поиск серверный: фильтр по уже загруженному искал бы только в пришедших
+   * порциях и обманывал бы человека тем, что «ничего нет».
+   */
   @UseGuards(AuthGuard)
   @Get('inbox')
   inbox(
     @CurrentUser() user: AccessTokenPayload,
+    @Query('cursor') cursor?: string,
+    @Query('q') query?: string,
+    @Query('limit') limit?: string,
   ): Promise<NotificationInboxResponse> {
-    return this.notifications.listInbox(user.sub);
+    return this.notifications.listInbox(user.sub, { cursor, query, limit });
   }
 
   /** Пустой `ids` — «прочитано всё»: страница списка гасит счётчик целиком. */
@@ -107,6 +124,45 @@ export class NotificationsController {
   ): Promise<{ ok: true }> {
     await this.notifications.markRead(user.sub, body?.ids);
     return { ok: true };
+  }
+
+  /**
+   * Своя отметка у одного уведомления (VED-143), в обе стороны.
+   *
+   * Отдельно от `POST inbox/read`: тот помечает пачку и только прочитанным, а
+   * здесь нужен откат («Вернуть в непрочитанные») и свежий счётчик в ответе —
+   * значок на колокольчике гаснет и загорается вместе с кнопкой, без второго
+   * запроса и без перезагрузки страницы.
+   *
+   * `read` проверяется руками, а не `ParseBoolPipe`: тело приходит из JSON,
+   * где `true`/`false` уже булевы, и строка «true» здесь означала бы, что
+   * клиент шлёт не то, что обещал. Молча считать её истиной нельзя — отметка
+   * не должна ставиться от опечатки.
+   */
+  @UseGuards(AuthGuard)
+  @Patch('inbox/:id/read')
+  setReadState(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: NotificationReadStateRequest,
+  ): Promise<NotificationReadStateResponse> {
+    if (typeof body?.read !== 'boolean')
+      throw new BadRequestException('Поле read должно быть true или false');
+    return this.notifications.setReadState(user.sub, id, body.read);
+  }
+
+  /**
+   * Есть ли куда доставлять уведомления этому человеку (VED-314). Настройки
+   * спрашивают об этом сами: человек жал «включить» и оставался в уверенности,
+   * что всё работает, — даже когда ни одной живой точки доставки у него не
+   * было и девять уведомлений за вечер прошли мимо.
+   */
+  @UseGuards(AuthGuard)
+  @Get('delivery-status')
+  deliveryStatus(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<NotificationDeliveryStatusDto> {
+    return this.notifications.deliveryStatus(user.sub);
   }
 
   @UseGuards(AuthGuard)

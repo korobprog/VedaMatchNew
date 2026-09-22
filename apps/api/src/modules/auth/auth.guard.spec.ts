@@ -99,15 +99,122 @@ describe('AuthGuard', () => {
     );
   });
 
+  it('агентский ключ пускает под агентом, а человека держит рядом', async () => {
+    const accounts: Record<string, Record<string, unknown>> = {
+      sevak: {
+        id: 'sevak',
+        email: 'sevak@agents.vedamatch.ru',
+        isAgent: true,
+        role: 'user',
+        accountStatus: 'active',
+        pendingDeletionAt: null,
+        blockedUntil: null,
+      },
+    };
+    const prisma = {
+      user: {
+        findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+          Promise.resolve(accounts[where.id] ?? null),
+        ),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const apiKeys = {
+      resolve: jest.fn().mockResolvedValue({
+        ok: true,
+        userId: 'u9',
+        agentId: 'sevak',
+        scopes: ['work:write'],
+      }),
+    };
+    const guard = new AuthGuard({} as never, prisma as never, apiKeys as never);
+    const { req, ctx } = context(
+      {},
+      { headers: { authorization: 'Bearer vm_secret' } },
+    );
+
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    const user = req.user as { sub: string; onBehalfOf?: string };
+    // Исполнителем и автором карточки в «Работе» станет агент, а не владелец
+    // ключа — ради этого различия всё и заведено.
+    expect(user.sub).toBe('sevak');
+    expect(user.onBehalfOf).toBe('u9');
+  });
+
+  it('личный ключ не приносит с собой чужого поручителя', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'u9',
+          email: 'key@owner',
+          isAgent: false,
+          role: 'user',
+          accountStatus: 'active',
+          pendingDeletionAt: null,
+          blockedUntil: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const apiKeys = {
+      resolve: jest.fn().mockResolvedValue({
+        ok: true,
+        userId: 'u9',
+        agentId: null,
+        scopes: ['work:read'],
+      }),
+    };
+    const guard = new AuthGuard({} as never, prisma as never, apiKeys as never);
+    const { req, ctx } = context(
+      {},
+      { headers: { authorization: 'Bearer vm_secret' } },
+    );
+
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect((req.user as { onBehalfOf?: string }).onBehalfOf).toBeUndefined();
+  });
+
+  it('аккаунт перестал быть служебным — ключ на него перестаёт работать', async () => {
+    // Иначе агентский ключ превратился бы в способ ходить под именем живого
+    // человека, которым этот аккаунт стал.
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'sevak',
+          email: 'sevak@agents.vedamatch.ru',
+          isAgent: false,
+          role: 'user',
+          accountStatus: 'active',
+          pendingDeletionAt: null,
+          blockedUntil: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const apiKeys = {
+      resolve: jest.fn().mockResolvedValue({
+        ok: true,
+        userId: 'u9',
+        agentId: 'sevak',
+        scopes: ['work:write'],
+      }),
+    };
+    const guard = new AuthGuard({} as never, prisma as never, apiKeys as never);
+    const { ctx } = context(
+      {},
+      { headers: { authorization: 'Bearer vm_secret' } },
+    );
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(/не служебный/);
+  });
+
   it('живому ключу без права объясняют, какого права нет', async () => {
     const apiKeys = {
-      resolve: jest
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          reason: 'forbidden',
-          scopes: ['work:read'],
-        }),
+      resolve: jest.fn().mockResolvedValue({
+        ok: false,
+        reason: 'forbidden',
+        scopes: ['work:read'],
+      }),
     };
     const guard = new AuthGuard({} as never, {} as never, apiKeys as never);
     const { ctx } = context(

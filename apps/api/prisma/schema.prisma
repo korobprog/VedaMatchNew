@@ -240,6 +240,13 @@ model User {
   passwordHash                 String?
   // Помечает демо-аккаунты из dev-сида, чтобы их можно было пересоздать.
   isDemo                       Boolean                    @default(false)
+  /// Служебный аккаунт ИИ-агента. Заведён не для входа, а чтобы в «Работе» у
+  /// агента были свои карточки, исполнительство и след в истории: `assignee`
+  /// и `createdBy` там — FK на User, и без аккаунта ИИ неотличим от человека,
+  /// чьим ключом он ходит. Войти им нельзя: ни пароля, ни googleId. Тот же
+  /// флаг закрывает агента от разделов, где ему делать нечего, — поиска
+  /// людей, Общения, справочника.
+  isAgent                      Boolean                    @default(false)
   spiritualStage               SpiritualStage?
   devoteeVerificationStatus    DevoteeVerificationStatus?
   lastSelfIdentificationAt     DateTime?
@@ -431,10 +438,12 @@ model User {
   workComments                       WorkComment[]                 @relation("WorkComments")
   workAttachments                    WorkAttachment[]              @relation("WorkAttachments")
   workActivity                       WorkActivity[]                @relation("WorkActivityActor")
+  workActivityOnBehalf               WorkActivity[]                @relation("WorkActivityOnBehalf")
   workTaskNoticesReceived            WorkTaskNotice[]              @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]              @relation("WorkTaskNoticeActor")
   workVacancyResponses               WorkVacancyResponse[]         @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                  @relation("UserApiKeys")
+  agentApiKeys                       UserApiKey[]                  @relation("AgentApiKeys")
   wellnessProductsAdded              WellnessProduct[]             @relation("WellnessProductsAdded")
   wellnessProductsReviewed           WellnessProduct[]             @relation("WellnessProductsReviewed")
   wellnessDietProfile                WellnessDietProfile?          @relation("WellnessDietProfile")
@@ -2099,6 +2108,23 @@ model PushSubscription {
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
+  /// Когда служба доставки браузера последний раз ПРИНЯЛА пуш (VED-314).
+  /// «Приняла» — не «человек увидел»: браузер, который не открывали месяц,
+  /// принимает пуш так же, как живой. Но пустая отметка при накопленных
+  /// неудачах — уже повод считать подписку мёртвой, см. `delivery-health.ts`.
+  lastSuccessAt DateTime?
+  /// Последний отказ службы доставки (кроме `gone` — по нему строка удаляется).
+  lastFailureAt DateTime?
+  /// Неудачи подряд. Обнуляется любым успехом и повторной регистрацией.
+  failureCount  Int       @default(0)
+  /// Браузер подтвердил подписку: страница портала при загрузке пересохраняет
+  /// её (`syncPushSubscription`). Единственный сигнал жизни, идущий от самого
+  /// клиента, — поэтому свежая отметка защищает подписку от удаления.
+  lastSeenAt    DateTime?
+  /// Когда правило впервые сочло подписку мёртвой. Сначала помечаем и держим
+  /// отметку на глазах в админке, удаляем только по истечении отсрочки: терять
+  /// подписку человека, который был в отпуске, дороже, чем лишняя строка.
+  deadSince     DateTime?
 
   @@index([userId])
 }
@@ -2123,6 +2149,14 @@ model NotificationDevice {
   nativeCalls Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  /// Те же отметки живости, что у веб-подписки (VED-314): служба доставки
+  /// приняла пуш, отказала, сколько отказов подряд, когда приложение
+  /// подтвердило токен и когда правило сочло устройство мёртвым.
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  failureCount  Int       @default(0)
+  lastSeenAt    DateTime?
+  deadSince     DateTime?
 
   @@index([userId])
 }
@@ -5569,6 +5603,11 @@ model WorkActivity {
   task      WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
   actorId   String?
   actor     User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Человек, чьим ключом действовал агент. Заполнено только у записей
+  /// ИИ-агента: аккаунт у него один на всех, и без этого поля при двух
+  /// подключённых помощниках нельзя ответить, чья сессия это сделала.
+  onBehalfOfId String?
+  onBehalfOf   User?          @relation("WorkActivityOnBehalf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
   kind      WorkActivityKind
   /// Подробности события: старая и новая колонка, имя назначенного, срок.
   /// Формулировку собирает читатель, здесь — факты.
@@ -5579,32 +5618,43 @@ model WorkActivity {
   @@index([spaceId, createdAt])
 }
 
-/// Очередь дозревания уведомлений о переездах карточки.
+/// Очередь дозревания уведомлений о работе с карточкой.
 ///
-/// Строка живёт минуты: появляется при переносе задачи и умирает, когда воркер
-/// решил, слать пуш или нет. Пары «задача + получатель» хватает — серия
-/// переносов за окно схлопывается в одну строку, и человек получит одно
-/// уведомление с итоговой колонкой вместо пяти с промежуточными.
+/// Строка живёт минуты: появляется, когда человек переносит задачу или пишет к
+/// ней комментарий, и умирает, когда воркер решил, слать пуш или нет. Серия
+/// переносов и очередь комментариев за окно схлопываются в одну строку, и
+/// получатель видит одно уведомление с итоговой колонкой вместо пяти с
+/// промежуточными и отдельной строки про каждую реплику (VED-298).
+///
+/// Ключ — тройка «задача + получатель + кто действовал»: склеивать в одно
+/// уведомление можно только сделанное одним человеком. Двое, правящих карточку
+/// одновременно, — два разных факта, и второй не имеет права затереть первый.
 model WorkTaskNotice {
   id           String    @id @default(uuid())
   taskId       String
   task         WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   recipientId  String
   recipient    User      @relation("WorkTaskNoticeRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  /// Кто двигал последним: за окно карточку могут трогать несколько человек.
+  /// Кто действовал. Часть ключа, поэтому за окно не переписывается; `null`
+  /// остаётся от удалённого аккаунта — такая строка доедет как «Участник».
   actorId      String?
   actor        User?     @relation("WorkTaskNoticeActor", fields: [actorId], references: [id], onDelete: SetNull)
-  /// Колонка на момент ПЕРВОГО движения в окне. «Куда» не храним: на отправке
-  /// читается из задачи, иначе промежуточный перенос стал бы новостью.
-  fromColumnId String
-  /// Когда отправлять. Повторный перенос срок не двигает — см. work-notice.ts.
+  /// Колонка на момент ПЕРВОГО движения в окне; `null` — движения не было,
+  /// строку завёл комментарий. «Куда» не храним: на отправке читается из
+  /// задачи, иначе промежуточный перенос стал бы новостью.
+  fromColumnId String?
+  /// Текст последнего комментария в окне; `null` — был только перенос.
+  commentBody  String?
+  /// Сколько комментариев легло в окно: «и ещё 2» собирает подписчик.
+  commentCount Int       @default(0)
+  /// Когда отправлять. Повторное действие срок не двигает — см. work-notice.ts.
   notifyAt     DateTime
   /// Взято воркером в работу; брошенное возвращается в очередь по таймауту.
   claimedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  @@unique([taskId, recipientId])
+  @@unique([taskId, recipientId, actorId])
   @@index([notifyAt, claimedAt])
 }
 
@@ -5668,8 +5718,14 @@ model WorkTravelBooking {
 /// api-key.ts.
 model UserApiKey {
   id         String    @id @default(uuid())
+  /// Кто ключ выпустил и отвечает за него. Даже у агентского ключа это живой
+  /// человек: отзывать ключ и отвечать за сделанное должно быть кому.
   userId     String
   user       User      @relation("UserApiKeys", fields: [userId], references: [id], onDelete: Cascade)
+  /// Служебный аккаунт, от имени которого ходит ключ. Пусто — ключ личный, и
+  /// всё сделанное им числится за владельцем, как было до агентов.
+  agentId    String?
+  agent      User?     @relation("AgentApiKeys", fields: [agentId], references: [id], onDelete: Cascade)
   /// Человеческое имя: «Claude на ноутбуке». Чтобы отзывать осознанно.
   name       String
   tokenHash  String    @unique
