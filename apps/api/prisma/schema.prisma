@@ -240,6 +240,13 @@ model User {
   passwordHash                 String?
   // Помечает демо-аккаунты из dev-сида, чтобы их можно было пересоздать.
   isDemo                       Boolean                    @default(false)
+  /// Служебный аккаунт ИИ-агента. Заведён не для входа, а чтобы в «Работе» у
+  /// агента были свои карточки, исполнительство и след в истории: `assignee`
+  /// и `createdBy` там — FK на User, и без аккаунта ИИ неотличим от человека,
+  /// чьим ключом он ходит. Войти им нельзя: ни пароля, ни googleId. Тот же
+  /// флаг закрывает агента от разделов, где ему делать нечего, — поиска
+  /// людей, Общения, справочника.
+  isAgent                      Boolean                    @default(false)
   spiritualStage               SpiritualStage?
   devoteeVerificationStatus    DevoteeVerificationStatus?
   lastSelfIdentificationAt     DateTime?
@@ -431,10 +438,12 @@ model User {
   workComments                       WorkComment[]                 @relation("WorkComments")
   workAttachments                    WorkAttachment[]              @relation("WorkAttachments")
   workActivity                       WorkActivity[]                @relation("WorkActivityActor")
+  workActivityOnBehalf               WorkActivity[]                @relation("WorkActivityOnBehalf")
   workTaskNoticesReceived            WorkTaskNotice[]              @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]              @relation("WorkTaskNoticeActor")
   workVacancyResponses               WorkVacancyResponse[]         @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                  @relation("UserApiKeys")
+  agentApiKeys                       UserApiKey[]                  @relation("AgentApiKeys")
   wellnessProductsAdded              WellnessProduct[]             @relation("WellnessProductsAdded")
   wellnessProductsReviewed           WellnessProduct[]             @relation("WellnessProductsReviewed")
   wellnessDietProfile                WellnessDietProfile?          @relation("WellnessDietProfile")
@@ -5594,6 +5603,11 @@ model WorkActivity {
   task      WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
   actorId   String?
   actor     User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// Человек, чьим ключом действовал агент. Заполнено только у записей
+  /// ИИ-агента: аккаунт у него один на всех, и без этого поля при двух
+  /// подключённых помощниках нельзя ответить, чья сессия это сделала.
+  onBehalfOfId String?
+  onBehalfOf   User?          @relation("WorkActivityOnBehalf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
   kind      WorkActivityKind
   /// Подробности события: старая и новая колонка, имя назначенного, срок.
   /// Формулировку собирает читатель, здесь — факты.
@@ -5704,8 +5718,14 @@ model WorkTravelBooking {
 /// api-key.ts.
 model UserApiKey {
   id         String    @id @default(uuid())
+  /// Кто ключ выпустил и отвечает за него. Даже у агентского ключа это живой
+  /// человек: отзывать ключ и отвечать за сделанное должно быть кому.
   userId     String
   user       User      @relation("UserApiKeys", fields: [userId], references: [id], onDelete: Cascade)
+  /// Служебный аккаунт, от имени которого ходит ключ. Пусто — ключ личный, и
+  /// всё сделанное им числится за владельцем, как было до агентов.
+  agentId    String?
+  agent      User?     @relation("AgentApiKeys", fields: [agentId], references: [id], onDelete: Cascade)
   /// Человеческое имя: «Claude на ноутбуке». Чтобы отзывать осознанно.
   name       String
   tokenHash  String    @unique
