@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
   UploadedFiles,
@@ -17,6 +18,7 @@ import {
   BLOG_POST_MAX_IMAGES,
   type AccessTokenPayload,
   type CreateBlogPostRequest,
+  type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { BlogService } from './blog.service';
@@ -87,6 +89,28 @@ export class BlogController {
     @UploadedFiles() files?: UploadedImageFile[],
   ) {
     return this.blog.create(user.sub, isAdmin(user), body, files ?? []);
+  }
+
+  /**
+   * Правка поста (VED-321). Тот же multipart, что у публикации: фотографии
+   * добавляются файлами, а оставшиеся перечисляются в `keepImageIds` —
+   * иначе «поправить» остаётся половинчатым, и человек всё равно идёт
+   * удалять пост и публиковать заново.
+   */
+  @Patch('posts/:id')
+  @Throttle({ default: { ttl: 3_600_000, limit: 120 } })
+  @UseInterceptors(
+    FilesInterceptor('files', BLOG_POST_MAX_IMAGES, {
+      limits: { fileSize: MAX_UPLOAD_BYTES },
+    }),
+  )
+  update(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: UpdateBlogPostRequest,
+    @UploadedFiles() files?: UploadedImageFile[],
+  ) {
+    return this.blog.update(user.sub, isAdmin(user), id, body, files ?? []);
   }
 
   @Post('posts/:id/repost')

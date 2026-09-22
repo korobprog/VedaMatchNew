@@ -4,8 +4,10 @@ import type {
   BlogFeedResponse,
   BlogPostCreatedResponse,
   BlogPostDto,
+  BlogPostUpdatedResponse,
   BlogSettingsDto,
   CreateBlogPostRequest,
+  UpdateBlogPostRequest,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 
@@ -37,6 +39,8 @@ const MESSAGES: Record<string, string> = {
   post_not_found: "Пост не найден — возможно, его уже удалили.",
   author_not_found: "Участник не найден.",
   not_your_post: "Это чужой пост.",
+  repost_not_editable:
+    "Репост не правится — поправить можно только исходный пост, и делает это его автор.",
   admin_only: "Доступно только администратору.",
 };
 
@@ -113,6 +117,51 @@ export function createBlogPost(
   for (const file of files) form.append("files", file);
   return request<BlogPostCreatedResponse>("/blog/posts", {
     method: "POST",
+    body: form,
+  });
+}
+
+/**
+ * Один пост. Нужен правке (VED-321): карточка в ленте приехала с SSR и
+ * могла устареть, а список оставленных картинок, собранный по устаревшему
+ * экрану, унёс бы фотографию, добавленную с другого устройства.
+ */
+export function fetchBlogPost(id: string): Promise<BlogPostDto> {
+  return request<BlogPostDto>(`/blog/posts/${encodeURIComponent(id)}`);
+}
+
+/**
+ * Правка поста (VED-321). Оставленные фотографии перечисляем `keepImageIds`,
+ * новые едут файлами тем же запросом — иначе правка остаётся половинчатой.
+ * Multipart нужен и без новых файлов, когда картинку убрали: сервер тогда
+ * читает `keepImageIds` из полей формы, а не из JSON.
+ */
+export function updateBlogPost(
+  id: string,
+  body: UpdateBlogPostRequest,
+  files: File[] = [],
+): Promise<BlogPostUpdatedResponse> {
+  const path = `/blog/posts/${encodeURIComponent(id)}`;
+  if (files.length === 0) {
+    return request<BlogPostUpdatedResponse>(path, {
+      method: "PATCH",
+      ...json(body),
+    });
+  }
+  const form = new FormData();
+  if (body.title) form.append("title", body.title);
+  form.append("text", body.text ?? "");
+  if (body.keepImageIds) {
+    // Поле обязано доехать даже пустым: на сервере молчание про картинки
+    // означает «не трогать их», а пустой список — «убрал все».
+    if (body.keepImageIds.length === 0) form.append("keepImageIds", "");
+    for (const imageId of body.keepImageIds) {
+      form.append("keepImageIds", imageId);
+    }
+  }
+  for (const file of files) form.append("files", file);
+  return request<BlogPostUpdatedResponse>(path, {
+    method: "PATCH",
     body: form,
   });
 }

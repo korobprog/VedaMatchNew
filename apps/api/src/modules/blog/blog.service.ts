@@ -17,11 +17,14 @@ import {
   type BlogImageRejection,
   type BlogPostCreatedResponse,
   type BlogPostDto,
+  type BlogPostUpdatedResponse,
   type BlogSettingsDto,
   type CreateBlogPostRequest,
+  type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
 import {
   BLOG_PAGE_SIZE,
   blogCursorFilter,
@@ -69,6 +72,9 @@ const POST_SELECT = {
   pinned: true,
   repostCount: true,
   createdAt: true,
+  editedAt: true,
+  // Нужен не карточке, а праву на правку: репост не правится никем.
+  repostOfId: true,
   author: { select: AUTHOR_SELECT },
   images: { select: IMAGE_SELECT, orderBy: { position: 'asc' as const } },
   repostOf: {
@@ -293,6 +299,104 @@ export class BlogService {
   }
 
   /**
+   * Правка поста (VED-321): и слова, и фотографии одним запросом.
+   *
+   * Правит автор, а любой пост — администратор. Право считается на сервере:
+   * спрятанной кнопки мало, PATCH чужого поста обязан отлупаться 403.
+   *
+   * Картинки описываются списком оставленных, а новые едут файлами в том же
+   * multipart — ровно как при публикации, чтобы «поправить» не превращалось
+   * в «удалить и опубликовать заново».
+   */
+  async update(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    body: UpdateBlogPostRequest,
+    files: UploadedImageFile[] = [],
+  ): Promise<BlogPostUpdatedResponse> {
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: {
+        authorId: true,
+        repostOfId: true,
+        images: {
+          select: { id: true, storageKey: true, position: true },
+          orderBy: { position: 'asc' },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('post_not_found');
+
+    const denial = blogEditDenial(row, { userId, isAdmin: viewerIsAdmin });
+    // Репост не правится вовсе — это не «не хватило прав», а свойство
+    // карточки, поэтому 400, а не 403: правами тут ничего не изменить.
+    if (denial === 'repost_not_editable') throw new BadRequestException(denial);
+    if (denial) throw new ForbiddenException(denial);
+
+    const title = normalizeTitle(body?.title);
+    const text = normalizeText(body?.text);
+    const plan = planBlogImages(
+      row.images,
+      parseKeepImageIds(body?.keepImageIds),
+    );
+    const error = validateBlogPost({
+      title,
+      text,
+      imageCount: plan.kept.length + files.length,
+    });
+    if (error) throw new BadRequestException(error);
+    if (files.length > 0 && !this.images.configured) {
+      throw new BadRequestException('image_upload_unavailable');
+    }
+
+    // Файлы кладём до записи в пост: если ни один не доехал, а слов и старых
+    // картинок не осталось, правка оставила бы в ленте пустую карточку —
+    // здесь её ещё можно не применять вовсе, а не удалять пост следом.
+    const failed = await this.storeImages(id, files, plan.nextPosition);
+    const arrived = files.length - failed.length;
+    if (
+      title === null &&
+      text === '' &&
+      plan.kept.length === 0 &&
+      arrived === 0
+    ) {
+      throw new BadRequestException(failed[0]?.reason ?? 'post_empty');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      if (plan.removed.length > 0) {
+        await tx.blogPostImage.deleteMany({
+          where: { id: { in: plan.removed.map((image) => image.id) } },
+        });
+      }
+      // Перестановка на экране доезжает до ленты, а объекты в бакете при
+      // этом не переписываются: порядок живёт полем.
+      for (const [index, image] of plan.kept.entries()) {
+        if (image.position === index) continue;
+        await tx.blogPostImage.update({
+          where: { id: image.id },
+          data: { position: index },
+        });
+      }
+      await tx.blogPost.update({
+        where: { id },
+        data: { title, text, editedAt: now },
+      });
+    });
+
+    await this.images.removeMany(plan.removed.map((image) => image.storageKey));
+
+    const updated = await this.prisma.blogPost.findUniqueOrThrow({
+      where: { id },
+      select: POST_SELECT,
+    });
+    const viewer = await this.viewer(userId, viewerIsAdmin);
+    return { post: toPostDto(updated, viewer, now), failed };
+  }
+
+  /**
    * Репост: новый пост со ссылкой на исходный. Репост репоста поднимается
    * до оригинала — иначе в ленте вырастает матрёшка из пустых карточек.
    */
@@ -389,9 +493,12 @@ export class BlogService {
   private async storeImages(
     postId: string,
     files: UploadedImageFile[],
+    startPosition = 0,
   ): Promise<BlogImageRejection[]> {
     const failed: BlogImageRejection[] = [];
-    let position = 0;
+    // При правке нумерация продолжает оставленные картинки, а предел
+    // `BLOG_POST_MAX_IMAGES` считается по всему посту, а не по добавке.
+    let position = startPosition;
 
     for (const file of files) {
       const name = file.originalname ?? 'файл';
@@ -567,6 +674,7 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
     text: row.text,
     images: row.images,
     createdAt: row.createdAt.toISOString(),
+    editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     feedUntil: row.feedUntil ? row.feedUntil.toISOString() : null,
     inFeed: isInFeed(row.feedUntil, now),
     pinned: row.pinned,
@@ -581,6 +689,13 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
           createdAt: row.repostOf.createdAt.toISOString(),
         }
       : null,
+    // Ровно то же правило, по которому отлупается PATCH: кнопка на экране и
+    // проверка на сервере не имеют права разойтись.
+    canEdit:
+      blogEditDenial(row, {
+        userId: viewer.userId,
+        isAdmin: viewer.isAdmin,
+      }) === null,
     canManage: row.authorId === viewer.userId || viewer.isAdmin,
     canModerate: viewer.isAdmin,
   };

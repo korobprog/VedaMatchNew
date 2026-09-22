@@ -38,6 +38,33 @@ export function blogPostDate(iso: string, now: Date = new Date()): string {
 }
 
 /**
+ * Отметка о правке (VED-321). Сдержанно: если правили в день публикации,
+ * хватает часов — дата стоит рядом, и повторять её значит удвоить подпись;
+ * в другой день показываем день и месяц, иначе «изменено в 14:03» читается
+ * как «сегодня».
+ *
+ * `null` — пост не правили, подписи нет вовсе.
+ */
+export function blogEditedLabel(
+  editedAt: string | null,
+  createdAt: string,
+): string | null {
+  if (!editedAt) return null;
+  const edited = new Date(editedAt);
+  if (Number.isNaN(edited.getTime())) return null;
+  const created = new Date(createdAt);
+  const sameDay =
+    !Number.isNaN(created.getTime()) &&
+    created.getFullYear() === edited.getFullYear() &&
+    created.getMonth() === edited.getMonth() &&
+    created.getDate() === edited.getDate();
+  if (sameDay) {
+    return `изменено в ${pad(edited.getHours())}:${pad(edited.getMinutes())}`;
+  }
+  return `изменено ${edited.getDate()} ${MONTHS[edited.getMonth()]}`;
+}
+
+/**
  * Сколько посту осталось в ленте. `null` — подписи нет: либо срока нет
  * вовсе, либо он уже вышел и пост живёт в архиве, где счётчик бессмыслен.
  */
