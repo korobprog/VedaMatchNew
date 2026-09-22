@@ -63,6 +63,12 @@ export default async function SharePage({ searchParams }: { searchParams: Query 
         <ShareView
           text={text}
           source={one(params.subtitle) ?? null}
+          /* `subtitleInPreview` — сервис сообщает, что эта же строка стоит
+             заголовком превью его ссылки, и дописывать её в тело сообщения
+             значит слать текст дважды (VED-357). Экран портальный, чужих
+             метатегов не читает, поэтому знание приходит адресом. Умолчание
+             прежнее: без параметра строка идёт в сообщение, как и шла. */
+          sourceInPreview={one(params.subtitleInPreview) === "1"}
           link={link}
           previewUrl={one(params.previewUrl) ?? null}
           filePath={one(params.file) ?? null}

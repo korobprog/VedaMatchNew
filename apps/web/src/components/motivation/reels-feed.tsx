@@ -514,6 +514,13 @@ export function ReelsFeed({
             title: shareQuoteOf(activePost).slice(0, 200),
             text: shareQuoteOf(activePost),
             subtitle: attributionLine(activePost),
+            /* Источник уже стоит заголовком превью ссылки `/m/<slug>` —
+               его собирает `buildShareMeta()` в `posts/[slug]/share-meta.ts`.
+               Поэтому в тело сообщения он не дописывается: иначе «Бхагавад-
+               гита 2.63» стоит и в тексте, и над картинкой превью (VED-357,
+               «Исключи любой дубляж текста»). В карточке для чата и на самом
+               экране «Поделиться» строка остаётся — там превью нет. */
+            subtitleInPreview: "1",
             link: `/m/${encodeURIComponent(activePost.slug)}`,
             file: `/m/${encodeURIComponent(activePost.slug)}/story`,
             previewUrl: activePost.storyImageUrl || activePost.imageUrl,
