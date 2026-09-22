@@ -528,12 +528,22 @@ export function ReelsFeed({
         hide:
           mediaKindOf(activePost) === "image" ? (
             <RailButton
-          label={textHidden ? "Показать текст" : "Скрыть текст"}
+          /* Ни слова «скрыть», ни перечёркнутого глаза (VED-251): ровно так
+             подписана редакторская кнопка «Скрыть из ленты», снимающая
+             афоризм у всех читателей, и их уже перепутали. Здесь не действие
+             над публикацией, а способ смотреть — у одного человека и только
+             сейчас, — поэтому подпись про текст на картинке, а значок
+             показывает строки текста. */
+          label={
+            textHidden
+              ? "Смотреть с текстом — вернуть цитату на картинку"
+              : "Смотреть без текста — только у вас на экране"
+          }
           pressed={textHidden}
-          caption={textHidden ? "Вернуть" : "Скрыть"}
+          caption={textHidden ? "С текстом" : "Без текста"}
           onClick={() => setTextHidden((value) => !value)}
         >
-          <EyeOffIcon />
+          <TextLinesIcon pictureOnly={textHidden} />
         </RailButton>
           ) : null,
         speak: speechAvailable ? (
@@ -1789,11 +1799,30 @@ function PencilIcon() {
   );
 }
 
-function EyeOffIcon() {
+/**
+ * Что сейчас на кадре: строки текста — или одна картинка, когда текст убран.
+ *
+ * Перечёркнутого глаза тут быть не может: им подписана редакторская кнопка
+ * «Скрыть из ленты», снимающая афоризм у всех читателей, и один значок на два
+ * настолько разных по последствиям действия — половина путаницы VED-251.
+ * Перечёркнутых строк тоже нет: на 22px слэш поверх трёх коротких линий
+ * читается как «≠», а не как «текста нет» — проверено снимком ряда. Поэтому
+ * состояние показывает смена значка, а не зачёркивание.
+ */
+function TextLinesIcon({ pictureOnly }: { pictureOnly: boolean }) {
+  if (pictureOnly)
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <circle cx="8.5" cy="9.5" r="1.6" />
+        <path d="M4 17l4.5-4.5 3.5 3.5 3-2.5L20 17" />
+      </svg>
+    );
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
-      <path d="M4 4l16 16" />
+      <path d="M4 7h16" />
+      <path d="M4 12h11" />
+      <path d="M4 17h7" />
     </svg>
   );
 }

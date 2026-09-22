@@ -1108,6 +1108,16 @@ function isSignal(value: unknown): value is ChatCallSignal {
     const c = v.candidate as Record<string, unknown> | undefined;
     return Boolean(c) && typeof c!.candidate === 'string';
   }
+  // VED-291: состояние камеры отправителя. Сервер, как и для sdp/candidate,
+  // содержимое не интерпретирует — только проверяет форму и переносит
+  // второй стороне. Без этой строки валидатор отвечал бы 400 «Неверный
+  // сигнал», и сообщить о выключенной камере было бы нечем: своего канала
+  // (data channel) у звонка нет, а подмешивать это в SDP значило бы гонять
+  // полную реегоциацию на каждое нажатие кнопки.
+  if (v.kind === 'media') {
+    const m = v.media as Record<string, unknown> | undefined;
+    return Boolean(m) && typeof m!.video === 'boolean';
+  }
   return false;
 }
 

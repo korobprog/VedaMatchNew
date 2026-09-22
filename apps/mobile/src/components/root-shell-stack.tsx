@@ -33,13 +33,27 @@ export function RootStack() {
           <Stack.Screen name="account" />
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="chat/requests" />
+          {/* Создание групп и каналов и управление участниками (VED-292) —
+              то же, что умеют формы `/chat/new` и `/chat/[id]/members` на
+              сайте. Новых ручек на сервере под это не заводилось. */}
+          <Stack.Screen name="chat/new" />
+          <Stack.Screen name="chat/members/[id]" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
+          <Stack.Screen name="communities/new" />
           <Stack.Screen name="calls-probe" />
           {/* Экран звонка (VED-219): модалью на весь экран, без системной
               шапки и без жеста «назад» — трубку кладут кнопкой, не свайпом. */}
           <Stack.Screen
             name="call/[id]"
+            options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false, animation: 'fade' }}
+          />
+          {/* Групповой звонок (VED-293) — тем же способом, что и звонок
+              один на один: модаль на весь экран без системной шапки.
+              Отличие одно: «назад» здесь СВОРАЧИВАЕТ комнату (экран сам
+              перехватывает), выход — только кнопкой. */}
+          <Stack.Screen
+            name="group-call/[id]"
             options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false, animation: 'fade' }}
           />
         </Stack.Protected>
