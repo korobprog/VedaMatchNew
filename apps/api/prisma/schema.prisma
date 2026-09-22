@@ -6751,6 +6751,11 @@ model BlogPost {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  /// Когда пост правили (VED-321). Отдельное поле, а не `updatedAt`: тот
+  /// меняется от любой записи в строку — закрепления, срока в ленте,
+  /// счётчика репостов, — и отметка «изменено» появлялась бы у поста,
+  /// которого автор не трогал.
+  editedAt  DateTime?
 
   images BlogPostImage[]
 

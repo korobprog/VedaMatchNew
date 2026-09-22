@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { blogFeedCountdown, blogPostDate } from "./blog-format";
+import {
+  blogEditedLabel,
+  blogFeedCountdown,
+  blogPostDate,
+} from "./blog-format";
 
 const NOW = new Date("2026-09-21T12:00:00.000Z");
 
@@ -48,5 +52,29 @@ describe("blogFeedCountdown", () => {
     expect(blogFeedCountdown("2026-09-21T12:00:00.000Z", NOW)).toBeNull();
     expect(blogFeedCountdown("2026-09-20T12:00:00.000Z", NOW)).toBeNull();
     expect(blogFeedCountdown("никогда", NOW)).toBeNull();
+  });
+});
+
+describe("blogEditedLabel", () => {
+  // Правка в день публикации: дата уже стоит рядом, повторять её незачем.
+  it("shows only the time when the post was edited the same day", () => {
+    const label = blogEditedLabel(
+      "2026-09-21T09:40:00.000Z",
+      "2026-09-21T09:30:00.000Z",
+    );
+    expect(label).toMatch(/^изменено в \d{2}:\d{2}$/);
+  });
+
+  it("shows the day and month when the edit came later", () => {
+    expect(
+      blogEditedLabel("2026-09-23T09:40:00.000Z", "2026-09-21T09:30:00.000Z"),
+    ).toMatch(/^изменено \d{1,2} сентября$/);
+  });
+
+  // Непоправленный пост подписи не получает: «изменено» у каждой карточки
+  // ленты — тот самый лишний шум, которого просили избежать.
+  it("stays silent for a post nobody edited", () => {
+    expect(blogEditedLabel(null, "2026-09-21T09:30:00.000Z")).toBeNull();
+    expect(blogEditedLabel("никогда", "2026-09-21T09:30:00.000Z")).toBeNull();
   });
 });

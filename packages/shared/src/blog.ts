@@ -69,6 +69,12 @@ export interface BlogPostDto {
   text: string;
   images: BlogImageDto[];
   createdAt: string;
+  /**
+   * Когда пост правили (VED-321); null — не правили ни разу. Отдельно от
+   * `createdAt`: дата публикации в ленте остаётся на месте, отметка о
+   * правке идёт рядом с ней сдержанной подписью.
+   */
+  editedAt: string | null;
   /** ISO-время, до которого пост показан в ленте; null — бессрочно. */
   feedUntil: string | null;
   /** Посчитано сервером на момент ответа: пост ещё в текущей ленте. */
@@ -76,6 +82,12 @@ export interface BlogPostDto {
   pinned: boolean;
   repostCount: number;
   repostOf: BlogRepostSourceDto | null;
+  /**
+   * Может править: автор или администратор. У репоста всегда `false` —
+   * правится оригинал его автором, а карточка репоста показывает живой
+   * оригинал, а не снимок.
+   */
+  canEdit: boolean;
   /** Может удалить: автор или администратор. */
   canManage: boolean;
   /** Может менять срок и закрепление: только администратор. */
@@ -111,6 +123,20 @@ export interface CreateBlogPostRequest {
   text: string;
 }
 
+/**
+ * Правка поста (VED-321). Шлём id оставленных картинок, а не удалённых:
+ * список удалённых расходится с экраном, когда пост успели поправить из
+ * другой вкладки, и тогда «убрал одну» стирает все. Новые файлы приезжают
+ * тем же запросом, как и при публикации.
+ */
+export interface UpdateBlogPostRequest extends CreateBlogPostRequest {
+  /**
+   * Поля нет — картинки остаются как были: правка одного текста не имеет
+   * права унести фотографии молча. Пустой список — «убрал все».
+   */
+  keepImageIds?: string[];
+}
+
 export interface BlogPostLifetimeRequest {
   /** Часы от момента публикации; null — снять срок, пост в ленте навсегда. */
   hours: number | null;
@@ -135,3 +161,6 @@ export interface BlogPostCreatedResponse {
   post: BlogPostDto;
   failed: BlogImageRejection[];
 }
+
+/** Ответ на правку: та же пара «пост и недоехавшие файлы», что у публикации. */
+export type BlogPostUpdatedResponse = BlogPostCreatedResponse;
