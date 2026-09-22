@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { appVariant } from '@/config/app-variant';
 import { ApiError, createApiClient } from '@/lib/api/client';
 import { createAuthApi } from './auth-api';
@@ -42,6 +43,9 @@ interface ProfileResponse {
   id: string;
   email: string;
   name: string;
+  spiritualName?: string | null;
+  /** Что видят другие: духовное имя, если оно есть, иначе мирское. */
+  displayName?: string;
   avatarUrl?: string | null;
 }
 
@@ -86,6 +90,11 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       id: profile.id,
       email: profile.email,
       name: profile.name,
+      spiritualName: profile.spiritualName ?? null,
+      // `displayName` считает сервер (`resolveDisplayName`), но подстраховка
+      // на случай старого ответа — та же функция из общего пакета, а не
+      // своё «если есть духовное»: правило одно на портал.
+      displayName: profile.displayName ?? resolveDisplayName(profile),
       avatarUrl: profile.avatarUrl ?? null,
     });
     setStatus('signed');
@@ -152,6 +161,7 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       signInDev,
       signOut,
       registerBeforeSignOut,
+      reloadUser: loadProfile,
     }),
     [
       status,
@@ -166,6 +176,7 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       signInDev,
       signOut,
       registerBeforeSignOut,
+      loadProfile,
     ],
   );
 
@@ -266,6 +277,11 @@ function TelegramTokenSessionProvider({
       id: profile.id,
       email: profile.email,
       name: profile.name,
+      spiritualName: profile.spiritualName ?? null,
+      // `displayName` считает сервер (`resolveDisplayName`), но подстраховка
+      // на случай старого ответа — та же функция из общего пакета, а не
+      // своё «если есть духовное»: правило одно на портал.
+      displayName: profile.displayName ?? resolveDisplayName(profile),
       avatarUrl: profile.avatarUrl ?? null,
     });
     setStatus('signed');
@@ -384,8 +400,9 @@ function TelegramTokenSessionProvider({
       signInDev,
       signOut,
       registerBeforeSignOut,
+      reloadUser: loadProfile,
     }),
-    [status, user, api, apiOrigin, loginError, getAccessToken, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut],
+    [status, user, api, apiOrigin, loginError, getAccessToken, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut, loadProfile],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -31,6 +31,11 @@ export function RootStack() {
         <Stack.Protected guard={status === 'signed'}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="account" />
+          {/* «Профиль» (VED-332) — маршрут корневого стека рядом с
+              «Аккаунтом», а не шестая вкладка: заходят туда редко, зато из
+              двух мест — карточкой сверху «Аккаунта» и своей карточкой в
+              справочнике людей. */}
+          <Stack.Screen name="profile" />
           {/* Лента уведомлений (VED-330) — маршрут корневого стека, а не
               шестая вкладка внизу: вход в неё один, колокольчиком в шапке
               «Чатов» (`components/notifications/notification-bell.tsx`).
