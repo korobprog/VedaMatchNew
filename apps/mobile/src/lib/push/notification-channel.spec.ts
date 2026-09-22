@@ -14,7 +14,7 @@ import {
  */
 
 const mockChannelState = {
-  importance: 4 as number | null,
+  importance: 6 as number | null,
   throws: false,
   intentThrows: false,
   started: [] as { action: string; options?: unknown }[],
@@ -22,7 +22,9 @@ const mockChannelState = {
 };
 
 jest.mock('expo-notifications', () => ({
-  AndroidImportance: { NONE: 0, MIN: 1, DEFAULT: 3, HIGH: 4 },
+  // Значения как в самом `expo-notifications`: перечисление сдвинуто
+  // относительно андроидовского (`UNKNOWN = 0`, `NONE = 2`, `HIGH = 6`).
+  AndroidImportance: { UNKNOWN: 0, UNSPECIFIED: 1, NONE: 2, MIN: 3, LOW: 4, DEFAULT: 5, HIGH: 6, MAX: 7 },
   getNotificationChannelAsync: jest.fn(async () => {
     if (mockChannelState.throws) throw new Error('нет канала');
     return mockChannelState.importance === null
@@ -57,7 +59,7 @@ beforeEach(() => {
     .mockImplementation(async () => {
       mockChannelState.openedAppSettings += 1;
     });
-  mockChannelState.importance = 4;
+  mockChannelState.importance = 6;
   mockChannelState.throws = false;
   mockChannelState.intentThrows = false;
   mockChannelState.started.length = 0;
@@ -79,12 +81,21 @@ describe('channelStateFrom', () => {
   it('канала ещё нет — «не знаем», а не «выключено»: обвинять человека не в чем', () => {
     expect(channelStateFrom(null)).toBe('unknown');
     expect(channelStateFrom(undefined)).toBe('unknown');
+    expect(channelStateFrom(Notifications.AndroidImportance.UNKNOWN)).toBe('unknown');
+  });
+
+  it('шкала берётся из expo, а не из Android: ноль там значит «не знаем», а не «выключено»', () => {
+    // В документации Android `IMPORTANCE_NONE = 0`, у expo ноль — `UNKNOWN`.
+    // Сравнение с нулём вместо константы превратило бы «не знаем» в ругань.
+    expect(Notifications.AndroidImportance.NONE).not.toBe(0);
+    expect(channelStateFrom(0)).toBe('unknown');
   });
 });
 
 describe('readMessagesChannel', () => {
   it('спрашивает систему и разбирает ответ', async () => {
-    mockChannelState.importance = 0;
+    mockChannelState.importance = 2; // NONE в шкале expo
+
     await expect(readMessagesChannel()).resolves.toBe('off');
   });
 

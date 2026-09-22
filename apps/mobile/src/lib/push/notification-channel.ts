@@ -28,11 +28,17 @@ export type MessagesChannelState =
 /**
  * Чистая часть: важность канала → состояние. `null` — канала нет; такое бывает
  * до первой регистрации, и обвинять в этом человека нельзя.
+ *
+ * Шкала здесь СВОЯ, не андроидовская: у `expo-notifications` перечисление
+ * сдвинуто (`UNKNOWN = 0`, `UNSPECIFIED = 1`, `NONE = 2`, `MIN = 3`…), поэтому
+ * сравнивать нужно с константой, а не с нулём, как в документации Android.
+ * `UNKNOWN` — это «модуль не смог перевести», тоже не повод ругаться.
  */
 export function channelStateFrom(
   importance: Notifications.AndroidImportance | number | null | undefined,
 ): MessagesChannelState {
   if (importance === null || importance === undefined) return 'unknown';
+  if (importance === Notifications.AndroidImportance.UNKNOWN) return 'unknown';
   return importance === Notifications.AndroidImportance.NONE ? 'off' : 'on';
 }
 
