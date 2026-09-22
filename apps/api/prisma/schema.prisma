@@ -2096,6 +2096,23 @@ model PushSubscription {
   auth      String
   userAgent String?
   createdAt DateTime @default(now())
+  /// Когда служба доставки браузера последний раз ПРИНЯЛА пуш (VED-314).
+  /// «Приняла» — не «человек увидел»: браузер, который не открывали месяц,
+  /// принимает пуш так же, как живой. Но пустая отметка при накопленных
+  /// неудачах — уже повод считать подписку мёртвой, см. `delivery-health.ts`.
+  lastSuccessAt DateTime?
+  /// Последний отказ службы доставки (кроме `gone` — по нему строка удаляется).
+  lastFailureAt DateTime?
+  /// Неудачи подряд. Обнуляется любым успехом и повторной регистрацией.
+  failureCount  Int       @default(0)
+  /// Браузер подтвердил подписку: страница портала при загрузке пересохраняет
+  /// её (`syncPushSubscription`). Единственный сигнал жизни, идущий от самого
+  /// клиента, — поэтому свежая отметка защищает подписку от удаления.
+  lastSeenAt    DateTime?
+  /// Когда правило впервые сочло подписку мёртвой. Сначала помечаем и держим
+  /// отметку на глазах в админке, удаляем только по истечении отсрочки: терять
+  /// подписку человека, который был в отпуске, дороже, чем лишняя строка.
+  deadSince     DateTime?
 
   @@index([userId])
 }
@@ -2120,6 +2137,14 @@ model NotificationDevice {
   nativeCalls Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  /// Те же отметки живости, что у веб-подписки (VED-314): служба доставки
+  /// приняла пуш, отказала, сколько отказов подряд, когда приложение
+  /// подтвердило токен и когда правило сочло устройство мёртвым.
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  failureCount  Int       @default(0)
+  lastSeenAt    DateTime?
+  deadSince     DateTime?
 
   @@index([userId])
 }

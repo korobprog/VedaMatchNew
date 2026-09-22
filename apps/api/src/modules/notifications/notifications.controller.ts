@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type {
   AccessTokenPayload,
+  NotificationDeliveryStatusDto,
   NotificationInboxResponse,
   NotificationPreferencesDto,
   NotificationUnreadCountResponse,
@@ -107,6 +108,20 @@ export class NotificationsController {
   ): Promise<{ ok: true }> {
     await this.notifications.markRead(user.sub, body?.ids);
     return { ok: true };
+  }
+
+  /**
+   * Есть ли куда доставлять уведомления этому человеку (VED-314). Настройки
+   * спрашивают об этом сами: человек жал «включить» и оставался в уверенности,
+   * что всё работает, — даже когда ни одной живой точки доставки у него не
+   * было и девять уведомлений за вечер прошли мимо.
+   */
+  @UseGuards(AuthGuard)
+  @Get('delivery-status')
+  deliveryStatus(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<NotificationDeliveryStatusDto> {
+    return this.notifications.deliveryStatus(user.sub);
   }
 
   @UseGuards(AuthGuard)

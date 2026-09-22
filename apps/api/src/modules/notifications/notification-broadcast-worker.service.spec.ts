@@ -50,8 +50,14 @@ function createWorker(options: {
   const notifications = {
     addManyToInbox: jest.fn(() => Promise.resolve()),
     deleteSubscription: jest.fn(() => Promise.resolve()),
+    /* Итог каждой попытки — в отметки живости подписки (VED-314); удаление
+       протухшей происходит там же. */
+    recordPushResult: jest.fn(() => Promise.resolve()),
   };
-  const sender = { send: jest.fn(() => Promise.resolve(null)) };
+  const sender = {
+    send: jest.fn(() => Promise.resolve(null)),
+    vapidConfigured: true,
+  };
   const worker = new NotificationBroadcastWorkerService(
     prisma as unknown as PrismaService,
     notifications as unknown as NotificationsService,
@@ -175,7 +181,7 @@ describe('NotificationBroadcastWorkerService.sendBatch', () => {
     expect(notifications.addManyToInbox).not.toHaveBeenCalled();
   });
 
-  it('протухшую подписку удаляет и не считает доставленной', async () => {
+  it('протухшую подписку отдаёт конвейеру и не считает доставленной', async () => {
     const { worker, notifications, sender, prisma } = createWorker({
       recipients: [allowed],
       subscriptions: [{ id: 's-1', endpoint: 'e-1', p256dh: 'p', auth: 'a' }],
@@ -184,7 +190,10 @@ describe('NotificationBroadcastWorkerService.sendBatch', () => {
 
     await sendBatch(worker);
 
-    expect(notifications.deleteSubscription).toHaveBeenCalledWith('e-1');
+    expect(notifications.recordPushResult).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'e-1' }),
+      'gone',
+    );
     expect(prisma.notificationBroadcast.update).toHaveBeenCalledWith({
       where: { id: 'b-1' },
       data: containing({ pushSentCount: { increment: 0 } }),

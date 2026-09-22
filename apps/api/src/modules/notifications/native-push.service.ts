@@ -8,6 +8,12 @@ import {
   type PushPayload,
 } from './fcm';
 import { FcmSenderService } from './fcm-sender.service';
+import type { PushFailure } from './push-errors';
+import {
+  deliveryHealthSelect,
+  NotificationsService,
+  type StoredDevice,
+} from './notifications.service';
 
 /** Сколько телефонов опрашивать одновременно: как у веб-пушей в рассылке. */
 const NATIVE_PUSH_CONCURRENCY = 10;
@@ -29,6 +35,7 @@ export class NativePushService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fcm: FcmSenderService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async sendToUsers(
@@ -40,7 +47,7 @@ export class NativePushService {
     }
     const devices = await this.prisma.notificationDevice.findMany({
       where: { userId: { in: userIds }, provider: 'fcm' },
-      select: { token: true },
+      select: { token: true, ...deliveryHealthSelect },
     });
     return this.deliver(devices, ({ token }) => this.fcm.send(token, payload));
   }
@@ -59,7 +66,7 @@ export class NativePushService {
     if (!this.fcm.configured) return { devices: 0, delivered: 0 };
     const devices = await this.prisma.notificationDevice.findMany({
       where: { userId: recipientId, provider: 'fcm' },
-      select: { token: true, nativeCalls: true },
+      select: { token: true, nativeCalls: true, ...deliveryHealthSelect },
     });
     return this.deliver(devices, ({ token, nativeCalls }) =>
       nativeCalls
@@ -82,17 +89,22 @@ export class NativePushService {
     if (!this.fcm.configured) return { devices: 0, delivered: 0 };
     const devices = await this.prisma.notificationDevice.findMany({
       where: { userId, provider: 'fcm', nativeCalls: true },
-      select: { token: true, nativeCalls: true },
+      select: { token: true, nativeCalls: true, ...deliveryHealthSelect },
     });
     return this.deliver(devices, ({ token }) =>
       this.fcm.sendRaw(buildCallEndedMessage(token, { callId, reason })),
     );
   }
 
-  /** Общий обход телефонов пачками с удалением протухших токенов. */
-  private async deliver<T extends { token: string }>(
+  /**
+   * Общий обход телефонов пачками. Исход каждой попытки идёт в базу
+   * (VED-314): успех отмечает приём, отказ — в счётчик неудач, протухший
+   * токен удаляется. Раньше след оставлял только ответ `gone`, и телефон,
+   * которому пуши просто не уходят, было не отличить от живого.
+   */
+  private async deliver<T extends StoredDevice>(
     devices: T[],
-    send: (device: T) => Promise<string | null>,
+    send: (device: T) => Promise<PushFailure | null>,
   ): Promise<NativePushResult> {
     let delivered = 0;
     for (let i = 0; i < devices.length; i += NATIVE_PUSH_CONCURRENCY) {
@@ -100,11 +112,7 @@ export class NativePushService {
       const results = await Promise.all(
         chunk.map(async (device) => {
           const failure = await send(device);
-          if (failure === 'gone') {
-            await this.prisma.notificationDevice.deleteMany({
-              where: { token: device.token },
-            });
-          }
+          await this.notifications.recordDeviceResult(device, failure);
           return failure === null;
         }),
       );

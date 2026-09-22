@@ -3,8 +3,8 @@ import type { NotificationsService } from './notifications.service';
 import {
   TELEGRAM_DEVICE_PLATFORM,
   TELEGRAM_DEVICE_PROVIDER,
-  TelegramNotificationsService,
-} from './telegram-notifications.service';
+} from './telegram-device';
+import { TelegramNotificationsService } from './telegram-notifications.service';
 
 function setup() {
   const prisma = {
@@ -163,9 +163,17 @@ describe('TelegramNotificationsService.listDevices', () => {
     await expect(service.listDevices('u1')).resolves.toEqual([
       { token: '777' },
     ]);
-    expect(prisma.notificationDevice.findMany).toHaveBeenCalledWith({
-      where: { userId: 'u1', provider: TELEGRAM_DEVICE_PROVIDER },
-      select: { token: true },
+    const findMany: jest.Mock = prisma.notificationDevice.findMany;
+    const [query] = findMany.mock.calls[0] as [
+      { where: unknown; select: Record<string, unknown> },
+    ];
+    expect(query.where).toEqual({
+      userId: 'u1',
+      provider: TELEGRAM_DEVICE_PROVIDER,
     });
+    // Вместе с токеном — отметки живости (VED-314): исход отправки боту
+    // пишется тем же конвейером, что у браузера и телефона.
+    expect(query.select.token).toBe(true);
+    expect(query.select.lastSuccessAt).toBe(true);
   });
 });

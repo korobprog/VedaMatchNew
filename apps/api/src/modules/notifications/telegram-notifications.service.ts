@@ -1,20 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { TelegramNotificationStatusResponse } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationsService } from './notifications.service';
+import {
+  deliveryHealthSelect,
+  NotificationsService,
+  type StoredDevice,
+} from './notifications.service';
+import {
+  TELEGRAM_DEVICE_PLATFORM,
+  TELEGRAM_DEVICE_PROVIDER,
+} from './telegram-device';
 
-/** Провайдер и платформа устройства доставки через бота — те же строки,
- *  что ищет `deliver()` при рассылке (`notifications.listener.ts`). Не
- *  входят в `NotificationDeviceProvider`/`NotificationDevicePlatform` из
- *  `@vedamatch/shared`: те валидируют регистрацию телефонов с приложением
- *  (`POST /notifications/devices`), а телеграм-устройство заводится только
- *  отсюда, по подписи Telegram, а не произвольным телом запроса. */
-export const TELEGRAM_DEVICE_PROVIDER = 'telegram';
-export const TELEGRAM_DEVICE_PLATFORM = 'telegram';
-
-export interface TelegramDeviceRow {
-  token: string;
-}
+/** Устройство бота вместе с отметками живости: исход отправки записывает
+ *  `NotificationsService.recordDeviceResult` (VED-314). */
+export type TelegramDeviceRow = StoredDevice;
 
 /**
  * Устройство доставки `@vedamatch_bot` и тумблер его доставки. Отдельно от
@@ -115,7 +114,7 @@ export class TelegramNotificationsService {
   async listDevices(userId: string): Promise<TelegramDeviceRow[]> {
     return this.prisma.notificationDevice.findMany({
       where: { userId, provider: TELEGRAM_DEVICE_PROVIDER },
-      select: { token: true },
+      select: { token: true, ...deliveryHealthSelect },
     });
   }
 
