@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
+import type { NotificationPreferencesDto } from '@vedamatch/shared';
 import {
   AUTH_TELEGRAM_CONNECTED_EVENT,
   AUTH_TELEGRAM_DISCONNECTED_EVENT,
@@ -24,14 +25,12 @@ const chatEvent = {
 } as const;
 
 function createListener(options: {
-  preferences?: Partial<{
-    enabled: boolean;
-    chat: boolean;
-    connections: boolean;
-    support: boolean;
-    announcements: boolean;
-    telegram: boolean;
-  }>;
+  /**
+   * Тумблеры берутся из общего типа, а не перечисляются здесь руками: список
+   * полей вручную уже отстал от жизни на «Звонках» (VED-361) — тест
+   * компилировался, а CI падал. Новая категория теперь ломает сборку сама.
+   */
+  preferences?: Partial<NotificationPreferencesDto>;
   sendResult?: 'gone' | 'rate-limited' | 'transient' | null;
   /** Пустой массив — устройство не подписано на пуш. */
   subscriptions?: Array<{
@@ -212,7 +211,7 @@ describe('NotificationsListener.deliver', () => {
   it('кладёт значок состояния в колокольчик, но не в пуш (VED-272)', async () => {
     const { listener, inbox, sent } = createListener({
       // `work` в наборе по умолчанию нет, а без тумблера доставка молчит.
-      preferences: { work: true } as Record<string, boolean>,
+      preferences: { work: true },
     });
 
     await listener.deliver({

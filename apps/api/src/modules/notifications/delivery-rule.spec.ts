@@ -101,9 +101,19 @@ describe('decideDelivery — звонки и сообщения независи
   it('категория без своего тумблера не проходит молча', () => {
     // Страховка от возврата старой беды: категория, которой забыли завести
     // поле, даёт `undefined` — и уведомления исчезают без следа в логе.
-    const broken = preferences();
-    delete (broken as Record<string, unknown>).calls;
-    expect(decideDelivery(broken, 'calls')).toEqual({
+    //
+    // Набор собирается БЕЗ `calls` разбором, а не удалением поля из готового
+    // объекта: `NotificationPreferencesDto` наследует
+    // `Record<NotificationCategory, boolean>`, и приведение к
+    // `Record<string, unknown>` ради `delete` компилятор больше не пропускает.
+    const { calls, ...withoutCalls } = preferences();
+
+    // Поле в полном наборе есть — значит проверяем именно его отсутствие, а
+    // не опечатку в имени.
+    expect(calls).toBe(true);
+    expect(
+      decideDelivery(withoutCalls as NotificationPreferencesDto, 'calls'),
+    ).toEqual({
       deliver: false,
       reason: 'category-off',
     });
