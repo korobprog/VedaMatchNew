@@ -697,8 +697,14 @@ export function ReelWizard({
                   Кадр взят: {file.name} · {formatImageSize(file.size)}
                 </p>
               )}
+              {/* Отказ по картинке блокирует публикацию, поэтому он
+                  `alert`, как и ошибка отправки ниже, а не тихий `status`:
+                  человек обязан узнать, почему кнопка не срабатывает.
+                  Замерено в браузере поверх фактической подложки (--vm-bg-0,
+                  12px): --vm-magenta даёт 4,62:1 на светлой и 6,13:1 на
+                  тёмной — выше порога AA 4,5:1. */}
               {imageError && (
-                <p role="status" className="text-xs text-magenta">
+                <p role="alert" className="text-xs text-magenta">
                   {imageError}
                 </p>
               )}
@@ -1248,7 +1254,14 @@ function ReelStatus({
       {reel.stage === "rejected" && (
         <div className="space-y-3 rounded-2xl border border-magenta/40 bg-magenta/5 p-4">
           <div>
-            <div className="text-xs font-bold uppercase tracking-wide text-gold">Почему</div>
+            {/* Не --vm-gold и не --vm-magenta: подпись 12px жирным — мелкий
+                текст, а подложка здесь не --vm-bg-0, а магентовая заливка
+                самой карточки, и она поднимает фон к цвету букв. Замерено в
+                браузере поверх неё, светлая / тёмная: gold 3,37:1 / 12,55:1,
+                magenta 4,26:1 / 5,91:1 — обе на светлой ниже порога AA
+                4,5:1. --vm-text-1 даёт 8,64:1 / 8,92:1. Смысл карточки несут
+                её рамка и заливка, а не цвет этого слова. */}
+            <div className="text-xs font-bold uppercase tracking-wide text-text-1">Почему</div>
             <p className="mt-1 text-sm text-text-0">{reel.reason ?? "Текст не подходит для ленты вдохновения."}</p>
             <p className="mt-1 text-xs text-text-2">Лимит дня не потрачен: можно исправить и отправить снова.</p>
           </div>

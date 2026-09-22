@@ -283,8 +283,13 @@ export function PicturePublishForm({
             Картинка взята: {file.name} · {formatImageSize(file.size)}
           </p>
         )}
+        {/* Отказ по картинке блокирует публикацию, поэтому он `alert`, как
+            и ошибка отправки ниже, а не тихий `status`: человек обязан
+            узнать, почему кнопка не срабатывает. Замерено в браузере поверх
+            фактической подложки (--vm-bg-0, 12px): --vm-magenta даёт 4,62:1
+            на светлой и 6,13:1 на тёмной — выше порога AA 4,5:1. */}
         {imageError && (
-          <p role="status" className="text-xs text-magenta">
+          <p role="alert" className="text-xs text-magenta">
             {imageError}
           </p>
         )}
