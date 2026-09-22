@@ -8,6 +8,7 @@ import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { InlineError } from '@/components/inline-error';
 import { PersonKeyboardAwareScroll as KeyboardAwareScrollView } from '@/components/keyboard-controller-web';
 import { AvatarSheet } from '@/components/profile/avatar-sheet';
+import { ProfileSiteLinksSection } from '@/components/profile/site-links-section';
 import { RetryButton } from '@/components/retry-button';
 import { useSession } from '@/lib/auth/session';
 import { confirmTap } from '@/lib/feedback';
@@ -351,6 +352,13 @@ export default function ProfileScreen() {
           hint="Заполнено — именно его увидят в переписке, в справочнике людей и в общинах. Пустое поле убирает его."
         />
 
+        {/* Статус — многострочное поле, хотя строка по смыслу одна и
+            переносы схлопываются при сохранении. Однострочный ввод при
+            длинном значении показывает ХВОСТ: каретка стоит в конце, и
+            человек видит «…к дружбе и сотрудничеству.» вместо начала своего
+            же статуса, пока не проведёт по полю (раунд оценки 001, дефект 3).
+            Многострочное начинается сверху, и 140 символов помещаются в него
+            целиком — прокручивать нечего. */}
         <Field
           label="Статус"
           value={values.statusLine}
@@ -358,8 +366,10 @@ export default function ProfileScreen() {
           limit={PROFILE_FIELD_LIMITS.statusLine}
           editable={!saving}
           invalid={invalidField === 'statusLine'}
+          multiline
+          minHeight={88}
           placeholder="«в Маяпуре до марта»"
-          hint="Короткая строка рядом с именем."
+          hint="Короткая строка рядом с именем. Перенос строки не сохранится — статус стоит рядом с именем одной строкой."
         />
 
         <Field
@@ -405,9 +415,7 @@ export default function ProfileScreen() {
           )}
         </Pressable>
 
-        <Text style={[styles.footnote, { color: colors.text1, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
-          Город, языки, дату рождения, соцсети и мессенджеры пока правят на сайте — в приложении их нет.
-        </Text>
+        <ProfileSiteLinksSection />
       </KeyboardAwareScrollView>
 
       <AvatarSheet
@@ -432,6 +440,8 @@ interface FieldProps {
   placeholder: string;
   hint: string;
   multiline?: boolean;
+  /** Высота многострочного поля: у статуса своя — см. комментарий на месте. */
+  minHeight?: number;
 }
 
 /**
@@ -442,7 +452,7 @@ interface FieldProps {
  * возможен (статус схлопывает пробелы), поэтому проверка перед отправкой
  * никуда не делась.
  */
-function Field({ label, value, onChange, limit, editable, invalid, placeholder, hint, multiline = false }: FieldProps) {
+function Field({ label, value, onChange, limit, editable, invalid, placeholder, hint, multiline = false, minHeight }: FieldProps) {
   const { colors } = useTheme();
   const showCounter = shouldShowCounter(value, limit);
 
@@ -468,6 +478,7 @@ function Field({ label, value, onChange, limit, editable, invalid, placeholder, 
         style={[
           multiline ? styles.textarea : styles.input,
           { color: colors.text0, borderColor: invalid ? colors.magenta : colors.glassBorder, backgroundColor: colors.bg1 },
+          minHeight === undefined ? null : { minHeight },
         ]}
       />
       <Text style={[styles.hint, { color: colors.text1 }]}>{hint}</Text>
@@ -526,15 +537,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    overflow: 'hidden',
-  },
-  footnote: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    lineHeight: 19,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    padding: 12,
     overflow: 'hidden',
   },
   secondary: {

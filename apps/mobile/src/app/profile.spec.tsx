@@ -2,6 +2,7 @@ import type { UserProfile } from '@vedamatch/shared';
 import { ApiError } from '@/lib/api/client';
 import { light } from '@/theme/tokens';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import ProfileScreen from './profile';
 
@@ -20,6 +21,7 @@ const mockReloadUser = jest.fn<Promise<void>, []>(async () => undefined);
 const mockLaunchLibrary = jest.fn();
 const mockLaunchCamera = jest.fn();
 const mockRequestCameraPermissions = jest.fn(async () => ({ granted: true }));
+const mockOpenBrowser = jest.fn<Promise<undefined>, [string]>(async () => undefined);
 const mockBuildUploadFormPart = jest.fn(async (part: { name: string; type: string }) => ({
   name: part.name,
   type: part.type,
@@ -67,6 +69,19 @@ jest.mock('@/theme/theme', () => ({
 }));
 
 jest.mock('@/lib/feedback', () => ({ __esModule: true, confirmTap: () => undefined }));
+
+// Раздел «Правится на сайте» открывает браузер — в тесте только считаем,
+// какой адрес ему отдали.
+jest.mock('expo-web-browser', () => ({
+  __esModule: true,
+  openBrowserAsync: (url: string) => mockOpenBrowser(url),
+}));
+
+jest.mock('@/config/app-variant', () => ({
+  __esModule: true,
+  appVariant: () => ({ webOrigin: 'https://vedamatch.ru' }),
+  appCapabilities: () => ({ selfUpdate: false }),
+}));
 
 // Подменяется только клиент: `describeProfileError` остаётся настоящей —
 // тексты ошибок экрана должны совпадать с тем, что видит человек, а не с
@@ -438,5 +453,62 @@ describe('фотография', () => {
     await press(renderer, 'Убрать фото');
     expect(mockDeleteAvatar).toHaveBeenCalledTimes(1);
     expect(texts(renderer)).toContain('Фотография убрана.');
+  });
+});
+
+describe('правится на сайте', () => {
+  /**
+   * Дефект 3 первого раунда: однострочный ввод при длинном статусе
+   * показывал ХВОСТ строки, и человек не видел начала своего же статуса.
+   * Многострочное поле начинается сверху — возврат к однострочному обязан
+   * уронить этот тест.
+   */
+  it('поле «Статус» многострочное — иначе видно хвост, а не начало', async () => {
+    const renderer = await render();
+    expect(input(renderer, 'Статус').props.multiline).toBe(true);
+  });
+
+  it('имена остаются однострочными — их не переносят', async () => {
+    const renderer = await render();
+    expect(input(renderer, 'Имя').props.multiline).toBe(false);
+    expect(input(renderer, 'Духовное имя').props.multiline).toBe(false);
+  });
+
+  it('сказано про этап пути и духовную линию, а не только про город', async () => {
+    const renderer = await render();
+    const shown = texts(renderer);
+    expect(shown).toContain('Этап пути и духовная линия');
+    expect(shown).toContain('Город, языки');
+  });
+
+  it('«Пройти знакомство заново» открывает анкету на сайте', async () => {
+    const renderer = await render();
+    await press(renderer, 'Пройти знакомство заново');
+    expect(mockOpenBrowser).toHaveBeenCalledWith('https://vedamatch.ru/self-identification');
+  });
+
+  it('«Открыть профиль на сайте» ведёт в профиль портала', async () => {
+    const renderer = await render();
+    await press(renderer, 'Открыть профиль на сайте');
+    expect(mockOpenBrowser).toHaveBeenCalledWith('https://vedamatch.ru/profile');
+  });
+
+  it('вкладка внутри приложения не открылась — пробуем системный браузер', async () => {
+    mockOpenBrowser.mockRejectedValueOnce(new Error('no custom tabs'));
+    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValueOnce(true);
+    const renderer = await render();
+    await press(renderer, 'Открыть профиль на сайте');
+    expect(openUrl).toHaveBeenCalledWith('https://vedamatch.ru/profile');
+    expect(texts(renderer)).not.toContain('Откройте');
+    openUrl.mockRestore();
+  });
+
+  it('браузера нет вовсе — человеку называют адрес, а не молчат', async () => {
+    mockOpenBrowser.mockRejectedValueOnce(new Error('no browser'));
+    const openUrl = jest.spyOn(Linking, 'openURL').mockRejectedValueOnce(new Error('no handler'));
+    const renderer = await render();
+    await press(renderer, 'Открыть профиль на сайте');
+    expect(texts(renderer)).toContain('vedamatch.ru/profile');
+    openUrl.mockRestore();
   });
 });
