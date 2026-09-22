@@ -1,22 +1,36 @@
 /**
- * Куда вести человека по нажатию на пуш. Сервер кладёт в `data.url` путь сайта:
- * `/chat/<id>`, `/chat/<id>?call=<callId>`, `/chat/requests`, `/notifications`.
- * В приложении есть только экран беседы, остальное открывает вкладку чатов.
+ * Куда вести человека по нажатию на пуш. Сервер кладёт в `data.url` путь
+ * сайта: `/chat/<id>`, `/chat/<id>?call=<callId>`, `/chat/requests`,
+ * `/market/orders/<id>`, `/notices/<id>`, `/vacancies/...`, `/notifications`
+ * и так далее — весь список формулирует `notification-copy.ts` на сервере.
+ *
+ * До VED-330 разбор жил здесь и знал ровно одну форму — беседу; всё
+ * остальное возвращало `home`, то есть список чатов. Пуш про заявку на
+ * Рынке, отклик на объявление или задачу в «Работе» молча приземлялся в
+ * чатах, и человек не узнавал, что произошло. Теперь таблица разбора одна
+ * на пуш и на ленту уведомлений —
+ * `lib/notifications/notification-target.ts`: два источника дают один и тот
+ * же путь, и расходиться им не с чего.
  */
 
-export type PushTarget = { kind: 'chat'; conversationId: string } | { kind: 'home' };
+import {
+  resolveNotificationTarget,
+  type NotificationTarget,
+} from '@/lib/notifications/notification-target';
 
-const CHAT_PATH = /^\/chat\/([^/?#]+)/;
-/** Служебные разделы сайта, похожие на беседу по форме пути. */
-const NOT_CONVERSATIONS = new Set(['requests', 'with', 'people', 'appearance']);
+/** Раздел из пуша. Тип общий с лентой — см. `notification-target.ts`. */
+export type PushTarget = NotificationTarget;
 
+/**
+ * Раздел, на который показывает пуш. Тонкая обёртка: собственной таблицы
+ * разбора у пушей больше нет.
+ *
+ * Оставлена отдельным именем, потому что её зовёт не только переход, но и
+ * `setNotificationHandler` в `push-bridge.tsx`: он прячет баннер беседы,
+ * уже открытой на экране, и ему нужен именно раздел, а не маршрут.
+ */
 export function pushTarget(url: unknown): PushTarget {
-  if (typeof url !== 'string') return { kind: 'home' };
-  const match = CHAT_PATH.exec(url);
-  if (!match) return { kind: 'home' };
-  const id = decodeURIComponent(match[1]);
-  if (NOT_CONVERSATIONS.has(id)) return { kind: 'home' };
-  return { kind: 'chat', conversationId: id };
+  return resolveNotificationTarget(url);
 }
 
 /**
