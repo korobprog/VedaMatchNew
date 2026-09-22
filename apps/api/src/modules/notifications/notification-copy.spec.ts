@@ -20,6 +20,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         spaceName: 'VedaMatch',
         actorName: 'Санкаршан',
         columnName: 'В работе',
+        statusMark: 'in_progress',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
   });
@@ -36,6 +37,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         excerpt: 'Посмотрите ещё раз',
         commentCount: 1,
         columnName: 'Тестирование',
+        statusMark: 'testing',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
   });
@@ -50,6 +52,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         taskTitle: 'Починить ссылки',
         columnName: 'На доработку',
         actorName: 'Санкаршан',
+        statusMark: 'rework',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
   });
@@ -65,6 +68,7 @@ describe('buildNotification · уведомления «Работ» ведут 
         fromColumnName: 'В работе',
         toColumnName: 'Тестирование',
         actorName: 'Санкаршан',
+        statusMark: 'testing',
       }),
     ).toMatchObject({ url: '/work/planner/space-1?task=VED-42' });
   });
@@ -85,6 +89,7 @@ describe('buildNotification · склейка комментария с пере
     fromColumnName: 'В работе',
     toColumnName: 'Тестирование',
     actorName: 'Санкаршан',
+    statusMark: 'testing',
   } as const;
 
   it('перенесли молча — текст прежний, без хвоста', () => {
@@ -127,6 +132,7 @@ describe('buildNotification · склейка комментария с пере
         actorName: 'Санкаршан',
         commentExcerpt: 'Не открывается на телефоне',
         commentCount: 1,
+        statusMark: 'rework',
       }).body,
     ).toContain('Комментарий: Не открывается на телефоне');
   });
@@ -143,6 +149,7 @@ describe('buildNotification · склейка комментария с пере
         excerpt: 'Последняя мысль',
         commentCount: 2,
         columnName: 'Тестирование',
+        statusMark: 'testing',
       }),
     ).toMatchObject({
       title: 'VED-42: 2 комментария',
@@ -162,6 +169,7 @@ describe('buildNotification · склейка комментария с пере
         excerpt: 'Посмотрите ещё раз',
         commentCount: 1,
         columnName: 'Тестирование',
+        statusMark: 'testing',
       }).title,
     ).toBe('VED-42: новый комментарий');
   });
@@ -181,12 +189,26 @@ describe('commentsWord', () => {
 });
 
 /**
- * VED-272: одна и та же задача возвращается в ленту после каждой смены
- * статуса. Значок состояния избавляет от повторного открытия карточки ради
- * вопроса «а что там теперь».
+ * VED-272, VED-320: одна и та же задача возвращается в ленту после каждой смены
+ * статуса, и пометка отвечает на вопрос «а что там теперь», не открывая
+ * карточку.
+ *
+ * С VED-320 пометку считает «Работа» и присылает кодом в событии: пока её
+ * разбирали здесь по названию колонки, два списка синонимов — свой у ленты и
+ * свой у доски — отвечали по-разному, и человек видел «Тестирование» в
+ * уведомлении рядом с «На доработку» в планировщике.
  */
-describe('buildNotification · значок состояния у уведомлений «Работы»', () => {
-  it('переезд помечается колонкой, в которой карточка осталась', () => {
+describe('buildNotification · пометка состояния у уведомлений «Работы»', () => {
+  const returned = {
+    name: 'work.task.returned',
+    recipientId: 'u1',
+    spaceId: 'space-1',
+    taskKey: 'VED-42',
+    taskTitle: 'Починить ссылки',
+    actorName: 'Санкаршан',
+  } as const;
+
+  it('переезд несёт код состояния из события, а не из названия колонки', () => {
     expect(
       buildNotification({
         name: 'work.task.status-changed',
@@ -195,58 +217,69 @@ describe('buildNotification · значок состояния у уведомл
         taskKey: 'VED-42',
         taskTitle: 'Починить ссылки',
         fromColumnName: 'В работе',
-        toColumnName: 'Тестирование',
+        toColumnName: 'Тестерование',
         actorName: 'Санкаршан',
+        statusMark: 'testing',
       }),
     ).toMatchObject({ mark: 'testing' });
   });
 
-  it('возврат помечается как «На доработку»', () => {
+  it('возврат несёт то состояние, в которое вернули', () => {
+    // Из «Выполнено» возвращают не только «на доработку»: вернуть могут и в
+    // «Тестерование», и тогда пометка обязана сказать именно это.
     expect(
       buildNotification({
-        name: 'work.task.returned',
-        recipientId: 'u1',
-        spaceId: 'space-1',
-        taskKey: 'VED-42',
-        taskTitle: 'Починить ссылки',
+        ...returned,
+        columnName: 'Тестерование',
+        statusMark: 'testing',
+      }),
+    ).toMatchObject({ mark: 'testing' });
+    expect(
+      buildNotification({
+        ...returned,
         columnName: 'На доработку',
-        actorName: 'Санкаршан',
+        statusMark: 'rework',
       }),
     ).toMatchObject({ mark: 'rework' });
   });
 
-  it('комментарий помечается колонкой, в которой карточка лежит сейчас', () => {
-    expect(
-      buildNotification({
-        name: 'work.task.commented',
-        recipientId: 'u1',
-        spaceId: 'space-1',
-        taskKey: 'VED-42',
-        taskTitle: 'Починить ссылки',
-        actorName: 'Санкаршан',
-        excerpt: 'Посмотрите ещё раз',
-        commentCount: 1,
-        columnName: 'Выполнено',
-      }),
-    ).toMatchObject({ mark: 'done' });
+  it('колонку называет пометка, а не слова уведомления', () => {
+    // VED-351: «Задачу вернули в работу» стояло в заголовке при любом исходе,
+    // и рядом с пометкой «Тестерование» читалось как недоделанная работа над
+    // самой пометкой. Вписать сюда настоящую колонку — полумера: пометка
+    // показывает состояние на сейчас (VED-320), карточка уедет дальше, и
+    // заголовок разойдётся с ней снова. Поэтому имя колонки живёт в одном
+    // месте — в пометке.
+    const news = buildNotification({
+      ...returned,
+      columnName: 'Тестерование',
+      statusMark: 'testing',
+    });
+    expect(news.title).toBe('Задачу вернули');
+    expect(news.body).not.toContain('Тестерование');
+    expect(news.mark).toBe('testing');
   });
 
-  it('поручение помечается колонкой, в которой карточка лежит', () => {
-    expect(
-      buildNotification({
-        name: 'work.task.assigned',
-        recipientId: 'u1',
-        spaceId: 'space-1',
-        taskKey: 'VED-42',
-        taskTitle: 'Починить ссылки',
-        spaceName: 'VedaMatch',
-        actorName: 'Санкаршан',
-        columnName: 'В работе',
-      }),
-    ).toMatchObject({ mark: 'in_progress' });
+  it('переезд тоже не называет колонку, куда уехали, словами', () => {
+    const news = buildNotification({
+      name: 'work.task.status-changed',
+      recipientId: 'u1',
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      taskTitle: 'Починить ссылки',
+      fromColumnName: 'В работе',
+      toColumnName: 'Выполнено',
+      actorName: 'Санкаршан',
+      statusMark: 'done',
+    });
+    expect(news.title).toBe('VED-42: сменился статус');
+    expect(news.body).not.toContain('Выполнено');
+    // Откуда уехали — сказано про прошлое, и прошлым останется.
+    expect(news.body).toContain('из «В работе»');
+    expect(news.mark).toBe('done');
   });
 
-  it('незнакомая колонка оставляет уведомление без значка', () => {
+  it('незнакомая колонка оставляет уведомление без пометки', () => {
     expect(
       buildNotification({
         name: 'work.task.commented',
@@ -258,11 +291,41 @@ describe('buildNotification · значок состояния у уведомл
         excerpt: 'Посмотрите ещё раз',
         commentCount: 1,
         columnName: 'Бэклог',
+        statusMark: null,
       }),
     ).toMatchObject({ mark: null });
   });
-});
 
+  it('поручение и комментарий несут пометку так же', () => {
+    expect(
+      buildNotification({
+        name: 'work.task.assigned',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        spaceName: 'VedaMatch',
+        actorName: 'Санкаршан',
+        columnName: 'В работе',
+        statusMark: 'in_progress',
+      }),
+    ).toMatchObject({ mark: 'in_progress' });
+    expect(
+      buildNotification({
+        name: 'work.task.commented',
+        recipientId: 'u1',
+        spaceId: 'space-1',
+        taskKey: 'VED-42',
+        taskTitle: 'Починить ссылки',
+        actorName: 'Санкаршан',
+        excerpt: 'Посмотрите ещё раз',
+        commentCount: 1,
+        columnName: 'Выполнено',
+        statusMark: 'done',
+      }),
+    ).toMatchObject({ mark: 'done' });
+  });
+});
 describe('buildNotification', () => {
   it('показывает имя отправителя и начало сообщения', () => {
     expect(

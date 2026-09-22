@@ -1,42 +1,4 @@
-import { parseNotificationMark, resolveColumnMark } from './notification-mark';
-
-describe('resolveColumnMark', () => {
-  it('узнаёт четыре состояния из карточки VED-272', () => {
-    expect(resolveColumnMark('В работе')).toBe('in_progress');
-    expect(resolveColumnMark('Тестирование')).toBe('testing');
-    expect(resolveColumnMark('Выполнено')).toBe('done');
-    expect(resolveColumnMark('На доработку')).toBe('rework');
-  });
-
-  it('узнаёт колонку «Тестерование», как она названа на доске', () => {
-    // Через «е»: так колонка называется у заказчика, и без этого написания
-    // самый частый переход в тестирование оставался без значка (VED-312).
-    expect(resolveColumnMark('Тестерование')).toBe('testing');
-    expect(resolveColumnMark('  тестерование ')).toBe('testing');
-  });
-
-  it('не спотыкается о регистр, пробелы, кавычки и ё', () => {
-    expect(resolveColumnMark('  выполнено  ')).toBe('done');
-    expect(resolveColumnMark('«На доработку»')).toBe('rework');
-    expect(resolveColumnMark('НА ДОРАБОТКУ'.replace(' ', ' '))).toBe('rework');
-    expect(resolveColumnMark('Завершено')).toBe('done');
-  });
-
-  it('незнакомую колонку оставляет без значка', () => {
-    // Своя доска называет колонки по-своему: подписать «Бэклог» одним из
-    // четырёх наших слов было бы хуже, чем не подписать вовсе.
-    expect(resolveColumnMark('Бэклог')).toBeNull();
-    expect(resolveColumnMark('Идеи на потом')).toBeNull();
-    expect(resolveColumnMark('')).toBeNull();
-    expect(resolveColumnMark(null)).toBeNull();
-    expect(resolveColumnMark(undefined)).toBeNull();
-  });
-
-  it('не подписывает колонку, которая лишь содержит знакомое слово', () => {
-    // «Выполнено в прошлом квартале» — другая колонка, а не «Выполнено».
-    expect(resolveColumnMark('Выполнено в прошлом квартале')).toBeNull();
-  });
-});
+import { parseNotificationMark } from './notification-mark';
 
 describe('parseNotificationMark', () => {
   it('принимает известные коды', () => {

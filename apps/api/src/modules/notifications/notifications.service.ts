@@ -34,6 +34,7 @@ import {
   sliceInboxPage,
 } from './inbox-page';
 import { buildInboxSearchClauses, parseInboxSearch } from './inbox-search';
+import { workTaskUrl } from './notification-copy';
 import { parseNotificationMark } from './notification-mark';
 import type { PushFailure } from './push-errors';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
@@ -526,6 +527,38 @@ export class NotificationsService {
       // человека, а не выдачи.
       unreadCount: await this.countUnread(userId),
     };
+  }
+
+  /**
+   * Обновляет пометку состояния у всех уведомлений об одной задаче (VED-320).
+   *
+   * Зачем: пометка была снимком колонки на момент события, и уехавшая дальше
+   * карточка оставляла в ленте прошлый ответ — «в уведомлениях Тестирование, а
+   * при раскрытии задачи На доработку. Такого быть не должно». Теперь «Работа»
+   * на каждой смене колонки шлёт `work.task.mark-refreshed`, и пометка
+   * догоняет карточку у всех получателей сразу, включая прочитанные
+   * уведомления: человек смотрит в ленту, чтобы понять, что с задачей сейчас.
+   *
+   * Ищем по адресу, а не по задаче: своей ссылки на `WorkTask` у уведомления
+   * нет и быть не может — FK на модель чужого сервиса контракт запрещает, — а
+   * адрес карточки уведомление и так хранит, и собирает его тот же
+   * `workTaskUrl`, что и при доставке. Категория в условии — страховка от
+   * случайного совпадения адреса с уведомлением не про «Работу».
+   *
+   * Заголовок и текст не трогаем: это новость на свою дату, и переписывать
+   * «вернули в „Тестерование“» задним числом значило бы стирать историю.
+   * Меняется ровно ответ на вопрос «где карточка сейчас».
+   */
+  async refreshWorkTaskMark(
+    spaceId: string,
+    taskKey: string,
+    mark: NotificationMark | null,
+  ): Promise<number> {
+    const { count } = await this.prisma.notificationItem.updateMany({
+      where: { url: workTaskUrl(spaceId, taskKey), category: 'work' },
+      data: { mark },
+    });
+    return count;
   }
 
   /**

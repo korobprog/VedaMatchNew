@@ -4,7 +4,6 @@ import type {
   NotificationEventName,
   NotificationMark,
 } from '@vedamatch/shared';
-import { resolveColumnMark } from './notification-mark';
 
 export type { NotificationCategory };
 
@@ -490,7 +489,7 @@ export function buildNotification(
         // новости, и второе не должно затирать первое.
         tag: `work-task:${event.taskKey}`,
         category: 'work',
-        mark: resolveColumnMark(event.columnName),
+        mark: event.statusMark,
       };
     case 'work.task.commented':
       return {
@@ -504,22 +503,36 @@ export function buildNotification(
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-comment:${event.taskKey}`,
         category: 'work',
-        mark: resolveColumnMark(event.columnName),
+        mark: event.statusMark,
       };
     case 'work.task.returned':
       return {
-        title: 'Задачу вернули в работу',
+        // Колонку называет ПОМЕТКА, а не заголовок (VED-351, VED-320).
+        //
+        // Здесь стояло «Задачу вернули в работу» при любом исходе, а из
+        // «Выполнено» возвращают и в «Тестерование»: заголовок говорил «в
+        // работу», пометка рядом — «Тестерование», и человек читал это как
+        // недоделанную работу над пометкой. Вписать сюда настоящую колонку —
+        // полумера: пометка с VED-320 показывает состояние на сейчас, карточка
+        // уедет дальше, и заголовок разойдётся с ней снова. Поэтому правило на
+        // все уведомления «Работы» одно: имя колонки живёт в пометке, в одном
+        // месте, а слова говорят о событии — оно своей даты и не меняется.
+        title: 'Задачу вернули',
         // Без рода: у `User.gender` его может не быть, а «перенёс» на женском
         // имени читается как чужая ошибка — правило всего файла.
-        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}» снова в разделе «${event.columnName}»${workCommentTail(event.commentExcerpt, event.commentCount)}`,
+        body: `${event.actorName}: ${event.taskKey} «${toExcerpt(event.taskTitle)}»${workCommentTail(event.commentExcerpt, event.commentCount)}`,
         url: workTaskUrl(event.spaceId, event.taskKey),
         tag: `work-returned:${event.taskKey}`,
         category: 'work',
-        mark: resolveColumnMark(event.columnName),
+        mark: event.statusMark,
       };
     case 'work.task.status-changed':
       return {
-        title: `${event.taskKey}: «${event.toColumnName}»`,
+        // Куда переехала — в пометке, по той же причине, что у возврата выше:
+        // заголовок с названием колонки устаревал бы на следующем переносе.
+        // Откуда уехала — в тексте, и это не устаревает: «из „В работе“»
+        // сказано про прошлое и прошлым останется.
+        title: `${event.taskKey}: сменился статус`,
         body: `${event.actorName}: «${toExcerpt(event.taskTitle)}» — из «${event.fromColumnName}»${workCommentTail(event.commentExcerpt, event.commentCount)}`,
         url: workTaskUrl(event.spaceId, event.taskKey),
         // Свой тег, общий для всех переездов задачи: вторая смена колонки
@@ -527,8 +540,9 @@ export function buildNotification(
         // Поручение (`work-task:`) она при этом не трогает: там новость иная.
         tag: `work-status:${event.taskKey}`,
         category: 'work',
-        // Колонка, в которой карточка осталась после окна дозревания.
-        mark: resolveColumnMark(event.toColumnName),
+        // Состояние карточки, посчитанное «Работой» по колонке, в которой она
+        // осталась после окна дозревания.
+        mark: event.statusMark,
       };
     case 'work.invite.received':
       return {

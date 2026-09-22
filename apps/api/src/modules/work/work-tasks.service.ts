@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import {
   WORK_CHECKLIST_TEXT_MAX,
+  WORK_TASK_MARK_REFRESHED_EVENT,
   WORK_COMMENT_MAX,
   WORK_TASK_DESCRIPTION_MAX,
   WORK_TASK_TITLE_MAX,
@@ -22,6 +23,7 @@ import {
   type WorkAgendaItemDto,
   type WorkAttachmentDto,
   type WorkTaskDto,
+  type WorkTaskMarkRefreshedEvent,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -42,6 +44,7 @@ import {
   resolveMovePosition,
 } from './work-position';
 import { assertWorkAccess } from './work-roles';
+import { resolveTaskStatusMark } from './work-task-status';
 import { WorkSpacesService } from './work-spaces.service';
 import {
   validateWorkUpload,
@@ -141,6 +144,8 @@ export class WorkTasksService {
       include: {
         ...taskCardInclude,
         space: { select: { prefix: true } },
+        // Название колонки — для ярлыка состояния на карточке (VED-311).
+        column: { select: { name: true } },
         createdBy: { select: workUserSelect },
         checklist: { orderBy: { position: 'asc' } },
         comments: {
@@ -166,6 +171,7 @@ export class WorkTasksService {
         checklist: task.checklist.map((item) => ({ done: item.done })),
       },
       task.space.prefix,
+      task.column.name,
     );
 
     return {
@@ -378,6 +384,7 @@ export class WorkTasksService {
           spaceName: notify.task.space.name,
           actorName: notify.actorName,
           columnName: notify.task.column.name,
+          statusMark: resolveTaskStatusMark(notify.task.column.name),
         } satisfies WorkTaskAssignedEvent);
       }
     }
@@ -461,10 +468,31 @@ export class WorkTasksService {
     if (wasDone && wasDone.columnId !== column.id) {
       const task = await this.prisma.workTask.findUnique({
         where: { id: taskId },
-        select: { id: true, assigneeId: true, createdById: true },
+        select: {
+          id: true,
+          assigneeId: true,
+          createdById: true,
+          number: true,
+          space: { select: { prefix: true } },
+        },
       });
       if (task) {
         await this.notices.enqueueMove(task, userId, wasDone.columnId);
+        // Уже лежащие уведомления об этой карточке получают её нынешнее
+        // состояние (VED-320). Сразу, а не через окно дозревания: окно решает,
+        // слать ли НОВОСТЬ, а здесь поправка к старым — «где карточка сейчас».
+        // Отсюда же следует, что поправка уходит и при отменённом переносе:
+        // карточка вернулась, и пометка обязана вернуться вместе с ней.
+        //
+        // Всем получателям сразу, включая того, кто двигал: его собственное
+        // уведомление о прошлом переезде тоже не должно врать. Новости он о
+        // своём действии по-прежнему не получает — это решает `enqueueMove`.
+        this.events.emit(WORK_TASK_MARK_REFRESHED_EVENT, {
+          name: WORK_TASK_MARK_REFRESHED_EVENT,
+          spaceId: context.spaceId,
+          taskKey: workTaskKey(task.space.prefix, task.number),
+          statusMark: resolveTaskStatusMark(column.name),
+        } satisfies WorkTaskMarkRefreshedEvent);
       }
     }
 
