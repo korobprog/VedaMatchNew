@@ -4,6 +4,7 @@ import type { ChatCallKind, ChatCallSignal, ChatIceServerDto } from '@vedamatch/
 import { describeIceServerForLog, normalizeIceServers } from './ice-server-normalize';
 import { parseCandidate } from './ice-probe';
 import { relayedFromStats, type RtcStatsReport } from './relay-stats';
+import { withVideoEncoding, type SenderParameters, type VideoEncoding } from './video-encoding';
 import { decideSdpApply, type SignalingState } from './webrtc-signal-guard';
 
 /**
@@ -345,6 +346,12 @@ export class CallSession {
         await this.pc.addIceCandidate(candidate).catch(() => undefined);
       return;
     }
+    // Состояние камеры собеседника (VED-291) к переговорам отношения не
+    // имеет — его разбирает `call-provider.tsx` ДО вызова сессии. Ветка
+    // явная, а не «провалится в кандидата и молча выйдет по
+    // `candidate === undefined`»: так намерение видно, и следующий вид
+    // сигнала не начнёт случайно работать как «конец сбора кандидатов».
+    if (signal.kind === 'media') return;
     if (!signal.candidate) return; // конец сбора у собеседника
     if (!this.remoteSet || this.answerInFlight) {
       this.pending.push(signal.candidate);
@@ -359,6 +366,38 @@ export class CallSession {
 
   setCameraOff(off: boolean): void {
     for (const track of this.local?.getVideoTracks() ?? []) track.enabled = !off;
+  }
+
+  /** Есть ли что показывать собеседнику — отличает видеозвонок от аудио на
+   *  уровне дорожек, не полагаясь на `call.kind` (VED-291). */
+  hasVideoTrack(): boolean {
+    return (this.local?.getVideoTracks().length ?? 0) > 0;
+  }
+
+  /**
+   * Потолок качества исходящего видео под текущую сеть (VED-291,
+   * `video-encoding.ts`). Без пересогласования SDP — `setParameters` меняет
+   * только настройки кодировщика на нашей стороне, собеседнику ничего не
+   * приходит, картинка не моргает.
+   *
+   * Ошибки глотаются намеренно: потолок — оптимизация, а не условие
+   * разговора. `setParameters` штатно отвергает параметры, устаревшие
+   * относительно последнего `getParameters` (гонка с реегоциацией/ICE
+   * restart) — следующий вызов (смена сети, `connected` после перезапуска)
+   * возьмёт свежие и поставит потолок заново.
+   */
+  async applyVideoEncoding(target: VideoEncoding): Promise<void> {
+    if (this.closed) return;
+    try {
+      const sender = this.pc.getSenders().find((candidate) => candidate.track?.kind === 'video');
+      if (!sender) return;
+      const params = sender.getParameters() as unknown as SenderParameters;
+      const next = withVideoEncoding(params, target);
+      if (!next) return;
+      await sender.setParameters(next as unknown as Parameters<typeof sender.setParameters>[0]);
+    } catch {
+      // См. шапку метода — следующий вызов повторит.
+    }
   }
 
   /** Web: `getUserMedia({facingMode})` + `replaceTrack` идут параллельно —
