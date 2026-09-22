@@ -35,7 +35,7 @@ import {
   getUnionRecommendations,
 } from "@/lib/union-api";
 import { buildUnionQuickAccessData } from "@/lib/union-quick-access";
-import { needsWelcome } from "@/lib/welcome";
+import { needsWelcome, welcomeHref } from "@/lib/welcome";
 import {
   advisorLimitFor,
   showsInstallPrompts,
@@ -176,7 +176,9 @@ export default async function Home({
   // Новичок идёт в мастер: там тот же вопрос об этапе, но после имени
   // и города и с прогрессом. Страница анкеты остаётся для повторного
   // прохождения, её не редирект открывает, а ссылка из профиля.
-  if (needsWelcome(user)) redirect("/welcome");
+  // Путь возврата едет в мастер: человек, пришедший по ссылке (например на
+  // конференцию), обязан оказаться там, куда шёл, а не на главной.
+  if (needsWelcome(user)) redirect(welcomeHref(returnTo));
 
   // Карточка Музыки. Запись догружается вторым запросом: состояние плеера
   // несёт только идентификатор, а карточке нужны название, обложка и

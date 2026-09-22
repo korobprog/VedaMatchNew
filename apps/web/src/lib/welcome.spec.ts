@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsWelcome, welcomeSteps } from "./welcome";
+import { needsWelcome, welcomeHref, welcomeSteps } from "./welcome";
 
 /**
  * Условие редиректа в мастер проверяют пять страниц. Тест сторожит именно
@@ -45,4 +45,40 @@ describe("welcomeSteps", () => {
       "Знакомство",
     ]);
   });
+});
+
+/**
+ * Путь возврата обязан пережить мастер новичка.
+ *
+ * До VED-360 его не было вовсе: `redirect("/welcome")` терял `returnTo`, а
+ * мастер заканчивался жёстким `push("/")`. Для ссылки на конференцию это
+ * означало, что «зарегался и сразу в комнате» превращалось в «зарегался и
+ * ищи сам» — ровно на том человеке, ради которого ссылку и присылали.
+ */
+describe("welcomeHref", () => {
+  it("без пути возврата — просто мастер", () => {
+    expect(welcomeHref(undefined)).toBe("/welcome");
+    expect(welcomeHref(null)).toBe("/welcome");
+    expect(welcomeHref("/")).toBe("/welcome");
+  });
+
+  it("ссылка на конференцию доезжает до мастера", () => {
+    const token = "a".repeat(32);
+    expect(welcomeHref(`/j/${token}`)).toBe(
+      `/welcome?returnTo=${encodeURIComponent(`/j/${token}`)}`,
+    );
+  });
+
+  it("путь с запросом не рассыпается", () => {
+    expect(welcomeHref("/chat/c1?tab=call")).toBe(
+      `/welcome?returnTo=${encodeURIComponent("/chat/c1?tab=call")}`,
+    );
+  });
+
+  it.each(["//evil.example/x", "https://evil.example", "javascript:alert(1)"])(
+    "чужой адрес (%s) в мастер не протащить",
+    (hostile) => {
+      expect(welcomeHref(hostile)).toBe("/welcome");
+    },
+  );
 });

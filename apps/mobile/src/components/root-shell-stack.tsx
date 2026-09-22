@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ConferenceReturn } from '@/components/chat/conference-return';
 import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
 import { PushBridge } from '@/lib/push/push-bridge';
@@ -38,8 +39,17 @@ function RootStackInner() {
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <PushBridge />
+      {/* Возврат в конференцию после входа (VED-360): здесь по той же
+          причине, что и PushBridge, — намерение надо подхватить, как только
+          сессия стала «вошёл», на каком бы экране человек ни оказался. */}
+      <ConferenceReturn />
       <TelegramShell />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg0 } }}>
+        {/* Ссылка на конференцию (VED-360) — ВНЕ охраны: её присылают
+            человеку, у которого аккаунта может ещё не быть, и он обязан
+            увидеть, кто зовёт, до входа. Единственный экран приложения,
+            открытый и гостю, и вошедшему. */}
+        <Stack.Screen name="j/[token]" />
         <Stack.Protected guard={status === 'guest'}>
           <Stack.Screen name="login" />
           <Stack.Screen name="auth" />

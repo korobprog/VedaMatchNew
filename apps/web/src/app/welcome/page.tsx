@@ -4,20 +4,33 @@ import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { WelcomeWizard } from "@/components/welcome-wizard";
-import { needsWelcome, welcomeSteps } from "@/lib/welcome";
+import { needsWelcome, welcomeHref, welcomeSteps } from "@/lib/welcome";
+import { getSafeReturnTo } from "@/lib/return-to";
 import { plural } from "@/lib/plural";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
 export const metadata: Metadata = { title: "Добро пожаловать" };
 
-export default async function WelcomePage() {
+export default async function WelcomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string | string[] }>;
+}) {
+  const { returnTo: raw } = await searchParams;
+  // Куда человек шёл до того, как портал остановил его мастером. Ссылка на
+  // конференцию (VED-360) — главный такой случай: обещание «зарегался и
+  // сразу в комнате» держится ровно на том, что путь доживает до конца
+  // мастера.
+  const returnTo = getSafeReturnTo(
+    Array.isArray(raw) ? raw[0] : raw,
+  );
   const user = await getProfile();
-  if (!user) redirectToLogin("/welcome");
+  if (!user) redirectToLogin(welcomeHref(returnTo));
   // Мастер — экран для новичка и для старого аккаунта, у которого не хватает
   // обязательного. Заполнившему он больше не нужен: имя и город правятся в
   // профиле, анкета переигрывается на своей странице.
-  if (!needsWelcome(user)) redirect("/");
+  if (!needsWelcome(user)) redirect(returnTo);
   const steps = welcomeSteps(user);
 
   return (
@@ -34,7 +47,7 @@ export default async function WelcomePage() {
           {plural(steps.length, "короткий шаг", "коротких шага", "коротких шагов")}{" "}
           — и портал покажет то, что подходит именно вам.
         </p>
-        <WelcomeWizard user={user} />
+        <WelcomeWizard user={user} returnTo={returnTo} />
       </main>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSafeReturnTo } from "@/lib/return-to";
 import {
   detectSpiritualStage,
   findNameError,
@@ -43,7 +44,18 @@ const GENDER_OPTIONS: Array<[string, string]> = [
  * работает подбор в Знакомствах, а этап пути определяется по анкете, и без
  * неё портал не знает, что показывать.
  */
-export function WelcomeWizard({ user }: { user: UserProfile }) {
+export function WelcomeWizard({
+  user,
+  /**
+   * Куда вести после последнего шага. По умолчанию главная — но пришедший
+   * по ссылке обязан вернуться к ней, иначе регистрация «съедает» то, ради
+   * чего человек вообще заводил аккаунт (VED-360).
+   */
+  returnTo = "/",
+}: {
+  user: UserProfile;
+  returnTo?: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [steps] = useState(() => welcomeSteps(user));
@@ -119,7 +131,7 @@ export function WelcomeWizard({ user }: { user: UserProfile }) {
         });
         if (!res.ok) throw new Error(await readErrorMessage(res));
       }
-      router.push("/");
+      router.push(getSafeReturnTo(returnTo));
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось сохранить ответы");

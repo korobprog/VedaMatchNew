@@ -53,6 +53,30 @@ describe("proxy", () => {
     }
   });
 
+  // Ссылка на конференцию — главный путь VED-360: гость обязан увидеть
+  // карточку приглашения, а не лендинг, иначе «зарегался и сразу в комнате»
+  // начинается с блуждания.
+  it("lets guests open a conference link and sends them back to it after login", () => {
+    const token = "a".repeat(32);
+    const open = proxy(new NextRequest(`https://vedamatch.ru/j/${token}`));
+    expect(open.headers.get("location")).toBeNull();
+
+    // А вот саму комнату гостю не показываем: за ней стоит вход, и адрес
+    // возврата обязан вести именно в неё.
+    const room = proxy(new NextRequest("https://vedamatch.ru/chat/conv-1"));
+    expect(room.headers.get("location")).toBe(
+      "https://vedamatch.ru/?returnTo=%2Fchat%2Fconv-1",
+    );
+  });
+
+  it("opens only the conference link prefix, not everything starting with j", () => {
+    for (const path of ["/jobs", "/j", "/journal"]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location"), path).toContain("returnTo=");
+    }
+  });
+
   it("keeps the rest of travel private: only the QR page is public", () => {
     for (const path of ["/travel", "/travel/manage", "/travel/sX"]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));

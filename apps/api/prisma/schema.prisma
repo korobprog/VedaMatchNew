@@ -395,6 +395,7 @@ model User {
   chatGroupCallsStarted              ChatGroupCall[]               @relation("ChatGroupCallsStarted")
   chatGroupCallsHosted               ChatGroupCall[]               @relation("ChatGroupCallsHosted")
   chatGroupCallParticipations        ChatGroupCallParticipant[]    @relation("ChatGroupCallParticipations")
+  chatConferencesOpened              ChatConferenceLink[]          @relation("ChatConferencesOpened")
   chatMessagesSent                   ChatMessage[]                 @relation("ChatMessagesSent")
   chatReactionsMade                  ChatMessageReaction[]         @relation("ChatReactionsMade")
   chatReportsMade                    ChatReport[]                  @relation("ChatReportsMade")
@@ -2100,14 +2101,14 @@ model LibrarySectionRequest {
 /// Подписка браузера на веб-пуши. У одного пользователя их несколько:
 /// телефон, ноутбук, планшет. Ключ подписки — endpoint, его выдаёт браузер.
 model PushSubscription {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userAgent String?
-  createdAt DateTime @default(now())
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
   /// Когда служба доставки браузера последний раз ПРИНЯЛА пуш (VED-314).
   /// «Приняла» — не «человек увидел»: браузер, который не открывали месяц,
   /// принимает пуш так же, как живой. Но пустая отметка при накопленных
@@ -2133,22 +2134,22 @@ model PushSubscription {
 /// доставки (FCM, позже RuStore) и сам меняет при переустановке, поэтому
 /// ключ — токен, а не пара «пользователь и устройство».
 model NotificationDevice {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Служба доставки: `fcm` или `rustore`.
-  provider    String
+  provider      String
   /// `android` или `ios`.
-  platform    String
-  token       String   @unique
+  platform      String
+  token         String    @unique
   /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
-  appVariant  String?
+  appVariant    String?
   /// Приложение умеет нативный экран звонка по data-пушу FCM (VED-220):
   /// такому устройству входящий звонок шлётся data-only, а не обычным
   /// пушем с уведомлением — иначе звонок звонил бы дважды.
-  nativeCalls Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  nativeCalls   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   /// Те же отметки живости, что у веб-подписки (VED-314): служба доставки
   /// приняла пуш, отказала, сколько отказов подряд, когда приложение
   /// подтвердило токен и когда правило сочло устройство мёртвым.
@@ -4173,14 +4174,17 @@ model ChatConversation {
   /// Официальный канал VedaMatch: один на портал, в нём подписаны все участники,
   /// пишут администраторы портала. Единственность держит частичный уникальный
   /// индекс из миграции chat_official_channel (см. docs/prisma-raw-sql-objects.md).
-  official  Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  calls      ChatCall[]
-  groupCalls ChatGroupCall[]
-  members   ChatMember[]
-  messages  ChatMessage[]
-  reports   ChatReport[]
+  official       Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  calls          ChatCall[]
+  groupCalls     ChatGroupCall[]
+  /// Ссылка быстрой конференции, если беседу завели ею. Одна на беседу:
+  /// комната и её дверь — одно и то же.
+  conferenceLink ChatConferenceLink?
+  members        ChatMember[]
+  messages       ChatMessage[]
+  reports        ChatReport[]
 
   @@index([contextService, contextId])
   @@index([kind, lastMessageAt])
@@ -4730,16 +4734,16 @@ enum MusicReportStatus {
 
 /// Исполнитель: киртанья, группа или храм.
 model MusicArtist {
-  id         String          @id @default(uuid())
-  slug       String          @unique
-  name       String
-  kind       MusicArtistKind @default(unknown)
-  bio        String?
+  id             String          @id @default(uuid())
+  slug           String          @unique
+  name           String
+  kind           MusicArtistKind @default(unknown)
+  bio            String?
   /// Ключ обложки в S3. Обложки, в отличие от аудио, публичные: их кеширует
   /// CDN и они нужны в SSR-разметке.
-  coverKey   String?
+  coverKey       String?
   /// Отметка редакции «это тот самый человек», а не значок портала.
-  isVerified Boolean         @default(false)
+  isVerified     Boolean         @default(false)
   /// Корневая категория витрины («Традиционное»/«Современное», VED-165-2).
   /// Раньше её ставили записи за записью (`MusicTrackCategory`), но
   /// тестировщик попросил разметку по исполнителю целиком — так проще для
@@ -4747,16 +4751,16 @@ model MusicArtist {
   /// вкладку, без повторной правки. `kind` категории обязан быть `root`,
   /// это проверяет сервис, а не база.
   rootCategoryId String?
-  rootCategory   MusicCategory?     @relation("MusicArtistRootCategory", fields: [rootCategoryId], references: [id], onDelete: SetNull)
+  rootCategory   MusicCategory?  @relation("MusicArtistRootCategory", fields: [rootCategoryId], references: [id], onDelete: SetNull)
   /// Раздел «Аудиокниги» (VED-237): все записи этого исполнителя — главы
   /// книг, а не киртаны. Отметка стоит у исполнителя, а не у записи, по той
   /// же причине, что и корневая категория выше: редакция размечает чтеца
   /// один раз, и каждая новая его глава попадает в раздел сама. В общем
   /// каталоге такие записи не показываются — «отображение всех аудиокниг
   /// находится внутри кнопки», как и просили в карточке.
-  isAudiobook    Boolean            @default(false)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  isAudiobook    Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   albums        MusicAlbum[]
   tracks        MusicTrack[]
@@ -5596,23 +5600,23 @@ model WorkAttachment {
 /// История: «кто перенёс в Готово и когда». Первый вопрос второй недели, и
 /// задним числом он не восстанавливается — поэтому пишется с первого дня.
 model WorkActivity {
-  id        String           @id @default(uuid())
-  spaceId   String
-  space     WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  taskId    String?
-  task      WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  actorId   String?
-  actor     User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  id           String           @id @default(uuid())
+  spaceId      String
+  space        WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  taskId       String?
+  task         WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId      String?
+  actor        User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
   /// Человек, чьим ключом действовал агент. Заполнено только у записей
   /// ИИ-агента: аккаунт у него один на всех, и без этого поля при двух
   /// подключённых помощниках нельзя ответить, чья сессия это сделала.
   onBehalfOfId String?
-  onBehalfOf   User?          @relation("WorkActivityOnBehalf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
-  kind      WorkActivityKind
+  onBehalfOf   User?            @relation("WorkActivityOnBehalf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
+  kind         WorkActivityKind
   /// Подробности события: старая и новая колонка, имя назначенного, срок.
   /// Формулировку собирает читатель, здесь — факты.
-  payload   Json             @default("{}")
-  createdAt DateTime         @default(now())
+  payload      Json             @default("{}")
+  createdAt    DateTime         @default(now())
 
   @@index([taskId, createdAt])
   @@index([spaceId, createdAt])
@@ -6702,7 +6706,6 @@ model BookmarksEntry {
   @@index([userId, createdAt(sort: Desc)])
 }
 
-
 // ===== Blog service («Блог-лента», VED-238, VED-116) =====
 
 /// Пост блог-ленты портала: крупная картинка, короткий заголовок и текст.
@@ -6771,7 +6774,7 @@ model BlogPostImage {
 
 /// Единственная строка настроек сервиса (id всегда "global").
 model BlogSettings {
-  id String @id @default("global")
+  id                String   @id @default("global")
   /// Срок нахождения поста в ленте по умолчанию, в часах. 0 — без срока.
   feedLifetimeHours Int      @default(72)
   updatedAt         DateTime @updatedAt
@@ -6852,4 +6855,39 @@ model ChatGroupCallParticipant {
   @@unique([callId, userId])
   @@index([callId, state])
   @@index([state, lastSeenAt])
+}
+
+/// Ссылка быстрой конференции (VED-360): дверь в комнату, которой служит
+/// обычная групповая беседа. Отдельной «комнаты конференции» в базе нет
+/// намеренно — переписка, состав, права и история уже есть у беседы, а
+/// вторая сущность означала бы второй набор тех же правил (обоснование
+/// целиком — в докстринге `chat-conference.service.ts`).
+///
+/// Токен лежит открытым, а не хешем, в отличие от приглашения в «Работу».
+/// Причина: хозяин обязан мочь скопировать ссылку ещё раз посреди
+/// конференции — «создайте новую» здесь означало бы «заведите вторую
+/// комнату и позовите людей заново». Компенсируется коротким сроком
+/// (полсуток), отзывом и тем, что прочитать строку может только участник
+/// этой же беседы: тот, кто и так видит в ней всё.
+model ChatConferenceLink {
+  id             String           @id @default(uuid())
+  conversationId String           @unique
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// 24 случайных байта в base64url — 32 символа. Уникальность на уровне
+  /// базы: два одинаковых токена означали бы вход не в свою комнату.
+  token String @unique
+
+  createdById String
+  createdBy   User   @relation("ChatConferencesOpened", fields: [createdById], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  /// Хозяин закрыл вход по ссылке. Тех, кто уже внутри, это не выставляет.
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([createdById])
 }
