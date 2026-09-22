@@ -78,6 +78,14 @@ function RootStackInner() {
               сайте. Новых ручек на сервере под это не заводилось. */}
           <Stack.Screen name="chat/new" />
           <Stack.Screen name="chat/members/[id]" />
+          {/* Панель конференции (VED-360): срок ссылки, отправка, «закрыть
+              вход» и «выдать новую». Полулистом, а не полосой в комнате:
+              нужна редко, а «закрыть вход» без второй кнопки необратимо —
+              пусть у решения будет своя страница и пауза перед нажатием. */}
+          <Stack.Screen
+            name="conference/[id]"
+            options={{ presentation: 'formSheet', sheetGrabberVisible: true }}
+          />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />

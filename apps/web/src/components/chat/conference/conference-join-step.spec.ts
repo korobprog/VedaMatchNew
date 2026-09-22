@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChatConferenceInviteDto } from "@vedamatch/shared";
 import {
+  conferenceAppLink,
   conferenceCallLine,
   conferenceExpiryLine,
   conferenceJoinStep,
@@ -186,5 +187,25 @@ describe("подписи на карточке", () => {
 
   it("мусор вместо даты не ломает карточку", () => {
     expect(conferenceExpiryLine("не дата")).toBe("");
+  });
+});
+
+/**
+ * Переход в приложение с карточки приглашения. Проверенных app-links у
+ * домена нет, поэтому https-ссылка на телефоне открывается браузером, а в
+ * приложение ведёт собственная схема — и обе обязаны приводить к одному и
+ * тому же экрану по одному и тому же токену.
+ */
+describe("conferenceAppLink", () => {
+  const token = "a".repeat(32);
+
+  it("та же комната, но по схеме приложения", () => {
+    expect(conferenceAppLink(token)).toBe(`vedamatch://j/${token}`);
+  });
+
+  it("хвост совпадает с адресом страницы на сайте", () => {
+    expect(conferenceAppLink(token).endsWith(conferenceLinkPath(token))).toBe(
+      true,
+    );
   });
 });

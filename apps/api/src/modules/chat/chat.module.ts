@@ -7,6 +7,7 @@ import { ChatCallsService } from './calls/chat-calls.service';
 import { ChatGroupCallsController } from './calls/group/chat-group-calls.controller';
 import { ChatGroupCallsService } from './calls/group/chat-group-calls.service';
 import { ChatConferenceController } from './conference/chat-conference.controller';
+import { ChatConferenceRetentionService } from './conference/chat-conference-retention.service';
 import { ChatConferenceService } from './conference/chat-conference.service';
 import { ChatColorTemplatesService } from './chat-color-templates.service';
 import { ChatConversationThemeService } from './chat-conversation-theme.service';
@@ -63,6 +64,7 @@ import { PeopleService } from './people/people.service';
     ChatCallsService,
     ChatGroupCallsService,
     ChatConferenceService,
+    ChatConferenceRetentionService,
     ChatMessagesService,
     ChatReportsService,
     ChatEventsService,
