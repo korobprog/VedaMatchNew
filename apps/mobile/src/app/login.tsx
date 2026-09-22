@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/auth/session';
 import type { LoginProvider } from '@/lib/auth/login-flow';
+import { WebPortalButton } from '@/components/web-portal-button';
 import { buildStamp, buildStampLabel } from '@/config/build-stamp';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -45,88 +46,93 @@ export default function LoginScreen() {
   const buttonBase = [styles.button, { borderColor: colors.glassBorder, backgroundColor: colors.glass }];
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bg0, paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.header}>
-        <Text style={[styles.brand, { color: colors.magenta }]}>VedaMatch</Text>
-        <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
-          Войти в свой аккаунт
-        </Text>
-        <Text style={[styles.hint, { color: colors.text1 }]}>
-          {Platform.OS === 'web'
-            ? 'Тот же аккаунт, что и на сайте VedaMatch. Вошли там — войдёте и здесь.'
-            : 'Тот же аккаунт, что и на сайте. Откроется браузер, после входа вы вернётесь сюда.'}
-        </Text>
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy !== null}
-          onPress={() => run('google', () => signIn('google'))}
-          android_ripple={ripple(colors.glassBorder)}
-          style={({ pressed }) => [...buttonBase, pressedStyle(pressed)]}
-        >
-          {busy === 'google' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Google</Text>}
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy !== null}
-          onPress={() => run('yandex', () => signIn('yandex'))}
-          android_ripple={ripple(colors.glassBorder)}
-          style={({ pressed }) => [...buttonBase, pressedStyle(pressed)]}
-        >
-          {busy === 'yandex' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Яндекс</Text>}
-        </Pressable>
-        {stamp ? (
-        <Text style={[styles.stamp, { color: colors.text2 }]} accessibilityRole="text">
-          {stamp}
-        </Text>
-      ) : null}
-
-      {error ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: colors.magenta }]}>
-            {error}
+    <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
+      {/* Выход в полную веб-версию портала: у корня нет своих отступов,
+          поэтому угол считается от края экрана (`web-portal-button.tsx`). */}
+      <WebPortalButton />
+      <View style={[styles.content, { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 24 }]}>
+        <View style={styles.header}>
+          <Text style={[styles.brand, { color: colors.magenta }]}>VedaMatch</Text>
+          <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
+            Войти в свой аккаунт
           </Text>
-        ) : null}
-      </View>
+          <Text style={[styles.hint, { color: colors.text1 }]}>
+            {Platform.OS === 'web'
+              ? 'Тот же аккаунт, что и на сайте VedaMatch. Вошли там — войдёте и здесь.'
+              : 'Тот же аккаунт, что и на сайте. Откроется браузер, после входа вы вернётесь сюда.'}
+          </Text>
+        </View>
 
-      {__DEV__ ? (
-        <View style={[styles.dev, { borderColor: colors.glassBorder }]}>
-          <Text style={[styles.devTitle, { color: colors.text2 }]}>Отладочный вход по паролю</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="email"
-            placeholderTextColor={colors.text2}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            style={[styles.input, { color: colors.text0, borderColor: colors.glassBorder }]}
-          />
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="пароль"
-            placeholderTextColor={colors.text2}
-            secureTextEntry
-            style={[styles.input, { color: colors.text0, borderColor: colors.glassBorder }]}
-          />
+        <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
             disabled={busy !== null}
-            onPress={() => run('dev', () => signInDev(email.trim(), password))}
+            onPress={() => run('google', () => signIn('google'))}
             android_ripple={ripple(colors.glassBorder)}
-            style={({ pressed }) => [styles.button, { backgroundColor: colors.magenta, borderColor: colors.magenta }, pressedStyle(pressed)]}
+            style={({ pressed }) => [...buttonBase, pressedStyle(pressed)]}
           >
-            {busy === 'dev' ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.buttonText, { color: colors.onAccent }]}>Войти</Text>}
+            {busy === 'google' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Google</Text>}
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy !== null}
+            onPress={() => run('yandex', () => signIn('yandex'))}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [...buttonBase, pressedStyle(pressed)]}
+          >
+            {busy === 'yandex' ? <ActivityIndicator color={colors.text0} /> : <Text style={[styles.buttonText, { color: colors.text0 }]}>Войти через Яндекс</Text>}
+          </Pressable>
+          {stamp ? (
+            <Text style={[styles.stamp, { color: colors.text2 }]} accessibilityRole="text">
+              {stamp}
+            </Text>
+          ) : null}
+          {error ? (
+            <Text accessibilityRole="alert" style={[styles.error, { color: colors.magenta }]}>
+              {error}
+            </Text>
+          ) : null}
         </View>
-      ) : null}
+
+        {__DEV__ ? (
+          <View style={[styles.dev, { borderColor: colors.glassBorder }]}>
+            <Text style={[styles.devTitle, { color: colors.text2 }]}>Отладочный вход по паролю</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="email"
+              placeholderTextColor={colors.text2}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={[styles.input, { color: colors.text0, borderColor: colors.glassBorder }]}
+            />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="пароль"
+              placeholderTextColor={colors.text2}
+              secureTextEntry
+              style={[styles.input, { color: colors.text0, borderColor: colors.glassBorder }]}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy !== null}
+              onPress={() => run('dev', () => signInDev(email.trim(), password))}
+              android_ripple={ripple(colors.glassBorder)}
+              style={({ pressed }) => [styles.button, { backgroundColor: colors.magenta, borderColor: colors.magenta }, pressedStyle(pressed)]}
+            >
+              {busy === 'dev' ? <ActivityIndicator color={colors.onAccent} /> : <Text style={[styles.buttonText, { color: colors.onAccent }]}>Войти</Text>}
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 24, gap: 32 },
+  root: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 24, gap: 32 },
   header: { gap: 10 },
   brand: { fontFamily: fonts.displayBold, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' },
   title: { fontFamily: fonts.displayBold, fontSize: 26, lineHeight: 32 },

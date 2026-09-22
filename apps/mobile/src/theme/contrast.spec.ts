@@ -51,6 +51,10 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   // только 3.85:1 — поэтому ошибка ПЛЕЕРА красится в `text0`, см.
   // `voice-message-player.tsx`, а не magenta).
   { name: 'таймер и ошибка записи голосового на стекле', text: 'magenta', surface: 'glass' },
+  // Кнопка «Открыть сайт» в углу экранов входа (`web-portal-button.tsx`):
+  // действие вторичное, поэтому подложка — стекло, а не заливка акцентом.
+  // Текст 14px — порог обычный, 4.5:1, поверх `bg0` экрана входа.
+  { name: 'кнопка «Открыть сайт» на экранах входа', text: 'text0', surface: 'glass' },
 ];
 
 describe.each([
