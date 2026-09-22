@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationReelDto } from "@vedamatch/shared";
 import { ReelWizard } from "./reel-wizard";
 import { POLL_INTERVAL_MS, POLL_SILENT_FAILURE_LIMIT } from "./reel-wizard-copy";
+import { fieldLabelClass } from "./field-label";
+import { tapButtonClass, tapFieldClass } from "./tap-target";
 
 const quota = { enabled: true, unlimited: false, limit: 1, used: 0, remaining: 1 };
 
@@ -184,6 +186,45 @@ describe("ReelWizard", () => {
     // и решает, ждать ему или уходить.
     expect(await screen.findByText(/мы пришлём уведомление/)).toBeInTheDocument();
     expect(screen.getByText("Сегодня: 1 из 1")).toBeInTheDocument();
+  });
+
+  it("подписи полей шага «Текст» выделены общим классом (VED-203)", async () => {
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(<ReelWizard prefill={{}} donation={null} />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    for (const text of [
+      "Текст цитаты",
+      "Ваша мысль под цитатой (необязательно)",
+      "Автор (необязательно)",
+      "Источник (необязательно)",
+    ])
+      // Тот же класс, что и у открыток: две половины одного мастера не
+      // должны выглядеть по-разному.
+      expect(screen.getByText(text).className).toContain(fieldLabelClass());
+  });
+
+  it("поля и кнопки шага «Текст» дотягивают до тап-цели", async () => {
+    routeFetch({ "/motivation/reels/quota": () => quota });
+    render(<ReelWizard prefill={{}} donation={null} />);
+
+    await screen.findByText("Сегодня: 0 из 1");
+    // jsdom не считает раскладку, поэтому проверяем не высоту, а класс,
+    // который её задаёт: замер живой страницы лежит в tap-target.ts.
+    // По роли, а не по подписи: в текст `<label>` входит и счётчик символов,
+    // и подсказка под полем.
+    for (const name of [
+      /^Текст цитаты/,
+      /^Ваша мысль под цитатой/,
+      /^Автор/,
+      /^Источник/,
+    ])
+      expect(screen.getByRole("textbox", { name }).className).toContain(
+        tapFieldClass(),
+      );
+    expect(
+      screen.getByRole("button", { name: "Дальше: картинка" }).className,
+    ).toContain(tapButtonClass());
   });
 
   it("prefills a book fragment and sends it as a vedabase source", async () => {

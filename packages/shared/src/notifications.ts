@@ -692,6 +692,110 @@ export interface NotificationDeviceTestResult {
   delivered: number;
 }
 
+// ===== Живость точек доставки (VED-314) =====
+
+/**
+ * Есть ли человеку куда доставлять уведомления. Нужно ему самому: раньше он
+ * жал «включить уведомления» и оставался в уверенности, что всё работает,
+ * даже когда ни одной точки доставки у него не было.
+ *
+ * Считаются только живые точки: помеченные мёртвыми (`stale`) идут отдельным
+ * числом — доставки от них не ждём.
+ */
+export interface NotificationDeliveryStatusDto {
+  /** Браузеров с подпиской на веб-пуши. */
+  web: number;
+  /** Телефонов с приложением VedaMatch. */
+  app: number;
+  /** Устройств `@vedamatch_bot`. */
+  telegram: number;
+  /** Веб-подписок, помеченных мёртвыми: числятся, но не доставляют. */
+  stale: number;
+  /** Есть хотя бы одна живая точка доставки. */
+  reachable: boolean;
+}
+
+/**
+ * Состояние точки доставки в админке.
+ *
+ * - `alive` — приняла пуш или подтверждена самим клиентом недавно;
+ * - `silent` — месяц без единого принятого пуша, но записывать в мёртвые не за
+ *   что: возможно, ей просто нечего было отправлять;
+ * - `dead` — правило сочло мёртвой, идёт отсрочка до удаления.
+ */
+export type NotificationDeliveryPointState = 'alive' | 'silent' | 'dead';
+
+/** Откуда точка доставки: браузер, приложение или бот. */
+export type NotificationDeliveryPointKind = 'web' | 'app' | 'telegram';
+
+/** Одна точка доставки в разделе админки. */
+export interface NotificationDeliveryPointDto {
+  id: string;
+  kind: NotificationDeliveryPointKind;
+  /** Браузер по `user-agent`, платформа и сборка приложения, «бот». */
+  label: string;
+  state: NotificationDeliveryPointState;
+  createdAt: string;
+  /** Когда служба доставки последний раз ПРИНЯЛА пуш; `null` — ни разу. */
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  /** Неудач подряд. */
+  failureCount: number;
+  /** Когда клиент последний раз подтвердил точку сам. */
+  lastSeenAt: string | null;
+  /** Когда правило сочло точку мёртвой. */
+  deadSince: string | null;
+}
+
+/** Человек и его точки доставки. Имя мирское: это админка. */
+export interface NotificationDeliveryUserDto {
+  userId: string;
+  name: string;
+  email: string;
+  points: NotificationDeliveryPointDto[];
+}
+
+/**
+ * Человек, которому уведомления шли, а доставлять было некуда. Именно этот
+ * случай дал жалобу 21.09: девять уведомлений за вечер и ни одной точки
+ * доставки, а в логах — только «пропущено: нет подписок».
+ */
+export interface NotificationUnreachableUserDto {
+  userId: string;
+  name: string;
+  email: string;
+  /** Уведомлений в колокольчике за отчётный срок — столько прошло мимо пуша. */
+  missed: number;
+  /** Последнее из них. */
+  lastNotificationAt: string;
+  /** Включены ли у человека уведомления вообще (тумблер «Все уведомления»). */
+  notificationsEnabled: boolean;
+  /** Есть точки, но все помечены мёртвыми — это не «никогда не подписывался». */
+  hasDeadPoints: boolean;
+}
+
+/** Раздел «Доставка» в админке уведомлений. */
+export interface NotificationDeliveryHealthResponse {
+  /** За сколько дней считались недостижимые. */
+  windowDays: number;
+  summary: {
+    webTotal: number;
+    webDead: number;
+    /** Веб-подписок без единого принятого пуша за срок молчания. */
+    webSilent: number;
+    appTotal: number;
+    appDead: number;
+    telegramTotal: number;
+    /** Людей хотя бы с одной живой точкой доставки. */
+    usersReachable: number;
+    /** Людей, которым уведомления шли, а доставлять было некуда. */
+    usersUnreachable: number;
+  };
+  /** Люди с точками доставки: сначала те, чьи точки молчат дольше всех. */
+  people: NotificationDeliveryUserDto[];
+  unreachable: NotificationUnreachableUserDto[];
+}
+
 export interface VapidKeyResponse {
   publicKey: string;
 }

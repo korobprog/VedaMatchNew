@@ -1,5 +1,6 @@
 import type { ChatMessageDto } from '@vedamatch/shared';
 import {
+  applyConversationMeta,
   applyReadByOther,
   applyRoomEvent,
   buildPendingMessage,
@@ -125,6 +126,55 @@ describe('applyReadByOther', () => {
     ];
     const next = applyReadByOther(list, 'me', '2026-09-14T10:00:00Z');
     expect(next.map((m) => Boolean(m.readByOthers))).toEqual([true, false, false, false]);
+  });
+});
+
+describe('applyConversationMeta', () => {
+  function detail(extra: Record<string, unknown> = {}) {
+    return {
+      id: 'conv-1',
+      kind: 'group',
+      state: 'active',
+      visibility: 'private',
+      title: 'Севаки',
+      description: null,
+      membersCount: 2,
+      unreadCount: 0,
+      muted: false,
+      pinned: false,
+      official: false,
+      canWrite: true,
+      members: [],
+      messages: [],
+      hasMore: false,
+      myRole: 'owner',
+      ...extra,
+    } as unknown as Parameters<typeof applyConversationMeta>[0];
+  }
+
+  it('переносит в шапку новое название, описание и открытость', () => {
+    const merged = applyConversationMeta(
+      detail(),
+      detail({ title: 'Севаки Минска', description: 'Программы', visibility: 'public' }),
+    );
+    expect(merged.title).toBe('Севаки Минска');
+    expect(merged.description).toBe('Программы');
+    expect(merged.visibility).toBe('public');
+  });
+
+  it('переносит состав участников, мою роль и право писать', () => {
+    const merged = applyConversationMeta(detail(), detail({ membersCount: 3, myRole: 'member', canWrite: false }));
+    expect(merged.membersCount).toBe(3);
+    expect(merged.myRole).toBe('member');
+    expect(merged.canWrite).toBe(false);
+  });
+
+  it('не трогает ленту сообщений и счётчик непрочитанного', () => {
+    const current = detail({ messages: [{ id: 'm1' }], unreadCount: 7 });
+    const merged = applyConversationMeta(current, detail({ messages: [], unreadCount: 0, title: 'Новое' }));
+    expect(merged.messages).toHaveLength(1);
+    expect(merged.unreadCount).toBe(7);
+    expect(merged.title).toBe('Новое');
   });
 });
 

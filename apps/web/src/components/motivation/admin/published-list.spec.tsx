@@ -106,27 +106,38 @@ describe("MotivationPublishedList", () => {
 
   // VED-199, VED-264: кнопки — квадраты со значками; подпись — для
   // скринридера и в подсказке.
-  it("подписывает каждую кнопку-значок для скринридера и подсказкой", () => {
+  // VED-251: и видимым словом тоже. `title` на телефоне не показывается
+  // никогда, и перечёркнутый глаз нажимали, не зная, что он делает.
+  it("подписывает каждую кнопку-значок словом, а не только aria-label", () => {
     render(<MotivationPublishedList posts={[post()]} />);
 
-    for (const name of [
-      "Открыть в ленте",
-      "Править текст",
-      "Скрыть из ленты",
-      "Читать полностью",
-      "Заменить картинку",
-      "Удалить",
-      "Поиск",
-      "Скрытые",
-    ]) {
+    for (const [name, caption] of [
+      ["Открыть в ленте", "В ленте"],
+      ["Править текст", "Править"],
+      ["Скрыть из ленты", "Скрыть"],
+      ["Читать полностью", "Читать"],
+      ["Заменить картинку", "Заменить"],
+      ["Удалить", "Удалить"],
+      ["Поиск", "Поиск"],
+      ["Скрытые", "Скрытые"],
+    ] as const) {
       const control = screen.getByRole(
         ["Открыть в ленте", "Скрытые"].includes(name) ? "link" : "button",
         { name },
       );
       expect(control).toHaveAttribute("title");
-      // Подписи на самой кнопке нет — только значок.
-      expect(control).toHaveTextContent("");
+      expect(control).toHaveTextContent(caption);
     }
+  });
+
+  // VED-251: у скрытой карточки та же клетка подписана обратным действием —
+  // отмену ищут там же, где нажали, а не в другой вкладке.
+  it("у скрытой карточки перечёркнутый глаз подписан «Вернуть»", () => {
+    render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
+
+    const control = screen.getByRole("button", { name: "Вернуть в ленту" });
+    expect(control).toHaveTextContent("Вернуть");
+    expect(screen.queryByText("Скрыть")).not.toBeInTheDocument();
   });
 
   it("открывает карточку в ленте по её слагу", () => {
@@ -222,8 +233,10 @@ describe("MotivationPublishedList", () => {
     await user.click(screen.getByRole("button", { name: /Скрыть/ }));
 
     await waitFor(() =>
+      // VED-251: подсказка называет оба пути назад — ту же кнопку и вкладку
+      // «Скрытые», где лежит весь список снятого с показа.
       expect(screen.getByRole("status")).toHaveTextContent(
-        "Скрыто из ленты. Вернуть можно этой же кнопкой.",
+        /Вернуть можно этой же кнопкой или на вкладке «Скрытые»/,
       ),
     );
 

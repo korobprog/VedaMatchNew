@@ -33,7 +33,7 @@ describe("PortalSearchField", () => {
     );
   });
 
-  it("на главной поле по ширине надписи, над выдачей — на всю строку", () => {
+  it("узкий вариант — по ширине надписи, обычный — на всю строку", () => {
     const { rerender } = render(<PortalSearchField compact />);
     const field = () =>
       screen.getByLabelText("Поиск по VedaMatch").closest("label");

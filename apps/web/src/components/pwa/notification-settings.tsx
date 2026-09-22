@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Bell } from "lucide-react";
 import type {
+  NotificationDeliveryStatusDto,
   NotificationPreferencesDto,
   UpdateNotificationPreferencesRequest,
 } from "@vedamatch/shared";
@@ -12,7 +13,12 @@ import {
   subscribePushSupport,
 } from "@/lib/pwa/push-subscription";
 import { enablePush, syncPushSubscription } from "@/lib/pwa/enable-push";
-import { fetchPreferences, savePreferences } from "@/lib/notifications-api";
+import { deliveryWarning } from "@/lib/pwa/delivery-warning";
+import {
+  fetchDeliveryStatus,
+  fetchPreferences,
+  savePreferences,
+} from "@/lib/notifications-api";
 import { useInstallPrompt } from "./use-install-prompt";
 
 const categories = [
@@ -61,6 +67,11 @@ export function NotificationSettings() {
   );
   const [preferences, setPreferences] =
     useState<NotificationPreferencesDto | null>(null);
+  // Что о доставке думает сервер. Разрешение браузера об этом не говорит:
+  // подписка могла не дойти, протухнуть или быть помечена мёртвой (VED-314).
+  const [delivery, setDelivery] = useState<NotificationDeliveryStatusDto | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   // Серверный снимок — всегда «unsupported», и до гидратации любая строка про
@@ -85,12 +96,29 @@ export function NotificationSettings() {
     };
   }, []);
 
+  const refreshDelivery = useCallback(async () => {
+    try {
+      setDelivery(await fetchDeliveryStatus());
+    } catch {
+      // Молчание сервера — не повод обещать человеку неприятности: без ответа
+      // предупреждение не показывается вовсе.
+      setDelivery(null);
+    }
+  }, []);
+
   // Подписка могла смениться на стороне браузера или не создаться вовсе;
   // сверяем её при каждой загрузке — воркер отправить новую сам не может.
+  // Состояние доставки спрашиваем ПОСЛЕ сверки, иначе увидим вчерашнюю правду.
   useEffect(() => {
-    if (support !== "granted") return;
-    void syncPushSubscription();
-  }, [support]);
+    let cancelled = false;
+    void (async () => {
+      if (support === "granted") await syncPushSubscription();
+      if (!cancelled) await refreshDelivery();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [support, refreshDelivery]);
 
   const enable = useCallback(async () => {
     setBusy(true);
@@ -99,10 +127,13 @@ export function NotificationSettings() {
       if ((await enablePush()) === "failed") {
         setProblem("Не удалось включить уведомления. Попробуйте ещё раз позже.");
       }
+      // Подписка только что появилась — предупреждение должно уйти сразу, а не
+      // до следующей загрузки страницы.
+      await refreshDelivery();
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [refreshDelivery]);
 
   const update = useCallback(
     async (patch: UpdateNotificationPreferencesRequest) => {
@@ -115,6 +146,12 @@ export function NotificationSettings() {
     },
     [],
   );
+
+  const warning = deliveryWarning({
+    enabled: preferences?.enabled ?? true,
+    status: delivery,
+    support,
+  });
 
   return (
     <div className="glass rounded-2xl border border-glass-brd p-6">
@@ -132,13 +169,30 @@ export function NotificationSettings() {
             </p>
           )}
 
-          {support === "granted" && preferences?.enabled !== false && (
-            <p className="mt-3 text-sm text-text-1">
-              Уведомления приходят и на это устройство.
-            </p>
+          {/* Правда вместо молчания (VED-314): включённые уведомления без
+              живой точки доставки — это тишина, и сказать об этом нужно там,
+              где человек их включает. */}
+          {warning ? (
+            <div className="mt-3 rounded-xl border border-gold/50 bg-gold/15 px-3 py-2">
+              <p className="text-sm font-semibold text-text-0" role="status">
+                {warning.title}
+              </p>
+              <p className="mt-1 text-sm text-text-1">{warning.hint}</p>
+            </div>
+          ) : (
+            support === "granted" &&
+            preferences?.enabled !== false && (
+              <p className="mt-3 text-sm text-text-1">
+                Уведомления приходят и на это устройство
+                {delivery && delivery.app > 0 ? " и в приложение" : ""}.
+              </p>
+            )
           )}
 
-          {support === "denied" && (
+          {/* Пока предупреждения нет, про запрет и неумение браузера
+              рассказывают эти две строки; когда оно есть — там уже сказано и
+              то же самое, и что делать, а повторять дважды незачем. */}
+          {!warning && support === "denied" && (
             <p className="mt-3 text-sm text-text-1">
               На устройство уведомления приходить не будут: вы запретили их для
               сайта, а вернуть разрешение можно только в настройках браузера.
@@ -146,7 +200,7 @@ export function NotificationSettings() {
             </p>
           )}
 
-          {support === "unsupported" && (
+          {!warning && support === "unsupported" && (
             <p className="mt-3 text-sm text-text-1">
               Этот браузер не умеет присылать уведомления на устройство.
               Колокольчик в шапке работает и без этого.

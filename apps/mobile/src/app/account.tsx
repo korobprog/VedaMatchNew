@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { InlineError } from '@/components/inline-error';
+import { DevicePushSection } from '@/components/notifications/device-push-section';
 import { RetryButton } from '@/components/retry-button';
 import {
   accountEmailLabel,
@@ -383,6 +384,11 @@ export default function AccountScreen() {
             />
           ))}
         </View>
+
+        {/* Уведомления самого устройства (VED-313). В веб-сборке — веб-пуши
+            через сервис-воркер, в нативной компонент ничего не рисует: там
+            пуши идут через Firebase и включаются сами при первом входе. */}
+        <DevicePushSection />
 
         <TelegramNotificationsSection
           connected={telegramStatus?.connected ?? false}

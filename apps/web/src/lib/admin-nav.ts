@@ -189,6 +189,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "portal",
       },
       {
+        href: "/admin/notifications/delivery",
+        label: "Доставка уведомлений",
+        hint: "Живые и мёртвые подписки, кому пуши шли впустую",
+        scope: "portal",
+      },
+      {
         href: "/admin/services",
         label: "Каталог сервисов",
         hint: "Карточки в сетке портала: статус, порядок, видимость",

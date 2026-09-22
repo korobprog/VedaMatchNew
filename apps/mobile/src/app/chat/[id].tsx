@@ -4,7 +4,7 @@ import type {
   ChatMessageDto,
   ChatReplyPreview,
 } from '@vedamatch/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
@@ -49,6 +49,7 @@ import {
 } from '@/lib/chat/chat-composer-state';
 import { attachmentLabel, formatChatDivider, isNewDay, officialNotifyLabel, readonlyNotice } from '@/lib/chat/chat-format';
 import {
+  applyConversationMeta,
   applyReadByOther,
   applyRoomEvent,
   buildPendingMessage,
@@ -191,6 +192,31 @@ export default function ChatRoomScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Возврат с экрана участников: беседу могли переименовать, сменить ей
+  // описание и открытость, позвать или исключить человека — шапка обязана
+  // это показать. Перечитываем только шапку: лента и черновик остаются.
+  // Первый фокус пропускаем — его уже отработал `load()` выше.
+  const focusedBefore = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedBefore.current) {
+        focusedBefore.current = true;
+        return;
+      }
+      let alive = true;
+      chatApi
+        .detail(conversationId)
+        .then((next) => {
+          if (alive) setDetail((current) => (current ? applyConversationMeta(current, next) : next));
+        })
+        // Молча: шапка просто останется прежней, экран этим не ломается.
+        .catch(() => undefined);
+      return () => {
+        alive = false;
+      };
+    }, [chatApi, conversationId]),
+  );
 
   useEffect(() => {
     const offEvents = stream.subscribe((event) => {
@@ -702,33 +728,50 @@ export default function ChatRoomScreen() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           headerTitleAlign: 'left',
-          headerTitle: () => (
-            <View
-              accessible
-              accessibilityRole="header"
-              accessibilityLabel={[detail?.title, typingName ? 'печатает' : subtitle].filter(Boolean).join(', ')}
-              style={[styles.headerTitleRow, { maxWidth: width - 96 }]}
-            >
-              {detail ? (
-                <ChatAvatar
-                  id={detail.companion?.id ?? detail.id}
-                  name={detail.title}
-                  uri={detail.kind === 'direct' ? detail.companion?.avatarUrl : detail.avatarUrl}
-                  size={36}
-                />
-              ) : null}
-              <View style={styles.headerText}>
-                <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text0 }]}>
-                  {detail?.title ?? ' '}
-                </Text>
-                {typingName || subtitle ? (
-                  <Text numberOfLines={1} style={[styles.headerSub, { color: typingName ? colors.cyan : colors.text2 }]}>
-                    {typingName ? `${detail?.kind === 'direct' ? '' : `${typingName} `}печатает…` : subtitle}
-                  </Text>
+          headerTitle: () => {
+            const label = [detail?.title, typingName ? 'печатает' : subtitle].filter(Boolean).join(', ');
+            const body = (
+              <>
+                {detail ? (
+                  <ChatAvatar
+                    id={detail.companion?.id ?? detail.id}
+                    name={detail.title}
+                    uri={detail.kind === 'direct' ? detail.companion?.avatarUrl : detail.avatarUrl}
+                    size={36}
+                  />
                 ) : null}
+                <View style={styles.headerText}>
+                  <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text0 }]}>
+                    {detail?.title ?? ' '}
+                  </Text>
+                  {typingName || subtitle ? (
+                    <Text numberOfLines={1} style={[styles.headerSub, { color: typingName ? colors.cyan : colors.text2 }]}>
+                      {typingName ? `${detail?.kind === 'direct' ? '' : `${typingName} `}печатает…` : subtitle}
+                    </Text>
+                  ) : null}
+                </View>
+              </>
+            );
+            // В группе и канале название — вход в участников (VED-292):
+            // привычный жест мессенджера и единственное место в шапке, не
+            // занятое кнопками звонка. У личного диалога участников нет,
+            // и заголовок остаётся просто заголовком.
+            return detail && detail.kind !== 'direct' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityHint="Открывает участников беседы"
+                onPress={() => router.push({ pathname: '/chat/members/[id]', params: { id: detail.id } })}
+                style={[styles.headerTitleRow, { maxWidth: width - 96 }]}
+              >
+                {body}
+              </Pressable>
+            ) : (
+              <View accessible accessibilityRole="header" accessibilityLabel={label} style={[styles.headerTitleRow, { maxWidth: width - 96 }]}>
+                {body}
               </View>
-            </View>
-          ),
+            );
+          },
           // Только кнопки — остальная шапка (заголовок, стрелка назад) вне
           // зоны звонков, см. VedaMatchNew-mobile-coordination.md.
           headerRight: () => (

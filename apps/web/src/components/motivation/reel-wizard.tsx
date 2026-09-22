@@ -28,11 +28,13 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { PicturePublishForm } from "./picture-publish-form";
+import { fieldLabelClass } from "./field-label";
 import { splitQuoteAndExplanation } from "./quote-text";
 import {
   ReelCategorySelect,
   initialReelCategory,
 } from "./reel-category-select";
+import { tapButtonClass, tapFieldClass } from "./tap-target";
 import {
   formatImageSize,
   pastedImageName,
@@ -56,6 +58,29 @@ import {
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
+
+/** Общий вид поля: рамка, фон и паддинги. Размер текста — у каждого свой. */
+const FIELD_SKIN =
+  "mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2";
+
+/**
+ * Поле шага мастера. Один и тот же скин переписывался в каждом шаге
+ * заново — тап-цель к нему добавлена одной строкой на все.
+ */
+const fieldClass = tapFieldClass(`${FIELD_SKIN} text-sm text-text-0`);
+
+/** То же поле, но набираемым текстом: 16px, чтобы iOS не зумил при фокусе. */
+const bigFieldClass = tapFieldClass(`${FIELD_SKIN} text-base text-text-0`);
+
+/** Кнопка шага: «дальше» и «отправить». */
+const primaryButtonClass = tapButtonClass(
+  "btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50",
+);
+
+/** Кнопка «← Назад» на шагах «Картинка» и «Проверка». */
+const secondaryButtonClass = tapButtonClass(
+  "rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1",
+);
 
 const MOTION_CHOICES = [
   { value: "calm", label: "Спокойное дыхание" },
@@ -445,7 +470,12 @@ export function ReelWizard({
               : "Следующий можно создать завтра. В бете генерация бесплатна и оплачивается из бюджета проекта."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href="/motivation/my" className="btn-mint-outline rounded-xl px-3 py-1.5 text-sm font-medium">
+            <Link
+              href="/motivation/my"
+              className={tapButtonClass(
+                "btn-mint-outline rounded-xl px-3 py-1.5 text-sm font-medium",
+              )}
+            >
               Студия
             </Link>
             <DonateButton donation={donation} />
@@ -496,14 +526,14 @@ export function ReelWizard({
             />
           )}
           <label className="block text-sm text-text-1">
-            <span className="font-semibold">Текст цитаты</span>
+            <span className={fieldLabelClass()}>Текст цитаты</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={5}
               maxLength={MAX_TEXT + 50}
               placeholder="Ты имеешь право лишь на действие, но не на его плоды."
-              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-base text-text-0"
+              className={bigFieldClass}
               aria-invalid={Boolean(textError)}
               aria-describedby="reel-text-hint"
             />
@@ -512,14 +542,14 @@ export function ReelWizard({
             </span>
           </label>
           <label className="block text-sm text-text-1">
-            <span className="font-semibold">Ваша мысль под цитатой (необязательно)</span>
+            <span className={fieldLabelClass()}>Ваша мысль под цитатой (необязательно)</span>
             <textarea
               value={explanation}
               onChange={(e) => setExplanation(e.target.value)}
               rows={3}
               maxLength={800}
               placeholder="Почему эти слова важны для вас"
-              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+              className={fieldClass}
             />
           </label>
           {/* Источник и автор — отдельным блоком, но на этом же экране. Для
@@ -543,13 +573,13 @@ export function ReelWizard({
               </p>
             ) : (
               <label className="block text-sm text-text-1">
-                <span className="font-semibold">Автор (необязательно)</span>
+                <span className={fieldLabelClass()}>Автор (необязательно)</span>
                 <input
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
                   maxLength={80}
                   placeholder="Кому принадлежат слова"
-                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                  className={fieldClass}
                 />
                 <span className="mt-1 block text-xs text-text-2">
                   Пусто — подпишем вашим именем. Чужие слова честнее подписать
@@ -559,13 +589,13 @@ export function ReelWizard({
             )}
             {sourceKind === "own" && (
               <label className="block text-sm text-text-1">
-                <span className="font-semibold">Источник (необязательно)</span>
+                <span className={fieldLabelClass()}>Источник (необязательно)</span>
                 <input
                   value={work}
                   onChange={(e) => setWork(e.target.value)}
                   maxLength={120}
                   placeholder="Книга, лекция или ссылка"
-                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                  className={fieldClass}
                 />
               </label>
             )}
@@ -578,7 +608,7 @@ export function ReelWizard({
           <button
             type="submit"
             disabled={!trimmed || Boolean(textError) || (sourceKind === "vedabase" && !book)}
-            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            className={primaryButtonClass}
           >
             Дальше: картинка
           </button>
@@ -625,7 +655,7 @@ export function ReelWizard({
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => acceptImage(e.target.files?.[0] ?? null)}
-                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                  className={fieldClass}
                 />
               </label>
               {/* Картинку чаще копируют, чем сохраняют файлом: из переписки,
@@ -636,7 +666,9 @@ export function ReelWizard({
                 <button
                   type="button"
                   onClick={pasteImage}
-                  className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+                  className={tapButtonClass(
+                    "rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0",
+                  )}
                 >
                   📋 Вставить из буфера
                 </button>
@@ -667,7 +699,7 @@ export function ReelWizard({
               value={style}
               disabled={imageMode === "upload"}
               onChange={(e) => setStyle(e.target.value as MotivationVisualStyle | "")}
-              className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+              className={fieldClass}
             >
               <option value="">Подобрать автоматически по смыслу</option>
               {STYLE_OPTIONS.map(([value, label]) => (
@@ -682,13 +714,13 @@ export function ReelWizard({
             {imageMode === "upload" && " Свой кадр всегда смотрит администратор перед публикацией."}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setStep("text")} className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
+            <button type="button" onClick={() => setStep("text")} className={secondaryButtonClass}>
               ← Назад
             </button>
             <button
               type="submit"
               disabled={imageMode === "upload" && !file}
-              className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              className={primaryButtonClass}
             >
               Дальше: проверка
             </button>
@@ -761,14 +793,14 @@ export function ReelWizard({
             <button
               type="button"
               onClick={() => setStep("image")}
-              className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1"
+              className={secondaryButtonClass}
             >
               ← Назад
             </button>
             <button
               type="submit"
               disabled={pending || !trimmed || Boolean(textError)}
-              className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              className={primaryButtonClass}
             >
               {pending
                 ? "Отправляем…"
@@ -818,7 +850,13 @@ function BookSource({
             <div className="font-semibold text-text-0">{selected.bookTitle}</div>
             {selected.locator && <div className="font-mono text-xs text-text-2">{selected.locator}</div>}
           </div>
-          <button type="button" onClick={onClear} className="text-xs text-text-2 underline-offset-4 hover:underline">
+          <button
+            type="button"
+            onClick={onClear}
+            className={tapButtonClass(
+              "shrink-0 px-1 text-xs text-text-2 underline-offset-4 hover:underline",
+            )}
+          >
             Выбрать другой
           </button>
         </div>
@@ -841,11 +879,13 @@ function BookSource({
             role="tab"
             aria-selected={mode === value}
             onClick={() => setMode(value)}
-            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${
-              mode === value
-                ? "border-cyan bg-cyan/10 text-text-0"
-                : "border-glass-brd text-text-2 hover:text-text-0"
-            }`}
+            className={tapButtonClass(
+              `rounded-xl border px-3 py-1.5 text-xs font-semibold ${
+                mode === value
+                  ? "border-cyan bg-cyan/10 text-text-0"
+                  : "border-glass-brd text-text-2 hover:text-text-0"
+              }`,
+            )}
           >
             {label}
           </button>
@@ -926,7 +966,7 @@ function BookBrowser({ onSelect }: { onSelect: (hit: MotivationReelSourceHit) =>
             setChapterSlug("");
             setHits(null);
           }}
-          className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+          className={fieldClass}
         >
           <option value="">Выберите книгу</option>
           {(books ?? []).map((item) => (
@@ -942,7 +982,7 @@ function BookBrowser({ onSelect }: { onSelect: (hit: MotivationReelSourceHit) =>
           <select
             value={chapterSlug}
             onChange={(event) => void loadChapter(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+            className={fieldClass}
           >
             <option value="">Выберите главу</option>
             {book.chapters.map((chapter) => (
@@ -1003,13 +1043,17 @@ function BookSearch({ onSelect }: { onSelect: (hit: MotivationReelSourceHit) => 
           }}
           placeholder="Слова из стиха: «право на действие»"
           aria-label="Поиск по книгам"
-          className="flex-1 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-base text-text-0"
+          className={tapFieldClass(
+            "flex-1 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-base text-text-0",
+          )}
         />
         <button
           type="button"
           onClick={() => void search()}
           disabled={pending || query.trim().length < 3}
-          className="btn-mint-outline rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50"
+          className={tapButtonClass(
+            "btn-mint-outline rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50",
+          )}
         >
           {pending ? "Ищем…" : "Найти"}
         </button>
@@ -1207,7 +1251,7 @@ function ReelStatus({
                   onChange={(e) => setAppeal(e.target.value)}
                   rows={3}
                   maxLength={1000}
-                  className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+                  className={fieldClass}
                 />
               </label>
               {appealError && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{appealError}</p>}

@@ -2,8 +2,22 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FeedAttributionFilter } from "./feed-attribution-filter";
+import { resetAttributionsCache } from "./attribution-options-cache";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  // Кэш списков живёт во вкладке, а не в компоненте: между тестами — стереть.
+  resetAttributionsCache();
+});
+
+const listResponse = () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({
+    works: [{ label: "Бхагавад-гита", count: 6 }],
+    speakers: [{ label: "Кришна", count: 4 }],
+  }),
+});
 
 describe("FeedAttributionFilter", () => {
   it("у избранного фильтра нет", () => {
@@ -116,5 +130,75 @@ describe("FeedAttributionFilter", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  // VED-252, доработка: «кнопка со значком фильтра открывается с
+  // затормаживанием». Тормозило «Загружаем…» внутри окна — запрос
+  // начинался только после открытия. Теперь он уходит, пока палец ещё
+  // на стекле (`pointerdown` до `click`) или мышь только подъехала.
+  it("запрос уходит по касанию кнопки, до открытия окна", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(listResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+
+    await user.hover(screen.getByRole("button", { name: "Фильтр по автору и источнику" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/motivation/feed/attributions");
+  });
+
+  it("наведение, касание и нажатие — один запрос, а не три", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(listResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+
+    await user.click(screen.getByRole("button", { name: "Фильтр по автору и источнику" }));
+    await screen.findByRole("dialog", { name: "Автор и источник" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("второе открытие показывает список сразу, без «Загружаем…» и без запроса", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(listResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+
+    await user.click(trigger);
+    const first = await screen.findByRole("dialog", { name: "Автор и источник" });
+    await within(first).findByRole("link", { name: /Бхагавад-гита/ });
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+    await user.click(trigger);
+
+    const again = screen.getByRole("dialog", { name: "Автор и источник" });
+    // Синхронно, тем же кадром, что и открытие: `getBy*`, не `findBy*`.
+    expect(within(again).getByRole("link", { name: /Бхагавад-гита/ })).toBeInTheDocument();
+    expect(within(again).queryByText("Загружаем…")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("не ответивший портал показывает ошибку, следующее открытие пробует снова", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+    const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
+
+    await user.click(trigger);
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+    fetchMock.mockResolvedValue(listResponse());
+    await user.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "Автор и источник" });
+    expect(await within(dialog).findByRole("link", { name: /Бхагавад-гита/ })).toBeInTheDocument();
+    // Неудача не запоминается: за списком сходили снова.
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
   });
 });

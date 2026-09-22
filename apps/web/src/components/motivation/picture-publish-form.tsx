@@ -25,15 +25,23 @@ import {
   withImageTypeFromName,
 } from "./clipboard-image";
 import { categoriesAcceptingStyle } from "./feed-style";
+import { fieldLabelClass } from "./field-label";
 import {
   ReelCategorySelect,
   initialReelCategory,
 } from "./reel-category-select";
+import { tapButtonClass, tapFieldClass } from "./tap-target";
 
 const API_URL = apiBase();
 
-const inputClass =
-  "mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0";
+const inputClass = tapFieldClass(
+  "mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0",
+);
+
+/** Кнопка «откуда взять картинку»: три стоят в ряд, и все три — тап-цели. */
+const pickButtonClass = tapButtonClass(
+  "rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0",
+);
 
 /**
  * «Готовая картинка с цитатой» — первым вариантом мастера (VED-97, VED-99).
@@ -168,14 +176,18 @@ export function PicturePublishForm({
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/motivation?post=${encodeURIComponent(published.slug)}`}
-            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+            className={tapButtonClass(
+              "btn-mint rounded-xl px-4 py-2 text-sm font-semibold",
+            )}
           >
             Открыть в ленте
           </Link>
           <button
             type="button"
             onClick={again}
-            className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={tapButtonClass(
+              "rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1 hover:text-text-0",
+            )}
           >
             Ещё картинку
           </button>
@@ -187,7 +199,10 @@ export function PicturePublishForm({
   return (
     <form className="space-y-4" onSubmit={submit}>
       <div className="space-y-2">
-        <p className="text-sm text-text-1">
+        {/* Подпись, а не заголовок (VED-203): декоративной разметки h2/h3
+            здесь быть не должно, она ломает порядок заголовков экрана. Вид —
+            общий с остальными подписями формы. */}
+        <p className={`text-sm ${fieldLabelClass()}`}>
           Картинка с цитатой (JPEG, PNG или WebP)
         </p>
         {/* Две кнопки (VED-154): на Android поле с `accept` картинок
@@ -197,14 +212,14 @@ export function PicturePublishForm({
           <button
             type="button"
             onClick={() => galleryRef.current?.click()}
-            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={pickButtonClass}
           >
             🖼️ Из галереи
           </button>
           <button
             type="button"
             onClick={() => filesRef.current?.click()}
-            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={pickButtonClass}
           >
             📁 Из файлов
           </button>
@@ -235,7 +250,7 @@ export function PicturePublishForm({
           <button
             type="button"
             onClick={pasteImage}
-            className="rounded-xl border border-glass-brd px-3 py-2 text-sm font-medium text-text-1 hover:text-text-0"
+            className={pickButtonClass}
           >
             📋 Вставить из буфера
           </button>
@@ -265,12 +280,17 @@ export function PicturePublishForm({
         onChange={setCategory}
       />
 
-      <fieldset className="space-y-2 rounded-2xl border border-glass-brd p-3">
-        <legend className="px-1 text-sm font-medium text-text-1">
-          Автор / источник
-        </legend>
+      {/* Видимого заголовка группы нет (VED-203): «Автор / источник» стоял
+          над двумя полями с теми же самыми словами и читался как лишняя
+          строка — ровно та жалоба, что уже разобрали у роликов. Имя группы
+          для скринридера несёт `aria-label` на самом fieldset, и оно дословно
+          такое же, как в мастере роликов. */}
+      <fieldset
+        className="space-y-2 rounded-2xl border border-glass-brd p-3"
+        aria-label="Источник и автор"
+      >
         <label className="block text-sm text-text-1">
-          Автор (необязательно)
+          <span className={fieldLabelClass()}>Автор (необязательно)</span>
           <input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
@@ -280,7 +300,7 @@ export function PicturePublishForm({
           />
         </label>
         <label className="block text-sm text-text-1">
-          Источник (необязательно)
+          <span className={fieldLabelClass()}>Источник (необязательно)</span>
           <input
             value={work}
             onChange={(e) => setWork(e.target.value)}
@@ -292,7 +312,7 @@ export function PicturePublishForm({
       </fieldset>
 
       <label className="block text-sm text-text-1">
-        Текст с картинки (необязательно)
+        <span className={fieldLabelClass()}>Текст с картинки (необязательно)</span>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -315,7 +335,9 @@ export function PicturePublishForm({
       <button
         type="submit"
         disabled={!file || pending}
-        className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        className={tapButtonClass(
+          "btn-mint rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50",
+        )}
       >
         {pending ? "Публикуем…" : "Опубликовать"}
       </button>

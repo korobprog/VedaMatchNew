@@ -13,6 +13,7 @@ import {
   subscribeToChannel,
 } from "@/lib/chat-client";
 import { listColorTemplates, setConversationTheme } from "@/lib/chat-appearance-api";
+import { chatActionErrorMessage } from "./chat-action-error";
 
 /**
  * Меню беседы: без звука, закрепить, выйти, пожаловаться. Настройки живут
@@ -35,37 +36,84 @@ export function ChatRoomMenu({
   const [templates, setTemplates] = useState<ChatColorTemplateDto[] | null>(
     null,
   );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!appearanceOpen || templates) return;
-    void listColorTemplates().then((state) => setTemplates(state.templates));
+    void listColorTemplates()
+      .then((state) => setTemplates(state.templates))
+      .catch((cause: unknown) => {
+        // Пустой список вместо null — иначе эффект уходит на второй круг.
+        setTemplates([]);
+        setError(
+          chatActionErrorMessage(cause, "Не получилось загрузить оформление"),
+        );
+      });
   }, [appearanceOpen, templates]);
 
   async function applyTheme(template: ChatColorTemplateDto | null) {
-    await setConversationTheme(conversation.id, template?.id ?? null);
-    onThemeChange(template);
-    setAppearanceOpen(false);
-    setOpen(false);
+    setBusy(true);
+    setError(null);
+    try {
+      await setConversationTheme(conversation.id, template?.id ?? null);
+      onThemeChange(template);
+      setAppearanceOpen(false);
+      setOpen(false);
+    } catch (cause) {
+      setError(chatActionErrorMessage(cause, "Не получилось сменить оформление"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const isChannel = conversation.kind === "channel";
   const isMember = conversation.myRole !== "member" || !isChannel;
 
-  async function run(action: () => Promise<void>) {
+  /**
+   * Любой пункт меню. Закрытие — только по успеху: закрытое меню без единого
+   * слова внешне неотличимо от выполненного действия, а после отказа человек
+   * остаётся на месте (перехода нет) и должен понимать почему. Поэтому при
+   * ошибке меню остаётся открытым, а текст отказа встаёт прямо над пунктами —
+   * там же, где их нажимали, и оттуда же можно повторить.
+   */
+  async function run(action: () => Promise<void>, fallback: string) {
     setBusy(true);
+    setError(null);
     try {
       await action();
+      setOpen(false);
+    } catch (cause) {
+      setError(chatActionErrorMessage(cause, fallback));
     } finally {
       setBusy(false);
-      setOpen(false);
     }
   }
+
+  function toggle() {
+    setOpen((current) => !current);
+    setAppearanceOpen(false);
+    setError(null);
+  }
+
+  /**
+   * Плашка отказа. Рамка мадженты опознаётся как ошибка (так же оформлены
+   * отказы в «Запросах» и справочнике людей), но сам текст — `--vm-text-0`:
+   * маджента мелким кеглем не добирает 4.5:1 на светлой теме.
+   */
+  const errorNote = error && (
+    <p
+      role="alert"
+      className="rounded-xl border border-magenta/40 bg-magenta/10 px-3 py-2 text-sm text-text-0"
+    >
+      {error}
+    </p>
+  );
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label="Меню беседы"
         className="flex size-11 items-center justify-center rounded-2xl text-text-1 hover:text-text-0"
@@ -88,6 +136,9 @@ export function ChatRoomMenu({
 
       {open && (
         <div className="absolute right-0 top-12 z-10 flex w-56 flex-col gap-1 rounded-2xl border border-glass-brd bg-bg-1 p-1.5 shadow-xl shadow-black/40">
+          {/* Панель оформления перекрывает меню: плашку рисует она, иначе
+              один и тот же текст отказа попал бы в разметку дважды. */}
+          {!appearanceOpen && errorNote}
           {conversation.kind !== "direct" && (
             <Link
               href={`/chat/${conversation.id}/members`}
@@ -106,7 +157,7 @@ export function ChatRoomMenu({
                   !conversation.muted,
                 );
                 onChange({ muted });
-              })
+              }, "Не получилось переключить звук")
             }
           />
           <MenuItem
@@ -119,7 +170,7 @@ export function ChatRoomMenu({
                   !conversation.pinned,
                 );
                 onChange({ pinned });
-              })
+              }, "Не получилось изменить закрепление")
             }
           />
 
@@ -131,7 +182,7 @@ export function ChatRoomMenu({
                 void run(async () => {
                   await subscribeToChannel(conversation.id);
                   router.refresh();
-                })
+                }, "Не получилось подписаться на канал")
               }
             />
           )}
@@ -139,7 +190,10 @@ export function ChatRoomMenu({
           <MenuItem
             busy={busy}
             label="Оформление"
-            onClick={() => setAppearanceOpen(true)}
+            onClick={() => {
+              setError(null);
+              setAppearanceOpen(true);
+            }}
           />
 
           <MenuItem
@@ -152,7 +206,7 @@ export function ChatRoomMenu({
                   reason: "Жалоба на беседу",
                   conversationId: conversation.id,
                 });
-              })
+              }, "Не получилось отправить жалобу")
             }
           />
 
@@ -169,7 +223,11 @@ export function ChatRoomMenu({
               void run(async () => {
                 await leaveChatConversation(conversation.id);
                 router.push("/chat");
-              })
+              }, conversation.kind === "direct"
+                ? "Не получилось убрать беседу из списка"
+                : isChannel
+                  ? "Не получилось отписаться от канала"
+                  : "Не получилось выйти из группы")
             }
           />
 
@@ -193,7 +251,9 @@ export function ChatRoomMenu({
                       return;
                     await deleteChatConversation(conversation.id);
                     router.push("/chat");
-                  })
+                  }, isChannel
+                    ? "Не получилось удалить канал"
+                    : "Не получилось удалить группу")
                 }
               />
             )}
@@ -202,10 +262,12 @@ export function ChatRoomMenu({
 
       {appearanceOpen && (
         <div className="absolute right-0 top-12 z-10 flex w-64 flex-col gap-1 rounded-2xl border border-glass-brd bg-bg-1 p-1.5 shadow-xl shadow-black/40">
+          {errorNote}
           <button
             type="button"
+            disabled={busy}
             onClick={() => void applyTheme(null)}
-            className="flex min-h-11 items-center rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0"
+            className="flex min-h-11 items-center rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0 disabled:opacity-60"
           >
             Без шаблона (по умолчанию)
           </button>
@@ -213,8 +275,9 @@ export function ChatRoomMenu({
             <button
               key={template.id}
               type="button"
+              disabled={busy}
               onClick={() => void applyTheme(template)}
-              className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0"
+              className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-white/6 hover:text-text-0 disabled:opacity-60"
             >
               <span
                 className="size-4 shrink-0 rounded-full border border-glass-brd"

@@ -20,8 +20,6 @@ import {
 } from "@/lib/home-featured";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
-import { PortalSearchField } from "@/components/portal-search-field";
-import { PortalSupportLink } from "@/components/portal-support-link";
 import { BlogHomeWidget } from "@/components/blog/blog-home-widget";
 import { BlogFeedToggle } from "@/components/blog/blog-feed-toggle";
 import {
@@ -304,20 +302,14 @@ export default async function Home({
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
         {/* Блог-лента (VED-238) — на месте карточки поддержки и строки
-            поиска: по карточке задачи они оба уезжают в панель горячих
-            клавиш, освобождая место ленте. Пока поиск туда не переехал,
-            лента стоит над ними, а не вместо: убрать поиск раньше, чем он
-            появится в панели, значит на время оставить портал без поиска
-            вовсе. Что удалять следующим шагом — эти две строки ниже. */}
+            поиска: оба уехали в панель горячих кнопок и с главной убраны.
+            Поддержка там же — плиткой «Написать админам», и вдобавок в меню
+            шапки, профиле и подвале; поиск — плиткой «Поиск» на ту же
+            страницу `/search`, где поле осталось над выдачей. Место, которое
+            они занимали, — это место ленты. */}
         {blogFeed && (
-          <BlogHomeWidget data={blogFeed} userId={user.id} className="mb-3" />
+          <BlogHomeWidget data={blogFeed} userId={user.id} className="mb-6" />
         )}
-        {/* Поддержка — первой, над поиском (VED-146). */}
-        <PortalSupportLink className="mb-3" />
-        {/* Поиск по порталу — сразу под поддержкой (VED-75): человек, который
-            пришёл за конкретной лекцией или объявлением, не должен сначала
-            угадывать, в каком она сервисе. */}
-        <PortalSearchField compact className="mb-6" />
         {/* Новости администрации выше советника: советник говорит о делах
             человека, новость — о портале, и она не должна теряться под ними. */}
         <PortalNews items={news ?? []} />

@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PicturePublishForm } from "./picture-publish-form";
 import { ReelWizard } from "./reel-wizard";
+import { fieldLabelClass } from "./field-label";
+import { tapButtonClass, tapFieldClass } from "./tap-target";
 
 const categories = [
   { id: "c1", slug: "filosofiya", title: "Философия", sortOrder: 0, isDefault: true, parentId: null, postCount: 5, feed: "both" as const, artCount: 5, cardsCount: 0 },
@@ -49,8 +51,11 @@ describe("PicturePublishForm (VED-97)", () => {
 
     await user.upload(screen.getByLabelText("Картинка с цитатой из галереи"), picture());
     await user.selectOptions(screen.getByLabelText(/Категория/), "vedy");
-    await user.type(screen.getByLabelText(/Автор/), "Шрила Прабхупада");
-    await user.type(screen.getByLabelText(/Источник/), "Бхагавад-гита");
+    // Точные строки, а не /Автор/ и /Источник/: группа-обёртка (fieldset)
+    // сама несёт aria-label «Источник и автор» (VED-203) и подошла бы под
+    // свободный поиск подстроки.
+    await user.type(screen.getByLabelText("Автор (необязательно)"), "Шрила Прабхупада");
+    await user.type(screen.getByLabelText("Источник (необязательно)"), "Бхагавад-гита");
     await user.click(screen.getByRole("button", { name: "Опубликовать" }));
 
     await waitFor(() => expect(onPublished).toHaveBeenCalled());
@@ -69,6 +74,59 @@ describe("PicturePublishForm (VED-97)", () => {
       "href",
       "/motivation?post=picture-p1",
     );
+  });
+
+  it("заголовка группы «Автор / источник» на экране нет, имя группы осталось (VED-203)", () => {
+    render(<PicturePublishForm categories={categories} />);
+
+    // Строка над двумя полями с теми же словами читалась как лишняя.
+    expect(screen.queryByText("Автор / источник")).not.toBeInTheDocument();
+    // Но назначение группы скринридер по-прежнему называет — теми же
+    // словами, что и мастер роликов.
+    expect(
+      screen.getByRole("group", { name: "Источник и автор" }),
+    ).toBeInTheDocument();
+  });
+
+  it("подписи полей выделены тем же классом, что и в мастере роликов (VED-203)", () => {
+    render(<PicturePublishForm categories={categories} />);
+
+    for (const text of [
+      "Картинка с цитатой (JPEG, PNG или WebP)",
+      "Категория",
+      "Автор (необязательно)",
+      "Источник (необязательно)",
+      "Текст с картинки (необязательно)",
+    ])
+      // Жирность и самый контрастный текстовый токен — иначе подпись
+      // сливается с фоном страницы, на котором лежит форма.
+      expect(screen.getByText(text).className).toContain(fieldLabelClass());
+  });
+
+  it("кнопки и поля открытки дотягивают до тап-цели", () => {
+    render(<PicturePublishForm categories={categories} />);
+
+    // jsdom высоту не считает — стережём класс, который её задаёт; замер
+    // живой страницы лежит в tap-target.ts. Класс общий с мастером
+    // роликов: разойдись они, открытки снова стали бы ниже.
+    for (const name of [
+      "🖼️ Из галереи",
+      "📁 Из файлов",
+      "📋 Вставить из буфера",
+      "Опубликовать",
+    ])
+      expect(screen.getByRole("button", { name }).className).toContain(
+        tapButtonClass(),
+      );
+    // По роли, а не по подписи: у `<label>` в текст входит и подсказка под
+    // полем, и точное совпадение по ней не находится.
+    expect(
+      screen.getByRole("combobox", { name: /^Категория/ }).className,
+    ).toContain(tapFieldClass());
+    for (const name of [/^Автор/, /^Источник/, /^Текст с картинки/])
+      expect(screen.getByRole("textbox", { name }).className).toContain(
+        tapFieldClass(),
+      );
   });
 
   it("чужой формат не берёт и объясняет почему", async () => {
