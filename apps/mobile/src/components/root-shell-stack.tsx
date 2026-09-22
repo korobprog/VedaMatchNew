@@ -48,6 +48,14 @@ export function RootStack() {
             name="call/[id]"
             options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false, animation: 'fade' }}
           />
+          {/* Групповой звонок (VED-293) — тем же способом, что и звонок
+              один на один: модаль на весь экран без системной шапки.
+              Отличие одно: «назад» здесь СВОРАЧИВАЕТ комнату (экран сам
+              перехватывает), выход — только кнопкой. */}
+          <Stack.Screen
+            name="group-call/[id]"
+            options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false, animation: 'fade' }}
+          />
         </Stack.Protected>
       </Stack>
     </>

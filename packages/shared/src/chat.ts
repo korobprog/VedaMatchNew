@@ -458,7 +458,8 @@ export type ChatStreamEvent =
       conversationId: string;
       message: ChatMessageDto | null;
     }
-  | ChatCallStreamEvent;
+  | ChatCallStreamEvent
+  | ChatGroupCallStreamEvent;
 
 /** ICE-сервер в формате `RTCIceServer` — то, что уходит в `RTCPeerConnection`. */
 export interface ChatIceServerDto {
@@ -773,6 +774,106 @@ export interface AdminChatCallsState {
 export interface UpdateChatCallSettingsRequest {
   callsEnabled: boolean;
 }
+
+// ===== Групповые звонки в беседах (VED-293, этап 1: аудио, до 4 человек) =====
+
+/**
+ * Потолок участников комнаты. Не «круглое число»: звонок собран mesh'ем —
+ * каждый держит соединение с каждым, при N участниках это N−1 исходящих и
+ * N−1 входящих потоков на телефон. На пятом Samsung A51 (опорное устройство
+ * проекта) начинает захлёбываться: кодирование одного и того же микрофона в
+ * четыре независимых потока плюс четыре декодера — уже за гранью. Переход за
+ * этот предел означает не «поднять константу», а сервер-микшер (SFU), который
+ * решением от 2026-09-21 отложен «до надобности».
+ */
+export const CHAT_GROUP_CALL_MAX_PARTICIPANTS = 4;
+
+/** Этап 1 — только `audio`; `video` заведён, чтобы не менять тип потом. */
+export type ChatGroupCallKind = ChatCallKind;
+
+export type ChatGroupCallStatus = 'live' | 'ended';
+
+export interface ChatGroupCallParticipantDto {
+  user: ChatUserSummary;
+  joinedAt: string;
+  /** Микрофон выключен самим участником — видно остальным. */
+  muted: boolean;
+  /** Он «хозяин» комнаты прямо сейчас (самый ранний из живых). */
+  host: boolean;
+}
+
+export interface ChatGroupCallDto {
+  id: string;
+  conversationId: string;
+  kind: ChatGroupCallKind;
+  status: ChatGroupCallStatus;
+  /** `null` у завершённой комнаты. */
+  hostId: string | null;
+  startedBy: ChatUserSummary;
+  createdAt: string;
+  endedAt: string | null;
+  /** Только те, кто прямо сейчас в комнате, по возрастанию `joinedAt`. */
+  participants: ChatGroupCallParticipantDto[];
+  maxParticipants: number;
+}
+
+export interface StartChatGroupCallRequest {
+  conversationId: string;
+  /** Этап 1 принимает только `audio`; поле необязательно. */
+  kind?: ChatGroupCallKind;
+}
+
+/**
+ * Сигналинг mesh'а отличается от звонка один на один ровно одним полем:
+ * у сигнала есть адресат. Сервер, как и там, содержимое не разбирает.
+ */
+export interface ChatGroupCallSignalRequest {
+  toUserId: string;
+  signal: ChatCallSignal;
+  /** Тот же смысл, что у `ChatCallSignalRequest.clientSignalId`. */
+  clientSignalId?: string;
+}
+
+export interface ChatGroupCallSignalEnvelope {
+  seq: number;
+  fromUserId: string;
+  signal: ChatCallSignal;
+}
+
+export interface ChatGroupCallSignalsResponse {
+  signals: ChatGroupCallSignalEnvelope[];
+}
+
+/** `POST /chat/group-calls/:id/state` — своё состояние микрофона. */
+export interface SetChatGroupCallStateRequest {
+  muted: boolean;
+}
+
+/** `GET /chat/group-calls/active?conversationId=` и `POST /heartbeat`. */
+export interface ChatGroupCallState {
+  call: ChatGroupCallDto | null;
+}
+
+/** События групповых звонков в общем потоке `GET /chat/stream`. */
+export type ChatGroupCallStreamEvent =
+  | {
+      /** Комната открылась — всем участникам беседы, это и есть «входящий». */
+      type: 'group-call.started';
+      call: ChatGroupCallDto;
+    }
+  | {
+      /** Кто-то вошёл, вышел, выключил микрофон или сменился хозяин. */
+      type: 'group-call.updated';
+      call: ChatGroupCallDto;
+    }
+  | { type: 'group-call.ended'; call: ChatGroupCallDto }
+  | {
+      type: 'group-call.signal';
+      callId: string;
+      fromUserId: string;
+      signal: ChatCallSignal;
+      seq?: number;
+    };
 
 /** Сводка официального канала VedaMatch для админки. */
 export interface ChatOfficialChannelStats {

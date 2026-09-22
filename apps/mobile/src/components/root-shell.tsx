@@ -4,6 +4,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider } from '@/lib/auth/session';
 import { CallProvider } from '@/lib/calls/call-provider';
+import { GroupCallProvider } from '@/lib/group-calls/group-call-provider';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
 import { ThemeProvider } from '@/theme/theme';
 import { RootStack } from './root-shell-stack';
@@ -29,7 +30,9 @@ export function RootProviders({ children }: { children: ReactNode }) {
           <ThemeProvider>
             <SessionProvider>
               <ChatStreamProvider>
-                <CallProvider>{children}</CallProvider>
+                <CallProvider>
+                  <GroupCallProvider>{children}</GroupCallProvider>
+                </CallProvider>
               </ChatStreamProvider>
             </SessionProvider>
           </ThemeProvider>

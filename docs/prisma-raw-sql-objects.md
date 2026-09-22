@@ -15,6 +15,7 @@
 | `LibraryCategory_normalizedEn_trgm_idx` — GIN `gin_trgm_ops` | `library_core` | `DROP INDEX` |
 | `VedabaseSearchUnit_text_fts_idx` — GIN по `to_tsvector('russian', "text")` | `20260711_vedabase_postgres_content` | `DROP INDEX` |
 | `ChatConversation_official_single_idx` — частичный UNIQUE по `official` WHERE `official = true` | `20260914200000_chat_official_channel` | `DROP INDEX` |
+| `ChatGroupCall_one_live_per_conversation` — частичный UNIQUE по `conversationId` WHERE `status = 'live'` | `20260921134050_chat_group_calls` | `DROP INDEX` |
 
 Удаление любого из них ломает полнотекстовый поиск по библиотеке и подсказку
 похожих категорий при создании, а также полнотекстовый поиск по Vedabase

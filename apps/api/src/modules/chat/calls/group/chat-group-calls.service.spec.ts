@@ -1,0 +1,531 @@
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { ChatCallSignal } from '@vedamatch/shared';
+import type { PrismaService } from '../../../../prisma/prisma.service';
+import type { ChatConversationsService } from '../../chat-conversations.service';
+import type { ChatEventsService } from '../../chat-events.service';
+import { ChatGroupCallsService } from './chat-group-calls.service';
+import { GROUP_CALL_PARTICIPANT_TTL_MS } from './group-call-room';
+
+/**
+ * Сервис комнаты на маленьком дубле Prisma: правила входа/выхода живут в
+ * `group-call-room.ts` и проверены там таблицей случаев, здесь — что сервис
+ * их действительно применяет и рассылает то, что должен. Без REDIS_HOST
+ * сигналы обязаны работать на памяти процесса, как у звонка один на один.
+ */
+
+interface ParticipantRow {
+  id: string;
+  callId: string;
+  userId: string;
+  state: 'joined' | 'left';
+  joinedAt: Date;
+  leftAt: Date | null;
+  lastSeenAt: Date;
+  muted: boolean;
+}
+
+interface CallRow {
+  id: string;
+  conversationId: string;
+  startedById: string;
+  hostId: string | null;
+  kind: 'audio' | 'video';
+  status: 'live' | 'ended';
+  createdAt: Date;
+  endedAt: Date | null;
+  endReason: string | null;
+}
+
+function user(id: string) {
+  return {
+    id,
+    name: id,
+    spiritualName: null,
+    avatarUrl: null,
+    lastSeenAt: null,
+  };
+}
+
+function matches(
+  row: Record<string, unknown>,
+  where: Record<string, unknown>,
+): boolean {
+  return Object.entries(where).every(([key, value]) => {
+    if (value === undefined) return true;
+    if (value !== null && typeof value === 'object' && 'in' in value)
+      return (value as { in: unknown[] }).in.includes(row[key]);
+    return row[key] === value;
+  });
+}
+
+function buildService(
+  options: {
+    members?: string[];
+    conversationKind?: 'direct' | 'group' | 'channel';
+  } = {},
+) {
+  const memberIds = options.members ?? ['a', 'b', 'c', 'd', 'e'];
+  const calls: CallRow[] = [];
+  const participants: ParticipantRow[] = [];
+  let seq = 0;
+
+  const withIncludes = (row: CallRow) => ({
+    ...row,
+    startedBy: user(row.startedById),
+    participants: participants
+      .filter((p) => p.callId === row.id)
+      .map((p) => ({ ...p, user: user(p.userId) })),
+  });
+
+  const prisma = {
+    chatGroupCall: {
+      create: jest.fn(({ data }: { data: Record<string, unknown> }) => {
+        seq += 1;
+        const row: CallRow = {
+          id: `room-${seq}`,
+          conversationId: data.conversationId as string,
+          startedById: data.startedById as string,
+          hostId: (data.hostId as string) ?? null,
+          kind: 'audio',
+          status: 'live',
+          createdAt: new Date(),
+          endedAt: null,
+          endReason: null,
+        };
+        calls.push(row);
+        const created = (
+          data.participants as { create: { userId: string } } | undefined
+        )?.create;
+        if (created)
+          participants.push({
+            id: `p-${participants.length + 1}`,
+            callId: row.id,
+            userId: created.userId,
+            state: 'joined',
+            joinedAt: new Date(),
+            leftAt: null,
+            lastSeenAt: new Date(),
+            muted: false,
+          });
+        return Promise.resolve(withIncludes(row));
+      }),
+      findFirst: jest.fn(({ where }: { where: Record<string, unknown> }) => {
+        const found = calls.filter((row) =>
+          matches(row as unknown as Record<string, unknown>, {
+            conversationId: where.conversationId,
+            status: where.status,
+          }),
+        );
+        const byParticipant = where.participants
+          ? found.filter((row) =>
+              participants.some(
+                (p) =>
+                  p.callId === row.id &&
+                  p.state === 'joined' &&
+                  p.userId ===
+                    (where.participants as { some: { userId: string } }).some
+                      .userId,
+              ),
+            )
+          : found;
+        const last = byParticipant[byParticipant.length - 1];
+        return Promise.resolve(last ? withIncludes(last) : null);
+      }),
+      findMany: jest.fn(({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(
+          calls
+            .filter((row) => row.status === where.status)
+            .map((row) => withIncludes(row)),
+        ),
+      ),
+      findUnique: jest.fn(({ where }: { where: { id: string } }) => {
+        const row = calls.find((c) => c.id === where.id);
+        return Promise.resolve(row ? withIncludes(row) : null);
+      }),
+      findUniqueOrThrow: jest.fn(({ where }: { where: { id: string } }) => {
+        const row = calls.find((c) => c.id === where.id);
+        if (!row) throw new Error('нет такой комнаты');
+        return Promise.resolve(withIncludes(row));
+      }),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Partial<CallRow>;
+        }) => {
+          const row = calls.find((c) => c.id === where.id)!;
+          Object.assign(row, data);
+          return Promise.resolve(withIncludes(row));
+        },
+      ),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Partial<CallRow>;
+        }) => {
+          const rows = calls.filter((c) =>
+            matches(c as unknown as Record<string, unknown>, where),
+          );
+          rows.forEach((row) => Object.assign(row, data));
+          return Promise.resolve({ count: rows.length });
+        },
+      ),
+    },
+    chatGroupCallParticipant: {
+      upsert: jest.fn(
+        ({
+          where,
+          create,
+          update,
+        }: {
+          where: { callId_userId: { callId: string; userId: string } };
+          create: Record<string, unknown>;
+          update: Record<string, unknown>;
+        }) => {
+          const { callId, userId } = where.callId_userId;
+          const found = participants.find(
+            (p) => p.callId === callId && p.userId === userId,
+          );
+          if (found) Object.assign(found, update);
+          else
+            participants.push({
+              id: `p-${participants.length + 1}`,
+              callId,
+              userId,
+              state: 'joined',
+              joinedAt: (create.joinedAt as Date) ?? new Date(),
+              leftAt: null,
+              lastSeenAt: (create.lastSeenAt as Date) ?? new Date(),
+              muted: false,
+            });
+          return Promise.resolve({});
+        },
+      ),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Partial<ParticipantRow>;
+        }) => {
+          const rows = participants.filter((p) =>
+            matches(p as unknown as Record<string, unknown>, where),
+          );
+          rows.forEach((row) => Object.assign(row, data));
+          return Promise.resolve({ count: rows.length });
+        },
+      ),
+    },
+    chatConversation: {
+      findUnique: jest.fn(() =>
+        Promise.resolve({
+          members: memberIds.map((userId) => ({ userId, leftAt: null })),
+        }),
+      ),
+    },
+    chatMember: {
+      findFirst: jest.fn(({ where }: { where: { userId: string } }) =>
+        Promise.resolve(memberIds.includes(where.userId) ? { id: 'm' } : null),
+      ),
+    },
+    chatSettings: {
+      findUnique: jest.fn(() => Promise.resolve({ callsEnabled: true })),
+    },
+  } as unknown as PrismaService;
+
+  const conversations = {
+    requireConversation: jest.fn((conversationId: string) =>
+      Promise.resolve({
+        id: conversationId,
+        kind: options.conversationKind ?? 'group',
+        state: 'active',
+        requestedById: null,
+        members: memberIds.map((userId) => ({
+          userId,
+          role: 'member',
+          leftAt: null,
+        })),
+      }),
+    ),
+  } as unknown as ChatConversationsService;
+
+  const events = { publish: jest.fn() };
+  const config = { get: () => undefined } as unknown as ConfigService;
+
+  const service = new ChatGroupCallsService(
+    prisma,
+    conversations,
+    events as unknown as ChatEventsService,
+    config,
+  );
+  return { service, events, participants, calls };
+}
+
+const offer: ChatCallSignal = {
+  kind: 'sdp',
+  sdp: { type: 'offer', sdp: 'v=0…' },
+};
+
+describe('начало звонка', () => {
+  it('открывает комнату и сообщает о ней всей беседе', async () => {
+    const { service, events } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+
+    expect(room.participants.map((p) => p.user.id)).toEqual(['a']);
+    expect(room.hostId).toBe('a');
+    expect(room.maxParticipants).toBe(4);
+    expect(events.publish).toHaveBeenCalledWith(
+      ['a', 'b', 'c', 'd', 'e'],
+      expect.objectContaining({ type: 'group-call.started' }),
+    );
+  });
+
+  it('второй «начать» в той же беседе — вход в ту же комнату, а не вторая', async () => {
+    const { service } = buildService();
+    const first = await service.start('a', { conversationId: 'conv-1' });
+    const second = await service.start('b', { conversationId: 'conv-1' });
+
+    expect(second.id).toBe(first.id);
+    expect(second.participants.map((p) => p.user.id)).toEqual(['a', 'b']);
+  });
+
+  it('в личном диалоге отказывает — там обычный звонок', async () => {
+    const { service } = buildService({ conversationKind: 'direct' });
+    await expect(
+      service.start('a', { conversationId: 'conv-1' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('видео на этом этапе не принимает', async () => {
+    const { service } = buildService();
+    await expect(
+      service.start('a', { conversationId: 'conv-1', kind: 'video' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('потолок в четыре человека', () => {
+  it('пятого не пускает', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    for (const id of ['b', 'c', 'd']) await service.join(id, room.id);
+
+    await expect(service.join('e', room.id)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('после выхода одного место освобождается', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    for (const id of ['b', 'c', 'd']) await service.join(id, room.id);
+    await service.leave('b', room.id);
+
+    const after = await service.join('e', room.id);
+    expect(after.participants.map((p) => p.user.id)).toEqual([
+      'a',
+      'c',
+      'd',
+      'e',
+    ]);
+  });
+});
+
+describe('выход и хозяин', () => {
+  it('хозяин вышел — роль переходит следующему, комната жива', async () => {
+    const { service, events } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.join('c', room.id);
+
+    const after = await service.leave('a', room.id);
+    expect(after.status).toBe('live');
+    expect(after.hostId).toBe('b');
+    expect(after.participants.find((p) => p.user.id === 'b')?.host).toBe(true);
+    expect(events.publish).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ type: 'group-call.updated' }),
+    );
+  });
+
+  it('вышел последний — комната закрывается', async () => {
+    const { service, events } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    const after = await service.leave('a', room.id);
+
+    expect(after.status).toBe('ended');
+    expect(after.hostId).toBeNull();
+    expect(after.participants).toEqual([]);
+    expect(events.publish).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ type: 'group-call.ended' }),
+    );
+  });
+
+  it('вернувшийся не становится хозяином вперёд тех, кто сидел всё это время', async () => {
+    const { service, participants } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.leave('a', room.id);
+
+    // Без сдвига часов все три действия ложатся в одну миллисекунду, и
+    // порядок решает разводка по id — в жизни между выходом и возвратом
+    // проходят секунды, и проверять надо именно это.
+    jest.useFakeTimers().setSystemTime(Date.now() + 5_000);
+    try {
+      const back = await service.join('a', room.id);
+      expect(back.hostId).toBe('b');
+      expect(participants.find((p) => p.userId === 'a')!.state).toBe('joined');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('потеря участника', () => {
+  it('протухший heartbeat убирает человека из комнаты', async () => {
+    const { service, participants } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+
+    const lost = participants.find((p) => p.userId === 'b')!;
+    lost.lastSeenAt = new Date(
+      Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000,
+    );
+
+    const after = await service.heartbeat('a', room.id);
+    expect(after.participants.map((p) => p.user.id)).toEqual(['a']);
+    expect(after.status).toBe('live');
+    expect(lost.state).toBe('left');
+  });
+
+  it('пропали все — комната закрывается по таймауту', async () => {
+    const { service, participants, calls } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    participants.forEach((p) => {
+      p.lastSeenAt = new Date(
+        Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000,
+      );
+    });
+
+    const active = await service.activeForConversation('b', 'conv-1');
+    expect(active).toBeNull();
+    expect(calls.find((c) => c.id === room.id)!.endReason).toBe('timeout');
+  });
+});
+
+describe('микрофон', () => {
+  it('своё «выключил микрофон» видят остальные', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+
+    const after = await service.setState('b', room.id, true);
+    expect(after.participants.find((p) => p.user.id === 'b')?.muted).toBe(true);
+    expect(after.participants.find((p) => p.user.id === 'a')?.muted).toBe(
+      false,
+    );
+  });
+
+  it('не участник микрофоном комнаты не управляет', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await expect(service.setState('b', room.id, true)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
+
+describe('сигналинг', () => {
+  it('адресует сигнал конкретному участнику и отдаёт его в дочитывании', async () => {
+    const { service, events } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.join('c', room.id);
+
+    await service.signal('c', room.id, 'a', offer, 'sig-1');
+
+    expect(events.publish).toHaveBeenLastCalledWith(
+      ['a'],
+      expect.objectContaining({
+        type: 'group-call.signal',
+        fromUserId: 'c',
+        seq: 1,
+      }),
+    );
+    await expect(service.signalsSince('a', room.id, 0)).resolves.toEqual([
+      { seq: 1, fromUserId: 'c', signal: offer },
+    ]);
+    await expect(service.signalsSince('b', room.id, 0)).resolves.toEqual([]);
+  });
+
+  it('повтор с тем же ключом не порождает второй сигнал', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+
+    await service.signal('b', room.id, 'a', offer, 'sig-1');
+    await service.signal('b', room.id, 'a', offer, 'sig-1');
+
+    await expect(service.signalsSince('a', room.id, 0)).resolves.toHaveLength(
+      1,
+    );
+  });
+
+  it('вышедшему адресату не шлёт', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.leave('b', room.id);
+
+    await expect(
+      service.signal('a', room.id, 'b', offer),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('сам себе сигналить нельзя и мусор не принимается', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await expect(
+      service.signal('a', room.id, 'a', offer),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.signal('a', room.id, 'b', {
+        kind: 'nonsense',
+      } as unknown as ChatCallSignal),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('чужого в беседу не пускает вовсе', async () => {
+    const { service } = buildService({ members: ['a', 'b'] });
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await expect(service.join('z', room.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('восстановление после перезапуска', () => {
+  it('отдаёт комнату, в которой человек сейчас', async () => {
+    const { service } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+
+    await expect(service.activeForUser('b')).resolves.toMatchObject({
+      id: room.id,
+    });
+    await service.leave('b', room.id);
+    await expect(service.activeForUser('b')).resolves.toBeNull();
+  });
+});
