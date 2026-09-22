@@ -415,6 +415,10 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
           accessibilityLabel="Открыть настройки приложения"
           onPress={() => void Linking.openSettings()}
           android_ripple={ripple(colors.glassBorder, true)}
+          // Полоска отказа низкая, и кнопка в ней ростом 36; до 44 её
+          // добирает `hitSlop` — растить саму полоску ради этого значило бы
+          // подвинуть композер (`theme/hit-target.spec.ts`).
+          hitSlop={{ top: 4, bottom: 4 }}
           style={styles.deniedButton}
         >
           <Text style={[styles.deniedButtonText, { color: colors.magenta }]}>Открыть настройки</Text>
@@ -445,6 +449,10 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
           accessibilityLabel="Понятно"
           onPress={() => setState(() => INITIAL_VOICE_RECORDER_STATE)}
           android_ripple={ripple(colors.glassBorder, true)}
+          // Полоска отказа низкая, и кнопка в ней ростом 36; до 44 её
+          // добирает `hitSlop` — растить саму полоску ради этого значило бы
+          // подвинуть композер (`theme/hit-target.spec.ts`).
+          hitSlop={{ top: 4, bottom: 4 }}
           style={styles.deniedButton}
         >
           <Text style={[styles.deniedButtonText, { color: colors.text0 }]}>Понятно</Text>

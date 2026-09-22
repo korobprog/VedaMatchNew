@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { resolveDisplayName } from '@vedamatch/shared';
 import { appVariant } from '@/config/app-variant';
 import { ApiError, createApiClient } from '@/lib/api/client';
 import { createAuthApi } from './auth-api';
@@ -12,7 +11,8 @@ import { hasSessionMarker } from './session-marker';
 import { resolveWebSessionStrategy } from './telegram-web-session-strategy';
 import { tokenAuthority } from './token-authority';
 import { telegramLaunch } from '@/lib/telegram/web-app';
-import type { Session, SessionStatus, SessionUser } from './session';
+import type { Session, SessionStatus } from './session';
+import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
 
 /**
  * Сессия веб-версии приложения (`ios.vedamatch.com`). Какую именно сессию
@@ -39,15 +39,6 @@ const BEFORE_SIGN_OUT_TIMEOUT_MS = 2000;
 
 const SessionContext = createContext<Session | null>(null);
 
-interface ProfileResponse {
-  id: string;
-  email: string;
-  name: string;
-  spiritualName?: string | null;
-  /** Что видят другие: духовное имя, если оно есть, иначе мирское. */
-  displayName?: string;
-  avatarUrl?: string | null;
-}
 
 function currentPath(): string {
   const { pathname, search } = window.location;
@@ -86,17 +77,7 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
 
   const loadProfile = useCallback(async () => {
     const profile = await api.request<ProfileResponse>('/users/me');
-    setUser({
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      spiritualName: profile.spiritualName ?? null,
-      // `displayName` считает сервер (`resolveDisplayName`), но подстраховка
-      // на случай старого ответа — та же функция из общего пакета, а не
-      // своё «если есть духовное»: правило одно на портал.
-      displayName: profile.displayName ?? resolveDisplayName(profile),
-      avatarUrl: profile.avatarUrl ?? null,
-    });
+    setUser(toSessionUser(profile));
     setStatus('signed');
   }, [api]);
 
@@ -273,17 +254,7 @@ function TelegramTokenSessionProvider({
 
   const loadProfile = useCallback(async () => {
     const profile = await api.request<ProfileResponse>('/users/me');
-    setUser({
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      spiritualName: profile.spiritualName ?? null,
-      // `displayName` считает сервер (`resolveDisplayName`), но подстраховка
-      // на случай старого ответа — та же функция из общего пакета, а не
-      // своё «если есть духовное»: правило одно на портал.
-      displayName: profile.displayName ?? resolveDisplayName(profile),
-      avatarUrl: profile.avatarUrl ?? null,
-    });
+    setUser(toSessionUser(profile));
     setStatus('signed');
   }, [api]);
 

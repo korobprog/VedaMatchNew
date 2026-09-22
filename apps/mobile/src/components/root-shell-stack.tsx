@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSession } from '@/lib/auth/session';
+import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
 import { PushBridge } from '@/lib/push/push-bridge';
 import { TelegramShell } from '@/lib/telegram/telegram-shell';
 import { useTheme } from '@/theme/theme';
@@ -13,10 +14,25 @@ import { useTheme } from '@/theme/theme';
  * Гость видит только экран входа, вошедший — только вкладки. Пока сессия
  * восстанавливается, не показываем ничего: мигание экрана входа перед чатами
  * выглядит как разлогин.
+ *
+ * Третья развилка — онбординг новичка (VED-333): у вошедшего без пола или
+ * этапа пути доступен ровно один экран вопросов, и он стоит ВЫШЕ вкладок,
+ * потому что `Stack.Protected` при смене охраны уводит на первый доступный
+ * экран. Ответил или отложил — группа схлопывается, и первым доступным
+ * снова становится `(tabs)`.
  */
 export function RootStack() {
+  return (
+    <OnboardingGateProvider>
+      <RootStackInner />
+    </OnboardingGateProvider>
+  );
+}
+
+function RootStackInner() {
   const { scheme, colors } = useTheme();
   const { status } = useSession();
+  const onboarding = useOnboardingGate();
   if (status === 'loading') return null;
   return (
     <>
@@ -28,7 +44,10 @@ export function RootStack() {
           <Stack.Screen name="login" />
           <Stack.Screen name="auth" />
         </Stack.Protected>
-        <Stack.Protected guard={status === 'signed'}>
+        <Stack.Protected guard={onboarding.visible}>
+          <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={status === 'signed' && !onboarding.visible}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="account" />
           {/* «Профиль» (VED-332) — маршрут корневого стека рядом с
