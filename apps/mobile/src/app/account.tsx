@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { InlineError } from '@/components/inline-error';
 import { DevicePushSection } from '@/components/notifications/device-push-section';
@@ -326,19 +327,44 @@ export default function AccountScreen() {
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
       {header}
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={[styles.profile, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
-          <Text numberOfLines={1} style={[styles.profileName, { color: colors.text0 }]}>
-            {user?.name ?? 'Аккаунт'}
-          </Text>
-          {emailLabel ? (
-            <Text
-              numberOfLines={1}
-              style={[styles.profileEmail, { color: data.placeholderEmail ? colors.text2 : colors.text1 }]}
-            >
-              {emailLabel}
+        {/* Вход в профиль (VED-332). Карточка была неинтерактивной: человек
+            видел своё имя и не мог его поправить — поменять о себе хоть
+            что-то в приложении было негде вовсе. Имя здесь — `displayName`,
+            то есть духовное, если оно заполнено: карточка показывает
+            человека, а не служебное поле анкеты. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Профиль, ${user?.displayName ?? 'аккаунт'}`}
+          accessibilityHint="Имя, духовное имя, фотография и рассказ о себе"
+          onPress={() => router.push('/profile')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [
+            styles.profile,
+            { backgroundColor: colors.glass, borderColor: colors.glassBorder },
+            pressedStyle(pressed),
+          ]}
+        >
+          <ChatAvatar
+            id={user?.id ?? 'me'}
+            name={user?.displayName ?? 'Аккаунт'}
+            uri={user?.avatarUrl}
+            size={52}
+          />
+          <View style={styles.profileBody}>
+            <Text numberOfLines={1} style={[styles.profileName, { color: colors.text0 }]}>
+              {user?.displayName ?? 'Аккаунт'}
             </Text>
-          ) : null}
-        </View>
+            {emailLabel ? (
+              <Text
+                numberOfLines={1}
+                style={[styles.profileEmail, { color: data.placeholderEmail ? colors.text2 : colors.text1 }]}
+              >
+                {emailLabel}
+              </Text>
+            ) : null}
+            <Text style={[styles.profileHint, { color: colors.text1 }]}>Имя, фотография, о себе</Text>
+          </View>
+        </Pressable>
 
         {data.placeholderEmail ? (
           <Text
@@ -694,9 +720,20 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
-  profile: { borderWidth: 1, borderRadius: radius.md, padding: 16, gap: 2 },
+  profile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    minHeight: hitTarget,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  profileBody: { flex: 1, minWidth: 0, gap: 2 },
   profileName: { fontFamily: fonts.bodyBold, fontSize: 18 },
   profileEmail: { fontFamily: fonts.body, fontSize: 13 },
+  profileHint: { fontFamily: fonts.body, fontSize: 13 },
   hint: {
     fontFamily: fonts.body,
     fontSize: 13,

@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import { resolveDisplayName } from '@vedamatch/shared';
 import { appVariant } from '@/config/app-variant';
 import { createApiClient, type ApiClient, type SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AppTokens } from './auth-api';
@@ -33,8 +34,17 @@ import { unregisterDevice } from '@/lib/push/push-api';
 
 export interface SessionUser {
   id: string;
-  email: string;
+  /** Мирское имя. Владельцу нужно для правки профиля — наружу идёт `displayName`. */
   name: string;
+  /** Духовное имя; `null` — не заполнено. */
+  spiritualName: string | null;
+  /**
+   * Имя, под которым человека видят все остальные: духовное, если оно
+   * заполнено, иначе мирское (CLAUDE.md, «Имя пользователя наружу»). Всё,
+   * что показывает человека людям, берёт именно его, а не `name`.
+   */
+  displayName: string;
+  email: string;
   avatarUrl: string | null;
 }
 
@@ -83,6 +93,13 @@ export interface Session {
    * отписка — возвращаемой функцией.
    */
   registerBeforeSignOut(hook: () => Promise<void>): () => void;
+  /**
+   * Перечитать `GET /users/me` и обновить `user` (VED-332). Нужен экрану
+   * профиля: после смены имени или фотографии стоявшее в сессии значение
+   * протухает, и «Аккаунт», справочник и шапки продолжали бы показывать
+   * старое имя до перезапуска приложения.
+   */
+  reloadUser(): Promise<void>;
 }
 
 /** Сколько максимум ждать все `registerBeforeSignOut`-колбэки в сумме,
@@ -105,6 +122,9 @@ interface ProfileResponse {
   id: string;
   email: string;
   name: string;
+  spiritualName?: string | null;
+  /** Что видят другие: духовное имя, если оно есть, иначе мирское. */
+  displayName?: string;
   avatarUrl?: string | null;
 }
 
@@ -245,6 +265,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       id: profile.id,
       email: profile.email,
       name: profile.name,
+      spiritualName: profile.spiritualName ?? null,
+      // `displayName` считает сервер (`resolveDisplayName`), но подстраховка
+      // на случай старого ответа — та же функция из общего пакета, а не
+      // своё «если есть духовное»: правило одно на портал.
+      displayName: profile.displayName ?? resolveDisplayName(profile),
       avatarUrl: profile.avatarUrl ?? null,
     });
     setStatus('signed');
@@ -383,6 +408,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signInDev,
       signOut,
       registerBeforeSignOut,
+      reloadUser: loadProfile,
     }),
     [
       status,
@@ -396,6 +422,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signInDev,
       signOut,
       registerBeforeSignOut,
+      loadProfile,
     ],
   );
 
