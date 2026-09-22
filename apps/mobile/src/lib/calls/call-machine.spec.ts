@@ -110,6 +110,47 @@ describe('reduceCall', () => {
     expect(next).toEqual(IDLE_STATE);
   });
 
+  // ---- VED-358: «Принять» нажали здесь, а камеру ещё спрашивают ----
+
+  it('`call.accepted` в дырке между нажатием «Принять» и запросом камеры не гасит звонок', () => {
+    // Живая поломка 22.09: `accept()` ставит `accepting` только ПОСЛЕ
+    // запроса ICE-серверов по сети и `getUserMedia` (на первом видеозвонке
+    // там ещё и системный вопрос о доступе к камере, который ждёт
+    // человека). Всё это время фаза здесь `incoming`, и правило VED-346
+    // «в `incoming` пришёл `call.accepted` — значит ответили на другом
+    // устройстве» срабатывало на собственном же ответе.
+    const answering = reduceCall(incoming(), { type: 'answering' });
+    expect(answering.phase).toBe('incoming');
+    const next = reduceCall(answering, {
+      type: 'stream',
+      event: { type: 'call.accepted', call: call({ status: 'accepted' }) },
+      selfId: 'me',
+    });
+    expect(next.phase).toBe('connecting');
+    expect(next.call?.status).toBe('accepted');
+  });
+
+  it('метка «отвечаем здесь» ставится только из фазы входящего', () => {
+    expect(reduceCall(IDLE_STATE, { type: 'answering' })).toEqual(IDLE_STATE);
+  });
+
+  it('метка «отвечаем здесь» не переживает следующий звонок', () => {
+    const answering = reduceCall(incoming(), { type: 'answering' });
+    const reset = reduceCall(answering, { type: 'reset' });
+    const again = reduceCall(reset, {
+      type: 'stream',
+      event: { type: 'call.ringing', call: call({ id: 'c2' }) },
+      selfId: 'me',
+    });
+    expect(again.phase).toBe('incoming');
+    const next = reduceCall(again, {
+      type: 'stream',
+      event: { type: 'call.accepted', call: call({ id: 'c2', status: 'accepted' }) },
+      selfId: 'me',
+    });
+    expect(next).toEqual(IDLE_STATE);
+  });
+
   it('ответившее устройство на том же событии остаётся в звонке', () => {
     const answering = reduceCall(incoming(), { type: 'accepting' });
     const next = reduceCall(answering, {

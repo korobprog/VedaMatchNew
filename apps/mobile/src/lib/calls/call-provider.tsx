@@ -27,6 +27,7 @@ import { describeMediaError } from './call-media-error';
 import { buildLaunchPreviewCall } from './call-launch-preview';
 import { CONNECTING_TIMEOUT_MS, decideConnectingTimeout } from './call-connect-timeout';
 import { IDLE_STATE, companionOf, reduceCall, roleIn, type CallState } from './call-machine';
+import { routeRingingEvent } from './call-ringing-routing';
 import type { CameraFacing } from './camera-mirror';
 import {
   admitCallSignal,
@@ -359,25 +360,34 @@ export function CallProvider({ children }: { children: ReactNode }) {
       // JS-баннера/рингтона, которых за блокировкой никто не видел и не
       // слышал (`decideIncomingCallPresentation`,
       // `incoming-call-presentation.ts`); только Android — на iOS нет
-      // альтернативы нативному пути вовсе, там `dispatch` идёт как раньше.
-      // Только из простоя (не мешаем уже идущему разговору) — дедуп по
-      // `callId` внутри `showIncomingCallFromStream` (`callLifecycleTracker`,
-      // общий с пуш-путём) защищает от повторного вызова на каждый ре-рендер
-      // потока.
-      if (
-        Platform.OS === 'android' &&
-        event.type === 'call.ringing' &&
-        stateRef.current.phase === 'idle' &&
-        event.call.callee.id === userId &&
-        AppState.currentState !== 'active'
-      ) {
-        void showIncomingCallFromStream({
-          callId: event.call.id,
-          callerName: event.call.caller.name,
-          kind: event.call.kind,
-          avatarUrl: event.call.caller.avatarUrl,
+      // альтернативы нативному пути вовсе. Только из простоя (не мешаем уже
+      // идущему разговору) — дедуп по `callId` внутри
+      // `showIncomingCallFromStream` (`callLifecycleTracker`, общий с
+      // пуш-путём) защищает от повторного вызова на каждое событие потока.
+      //
+      // VED-358: нативный экран — способ ДОЗВОНИТЬСЯ до человека мимо
+      // приложения, а не замена знанию приложения о звонке. Раньше эта
+      // ветка заканчивалась `return`, и `dispatch` до машины состояний не
+      // доходил вовсе: полноэкранный intent тут же выводил приложение на
+      // передний план, а там не было ни баннера, ни кнопки «Принять» —
+      // ровно то, что нашлось живой проверкой (в браузере окно было).
+      // Решение — `routeRingingEvent` (`call-ringing-routing.ts`), и
+      // «только нативный, мимо машины» среди его исходов больше нет.
+      if (event.type === 'call.ringing') {
+        const routing = routeRingingEvent({
+          platform: Platform.OS,
+          appState: AppState.currentState,
+          phase: stateRef.current.phase,
+          isCallee: event.call.callee.id === userId,
         });
-        return;
+        if (routing.showNative)
+          void showIncomingCallFromStream({
+            callId: event.call.id,
+            callerName: event.call.caller.name,
+            kind: event.call.kind,
+            avatarUrl: event.call.caller.avatarUrl,
+          });
+        if (!routing.trackInMachine) return;
       }
       // Финал звонка, которого провайдер не ведёт (например, поднятого
       // нативно из фона, пока JS был в простое): погасить его соединение
@@ -806,6 +816,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
     acceptingCallId.current = call.id;
     answerAttemptCallId.current = call.id;
+    // Метка «отвечаем отсюда» — до запроса камеры (VED-358): между нажатием
+    // и `accepting` ниже лежат сеть и системный вопрос о доступе к камере,
+    // а `call.accepted` за это время уже может прийти потоком. Без метки
+    // машина приняла бы его за «ответили на другом устройстве» и погасила
+    // бы звонок ровно на том устройстве, где на «Принять» и нажали.
+    dispatch({ type: 'answering' });
     // eslint-disable-next-line no-console
     console.warn('[calls] accept: начат', { callId: call.id });
     try {
