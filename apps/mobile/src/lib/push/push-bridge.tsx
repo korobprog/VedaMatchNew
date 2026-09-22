@@ -1,7 +1,6 @@
 import {
   getInitialNotification,
   getMessaging,
-  getToken,
   onMessage,
   onNotificationOpenedApp,
   onTokenRefresh,
@@ -10,17 +9,13 @@ import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { appVariant } from '@/config/app-variant';
 import { handleIncomingCallPush } from '@/lib/calls/native-call-bridge';
 import { parseCallPush } from '@/lib/calls/incoming-call-push';
 import { useSession } from '@/lib/auth/session';
 import { isConversationOpen } from './active-chat';
 import { isCallRelatedPushUrl } from './call-push-guard';
-import { registerDevice } from './push-api';
+import { CHANNEL_ID, registerThisDevice, sendDeviceToken } from './device-registration';
 import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
-
-/** Тот же идентификатор канала, что шлёт сервер в `android.notification.channel_id`. */
-const CHANNEL_ID = 'messages';
 
 // Пока приложение открыто, пуш показывается, если только беседа из него уже
 // не на экране. Это решает, что делать с уведомлением, которое мы сами же
@@ -70,44 +65,16 @@ export function PushBridge() {
 
   useEffect(() => {
     if (!signed || Platform.OS !== 'android') return;
-    let cancelled = false;
-    const variant = appVariant();
-    const send = (token: string) =>
-      registerDevice(api, {
-        token,
-        provider: 'fcm',
-        platform: 'android',
-        appVariant: `${variant.contour}-${variant.channel}`,
-        // Устройство умеет нативный экран звонка по data-пушу (VED-220/221):
-        // сервер перестаёт слать этому телефону обычный пуш «вам звонят».
-        nativeCalls: true,
-      }).catch(() => undefined);
-
-    void (async () => {
-      // Канал нужен до запроса разрешения: без него Android 13 не покажет окно.
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: 'Сообщения',
-        importance: Notifications.AndroidImportance.HIGH,
-      });
-      const current = await Notifications.getPermissionsAsync();
-      const granted = current.granted || (current.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);
-      if (!granted || cancelled) return;
-      try {
-        // Тот же FCM-токен, что раньше отдавал `getDevicePushTokenAsync` —
-        // источник другой (RNFB, а не expo-notifications), контракт с
-        // сервером (`POST /notifications/devices`) не меняется.
-        const token = await getToken(getMessaging());
-        if (!cancelled && token) await send(token);
-      } catch {
-        // Сборка без google-services.json не умеет FCM: чаты работают и без пушей.
-      }
-    })();
+    // Сама последовательность (канал → разрешение → токен → сервер) живёт в
+    // `device-registration.ts`: её же повторяет кнопка «Зарегистрировать
+    // заново» в разделе доставки, и она же записывает итог, который этот
+    // раздел показывает человеку (VED-329).
+    void registerThisDevice(api);
 
     const rotation = onTokenRefresh(getMessaging(), (token) => {
-      if (typeof token === 'string') void send(token);
+      if (typeof token === 'string') void sendDeviceToken(api, token);
     });
     return () => {
-      cancelled = true;
       rotation();
     };
   }, [signed, api]);
