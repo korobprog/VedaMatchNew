@@ -86,6 +86,15 @@ function RootStackInner() {
             name="conference/[id]"
             options={{ presentation: 'formSheet', sheetGrabberVisible: true }}
           />
+          {/* Сканер состава «Здоровья» (VED-335) — маршруты корневого стека,
+              а не шестая вкладка: вход в него один, карточкой сервиса на
+              вкладке «Сервисы», и держать ради него постоянную кнопку внизу
+              незачем. Экран ответа берёт штрихкод из адреса, а не из памяти
+              сканера: так в него возвращаются из истории и попадают по
+              ссылке, а вердикт всегда пересчитывается заново. */}
+          <Stack.Screen name="wellness/scan" />
+          <Stack.Screen name="wellness/result/[barcode]" />
+          <Stack.Screen name="wellness/history" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />

@@ -24,6 +24,26 @@ export interface Palette {
   blue: string;
   /** Текст поверх заливки `magenta`. */
   onAccent: string;
+  /**
+   * Три состояния ответа сканера: «подходит», «сомнительно», «не подходит»
+   * (VED-335). Ими же красится рамка прицеливания камеры.
+   *
+   * Заведены отдельно от `cyan`/`gold`/`magenta`, хотя на глаз соседние: те
+   * три — акценты бренда (ссылка, значок, кнопка), и их значения меняются
+   * вместе с фирменным стилем. Эти — значение, а не украшение: зелёное тут
+   * обязано остаться зелёным, даже если бренд завтра станет синим. Фирменные
+   * для этой роли не годятся ещё и по замеру: `cyan` на светлой теме даёт
+   * 4.53:1 на `bg0` и 4.16:1 на `bg1`, `gold` — 3.66:1 на `bg0`; оба ниже
+   * порога мелким текстом (CLAUDE.md уже держит их в списке исключений).
+   *
+   * Цвет — не единственный носитель состояния: и рамка, и карточка вердикта
+   * дублируют его словом и подписью для скринридера
+   * (`components/wellness/aim-frame.tsx`, `lib/wellness/verdict-copy.ts`).
+   * Замеры реальных пар — в `contrast.spec.ts`.
+   */
+  success: string;
+  warning: string;
+  danger: string;
   /** Подложка счётчиков непрочитанного, как `--vm-mint-from` на сайте. */
   mint: string;
   /** Текст поверх `mint`: 9,3:1 в обеих темах. */
@@ -55,6 +75,9 @@ export const light: Palette = {
   violet: '#7A3FBF',
   blue: '#1F5FBF',
   onAccent: '#FFFFFF',
+  success: '#0A6E38',
+  warning: '#8F5F00',
+  danger: '#B81D1D',
   mint: '#33CCCC',
   onMint: '#14212C',
   scrim: 'rgba(0, 0, 0, 0.6)',
@@ -77,6 +100,9 @@ export const dark: Palette = {
   violet: '#C68BFF',
   blue: '#7FB4FF',
   onAccent: '#180F2C',
+  success: '#4BE08C',
+  warning: '#FFC85C',
+  danger: '#FF7A7A',
   mint: '#33CCCC',
   onMint: '#14212C',
   scrim: 'rgba(0, 0, 0, 0.6)',

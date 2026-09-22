@@ -12,12 +12,14 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { summarizeBasket } from './basket-summary';
+import { restrictionsOrDefault } from './default-restrictions';
 import { resolveVerdict, type WellnessDietRestrictions } from './diet-verdict';
 import {
   matchIngredients,
   type WellnessIngredientEntry,
 } from './ingredient-match';
 import { parseComposition } from './ingredient-parse';
+import { dropKnownSafe } from './known-safe';
 import type { ParsedProductInput, ParsedScanInput } from './wellness-dto';
 import { WellnessOpenFoodFactsService } from './wellness-openfoodfacts.service';
 
@@ -124,24 +126,32 @@ export class WellnessService {
     }));
   }
 
+  /**
+   * Ограничения человека. Анкеты нет — отвечает умолчание портала
+   * (`default-restrictions.ts`, VED-335): до него новичок у полки получал на
+   * сосиски честное «подходит», потому что судить было не о чем.
+   */
   async restrictions(userId: string): Promise<WellnessDietRestrictions> {
     const profile = await this.prisma.wellnessDietProfile.findUnique({
       where: { userId },
       select: { excluded: true, excludedKeys: true },
     });
-    return {
-      excluded: profile?.excluded ?? [],
-      excludedKeys: profile?.excludedKeys ?? [],
-    };
+    return restrictionsOrDefault(profile);
   }
 
+  /**
+   * Та же подстановка, что в `restrictions()`, и по той же причине: экран
+   * анкеты обязан показывать ровно то, по чему на самом деле судит сканер,
+   * иначе галочки и вердикт расходятся у человека на глазах.
+   */
   async diet(userId: string): Promise<WellnessDietProfileDto> {
     const profile = await this.prisma.wellnessDietProfile.findUnique({
       where: { userId },
     });
+    const restrictions = restrictionsOrDefault(profile);
     return {
-      excluded: profile?.excluded ?? [],
-      excludedKeys: profile?.excludedKeys ?? [],
+      excluded: restrictions.excluded,
+      excludedKeys: restrictions.excludedKeys,
       updatedAt: profile?.updatedAt.toISOString() ?? null,
     };
   }
@@ -168,11 +178,17 @@ export class WellnessService {
     restrictions: WellnessDietRestrictions,
   ): Promise<WellnessVerdictResult> {
     const entries = await this.ingredients();
-    const { matches, unrecognized } = matchIngredients(
-      parseComposition(ingredientsRaw),
-      entries,
+    const tokens = parseComposition(ingredientsRaw);
+    const { matches, unrecognized } = matchIngredients(tokens, entries);
+    // Справочник знает только то, что может не подойти, поэтому вода и мука
+    // из него выпадают и превращают любой состав в «не знаем»
+    // (`known-safe.ts`, VED-335). Список безвредного применяется ПОСЛЕ
+    // справочника и только к непонятому: запретное он отменить не может.
+    return resolveVerdict(
+      matches,
+      dropKnownSafe(tokens, unrecognized),
+      restrictions,
     );
-    return resolveVerdict(matches, unrecognized, restrictions);
   }
 
   async productByBarcode(barcode: string): Promise<WellnessProductCard | null> {

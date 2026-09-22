@@ -14,6 +14,7 @@ import { serviceUrl } from '@/config/services';
 import { useSession } from '@/lib/auth/session';
 import { createServicesApi } from '@/lib/services/services-api';
 import { describeServicesError } from '@/lib/services/services-error';
+import { serviceTarget } from '@/lib/services/service-route';
 import { visibleServices } from '@/lib/services/services-list';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -87,9 +88,18 @@ export default function ServicesScreen() {
     void load();
   }, [load]);
 
+  // У «Здоровья» есть свой экран в приложении (VED-335): сканер состава
+  // нельзя отправить в браузер телефона, там камеры либо нет, либо она
+  // требует https и отдельного разрешения. Список таких сервисов — в
+  // `lib/services/service-route.ts`, а не `if` по месту.
   const openService = useCallback(
     (service: ServiceCardDto) => {
-      void WebBrowser.openBrowserAsync(serviceUrl(webOrigin, service.url));
+      const target = serviceTarget(service);
+      if (target.kind === 'in-app') {
+        router.push(target.path as never);
+        return;
+      }
+      void WebBrowser.openBrowserAsync(serviceUrl(webOrigin, target.url));
     },
     [webOrigin],
   );
@@ -99,7 +109,11 @@ export default function ServicesScreen() {
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
         Сервисы
       </Text>
-      <Text style={[styles.subtitle, { color: colors.text1 }]}>Открываются на сайте VedaMatch в браузере.</Text>
+      {/* «Здоровье» с VED-335 открывается своим экраном, остальные — на
+          сайте: обещать «все в браузере» больше нельзя. */}
+      <Text style={[styles.subtitle, { color: colors.text1 }]}>
+        Сканер состава работает прямо здесь, остальные — на сайте VedaMatch.
+      </Text>
     </View>
   );
 
