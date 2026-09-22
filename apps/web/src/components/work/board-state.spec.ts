@@ -15,6 +15,7 @@ function card(id: string): WorkTaskCardDto {
     key: `VM-${id}`,
     number: Number(id.replace(/\D/g, "")) || 1,
     columnId: "",
+    statusMark: null,
     title: id,
     position: 0,
     priority: "normal",

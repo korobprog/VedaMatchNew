@@ -54,7 +54,7 @@ import {
 } from "@/lib/notifications-inbox";
 import { setUnreadCount } from "@/lib/notifications-unread";
 import { NotificationIcon } from "@/components/icons/notification-icons";
-import { NotificationMarkBadge } from "./notification-mark-badge";
+import { StatusMarkBadge } from "@/components/status-mark-badge";
 
 /**
  * Пауза перед запросом при наборе. Меньше — сервер получает запрос на каждую
@@ -527,7 +527,7 @@ function NotificationCard({
               смены статуса, и без пометки её приходится открывать заново. */}
           {item.mark && (
             <span className="mt-2 flex justify-end">
-              <NotificationMarkBadge mark={item.mark} />
+              <StatusMarkBadge mark={item.mark} />
             </span>
           )}
         </span>

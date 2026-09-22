@@ -124,7 +124,7 @@ export class WorkBoardsService {
       view,
       hasMore: tasks.length > WORK_ARCHIVE_LIMIT,
       items: tasks.slice(0, WORK_ARCHIVE_LIMIT).map((task) => ({
-        ...toWorkTaskCard(task, prefix),
+        ...toWorkTaskCard(task, prefix, task.column.name),
         columnName: task.column.name,
         archivedAt: task.archivedAt?.toISOString() ?? null,
       })),
@@ -203,7 +203,7 @@ export class WorkBoardsService {
         wipLimit: column.wipLimit,
         isDone: column.isDone,
         tasks: column.tasks.map((task) =>
-          toWorkTaskCard(task, board.space.prefix),
+          toWorkTaskCard(task, board.space.prefix, column.name),
         ),
       })),
     };

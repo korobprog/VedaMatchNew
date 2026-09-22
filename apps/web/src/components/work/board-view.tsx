@@ -74,6 +74,7 @@ import {
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
+import { StatusMarkBadge } from "@/components/status-mark-badge";
 import { descriptionHasWholeText, splitTaskDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 import { groupTasksByPriority } from "./task-grouping";
@@ -1294,6 +1295,12 @@ function TaskCard({
 
       <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-5 text-xs text-text-2">
         <span className="font-mono">{task.key}</span>
+        {/* Состояние — сразу за номером (VED-311): «в каком состоянии задача»
+            человек спрашивает первым, и ответ должен попасться раньше срока и
+            счётчиков. Тот же компонент, что в ленте уведомлений, и тот же код
+            от сервера: расхождение между лентой и доской было отдельной
+            жалобой (VED-320). */}
+        <StatusMarkBadge mark={task.statusMark} />
         {/* Точка и слово вместе: цветного края мало — на солнце и при
             дальтонизме золото от пурпура не отличить. */}
         {mark && (

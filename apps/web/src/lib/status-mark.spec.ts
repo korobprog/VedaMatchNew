@@ -1,41 +1,36 @@
 import { describe, expect, it } from "vitest";
-import type { NotificationMark } from "@vedamatch/shared";
-import {
-  notificationMarkLabel,
-  notificationMarkView,
-} from "./notification-mark";
+import type { TaskStatusMark } from "@vedamatch/shared";
+import { taskStatusMarkLabel, taskStatusMarkView } from "./status-mark";
 
-const ALL: NotificationMark[] = ["in_progress", "testing", "done", "rework"];
+const ALL: TaskStatusMark[] = ["in_progress", "testing", "done", "rework"];
 
-describe("notificationMarkView", () => {
+describe("taskStatusMarkView", () => {
   /**
    * Слово — ровно название колонки доски, включая «Тестерование» через «е»:
-   * так она называется у заказчика, и подменять её написание в значке значит
+   * так она называется у заказчика, и подменять её написание в ярлыке значит
    * показывать человеку не то слово, на которое он нажимал (VED-312).
    */
   it("даёт слово каждому из четырёх состояний", () => {
-    expect(notificationMarkView("in_progress")?.label).toBe("В работе");
-    expect(notificationMarkView("testing")?.label).toBe("Тестерование");
-    expect(notificationMarkView("done")?.label).toBe("Выполнено");
-    expect(notificationMarkView("rework")?.label).toBe("На доработку");
+    expect(taskStatusMarkView("in_progress")?.label).toBe("В работе");
+    expect(taskStatusMarkView("testing")?.label).toBe("Тестерование");
+    expect(taskStatusMarkView("done")?.label).toBe("Выполнено");
+    expect(taskStatusMarkView("rework")?.label).toBe("На доработку");
   });
 
-  it("без значка возвращает null", () => {
-    expect(notificationMarkView(null)).toBeNull();
-    expect(notificationMarkView(undefined)).toBeNull();
+  it("без ярлыка возвращает null", () => {
+    expect(taskStatusMarkView(null)).toBeNull();
+    expect(taskStatusMarkView(undefined)).toBeNull();
     // Код из сборки с другим набором значков не должен ронять ленту.
-    expect(
-      notificationMarkView("backlog" as NotificationMark),
-    ).toBeNull();
+    expect(taskStatusMarkView("backlog" as TaskStatusMark)).toBeNull();
   });
 
   /**
-   * Цвет — не единственная примета: дальтонику и в чёрно-белой печати значок
+   * Цвет — не единственная примета: дальтонику и в чёрно-белой печати ярлык
    * обязан читаться словом. Знака рядом со словом больше нет (VED-312),
    * поэтому слово остаётся единственной приметой, не зависящей от зрения.
    */
   it("у каждого состояния своё слово и свой цвет", () => {
-    const views = ALL.map((mark) => notificationMarkView(mark)!);
+    const views = ALL.map((mark) => taskStatusMarkView(mark)!);
     expect(new Set(views.map((view) => view.label)).size).toBe(ALL.length);
     expect(new Set(views.map((view) => view.className)).size).toBe(ALL.length);
   });
@@ -47,7 +42,7 @@ describe("notificationMarkView", () => {
    */
   it("цвета берутся токенами темы, без хардкода", () => {
     for (const mark of ALL) {
-      const { className } = notificationMarkView(mark)!;
+      const { className } = taskStatusMarkView(mark)!;
       expect(className).not.toMatch(/#[0-9a-f]{3,8}/i);
       expect(className).toMatch(
         /^border-mark-(progress|testing|done|rework)\/60 text-mark-(progress|testing|done|rework)$/,
@@ -55,17 +50,17 @@ describe("notificationMarkView", () => {
     }
   });
 
-  /** Своей заливки у значка нет: она роняет контраст подписи ниже AA. */
-  it("значок не заливает подложку цветом", () => {
+  /** Своей заливки у ярлыка нет: она роняет контраст подписи ниже AA. */
+  it("ярлык не заливает подложку цветом", () => {
     for (const mark of ALL) {
-      expect(notificationMarkView(mark)!.className).not.toMatch(/\bbg-/);
+      expect(taskStatusMarkView(mark)!.className).not.toMatch(/\bbg-/);
     }
   });
 });
 
-describe("notificationMarkLabel", () => {
+describe("taskStatusMarkLabel", () => {
   it("читается скринридером целой фразой", () => {
-    expect(notificationMarkLabel(notificationMarkView("done")!)).toBe(
+    expect(taskStatusMarkLabel(taskStatusMarkView("done")!)).toBe(
       "Статус: Выполнено",
     );
   });

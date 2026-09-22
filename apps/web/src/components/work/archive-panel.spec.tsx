@@ -17,6 +17,7 @@ function item(over: Partial<WorkArchiveItemDto> = {}): WorkArchiveItemDto {
     key: "VED-61",
     number: 61,
     columnId: "c-done",
+    statusMark: "done",
     title: "Кнопка архива",
     position: 0,
     priority: "normal",
