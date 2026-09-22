@@ -231,9 +231,9 @@ describe('toWorkAgendaResponse', () => {
 describe('признак ИИ-агента', () => {
   it('едет наружу и у исполнителя карточки, и у участника среды', () => {
     // Без него агент рисуется тем же кружком с буквой, что и живой человек.
-    expect(toWorkTaskCard(taskRow({ assignee: agent }), 'VM').assignee).toEqual(
-      expect.objectContaining({ name: 'Севак', isAgent: true }),
-    );
+    expect(
+      toWorkTaskCard(taskRow({ assignee: agent }), 'VM', 'В работе').assignee,
+    ).toEqual(expect.objectContaining({ name: 'Севак', isAgent: true }));
     expect(
       toWorkMember({ role: 'member', joinedAt: new Date(), user: agent })
         .isAgent,
@@ -243,7 +243,8 @@ describe('признак ИИ-агента', () => {
   it('у людей остаётся false', () => {
     expect(toWorkPerson(devotee).isAgent).toBe(false);
     expect(
-      toWorkTaskCard(taskRow({ assignee: worldly }), 'VM').assignee?.isAgent,
+      toWorkTaskCard(taskRow({ assignee: worldly }), 'VM', 'В работе').assignee
+        ?.isAgent,
     ).toBe(false);
   });
 
