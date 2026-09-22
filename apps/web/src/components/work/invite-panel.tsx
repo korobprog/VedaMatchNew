@@ -8,12 +8,15 @@ import type {
   WorkContactsDto,
   WorkInviteDto,
   WorkMemberRole,
+  WorkPersonRefDto,
   WorkSpaceDto,
 } from "@vedamatch/shared";
 import {
+  addWorkSpaceAgent,
   createWorkInvite,
   listWorkContacts,
   listWorkInvites,
+  listWorkSpaceAgents,
   revokeWorkInvite,
 } from "@/lib/work-api";
 import { copyText } from "@/lib/copy-text";
@@ -51,6 +54,7 @@ export function WorkInvitePanel({
   const [contacts, setContacts] = useState<WorkContactsDto | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [agents, setAgents] = useState<WorkPersonRefDto[]>([]);
 
   const canInvite = space.role === "owner" || space.role === "admin";
 
@@ -61,6 +65,24 @@ export function WorkInvitePanel({
       setError(cause instanceof Error ? cause.message : "Не удалось загрузить");
     }
   }, [space.id]);
+
+  /* Кого из ИИ-агентов можно принять. Список приходит пустым и тому, кто не
+     распоряжается составом среды, и когда принимать уже некого, — в обоих
+     случаях блока просто нет. */
+  useEffect(() => {
+    if (!open || !canInvite) return;
+    let alive = true;
+    listWorkSpaceAgents(space.id)
+      .then((list) => {
+        if (alive) setAgents(list);
+      })
+      .catch(() => {
+        if (alive) setAgents([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, canInvite, space.id, space.members.length]);
 
   // Знакомых грузим вместе со ссылками: панель одна, и второй спиннер под
   // первым выглядит как поломка.
@@ -149,6 +171,26 @@ export function WorkInvitePanel({
       );
     } finally {
       setInvitingId(null);
+    }
+  }
+
+  /**
+   * Принять агента в среду. Не приглашение: согласия ждать не от кого, и
+   * участником он становится сразу.
+   */
+  async function acceptAgent(agentId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await addWorkSpaceAgent(space.id, agentId);
+      setAgents(await listWorkSpaceAgents(space.id));
+      await onChanged();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Не получилось принять",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -350,6 +392,35 @@ export function WorkInvitePanel({
                 </li>
               ))}
             </ul>
+
+            {agents.length > 0 && (
+              <>
+                <h3 className="mt-5 text-sm font-semibold text-text-0">
+                  ИИ-агент
+                </h3>
+                <p className="mt-1 text-xs text-text-2">
+                  Приглашение ему не отправишь — на портал он не заходит.
+                  Принятый агент работает карточками наравне с участниками.
+                </p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {agents.map((agent) => (
+                    <li key={agent.userId} className="flex items-center gap-2">
+                      <span className="truncate text-text-0">
+                        {workPersonLabel(agent)}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void acceptAgent(agent.userId)}
+                        className="ml-auto shrink-0 text-xs text-magenta disabled:opacity-50"
+                      >
+                        Принять в среду
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">
               Действующие ссылки

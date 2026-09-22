@@ -148,6 +148,12 @@ export class WorkController {
     await this.spaces.remove(id, user.sub);
   }
 
+  /** Кого из ИИ-агентов можно принять в эту среду. */
+  @Get('spaces/:id/agents')
+  agents(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.spaces.agentsForSpace(id, user.sub);
+  }
+
   /**
    * Принять в среду ИИ-агента. Отдельный маршрут от приглашений: служебному
    * аккаунту нечем принять приглашение — он не заходит на портал.

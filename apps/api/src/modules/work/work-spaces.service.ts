@@ -11,13 +11,14 @@ import {
   type CreateWorkSpaceRequest,
   type UpdateWorkSpaceRequest,
   type WorkMemberRole,
+  type WorkPersonRefDto,
   type WorkSpaceDto,
   type WorkSpaceSummaryDto,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WORK_POSITION_STEP } from './work-position';
 import { assertWorkAccess, canAssignRole } from './work-roles';
-import { toWorkLabel, toWorkMember } from './work-dto';
+import { toWorkLabel, toWorkMember, toWorkPersonRef } from './work-dto';
 import {
   normalizeWorkColor,
   optionalText,
@@ -280,6 +281,34 @@ export class WorkSpacesService {
    * Роль только `member`: агент работает карточками, а раздавать роли и
    * выгонять людей — не его дело.
    */
+  /**
+   * Кого из ИИ-агентов можно принять в эту среду.
+   *
+   * Без такого списка функция не замыкалась: принять агента маршрут позволял,
+   * а узнать его идентификатор распорядителю было негде — из кандидатов на
+   * приглашение служебные аккаунты убраны намеренно.
+   *
+   * Список видит только тот, кто распоряжается составом среды: перечень
+   * служебных имён посторонним ни к чему. Уже принятые отсюда уходят — иначе
+   * кнопка предлагала бы сделать то, что уже сделано.
+   */
+  async agentsForSpace(
+    spaceId: string,
+    actorId: string,
+  ): Promise<WorkPersonRefDto[]> {
+    assertWorkAccess(await this.roleOf(spaceId, actorId), 'manageMembers');
+    const agents = await this.prisma.user.findMany({
+      where: {
+        isAgent: true,
+        accountStatus: 'active',
+        workMemberships: { none: { spaceId } },
+      },
+      orderBy: { name: 'asc' },
+      select: workUserSelect,
+    });
+    return agents.map(toWorkPersonRef);
+  }
+
   async addAgent(
     spaceId: string,
     actorId: string,
