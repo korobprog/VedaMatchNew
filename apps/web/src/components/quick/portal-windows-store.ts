@@ -13,6 +13,8 @@ import {
   type PortalWindowsState,
   PORTAL_WINDOW_COUNT,
 } from "@/lib/portal-windows";
+import { planPortalHistoryStep } from "@/lib/portal-back";
+import type { PortalHistoryDirection } from "@/lib/portal-history-seq";
 
 /**
  * Живое состояние окон портала (VED-118): модуль-одиночка поверх чистой
@@ -39,6 +41,20 @@ const INITIAL: PortalWindowsState = Object.freeze(
 
 let state: PortalWindowsState = INITIAL;
 let hydrated = false;
+/** Идёт возврат на запомненное место — см. `notePortalScroll`. */
+let restoring = false;
+/** Адрес, который портал сам себе отменил — см. `notePortalNavigation`. */
+let ignoreUrl: string | null = null;
+/**
+ * Последний записанный переход и состояние ДО него — см. `stepPortalHistory`.
+ *
+ * Роутер Next разбирает `popstate` раньше портала: к моменту, когда до
+ * портала доходит сам `popstate`, адрес, куда увёл браузер, уже записан в
+ * историю активного окна как обычный переход. Отматываем запись назад, а не
+ * спорим за порядок слушателей: он зависит от того, кто раньше подписался, и
+ * держать это в голове при следующей правке никто не обязан.
+ */
+let lastNavigation: { url: string; before: PortalWindowsState } | null = null;
 
 /**
  * Куда прокрутить страницу, когда роутер доедет до адреса переключения.
@@ -102,16 +118,74 @@ export function hydratePortalWindows(url: string): void {
   set(recordPortalNavigation(base, url));
 }
 
-/** Записать переход. Повтор того же адреса состояние не трогает. */
+/**
+ * Записать переход. Повтор того же адреса состояние не трогает.
+ *
+ * Адрес, с которого портал сам себя увёл после `popstate` (VED-354),
+ * пропускается один раз: роутер успевает отрисовать страницу чужого окна до
+ * того, как доедет `replace`, и без этого чужой адрес попадал бы в историю
+ * активного окна.
+ */
 export function notePortalNavigation(url: string): void {
   if (!hydrated) return;
+  const skip = url === ignoreUrl;
+  ignoreUrl = null;
+  if (skip) return;
+  lastNavigation = { url, before: state };
   set(recordPortalNavigation(state, url));
 }
 
-/** Запомнить прокрутку текущей страницы активного окна. */
+/**
+ * Запомнить прокрутку текущей страницы активного окна.
+ *
+ * Пока идёт возврат на запомненное место, записи не принимаются (VED-325):
+ * возврат сам двигает страницу, браузер шлёт события прокрутки, и портал
+ * записывал промежуточное положение поверх того, куда как раз и возвращался.
+ * На странице, которая грузит содержимое запросом, запомненное место так
+ * затиралось нулём ещё до того, как список успевал отрисоваться.
+ */
 export function notePortalScroll(scroll: number): void {
-  if (!hydrated) return;
+  if (!hydrated || restoring) return;
   set(rememberPortalScroll(state, scroll));
+}
+
+/** Возврат на запомненное место начался/кончился — см. `notePortalScroll`. */
+export function setPortalScrollRestoring(active: boolean): void {
+  restoring = active;
+}
+
+/**
+ * Шаг по истории браузера (`popstate`) — аппаратная кнопка «назад» на
+ * телефоне (VED-354). Возвращает адрес, на который надо поправить роутер,
+ * или `null`, если браузер и так попал куда надо.
+ */
+export function stepPortalHistory(
+  landed: string,
+  direction: PortalHistoryDirection = -1,
+): string | null {
+  if (!hydrated) return null;
+  // Роутер Next успел записать адрес, куда увёл браузер, как обычный
+  // переход — отматываем эту запись и решаем по состоянию до неё.
+  const noted = lastNavigation?.url === landed;
+  const base = noted ? lastNavigation!.before : state;
+  lastNavigation = null;
+  const plan = planPortalHistoryStep(base, landed, direction);
+  if (plan.kind === "leave") {
+    // Шагать в активном окне некуда: пусть «назад» уводит с портала, как и
+    // ожидается на телефоне. Окно, которому принадлежит адрес, становится
+    // активным — это записано в самой истории вкладки. А если адрес не
+    // принадлежит никому, окно остаётся там, куда увёл браузер: запись уже
+    // сделана обычным переходом, и отменять её нечего.
+    if (plan.target === null) return null;
+    pendingScroll = plan.target;
+    set(plan.state);
+    return null;
+  }
+  pendingScroll = plan.target;
+  // Если запись уже была и мы её отмотали, пропускать больше нечего.
+  ignoreUrl = plan.navigate === null || noted ? null : landed;
+  set(plan.state);
+  return plan.navigate;
 }
 
 /**
@@ -159,5 +233,8 @@ export function resetPortalWindowsForTests(): void {
   state = INITIAL;
   hydrated = false;
   pendingScroll = null;
+  restoring = false;
+  ignoreUrl = null;
+  lastNavigation = null;
   emit();
 }
