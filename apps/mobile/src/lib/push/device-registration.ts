@@ -9,6 +9,18 @@ import { setPushRegistration, type PushRegistration } from './push-registration'
 export const CHANNEL_ID = 'messages';
 
 /**
+ * Категория «Звонки» (VED-361). Отдельный канал, а не важность внутри
+ * «Сообщений»: категория — единица, которой Android даёт человеку тумблер,
+ * звук и режим «не беспокоить». Пока канал был один, выключенные «Сообщения»
+ * гасили и входящий вызов, причём молча — сервер честно слал, система прятала.
+ *
+ * Идентификатор совпадает со строкой сервера
+ * (`apps/api/.../notifications/android-channel.ts`): пуш в незаведённый канал
+ * Android кладёт в служебный `fallback`, где ни звука звонка, ни настройки.
+ */
+export const CALLS_CHANNEL_ID = 'calls';
+
+/**
  * Регистрация телефона точкой доставки: канал Android, разрешение, токен FCM
  * и отправка его на сервер.
  *
@@ -44,15 +56,42 @@ export async function registerThisDevice(
 
 const never = (): boolean => false;
 
+/**
+ * Две категории уведомлений: «Сообщения» и «Звонки» (VED-361).
+ *
+ * Звонковому каналу — `MAX` и вибрация: это вызов, он обязан пробиться
+ * баннером поверх экрана, а не лечь строкой в шторку. Прежним «Сообщениям»
+ * важность не меняем: у кого канал уже заведён, Android всё равно оставит
+ * ту, что человек выбрал сам, — важность канала после создания принадлежит
+ * ему, а не приложению.
+ *
+ * Отдельная функция, а не строки внутри `attempt`: каналы заводятся и при
+ * первом запуске, и по кнопке «Зарегистрировать заново», и проверяются
+ * тестом (`device-registration.spec.ts`) без всей регистрации целиком.
+ */
+export async function createChannels(): Promise<void> {
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    name: 'Сообщения',
+    description: 'Переписка, заявки и новости. Звонки — отдельная категория.',
+    importance: Notifications.AndroidImportance.HIGH,
+  });
+  await Notifications.setNotificationChannelAsync(CALLS_CHANNEL_ID, {
+    name: 'Звонки',
+    description: 'Входящие и пропущенные звонки, приглашения в групповой звонок.',
+    importance: Notifications.AndroidImportance.MAX,
+    // Звонок без вибрации на беззвучном телефоне пропускают: рингтон
+    // выключен, а экран человек в этот момент не смотрит.
+    vibrationPattern: [0, 400, 250, 400],
+    enableVibrate: true,
+  });
+}
+
 async function attempt(
   api: ApiClient,
   isCancelled: () => boolean,
 ): Promise<PushRegistration> {
-  // Канал нужен до запроса разрешения: без него Android 13 не покажет окно.
-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: 'Сообщения',
-    importance: Notifications.AndroidImportance.HIGH,
-  });
+  // Каналы нужны до запроса разрешения: без них Android 13 не покажет окно.
+  await createChannels();
   const current = await Notifications.getPermissionsAsync();
   const granted =
     current.granted || (current.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);

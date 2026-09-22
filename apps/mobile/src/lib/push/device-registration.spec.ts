@@ -1,7 +1,12 @@
 import { getToken } from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
 import type { ApiClient } from '@/lib/api/client';
-import { registerThisDevice, sendDeviceToken } from './device-registration';
+import {
+  CALLS_CHANNEL_ID,
+  CHANNEL_ID,
+  registerThisDevice,
+  sendDeviceToken,
+} from './device-registration';
 import { pushRegistration, resetPushRegistration } from './push-registration';
 
 /**
@@ -22,7 +27,7 @@ const mockState = {
 };
 
 jest.mock('expo-notifications', () => ({
-  AndroidImportance: { HIGH: 4 },
+  AndroidImportance: { HIGH: 4, MAX: 5 },
   setNotificationChannelAsync: jest.fn(async () => undefined),
   getPermissionsAsync: jest.fn(async () => mockPermissions),
   requestPermissionsAsync: jest.fn(async () => ({ granted: mockState.requestedGranted })),
@@ -163,5 +168,57 @@ describe('sendDeviceToken', () => {
 
     await expect(sendDeviceToken(api, 'token-2')).resolves.toBe('failed');
     expect(pushRegistration()).toBe('failed');
+  });
+});
+
+/**
+ * VED-361: каналов два. Пуш в незаведённый канал Android кладёт в служебный
+ * `fallback` — без звука звонка и без тумблера, который человек искал бы
+ * среди категорий приложения.
+ */
+describe('категории уведомлений', () => {
+  beforeEach(() => {
+    // Вызовы копятся на весь файл: здесь важен именно этот запуск.
+    jest.mocked(Notifications.setNotificationChannelAsync).mockClear();
+  });
+
+  it('заводит обе: «Сообщения» и «Звонки»', async () => {
+    mockPermissions.granted = true;
+
+    await registerThisDevice({} as ApiClient);
+
+    const created = jest
+      .mocked(Notifications.setNotificationChannelAsync)
+      .mock.calls.map(([id, options]) => ({ id, name: options.name }));
+    expect(created).toEqual([
+      { id: CHANNEL_ID, name: 'Сообщения' },
+      { id: CALLS_CHANNEL_ID, name: 'Звонки' },
+    ]);
+  });
+
+  it('у звонков важность выше, чем у сообщений: вызов обязан пробиться баннером', async () => {
+    mockPermissions.granted = true;
+
+    await registerThisDevice({} as ApiClient);
+
+    const byId = new Map(
+      jest
+        .mocked(Notifications.setNotificationChannelAsync)
+        .mock.calls.map(([id, options]) => [id, options]),
+    );
+    expect(byId.get(CALLS_CHANNEL_ID)?.importance).toBe(
+      Notifications.AndroidImportance.MAX,
+    );
+    expect(byId.get(CHANNEL_ID)?.importance).toBe(
+      Notifications.AndroidImportance.HIGH,
+    );
+    expect(byId.get(CALLS_CHANNEL_ID)?.enableVibrate).toBe(true);
+  });
+
+  it('идентификаторы совпадают с теми, что шлёт сервер', () => {
+    // Строки продублированы в `apps/api/.../notifications/android-channel.ts`:
+    // модули не импортируют друг друга, совпадение стережёт этот тест.
+    expect(CHANNEL_ID).toBe('messages');
+    expect(CALLS_CHANNEL_ID).toBe('calls');
   });
 });

@@ -17,6 +17,8 @@ import {
   resolveDisplayName,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { androidChannelFor } from './android-channel';
+import { decideDelivery, describeDeliverySkip } from './delivery-rule';
 import { buildNotification, notificationEventNames } from './notification-copy';
 import { NativePushService } from './native-push.service';
 import { NotificationsService } from './notifications.service';
@@ -297,9 +299,16 @@ export class NotificationsListener {
       );
       // Молчание — самый частый повод для жалобы «уведомление не пришло», и
       // раньше его причину из логов было не достать: доставка ничего не писала.
-      if (!preferences.enabled || !preferences[content.category]) {
+      // Правило «слать или нет» живёт в `delivery-rule.ts` со своим тестом
+      // (VED-361): со звонками цена ошибки в этой строке выросла — категории
+      // «Сообщения» и «Звонки» обязаны выключаться независимо друг от друга.
+      const decision = decideDelivery(preferences, content.category);
+      if (!decision.deliver) {
         this.logger.log(
-          `${event.name} для ${event.recipientId} пропущено: категория ${content.category} выключена`,
+          `${event.name} для ${event.recipientId} пропущено: ${describeDeliverySkip(
+            decision.reason,
+            content.category,
+          )}`,
         );
         return;
       }
@@ -340,7 +349,14 @@ export class NotificationsListener {
               },
               payload,
             )
-          : await this.nativePush.sendToUsers([event.recipientId], payload);
+          : await this.nativePush.sendToUsers(
+              [event.recipientId],
+              payload,
+              // Категория уведомлений Android по категории портала
+              // (VED-361): звонок — в канал «Звонки», остальное — в
+              // «Сообщения».
+              androidChannelFor(content.category),
+            );
 
       const subscriptions = await this.notifications.listSubscriptions(
         event.recipientId,

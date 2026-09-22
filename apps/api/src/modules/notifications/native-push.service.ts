@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ChatCallEndedPushReason } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ANDROID_CALLS_CHANNEL_ID } from './android-channel';
 import {
   buildCallEndedMessage,
   buildCallIncomingMessage,
@@ -41,6 +42,12 @@ export class NativePushService {
   async sendToUsers(
     userIds: string[],
     payload: PushPayload,
+    /**
+     * Категория уведомлений Android (VED-361). По умолчанию «Сообщения»: так
+     * идут переписка, заявки и новости. Звонковые события передают канал
+     * `calls`, иначе выключенные в системе «Сообщения» гасят и вызов.
+     */
+    channelId?: string,
   ): Promise<NativePushResult> {
     if (userIds.length === 0 || !this.fcm.configured) {
       return { devices: 0, delivered: 0 };
@@ -49,7 +56,9 @@ export class NativePushService {
       where: { userId: { in: userIds }, provider: 'fcm' },
       select: { token: true, ...deliveryHealthSelect },
     });
-    return this.deliver(devices, ({ token }) => this.fcm.send(token, payload));
+    return this.deliver(devices, ({ token }) =>
+      this.fcm.send(token, payload, channelId),
+    );
   }
 
   /**
@@ -63,6 +72,8 @@ export class NativePushService {
     data: CallIncomingPushData,
     fallbackPayload: PushPayload,
   ): Promise<NativePushResult> {
+    // Фолбэк для телефонов без нативного экрана вызова идёт каналом «Звонки»
+    // (VED-361): это звонок, и прятаться вместе с перепиской он не должен.
     if (!this.fcm.configured) return { devices: 0, delivered: 0 };
     const devices = await this.prisma.notificationDevice.findMany({
       where: { userId: recipientId, provider: 'fcm' },
@@ -71,7 +82,7 @@ export class NativePushService {
     return this.deliver(devices, ({ token, nativeCalls }) =>
       nativeCalls
         ? this.fcm.sendRaw(buildCallIncomingMessage(token, data))
-        : this.fcm.send(token, fallbackPayload),
+        : this.fcm.send(token, fallbackPayload, ANDROID_CALLS_CHANNEL_ID),
     );
   }
 

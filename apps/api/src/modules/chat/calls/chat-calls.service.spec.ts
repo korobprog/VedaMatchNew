@@ -415,3 +415,72 @@ describe('ChatCallsService — «звонок снят» уходит на те�
     }
   });
 });
+
+/**
+ * VED-361: «без звука» — это про поток сообщений, а не про вызов.
+ *
+ * Прежде `notifyIncoming` молча выходил, если беседа заглушена, — и человек,
+ * приглушивший болтливый диалог, звонков из него не получал вовсе. Выключить
+ * звонки он теперь может отдельным тумблером «Звонки», а доставка уважает его
+ * в `notifications/delivery-rule.ts`.
+ */
+describe('ChatCallsService.start — заглушённая беседа', () => {
+  function startService(mutedUntil: Date | null) {
+    const built = buildService(
+      callRow({ status: 'ringing', answeredAt: null }),
+    );
+    const conversations = {
+      requireConversation: fn(() =>
+        Promise.resolve({
+          id: 'conversation-1',
+          kind: 'direct',
+          state: 'active',
+          requestedById: null,
+          members: [
+            {
+              userId: 'caller',
+              role: 'member',
+              leftAt: null,
+              mutedUntil: null,
+            },
+            { userId: 'callee', role: 'member', leftAt: null, mutedUntil },
+          ],
+        }),
+      ),
+    };
+    // Собеседник в сервисе уже создан: подменяем только зависимость, от
+    // которой зависит именно эта проверка.
+    (built.service as unknown as { conversations: unknown }).conversations =
+      conversations;
+    return built;
+  }
+
+  function incoming(bus: { emit: jest.Mock }): unknown[] {
+    return (bus.emit.mock.calls as unknown[][]).filter(
+      ([name]) => name === 'chat.call-incoming',
+    );
+  }
+
+  it('звонок из беззвучной беседы всё равно уведомляет', async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    const { service, bus } = startService(future);
+
+    await service.start('caller', {
+      conversationId: 'conversation-1',
+      kind: 'audio',
+    });
+
+    expect(incoming(bus)).toHaveLength(1);
+  });
+
+  it('обычная беседа ведёт себя как прежде', async () => {
+    const { service, bus } = startService(null);
+
+    await service.start('caller', {
+      conversationId: 'conversation-1',
+      kind: 'audio',
+    });
+
+    expect(incoming(bus)).toHaveLength(1);
+  });
+});

@@ -21,6 +21,8 @@ vi.mock("@/lib/pwa/push-subscription", () => ({
 const всеВключены = {
   enabled: true,
   chat: true,
+  // VED-361: у звонков свой тумблер.
+  calls: true,
   connections: true,
   support: true,
   transits: true,
@@ -166,5 +168,63 @@ describe("NotificationSettings", () => {
       await screen.findByRole("checkbox", { name: "Все уведомления" });
       expect(screen.queryByText(/приходят и на это устройство/i)).toBeNull();
     });
+  });
+});
+
+/**
+ * VED-361: тумблер звонков рядом с тумблером сообщений и честные подписи
+ * рядом с обоими.
+ */
+describe("NotificationSettings — звонки отдельным тумблером", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fetchPreferences).mockResolvedValue({ ...всеВключены });
+    vi.mocked(detectPushSupport).mockReturnValue("granted");
+  });
+
+  it("показывает отдельный тумблер «Звонки» и объясняет оба", async () => {
+    render(<NotificationSettings />);
+
+    const calls = await screen.findByLabelText("Звонки");
+    expect(calls).toBeChecked();
+    expect(
+      screen.getByText(/перестанут приходить сообщения, звонки продолжат звонить/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/перестанут звонить звонки, сообщения продолжат приходить/),
+    ).toBeInTheDocument();
+  });
+
+  it("подпись привязана к тумблеру для скринридера", async () => {
+    render(<NotificationSettings />);
+
+    const calls = await screen.findByLabelText("Звонки");
+    const described = calls.getAttribute("aria-describedby");
+    expect(described).toBe("notification-note-calls");
+    expect(document.getElementById(described!)).toHaveTextContent(
+      /сообщения продолжат приходить/,
+    );
+  });
+
+  it("выключение звонков не трогает сообщения", async () => {
+    render(<NotificationSettings />);
+
+    await userEvent.click(await screen.findByLabelText("Звонки"));
+
+    expect(savePreferences).toHaveBeenCalledWith({ calls: false });
+    // Сообщения остаются включёнными: патч частичный, и сервер их не трогает.
+    expect(await screen.findByLabelText("Сообщения")).toBeChecked();
+  });
+
+  it("выключенные сообщения не гасят тумблер звонков", async () => {
+    vi.mocked(fetchPreferences).mockResolvedValue({
+      ...всеВключены,
+      chat: false,
+    });
+
+    render(<NotificationSettings />);
+
+    expect(await screen.findByLabelText("Звонки")).toBeChecked();
+    expect(screen.getByText(/Звонки при этом звонят/)).toBeInTheDocument();
   });
 });

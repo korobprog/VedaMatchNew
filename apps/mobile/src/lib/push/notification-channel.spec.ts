@@ -2,9 +2,12 @@ import * as Notifications from 'expo-notifications';
 import { Linking } from 'react-native';
 import {
   channelStateFrom,
+  openCallsChannelSettings,
   openMessagesChannelSettings,
   openNotificationSettings,
+  readCallsChannel,
   readMessagesChannel,
+  readNotificationChannels,
 } from './notification-channel';
 
 /**
@@ -15,6 +18,8 @@ import {
 
 const mockChannelState = {
   importance: 6 as number | null,
+  /** Важность канала «Звонки»; `undefined` — такая же, как у «Сообщений». */
+  callsImportance: undefined as number | null | undefined,
   throws: false,
   intentThrows: false,
   started: [] as { action: string; options?: unknown }[],
@@ -25,11 +30,13 @@ jest.mock('expo-notifications', () => ({
   // Значения как в самом `expo-notifications`: перечисление сдвинуто
   // относительно андроидовского (`UNKNOWN = 0`, `NONE = 2`, `HIGH = 6`).
   AndroidImportance: { UNKNOWN: 0, UNSPECIFIED: 1, NONE: 2, MIN: 3, LOW: 4, DEFAULT: 5, HIGH: 6, MAX: 7 },
-  getNotificationChannelAsync: jest.fn(async () => {
+  getNotificationChannelAsync: jest.fn(async (id: string) => {
     if (mockChannelState.throws) throw new Error('нет канала');
-    return mockChannelState.importance === null
-      ? null
-      : { id: 'messages', importance: mockChannelState.importance };
+    const importance =
+      id === 'calls' && mockChannelState.callsImportance !== undefined
+        ? mockChannelState.callsImportance
+        : mockChannelState.importance;
+    return importance === null ? null : { id, importance };
   }),
 }));
 
@@ -49,7 +56,10 @@ jest.mock('expo-constants', () => ({
   default: { expoConfig: { android: { package: 'com.vedamatch.app' } } },
 }));
 
-jest.mock('./device-registration', () => ({ CHANNEL_ID: 'messages' }));
+jest.mock('./device-registration', () => ({
+  CHANNEL_ID: 'messages',
+  CALLS_CHANNEL_ID: 'calls',
+}));
 
 let openSettings: jest.SpyInstance;
 
@@ -60,6 +70,7 @@ beforeEach(() => {
       mockChannelState.openedAppSettings += 1;
     });
   mockChannelState.importance = 6;
+  mockChannelState.callsImportance = undefined;
   mockChannelState.throws = false;
   mockChannelState.intentThrows = false;
   mockChannelState.started.length = 0;
@@ -145,5 +156,64 @@ describe('экраны настроек', () => {
 
     await openMessagesChannelSettings();
     expect(mockChannelState.openedAppSettings).toBe(2);
+  });
+});
+
+/**
+ * VED-361: категорий две, и человек выключает их порознь. Приложение обязано
+ * спрашивать про обе и вести в настройки той, которая молчит.
+ */
+describe('две категории', () => {
+  it('читает «Сообщения» и «Звонки» по отдельности', async () => {
+    mockChannelState.importance = 6; // HIGH
+    mockChannelState.callsImportance = 2; // NONE
+
+    await expect(readMessagesChannel()).resolves.toBe('on');
+    await expect(readCallsChannel()).resolves.toBe('off');
+  });
+
+  it('обе разом — ровно то, чем раздел доставки описывает систему', async () => {
+    mockChannelState.importance = 2;
+    mockChannelState.callsImportance = 7;
+
+    await expect(readNotificationChannels()).resolves.toEqual({
+      messages: 'off',
+      calls: 'on',
+    });
+  });
+
+  it('категория «Звонки» открывается своим экраном и своим id канала', async () => {
+    await openCallsChannelSettings();
+
+    expect(mockChannelState.started[0]).toEqual({
+      action: 'android.settings.CHANNEL_NOTIFICATION_SETTINGS',
+      options: {
+        extra: {
+          'android.provider.extra.APP_PACKAGE': 'com.vedamatch.app',
+          'android.provider.extra.CHANNEL_ID': 'calls',
+        },
+      },
+    });
+  });
+
+  it('экраны категорий не путаются между собой', async () => {
+    await openMessagesChannelSettings();
+    await openCallsChannelSettings();
+
+    const ids = mockChannelState.started.map(
+      (call) =>
+        (call.options as { extra: Record<string, string> }).extra[
+          'android.provider.extra.CHANNEL_ID'
+        ],
+    );
+    expect(ids).toEqual(['messages', 'calls']);
+  });
+
+  it('интент категории «Звонки» не открылся — отступаем на общую страницу', async () => {
+    mockChannelState.intentThrows = true;
+
+    await openCallsChannelSettings();
+
+    expect(mockChannelState.openedAppSettings).toBe(1);
   });
 });

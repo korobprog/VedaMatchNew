@@ -19,10 +19,11 @@ import {
 } from '@/lib/push/device-delivery-state';
 import { registerThisDevice } from '@/lib/push/device-registration';
 import {
+  openCallsChannelSettings,
   openMessagesChannelSettings,
   openNotificationSettings,
-  readMessagesChannel,
-  type MessagesChannelState,
+  readNotificationChannels,
+  type NotificationChannelsState,
 } from '@/lib/push/notification-channel';
 import { pushRegistration, subscribePushRegistration } from '@/lib/push/push-registration';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -70,10 +71,14 @@ function DeviceDeliveryCard() {
   const [status, setStatus] = useState<NotificationDeliveryStatusDto | null>(null);
   const [statusFailed, setStatusFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Важность канала «Сообщения»: её человек меняет в системных настройках, и
-  // приложение узнаёт об этом, только когда спросит. Спрашиваем по тем же
-  // поводам, что и сервер, — это дешёвый локальный вызов.
-  const [channel, setChannel] = useState<MessagesChannelState>('unknown');
+  // Важность категорий «Сообщения» и «Звонки»: её человек меняет в системных
+  // настройках, и приложение узнаёт об этом, только когда спросит.
+  // Спрашиваем по тем же поводам, что и сервер, — это дешёвый локальный
+  // вызов. Категории две (VED-361) и выключены бывают порознь.
+  const [channels, setChannels] = useState<NotificationChannelsState>({
+    messages: 'unknown',
+    calls: 'unknown',
+  });
 
   // Момент последнего УДАЧНОГО ответа: по нему решается, дёргать ли сервер на
   // этом заходе. Ref, а не state: от него ничего не рисуется.
@@ -106,10 +111,10 @@ function DeviceDeliveryCard() {
     [deliveryApi],
   );
 
-  /** Состояние целиком: канал у системы (локально) и точки доставки у сервера. */
+  /** Состояние целиком: категории у системы (локально) и точки доставки у сервера. */
   const refresh = useCallback(
     async (reason: DeliveryRefreshReason) => {
-      await Promise.all([readMessagesChannel().then(setChannel), load(reason)]);
+      await Promise.all([readNotificationChannels().then(setChannels), load(reason)]);
     },
     [load],
   );
@@ -139,24 +144,29 @@ function DeviceDeliveryCard() {
     return () => subscription.remove();
   }, [api, refresh]);
 
-  const section = describeDeviceDelivery({ registration, channel, status, statusFailed });
+  const section = describeDeviceDelivery({ registration, channels, status, statusFailed });
 
   /**
    * Уводим человека в настройки. Флаг «мы его туда отправили» снимается, если
    * открыть не вышло: иначе он остался бы взведённым навсегда и следующий
    * возврат на передний план по любому поводу зря дёргал бы регистрацию.
    */
-  const goToSettings = useCallback(async (channelScreen: boolean) => {
-    fromSettings.current = true;
-    setBusy(true);
-    try {
-      await (channelScreen ? openMessagesChannelSettings() : openNotificationSettings());
-    } catch {
-      fromSettings.current = false;
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const goToSettings = useCallback(
+    async (screen: 'app' | 'messages' | 'calls') => {
+      fromSettings.current = true;
+      setBusy(true);
+      try {
+        if (screen === 'messages') await openMessagesChannelSettings();
+        else if (screen === 'calls') await openCallsChannelSettings();
+        else await openNotificationSettings();
+      } catch {
+        fromSettings.current = false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
 
   const retry = useCallback(async () => {
     setBusy(true);
@@ -178,8 +188,9 @@ function DeviceDeliveryCard() {
   }, [refresh]);
 
   const press = useCallback(() => {
-    if (section.action === 'settings') void goToSettings(false);
-    else if (section.action === 'channel-settings') void goToSettings(true);
+    if (section.action === 'settings') void goToSettings('app');
+    else if (section.action === 'messages-channel-settings') void goToSettings('messages');
+    else if (section.action === 'calls-channel-settings') void goToSettings('calls');
     else if (section.action === 'retry') void retry();
     else if (section.action === 'recheck') void recheck();
   }, [section.action, goToSettings, retry, recheck]);

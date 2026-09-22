@@ -19,31 +19,9 @@ import {
   fetchPreferences,
   savePreferences,
 } from "@/lib/notifications-api";
+import { notificationCategoryRows } from "@/lib/notification-categories";
 import { useInstallPrompt } from "./use-install-prompt";
 
-const categories = [
-  { key: "chat", label: "Сообщения" },
-  { key: "connections", label: "Заявки и совпадения" },
-  { key: "support", label: "Поддержка" },
-  { key: "transits", label: "Персональный день (астрология)" },
-  // Сообщения чата Рынка идут под тумблером «Сообщения»: это та же переписка.
-  { key: "market", label: "Заявки на Рынке" },
-  // Отдельно от Рынка: выключив коммерцию, человек не должен молча потерять
-  // доску общины — подписки на рубрику и город, отклики на свои объявления.
-  { key: "notices", label: "Доска «Объявления»" },
-  // Только про свои публикации: лента вдохновения сама по себе не пишет.
-  { key: "motivation", label: "Мои рилсы: студия «Вдохновения»" },
-  // Тоже только про своё: о чужих новинках каталога тумблер не сообщает.
-  { key: "music", label: "Мои записи в «Музыке»" },
-  { key: "work", label: "Задачи и приглашения в «Работе»" },
-  // Отдельно от Рынка: выключив торговлю, человек не должен потерять
-  // ответ хозяина по ночлегу на своём пути.
-  { key: "travel", label: "Заявки на ночлег в «Путешествиях»" },
-  { key: "announcements", label: "Новости VedaMatch" },
-  // Не категория, а канал: всё включённое выше дублируется сообщением от
-  // @vedamatch_bot тем, кто вошёл через Telegram и разрешил боту писать.
-  { key: "telegram", label: "Дублировать в Telegram (@vedamatch_bot)" },
-] as const;
 
 /**
  * Настройки уведомлений.
@@ -249,17 +227,39 @@ export function NotificationSettings() {
               потерянное, а приглушённый текст роняет контраст ниже 4.5:1 —
               состояние несёт слово выше и `disabled` у самих полей. */}
           <div className="mt-4 space-y-3">
-            {categories.map((category) => (
+            {notificationCategoryRows(preferences).map((category) => (
               <label
                 key={category.key}
                 // Запертая строка курсор-руку не показывает: рука обещает
                 // нажатие, а нажимать здесь пока нечего.
                 className="flex cursor-pointer items-center justify-between gap-4 text-sm text-text-1 has-[:disabled]:cursor-default"
               >
-                {category.label}
+                <span>
+                  {category.label}
+                  {/* Что именно выключается — словами (VED-361). Без этой
+                      строки два соседних тумблера читаются как один, и
+                      человек, заглушивший переписку, ждёт тишины и от
+                      звонков. */}
+                  {category.note && (
+                    <span
+                      id={`notification-note-${category.key}`}
+                      // text-text-1, а не text-text-2: вторичный токен на
+                      // стекле светлой темы опускается до 4,14:1 — ниже AA
+                      // (см. заметку про полосу плеера в globals.css).
+                      className="mt-1 block text-xs text-text-1"
+                    >
+                      {category.note}
+                    </span>
+                  )}
+                </span>
                 <input
                   type="checkbox"
                   aria-label={category.label}
+                  aria-describedby={
+                    category.note
+                      ? `notification-note-${category.key}`
+                      : undefined
+                  }
                   checked={preferences[category.key]}
                   disabled={!preferences.enabled}
                   onChange={(event) =>
