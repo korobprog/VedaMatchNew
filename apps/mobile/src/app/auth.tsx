@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSession } from '@/lib/auth/session';
 import { APP_AUTH_REDIRECT } from '@/lib/auth/login-flow';
+import { WebPortalButton } from '@/components/web-portal-button';
 import { useTheme } from '@/theme/theme';
 import { fonts } from '@/theme/tokens';
 
@@ -34,13 +35,19 @@ export default function AuthReturnScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
-      <ActivityIndicator color={colors.magenta} />
-      <Text style={[styles.text, { color: colors.text1 }]}>Завершаем вход…</Text>
+      {/* Тот же выход в портал, что и на экране входа: если завершение
+          входа зависло без сети, экран не должен оставаться тупиком. */}
+      <WebPortalButton />
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.magenta} />
+        <Text style={[styles.text, { color: colors.text1 }]}>Завершаем вход…</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  root: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   text: { fontFamily: fonts.body, fontSize: 15 },
 });
