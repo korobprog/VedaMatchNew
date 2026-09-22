@@ -15,6 +15,7 @@ import { useSession } from '@/lib/auth/session';
 import { isConversationOpen } from './active-chat';
 import { isCallRelatedPushUrl } from './call-push-guard';
 import { CHANNEL_ID, registerThisDevice, sendDeviceToken } from './device-registration';
+import { pushDestination } from '@/lib/notifications/notification-target';
 import { setPushRegistration } from './push-registration';
 import { pushTarget, pushUrlOf, rnfbMessageUrlOf } from './push-url';
 
@@ -36,13 +37,28 @@ Notifications.setNotificationHandler({
   },
 });
 
+/**
+ * Переход по нажатию на пуш (VED-330).
+ *
+ * Раньше здесь стояло `router.navigate('/')` для всего, кроме беседы, — то
+ * есть вкладка чатов. Теперь маршрут считает `pushDestination()`: раздел со
+ * своим экраном открывается им, раздел без своего экрана — лентой
+ * уведомлений, где это же уведомление лежит целиком (почему не браузер —
+ * см. комментарий у `pushDestination` в `notification-target.ts`).
+ */
 function openFromNotification(url: string | null): void {
-  const target = pushTarget(url);
-  if (target.kind === 'chat') {
-    router.push({ pathname: '/chat/[id]', params: { id: target.conversationId } });
-  } else {
-    router.navigate('/');
-  }
+  const destination = pushDestination(url);
+  // `site` из пуша не приходит: `pushDestination` всегда отдаёт маршрут.
+  if (destination.kind !== 'route') return;
+  router.push(
+    destination.params
+      ? // `as never` у пути с параметрами: у expo-router `Href` — union
+        // строковых литералов маршрутов приложения, а путь приходит из
+        // чистого модуля, который карты маршрутов знать не должен. Сами
+        // литералы перечислены в `routeOfTarget()` и закреплены его тестом.
+        ({ pathname: destination.pathname, params: destination.params } as never)
+      : (destination.pathname as never),
+  );
 }
 
 /**

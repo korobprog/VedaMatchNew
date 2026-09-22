@@ -31,6 +31,12 @@ export function RootStack() {
         <Stack.Protected guard={status === 'signed'}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="account" />
+          {/* Лента уведомлений (VED-330) — маршрут корневого стека, а не
+              шестая вкладка внизу: вход в неё один, колокольчиком в шапке
+              «Чатов» (`components/notifications/notification-bell.tsx`).
+              Сюда же приземляются пуши о разделах, которых в приложении
+              нет, — раньше они вели на список чатов. */}
+          <Stack.Screen name="notifications" />
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="chat/requests" />
           {/* Создание групп и каналов и управление участниками (VED-292) —
