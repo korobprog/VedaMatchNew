@@ -148,6 +148,20 @@ export class WorkController {
     await this.spaces.remove(id, user.sub);
   }
 
+  /**
+   * Принять в среду ИИ-агента. Отдельный маршрут от приглашений: служебному
+   * аккаунту нечем принять приглашение — он не заходит на портал.
+   */
+  @Post('spaces/:id/agents/:agentId')
+  @HttpCode(204)
+  async addAgent(
+    @Param('id') id: string,
+    @Param('agentId') agentId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    await this.spaces.addAgent(id, user.sub, agentId);
+  }
+
   @Patch('spaces/:id/members/:userId')
   @HttpCode(204)
   async setRole(
@@ -333,7 +347,7 @@ export class WorkTasksController {
     @Body() body: CreateWorkTaskRequest,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.tasks.create(boardId, user.sub, body);
+    return this.tasks.create(boardId, user.sub, body, user.onBehalfOf ?? null);
   }
 
   @Get('tasks/:id')
@@ -347,7 +361,7 @@ export class WorkTasksController {
     @Body() body: UpdateWorkTaskRequest,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.tasks.update(id, user.sub, body);
+    return this.tasks.update(id, user.sub, body, user.onBehalfOf ?? null);
   }
 
   // Перетаскивание — самое частое действие на доске, и лимит на него отдельный:
@@ -359,7 +373,7 @@ export class WorkTasksController {
     @Body() body: MoveWorkTaskRequest,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.tasks.move(id, user.sub, body);
+    return this.tasks.move(id, user.sub, body, user.onBehalfOf ?? null);
   }
 
   @Delete('tasks/:id')
@@ -368,13 +382,13 @@ export class WorkTasksController {
     @Param('id') id: string,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    await this.tasks.archive(id, user.sub);
+    await this.tasks.archive(id, user.sub, user.onBehalfOf ?? null);
   }
 
   /** Вернуть карточку из архива доски на её колонку (VED-61). */
   @Post('tasks/:id/restore')
   restore(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
-    return this.tasks.restore(id, user.sub);
+    return this.tasks.restore(id, user.sub, user.onBehalfOf ?? null);
   }
 
   /**
@@ -397,7 +411,7 @@ export class WorkTasksController {
     @Body() body: CreateWorkCommentRequest,
     @CurrentUser() user: AccessTokenPayload,
   ) {
-    return this.tasks.addComment(id, user.sub, body);
+    return this.tasks.addComment(id, user.sub, body, user.onBehalfOf ?? null);
   }
 
   @Post('tasks/:id/checklist')

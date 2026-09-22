@@ -2,6 +2,8 @@ import {
   toWorkAgendaItem,
   toWorkAgendaResponse,
   toWorkMember,
+  toWorkPerson,
+  toWorkPersonRef,
   toWorkTaskCard,
   workAgendaBucket,
   type WorkTaskRow,
@@ -12,12 +14,22 @@ const worldly = {
   name: 'Максим',
   spiritualName: null,
   avatarUrl: null,
+  isAgent: false,
 };
 const devotee = {
   id: 'u2',
   name: 'Максим',
   spiritualName: 'Мадхава дас',
   avatarUrl: 'https://cdn/a.jpg',
+  isAgent: false,
+};
+/** Служебный аккаунт ИИ: имя есть, лица нет. */
+const agent = {
+  id: 'sevak',
+  name: 'Севак',
+  spiritualName: null,
+  avatarUrl: null,
+  isAgent: true,
 };
 
 describe('toWorkMember', () => {
@@ -188,5 +200,40 @@ describe('toWorkAgendaResponse', () => {
     });
     expect(dto.offerKind).toBe('task');
     expect(dto.status).toBe('new');
+  });
+});
+
+describe('признак ИИ-агента', () => {
+  it('едет наружу и у исполнителя карточки, и у участника среды', () => {
+    // Без него агент рисуется тем же кружком с буквой, что и живой человек.
+    expect(toWorkTaskCard(taskRow({ assignee: agent }), 'VM').assignee).toEqual(
+      expect.objectContaining({ name: 'Севак', isAgent: true }),
+    );
+    expect(
+      toWorkMember({ role: 'member', joinedAt: new Date(), user: agent })
+        .isAgent,
+    ).toBe(true);
+  });
+
+  it('у людей остаётся false', () => {
+    expect(toWorkPerson(devotee).isAgent).toBe(false);
+    expect(
+      toWorkTaskCard(taskRow({ assignee: worldly }), 'VM').assignee?.isAgent,
+    ).toBe(false);
+  });
+
+  it('там, где аватар не рисуется, признак всё равно есть', () => {
+    // Автор карточки и лицо в истории показываются без фото, но отличать ИИ
+    // от человека нужно и там.
+    expect(toWorkPersonRef(agent)).toEqual({
+      userId: 'sevak',
+      name: 'Севак',
+      isAgent: true,
+    });
+    expect(toWorkPersonRef(devotee)).toEqual({
+      userId: 'u2',
+      name: 'Мадхава дас',
+      isAgent: false,
+    });
   });
 });

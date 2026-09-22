@@ -4,20 +4,20 @@
 // нет и быть не должно — как только за задачу платят, это Рынок.
 
 /** Роль в рабочей среде. Владелец ровно один. */
-export type WorkMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
+export type WorkMemberRole = "owner" | "admin" | "member" | "viewer";
 
-export type WorkTaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type WorkTaskPriority = "low" | "normal" | "high" | "urgent";
 
 export type WorkActivityKind =
-  | 'task_created'
-  | 'task_moved'
-  | 'task_assigned'
-  | 'task_due_set'
-  | 'task_completed'
-  | 'task_archived'
-  | 'task_restored'
-  | 'comment_added'
-  | 'member_joined';
+  | "task_created"
+  | "task_moved"
+  | "task_assigned"
+  | "task_due_set"
+  | "task_completed"
+  | "task_archived"
+  | "task_restored"
+  | "comment_added"
+  | "member_joined";
 
 /**
  * Имена акцентных токенов из globals.css. Цвет хранится именем, а не
@@ -25,11 +25,11 @@ export type WorkActivityKind =
  * чужой — правило дизайн-системы портала.
  */
 export const WORK_COLORS = [
-  'magenta',
-  'cyan',
-  'gold',
-  'violet',
-  'blue',
+  "magenta",
+  "cyan",
+  "gold",
+  "violet",
+  "blue",
 ] as const;
 export type WorkColor = (typeof WORK_COLORS)[number];
 
@@ -56,17 +56,33 @@ export const WORK_MAX_ATTACHMENTS_PER_TASK = 20;
  * отпугивает сильнее, чем отсутствие функции. Последняя закрывает задачу.
  */
 export const WORK_DEFAULT_COLUMNS = [
-  { name: 'Надо', isDone: false },
-  { name: 'В работе', isDone: false },
-  { name: 'Готово', isDone: true },
+  { name: "Надо", isDone: false },
+  { name: "В работе", isDone: false },
+  { name: "Готово", isDone: true },
 ] as const;
 
-/** Участник среды глазами остальных участников. */
-export interface WorkMemberDto {
+/**
+ * Человек или ИИ-агент в «Работе»: исполнитель, автор карточки, лицо в
+ * истории.
+ *
+ * Признак `isAgent` едет наружу не ради значка: агенту нечем заполнить
+ * аватар, и без пометки он рисуется тем же кружком с буквой, что и живой
+ * участник, — то есть программа выдаётся за человека.
+ */
+export interface WorkPersonDto {
   userId: string;
   /** Всегда результат resolveDisplayName(): духовное имя перекрывает мирское. */
   name: string;
   avatarUrl: string | null;
+  /** Служебный аккаунт ИИ. У людей `false`. */
+  isAgent: boolean;
+}
+
+/** То же там, где аватар не рисуется: автор карточки, лицо в истории. */
+export type WorkPersonRefDto = Omit<WorkPersonDto, "avatarUrl">;
+
+/** Участник среды глазами остальных участников. */
+export interface WorkMemberDto extends WorkPersonDto {
   role: WorkMemberRole;
   joinedAt: string;
 }
@@ -87,7 +103,7 @@ export interface WorkChecklistItemDto {
 export interface WorkCommentDto {
   id: string;
   body: string;
-  author: { userId: string; name: string; avatarUrl: string | null } | null;
+  author: WorkPersonDto | null;
   createdAt: string;
   editedAt: string | null;
 }
@@ -107,7 +123,13 @@ export interface WorkAttachmentDto {
 export interface WorkActivityDto {
   id: string;
   kind: WorkActivityKind;
-  actor: { userId: string; name: string } | null;
+  actor: WorkPersonRefDto | null;
+  /**
+   * Человек, чьим ключом действовал агент. Заполнено только у записей ИИ:
+   * аккаунт у него один на всех, и «кто это сделал» без поручителя отвечает
+   * лишь наполовину.
+   */
+  onBehalfOf: WorkPersonRefDto | null;
   payload: Record<string, unknown>;
   createdAt: string;
 }
@@ -127,7 +149,7 @@ export interface WorkTaskCardDto {
   priority: WorkTaskPriority;
   dueAt: string | null;
   completedAt: string | null;
-  assignee: { userId: string; name: string; avatarUrl: string | null } | null;
+  assignee: WorkPersonDto | null;
   labels: WorkLabelDto[];
   /** Сколько пунктов чек-листа отмечено из скольких. */
   checklistDone: number;
@@ -146,7 +168,7 @@ export interface WorkTaskDto extends WorkTaskCardDto {
   boardId: string;
   spaceId: string;
   description: string;
-  createdBy: { userId: string; name: string } | null;
+  createdBy: WorkPersonRefDto | null;
   checklist: WorkChecklistItemDto[];
   comments: WorkCommentDto[];
   attachments: WorkAttachmentDto[];
@@ -184,7 +206,7 @@ export interface WorkBoardSummaryDto {
  * «Выполненные» — всё, что закрыто, даже если карточка ещё стоит в колонке с
  * галочкой; «Убранные» — то, что убрали кнопкой «в архив».
  */
-export type WorkArchiveView = 'done' | 'removed';
+export type WorkArchiveView = "done" | "removed";
 
 export interface WorkArchiveItemDto extends WorkTaskCardDto {
   /** В какой колонке карточка стоит или стояла. */
@@ -301,7 +323,7 @@ export interface WorkContactDto {
  * Разница видна человеку: пустая выдача у одного значит «среди знакомых
  * никого», у другого — «на портале никого», и путать эти два ответа нельзя.
  */
-export type WorkContactScope = 'known' | 'portal';
+export type WorkContactScope = "known" | "portal";
 
 /** Ответ поиска людей для приглашения: выдача и то, где её искали. */
 export interface WorkContactsDto {
@@ -316,7 +338,7 @@ export interface WorkContactsDto {
 }
 
 export interface CreateWorkInviteRequest {
-  role?: Exclude<WorkMemberRole, 'owner'>;
+  role?: Exclude<WorkMemberRole, "owner">;
   /** Дней жизни ссылки; по умолчанию 7. */
   expiresInDays?: number;
   /** 0 — без ограничения. */
@@ -326,7 +348,7 @@ export interface CreateWorkInviteRequest {
 }
 
 export interface UpdateWorkMemberRequest {
-  role: Exclude<WorkMemberRole, 'owner'>;
+  role: Exclude<WorkMemberRole, "owner">;
 }
 
 export interface CreateWorkBoardRequest {
@@ -416,13 +438,13 @@ export interface WorkAgendaDto {
   responses: WorkAgendaResponseDto[];
 }
 
-export type WorkAgendaResponseStatus = 'new' | 'in_dialog' | 'accepted';
+export type WorkAgendaResponseStatus = "new" | "in_dialog" | "accepted";
 
 export interface WorkAgendaResponseDto {
   responseId: string;
   offerId: string;
   offerTitle: string;
-  offerKind: 'work' | 'seva' | 'task';
+  offerKind: "work" | "seva" | "task";
   status: WorkAgendaResponseStatus;
   /** Когда статус менялся в последний раз. */
   updatedAt: string;
@@ -442,14 +464,14 @@ export interface WorkAgendaItemDto {
 
 /** Живые события доски (SSE). Один поток на человека, как в «Общении». */
 export type WorkStreamEvent =
-  | { type: 'task.created'; boardId: string; task: WorkTaskCardDto }
-  | { type: 'task.updated'; boardId: string; task: WorkTaskCardDto }
+  | { type: "task.created"; boardId: string; task: WorkTaskCardDto }
+  | { type: "task.updated"; boardId: string; task: WorkTaskCardDto }
   | {
-      type: 'task.moved';
+      type: "task.moved";
       boardId: string;
       taskId: string;
       columnId: string;
       position: number;
     }
-  | { type: 'task.removed'; boardId: string; taskId: string }
-  | { type: 'board.changed'; boardId: string };
+  | { type: "task.removed"; boardId: string; taskId: string }
+  | { type: "board.changed"; boardId: string };
