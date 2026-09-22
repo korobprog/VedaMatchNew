@@ -3,7 +3,11 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { buildLabelRequest, parseLabelResponse } from './label-recognition';
+import {
+  buildLabelRequest,
+  parseLabelResponse,
+  type LabelReading,
+} from './label-recognition';
 
 /**
  * Чтение состава со снимка этикетки.
@@ -45,8 +49,15 @@ export class WellnessRecognizeService {
     return { baseUrl, apiKey, model };
   }
 
-  /** Пустая строка — законный ответ: состава на снимке не видно. */
-  async readLabel(imageDataUrl: string): Promise<string> {
+  /**
+   * Пустой ответ — законный исход: состава на снимке не видно.
+   *
+   * Возвращается ответ модели целиком вместе со словом-заголовком: решение
+   * «это снимок состава или бок пачки» принимает вызывающий по
+   * `composition-word.ts`, а не разбор ответа. Разводить эти два дела важно —
+   * иначе правило приёмки снимка пряталось бы внутри парсера.
+   */
+  async readLabel(imageDataUrl: string): Promise<LabelReading> {
     const settings = this.config();
     if (!settings) {
       throw new ServiceUnavailableException(

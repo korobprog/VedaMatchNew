@@ -94,6 +94,10 @@ function RootStackInner() {
               ссылке, а вердикт всегда пересчитывается заново. */}
           <Stack.Screen name="wellness/scan" />
           <Stack.Screen name="wellness/result/[barcode]" />
+          {/* Съёмка состава, когда товара нет в базе: «не найдено» перестаёт
+              быть тупиком и становится путём пополнения базы. Штрихкод в
+              адресе — к нему и привяжется новая карточка. */}
+          <Stack.Screen name="wellness/label/[barcode]" />
           <Stack.Screen name="wellness/history" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />

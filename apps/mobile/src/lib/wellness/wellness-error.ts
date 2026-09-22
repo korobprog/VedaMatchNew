@@ -22,6 +22,11 @@ export type ScanFailureKind =
   | 'server'
   /** Код не прошёл проверку на сервере. Повторять нечего, нужен другой код. */
   | 'bad-barcode'
+  /**
+   * Снимок настоящий, но не того: на нём нет слова «Состав». Переснять —
+   * осмысленно, повторить тот же снимок — нет.
+   */
+  | 'bad-photo'
   | 'session'
   | 'unknown';
 
@@ -45,6 +50,17 @@ export function describeScanError(error: unknown): ScanFailure {
       return {
         kind: 'bad-barcode',
         message: error.message || 'Штрихкод не распознан — проверьте цифры.',
+        retryable: false,
+      };
+    }
+    // 422 у сканера означает ровно одно: снимок не про состав. Сервер уже
+    // сказал это по-человечески (`composition-word.ts`), доносим как есть.
+    if (error.status === 422) {
+      return {
+        kind: 'bad-photo',
+        message:
+          error.message ||
+          'Не вижу на снимке слова «Состав» — сфотографируйте ту часть упаковки, где написан состав.',
         retryable: false,
       };
     }

@@ -1,3 +1,5 @@
+import { stripCompositionWord } from './composition-word';
+
 /**
  * Снимок этикетки → строка состава.
  *
@@ -24,7 +26,12 @@ const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 const PROMPT = [
   'На снимке — упаковка продукта питания.',
   'Верни текст состава: то, что напечатано после слова «Состав»,',
-  '«Ингредиенты» или «Ingredients».',
+  '«Ингредиенты», «Ingredients» или «Склад».',
+  // Заголовок нужен не для красоты: по нему сервер отличает снимок состава от
+  // снятого наугад бока пачки (`composition-word.ts`). Про последствия модели
+  // не говорим — узнав их, она начнёт дописывать слово от себя.
+  'Начни ответ ровно тем словом-заголовком, как оно напечатано на упаковке,',
+  'вместе с двоеточием.',
   'Обязательно добавь в конце предложение про следы, если оно есть на упаковке:',
   '«может содержать следы…», «производится на оборудовании…» и подобные.',
   'Сохрани порядок, скобки и проценты как на упаковке.',
@@ -90,19 +97,28 @@ export function buildLabelRequest(
   };
 }
 
+export interface LabelReading {
+  /**
+   * Ответ модели как есть, вместе со словом-заголовком. По нему сервер решает,
+   * снимок это состава или чего-то другого (`composition-word.ts`), — поэтому
+   * заголовок больше не срезается молча при разборе.
+   */
+  raw: string;
+  /** Сам состав, без заголовка: именно он уходит в базу и в вердикт. */
+  ingredientsRaw: string;
+}
+
 /**
  * Ответ провайдера. Пустая строка — законный исход: состава на снимке не
  * видно, и притворяться, что видно, нельзя.
  */
-export function parseLabelResponse(payload: unknown): string {
+export function parseLabelResponse(payload: unknown): LabelReading {
   const choices = (payload as { choices?: unknown })?.choices;
-  if (!Array.isArray(choices) || !choices.length) return '';
-  const content = (
-    choices[0] as { message?: { content?: unknown } } | undefined
-  )?.message?.content;
-  if (typeof content !== 'string') return '';
-  return content
-    .replace(/^\s*(состав|ингредиенты|ingredients)\s*[:.]\s*/i, '')
-    .replace(/^["'«»]+|["'«»]+$/g, '')
-    .trim();
+  const content = Array.isArray(choices)
+    ? (choices[0] as { message?: { content?: unknown } } | undefined)?.message
+        ?.content
+    : undefined;
+  if (typeof content !== 'string') return { raw: '', ingredientsRaw: '' };
+  const raw = content.trim();
+  return { raw, ingredientsRaw: stripCompositionWord(raw) };
 }

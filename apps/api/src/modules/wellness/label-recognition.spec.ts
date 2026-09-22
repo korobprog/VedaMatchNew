@@ -61,20 +61,45 @@ describe('buildLabelRequest', () => {
 describe('parseLabelResponse', () => {
   const reply = (content: unknown) => ({ choices: [{ message: { content } }] });
 
-  it('снимает служебное «Состав:» — его добавит наш разбор', () => {
-    expect(parseLabelResponse(reply('Состав: сахар, соль'))).toBe(
+  it('отдаёт и ответ целиком, и состав без заголовка', () => {
+    // `raw` нужен серверу, чтобы отличить снимок состава от бока пачки
+    // (`composition-word.ts`); в базу и в вердикт идёт `ingredientsRaw`.
+    expect(parseLabelResponse(reply('Состав: сахар, соль'))).toEqual({
+      raw: 'Состав: сахар, соль',
+      ingredientsRaw: 'сахар, соль',
+    });
+  });
+
+  it('снимает кавычки вокруг ответа', () => {
+    expect(parseLabelResponse(reply('«сахар, соль»')).ingredientsRaw).toBe(
       'сахар, соль',
     );
   });
 
-  it('снимает кавычки вокруг ответа', () => {
-    expect(parseLabelResponse(reply('«сахар, соль»'))).toBe('сахар, соль');
+  it('ответ без заголовка не теряется: решение об отказе принимает не разбор', () => {
+    expect(parseLabelResponse(reply('сахар, соль'))).toEqual({
+      raw: 'сахар, соль',
+      ingredientsRaw: 'сахар, соль',
+    });
   });
 
   it('пустой ответ остаётся пустым, а не превращается в выдумку', () => {
-    expect(parseLabelResponse(reply(''))).toBe('');
-    expect(parseLabelResponse({ choices: [] })).toBe('');
-    expect(parseLabelResponse(null)).toBe('');
-    expect(parseLabelResponse(reply(42))).toBe('');
+    const empty = { raw: '', ingredientsRaw: '' };
+    expect(parseLabelResponse(reply(''))).toEqual(empty);
+    expect(parseLabelResponse({ choices: [] })).toEqual(empty);
+    expect(parseLabelResponse(null)).toEqual(empty);
+    expect(parseLabelResponse(reply(42))).toEqual(empty);
+  });
+});
+
+describe('задание модели', () => {
+  it('просит начать ответ словом-заголовком: по нему проверяется снимок', () => {
+    const text = JSON.stringify(
+      buildLabelRequest('m', pixel).messages[0].content[0],
+    );
+    expect(text).toContain('словом-заголовком');
+    // Про последствия модели не говорим — иначе она допишет слово от себя.
+    expect(text).not.toContain('отклон');
+    expect(text).not.toContain('не примем');
   });
 });

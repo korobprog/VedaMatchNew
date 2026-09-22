@@ -1,5 +1,4 @@
 import type { WellnessScanResult } from '@vedamatch/shared';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -7,19 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import { useSession } from '@/lib/auth/session';
-import {
-  MISSING_PRODUCT_COPY,
-  describeVerdict,
-  isMissingProduct,
-  verdictAccessibilityLabel,
-  verdictSections,
-  type VerdictTone,
-} from '@/lib/wellness/verdict-copy';
+import { VerdictCard } from '@/components/wellness/verdict-card';
+import { MISSING_PRODUCT_COPY, isMissingProduct } from '@/lib/wellness/verdict-copy';
 import { barcodeScanRequest, createWellnessApi } from '@/lib/wellness/wellness-api';
 import { describeScanError, type ScanFailure } from '@/lib/wellness/wellness-error';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
-import { fonts, hitTarget, radius, type Palette } from '@/theme/tokens';
+import { fonts, hitTarget, radius } from '@/theme/tokens';
 
 /**
  * Ответ сканера (VED-335): крупно «подходит / сомнительно / не подходит»,
@@ -73,7 +66,12 @@ export default function WellnessResultScreen() {
         </View>
       );
     }
-    return <Answer result={data} />;
+    return (
+      <View style={styles.block}>
+        <VerdictCard result={data} />
+        {isMissingProduct(data) ? <AddByPhoto barcode={barcode} /> : null}
+      </View>
+    );
   })();
 
   return (
@@ -128,96 +126,35 @@ function Failure({
   );
 }
 
-const TONE_TOKEN: Record<VerdictTone, keyof Palette> = {
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-  // «Не знаем» — не предупреждение и не разрешение: обычный текст.
-  neutral: 'text0',
-};
-
-function Answer({ result }: { result: WellnessScanResult }) {
+/**
+ * Товара нет в базе — и это не тупик, а приглашение её пополнить (VED-335,
+ * второй заход). То же самое умеет сайт; здесь путь короче, потому что
+ * камера уже в руках.
+ */
+function AddByPhoto({ barcode }: { barcode: string }) {
   const { colors } = useTheme();
-  const missing = isMissingProduct(result);
-  const copy = describeVerdict(result.result.verdict);
-  const tone = colors[TONE_TOKEN[copy.tone]];
-  const sections = verdictSections(result);
-
   return (
-    <View style={styles.block}>
-      <View
-        accessible
-        accessibilityRole="summary"
-        accessibilityLabel={
-          missing
-            ? `${MISSING_PRODUCT_COPY.title}. ${MISSING_PRODUCT_COPY.summary}`
-            : verdictAccessibilityLabel(result)
+    <View style={[styles.invite, { backgroundColor: colors.bg1 }]}>
+      <Text accessibilityRole="header" style={[styles.inviteTitle, { color: colors.text0 }]}>
+        Сфотографируйте состав
+      </Text>
+      <Text style={[styles.note, { color: colors.text1 }]}>{MISSING_PRODUCT_COPY.hint}</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          router.push({ pathname: '/wellness/label/[barcode]', params: { barcode } })
         }
-        style={[styles.card, { backgroundColor: colors.glass, borderColor: missing ? colors.glassBorder : tone }]}
+        android_ripple={ripple(colors.glassBorder)}
+        style={({ pressed }) => [
+          styles.invitePrimary,
+          { backgroundColor: colors.magenta },
+          pressedStyle(pressed),
+        ]}
       >
-        {/* Слово — главное на экране. Порог контраста для него текстовый,
-            4.5:1: пара замерена в `theme/contrast.spec.ts`. */}
-        <Text style={[styles.verdict, { color: missing ? colors.text0 : tone }]}>
-          {missing ? MISSING_PRODUCT_COPY.title : copy.title}
+        <Text style={[styles.invitePrimaryText, { color: colors.onAccent }]}>
+          Снять состав камерой
         </Text>
-        <Text style={[styles.summary, { color: colors.text1 }]}>
-          {missing ? MISSING_PRODUCT_COPY.summary : copy.summary}
-        </Text>
-      </View>
-
-      {result.product ? (
-        <View style={[styles.product, { backgroundColor: colors.bg1 }]}>
-          {result.product.imageUrl ? (
-            <Image
-              source={{ uri: result.product.imageUrl }}
-              style={styles.photo}
-              contentFit="contain"
-              // Картинка ничего не добавляет к названию рядом: скринридеру
-              // она только мешает.
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-          ) : null}
-          <View style={styles.productText}>
-            <Text style={[styles.productName, { color: colors.text0 }]}>{result.product.name}</Text>
-            {result.product.brand ? (
-              <Text style={[styles.brand, { color: colors.text1 }]}>{result.product.brand}</Text>
-            ) : null}
-            {result.product.source === 'openfoodfacts' ? (
-              // Лицензия ODbL требует называть источник — и человеку полезно
-              // знать, чьей строке он доверяет.
-              <Text style={[styles.brand, { color: colors.text1 }]}>Состав из Open Food Facts</Text>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
-
-      {sections.map((section) => (
-        <View key={section.title} style={styles.section}>
-          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text0 }]}>
-            {section.title}
-          </Text>
-          <Text style={[styles.note, { color: colors.text1 }]}>{section.hint}</Text>
-          {section.lines.map((line) => (
-            <Text key={line} selectable style={[styles.line, { color: colors.text0, backgroundColor: colors.bg1 }]}>
-              {line}
-            </Text>
-          ))}
-        </View>
-      ))}
-
-      {result.ingredientsRaw ? (
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text0 }]}>
-            Состав целиком
-          </Text>
-          {/* Выделяемый: человек проверяет нас по строке и иногда хочет её
-              переслать — состав важнее удобства вёрстки. */}
-          <Text selectable style={[styles.raw, { color: colors.text0, backgroundColor: colors.bg1 }]}>
-            {result.ingredientsRaw}
-          </Text>
-        </View>
-      ) : null}
+      </Pressable>
     </View>
   );
 }
@@ -282,4 +219,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   againText: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
+  invite: { borderRadius: radius.md, borderCurve: 'continuous', padding: 16, gap: 10 },
+  inviteTitle: { fontFamily: fonts.displayMedium, fontSize: 17 },
+  invitePrimary: {
+    minHeight: hitTarget,
+    borderRadius: radius.sm,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    overflow: 'hidden',
+  },
+  invitePrimaryText: { fontFamily: fonts.bodySemiBold, fontSize: 15 },
 });
