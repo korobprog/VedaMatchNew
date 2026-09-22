@@ -20,8 +20,13 @@ import {
 } from "@/lib/home-featured";
 import { MemberCountLine } from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
-import { PortalSearchField } from "@/components/portal-search-field";
-import { PortalSupportLink } from "@/components/portal-support-link";
+import { BlogHomeWidget } from "@/components/blog/blog-home-widget";
+import { BlogFeedToggle } from "@/components/blog/blog-feed-toggle";
+import {
+  BLOG_HOME_COOKIE,
+  resolveBlogHomeVisible,
+} from "@/lib/blog-home-visibility";
+import { getBlogHomeFeed } from "@/lib/blog-api";
 import { InviteFriendTeaser } from "@/components/rewards/invite-friend-teaser";
 import {
   getUnionChats,
@@ -222,6 +227,16 @@ export default async function Home({
     featuredOptions,
   );
   const featuredRoutes = new Set(featured.map((item) => item.href));
+  // Блог-лента наверху главной (VED-238). Выбор «убрать ленту с экрана»
+  // живёт в cookie и читается здесь, на сервере: лента рисуется в SSR, и
+  // решение, известное только браузеру, дало бы главную, которая сначала
+  // показывает ленту, а потом её убирает.
+  const blogVisible = resolveBlogHomeVisible(
+    (await cookies()).get(BLOG_HOME_COOKIE)?.value,
+    user.id,
+  );
+  // Упавший сервис обязан убрать ленту, а не главную.
+  const blogFeed = blogVisible ? await getBlogHomeFeed().catch(() => null) : null;
   const unionService = services.find((s) => s.url === "/union");
   const motivationService = services.find((s) => s.url === "/motivation");
   const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
@@ -286,12 +301,15 @@ export default async function Home({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-6xl px-4 py-8 pb-24">
-        {/* Поддержка — первой, над поиском (VED-146). */}
-        <PortalSupportLink className="mb-3" />
-        {/* Поиск по порталу — сразу под поддержкой (VED-75): человек, который
-            пришёл за конкретной лекцией или объявлением, не должен сначала
-            угадывать, в каком она сервисе. */}
-        <PortalSearchField compact className="mb-6" />
+        {/* Блог-лента (VED-238) — на месте карточки поддержки и строки
+            поиска: оба уехали в панель горячих кнопок и с главной убраны.
+            Поддержка там же — плиткой «Написать админам», и вдобавок в меню
+            шапки, профиле и подвале; поиск — плиткой «Поиск» на ту же
+            страницу `/search`, где поле осталось над выдачей. Место, которое
+            они занимали, — это место ленты. */}
+        {blogFeed && (
+          <BlogHomeWidget data={blogFeed} userId={user.id} className="mb-6" />
+        )}
         {/* Новости администрации выше советника: советник говорит о делах
             человека, новость — о портале, и она не должна теряться под ними. */}
         <PortalNews items={news ?? []} />
@@ -334,11 +352,20 @@ export default async function Home({
              висела отдельной строкой, а плеер между ними отрывал её от
              остальных настроек главной. */
           toolbarStart={
-            <FeaturedServicesEditor
-              userId={user.id}
-              current={featured.map((item) => item.key)}
-              options={featuredOptions.map(({ key, name }) => ({ key, name }))}
-            />
+            <>
+              <FeaturedServicesEditor
+                userId={user.id}
+                current={featured.map((item) => item.key)}
+                options={featuredOptions.map(({ key, name }) => ({
+                  key,
+                  name,
+                }))}
+              />
+              {/* Возврат спрятанной ленты — здесь, а не наверху: в
+                  спрятанном виде верх главной обязан выглядеть как раньше.
+                  Пока лента показана, кнопки нет вовсе. */}
+              <BlogFeedToggle userId={user.id} hidden={!blogVisible} />
+            </>
           }
         />
         {/* Подвал главной, под сеткой: действия людей, которые открыли

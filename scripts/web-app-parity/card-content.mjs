@@ -34,6 +34,7 @@ export const SERVICE_NAMES = {
   wellness: 'Здоровье',
   vacancies: 'Вакансии',
   travel: 'Путешествия',
+  blog: 'Блог-лента',
 };
 
 /** Пункты настоящего чек-листа доски (`POST /work/tasks/:id/checklist`) —

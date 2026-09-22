@@ -8,9 +8,14 @@ import {
 const ALL: NotificationMark[] = ["in_progress", "testing", "done", "rework"];
 
 describe("notificationMarkView", () => {
+  /**
+   * Слово — ровно название колонки доски, включая «Тестерование» через «е»:
+   * так она называется у заказчика, и подменять её написание в значке значит
+   * показывать человеку не то слово, на которое он нажимал (VED-312).
+   */
   it("даёт слово каждому из четырёх состояний", () => {
     expect(notificationMarkView("in_progress")?.label).toBe("В работе");
-    expect(notificationMarkView("testing")?.label).toBe("Тестирование");
+    expect(notificationMarkView("testing")?.label).toBe("Тестерование");
     expect(notificationMarkView("done")?.label).toBe("Выполнено");
     expect(notificationMarkView("rework")?.label).toBe("На доработку");
   });
@@ -25,27 +30,28 @@ describe("notificationMarkView", () => {
   });
 
   /**
-   * Цвет — не единственная примета: дальтонику и в чёрно-белой печати значки
-   * обязаны различаться словом и знаком.
+   * Цвет — не единственная примета: дальтонику и в чёрно-белой печати значок
+   * обязан читаться словом. Знака рядом со словом больше нет (VED-312),
+   * поэтому слово остаётся единственной приметой, не зависящей от зрения.
    */
-  it("у каждого состояния свои слово, знак и цвет", () => {
+  it("у каждого состояния своё слово и свой цвет", () => {
     const views = ALL.map((mark) => notificationMarkView(mark)!);
     expect(new Set(views.map((view) => view.label)).size).toBe(ALL.length);
-    expect(new Set(views.map((view) => view.icon)).size).toBe(ALL.length);
     expect(new Set(views.map((view) => view.className)).size).toBe(ALL.length);
   });
 
   /**
    * Хардкод `#RRGGBB` пережил бы переключение темы и остался бы от чужой.
-   * Золота в наборе нет: на светлой теме оно даёт 3,78:1 и мелкой подписи
-   * не годится.
+   * Цвета — пары токенов `--vm-mark-*`: заказчик просил тёмные тона, они
+   * живут на светлой теме, а тёмная берёт осветлённый тон той же краски.
    */
-  it("цвета берутся токенами темы, без хардкода и без золота", () => {
+  it("цвета берутся токенами темы, без хардкода", () => {
     for (const mark of ALL) {
       const { className } = notificationMarkView(mark)!;
       expect(className).not.toMatch(/#[0-9a-f]{3,8}/i);
-      expect(className).not.toMatch(/gold/);
-      expect(className).toMatch(/^border-(blue|violet|cyan|magenta)\/60 text-(blue|violet|cyan|magenta)$/);
+      expect(className).toMatch(
+        /^border-mark-(progress|testing|done|rework)\/60 text-mark-(progress|testing|done|rework)$/,
+      );
     }
   });
 

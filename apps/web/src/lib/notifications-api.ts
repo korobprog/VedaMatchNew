@@ -2,6 +2,7 @@
 // идут в API своего контура (lib/api-base) с cookie, а не через серверные
 // хелперы lib/api.ts.
 import type {
+  NotificationDeliveryStatusDto,
   NotificationInboxResponse,
   NotificationPreferencesDto,
   NotificationUnreadCountResponse,
@@ -62,6 +63,15 @@ export function markInboxRead(ids?: string[]): Promise<{ ok: true }> {
     method: "POST",
     body: JSON.stringify(ids ? { ids } : {}),
   });
+}
+
+/**
+ * Есть ли куда доставлять уведомления этому человеку (VED-314). Настройки
+ * спрашивают об этом сами: разрешение браузера и живая подписка на сервере —
+ * разные вещи, и раньше расхождение между ними было видно только в логах.
+ */
+export function fetchDeliveryStatus(): Promise<NotificationDeliveryStatusDto> {
+  return request("/notifications/delivery-status");
 }
 
 export function fetchPreferences(): Promise<NotificationPreferencesDto> {

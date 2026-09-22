@@ -1,11 +1,12 @@
 import Link from "next/link";
-import type {
-  MusicArtistDto,
-  MusicCategoryDto,
-  MusicDurationBucket,
-  MusicTrackSort,
+import {
+  MUSIC_DEFAULT_TRACK_SORT,
+  MUSIC_TRACK_SORTS,
+  type MusicArtistDto,
+  type MusicCategoryDto,
+  type MusicTrackSort,
 } from "@vedamatch/shared";
-import { MUSIC_DEFAULT_TRACK_SORT } from "@vedamatch/shared";
+import { styleFilterCategories } from "./music-root-scope";
 
 /**
  * Фильтры каталога — тот самый чип «Фильтры» из макета `Catalog.dc.html`.
@@ -18,20 +19,28 @@ import { MUSIC_DEFAULT_TRACK_SORT } from "@vedamatch/shared";
  * Раскрывается `<details>`, а не переключателем на состоянии: свёрнутый вид —
  * это ровно то, что нужно большинству, а тащить ради стрелочки клиентский
  * компонент в серверную страницу незачем.
+ *
+ * Рядов в панели три — «Порядок», «Стиль» и «Исполнитель» (VED-165).
+ * «Запись» (с программы / студийная) убрана и не возвращается: заказчик её
+ * не называл ни разу, а параметр `live` API принимает по-прежнему.
  */
 
-const SORTS: { value: MusicTrackSort; label: string }[] = [
-  { value: "fresh", label: "Сначала новое" },
-  { value: "popular", label: "Чаще слушают" },
-  { value: "title", label: "По названию" },
-  { value: "duration", label: "По длительности" },
-];
-
-const DURATIONS: { value: MusicDurationBucket; label: string }[] = [
-  { value: "short", label: "До 5 минут" },
-  { value: "medium", label: "5–30 минут" },
-  { value: "long", label: "Больше получаса" },
-];
+/**
+ * Чипы ряда «Порядок». Подписи здесь, значения — из общих типов
+ * (`MUSIC_TRACK_SORTS`), чтобы витрина не предлагала порядок, которого
+ * сервер не знает.
+ *
+ * «По длительности» в списке нет и не будет (VED-165): порядок считался по
+ * `durationSeconds`, а у части записей эта колонка заполнена оценкой при
+ * загрузке — заказчик просил убрать чип, и он остаётся убранным. Остальные
+ * три вернулись по его же уточнению: «верни в фильтры „Порядок“ (Сначала
+ * новое · Чаще слушают · По названию)».
+ */
+const SORT_LABELS: Record<MusicTrackSort, string> = {
+  fresh: "Сначала новое",
+  popular: "Чаще слушают",
+  title: "По названию",
+};
 
 export interface MusicFilterState {
   /**
@@ -44,8 +53,11 @@ export interface MusicFilterState {
   category: string | null;
   q: string | null;
   artist: string | null;
-  duration: string | null;
-  live: string | null;
+  /**
+   * Порядок выдачи из адреса. Строка, а не `MusicTrackSort`: сюда попадает
+   * то, что стоит в `?sort=`, — старая ссылка или опечатка тоже. Панель
+   * такое значение просто не подсветит, а сервер заменит умолчанием.
+   */
   sort: string | null;
   /** Страница выдачи. В счёт фильтров не идёт: это не выбор человека. */
   cursor: string | null;
@@ -77,13 +89,7 @@ export function musicFilterHref(
  * это главный выбор витрины (вкладки сверху), а не пункт панели фильтров.
  */
 export function countMusicFilters(state: MusicFilterState): number {
-  return [
-    state.category,
-    state.artist,
-    state.duration,
-    state.live,
-    state.sort,
-  ].filter(Boolean).length;
+  return [state.category, state.artist, state.sort].filter(Boolean).length;
 }
 
 const chip =
@@ -107,7 +113,11 @@ export function MusicFilters({
   // не список тегов «что уже нашлось» — редакция должна видеть весь набор
   // стилей, чтобы понимать, что вообще можно проставить, и уметь снять
   // фильтр, даже если он ссылается на пока пустой стиль.
-  const styles = categories.filter((category) => category.kind === "style");
+  //
+  // Корневые «Традиционное» и «Современное» сюда не попадают — ни настоящие,
+  // ни их тёзки из ручной разметки: они выбираются вкладками над каталогом,
+  // см. `styleFilterCategories` (VED-165).
+  const styles = styleFilterCategories(categories);
 
   return (
     // `w-fit` и `open:w-full` — чтобы свёрнутый чип стоял в одном ряду с
@@ -134,7 +144,7 @@ export function MusicFilters({
 
       <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-glass-brd bg-white/2 p-3">
         <FilterRow label="Порядок">
-          {SORTS.map((option) => {
+          {MUSIC_TRACK_SORTS.map((value) => {
             // Порядок по умолчанию (VED-273) — тот же, что применит сервер
             // без параметра: «По названию» горит выбранным и на чистом
             // адресе, иначе человек видит список по алфавиту и ни одного
@@ -142,38 +152,21 @@ export function MusicFilters({
             // а не ставит `sort=title`: умолчание не должно считаться
             // поставленным фильтром.
             const on =
-              state.sort === option.value ||
-              (state.sort === null && option.value === MUSIC_DEFAULT_TRACK_SORT);
+              state.sort === value ||
+              (state.sort === null && value === MUSIC_DEFAULT_TRACK_SORT);
             return (
               <Link
-                key={option.value}
+                key={value}
                 href={musicFilterHref(state, {
                   sort:
-                    on || option.value === MUSIC_DEFAULT_TRACK_SORT
-                      ? null
-                      : option.value,
+                    on || value === MUSIC_DEFAULT_TRACK_SORT ? null : value,
                 })}
                 className={`${chip} ${on ? chipOn : chipOff}`}
               >
-                {option.label}
+                {SORT_LABELS[value]}
               </Link>
             );
           })}
-        </FilterRow>
-
-        <FilterRow label="Длительность">
-          {DURATIONS.map((option) => (
-            <Link
-              key={option.value}
-              href={musicFilterHref(state, {
-                duration:
-                  state.duration === option.value ? null : option.value,
-              })}
-              className={`${chip} ${state.duration === option.value ? chipOn : chipOff}`}
-            >
-              {option.label}
-            </Link>
-          ))}
         </FilterRow>
 
         <FilterRow label="Стиль">
@@ -205,25 +198,6 @@ export function MusicFilters({
           )}
         </FilterRow>
 
-        <FilterRow label="Запись">
-          <Link
-            href={musicFilterHref(state, {
-              live: state.live === "true" ? null : "true",
-            })}
-            className={`${chip} ${state.live === "true" ? chipOn : chipOff}`}
-          >
-            С программы
-          </Link>
-          <Link
-            href={musicFilterHref(state, {
-              live: state.live === "false" ? null : "false",
-            })}
-            className={`${chip} ${state.live === "false" ? chipOn : chipOff}`}
-          >
-            Студийная
-          </Link>
-        </FilterRow>
-
         {artists.length > 0 && (
           <FilterRow label="Исполнитель">
             {artists.map((artist) => (
@@ -245,8 +219,6 @@ export function MusicFilters({
             href={musicFilterHref(state, {
               category: null,
               artist: null,
-              duration: null,
-              live: null,
               sort: null,
             })}
             className="w-fit text-xs text-cyan hover:text-magenta"

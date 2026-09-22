@@ -22,6 +22,27 @@ describe('parseStoredRequisites', () => {
     expect(parseStoredRequisites(null)).toEqual([]);
     expect(parseStoredRequisites({ kind: 'card' })).toEqual([]);
   });
+
+  // Примечание с банками (VED-12) появилось позже самих реквизитов: у строк,
+  // сохранённых до него, поля нет, и они обязаны пережить это без потерь.
+  it('keeps the bank note and survives rows saved before it existed', () => {
+    expect(
+      parseStoredRequisites([
+        {
+          kind: 'sbp',
+          label: 'Максим К.',
+          value: '+7 900',
+          note: ' Сбербанк ',
+        },
+        { kind: 'card', label: 'Максим К.', value: '2200', note: '  ' },
+        { kind: 'card', label: 'Станислав Ю.', value: '2202' },
+      ]),
+    ).toEqual([
+      { kind: 'sbp', label: 'Максим К.', value: '+7 900', note: 'Сбербанк' },
+      { kind: 'card', label: 'Максим К.', value: '2200' },
+      { kind: 'card', label: 'Станислав Ю.', value: '2202' },
+    ]);
+  });
 });
 
 describe('validateRequisites', () => {
@@ -35,8 +56,34 @@ describe('validateRequisites', () => {
     ]);
   });
 
+  it('оставляет примечание с банками и молча терпит пустое', () => {
+    expect(
+      validateRequisites([
+        {
+          kind: 'sbp',
+          label: 'Максим К.',
+          value: '+7 900',
+          note: ' Сбербанк, ВТБ, Озон-банк ',
+        },
+        { kind: 'card', label: 'Максим К.', value: '2200', note: '   ' },
+      ]),
+    ).toEqual([
+      {
+        kind: 'sbp',
+        label: 'Максим К.',
+        value: '+7 900',
+        note: 'Сбербанк, ВТБ, Озон-банк',
+      },
+      { kind: 'card', label: 'Максим К.', value: '2200' },
+    ]);
+  });
+
   it.each([
     [[{ kind: 'card', label: '', value: '1' }], 'подпись'],
+    [
+      [{ kind: 'card', label: 'x', value: '1', note: 'б'.repeat(121) }],
+      'примечание',
+    ],
     [[{ kind: 'card', label: 'x', value: '' }], 'значение'],
     [[{ kind: 'nope', label: 'x', value: '1' }], 'вид'],
     [[{ kind: 'link', label: 'x', value: 'http://insecure' }], 'https'],

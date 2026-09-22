@@ -14,10 +14,7 @@ import type {
 } from '@vedamatch/shared';
 import { resolveContentLineage, toLineagePreference } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  durationCondition,
-  type NormalizedMusicTrackQuery,
-} from './music-catalog-query';
+import type { NormalizedMusicTrackQuery } from './music-catalog-query';
 import {
   audiobookArtistCondition,
   audiobookScopeCondition,
@@ -108,7 +105,15 @@ export class MusicCatalogService {
    * друг от друга, а последовательные `await` превратили бы открытие
    * страницы в сумму четырёх задержек базы.
    */
-  async showcase(viewerId: string | null = null): Promise<MusicCatalogDto> {
+  async showcase(
+    viewerId: string | null = null,
+    /**
+     * Выбранная корневая вкладка (VED-165). Нужна только счётчикам стилей:
+     * под «Традиционным» чип стиля обязан обещать ровно то, что откроется по
+     * нажатию, а не число по всему каталогу.
+     */
+    rootSlug: string | null = null,
+  ): Promise<MusicCatalogDto> {
     const lineage = await this.viewerLineage(viewerId, null);
     // Аудиокниги живут отдельным разделом (VED-237) и в витрину не идут ни
     // записями, ни карточками чтецов, ни числом над заголовком.
@@ -116,7 +121,7 @@ export class MusicCatalogService {
 
     const [categories, fresh, artists, systemPlaylists, totalTracks] =
       await Promise.all([
-        this.listCategories(),
+        this.listCategories(rootSlug),
         this.prisma.musicTrack.findMany({
           where: {
             status: 'published',
@@ -147,14 +152,16 @@ export class MusicCatalogService {
     };
   }
 
-  async listCategories(): Promise<MusicCategoryDto[]> {
+  async listCategories(
+    rootSlug: string | null = null,
+  ): Promise<MusicCategoryDto[]> {
     const categories = await this.prisma.musicCategory.findMany({
       orderBy: [{ position: 'asc' }, { title: 'asc' }],
     });
 
     // Стиль считается прямой связью записи, корневая (VED-165-2) — через
     // исполнителя: см. `music-category-counts.ts`.
-    const byCategory = await countTracksByCategory(this.prisma, true);
+    const byCategory = await countTracksByCategory(this.prisma, true, rootSlug);
 
     return categories.map((row) =>
       toMusicCategoryDto(row, byCategory.get(row.id) ?? 0),
@@ -227,7 +234,6 @@ export class MusicCatalogService {
      */
     scope: 'catalog' | 'audiobooks' = 'catalog',
   ): Promise<MusicTrackListDto> {
-    const duration = durationCondition(query.duration);
     const lineage = await this.viewerLineage(viewerId, query.lineage);
 
     // Корневая категория (VED-165-2) переехала на исполнителя: фильтр по ней
@@ -271,7 +277,6 @@ export class MusicCatalogService {
           : {}),
         ...(query.artist ? { artist: { slug: query.artist } } : {}),
         ...(query.language ? { language: query.language } : {}),
-        ...(duration ? { durationSeconds: duration } : {}),
         ...(query.live === null ? {} : { isLiveRecording: query.live }),
       },
       include: TRACK_CARD_INCLUDE,
@@ -326,8 +331,9 @@ export class MusicCatalogService {
         return [{ playCount: 'desc' as const }, { id: 'desc' as const }];
       case 'title':
         return [{ title: 'asc' as const }, { id: 'desc' as const }];
-      case 'duration':
-        return [{ durationSeconds: 'asc' as const }, { id: 'desc' as const }];
+      // Порядка «по длительности» больше нет (VED-165) — убран вместе с
+      // одноимённым фильтром: сортировать по колонке, часть значений которой
+      // проставлена оценкой при загрузке, значит врать в списке.
       case 'fresh':
       default:
         return [{ publishedAt: 'desc' as const }, { id: 'desc' as const }];

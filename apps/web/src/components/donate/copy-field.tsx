@@ -14,10 +14,16 @@ import { copyText } from "@/lib/copy-text";
 export function CopyField({
   label,
   value,
+  note,
   mono = true,
 }: {
   label: string;
   value: string;
+  /**
+   * Строка под значением: банки, которые принимают перевод по этому номеру
+   * (VED-12). Её вписывают в `/admin/settings`; пусто — строки нет.
+   */
+  note?: string;
   /** Моноширинный шрифт: для номеров и счетов — да, для фраз — нет. */
   mono?: boolean;
 }) {
@@ -38,6 +44,7 @@ export function CopyField({
         >
           {value}
         </div>
+        {note && <div className="mt-0.5 text-xs text-text-1">{note}</div>}
       </div>
       <button
         type="button"

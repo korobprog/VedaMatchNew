@@ -53,6 +53,13 @@ const LazyCallProvider = lazy(() =>
   import('@/lib/calls/call-provider').then((m) => ({ default: m.CallProvider })),
 );
 
+/** Групповые звонки (VED-293) — тем же ленивым чанком и по той же причине. */
+const LazyGroupCallProvider = lazy(() =>
+  import('@/lib/group-calls/group-call-provider').then((m) => ({
+    default: m.GroupCallProvider,
+  })),
+);
+
 /**
  * `fallback` — то же дерево `children`, но без звонков: если чанк не
  * загрузился (обрыв сети), после ошибки рендерим именно его, а не то же
@@ -78,7 +85,9 @@ function CallGate({ children }: { children: ReactNode }) {
   return (
     <CallChunkBoundary fallback={children}>
       <Suspense fallback={<>{children}</>}>
-        <LazyCallProvider>{children}</LazyCallProvider>
+        <LazyCallProvider>
+          <LazyGroupCallProvider>{children}</LazyGroupCallProvider>
+        </LazyCallProvider>
       </Suspense>
     </CallChunkBoundary>
   );

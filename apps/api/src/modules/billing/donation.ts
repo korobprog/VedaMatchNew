@@ -9,6 +9,12 @@ export const MAX_DONATION_TEXT = 600;
 export const MAX_DONATION_REQUISITES = 8;
 export const MAX_REQUISITE_LABEL = 60;
 export const MAX_REQUISITE_VALUE = 200;
+/**
+ * Примечание под значением — перечень банков («Сбербанк, ВТБ, Озон-банк»),
+ * сеть у крипты или валюта. Лимит короткий намеренно: это подпись в одну
+ * строку под номером, а не второй текст обращения.
+ */
+export const MAX_REQUISITE_NOTE = 120;
 
 /**
  * Реквизиты из JSON-колонки в пригодный для показа вид. Хранилище могло
@@ -20,7 +26,7 @@ export function parseStoredRequisites(value: unknown): DonationRequisite[] {
   const result: DonationRequisite[] = [];
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
-    const { kind, label, value: raw } = item as Record<string, unknown>;
+    const { kind, label, value: raw, note } = item as Record<string, unknown>;
     if (
       typeof kind !== 'string' ||
       !(DONATION_REQUISITE_KINDS as readonly string[]).includes(kind) ||
@@ -30,10 +36,14 @@ export function parseStoredRequisites(value: unknown): DonationRequisite[] {
       !raw.trim()
     )
       continue;
+    // Примечание необязательное и появилось позже реквизитов: у старых
+    // записей его просто нет, и это не повод терять строку.
+    const cleanNote = typeof note === 'string' ? note.trim() : '';
     result.push({
       kind: kind as DonationRequisite['kind'],
       label: label.trim(),
       value: raw.trim(),
+      ...(cleanNote ? { note: cleanNote } : {}),
     });
   }
   return result;
@@ -48,7 +58,12 @@ export function validateRequisites(value: unknown): DonationRequisite[] {
       `Не больше ${MAX_DONATION_REQUISITES} реквизитов`,
     );
   return value.map((item, index) => {
-    const { kind, label, value: raw } = (item ?? {}) as Record<string, unknown>;
+    const {
+      kind,
+      label,
+      value: raw,
+      note,
+    } = (item ?? {}) as Record<string, unknown>;
     if (
       typeof kind !== 'string' ||
       !(DONATION_REQUISITE_KINDS as readonly string[]).includes(kind)
@@ -68,10 +83,18 @@ export function validateRequisites(value: unknown): DonationRequisite[] {
       throw new BadRequestException(
         `Реквизит ${index + 1}: ссылка должна начинаться с https://`,
       );
+    // Примечание необязательное: пустое поле — это «без примечания», а не
+    // ошибка формы. Длинное — ошибка: подпись в одну строку под номером.
+    const cleanNote = typeof note === 'string' ? note.trim() : '';
+    if (cleanNote.length > MAX_REQUISITE_NOTE)
+      throw new BadRequestException(
+        `Реквизит ${index + 1}: примечание не длиннее ${MAX_REQUISITE_NOTE} символов`,
+      );
     return {
       kind: kind as DonationRequisite['kind'],
       label: cleanLabel,
       value: cleanValue,
+      ...(cleanNote ? { note: cleanNote } : {}),
     };
   });
 }

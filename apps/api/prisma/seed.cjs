@@ -250,6 +250,25 @@ const services = [
     devoteeSelfIdentifiedVisible: true,
     devoteeVerifiedVisible: true,
   },
+  {
+    slug: 'blog',
+    name: 'Блог-лента',
+    description:
+      'Лента портала: посты участников с фотографиями и личный блог каждого — что происходит прямо сейчас',
+    url: '/blog',
+    // Открыта: лента на главной, архив, публикация с фотографиями, репост,
+    // страница автора и админский срок жизни поста готовы. Статус — это
+    // поведение, сид перезаписывает его при каждом старте api, поэтому
+    // переключать его надо здесь, а не в админке.
+    status: 'active',
+    category: 'community',
+    public: true,
+    seekerVisible: true,
+    practitionerVisible: true,
+    yogiVisible: true,
+    devoteeSelfIdentifiedVisible: true,
+    devoteeVerifiedVisible: true,
+  },
 ];
 
 async function main() {

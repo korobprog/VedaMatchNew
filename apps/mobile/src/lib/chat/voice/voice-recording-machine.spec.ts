@@ -42,6 +42,35 @@ describe('reduceVoiceRecorder', () => {
     expect(reduceVoiceRecorder(uploading, { type: 'interrupt' })).toEqual(INITIAL_VOICE_RECORDER_STATE);
   });
 
+  /**
+   * Скрытый дефект, найденный чтением кода (не воспроизведён живым
+   * наблюдением на устройстве): `voice-recorder-control.tsx` раньше слал
+   * сюда `{ type: 'failed' }` при провале самого СТАРТА записи (см.
+   * `voice-recorder-control.tsx: start()`) — но `failed` действует только
+   * из `uploading` (тест выше), и вызов с базой `idle` молча возвращал
+   * состояние БЕЗ ИЗМЕНЕНИЙ: UI остался бы в `idle`, даже если нативный
+   * `MediaRecorder` уже успел реально начать писать. Такого провала старта
+   * в проверенных прогонах на устройстве не случалось — дефект был в
+   * несовпадении guard-условия действия, а не в наблюдаемом поведении.
+   * Отдельное действие `startFailed` — специально для провала старта, из
+   * `idle`.
+   */
+  it('провал старта записи (startFailed) переводит idle → error, а не остаётся молча в idle', () => {
+    const failed = reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'startFailed', message: 'Микрофон недоступен' });
+    expect(failed).toEqual({ phase: 'error', elapsedSec: 0, error: 'Микрофон недоступен' });
+  });
+
+  it('startFailed не трогает состояние, если запись уже реально идёт (сюда не должен долетать провал вибрации/косметики после успешного старта)', () => {
+    const recording = reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'start' });
+    expect(reduceVoiceRecorder(recording, { type: 'startFailed', message: 'неважно' })).toEqual(recording);
+  });
+
+  it('старый action failed (провал загрузки) по-прежнему НЕ действует из idle — startFailed не подменяет его семантику', () => {
+    expect(reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'failed', message: 'x' })).toEqual(
+      INITIAL_VOICE_RECORDER_STATE,
+    );
+  });
+
   it('нельзя остановить то, что не записывается, и другие переходы вне фазы игнорируются', () => {
     expect(reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'stop' })).toEqual(INITIAL_VOICE_RECORDER_STATE);
     expect(reduceVoiceRecorder(INITIAL_VOICE_RECORDER_STATE, { type: 'cancel' })).toEqual(INITIAL_VOICE_RECORDER_STATE);

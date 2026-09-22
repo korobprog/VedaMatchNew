@@ -74,7 +74,10 @@ test('несервисные папки веба и API не попадают в
 // навигации (`seed.cjs`) — документированное исключение, см.
 // `CATALOG_SERVICES_WITHOUT_SEED_ENTRY` в changed-paths-to-services.mjs и
 // catalog-services-sync.test.mjs.
-test('все 13 сервисов каталога распознаются (белый список литералами)', () => {
+//
+// VED-238, VED-116: 14-й слаг — `blog` («Блог-лента»), обычный сервис
+// каталога с записью `Service` в сиде.
+test('все 14 сервисов каталога распознаются (белый список литералами)', () => {
   const expected = [
     'union',
     'vedabase',
@@ -89,6 +92,7 @@ test('все 13 сервисов каталога распознаются (бе
     'wellness',
     'travel',
     'vacancies',
+    'blog',
   ];
   assert.deepEqual([...CATALOG_SERVICES].sort(), [...expected].sort());
   for (const service of expected) {
@@ -215,4 +219,39 @@ test('groupChangedPathsByService группирует пути по сервис
 test('groupChangedPathsByService на пустом входе — пустая карта', () => {
   const grouped = groupChangedPathsByService([]);
   assert.equal(grouped.size, 0);
+});
+
+test('изменения только в тестах сервиса карточку не порождают (VED-285)', () => {
+  // Живое ложное срабатывание: PR #413 тронул из портальной части только спеку.
+  assert.deepEqual(
+    servicesFromPaths(['apps/api/src/modules/chat/calls/chat-calls.service.spec.ts']),
+    [],
+  );
+  assert.deepEqual(
+    servicesFromPaths(['apps/web/src/components/market/__tests__/card.tsx']),
+    [],
+  );
+  assert.deepEqual(servicesFromPaths(['apps/web/src/app/music/player.test.tsx']), []);
+});
+
+test('код рядом с тестом карточку порождает, но сам тест в её путях не упомянут', () => {
+  const grouped = groupChangedPathsByService([
+    'apps/api/src/modules/chat/chat-messages.service.spec.ts',
+    'apps/api/src/modules/chat/chat-messages.service.ts',
+  ]);
+  assert.deepEqual([...grouped.keys()], ['chat']);
+  assert.deepEqual(grouped.get('chat'), [
+    'apps/api/src/modules/chat/chat-messages.service.ts',
+  ]);
+});
+
+test('«spec» и «test» внутри имени папки или файла тестом не считаются', () => {
+  assert.deepEqual(
+    servicesFromPaths(['apps/web/src/app/market/specs/page.tsx']),
+    ['market'],
+  );
+  assert.deepEqual(
+    servicesFromPaths(['apps/api/src/modules/chat/latest-news.ts']),
+    ['chat'],
+  );
 });

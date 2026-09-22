@@ -14,7 +14,10 @@ import {
   normalizeAudience,
 } from './broadcast-audience';
 import { NativePushService } from './native-push.service';
-import { NotificationsService } from './notifications.service';
+import {
+  deliveryHealthSelect,
+  NotificationsService,
+} from './notifications.service';
 import { PushSenderService } from './push-sender.service';
 
 const TICK_MS = 30_000;
@@ -222,7 +225,13 @@ export class NotificationBroadcastWorkerService
     const native = await this.nativePush.sendToUsers(userIds, payload);
     const subscriptions = await this.prisma.pushSubscription.findMany({
       where: { userId: { in: userIds } },
-      select: { id: true, endpoint: true, p256dh: true, auth: true },
+      select: {
+        id: true,
+        endpoint: true,
+        p256dh: true,
+        auth: true,
+        ...deliveryHealthSelect,
+      },
     });
 
     let delivered = native.delivered;
@@ -231,8 +240,10 @@ export class NotificationBroadcastWorkerService
       const results = await Promise.all(
         chunk.map(async (subscription) => {
           const failure = await this.sender.send(subscription, payload);
-          if (failure === 'gone') {
-            await this.notifications.deleteSubscription(subscription.endpoint);
+          // Рассылка — самый массовый источник попыток, и отметки живости
+          // (VED-314) она обновляет наравне с одиночной доставкой.
+          if (this.sender.vapidConfigured) {
+            await this.notifications.recordPushResult(subscription, failure);
           }
           return failure === null;
         }),

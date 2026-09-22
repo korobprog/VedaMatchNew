@@ -16,8 +16,6 @@ const baseState: MusicFilterState = {
   category: null,
   q: null,
   artist: null,
-  duration: null,
-  live: null,
   sort: null,
   cursor: null,
 };

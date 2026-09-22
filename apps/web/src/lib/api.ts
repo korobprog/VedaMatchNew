@@ -25,6 +25,7 @@ import type {
   ContactsAdminTagDto,
   NotificationBroadcastDto,
   NotificationDeviceStats,
+  NotificationDeliveryHealthResponse,
   AdminReleaseDto,
   DonationSettingsDto,
   AdminRoadmapItemDto,
@@ -182,6 +183,16 @@ export const getAdminBroadcasts = () =>
 /** Телефоны с приложением VedaMatch для админки уведомлений. */
 export const getAdminNotificationDevices = () =>
   apiGet<NotificationDeviceStats>("/admin/notifications/devices");
+/**
+ * Живость точек доставки (VED-314): у кого есть живые веб-подписки и телефоны,
+ * когда каждая последний раз принимала пуш, и кому уведомления шли впустую.
+ */
+export const getAdminNotificationDelivery = (days?: string) => {
+  const window = days && /^\d+$/.test(days) ? `?days=${days}` : "";
+  return apiGet<NotificationDeliveryHealthResponse>(
+    `/admin/notifications/delivery${window}`,
+  );
+};
 /** Сводка на главной админки; для роли service-admin API отвечает 403. */
 export const getAdminPortalStats = () =>
   apiGet<AdminPortalStats>("/admin/stats/portal");

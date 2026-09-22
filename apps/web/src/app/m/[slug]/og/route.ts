@@ -1,12 +1,10 @@
 import sharp from "sharp";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
-import { ogFooterBuffer } from "@/lib/motivation-og-brand";
 import {
   OG_IMAGE_TYPE,
   encodeWithinLimit,
-  needsBrandFooter,
   ogImageSource,
-  ogPreviewLayout,
+  ogPreviewSize,
 } from "@/lib/motivation-og-image";
 
 export const runtime = "nodejs";
@@ -16,10 +14,12 @@ export const runtime = "nodejs";
  * пятимегабайтного PNG сторис. Почему это нужно и как считается кадр, см.
  * `motivation-og-image.ts`.
  *
- * Кадр собирается из двух частей: сама картинка целиком, без обрезки, и
- * полоса с подписью бренда снизу. Раньше здесь стоял `fit: 'cover'` под
- * жёсткие 9:16, и у открытки, принесённой готовым файлом, срезало бока
- * вместе с надписью — «открытки отображаются урезанными» в карточке.
+ * В кадре — сама иллюстрация целиком, без обрезки и без единой надписи.
+ * Раньше здесь стоял `fit: 'cover'` под жёсткие 9:16, и у открытки,
+ * принесённой готовым файлом, срезало бока вместе с надписью. А до третьего
+ * захода по карточке сюда шёл ещё и сторис-кадр с впечатанной цитатой плюс
+ * полоса с подписью бренда снизу — владелец попросил «чистую от текста
+ * картинку, а сам текст сверху или снизу», как показывает Max.
  *
  * Адрес публичный: бот Telegram, WhatsApp, Max или ВКонтакте приходит без
  * cookie, а префикс `/m/` открыт гостю в proxy.ts.
@@ -44,57 +44,31 @@ export async function GET(
     const upright = await sharp(original).rotate().toBuffer();
     const meta = await sharp(upright).metadata();
     if (!meta.width || !meta.height) throw new Error("no dimensions");
-    // Полоса — только там, где нашей подписи на картинке ещё нет: у
-    // сторис-кадра рилса её уже нарисовал API.
-    const withFooter = needsBrandFooter(post!);
 
     ({ bytes } = await encodeWithinLimit(async ({ scale, quality }) => {
-      const layout = ogPreviewLayout(
+      const size = ogPreviewSize(
         { width: meta.width!, height: meta.height! },
-        { scale, footer: withFooter },
+        { scale },
       );
-      const [picture, strip] = await Promise.all([
+      return (
         sharp(upright)
           // `inside` вместо `cover`: картинка вписывается целиком. Размеры
           // кадра посчитаны из её же пропорций, так что полей не остаётся.
-          .resize(layout.picture.width, layout.picture.height, {
-            fit: "inside",
+          .resize(size.width, size.height, { fit: "inside" })
+          // Фон сторис под прозрачными краями: у JPEG нет прозрачности, и без
+          // подложки они стали бы чёрными пятнами непредсказуемой формы.
+          .flatten({ background: "#0A0614" })
+          // Базовый (не прогрессивный) JPEG: так его разбирают все боты.
+          // `mozjpeg: true` здесь не годится — он включает прогрессивную
+          // развёртку, поэтому берём из его набора только сжатие.
+          .jpeg({
+            quality,
+            progressive: false,
+            trellisQuantisation: true,
+            overshootDeringing: true,
           })
-          .toBuffer(),
-        withFooter
-          ? sharp(ogFooterBuffer())
-              .resize(layout.footer.width, layout.footer.height, {
-                fit: "fill",
-              })
-              .toBuffer()
-          : null,
-      ]);
-      return sharp({
-        create: {
-          width: layout.width,
-          height: layout.height,
-          channels: 3,
-          // Фон сторис: у JPEG нет прозрачности, и без подложки прозрачные
-          // края стали бы чёрными пятнами непредсказуемой формы.
-          background: "#0A0614",
-        },
-      })
-        .composite([
-          { input: picture, left: layout.picture.left, top: layout.picture.top },
-          ...(strip
-            ? [{ input: strip, left: layout.footer.left, top: layout.footer.top }]
-            : []),
-        ])
-        // Базовый (не прогрессивный) JPEG: так его разбирают все боты.
-        // `mozjpeg: true` здесь не годится — он включает прогрессивную
-        // развёртку, поэтому берём из его набора только сжатие.
-        .jpeg({
-          quality,
-          progressive: false,
-          trellisQuantisation: true,
-          overshootDeringing: true,
-        })
-        .toBuffer();
+          .toBuffer()
+      );
     }));
   } catch {
     return new Response("Unable to render preview", { status: 502 });

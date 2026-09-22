@@ -58,6 +58,14 @@ function captionOf(slide: HTMLElement): HTMLElement {
   return caption;
 }
 
+/**
+ * Доступные имена кнопки «текст на картинке». Держим их здесь, чтобы тест
+ * читался про поведение, а не про строку, — и чтобы переименование ловилось
+ * в одном месте вместе с отдельной проверкой ниже, что в имени нет «Скрыть».
+ */
+const TEXT_OFF = "Смотреть без текста — только у вас на экране";
+const TEXT_ON = "Смотреть с текстом — вернуть цитату на картинку";
+
 function fetchOk(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
@@ -989,7 +997,7 @@ describe("ReelsFeed", () => {
     ).toBeInTheDocument();
   });
 
-  it("убирает текст и оставляет изображение", async () => {
+  it("убирает текст с картинки и возвращает его тем же нажатием", async () => {
     const user = userEvent.setup();
     render(
       <ReelsFeed
@@ -1000,13 +1008,21 @@ describe("ReelsFeed", () => {
     );
 
     expect(screen.getByText("Цитата a")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Скрыть текст" }));
+    const off = screen.getByRole("button", { name: TEXT_OFF });
+    expect(off).toHaveAttribute("aria-pressed", "false");
+    await user.click(off);
 
-    expect(
-      screen.getByRole("button", { name: "Показать текст" }),
-    ).toHaveAttribute("aria-pressed", "true");
     // Цитата убрана, но остаётся в разметке: возвращают её тем же нажатием.
     expect(screen.getByText("Цитата a")).not.toBeVisible();
+    const on = screen.getByRole("button", { name: TEXT_ON });
+    expect(on).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(on);
+    expect(screen.getByText("Цитата a")).toBeVisible();
+    expect(screen.getByRole("button", { name: TEXT_OFF })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   it("убранный текст держится, пока его не вернут", async () => {
@@ -1019,13 +1035,45 @@ describe("ReelsFeed", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Скрыть текст" }));
+    await user.click(screen.getByRole("button", { name: TEXT_OFF }));
     // Прежняя кнопка возвращала кадр через пять секунд; эту включают, чтобы
     // листать картинки без надписей, и сама она не выключается.
     await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(screen.getByRole("button", { name: TEXT_ON })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Цитата a")).not.toBeVisible();
+  });
+
+  /**
+   * Суть VED-251: тестировщик нажал в ленте кнопку, подписанную как
+   * редакторская «Скрыть из ленты» (та снимает афоризм у ВСЕХ читателей через
+   * `PATCH /admin/motivation/posts/:id`), и ждал того же. Публичная кнопка не
+   * меняет ничего ни у кого, поэтому ни её доступное имя, ни подпись под
+   * значком не вправе начинаться со «Скрыть» — именно это здесь и проверяем,
+   * а не конкретную формулировку.
+   */
+  it("подписью не притворяется редакторским «Скрыть из ленты»", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: TEXT_OFF });
+    const name = button.getAttribute("aria-label") ?? "";
+    expect(name).not.toMatch(/скры|спрят/i);
+    expect(name).toMatch(/текст/i);
+    // Подпись под значком — то, что человек читает глазами; «Скрыть» в ряду
+    // ленты и «Скрыть» в админке выглядели одинаково.
+    expect(button.textContent ?? "").not.toMatch(/скры|спрят/i);
+    // И никакой кнопки с редакторским именем в публичной ленте нет вовсе.
     expect(
-      screen.getByRole("button", { name: "Показать текст" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /скрыть/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("у ролика прятать нечего: подпись вшита в кадр", () => {
@@ -1041,7 +1089,7 @@ describe("ReelsFeed", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: /Скрыть текст/ }),
+      screen.queryByRole("button", { name: /без текста/i }),
     ).not.toBeInTheDocument();
   });
 

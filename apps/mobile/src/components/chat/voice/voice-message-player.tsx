@@ -7,7 +7,9 @@ import Svg, { Path, Rect } from 'react-native-svg';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget } from '@/theme/tokens';
-import { forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { canonicalVoiceUrlKey, forgetLocalVoiceFile, getLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { ensurePlaybackAudioMode } from '@/lib/chat/voice/voice-playback-audio-mode';
+import { isRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
 import {
   markVoiceFinished,
   registerVoiceOrder,
@@ -50,6 +52,19 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   const [loadRequested, setLoadRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(getCachedVoiceSpeed());
+  // Короткая подсказка вместо немого отказа, когда тап по волне пришёлся на
+  // время активной записи (`voice-recording-guard.ts`): панель записи и так
+  // видна человеку, но тап по чужому/своему голосовому в это время не
+  // должен выглядеть как ничего не делающая кнопка — тот же приём, что
+  // `backgroundNotice` в `voice-recorder-control.tsx`.
+  const [recordingHint, setRecordingHint] = useState(false);
+  const recordingHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (recordingHintTimeoutRef.current) clearTimeout(recordingHintTimeoutRef.current);
+    },
+    [],
+  );
   const finishedRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Async-загрузка источника (`loadAndPlay`) может дозреть уже после
@@ -103,6 +118,21 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
     if (status.isLoaded) clearLoadTimeout();
   }, [status.isLoaded]);
 
+  // Настоящая ошибка нативного плеера (`AudioStatus.error`, expo-audio) —
+  // 403 от S3, битый контейнер, обрыв сети. До этого эффекта единственным
+  // сигналом сбоя был слепой 12-секундный таймаут: любая причина, даже
+  // мгновенный отказ, тонула в спиннере на все 12 секунд и приходила с
+  // одной и той же надписью без единой зацепки в логе. Реагируем только
+  // пока реально ждём загрузку (`loadRequested`) — на отмонтированном или
+  // ещё не тронутом плеере это поле пустое само по себе.
+  useEffect(() => {
+    if (!loadRequested || !status.error || error) return;
+    clearLoadTimeout();
+    // eslint-disable-next-line no-console
+    console.warn('[voice] ошибка плеера', { url: canonicalVoiceUrlKey(url), reason: status.error });
+    setError('Не получилось загрузить запись');
+  }, [status.error, loadRequested, error, url]);
+
   // Финал: перематываем в начало и отпускаем глобальный «микрофон одного плеера»,
   // иначе повторное нажатие «Слушать» продолжало бы играть с нулевой позиции,
   // считаясь при этом всё ещё активным. `markVoiceFinished` — автопереход
@@ -110,9 +140,25 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   // есть непрослушанное, сам его запускает; `finishedRef` не даёт вызвать
   // это дважды на дребезг статуса плеера — заход в автопереход ровно один
   // раз на каждое реальное завершение.
+  //
+  // `player.pause()` ПЕРЕД `seekTo(0)` обязателен, не косметика: на Android
+  // `AudioPlayer` (`expo-audio`/ExoPlayer) естественное завершение переводит
+  // `playbackState` в `ENDED`, но НЕ трогает внутренний `playWhenReady` —
+  // тот остаётся `true`, если до этого играли обычным `player.play()`.
+  // `seekTo()` уводит плеер из `ENDED` обратно в `READY`, и раз
+  // `playWhenReady` всё ещё `true` — ExoPlayer сам возобновляет
+  // воспроизведение с нулевой позиции. Без явного `pause()` это давало
+  // бесконечный цикл ДАЖЕ на единственном голосовом в переписке (без
+  // соседей для автоперехода вообще) — живая проверка сборки 5003, Samsung
+  // A51: один и тот же клип 0:04 перезапускался каждые ~5 секунд, `logcat`
+  // показывал регулярный `AudioTrack: stop(...) delivered` → `Found a new
+  // active media playback`. `pause()` сбрасывает `playWhenReady` в `false`,
+  // и последующий `seekTo(0)` просто переставляет позицию, не запуская игру
+  // заново.
   useEffect(() => {
     if (status.didJustFinish && !finishedRef.current) {
       finishedRef.current = true;
+      player.pause();
       releaseVoicePlayback(id);
       void player.seekTo(0).catch(() => undefined);
       markVoiceFinished(id);
@@ -160,8 +206,20 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   // Старт воспроизведения после того, как источник уже выставлен
   // (`player.replace`) — общий хвост что для первого нажатия (после
   // `loadAndPlay`), что для повторных (источник уже загружен).
-  const startPlayback = () => {
+  //
+  // `ensurePlaybackAudioMode()` — ПЕРЕД `player.play()`, не после и не
+  // «когда-нибудь»: настоящий дефект, найденный чтением исходников
+  // `expo-audio`/`expo-modules-core` (разбор целиком —
+  // `voice-playback-audio-mode.ts`). Плеер не должен быть заложником того,
+  // кто последним трогал аудиорежим — `voice-recorder-control.tsx` тоже
+  // восстанавливает его после записи, но полагаться ТОЛЬКО на рекордер
+  // означало бы, что любой другой будущий вызывающий `setAudioModeAsync` с
+  // частичным объектом сломает воспроизведение снова, и плееру придётся
+  // опять гадать, откуда тишина без единого лога.
+  const startPlayback = async () => {
     requestVoicePlayback(id, () => player.pause());
+    await ensurePlaybackAudioMode();
+    if (!mountedRef.current) return;
     // `replace()` может сбросить скорость к 1× вместе с источником (тот же
     // повод, что `defaultPlaybackRate` у сайта, `chat-voice-player.tsx`) —
     // выставляем ещё раз перед стартом, не полагаясь только на эффект.
@@ -187,35 +245,75 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
       FileSystem.getInfoAsync(uri).then((info) => info.exists),
     );
     if (!mountedRef.current) return;
-    if (localUri && !isLocal) forgetLocalVoiceFile(url); // числился в реестре, но физически пропал
+    if (localUri && !isLocal) {
+      // eslint-disable-next-line no-console
+      console.warn('[voice] локальный файл числился в реестре, но пропал с диска', { url: canonicalVoiceUrlKey(url) });
+      forgetLocalVoiceFile(url); // числился в реестре, но физически пропал
+    }
     if (!source) {
       setError('Не удалось открыть запись');
       return;
     }
     try {
       player.replace(source);
-    } catch {
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[voice] player.replace бросил исключение', { url: canonicalVoiceUrlKey(url), isLocal, error: e });
       setError('Не удалось открыть запись');
       return;
     }
     clearLoadTimeout();
     // Таймаут неудачи — только для сетевого источника: локальный файл не
-    // ждёт сеть, вечный спиннер ему не грозит по этой причине вовсе.
+    // ждёт сеть, вечный спиннер ему не грозит по этой причине вовсе. Ставим
+    // ТОЛЬКО как подстраховку на случай, если сам плеер вообще не пришлёт ни
+    // `isLoaded`, ни `error` (реальный сбой обычно ловит эффект выше на
+    // `status.error`, быстрее и с настоящей причиной в логе).
     if (!isLocal) {
-      timeoutRef.current = setTimeout(() => setError('Не получилось загрузить запись'), LOAD_TIMEOUT_MS);
+      timeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
+        // eslint-disable-next-line no-console
+        console.warn('[voice] загрузка не уложилась в таймаут', { url: canonicalVoiceUrlKey(url), timeoutMs: LOAD_TIMEOUT_MS });
+        setError('Не получилось загрузить запись');
+      }, LOAD_TIMEOUT_MS);
     }
     if (seekToSec !== undefined) void player.seekTo(seekToSec).catch(() => undefined);
-    startPlayback();
+    void startPlayback();
+  };
+
+  // Повторный тап, пока первая загрузка ещё не дозрела (`waiting`), не
+  // должен запускать вторую параллельную `loadAndPlay` — вторая гонка со
+  // своим `player.replace()`/`seekTo()` поверх ещё не устаканившегося
+  // источника путала бы состояние (нашли на быстром двойном тапе при
+  // живой проверке). Кнопка ЛОВИТ этот тап (см. `onPress` ниже), просто
+  // ничего не делает — спиннер и так сигналит, что происходит.
+  // Короткая подсказка вместо немого отказа (не заводит `error`/`loadRequested`
+  // — это не сбой загрузки, а обычный отказ стартовать, пока занят микрофон).
+  const showRecordingHint = () => {
+    setRecordingHint(true);
+    if (recordingHintTimeoutRef.current) clearTimeout(recordingHintTimeoutRef.current);
+    recordingHintTimeoutRef.current = setTimeout(() => setRecordingHint(false), 1500);
   };
 
   const play = () => {
+    // Пока идёт запись, микрофон занят — тап по чужому/своему голосовому в
+    // ленте не должен пытаться поднять плеер поверх активного рекордера.
+    // Защитная мера (`voice-recording-guard.ts`): конфликт микрофона и
+    // плеера на устройстве отдельно не подтверждён, но и допускать его
+    // незачем. Останавливать чужую запись тапом по никак не связанной с ней
+    // волне было бы неожиданным — молча отказываемся стартовать, не трогая
+    // рекордер, но подсказка вместо немого молчания.
+    if (isRecordingActive()) {
+      showRecordingHint();
+      return;
+    }
+    if (waiting) return;
     setError(null);
     if (!loadRequested) {
       setLoadRequested(true);
       void loadAndPlay();
       return;
     }
-    startPlayback();
+    void startPlayback();
   };
   playRef.current = play;
 
@@ -225,15 +323,30 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
   };
 
   const seek = (ratio: number) => {
-    if (totalSec <= 0) return;
+    if (totalSec <= 0 || waiting) return;
     const target = timeFromRatio(ratio, totalSec);
     if (!loadRequested) {
+      if (isRecordingActive()) {
+        showRecordingHint();
+        return;
+      }
       setError(null);
       setLoadRequested(true);
       void loadAndPlay(target);
       return;
     }
     void player.seekTo(target).catch(() => undefined);
+  };
+
+  // Повтор по кнопке — одним тапом: раньше первый тап на ошибке только
+  // сбрасывал `loadRequested`/`error`, а реальная перезагрузка ждала ВТОРОГО
+  // тапа (человек видел, что кнопка стала «Слушать», и должен был нажать
+  // ещё раз) — с явной жалобой «не воспроизводится» это выглядело так,
+  // будто повтор вообще не работает.
+  const retry = () => {
+    setError(null);
+    setLoadRequested(true);
+    void loadAndPlay();
   };
 
   const cycleSpeed = () => {
@@ -248,8 +361,7 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
         accessibilityState={{ busy: waiting }}
         onPress={() => {
           if (error) {
-            setLoadRequested(false);
-            setError(null);
+            retry();
             return;
           }
           if (status.playing) pause();
@@ -273,6 +385,14 @@ export function VoiceMessagePlayer({ attachment, interrupted, order }: Props) {
         // показывает, что это ошибка, не обычный текст.
         <Text numberOfLines={2} style={[styles.errorInline, { color: colors.text0 }]}>
           {error}
+        </Text>
+      ) : recordingHint ? (
+        // Не ошибка — обычный нейтральный `text1`, тот же приём, что у
+        // «Запись остановлена» в `voice-recorder-control.tsx`. Панель записи
+        // и так видна человеку — это просто объяснение, почему тап по волне
+        // ничего не запустил, а не повод для тревожного цвета.
+        <Text numberOfLines={2} style={[styles.errorInline, { color: colors.text1 }]}>
+          Сначала закончите запись
         </Text>
       ) : (
         // Волна — своей строкой на всю ширину, время и скорость — СТРОКОЙ

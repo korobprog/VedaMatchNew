@@ -13,8 +13,6 @@ const baseState: MusicFilterState = {
   category: null,
   q: null,
   artist: null,
-  duration: null,
-  live: null,
   sort: null,
   cursor: null,
 };
@@ -58,17 +56,75 @@ describe("countMusicFilters", () => {
     expect(countMusicFilters({ ...baseState, category: "bhajan" })).toBe(1);
   });
 
+  // VED-165: в панели три фильтра — порядок, стиль и исполнитель; «Запись»
+  // и длительность в счётчик не попадают, их в панели нет.
   it("суммирует все активные фильтры панели", () => {
     expect(
       countMusicFilters({
         ...baseState,
         category: "kirtan",
         artist: "gaura-das",
-        duration: "short",
-        live: "true",
         sort: "popular",
       }),
-    ).toBe(5);
+    ).toBe(3);
+  });
+});
+
+// VED-165, уточнение заказчика: «верни в фильтры „Порядок“ (Сначала новое ·
+// Чаще слушают · По названию)». Ряд вернулся без чипа «По длительности» —
+// его просили убрать отдельно, и он остаётся убранным.
+describe("MusicFilters — ряды панели", () => {
+  const categories = [category("kirtan", "Киртан", "style", 12)];
+  const artists = [
+    { id: "a1", slug: "gaura-das", name: "Гаура дас" } as MusicArtistDto,
+  ];
+
+  it("три ряда: «Порядок», «Стиль», «Исполнитель»", () => {
+    render(
+      <MusicFilters state={baseState} artists={artists} categories={categories} />,
+    );
+
+    expect(screen.getByText("Порядок")).toBeInTheDocument();
+    expect(screen.getByText("Стиль")).toBeInTheDocument();
+    expect(screen.getByText("Исполнитель")).toBeInTheDocument();
+  });
+
+  it("в «Порядке» ровно три чипа, длительности среди них нет", () => {
+    render(
+      <MusicFilters state={baseState} artists={artists} categories={categories} />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Сначала новое" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Чаще слушают" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "По названию" })).toBeInTheDocument();
+    expect(screen.queryByText("По длительности")).not.toBeInTheDocument();
+  });
+
+  it("ни «Длительность», ни её чипы", () => {
+    render(
+      <MusicFilters state={baseState} artists={artists} categories={categories} />,
+    );
+
+    expect(screen.queryByText("Длительность")).not.toBeInTheDocument();
+    expect(screen.queryByText("До 5 минут")).not.toBeInTheDocument();
+    expect(screen.queryByText("5–30 минут")).not.toBeInTheDocument();
+    expect(screen.queryByText("Больше получаса")).not.toBeInTheDocument();
+  });
+
+  // Ряд «Запись» заказчик не называл ни разу — ни когда просил убрать
+  // лишнее, ни когда просил вернуть «Порядок». Он остаётся убранным.
+  it("ни ряда «Запись» с его чипами", () => {
+    render(
+      <MusicFilters state={baseState} artists={artists} categories={categories} />,
+    );
+
+    expect(screen.queryByText("Запись")).not.toBeInTheDocument();
+    expect(screen.queryByText("С программы")).not.toBeInTheDocument();
+    expect(screen.queryByText("Студийная")).not.toBeInTheDocument();
   });
 });
 
@@ -84,9 +140,9 @@ describe("MusicFilters — порядок по умолчанию", () => {
       <MusicFilters state={baseState} artists={artists} categories={categories} />,
     );
 
-    expect(
-      screen.getByRole("link", { name: "По названию" }).className,
-    ).toMatch(/bg-violet/);
+    expect(screen.getByRole("link", { name: "По названию" }).className).toMatch(
+      /bg-violet/,
+    );
     expect(
       screen.getByRole("link", { name: "Сначала новое" }).className,
     ).not.toMatch(/bg-violet/);
@@ -104,7 +160,7 @@ describe("MusicFilters — порядок по умолчанию", () => {
     expect(countMusicFilters(baseState)).toBe(0);
   });
 
-  it("выбранный вручную порядок остаётся выбранным", () => {
+  it("выбранный вручную порядок остаётся выбранным и живёт в адресе", () => {
     render(
       <MusicFilters
         state={{ ...baseState, sort: "fresh" }}
@@ -119,6 +175,25 @@ describe("MusicFilters — порядок по умолчанию", () => {
     expect(
       screen.getByRole("link", { name: "По названию" }).className,
     ).not.toMatch(/bg-violet/);
+    expect(screen.getByRole("link", { name: "Чаще слушают" })).toHaveAttribute(
+      "href",
+      "/music?sort=popular",
+    );
+  });
+
+  it("порядок и стиль живут в адресе вместе, не вытесняя друг друга", () => {
+    render(
+      <MusicFilters
+        state={{ ...baseState, sort: "popular" }}
+        artists={artists}
+        categories={categories}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /Киртан/ })).toHaveAttribute(
+      "href",
+      "/music?category=kirtan&sort=popular",
+    );
   });
 });
 
@@ -139,6 +214,28 @@ describe("MusicFilters — секция «Стиль»", () => {
     expect(screen.queryByText("Традиционное")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Киртан/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Мантра/ })).toBeInTheDocument();
+  });
+
+  // VED-165: на проде «Традиционное» и «Современное» успели завести и
+  // обычными категориями — их тёзки с `kind: 'style'` попадали в панель и
+  // читались как отдельный фильтр рядом с корневыми вкладками.
+  it("отбрасывает и стиль-тёзку корневой, оставшийся от ручной разметки", () => {
+    render(
+      <MusicFilters
+        state={baseState}
+        artists={artists}
+        categories={[
+          ...categories,
+          category("modern", "Современное", "root", 6),
+          category("tradicionnoe", "Традиционное", "style", 0),
+          category("sovremennoe", "Современное", "style", 0),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Традиционное")).not.toBeInTheDocument();
+    expect(screen.queryByText("Современное")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Киртан/ })).toBeInTheDocument();
   });
 
   it("не прячет пустой стиль — показывает приглушённым с нулём (тестировщик просил не скрывать раздел)", () => {
@@ -190,10 +287,10 @@ describe("MusicFilters — секция «Стиль»", () => {
     );
   });
 
-  it("«Снять фильтры» очищает и стиль", () => {
+  it("«Снять фильтры» очищает и стиль, и порядок", () => {
     render(
       <MusicFilters
-        state={{ ...baseState, category: "kirtan" }}
+        state={{ ...baseState, category: "kirtan", sort: "fresh" }}
         artists={artists}
         categories={categories}
       />,

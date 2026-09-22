@@ -63,6 +63,9 @@ export function ConfirmDialog({
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
+              // Подпись задаётся явно, а не собирается из вложенного `Text`:
+              // так кнопку однозначно находит и скринридер, и тест.
+              accessibilityLabel={cancelLabel}
               accessibilityState={{ disabled: busy }}
               disabled={busy}
               onPress={onCancel}
@@ -73,6 +76,7 @@ export function ConfirmDialog({
             </Pressable>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={confirmLabel}
               accessibilityState={{ disabled: busy, busy }}
               disabled={busy}
               onPress={onConfirm}

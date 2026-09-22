@@ -76,7 +76,8 @@
     "generate:web-icons": "node scripts/generate-web-icons.mjs",
     "export:web": "expo export --platform web --output-dir dist-web",
     "test:web-shims": "node --test web-shims/resolve.test.mjs",
-    "test:channel-shims": "node --test channel-shims/resolve.test.mjs"
+    "test:channel-shims": "node --test channel-shims/resolve.test.mjs",
+    "test:sw-push": "node --test scripts/sw-push.test.mjs"
   },
   "private": true,
   "jest": {

@@ -82,12 +82,14 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
       </label>
       <label className="block text-sm text-text-1">
         Текст обращения
+        {/* Пусто — абзаца в шторке нет вовсе: подставлять за админа фразу про
+            генерацию видео портал больше не будет (VED-12). */}
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={600}
           rows={3}
-          placeholder="Генерация видео стоит реальных денег. Пожертвование идёт на развитие портала. Спасибо 🙏"
+          placeholder="Необязательно: своими словами, на что идут пожертвования. Пусто — текста в шторке не будет."
           className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
         />
       </label>
@@ -127,11 +129,23 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
               maxLength={200}
               className="col-span-2 col-start-1 row-start-2 min-w-0 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 font-mono text-sm text-text-0"
             />
+            {/* Банки под номером (VED-12): по телефону перевод уходит в
+                конкретный банк, и человек должен видеть, в какой, до того как
+                откроет приложение. Поле свободное — список банков меняется
+                чаще, чем выкатывается портал. */}
+            <input
+              aria-label={`Примечание реквизита ${index + 1}`}
+              value={row.note ?? ""}
+              onChange={(e) => updateRow(index, { note: e.target.value })}
+              placeholder="Банки: Сбербанк, ВТБ, Озон-банк"
+              maxLength={120}
+              className="col-span-2 col-start-1 row-start-3 min-w-0 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+            />
             <button
               type="button"
               aria-label={`Удалить реквизит ${index + 1}`}
               onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-              className="col-start-3 row-span-2 row-start-1 self-center rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 hover:bg-bg-2"
+              className="col-start-3 row-span-3 row-start-1 self-center rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1 hover:bg-bg-2"
             >
               ✕
             </button>

@@ -35,6 +35,8 @@ export * from './spiritual-stage';
 export * from './work';
 export * from './wellness';
 export * from './travel';
+export * from './bookmarks';
+export * from './blog';
 
 import type { BillingMode, SubscriptionState } from './support';
 
@@ -60,6 +62,9 @@ export const ADMIN_SERVICE_SLUGS = [
   'assistant',
   'wellness',
   'travel',
+  // «Блог-лента» (VED-238): админ задаёт срок жизни поста в ленте и
+  // закрепляет посты, остальные просто постят один за другим.
+  'blog',
 ] as const;
 
 export type AdminServiceSlug = (typeof ADMIN_SERVICE_SLUGS)[number];

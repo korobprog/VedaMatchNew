@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import type {
@@ -16,6 +16,20 @@ import {
   sameAttribution,
   type FeedFilterState,
 } from "./attribution-filter";
+import { cachedAttributions, loadAttributions } from "./attribution-options-cache";
+
+/**
+ * Запрос списка к порталу. Вынесен из окна: тот же запрос уходит заранее —
+ * по наведению, фокусу и касанию, когда окна ещё нет.
+ */
+async function fetchAttributions(query: string): Promise<MotivationFeedAttributionsDto> {
+  const suffix = query ? `?${query}` : "";
+  const response = await apiFetch(`${apiBase()}/motivation/feed/attributions${suffix}`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error(String(response.status));
+  return (await response.json()) as MotivationFeedAttributionsDto;
+}
 
 /**
  * Фильтр ленты по автору и источнику (VED-206): «покажи только Гиту».
@@ -38,8 +52,12 @@ import {
  *   рамки и подписи, повисшей само по себе — баг, который поймал не тест,
  *   а второй проход оценщика по коду.
  *
- * Список грузится при открытии: он нужен одному из многих, а лента
- * открывается у всех.
+ * Список не грузится вместе с лентой: он нужен одному из многих, а лента
+ * открывается у всех. Но и ждать открытия окна незачем — запрос уходит на
+ * полшага раньше, по наведению, фокусу и касанию кнопки, а ответ живёт в
+ * `attribution-options-cache` и переживает закрытие окна. Это и есть
+ * лечение «кнопка открывается с затормаживанием» (VED-252, доработка):
+ * тормозило не окно, а «Загружаем…» внутри него.
  */
 export function FeedAttributionFilter({
   state,
@@ -54,6 +72,20 @@ export function FeedAttributionFilter({
   const close = () => {
     setOpen(false);
     triggerRef.current?.focus();
+  };
+  /* Запрос на полшага раньше окна. Три повода, по одному на способ
+     нажатия: `pointerenter` — мышь ещё едет к кнопке, `focus` — клавиатура
+     дошла до неё, `pointerdown` — палец уже на стекле, но до `click`
+     остаётся подъём пальца. Лишних запросов это не делает: кэш склеивает
+     их в один (см. `attribution-options-cache`), а сам запрос уходит
+     только когда к кнопке потянулись. */
+  const prefetch = () => {
+    void loadAttributions(attributionsQuery(state), fetchAttributions);
+  };
+  const triggerHandlers = {
+    onPointerEnter: prefetch,
+    onFocus: prefetch,
+    onPointerDown: prefetch,
   };
   const active = hasAttributionFilter(state);
   // Избранное — одно на всех, фильтров у него нет, как и папок.
@@ -101,6 +133,7 @@ export function FeedAttributionFilter({
           ref={triggerRef}
           type="button"
           onClick={() => setOpen(true)}
+          {...triggerHandlers}
           aria-haspopup="dialog"
           aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
           className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border border-white/25 bg-black/40 px-2.5 text-xs font-medium text-white backdrop-blur transition hover:bg-black/60"
@@ -132,6 +165,7 @@ export function FeedAttributionFilter({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
+        {...triggerHandlers}
         aria-haspopup="dialog"
         aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
         className="relative flex h-10 w-7 shrink-0 items-center justify-center text-white/70 drop-shadow transition before:absolute before:-inset-x-1.5 before:inset-y-0 before:content-[''] hover:text-white"
@@ -162,23 +196,26 @@ export function FeedAttributionFilter({
 }
 
 function FilterSheet({ state, onClose }: { state: FeedFilterState; onClose: () => void }) {
-  const [data, setData] = useState<MotivationFeedAttributionsDto | null>(null);
-  const [failed, setFailed] = useState(false);
-  const closeRef = useRef<HTMLButtonElement>(null);
   const query = attributionsQuery(state);
+  /* Список окно не хранит, а читает из памяти вкладки прямо на рисовании:
+     уже привезённый (второе открытие или успевшая предзагрузка по
+     наведению) появляется тем же кадром, что и само окно, без «Загружаем…»
+     и без лишней копии состояния, которую пришлось бы сбрасывать при смене
+     запроса. Ответ на запрос, которого в памяти не было, приходит асинхронно
+     и просит перерисовать — тогда та же строка прочитает уже привезённое. */
+  const data = cachedAttributions(query);
+  const [failed, setFailed] = useState(false);
+  const [, rerender] = useReducer((value: number) => value + 1, 0);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    if (cachedAttributions(query)) return;
     let cancelled = false;
-    const suffix = query ? `?${query}` : "";
-    apiFetch(`${apiBase()}/motivation/feed/attributions${suffix}`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(String(response.status));
-        const body = (await response.json()) as MotivationFeedAttributionsDto;
-        if (!cancelled) setData(body);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
+    void loadAttributions(query, fetchAttributions).then((body) => {
+      if (cancelled) return;
+      setFailed(!body);
+      if (body) rerender();
+    });
     return () => {
       cancelled = true;
     };
@@ -212,7 +249,13 @@ function FilterSheet({ state, onClose }: { state: FeedFilterState; onClose: () =
         aria-modal="true"
         aria-labelledby="feed-filter-title"
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-[80svh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-white/15 bg-[#1B0F2E]/95 text-left text-sm text-white/90 backdrop-blur sm:rounded-3xl"
+        /* Подложка непрозрачная и без `backdrop-blur` (VED-252, доработка).
+           Размытие здесь стоило прохода по всему кадру поверх играющего
+           видео ленты — ровно в момент открытия, когда телефону и так
+           тяжело. Пять процентов прозрачности, ради которых оно было, без
+           размытия дают просвечивающую цитату — поэтому подложка стала
+           сплошной: то же место, тот же цвет, ничего не мельтешит. */
+        className="flex max-h-[80svh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-white/15 bg-[#1B0F2E] text-left text-sm text-white/90 sm:rounded-3xl"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-3">
           <h2 id="feed-filter-title" className="font-display text-sm font-semibold">

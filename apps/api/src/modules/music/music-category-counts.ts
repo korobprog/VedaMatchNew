@@ -50,22 +50,54 @@ export function mergeCategoryCounts(
 }
 
 /**
+ * Условие на записи для счётчика стиля (VED-165).
+ *
+ * `rootSlug` — выбранная вкладка витрины. Без неё чип «Киртан 12» под
+ * «Традиционным» обещал двенадцать записей, а по нажатию открывалось две:
+ * записи считались по всему каталогу, а выдача — уже в пределах вкладки.
+ * Условие то же, что у самой выдачи (`listTracks`): корневая живёт у
+ * исполнителя, поэтому это фильтр по связи `artist.rootCategory`, а не по
+ * тегам записи.
+ *
+ * Отдельной функцией, а не строкой внутри запроса: ровно это и есть то, что
+ * имеет смысл проверять тестом, — сам `groupBy` вокруг только считает строки.
+ */
+export function styleCountTrackFilter(
+  onlyPublished: boolean,
+  rootSlug: string | null,
+): Record<string, unknown> {
+  return {
+    ...(onlyPublished ? { status: 'published' as const } : {}),
+    ...(rootSlug ? { artist: { rootCategory: { slug: rootSlug } } } : {}),
+  };
+}
+
+/**
  * Считает записи каждой категории — оба вида, одним обходом.
  *
  * `onlyPublished` — витрина показывает счётчик только опубликованного,
  * справочник админки — вообще всё: черновик или отклонённая запись тоже
  * занимают раздел каталога с точки зрения редакции.
+ *
+ * `rootSlug` сужает счётчик СТИЛЕЙ до выбранной вкладки, а счётчик корневых
+ * оставляет как есть — намеренно: числа на самих вкладках отвечают на «а
+ * сколько там, в другой папке», и сузить их до текущей значило бы написать
+ * «Современное 0» ровно тогда, когда человек стоит на «Традиционном».
  */
 export async function countTracksByCategory(
   prisma: PrismaService,
   onlyPublished: boolean,
+  rootSlug: string | null = null,
 ): Promise<Map<string, number>> {
   const trackFilter = onlyPublished ? { status: 'published' as const } : {};
 
   const [styleGroups, artistsWithRoot] = await Promise.all([
     prisma.musicTrackCategory.groupBy({
       by: ['categoryId'],
-      where: { track: trackFilter, category: { kind: 'style' } },
+      where: {
+        track: styleCountTrackFilter(onlyPublished, rootSlug),
+        category: { kind: 'style' },
+      },
       _count: { trackId: true },
     }),
     prisma.musicArtist.findMany({
