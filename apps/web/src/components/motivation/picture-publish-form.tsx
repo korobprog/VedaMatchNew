@@ -25,6 +25,7 @@ import {
   withImageTypeFromName,
 } from "./clipboard-image";
 import { categoriesAcceptingStyle } from "./feed-style";
+import { fieldLabelClass } from "./field-label";
 import {
   ReelCategorySelect,
   initialReelCategory,
@@ -187,7 +188,10 @@ export function PicturePublishForm({
   return (
     <form className="space-y-4" onSubmit={submit}>
       <div className="space-y-2">
-        <p className="text-sm text-text-1">
+        {/* Подпись, а не заголовок (VED-203): декоративной разметки h2/h3
+            здесь быть не должно, она ломает порядок заголовков экрана. Вид —
+            общий с остальными подписями формы. */}
+        <p className={`text-sm ${fieldLabelClass()}`}>
           Картинка с цитатой (JPEG, PNG или WebP)
         </p>
         {/* Две кнопки (VED-154): на Android поле с `accept` картинок
@@ -265,12 +269,17 @@ export function PicturePublishForm({
         onChange={setCategory}
       />
 
-      <fieldset className="space-y-2 rounded-2xl border border-glass-brd p-3">
-        <legend className="px-1 text-sm font-medium text-text-1">
-          Автор / источник
-        </legend>
+      {/* Видимого заголовка группы нет (VED-203): «Автор / источник» стоял
+          над двумя полями с теми же самыми словами и читался как лишняя
+          строка — ровно та жалоба, что уже разобрали у роликов. Имя группы
+          для скринридера несёт `aria-label` на самом fieldset, и оно дословно
+          такое же, как в мастере роликов. */}
+      <fieldset
+        className="space-y-2 rounded-2xl border border-glass-brd p-3"
+        aria-label="Источник и автор"
+      >
         <label className="block text-sm text-text-1">
-          Автор (необязательно)
+          <span className={fieldLabelClass()}>Автор (необязательно)</span>
           <input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
@@ -280,7 +289,7 @@ export function PicturePublishForm({
           />
         </label>
         <label className="block text-sm text-text-1">
-          Источник (необязательно)
+          <span className={fieldLabelClass()}>Источник (необязательно)</span>
           <input
             value={work}
             onChange={(e) => setWork(e.target.value)}
@@ -292,7 +301,7 @@ export function PicturePublishForm({
       </fieldset>
 
       <label className="block text-sm text-text-1">
-        Текст с картинки (необязательно)
+        <span className={fieldLabelClass()}>Текст с картинки (необязательно)</span>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

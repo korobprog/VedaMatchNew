@@ -28,6 +28,7 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { PicturePublishForm } from "./picture-publish-form";
+import { fieldLabelClass } from "./field-label";
 import { splitQuoteAndExplanation } from "./quote-text";
 import {
   ReelCategorySelect,
@@ -496,7 +497,7 @@ export function ReelWizard({
             />
           )}
           <label className="block text-sm text-text-1">
-            <span className="font-semibold">Текст цитаты</span>
+            <span className={fieldLabelClass()}>Текст цитаты</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -512,7 +513,7 @@ export function ReelWizard({
             </span>
           </label>
           <label className="block text-sm text-text-1">
-            <span className="font-semibold">Ваша мысль под цитатой (необязательно)</span>
+            <span className={fieldLabelClass()}>Ваша мысль под цитатой (необязательно)</span>
             <textarea
               value={explanation}
               onChange={(e) => setExplanation(e.target.value)}
@@ -543,7 +544,7 @@ export function ReelWizard({
               </p>
             ) : (
               <label className="block text-sm text-text-1">
-                <span className="font-semibold">Автор (необязательно)</span>
+                <span className={fieldLabelClass()}>Автор (необязательно)</span>
                 <input
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
@@ -559,7 +560,7 @@ export function ReelWizard({
             )}
             {sourceKind === "own" && (
               <label className="block text-sm text-text-1">
-                <span className="font-semibold">Источник (необязательно)</span>
+                <span className={fieldLabelClass()}>Источник (необязательно)</span>
                 <input
                   value={work}
                   onChange={(e) => setWork(e.target.value)}
