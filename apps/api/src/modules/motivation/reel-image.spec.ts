@@ -1,9 +1,12 @@
 import {
   coverCrop,
   MAX_REEL_IMAGE_BYTES,
+  MIN_REEL_IMAGE_SIDE,
   reelImageKey,
   reelImageMessage,
+  reelImageSizeMessage,
   validateReelImage,
+  validateReelImageSize,
 } from './reel-image';
 
 const file = (
@@ -35,6 +38,70 @@ describe('reelImageMessage', () => {
     expect(reelImageMessage('unsupported_image_type')).toContain('JPEG');
     expect(reelImageMessage('image_file_too_large')).toContain('МБ');
     expect(reelImageMessage('image_too_small')).toContain('точек');
+    expect(reelImageMessage('image_unreadable')).toContain('прочитать');
+  });
+});
+
+describe('validateReelImageSize', () => {
+  it('lets exactly the minimum side through', () => {
+    expect(
+      validateReelImageSize({ width: MIN_REEL_IMAGE_SIDE, height: 1200 }),
+    ).toBeNull();
+    expect(
+      validateReelImageSize({ width: 1200, height: MIN_REEL_IMAGE_SIDE }),
+    ).toBeNull();
+  });
+
+  it('rejects one point below the minimum side', () => {
+    expect(
+      validateReelImageSize({ width: MIN_REEL_IMAGE_SIDE - 1, height: 1200 }),
+    ).toBe('image_too_small');
+    expect(validateReelImageSize({ width: 320, height: 240 })).toBe(
+      'image_too_small',
+    );
+  });
+
+  // Нули и пропуски — это «не разобрали кадр», а не «кадр мелкий»: сказать
+  // человеку про его файл «слишком маленький» на таком замере значит соврать.
+  it.each([
+    [{ width: 0, height: 0 }],
+    [{ width: 0, height: 1200 }],
+    [{ width: 1200, height: 0 }],
+    [{ width: undefined, height: undefined }],
+    [{ width: null, height: null }],
+    [{}],
+    [null],
+    [undefined],
+    [{ width: Number.NaN, height: Number.NaN }],
+    [{ width: Number.POSITIVE_INFINITY, height: 1200 }],
+    [{ width: -1080, height: -1920 }],
+  ])('calls %j unreadable, not small', (size) => {
+    expect(validateReelImageSize(size)).toBe('image_unreadable');
+  });
+});
+
+describe('reelImageSizeMessage', () => {
+  it('names the real size of the frame, not just the requirement', () => {
+    const message = reelImageSizeMessage('image_too_small', {
+      width: 320,
+      height: 240,
+    });
+
+    expect(message).toContain('320×240');
+    expect(message).toContain(String(MIN_REEL_IMAGE_SIDE));
+  });
+
+  it('rounds fractional sides', () => {
+    expect(
+      reelImageSizeMessage('image_too_small', { width: 319.6, height: 240.2 }),
+    ).toContain('320×240');
+  });
+
+  it('does not invent a size for a frame it could not read', () => {
+    const message = reelImageSizeMessage('image_unreadable', null);
+
+    expect(message).toContain('прочитать');
+    expect(message).not.toContain('0×0');
   });
 });
 

@@ -593,6 +593,8 @@ describe('MotivationReelsService.uploadImage', () => {
     expect(generation.uploadStory).not.toHaveBeenCalled();
   });
 
+  // Отказ называет размер самого кадра (VED-328): «нужна сторона хотя бы 400»
+  // без «картинка 1×1» человек читает как придирку, не видя, где промахнулся.
   it('refuses a picture that is too small to carry a quote', async () => {
     const { service, prisma } = build();
     prisma.motivationPost.findFirst.mockResolvedValue({
@@ -607,7 +609,7 @@ describe('MotivationReelsService.uploadImage', () => {
         mimetype: 'image/png',
         size: png.length,
       }),
-    ).rejects.toThrow('маленькая');
+    ).rejects.toThrow('Картинка 1×1 — нужна сторона хотя бы 400 точек');
   });
 
   it('refuses to replace the picture of a published reel', async () => {

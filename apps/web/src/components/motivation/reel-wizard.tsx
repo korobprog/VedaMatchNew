@@ -42,6 +42,7 @@ import {
   pickClipboardType,
   pickPastedImage,
 } from "./clipboard-image";
+import { imageSizeRejection, readImageSize } from "./image-dimensions";
 import {
   MAX_TEXT,
   MIN_TEXT,
@@ -199,11 +200,25 @@ export function ReelWizard({
    * Кадр принимаем только тот, который примет сервер: отказ уже после
    * отправки человек читает как «портал сломался», а набранное к тому
    * времени жалко.
+   *
+   * Сторону кадра меряем здесь же (VED-328) — иначе про мелкую картинку
+   * сервер сообщает только на публикации, через два шага мастера. Замер
+   * асинхронный, поэтому у каждого выбора свой номер: пока мерили первый
+   * файл, человек мог выбрать второй, и ответ про старый не должен перебить
+   * новый.
    */
-  const acceptImage = useCallback((next: File | null) => {
+  const pickNonce = useRef(0);
+  const acceptImage = useCallback(async (next: File | null) => {
+    const pick = (pickNonce.current += 1);
     const rejection = pastedImageRejection(next);
-    setImageError(rejection);
-    if (!rejection) setFile(next);
+    if (rejection || !next) {
+      setImageError(rejection);
+      return;
+    }
+    const tooSmall = imageSizeRejection(await readImageSize(next));
+    if (pick !== pickNonce.current) return;
+    setImageError(tooSmall);
+    if (!tooSmall) setFile(next);
   }, []);
 
   /**
@@ -219,7 +234,7 @@ export function ReelWizard({
       // Своё поведение только когда в буфере правда картинка: иначе пусть
       // вставляется текст, как обычно.
       event.preventDefault();
-      acceptImage(picked);
+      void acceptImage(picked);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -244,12 +259,12 @@ export function ReelWizard({
         const type = pickClipboardType(item.types);
         if (!type) continue;
         const blob = await item.getType(type);
-        acceptImage(
+        await acceptImage(
           new File([blob], pastedImageName(type, new Date()), { type }),
         );
         return;
       }
-      acceptImage(null);
+      void acceptImage(null);
     } catch {
       // Отказ в доступе выглядит так же, как пустой буфер, — различить их
       // браузер не даёт, поэтому говорим про оба пути сразу.
@@ -654,7 +669,7 @@ export function ReelWizard({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => acceptImage(e.target.files?.[0] ?? null)}
+                  onChange={(e) => void acceptImage(e.target.files?.[0] ?? null)}
                   className={fieldClass}
                 />
               </label>

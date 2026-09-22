@@ -23,10 +23,11 @@ import {
   pictureTitle,
 } from './picture-post';
 import {
-  MIN_REEL_IMAGE_SIDE,
   type UploadedReelImage,
   reelImageMessage,
+  reelImageSizeMessage,
   validateReelImage,
+  validateReelImageSize,
 } from './reel-image';
 import { startOfUtcDay } from './reel-stages';
 
@@ -229,10 +230,9 @@ export class MotivationPicturesService {
       limitInputPixels: true,
     }).rotate();
     const meta = await image.metadata();
-    const width = meta.width ?? 0,
-      height = meta.height ?? 0;
-    if (Math.min(width, height) < MIN_REEL_IMAGE_SIDE)
-      throw new BadRequestException(reelImageMessage('image_too_small'));
+    const sizeProblem = validateReelImageSize(meta);
+    if (sizeProblem)
+      throw new BadRequestException(reelImageSizeMessage(sizeProblem, meta));
 
     const prepared = await image
       .resize(PICTURE_MAX_SIDE, PICTURE_MAX_SIDE, {

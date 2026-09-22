@@ -54,12 +54,13 @@ import { sortByLocator, toSourceHits } from './reel-source-search';
 import { parseReelVideoOptions } from './reel-video-options';
 import {
   coverCrop,
-  MIN_REEL_IMAGE_SIDE,
   reelImageKey,
   reelImageMessage,
+  reelImageSizeMessage,
   REEL_IMAGE_HEIGHT,
   REEL_IMAGE_WIDTH,
   validateReelImage,
+  validateReelImageSize,
   type UploadedReelImage,
 } from './reel-image';
 import sharp from 'sharp';
@@ -491,16 +492,13 @@ export class MotivationReelsService {
       limitInputPixels: true,
     }).rotate();
     const meta = await image.metadata();
-    const width = meta.width ?? 0,
-      height = meta.height ?? 0;
-    if (
-      Math.min(width, height) < MIN_REEL_IMAGE_SIDE ||
-      width === 0 ||
-      height === 0
-    )
-      throw new BadRequestException(reelImageMessage('image_too_small'));
+    const sizeProblem = validateReelImageSize(meta);
+    if (sizeProblem)
+      throw new BadRequestException(reelImageSizeMessage(sizeProblem, meta));
 
-    const crop = coverCrop(width, height);
+    // Размеры уже проверены выше: после `validateReelImageSize` обе стороны
+    // положительны, и `?? 0` здесь — формальность для типа.
+    const crop = coverCrop(meta.width ?? 0, meta.height ?? 0);
     const prepared = await image
       .extract(crop)
       .resize(REEL_IMAGE_WIDTH, REEL_IMAGE_HEIGHT, { fit: 'cover' })
