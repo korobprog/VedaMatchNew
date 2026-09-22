@@ -6,6 +6,7 @@
 // (живые карточки по SSE).
 import { cookies } from "next/headers";
 import type { ActivityFeedResponse } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -16,7 +17,7 @@ export async function getActivityFeedServer(): Promise<ActivityFeedResponse | nu
   if (!token) return null;
 
   const res = await fetch(`${API_URL}/activity/feed`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401) return null;

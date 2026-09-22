@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import type { AuthProviderId } from "@/components/login-card";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -24,7 +25,10 @@ export async function getAuthProviders(): Promise<readonly AuthProviderId[]> {
   const url = `${API_URL}/auth/providers?host=${encodeURIComponent(host)}`;
 
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, {
+      headers: await clientIpHeaders(),
+      cache: "no-store",
+    });
     if (!res.ok) return FALLBACK;
     const body = (await res.json()) as { providers?: unknown };
     if (!Array.isArray(body.providers)) return FALLBACK;
