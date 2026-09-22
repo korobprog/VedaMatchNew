@@ -11,10 +11,10 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
-import { resolveDisplayName } from '@vedamatch/shared';
 import { appVariant } from '@/config/app-variant';
 import { createApiClient, type ApiClient, type SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AppTokens } from './auth-api';
+import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
 import { msUntilRefresh } from './jwt-expiry';
 import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
@@ -32,21 +32,10 @@ import { unregisterDevice } from '@/lib/push/push-api';
  * `vedamatch://auth`, приложение меняет его на токены с PKCE-верификатором.
  */
 
-export interface SessionUser {
-  id: string;
-  /** Мирское имя. Владельцу нужно для правки профиля — наружу идёт `displayName`. */
-  name: string;
-  /** Духовное имя; `null` — не заполнено. */
-  spiritualName: string | null;
-  /**
-   * Имя, под которым человека видят все остальные: духовное, если оно
-   * заполнено, иначе мирское (CLAUDE.md, «Имя пользователя наружу»). Всё,
-   * что показывает человека людям, берёт именно его, а не `name`.
-   */
-  displayName: string;
-  email: string;
-  avatarUrl: string | null;
-}
+/** Сам тип живёт в `session-user.ts` — туда он переехал в VED-333, чтобы обе
+ *  веб-сессии и сессия на токенах складывали пользователя одной функцией.
+ *  Имя по-прежнему импортируют отсюда. */
+export type { SessionUser };
 
 export type SessionStatus = 'loading' | 'guest' | 'signed';
 
@@ -118,15 +107,6 @@ const pkceCrypto = {
     }),
 };
 
-interface ProfileResponse {
-  id: string;
-  email: string;
-  name: string;
-  spiritualName?: string | null;
-  /** Что видят другие: духовное имя, если оно есть, иначе мирское. */
-  displayName?: string;
-  avatarUrl?: string | null;
-}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { apiOrigin } = appVariant();
@@ -261,17 +241,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = useCallback(async () => {
     const profile = await api.request<ProfileResponse>('/users/me');
-    setUser({
-      id: profile.id,
-      email: profile.email,
-      name: profile.name,
-      spiritualName: profile.spiritualName ?? null,
-      // `displayName` считает сервер (`resolveDisplayName`), но подстраховка
-      // на случай старого ответа — та же функция из общего пакета, а не
-      // своё «если есть духовное»: правило одно на портал.
-      displayName: profile.displayName ?? resolveDisplayName(profile),
-      avatarUrl: profile.avatarUrl ?? null,
-    });
+    setUser(toSessionUser(profile));
     setStatus('signed');
   }, [api]);
 
