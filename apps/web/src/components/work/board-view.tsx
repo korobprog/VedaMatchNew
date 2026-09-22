@@ -65,6 +65,7 @@ import {
 import { WorkArchivePanel } from "./archive-panel";
 import { WorkInvitePanel } from "./invite-panel";
 import { workPersonLabel } from "./person-label";
+import { workToolbarButtonClass } from "./toolbar-button";
 import {
   TASK_SEARCH_DEBOUNCE_MS,
   countTasks,
@@ -635,8 +636,18 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             328 — укладывается, но впритык (запас ~6px, оценка ширины текста
             приближённая); `flex-wrap` на контейнере оставлен как сетка
             безопасности на случай более узкого экрана или крупного шрифта в
-            настройках браузера. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            настройках браузера.
+
+            Ряд занимает строку целиком (`w-full`) и прижат влево — значит,
+            его левый край всегда совпадает с левым краем поля поиска под ним
+            (VED-280). Раньше стояли `ml-auto` и `justify-end`: на широком
+            экране ряд уезжал в правый конец строки с названием, а на телефоне
+            переносился вниз, но оставался прижатым вправо — и край расходился
+            с поиском тем сильнее, чем уже экран (на 375 точках — на 27
+            пикселей, на 320 — на 18). Прижимать вправо и одновременно ровнять
+            по левому краю нельзя, поэтому ряд прижат влево на всех ширинах:
+            одно правило вместо разъезжающихся по брейкпоинтам. */}
+        <div className="flex w-full flex-wrap items-center justify-start gap-1.5">
           {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
               стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
               не пара рядом: вторая всегда была бы бесполезной, а место
@@ -654,7 +665,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               title={
                 allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
               }
-              className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-glass-brd text-text-1 hover:text-text-0 sm:hidden"
+              className={workToolbarButtonClass({ extra: "sm:hidden" })}
             >
               {allFolded ? (
                 <ChevronDown aria-hidden className="size-4" />
@@ -677,11 +688,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 ? "Карточки собраны по дате создания; перетаскивание пока выключено"
                 : "Собрать карточки раздела по дате создания: новые сверху"
             }
-            className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
-              groupMode === "date"
-                ? "border-cyan text-text-0"
-                : "border-glass-brd text-text-1 hover:text-text-0"
-            }`}
+            className={workToolbarButtonClass({ pressed: groupMode === "date" })}
           >
             По дате
           </button>
@@ -694,11 +701,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 ? "Карточки собраны по важности; перетаскивание пока выключено"
                 : "Собрать карточки раздела по важности: горящее сверху"
             }
-            className={`rounded-xl border px-2.5 py-2 text-xs font-semibold ${
-              groupMode === "priority"
-                ? "border-cyan text-text-0"
-                : "border-glass-brd text-text-1 hover:text-text-0"
-            }`}
+            className={workToolbarButtonClass({
+              pressed: groupMode === "priority",
+            })}
           >
             По важности
           </button>
@@ -707,7 +712,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             onClick={() => setArchiveOpen(true)}
             aria-label="Архив"
             title="Архив"
-            className="flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl border border-glass-brd px-2.5 py-2 text-xs font-semibold text-text-1 hover:text-text-0"
+            className={workToolbarButtonClass()}
           >
             <Archive aria-hidden className="size-4 shrink-0" />
             <span className="hidden sm:inline">Архив</span>
