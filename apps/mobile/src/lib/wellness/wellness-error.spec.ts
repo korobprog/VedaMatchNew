@@ -50,6 +50,19 @@ describe('describeScanError', () => {
     expect(failure.retryable).toBe(true);
   });
 
+  it('422 — снимок не про состав: переснять, а не повторить тот же', () => {
+    const failure = describeScanError(
+      api(422, 'Не вижу на снимке слова «Состав» — сфотографируйте ту часть упаковки, где написан состав.'),
+    );
+    expect(failure.kind).toBe('bad-photo');
+    expect(failure.retryable).toBe(false);
+    expect(failure.message).toContain('Состав');
+  });
+
+  it('422 без текста сервера всё равно объясняет, что переснять', () => {
+    expect(describeScanError(api(422)).message).toContain('Состав');
+  });
+
   it('кнопка «Повторить» показывается только там, где повтор помогает', () => {
     const retryable = [503, 429].map((status) => describeScanError(api(status)).retryable);
     const pointless = [404, 400, 401].map((status) => describeScanError(api(status)).retryable);

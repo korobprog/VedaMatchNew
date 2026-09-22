@@ -1,5 +1,7 @@
 import type {
+  WellnessCreateProductRequest,
   WellnessHistoryItem,
+  WellnessProductCard,
   WellnessScanRequest,
   WellnessScanResult,
 } from '@vedamatch/shared';
@@ -24,6 +26,27 @@ export function createWellnessApi(api: ApiClient) {
      */
     scan: (body: WellnessScanRequest) =>
       api.request<WellnessScanResult>('/wellness/scan', {
+        method: 'POST',
+        body,
+      }),
+    /**
+     * Снимок состава → строка состава. Читает модель на сервере, а не
+     * телефон: правило «на снимке должно быть слово „Состав“» должно быть
+     * одно на сайт и на приложение, а распознавание на устройстве дало бы два
+     * разных ответа на один и тот же снимок. Наружу уходит снимок, но не то,
+     * кто его сделал: запрос идёт к нашему серверу, а не к провайдеру.
+     */
+    recognize: (imageDataUrl: string) =>
+      api.request<{ ingredientsRaw: string }>('/wellness/recognize', {
+        method: 'POST',
+        body: { imageDataUrl },
+      }),
+    /**
+     * Добавить продукт в базу. Уходит в очередь модерации: карточка «со слов
+     * участника» не отвечает порталу, пока её не проверили.
+     */
+    createProduct: (body: WellnessCreateProductRequest) =>
+      api.request<WellnessProductCard>('/wellness/products', {
         method: 'POST',
         body,
       }),
