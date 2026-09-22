@@ -7,19 +7,45 @@
  * весь список одним запросом при загрузке: открыл одно уведомление, вернулся —
  * а остальных нет, хотя до них ещё не дошли руки. Прочитанное не исчезает
  * сразу, а лежит ниже, приглушённое, неделю; погасить всё разом можно кнопкой.
+ *
+ * Лента приходит порциями (VED-267). Раньше сервер отдавал её целиком, и две
+ * сотни карточек рисовались разом — каждая со стеклом, то есть с собственным
+ * `backdrop-filter`: на телефоне это и есть тот самый «очень сильно тормозит».
+ * Теперь на экране двадцать, остальное — по кнопке «Показать ещё».
+ *
+ * Поиск серверный: он ищет по всей ленте, а не среди подгруженного. Отбор на
+ * клиенте отвечал бы «ничего не нашлось» на то, до чего человек не долистал, —
+ * это было бы хуже, чем отсутствие поиска.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BellOff } from "lucide-react";
+import { BellOff, Search, X } from "lucide-react";
 import type {
   NotificationItemDto,
   NotificationCategory,
 } from "@vedamatch/shared";
 import { fetchInbox, markInboxRead } from "@/lib/notifications-api";
+import {
+  countUnreadItems,
+  markAllItemsRead,
+  markItemRead,
+  mergeInboxPages,
+  splitInbox,
+} from "@/lib/notifications-inbox";
 import { setUnreadCount } from "@/lib/notifications-unread";
 import { NotificationIcon } from "@/components/icons/notification-icons";
 import { NotificationMarkBadge } from "./notification-mark-badge";
+
+/**
+ * Пауза перед запросом при наборе. Меньше — сервер получает запрос на каждую
+ * букву; больше — поиск начинает казаться сломанным.
+ */
+const SEARCH_DEBOUNCE_MS = 300;
+
+/** Потолок перезагрузки после «отметить все прочитанными» — тот же, что у
+ *  сервера: просить больше бессмысленно, он всё равно обрежет. */
+const MAX_RELOAD = 100;
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -32,55 +58,119 @@ function formatWhen(iso: string): string {
 
 export function NotificationList() {
   const [items, setItems] = useState<NotificationItemDto[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  /** Всё непрочитанное человека: его считает сервер, а не длина порции. */
+  const [unreadTotal, setUnreadTotal] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  /** Что набрано в поле; в запрос уходит `applied` — после паузы. */
+  const [query, setQuery] = useState("");
+  const [applied, setApplied] = useState("");
+  const [searching, setSearching] = useState(false);
+  /** Ответ на устаревший запрос не должен перебить свежий: гонку при быстром
+   *  наборе гасит счётчик, а не отмена fetch. */
+  const requestId = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
-    void fetchInbox()
-      .then(({ items: loaded, unreadCount }) => {
-        if (cancelled) return;
-        setItems(loaded);
-        setUnreadCount(unreadCount);
+    if (query === applied) return;
+    const timer = setTimeout(() => setApplied(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query, applied]);
+
+  /**
+   * Первая порция: при входе на страницу и на каждый новый запрос поиска.
+   * Список при этом не гасится в «Загружаем…» — иначе он мигал бы на каждой
+   * букве; вместо этого рядом с полем появляется «Ищем…». Поднимает этот
+   * признак обработчик набора, а гасит здешний `finally`: из тела эффекта
+   * состояние менять напрямую нельзя, это лишний каскад отрисовок.
+   */
+  const load = useCallback((search: string, limit?: number) => {
+    const id = ++requestId.current;
+    void fetchInbox({ query: search, limit })
+      .then((page) => {
+        if (id !== requestId.current) return;
+        setItems(page.items);
+        setNextCursor(page.nextCursor ?? null);
+        setUnreadTotal(page.unreadCount);
+        setUnreadCount(page.unreadCount);
+        setFailed(false);
+        setMoreFailed(false);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (id === requestId.current) setFailed(true);
+      })
+      .finally(() => {
+        if (id === requestId.current) setSearching(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  const unread = items?.filter((item) => item.readAt === null) ?? [];
-  const read = items?.filter((item) => item.readAt !== null) ?? [];
+  useEffect(() => {
+    load(applied);
+  }, [applied, load]);
+
+  function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    const id = requestId.current;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    void fetchInbox({ query: applied, cursor: nextCursor })
+      .then((page) => {
+        if (id !== requestId.current) return;
+        setItems((current) => mergeInboxPages(current ?? [], page.items));
+        setNextCursor(page.nextCursor ?? null);
+        setUnreadTotal(page.unreadCount);
+      })
+      .catch(() => {
+        if (id === requestId.current) setMoreFailed(true);
+      })
+      .finally(() => {
+        if (id === requestId.current) setLoadingMore(false);
+      });
+  }
 
   /**
    * Помечаем прочитанным сразу в состоянии и не ждём сервер: переход по ссылке
    * уводит со страницы, и ответ пришёл бы уже некуда.
    */
   function markOne(id: string) {
-    setItems(
-      (current) =>
-        current?.map((item) =>
-          item.id === id && item.readAt === null
-            ? { ...item, readAt: new Date().toISOString() }
-            : item,
-        ) ?? null,
-    );
-    setUnreadCount(Math.max(0, unread.length - 1));
+    setItems((current) => (current ? markItemRead(current, id) : null));
+    setUnreadTotal((total) => Math.max(0, total - 1));
+    setUnreadCount(Math.max(0, unreadTotal - 1));
     void markInboxRead([id]).catch(() => undefined);
   }
 
+  /**
+   * Гасит всё непрочитанное — в том числе то, до чего человек не долистал.
+   * Поэтому следом лента перечитывается с начала: строки переехали из первого
+   * потока во второй, и прежний курсор указывает уже не туда. Просим столько
+   * же карточек, сколько было показано, — место, до которого долистали, не
+   * теряется.
+   */
   function markAll() {
-    const now = new Date().toISOString();
-    setItems(
-      (current) =>
-        current?.map((item) =>
-          item.readAt === null ? { ...item, readAt: now } : item,
-        ) ?? null,
-    );
+    const loaded = Math.min(Math.max(items?.length ?? 0, 1), MAX_RELOAD);
+    setItems((current) => (current ? markAllItemsRead(current) : null));
+    setUnreadTotal(0);
     setUnreadCount(0);
-    void markInboxRead().catch(() => undefined);
+    void markInboxRead()
+      .then(() => load(applied, loaded))
+      .catch(() => undefined);
   }
+
+  /** Набор в поле: запрос уйдёт после паузы, а «Ищем…» видно сразу. */
+  function changeQuery(next: string) {
+    setQuery(next);
+    if (next.trim() !== applied.trim()) setSearching(true);
+  }
+
+  const searchBox = (
+    <SearchBox
+      value={query}
+      onChange={changeQuery}
+      onClear={() => changeQuery("")}
+      busy={searching}
+    />
+  );
 
   if (failed)
     return (
@@ -91,34 +181,68 @@ export function NotificationList() {
 
   if (items === null) return <p className="text-sm text-text-2">Загружаем…</p>;
 
+  const searchActive = applied.trim().length > 0;
+
   if (items.length === 0)
     return (
-      <div className="glass flex flex-col items-center gap-3 rounded-2xl border border-glass-brd px-6 py-12 text-center">
-        <BellOff className="h-8 w-8 text-text-2" aria-hidden="true" />
-        <p className="font-medium text-text-0">Уведомлений нет</p>
-        <p className="max-w-sm text-sm text-text-1">
-          Здесь появляются новые сообщения, заявки и ответы поддержки.
-          Прочитанные остаются на неделю — успеете вернуться.
-        </p>
-        <NewsLink />
+      <div className="space-y-6">
+        {searchBox}
+        <div className="glass flex flex-col items-center gap-3 rounded-2xl border border-glass-brd px-6 py-12 text-center">
+          <BellOff className="h-8 w-8 text-text-2" aria-hidden="true" />
+          {searchActive ? (
+            <>
+              <p className="font-medium text-text-0">Ничего не нашлось</p>
+              <p className="max-w-sm text-sm text-text-1">
+                По запросу «{applied}» в ваших уведомлениях пусто. Ищем по
+                заголовку и тексту — попробуйте другое слово.
+              </p>
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="rounded-full border border-glass-brd px-3 py-1 text-xs font-medium text-text-1 hover:text-text-0"
+              >
+                Показать все уведомления
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-text-0">Уведомлений нет</p>
+              <p className="max-w-sm text-sm text-text-1">
+                Здесь появляются новые сообщения, заявки и ответы поддержки.
+                Прочитанные остаются на неделю — успеете вернуться.
+              </p>
+              <NewsLink />
+            </>
+          )}
+        </div>
       </div>
     );
 
+  const { unread, read } = splitInbox(items);
+
   return (
     <div className="space-y-6">
+      {searchBox}
+
       {unread.length > 0 && (
         <section aria-label="Непрочитанные">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-text-0">
-              Новое · {unread.length}
+              {/* Непрочитанного столько же, сколько на колокольчике: число
+                  приходит от сервера, а не считается по загруженным
+                  карточкам. В выдаче поиска считать нечего — там показано
+                  ровно то, что нашлось. */}
+              Новое · {searchActive ? countUnreadItems(items) : unreadTotal}
             </h2>
-            <button
-              type="button"
-              onClick={markAll}
-              className="rounded-full border border-glass-brd px-3 py-1 text-xs font-medium text-text-1 hover:text-text-0"
-            >
-              Отметить все прочитанными
-            </button>
+            {!searchActive && (
+              <button
+                type="button"
+                onClick={markAll}
+                className="rounded-full border border-glass-brd px-3 py-1 text-xs font-medium text-text-1 hover:text-text-0"
+              >
+                Отметить все прочитанными
+              </button>
+            )}
           </div>
           <ul className="space-y-3">
             {unread.map((item) => (
@@ -130,11 +254,13 @@ export function NotificationList() {
         </section>
       )}
 
-      <NewsLink />
+      {!searchActive && <NewsLink />}
 
       {read.length > 0 && (
         <section aria-label="Прочитанные">
-          <h2 className="mb-3 text-sm font-semibold text-text-2">Прочитанное</h2>
+          <h2 className="mb-3 text-sm font-semibold text-text-2">
+            {searchActive ? "Найдено в прочитанном" : "Прочитанное"}
+          </h2>
           <ul className="space-y-3">
             {read.map((item) => (
               <li key={item.id}>
@@ -144,6 +270,79 @@ export function NotificationList() {
           </ul>
         </section>
       )}
+
+      {nextCursor && (
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="glass rounded-full border border-glass-brd px-5 py-2 text-sm font-medium text-text-0 transition-colors hover:border-magenta/40 disabled:text-text-1"
+          >
+            {loadingMore ? "Загружаем…" : "Показать ещё"}
+          </button>
+          {moreFailed && (
+            <p className="text-xs text-magenta">
+              Не удалось загрузить продолжение. Попробуйте ещё раз.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Строка поиска над лентой — ровно там, где её ждёт заказчик (скриншот к
+ * VED-267): под заголовком страницы, над списком.
+ *
+ * Обводка фокуса своя не рисуется: её даёт глобальный `*:focus-visible` из
+ * `globals.css`, и она видна на самом поле. Рамка обёртки при этом меняет цвет
+ * на `--vm-magenta` — это подсказка, а не замена обводке. Своё кольцо тут
+ * стояло и давало два ободка один в другом.
+ *
+ * Крестик очистки — свой, а родной у `type="search"` спрятан: в WebKit они
+ * рисовались рядом, два крестика подряд.
+ */
+function SearchBox({
+  value,
+  onChange,
+  onClear,
+  busy,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onClear: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <label className="glass flex h-11 flex-1 items-center gap-2.5 rounded-2xl border border-glass-brd px-3.5 transition-colors focus-within:border-magenta">
+        <Search className="h-4 w-4 shrink-0 text-text-1" aria-hidden="true" />
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Поиск по уведомлениям"
+          aria-label="Поиск по уведомлениям"
+          className="w-full bg-transparent text-sm text-text-0 placeholder:text-text-1 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {value.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Очистить поиск"
+            className="shrink-0 rounded-full p-1 text-text-1 hover:text-text-0"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+      </label>
+      {/* Состояние поиска словами: скринридер узнаёт, что запрос ушёл, а
+          зрячий человек — что список сейчас обновится. */}
+      <p aria-live="polite" className="w-12 text-xs text-text-1">
+        {busy && value.length > 0 ? "Ищем…" : ""}
+      </p>
     </div>
   );
 }

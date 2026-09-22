@@ -53,8 +53,30 @@ export function fetchUnreadCount(): Promise<NotificationUnreadCountResponse> {
   return request("/notifications/unread-count");
 }
 
-export function fetchInbox(): Promise<NotificationInboxResponse> {
-  return request("/notifications/inbox");
+/** Что просим у ленты: порцию с такого-то места и, может быть, поиск. */
+export interface InboxQuery {
+  /** Курсор из прошлого ответа; пусто — первая порция. */
+  cursor?: string | null;
+  /** Поиск по заголовку и тексту; пусто — обычная лента. */
+  query?: string;
+  /** Размер порции; пусто — сколько решит сервер. */
+  limit?: number;
+}
+
+/**
+ * Порция ленты (VED-267). Поиск и подгрузка — параметры запроса, а не отбор
+ * среди уже загруженного: лента приходит частями, и фильтр на клиенте искал
+ * бы только в том, до чего человек долистал.
+ */
+export function fetchInbox(
+  options: InboxQuery = {},
+): Promise<NotificationInboxResponse> {
+  const params = new URLSearchParams();
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.query) params.set("q", options.query);
+  if (options.limit) params.set("limit", String(options.limit));
+  const search = params.toString();
+  return request(`/notifications/inbox${search ? `?${search}` : ""}`);
 }
 
 /** Без `ids` помечает прочитанным всё непрочитанное. */

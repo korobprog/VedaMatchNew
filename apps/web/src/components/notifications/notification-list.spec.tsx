@@ -72,7 +72,22 @@ describe("NotificationList", () => {
   });
 
   it("гасит всё разом только по кнопке", async () => {
-    fetchInbox.mockResolvedValue({ items: [item(), item({ id: "n2" })], unreadCount: 2 });
+    // Следом лента перечитывается: сервер погасил и то, до чего человек не
+    // долистал, и прежний курсор указывает уже не туда (VED-267).
+    fetchInbox
+      .mockResolvedValueOnce({
+        items: [item(), item({ id: "n2" })],
+        unreadCount: 2,
+        nextCursor: null,
+      })
+      .mockResolvedValue({
+        items: [
+          item({ readAt: new Date().toISOString() }),
+          item({ id: "n2", readAt: new Date().toISOString() }),
+        ],
+        unreadCount: 0,
+        nextCursor: null,
+      });
     const user = userEvent.setup();
     render(<NotificationList />);
 
@@ -201,5 +216,149 @@ describe("NotificationList", () => {
     expect(
       screen.getByRole("link", { name: /Что нового/ }),
     ).toHaveAttribute("href", "/updates/news");
+  });
+});
+
+/**
+ * VED-267: лента приходит порциями, а поиск идёт на сервере. Заказчик просил
+ * и то, и другое: «переход в уведомления очень сильно тормозит… может какую-то
+ * часть спрятать… сделай поиск».
+ */
+describe("NotificationList: страницы и поиск (VED-267)", () => {
+  it("первым запросом просит первую порцию без поиска", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1, nextCursor: null });
+
+    render(<NotificationList />);
+
+    await screen.findByText("Кадр готов");
+    expect(fetchInbox).toHaveBeenCalledWith({ query: "", limit: undefined });
+  });
+
+  it("кнопки «показать ещё» нет, когда лента кончилась", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1, nextCursor: null });
+
+    render(<NotificationList />);
+
+    await screen.findByText("Кадр готов");
+    expect(screen.queryByRole("button", { name: "Показать ещё" })).not.toBeInTheDocument();
+  });
+
+  it("подгружает следующую порцию по курсору и приклеивает её к списку", async () => {
+    fetchInbox
+      .mockResolvedValueOnce({ items: [item()], unreadCount: 3, nextCursor: "курсор-1" })
+      .mockResolvedValueOnce({
+        items: [item({ id: "n2", title: "Ответ поддержки" })],
+        unreadCount: 3,
+        nextCursor: null,
+      });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+
+    await user.click(await screen.findByRole("button", { name: "Показать ещё" }));
+
+    expect(fetchInbox).toHaveBeenLastCalledWith({ query: "", cursor: "курсор-1" });
+    expect(await screen.findByText("Ответ поддержки")).toBeInTheDocument();
+    // Первая порция никуда не делась.
+    expect(screen.getByText("Кадр готов")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Показать ещё" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("счётчик «Новое» показывает всё непрочитанное, а не длину порции", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 190, nextCursor: "ещё" });
+
+    render(<NotificationList />);
+
+    expect(await screen.findByText("Новое · 190")).toBeInTheDocument();
+  });
+
+  it("сбой подгрузки не стирает уже показанное", async () => {
+    fetchInbox
+      .mockResolvedValueOnce({ items: [item()], unreadCount: 1, nextCursor: "курсор-1" })
+      .mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    render(<NotificationList />);
+
+    await user.click(await screen.findByRole("button", { name: "Показать ещё" }));
+
+    expect(await screen.findByText(/Не удалось загрузить продолжение/)).toBeInTheDocument();
+    expect(screen.getByText("Кадр готов")).toBeInTheDocument();
+  });
+
+  it("отправляет запрос поиска на сервер, а не фильтрует загруженное", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1, nextCursor: null });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Кадр готов");
+
+    await user.type(screen.getByLabelText("Поиск по уведомлениям"), "кадр");
+
+    await waitFor(() =>
+      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "кадр", limit: undefined }),
+    );
+  });
+
+  it("пустой запрос возвращает обычную ленту", async () => {
+    fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1, nextCursor: null });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    const field = await screen.findByLabelText("Поиск по уведомлениям");
+
+    await user.type(field, "кадр");
+    await waitFor(() =>
+      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "кадр", limit: undefined }),
+    );
+    await user.click(screen.getByRole("button", { name: "Очистить поиск" }));
+
+    await waitFor(() =>
+      expect(fetchInbox).toHaveBeenLastCalledWith({ query: "", limit: undefined }),
+    );
+  });
+
+  it("на пустую выдачу отвечает словами, а не пустым экраном", async () => {
+    fetchInbox
+      .mockResolvedValueOnce({ items: [item()], unreadCount: 1, nextCursor: null })
+      .mockResolvedValue({ items: [], unreadCount: 1, nextCursor: null });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Кадр готов");
+
+    await user.type(screen.getByLabelText("Поиск по уведомлениям"), "мридангa");
+
+    expect(await screen.findByText("Ничего не нашлось")).toBeInTheDocument();
+    // Не «уведомлений нет»: у человека они есть, просто не по этому запросу.
+    expect(screen.queryByText("Уведомлений нет")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Показать все уведомления" }),
+    ).toBeInTheDocument();
+  });
+
+  it("подгрузка в выдаче поиска продолжает тот же запрос", async () => {
+    fetchInbox
+      .mockResolvedValueOnce({ items: [item()], unreadCount: 1, nextCursor: null })
+      .mockResolvedValueOnce({
+        items: [item({ id: "n3", title: "VED-267: поиск" })],
+        unreadCount: 1,
+        nextCursor: "курсор-2",
+      })
+      .mockResolvedValueOnce({
+        items: [item({ id: "n4", title: "VED-267: страницы" })],
+        unreadCount: 1,
+        nextCursor: null,
+      });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+    await screen.findByText("Кадр готов");
+
+    await user.type(screen.getByLabelText("Поиск по уведомлениям"), "ved-267");
+    await screen.findByText("VED-267: поиск");
+    await user.click(screen.getByRole("button", { name: "Показать ещё" }));
+
+    expect(fetchInbox).toHaveBeenLastCalledWith({
+      query: "ved-267",
+      cursor: "курсор-2",
+    });
+    expect(await screen.findByText("VED-267: страницы")).toBeInTheDocument();
   });
 });

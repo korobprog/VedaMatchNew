@@ -6,6 +6,7 @@ import {
   Headers,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -91,12 +92,23 @@ export class NotificationsController {
     return { unreadCount: await this.notifications.countUnread(user.sub) };
   }
 
+  /**
+   * Порция ленты (VED-267). `cursor` — строка из прошлого ответа, `q` — поиск
+   * по заголовку и тексту, `limit` — размер порции. Без них приходит первая
+   * страница обычной ленты, как и раньше.
+   *
+   * Поиск серверный: фильтр по уже загруженному искал бы только в пришедших
+   * порциях и обманывал бы человека тем, что «ничего нет».
+   */
   @UseGuards(AuthGuard)
   @Get('inbox')
   inbox(
     @CurrentUser() user: AccessTokenPayload,
+    @Query('cursor') cursor?: string,
+    @Query('q') query?: string,
+    @Query('limit') limit?: string,
   ): Promise<NotificationInboxResponse> {
-    return this.notifications.listInbox(user.sub);
+    return this.notifications.listInbox(user.sub, { cursor, query, limit });
   }
 
   /** Пустой `ids` — «прочитано всё»: страница списка гасит счётчик целиком. */

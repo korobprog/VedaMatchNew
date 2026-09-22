@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 
@@ -16,23 +17,55 @@ type InboxDraftRow = Omit<InboxRow, 'id' | 'createdAt' | 'readAt'>;
 
 interface InboxWhere {
   userId?: string;
-  readAt?: null | { lt: Date };
-  createdAt?: { lt: Date };
-  id?: { in: string[] };
+  readAt?: null | { lt: Date } | { not: null };
+  createdAt?: Date | { lt: Date };
+  id?: { in: string[] } | { lt: string };
+  title?: { contains: string; mode?: string };
+  body?: { contains: string; mode?: string };
   OR?: InboxWhere[];
+  AND?: InboxWhere[];
 }
 
 /** Минимальная замена условиям Prisma, достаточная для запросов сервиса. */
 function matchesInbox(row: InboxRow, where: InboxWhere): boolean {
   if (where.userId !== undefined && row.userId !== where.userId) return false;
   if (where.readAt === null && row.readAt !== null) return false;
-  if (where.readAt && (row.readAt === null || row.readAt >= where.readAt.lt))
+  if (where.readAt && 'not' in where.readAt && row.readAt === null)
     return false;
-  if (where.createdAt && row.createdAt >= where.createdAt.lt) return false;
-  if (where.id && !where.id.in.includes(row.id)) return false;
+  if (
+    where.readAt &&
+    'lt' in where.readAt &&
+    (row.readAt === null || row.readAt >= where.readAt.lt)
+  )
+    return false;
+  if (where.createdAt instanceof Date) {
+    if (row.createdAt.getTime() !== where.createdAt.getTime()) return false;
+  } else if (where.createdAt && row.createdAt >= where.createdAt.lt)
+    return false;
+  if (where.id && 'in' in where.id && !where.id.in.includes(row.id))
+    return false;
+  if (where.id && 'lt' in where.id && !(row.id < where.id.lt)) return false;
+  if (
+    where.title &&
+    !row.title.toLowerCase().includes(where.title.contains.toLowerCase())
+  )
+    return false;
+  if (
+    where.body &&
+    !row.body.toLowerCase().includes(where.body.contains.toLowerCase())
+  )
+    return false;
   if (where.OR && !where.OR.some((clause) => matchesInbox(row, clause)))
     return false;
+  if (where.AND && !where.AND.every((clause) => matchesInbox(row, clause)))
+    return false;
   return true;
+}
+
+/** Порядок выборки Prisma: свежее сверху, совпавшая дата — по `id` вниз. */
+function compareInboxFixtures(a: InboxRow, b: InboxRow): number {
+  const byDate = b.createdAt.getTime() - a.createdAt.getTime();
+  return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
 }
 
 function createService() {
@@ -40,6 +73,8 @@ function createService() {
     subscriptions: [] as Array<Record<string, unknown>>,
     preference: null as Record<string, unknown> | null,
     inbox: [] as InboxRow[],
+    /** Сколько раз лента что-то удаляла: чистка ушла с чтения (VED-267). */
+    inboxDeletes: 0,
     /** Ответы `pushSubscription.count()` для `deliveryStatus`: живые и
      *  помеченные мёртвыми подписки считаются отдельными запросами. */
     webCount: 0,
@@ -73,12 +108,14 @@ function createService() {
           store.inbox.filter((row) => matchesInbox(row, where)).length,
         ),
       ),
-      findMany: jest.fn(({ where }: { where: InboxWhere }) =>
-        Promise.resolve(
-          store.inbox
-            .filter((row) => matchesInbox(row, where))
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
-        ),
+      findMany: jest.fn(
+        ({ where, take }: { where: InboxWhere; take?: number }) =>
+          Promise.resolve(
+            store.inbox
+              .filter((row) => matchesInbox(row, where))
+              .sort(compareInboxFixtures)
+              .slice(0, take),
+          ),
       ),
       updateMany: jest.fn(
         ({ where, data }: { where: InboxWhere; data: { readAt: Date } }) => {
@@ -93,6 +130,7 @@ function createService() {
       ),
       deleteMany: jest.fn(({ where }: { where: InboxWhere }) => {
         const before = store.inbox.length;
+        store.inboxDeletes += 1;
         store.inbox = store.inbox.filter((row) => !matchesInbox(row, where));
         return Promise.resolve({ count: before - store.inbox.length });
       }),
@@ -354,25 +392,22 @@ describe('NotificationsService: колокольчик', () => {
     ]);
   });
 
-  it('удаляет прочитанное, пролежавшее дольше недели: архив не копится', async () => {
+  /**
+   * VED-267. Чистка уехала в `NotificationPurgeWorkerService`: раньше она
+   * стояла первой строкой `listInbox()`, и человек ждал удалений, чтобы
+   * получить свой список. Сроки хранения проверяет `inbox-retention.spec.ts`,
+   * сама чистка — спека воркера; здесь важно, что чтение ленты больше ничего
+   * не удаляет.
+   */
+  it('чтение ленты ничего не удаляет: чистка ушла с горячего пути', async () => {
     const { service, store } = createService();
     await service.addToInbox('user-1', draft);
     await service.markRead('user-1');
-    // Неделя прошла — строке больше незачем занимать место.
     store.inbox[0].readAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
 
     await service.listInbox('user-1');
 
-    expect(store.inbox).toHaveLength(0);
-  });
-
-  it('сохраняет только что прочитанное: перезагрузка страницы не теряет список', async () => {
-    const { service, store } = createService();
-    await service.addToInbox('user-1', draft);
-    await service.markRead('user-1');
-
-    await service.listInbox('user-1');
-
+    expect(store.inboxDeletes).toBe(0);
     expect(store.inbox).toHaveLength(1);
   });
 
@@ -384,6 +419,217 @@ describe('NotificationsService: колокольчик', () => {
     await service.markRead('user-1', [store.inbox[0].id]);
 
     await expect(service.countUnread('user-1')).resolves.toBe(1);
+  });
+});
+
+/**
+ * VED-267: лента приходит порциями, и порядок VED-153 при этом не ломается.
+ * Лента — два потока подряд: сначала весь `unread`, затем весь `read`.
+ */
+describe('NotificationsService.listInbox: постранично (VED-267)', () => {
+  /** Насев с явными датами: без них все записи легли бы в одну миллисекунду. */
+  async function seed(
+    service: NotificationsService,
+    store: { inbox: InboxRow[] },
+    counts: { unread: number; read: number },
+  ) {
+    const base = Date.parse('2026-09-20T12:00:00.000Z');
+    for (let i = 0; i < counts.unread + counts.read; i += 1)
+      await service.addToInbox('user-1', {
+        ...draft,
+        title: i < counts.unread ? `Новое ${i}` : `Старое ${i}`,
+      });
+    store.inbox.forEach((row, i) => {
+      row.createdAt = new Date(base - i * 60_000);
+      row.readAt = i < counts.unread ? null : new Date(base + 1000);
+    });
+  }
+
+  it('отдаёт запрошенное число и курсор, когда лента длиннее', async () => {
+    const { service, store } = createService();
+    await seed(service, store, { unread: 5, read: 5 });
+
+    const page = await service.listInbox('user-1', { limit: 3 });
+
+    expect(page.items).toHaveLength(3);
+    expect(page.items.map((item) => item.title)).toEqual([
+      'Новое 0',
+      'Новое 1',
+      'Новое 2',
+    ]);
+    expect(page.nextCursor).toEqual(expect.any(String));
+  });
+
+  it('счётчик непрочитанного считает всё, а не отданную порцию', async () => {
+    const { service, store } = createService();
+    await seed(service, store, { unread: 5, read: 5 });
+
+    const page = await service.listInbox('user-1', { limit: 2 });
+
+    expect(page.items).toHaveLength(2);
+    expect(page.unreadCount).toBe(5);
+  });
+
+  it('страницы, сложенные подряд, дают ту же ленту, что и одним куском', async () => {
+    const { service, store } = createService();
+    await seed(service, store, { unread: 5, read: 7 });
+    const whole = await service.listInbox('user-1', { limit: 100 });
+
+    const collected: string[] = [];
+    let cursor: string | null | undefined = undefined;
+    for (let guard = 0; guard < 20; guard += 1) {
+      const page: Awaited<ReturnType<typeof service.listInbox>> =
+        await service.listInbox('user-1', { limit: 3, cursor });
+      collected.push(...page.items.map((item) => item.id));
+      cursor = page.nextCursor;
+      if (!cursor) break;
+    }
+
+    expect(collected).toEqual(whole.items.map((item) => item.id));
+    expect(collected).toHaveLength(12);
+  });
+
+  /** Порядок VED-153 переживает постраничность: непрочитанное впереди. */
+  it('прочитанное не приходит раньше непрочитанного, даже если оно свежее', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-1', { ...draft, title: 'Старое, но новое' });
+    await service.addToInbox('user-1', {
+      ...draft,
+      title: 'Свежее прочитанное',
+    });
+    const [unread, read] = store.inbox;
+    unread.createdAt = new Date(Date.now() - 60 * 60 * 1000);
+    read.readAt = new Date();
+
+    const page = await service.listInbox('user-1', { limit: 1 });
+
+    expect(page.items.map((item) => item.title)).toEqual(['Старое, но новое']);
+  });
+
+  it('порция на границе потоков продолжается прочитанным, а не начинает ленту заново', async () => {
+    const { service, store } = createService();
+    await seed(service, store, { unread: 2, read: 3 });
+
+    const first = await service.listInbox('user-1', { limit: 3 });
+    const second = await service.listInbox('user-1', {
+      limit: 3,
+      cursor: first.nextCursor,
+    });
+
+    expect(first.items.map((item) => item.title)).toEqual([
+      'Новое 0',
+      'Новое 1',
+      'Старое 2',
+    ]);
+    expect(second.items.map((item) => item.title)).toEqual([
+      'Старое 3',
+      'Старое 4',
+    ]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('на последней странице курсора нет', async () => {
+    const { service, store } = createService();
+    await seed(service, store, { unread: 2, read: 0 });
+
+    const page = await service.listInbox('user-1', { limit: 5 });
+
+    expect(page.items).toHaveLength(2);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  /** Иначе «показать ещё» тихо крутила бы одну и ту же первую порцию. */
+  it('испорченный курсор — ошибка запроса, а не молчаливое начало ленты', async () => {
+    const { service, store } = createService();
+    await seed(service, store, { unread: 2, read: 0 });
+
+    await expect(
+      service.listInbox('user-1', { cursor: 'не курсор' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('NotificationsService.listInbox: поиск (VED-267)', () => {
+  async function seedForSearch(service: NotificationsService) {
+    await service.addToInbox('user-1', {
+      ...draft,
+      title: 'VED-160: новый комментарий',
+      body: 'Маму Тхакур дас: сделано и выкачено',
+    });
+    await service.addToInbox('user-1', {
+      ...draft,
+      title: 'Новое сообщение',
+      body: 'Вринда деви даси: Харе Кришна!',
+    });
+    await service.addToInbox('user-2', {
+      ...draft,
+      title: 'VED-160: чужое уведомление',
+      body: 'Не должно найтись',
+    });
+  }
+
+  it('ищет по заголовку', async () => {
+    const { service } = createService();
+    await seedForSearch(service);
+
+    const found = await service.listInbox('user-1', { query: 'ved-160' });
+
+    expect(found.items.map((item) => item.title)).toEqual([
+      'VED-160: новый комментарий',
+    ]);
+  });
+
+  it('ищет по тексту и не смотрит на регистр', async () => {
+    const { service } = createService();
+    await seedForSearch(service);
+
+    const found = await service.listInbox('user-1', { query: 'ХАРЕ' });
+
+    expect(found.items.map((item) => item.title)).toEqual(['Новое сообщение']);
+  });
+
+  it('ищет только в своей ленте', async () => {
+    const { service } = createService();
+    await seedForSearch(service);
+
+    const found = await service.listInbox('user-2', { query: 'ved-160' });
+
+    expect(found.items.map((item) => item.title)).toEqual([
+      'VED-160: чужое уведомление',
+    ]);
+  });
+
+  it('все слова запроса обязаны найтись', async () => {
+    const { service } = createService();
+    await seedForSearch(service);
+
+    await expect(
+      service.listInbox('user-1', { query: 'ved-160 выкачено' }),
+    ).resolves.toEqual(expect.objectContaining({ nextCursor: null }));
+    const narrowed = await service.listInbox('user-1', {
+      query: 'ved-160 Кришна',
+    });
+    expect(narrowed.items).toHaveLength(0);
+  });
+
+  it('пустой запрос возвращает обычную ленту', async () => {
+    const { service } = createService();
+    await seedForSearch(service);
+
+    const found = await service.listInbox('user-1', { query: '   ' });
+
+    expect(found.items).toHaveLength(2);
+  });
+
+  /** Колокольчик показывает непрочитанное человека, а не размер выдачи. */
+  it('счётчик непрочитанного от поиска не зависит', async () => {
+    const { service } = createService();
+    await seedForSearch(service);
+
+    const found = await service.listInbox('user-1', { query: 'ved-160' });
+
+    expect(found.items).toHaveLength(1);
+    expect(found.unreadCount).toBe(2);
   });
 });
 

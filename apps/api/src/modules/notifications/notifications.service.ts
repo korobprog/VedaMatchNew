@@ -17,6 +17,16 @@ import {
 } from './delivery-health';
 import { normalizeDeviceRequest } from './device-request';
 import { sortInboxRows } from './inbox-order';
+import {
+  buildInboxWhere,
+  clampInboxLimit,
+  inboxFetchSize,
+  inboxSections,
+  INBOX_ORDER_BY,
+  parseInboxCursor,
+  sliceInboxPage,
+} from './inbox-page';
+import { buildInboxSearchClauses, parseInboxSearch } from './inbox-search';
 import { parseNotificationMark } from './notification-mark';
 import type { PushFailure } from './push-errors';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
@@ -38,19 +48,32 @@ const defaults: NotificationPreferencesDto = {
 };
 
 /**
- * Сколько прочитанное живёт до удаления. Не ноль: иначе перезагрузка страницы
- * сразу после открытия списка показала бы пустоту, и человек решил бы, что
- * уведомление потерялось. Не сутки: колокольчик — список непрочитанного,
- * а не архив.
+ * Сроки хранения переехали в `inbox-retention.ts`, а сама чистка — в
+ * `NotificationPurgeWorkerService` (VED-267): на чтении ленты ей делать
+ * нечего, человек ждал удалений вместо своего списка.
  */
-/**
- * Прочитанное живёт неделю, а не четверть часа: список показывает его ниже
- * непрочитанного, и вернуться к уже открытому уведомлению — обычное дело.
- */
-const readRetentionMs = 7 * 24 * 60 * 60 * 1000;
 
-/** Непрочитанное тоже не копится вечно: неактивный аккаунт иначе растит таблицу. */
-const unreadRetentionMs = 30 * 24 * 60 * 60 * 1000;
+/** Колонки, из которых собирается карточка ленты. */
+interface InboxSelectedRow {
+  id: string;
+  title: string;
+  body: string;
+  url: string;
+  category: string;
+  createdAt: Date;
+  readAt: Date | null;
+  mark: string | null;
+}
+
+/** Чего просит клиент у ленты: порцию с такого-то места и, может быть, поиск. */
+export interface ListInboxOptions {
+  /** Курсор предыдущей порции; пусто — первая. */
+  cursor?: unknown;
+  /** Размер порции; пусто — `INBOX_PAGE_SIZE`. */
+  limit?: unknown;
+  /** Поисковый запрос; пусто — обычная лента. */
+  query?: unknown;
+}
 
 export interface InboxDraft {
   title: string;
@@ -406,32 +429,58 @@ export class NotificationsService {
   }
 
   /**
-   * Отдаёт непрочитанное и попутно подчищает хвост: прочитанное старше
-   * `readRetentionMs` и совсем древнее непрочитанное. Чистка привязана к чтению
-   * списка, а не к крону — отдельный планировщик ради этого не нужен.
+   * Порция ленты (VED-267).
+   *
+   * Было: чистка первой строкой, следом `findMany` без `take`. Человек ждал
+   * удаления просроченного, чтобы получить свою ленту целиком — сколько бы её
+   * ни накопилось, и вся она разом рисовалась на вебе. Чистку забрал
+   * `NotificationPurgeWorkerService`, лента читается страницами.
+   *
+   * Порядок VED-153 сохранён и выражен прямо в запросе: лента — два потока
+   * подряд, непрочитанное и следом прочитанное, каждый по индексу
+   * `[userId, createdAt]`. Порция набирается из первого потока, а когда он
+   * кончился — добирается из второго; какая строка последняя и в каком она
+   * потоке, помнит курсор (`inbox-page.ts`). `sortInboxRows()` остаётся: на
+   * границе потоков в порцию попадают строки обоих.
    */
-  async listInbox(userId: string): Promise<NotificationInboxResponse> {
-    await this.purge(userId);
-    const rows = await this.prisma.notificationItem.findMany({
-      where: { userId },
-      // Выборка — по индексу `[userId, createdAt]`, свежее сверху. Группы
-      // «непрочитанное впереди» расставляет `sortInboxRows()`: одним `orderBy`
-      // это не выразить — «сначала непрочитанное» сортировка по выражению
-      // (`readAt IS NULL`), а не по колонке. Чем прежний `readAt asc` ломал
-      // порядок прочитанного — VED-153, см. `inbox-order.ts`.
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        body: true,
-        url: true,
-        category: true,
-        createdAt: true,
-        readAt: true,
-        mark: true,
-      },
-    });
-    const items: NotificationItemDto[] = sortInboxRows(rows).map((row) => ({
+  async listInbox(
+    userId: string,
+    options: ListInboxOptions = {},
+  ): Promise<NotificationInboxResponse> {
+    const parsed = parseInboxCursor(options.cursor);
+    if (parsed.kind === 'invalid')
+      throw new BadRequestException('Некорректный курсор ленты');
+    const cursor = parsed.kind === 'cursor' ? parsed.cursor : null;
+    const limit = clampInboxLimit(options.limit);
+    const searchClauses = buildInboxSearchClauses(
+      parseInboxSearch(options.query),
+    );
+
+    const rows: InboxSelectedRow[] = [];
+    let remaining = inboxFetchSize(limit);
+    for (const section of inboxSections(cursor)) {
+      if (remaining <= 0) break;
+      const chunk = await this.prisma.notificationItem.findMany({
+        where: buildInboxWhere({ userId, section, cursor, searchClauses }),
+        orderBy: INBOX_ORDER_BY,
+        take: remaining,
+        select: {
+          id: true,
+          title: true,
+          body: true,
+          url: true,
+          category: true,
+          createdAt: true,
+          readAt: true,
+          mark: true,
+        },
+      });
+      rows.push(...chunk);
+      remaining -= chunk.length;
+    }
+
+    const page = sliceInboxPage(sortInboxRows(rows), limit);
+    const items: NotificationItemDto[] = page.items.map((row) => ({
       id: row.id,
       title: row.title,
       body: row.body,
@@ -445,7 +494,12 @@ export class NotificationsService {
     }));
     return {
       items,
-      unreadCount: items.filter((item) => item.readAt === null).length,
+      nextCursor: page.nextCursor,
+      // Счётчик — отдельным запросом по индексу `[userId, readAt]`, а не по
+      // отданной порции: в порции их двадцать, а колокольчик обязан
+      // показывать всё непрочитанное. От поиска он не зависит — это счётчик
+      // человека, а не выдачи.
+      unreadCount: await this.countUnread(userId),
     };
   }
 
@@ -461,19 +515,6 @@ export class NotificationsService {
         ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
       },
       data: { readAt: new Date() },
-    });
-  }
-
-  private async purge(userId: string): Promise<void> {
-    const now = Date.now();
-    await this.prisma.notificationItem.deleteMany({
-      where: {
-        userId,
-        OR: [
-          { readAt: { lt: new Date(now - readRetentionMs) } },
-          { createdAt: { lt: new Date(now - unreadRetentionMs) } },
-        ],
-      },
     });
   }
 }
