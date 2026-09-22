@@ -17,6 +17,10 @@ import {
  * главная обязана выглядеть как раньше, а прежде этой строки настроек
  * наверху не было вовсе — значит, единственное место, куда можно положить
  * возврат, не меняя верх экрана, это она.
+ *
+ * Подпись — одно слово «Лента» (VED-322): «Вернуть ленту» на узком экране
+ * ломалось пополам и вылезало из ряда настроек. Куда именно вернуть,
+ * договаривает подсказка при наведении.
  */
 export function BlogFeedToggle({
   userId,
@@ -43,11 +47,19 @@ export function BlogFeedToggle({
       type="button"
       onClick={show}
       disabled={pending}
-      /* Рамка и отступы — как у соседних кнопок строки настроек. */
-      className="inline-flex items-center gap-1.5 rounded-lg border border-glass-brd px-2.5 py-1.5 text-xs text-text-1 hover:border-cyan/60 disabled:opacity-60"
+      /* Полная подпись — подсказкой: имя кнопки на экране остаётся коротким,
+         а «куда вернуть» видно при наведении. Доступное имя при этом берётся
+         из текста, а не из title, — они не расходятся. */
+      title="Вернуть ленту на главную"
+      /* Рамка и отступы — как у соседних кнопок строки настроек, высоту
+         поэтому не наращиваем: в одном ряду с ними кнопка на 44px читается
+         как чужая. `whitespace-nowrap` — та же защита от переноса, что у
+         «Изменить порядок»: с ним подпись не ломается пополам даже там, где
+         ряд уезжает в горизонтальную прокрутку (VED-322). */
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-glass-brd px-2.5 py-1.5 text-xs text-text-1 hover:border-cyan/60 disabled:opacity-60"
     >
       <Newspaper aria-hidden className="size-3.5" />
-      Вернуть ленту
+      Лента
     </button>
   );
 }
