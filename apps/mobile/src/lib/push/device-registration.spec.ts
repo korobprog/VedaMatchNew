@@ -1,3 +1,5 @@
+import { getToken } from '@react-native-firebase/messaging';
+import * as Notifications from 'expo-notifications';
 import type { ApiClient } from '@/lib/api/client';
 import { registerThisDevice, sendDeviceToken } from './device-registration';
 import { pushRegistration, resetPushRegistration } from './push-registration';
@@ -105,6 +107,48 @@ describe('registerThisDevice', () => {
       nativeCalls: true,
     });
     expect(pushRegistration()).toBe('registered');
+  });
+});
+
+describe('отмена (выход из аккаунта во время регистрации)', () => {
+  it('отменённая попытка на сервер не ходит', async () => {
+    await expect(registerThisDevice(api, () => true)).resolves.toBe('unknown');
+    expect(mockState.sent).toHaveLength(0);
+  });
+
+  it('и итог прежнего аккаунта не записывает', async () => {
+    await registerThisDevice(api, () => true);
+    expect(pushRegistration()).toBe('unknown');
+  });
+
+  it('отмена посреди попытки: на окно разрешения ответили, а слать токен уже поздно', async () => {
+    let cancelled = false;
+    mockPermissions.granted = false;
+    // Человек ответил на системное окно — и тут же вышел из аккаунта.
+    (Notifications.requestPermissionsAsync as jest.Mock).mockImplementationOnce(async () => {
+      cancelled = true;
+      return { granted: true };
+    });
+
+    await expect(registerThisDevice(api, () => cancelled)).resolves.toBe('unknown');
+    expect(mockState.sent).toHaveLength(0);
+  });
+
+  it('отмена во время выдачи токена: токен на руках, но отправлять его уже некому', async () => {
+    let cancelled = false;
+    // Токен FCM выдаётся не мгновенно — выйти успевают и на этом шаге.
+    (getToken as jest.Mock).mockImplementationOnce(async () => {
+      cancelled = true;
+      return 'token-1';
+    });
+
+    await expect(registerThisDevice(api, () => cancelled)).resolves.toBe('unknown');
+    expect(mockState.sent).toHaveLength(0);
+  });
+
+  it('без отмены всё как раньше', async () => {
+    await expect(registerThisDevice(api, () => false)).resolves.toBe('registered');
+    expect(mockState.sent).toHaveLength(1);
   });
 });
 

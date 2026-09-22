@@ -22,16 +22,32 @@ export const CHANNEL_ID = 'messages';
  * Разрешение спрашивается только пока Android разрешает спрашивать: после
  * отказа окно больше не появится, и единственный путь — системные настройки.
  */
-export async function registerThisDevice(api: ApiClient): Promise<PushRegistration> {
+export async function registerThisDevice(
+  api: ApiClient,
+  /**
+   * Отмена. Окно разрешения и выдача токена идут секундами, и за это время
+   * человек может выйти из аккаунта: регистрировать его телефон на уже
+   * покинутый аккаунт нельзя. Флаг был в мосте до выноса
+   * (`push-bridge.tsx`) и вернулся сюда вместе с последовательностью.
+   */
+  isCancelled: () => boolean = never,
+): Promise<PushRegistration> {
   // Ни один вызов не ждёт исключения: мост зовёт это через `void`, а кнопка
   // раздела — ради итога. Неожиданный отказ (канал, сам модуль уведомлений)
   // приравнивается к «не дошло»: человеку от этого помогает повтор.
-  const result = await attempt(api).catch((): PushRegistration => 'failed');
+  const result = await attempt(api, isCancelled).catch((): PushRegistration => 'failed');
+  // Отменённая попытка молчит: её итог относится к прежнему аккаунту.
+  if (isCancelled()) return 'unknown';
   setPushRegistration(result);
   return result;
 }
 
-async function attempt(api: ApiClient): Promise<PushRegistration> {
+const never = (): boolean => false;
+
+async function attempt(
+  api: ApiClient,
+  isCancelled: () => boolean,
+): Promise<PushRegistration> {
   // Канал нужен до запроса разрешения: без него Android 13 не покажет окно.
   await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
     name: 'Сообщения',
@@ -40,6 +56,7 @@ async function attempt(api: ApiClient): Promise<PushRegistration> {
   const current = await Notifications.getPermissionsAsync();
   const granted =
     current.granted || (current.canAskAgain && (await Notifications.requestPermissionsAsync()).granted);
+  if (isCancelled()) return 'unknown';
   if (!granted) return 'no-permission';
 
   let token: string | null = null;
@@ -53,6 +70,8 @@ async function attempt(api: ApiClient): Promise<PushRegistration> {
     return 'no-token';
   }
   if (!token) return 'no-token';
+  // Последняя проверка перед самим запросом: дальше отменять уже поздно.
+  if (isCancelled()) return 'unknown';
   return sendToken(api, token);
 }
 

@@ -11,6 +11,7 @@ import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   WORK_EVENTS,
+  type WorkTaskCommentedEvent,
   type WorkTaskReturnedEvent,
   type WorkTaskStatusChangedEvent,
 } from './work-events';
@@ -18,7 +19,7 @@ import { WORK_NOTICE_CLAIM_TIMEOUT_MS, resolveWorkNotice } from './work-notice';
 import { workTaskKey } from './work-validate';
 
 /**
- * Отправка дозревших уведомлений о переездах карточки.
+ * Отправка дозревших уведомлений о работе с карточкой.
  *
  * Устройство повторяет `MotivationWorkerService`, который CLAUDE.md называет
  * образцом фоновой стадии: тик раз в 30 секунд под Redis-лизом, клейм записи
@@ -126,6 +127,8 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
         select: {
           recipientId: true,
           fromColumnId: true,
+          commentBody: true,
+          commentCount: true,
           actor: { select: { name: true, spiritualName: true } },
           task: {
             select: {
@@ -146,12 +149,15 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
       // Задачу убрали в архив, пока уведомление дозревало: новость протухла.
       if (task.archivedAt) return;
 
-      const from = await this.prisma.workColumn.findUnique({
-        where: { id: notice.fromColumnId },
-        select: { id: true, name: true, isDone: true },
-      });
-      // Колонку снесли вместе с доской — сказать «откуда» уже нечего.
-      if (!from) return;
+      // Колонку могли снести вместе с доской — тогда сказать «откуда» нечего
+      // и переезд из окна выпадает. Комментарий из того же окна при этом
+      // остаётся новостью, поэтому здесь `null`, а не выход.
+      const from = notice.fromColumnId
+        ? await this.prisma.workColumn.findUnique({
+            where: { id: notice.fromColumnId },
+            select: { id: true, name: true, isDone: true },
+          })
+        : null;
 
       // За окно человека могли исключить из среды. Уведомление о чужой теперь
       // доске — худший вид утечки: оно несёт название задачи.
@@ -161,7 +167,12 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
       });
       if (!member) return;
 
-      const outcome = resolveWorkNotice(from, task.column);
+      const outcome = resolveWorkNotice({
+        from,
+        to: task.column,
+        commentExcerpt: notice.commentBody,
+        commentCount: notice.commentCount,
+      });
       if (outcome.kind === 'skip') return;
 
       const actorName = notice.actor
@@ -175,11 +186,21 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
         actorName,
       };
 
-      if (outcome.kind === 'returned') {
+      if (outcome.kind === 'commented') {
+        this.events.emit(WORK_EVENTS.taskCommented, {
+          name: WORK_EVENTS.taskCommented,
+          ...base,
+          excerpt: outcome.commentExcerpt,
+          commentCount: outcome.commentCount,
+          columnName: task.column.name,
+        } satisfies WorkTaskCommentedEvent);
+      } else if (outcome.kind === 'returned') {
         this.events.emit(WORK_EVENTS.taskReturned, {
           name: WORK_EVENTS.taskReturned,
           ...base,
           columnName: outcome.columnName,
+          commentExcerpt: outcome.commentExcerpt,
+          commentCount: outcome.commentCount,
         } satisfies WorkTaskReturnedEvent);
       } else {
         this.events.emit(WORK_EVENTS.taskStatusChanged, {
@@ -187,6 +208,8 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
           ...base,
           fromColumnName: outcome.fromColumnName,
           toColumnName: outcome.toColumnName,
+          commentExcerpt: outcome.commentExcerpt,
+          commentCount: outcome.commentCount,
         } satisfies WorkTaskStatusChangedEvent);
       }
     } finally {

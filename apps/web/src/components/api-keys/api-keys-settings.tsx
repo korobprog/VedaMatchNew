@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { KeyRound } from "lucide-react";
 import {
   createApiKey,
+  fetchApiKeyAgents,
   fetchApiKeys,
   revokeApiKey,
+  type ApiKeyAgentDto,
   type ApiKeyDto,
   type IssuedApiKeyDto,
 } from "@/lib/api-keys-api";
@@ -57,6 +59,10 @@ export function ApiKeysSettings() {
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["work:read"]);
   const [days, setDays] = useState(0);
+  /* Служебные аккаунты ИИ-агентов. У обычного человека список пуст — выпускать
+     такие ключи позволено только администрации, — и выбор не показывается. */
+  const [agents, setAgents] = useState<ApiKeyAgentDto[]>([]);
+  const [agentId, setAgentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -75,6 +81,9 @@ export function ApiKeysSettings() {
       .catch(() => {
         if (active) setKeys([]);
       });
+    void fetchApiKeyAgents().then((list) => {
+      if (active) setAgents(list);
+    });
     return () => {
       active = false;
     };
@@ -88,6 +97,7 @@ export function ApiKeysSettings() {
         name: name.trim(),
         scopes,
         ...(days > 0 ? { expiresInDays: days } : {}),
+        ...(agentId ? { agentId } : {}),
       });
       setIssued(key);
       setName("");
@@ -198,6 +208,28 @@ export function ApiKeysSettings() {
           ))}
         </fieldset>
 
+        {agents.length > 0 && (
+          <label className="block text-sm text-[var(--vm-text-1)]">
+            От чьего имени
+            <select
+              value={agentId}
+              onChange={(event) => setAgentId(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-[var(--vm-glass-border)] bg-[var(--vm-bg-2)] px-3 py-2 text-sm text-[var(--vm-text-0)]"
+            >
+              <option value="">От моего имени</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name} (ИИ)
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-[var(--vm-text-2)]">
+              Ключ агента делает его исполнителем карточек и лицом в истории, а
+              вас — тем, кто за него отвечает.
+            </span>
+          </label>
+        )}
+
         <label className="block text-sm text-[var(--vm-text-1)]">
           Срок действия
           <select
@@ -239,6 +271,7 @@ export function ApiKeysSettings() {
               <span className="min-w-0">
                 <span className="block truncate text-[var(--vm-text-0)]">
                   {key.name}
+                  {key.agent && ` → ${key.agent.name} (ИИ)`}
                 </span>
                 <span className="block text-xs text-[var(--vm-text-2)]">
                   {key.hint} · {key.scopes.join(", ")} ·{" "}

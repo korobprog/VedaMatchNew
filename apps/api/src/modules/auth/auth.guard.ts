@@ -58,16 +58,29 @@ export class AuthGuard implements CanActivate {
           'Ключ недействителен: отозван, просрочен или не существует',
         );
       }
-      const owner = await this.prisma.user.findUnique({
-        where: { id: resolved.userId },
-        select: { email: true },
+      // Агентский ключ подменяет действующее лицо: запрос идёт от имени
+      // служебного аккаунта, а не того, кто ключ выпустил. Без этого ИИ в
+      // «Работе» неотличим от владельца ключа — исполнителем, автором
+      // карточки и лицом в истории значился бы человек.
+      const actingId = resolved.agentId ?? resolved.userId;
+      const acting = await this.prisma.user.findUnique({
+        where: { id: actingId },
+        select: { email: true, isAgent: true },
       });
-      if (!owner) throw new UnauthorizedException('Ключ недействителен');
+      if (!acting) throw new UnauthorizedException('Ключ недействителен');
+      // Аккаунт мог перестать быть служебным уже после выпуска ключа. Пускать
+      // такой ключ значило бы дать ходить под именем живого человека.
+      if (resolved.agentId && !acting.isAgent) {
+        throw new UnauthorizedException(
+          'Ключ выписан на аккаунт, который больше не служебный',
+        );
+      }
       req.user = {
-        sub: resolved.userId,
-        email: owner.email,
+        sub: actingId,
+        email: acting.email,
         role: 'user',
         apiScopes: resolved.scopes,
+        ...(resolved.agentId ? { onBehalfOf: resolved.userId } : {}),
       };
     } else {
       try {

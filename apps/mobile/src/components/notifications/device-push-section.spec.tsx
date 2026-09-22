@@ -1,7 +1,8 @@
-import { Linking, Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { act, create } from 'react-test-renderer';
 import type { NotificationDeliveryStatusDto } from '@vedamatch/shared';
+import { DELIVERY_FRESH_MS } from '@/lib/push/device-delivery-state';
 import { resetPushRegistration, setPushRegistration } from '@/lib/push/push-registration';
 import { DevicePushSection } from './device-push-section';
 
@@ -14,6 +15,9 @@ import { DevicePushSection } from './device-push-section';
 
 const mockStatus = jest.fn<Promise<NotificationDeliveryStatusDto>, []>();
 const mockRegister = jest.fn(async () => 'registered' as const);
+const mockChannel = jest.fn(async () => 'on' as 'on' | 'off' | 'unknown');
+const mockOpenSettings = jest.fn(async () => undefined);
+const mockOpenChannelSettings = jest.fn(async () => undefined);
 
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual('react');
@@ -43,6 +47,13 @@ jest.mock('@/lib/notifications/delivery-status-api', () => ({
 jest.mock('@/lib/push/device-registration', () => ({
   __esModule: true,
   registerThisDevice: () => mockRegister(),
+}));
+
+jest.mock('@/lib/push/notification-channel', () => ({
+  __esModule: true,
+  readMessagesChannel: () => mockChannel(),
+  openNotificationSettings: () => mockOpenSettings(),
+  openMessagesChannelSettings: () => mockOpenChannelSettings(),
 }));
 
 const nothing: NotificationDeliveryStatusDto = {
@@ -92,6 +103,10 @@ beforeEach(() => {
   resetPushRegistration();
   mockStatus.mockReset();
   mockRegister.mockClear();
+  mockChannel.mockClear();
+  mockChannel.mockResolvedValue('on');
+  mockOpenSettings.mockClear();
+  mockOpenChannelSettings.mockClear();
   // Нативная сборка — Android; на iOS раздел не рисуется вовсе.
   (Platform as { OS: string }).OS = 'android';
 });
@@ -147,14 +162,26 @@ describe('DevicePushSection', () => {
   it('нет разрешения — ведёт в системные настройки, сервер при этом не нужен', async () => {
     mockStatus.mockResolvedValue({ ...nothing, app: 1, reachable: true });
     setPushRegistration('no-permission');
-    const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
 
     const renderer = await render();
     expect(texts(renderer)).toContain('Уведомления запрещены в настройках телефона');
 
     await act(async () => button(renderer)?.props.onPress());
-    expect(openSettings).toHaveBeenCalledTimes(1);
-    openSettings.mockRestore();
+    expect(mockOpenSettings).toHaveBeenCalledTimes(1);
+    expect(mockOpenChannelSettings).not.toHaveBeenCalled();
+  });
+
+  it('категория «Сообщения» выключена — ведёт прямо в её настройки', async () => {
+    mockStatus.mockResolvedValue({ ...nothing, app: 1, reachable: true });
+    mockChannel.mockResolvedValue('off');
+    setPushRegistration('registered');
+
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Категория «Сообщения» выключена');
+
+    await act(async () => button(renderer)?.props.onPress());
+    expect(mockOpenChannelSettings).toHaveBeenCalledTimes(1);
+    expect(mockOpenSettings).not.toHaveBeenCalled();
   });
 
   it('сборка без ключей Firebase — ни кнопки, ни ложных обещаний', async () => {
@@ -165,6 +192,37 @@ describe('DevicePushSection', () => {
 
     expect(texts(renderer)).toContain('не умеет получать уведомления');
     expect(button(renderer)).toBeNull();
+  });
+
+  it('сервер замолчал после удачного ответа — прежнее «всё доходит» с экрана убирается', async () => {
+    // Иначе человеку продолжают обещать доставку, про которую приложение уже
+    // ничего не знает: ровно то враньё, от которого раздел и заведён.
+    let wake: ((state: string) => void) | null = null;
+    const listener = jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation(((_event: string, handler: (state: string) => void) => {
+        wake = handler;
+        return { remove: () => undefined };
+      }) as never);
+    mockStatus.mockResolvedValue({ ...nothing, app: 1, reachable: true });
+    setPushRegistration('registered');
+
+    const renderer = await render();
+    expect(texts(renderer)).toContain('Уведомления доходят до телефона');
+
+    // Прошла минута (ответ устарел), приложение вернулось на передний план, а
+    // сервер уже не отвечает.
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + DELIVERY_FRESH_MS + 1);
+    mockStatus.mockRejectedValue(new Error('нет сети'));
+    await act(async () => {
+      (wake as unknown as (state: string) => void)?.('active');
+    });
+
+    expect(texts(renderer)).not.toContain('Уведомления доходят до телефона');
+    expect(texts(renderer)).toContain('Не удалось проверить доставку');
+
+    now.mockRestore();
+    listener.mockRestore();
   });
 
   it('на iOS раздела нет: пуши там пока не регистрируются вовсе', async () => {
