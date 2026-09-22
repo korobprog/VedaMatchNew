@@ -22,13 +22,10 @@ import {
   updateWorkTask,
 } from "@/lib/work-api";
 import { uploadInTurn, uploadProblemMessage } from "./attach-files";
+import { workPersonLabel } from "./person-label";
 import { dueFromInput, dueToInput } from "./task-due";
 import { PRIORITY_TITLE } from "./task-priority";
-import {
-  hasTaskEdits,
-  pendingTaskEdits,
-  taskEditsProblem,
-} from "./task-edits";
+import { hasTaskEdits, pendingTaskEdits, taskEditsProblem } from "./task-edits";
 
 /** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
 function growToText(element: HTMLTextAreaElement): void {
@@ -315,7 +312,7 @@ export function WorkTaskDialog({
                   <option value="">Никто</option>
                   {board.members.map((member) => (
                     <option key={member.userId} value={member.userId}>
-                      {member.name}
+                      {workPersonLabel(member)}
                     </option>
                   ))}
                 </select>
@@ -380,7 +377,10 @@ export function WorkTaskDialog({
                 onKeyDown={(event) => {
                   // Ctrl+Enter (⌘+Enter) — сохранить, не отрывая рук от
                   // клавиатуры: простой Enter в описании — новая строка.
-                  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  if (
+                    event.key === "Enter" &&
+                    (event.ctrlKey || event.metaKey)
+                  ) {
                     event.preventDefault();
                     save();
                   }
@@ -569,7 +569,10 @@ export function WorkTaskDialog({
                 .filter((file) => !file.mime.startsWith("image/"))
                 .map((file) => (
                   <li key={file.id} className="flex items-center gap-2">
-                    <FileText aria-hidden className="size-4 shrink-0 text-text-2" />
+                    <FileText
+                      aria-hidden
+                      className="size-4 shrink-0 text-text-2"
+                    />
                     <a
                       href={file.url}
                       target="_blank"

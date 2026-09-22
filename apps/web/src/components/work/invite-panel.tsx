@@ -18,6 +18,7 @@ import {
 } from "@/lib/work-api";
 import { copyText } from "@/lib/copy-text";
 import { emptyHint } from "./invite-hints";
+import { workPersonLabel } from "./person-label";
 import { buildWorkInviteShareHref } from "./work-share";
 
 const ROLE_TITLE: Record<WorkMemberRole, string> = {
@@ -340,7 +341,9 @@ export function WorkInvitePanel({
             <ul className="mt-2 space-y-1 text-sm">
               {space.members.map((member) => (
                 <li key={member.userId} className="flex items-center gap-2">
-                  <span className="truncate text-text-0">{member.name}</span>
+                  <span className="truncate text-text-0">
+                    {workPersonLabel(member)}
+                  </span>
                   <span className="text-xs text-text-2">
                     {ROLE_TITLE[member.role]}
                   </span>

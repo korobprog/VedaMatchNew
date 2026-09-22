@@ -63,6 +63,7 @@ import {
 } from "./column-collapse";
 import { WorkArchivePanel } from "./archive-panel";
 import { WorkInvitePanel } from "./invite-panel";
+import { workPersonLabel } from "./person-label";
 import {
   TASK_SEARCH_DEBOUNCE_MS,
   countTasks,
@@ -118,7 +119,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
   const [draftAssignee, setDraftAssignee] = useState("");
   const [draftDue, setDraftDue] = useState("");
-  const [draftPriority, setDraftPriority] = useState<WorkTaskPriority>("normal");
+  const [draftPriority, setDraftPriority] =
+    useState<WorkTaskPriority>("normal");
   const [drag, setDrag] = useState<DragState | null>(null);
   const [columnDraft, setColumnDraft] = useState<string | null>(null);
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
@@ -587,8 +589,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               type="button"
               onClick={toggleAll}
               aria-expanded={!allFolded}
-              aria-label={allFolded ? "Развернуть все разделы" : "Свернуть все разделы"}
-              title={allFolded ? "Развернуть все разделы" : "Свернуть все разделы"}
+              aria-label={
+                allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
+              }
+              title={
+                allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
+              }
               className="flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-glass-brd text-text-1 hover:text-text-0 sm:hidden"
             >
               {allFolded ? (
@@ -674,7 +680,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           />
         </label>
         {searchActive && (
-          <p role="status" className="mt-1 flex items-center gap-2 text-xs text-text-1">
+          <p
+            role="status"
+            className="mt-1 flex items-center gap-2 text-xs text-text-1"
+          >
             {searchSummary(found, countTasks(board))}
             {searching && (
               <Loader2 aria-hidden className="size-3.5 animate-spin" />
@@ -1020,7 +1029,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                           <input
                             type="datetime-local"
                             value={draftDue}
-                            onChange={(event) => setDraftDue(event.target.value)}
+                            onChange={(event) =>
+                              setDraftDue(event.target.value)
+                            }
                             className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
                           />
                         </label>
@@ -1324,7 +1335,7 @@ function TaskCard({
         )}
         {task.assignee && (
           <span className="ml-auto truncate text-text-1">
-            {task.assignee.name}
+            {workPersonLabel(task.assignee)}
           </span>
         )}
       </div>
