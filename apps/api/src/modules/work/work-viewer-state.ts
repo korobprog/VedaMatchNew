@@ -38,29 +38,37 @@ export function workTaskOwnerIds(task: WorkTaskOwnership): string[] {
 }
 
 /**
- * Чужая ли задача для смотрящего.
+ * Чужая ли задача для смотрящего: он не автор и не исполнитель.
  *
- * Без исполнителя — не чужая: такую задачу может взять любой, и спрятать её
- * значило бы спрятать работу, которую некому делать.
+ * Задача без исполнителя раньше чужой не считалась никогда — «её может взять
+ * любой». Заказчик прислал скриншот (VED-418): VED-296, VED-294, VED-209,
+ * VED-166 завёл другой админ и никому не поручил, и у заказчика они стояли
+ * среди своих, без «Чужое». Правило для них то же, что для остальных: своя —
+ * у автора, чужая — у всех прочих. Взять такую задачу по-прежнему можно:
+ * папка «Чужие» открывается одной кнопкой, а поиск находит всё.
+ *
+ * Задача, у которой не осталось ни автора, ни исполнителя (оба аккаунта
+ * удалены), не чужая никому: прятать её не от кого, а спрятанная, она
+ * пропала бы у всех.
  */
 export function isForeignWorkTask(
   task: WorkTaskOwnership,
   viewerId: string,
 ): boolean {
-  if (!task.assigneeId) return false;
-  return !workTaskOwnerIds(task).includes(viewerId);
+  const owners = workTaskOwnerIds(task);
+  if (owners.length === 0) return false;
+  return !owners.includes(viewerId);
 }
 
 /**
  * Кого уведомления о задаче считают её хозяевами (`ownerIds` события
  * `work.task.mark-refreshed`): у остальных получателей пометка «Чужое».
- * `undefined` — чужих у задачи нет (исполнитель не назначен), пометка у всех
- * одна. Правило то же, что у `isForeignWorkTask`, — чтобы лента и доска не
- * разошлись.
+ * `undefined` — хозяев не осталось, пометка у всех одна. Правило то же, что у
+ * `isForeignWorkTask`, — чтобы лента и доска не разошлись.
  */
 export function markOwnerIds(task: WorkTaskOwnership): string[] | undefined {
-  if (!task.assigneeId) return undefined;
-  return workTaskOwnerIds(task);
+  const owners = workTaskOwnerIds(task);
+  return owners.length > 0 ? owners : undefined;
 }
 
 /**

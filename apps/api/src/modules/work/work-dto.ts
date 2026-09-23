@@ -12,6 +12,7 @@ import {
   type WorkTaskPriority,
 } from '@vedamatch/shared';
 import { resolveTaskStatusMark } from './work-task-status';
+import { cardSectionId } from './work-task-section';
 import { NO_VIEWER_STATE, type WorkViewerState } from './work-viewer-state';
 import { workTaskKey } from './work-validate';
 
@@ -81,6 +82,10 @@ export interface WorkTaskRow {
   checklist: Array<{ done: boolean }>;
   _count: { comments: number; attachments: number };
   createdAt: Date;
+  /** Раздел задачи в колонке статуса (VED-430). */
+  sectionColumnId: string | null;
+  /** Последняя правка человеком (VED-421); `null` — считаем `createdAt`. */
+  editedAt: Date | null;
 }
 
 /**
@@ -126,7 +131,22 @@ export function toWorkTaskCard(
     statusMark: resolveTaskStatusMark(columnName),
     foreign: viewer.foreign,
     viewed: viewer.viewed,
+    sectionId: cardSectionId(
+      { id: task.columnId, name: columnName ?? '' },
+      task.sectionColumnId,
+    ),
+    editedAt: workTaskEditedAt(task.createdAt, task.editedAt).toISOString(),
   };
+}
+
+/**
+ * Когда задачу правили последний раз (VED-421). Раньше создания — никогда:
+ * так после сдвига часов или задачи без отметки вид «По правке» не поставит
+ * её ниже, чем она заведена.
+ */
+export function workTaskEditedAt(createdAt: Date, editedAt: Date | null): Date {
+  if (!editedAt || editedAt.getTime() < createdAt.getTime()) return createdAt;
+  return editedAt;
 }
 
 export type WorkAgendaBucket = 'overdue' | 'today' | 'soon' | 'undated';
