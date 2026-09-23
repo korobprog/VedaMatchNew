@@ -1366,7 +1366,7 @@ function ReelStatus({
               Открыть рилс
             </Link>
             {reel.post.storyImageUrl && (
-              <a href={reel.post.storyImageUrl} download className="btn-mint-outline rounded-xl px-4 py-2 text-sm font-medium">
+              <a href={`/m/${reel.post.slug}/story`} download className="btn-mint-outline rounded-xl px-4 py-2 text-sm font-medium">
                 ⤓ Скачать для Stories
               </a>
             )}
