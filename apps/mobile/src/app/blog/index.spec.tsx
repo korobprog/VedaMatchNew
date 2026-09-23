@@ -128,6 +128,8 @@ describe('экран блог-ленты', () => {
     expect(text).toContain('Нет соединения с сервером.');
     mockFeed.mockResolvedValueOnce({ posts: [blogPost('b', { title: 'Второй' })], nextCursor: null });
     await act(async () => pressable(renderer, 'Повторить').props.onPress());
+    // Порция дописывается к ленте, а не заменяет её.
+    expect(screenText(renderer)).toContain('Первый');
     expect(screenText(renderer)).toContain('Второй');
   });
 
