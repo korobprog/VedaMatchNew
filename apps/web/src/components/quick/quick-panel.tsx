@@ -15,6 +15,7 @@ import {
   HeartHandshake,
   Images,
   Info,
+  Mail,
   Quote,
   Search,
   Settings2,
@@ -48,8 +49,10 @@ import {
   CUSTOM_ACTION_PREFIX,
   addCustomQuickAction,
   customQuickActionId,
+  lockedQuickActions,
   moveQuickAction,
   parseQuickConfig,
+  pinQuickActions,
   quickActionCatalog,
   quickActionMeta,
   removeCustomQuickAction,
@@ -58,6 +61,7 @@ import {
   serviceQuickActions,
   toggleQuickAction,
   type BuiltinQuickActionId,
+  type QuickActionId,
   type QuickActionMeta,
   type QuickConfig,
 } from "./quick-actions";
@@ -87,6 +91,9 @@ const ICONS: Record<
   search: Search,
   assistant: Bot,
   aphorism: Quote,
+  // VED-326: конверт, а не картинка. Стопка картинок уже занята «Картинками»
+  // рядом, а открытку в жизни узнают по тому, что её посылают.
+  postcard: Mail,
   // VED-326: «искры» открывают саму панель, и вторая такая же кнопка внутри
   // читалась как «то же самое ещё раз».
   collections: Images,
@@ -116,12 +123,16 @@ const TILE_ICON = "size-6";
  *
  * Настраивается прямо здесь же: набор кнопок у человека, который заходит за
  * цитатой, и у того, кто ведёт общину, разный, и угадать за них нельзя.
+ *
+ * `admin` — у администрации портала панель полностью своя (VED-326): три
+ * закреплённые кнопки у неё не закрепляются.
  */
-export function QuickPanel() {
+export function QuickPanel({ admin = false }: { admin?: boolean }) {
   const [open, setOpen] = useState(false);
   const [tuning, setTuning] = useState(false);
   const [config, setConfig] = useState<QuickConfig>({ ids: [], custom: [] });
   const panelRef = useRef<HTMLDivElement>(null);
+  const locked = lockedQuickActions(admin);
 
   const names = useServiceNames();
   const catalogMap = useServiceCatalog();
@@ -144,22 +155,32 @@ export function QuickPanel() {
      и полоса плеера. */
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
-    try {
-      setConfig(parseQuickConfig(window.localStorage.getItem(STORAGE_KEY)));
-    } catch {
-      setConfig(parseQuickConfig(null));
-    }
+    const read = () => {
+      try {
+        return parseQuickConfig(window.localStorage.getItem(STORAGE_KEY));
+      } catch {
+        return parseQuickConfig(null);
+      }
+    };
+    const stored = read();
+    setConfig({ ...stored, ids: pinQuickActions(stored.ids, locked) });
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
+  }, [locked]);
 
-  const save = useCallback((next: QuickConfig) => {
-    setConfig(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, serializeQuickConfig(next));
-    } catch {
-      // Приватный режим: выбор работает до конца сессии.
-    }
-  }, []);
+  const save = useCallback(
+    (next: QuickConfig) => {
+      // Закрепление применяется на каждом сохранении: то, что переживает
+      // только загрузку страницы, закреплением не является.
+      const pinned = { ...next, ids: pinQuickActions(next.ids, locked) };
+      setConfig(pinned);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, serializeQuickConfig(pinned));
+      } catch {
+        // Приватный режим: выбор работает до конца сессии.
+      }
+    },
+    [locked],
+  );
 
   // Escape закрывает, как у любой шторки; клик мимо — тоже.
   useEffect(() => {
@@ -247,6 +268,7 @@ export function QuickPanel() {
             <QuickSettings
               config={config}
               catalog={catalog}
+              locked={locked}
               onChange={save}
             />
           ) : (
@@ -597,14 +619,20 @@ function InfoSheet({ onClose }: { onClose: () => void }) {
  * Настройка панели. Список читается как сама панель: сначала включённые в
  * своём порядке, потом остальное по разделам — портальные кнопки, сервисы
  * (VED-326) и свои кнопки из закладок (VED-345).
+ *
+ * `locked` — закреплённые кнопки (VED-326, п. 6). Их переключатель не гаснет
+ * совсем, а объявляется недоступным: пропавшая строка выглядела бы как
+ * «кнопки нет в списке», и человек пошёл бы искать её в сервисах.
  */
 function QuickSettings({
   config,
   catalog,
+  locked,
   onChange,
 }: {
   config: QuickConfig;
   catalog: QuickActionMeta[];
+  locked: readonly QuickActionId[];
   onChange: (next: QuickConfig) => void;
 }) {
   const chosen = config.ids
@@ -648,19 +676,27 @@ function QuickSettings({
           <ul className="space-y-1">
             {group.items.map((meta) => {
               const on = config.ids.includes(meta.id);
+              const fixed = locked.includes(meta.id);
               return (
                 <li key={meta.id} className="flex items-center gap-1">
                   <button
                     type="button"
                     role="switch"
                     aria-checked={on}
-                    onClick={() =>
+                    /* `aria-disabled`, а не `disabled`: кнопка остаётся в
+                       порядке обхода табом, и скринридер успевает прочитать,
+                       почему галочка не снимается. */
+                    aria-disabled={fixed || undefined}
+                    onClick={() => {
+                      if (fixed) return;
                       onChange({
                         ...config,
                         ids: toggleQuickAction(config.ids, meta.id),
-                      })
-                    }
-                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-white/4"
+                      });
+                    }}
+                    className={`flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left ${
+                      fixed ? "cursor-default" : "hover:bg-white/4"
+                    }`}
                   >
                     <span
                       aria-hidden="true"
@@ -677,11 +713,11 @@ function QuickSettings({
                         {meta.label}
                       </span>
                       <span className="block truncate text-[11px] text-text-1">
-                        {meta.hint}
+                        {fixed ? "Всегда в панели" : meta.hint}
                       </span>
                     </span>
                   </button>
-                  {on && (
+                  {on && !fixed && (
                     <>
                       <button
                         type="button"
@@ -689,7 +725,12 @@ function QuickSettings({
                         onClick={() =>
                           onChange({
                             ...config,
-                            ids: moveQuickAction(config.ids, meta.id, -1),
+                            ids: moveQuickAction(
+                              config.ids,
+                              meta.id,
+                              -1,
+                              locked.length,
+                            ),
                           })
                         }
                         className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
@@ -702,7 +743,12 @@ function QuickSettings({
                         onClick={() =>
                           onChange({
                             ...config,
-                            ids: moveQuickAction(config.ids, meta.id, 1),
+                            ids: moveQuickAction(
+                              config.ids,
+                              meta.id,
+                              1,
+                              locked.length,
+                            ),
                           })
                         }
                         className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"

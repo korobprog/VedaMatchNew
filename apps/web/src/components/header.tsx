@@ -213,8 +213,10 @@ export function Header({ user }: { user: UserProfile }) {
             <CartBadge />
             {/* Горячие кнопки — рядом с колокольчиком и корзиной, а не
                 плавающей кнопкой поверх страницы: снизу уже стоит полоса
-                плеера, а на Знакомствах ещё и своя нижняя панель. */}
-            <QuickPanel />
+                плеера, а на Знакомствах ещё и своя нижняя панель.
+                Админу три закреплённые кнопки не закрепляются (VED-326):
+                панель у него рабочая, и «Поддержать» ему показывать незачем. */}
+            <QuickPanel admin={isPortalAdmin(user)} />
             <NotificationBell />
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
