@@ -1,3 +1,4 @@
+import { APP_PLAYBACK_AUDIO_MODE } from '@/lib/audio/app-audio-mode';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { ChatApi } from '@/lib/chat/chat-api';
 import { VoiceRecorderControl } from './voice-recorder-control';
@@ -123,12 +124,7 @@ describe('VoiceRecorderControl — остановка записи при ухо
     // `AudioMode`, — `playsInSilentMode` в частности осталась бы `false`
     // вместо `true`, и это поле глобальное для всего модуля, не только
     // для этого рекордера). Полный разбор — `voice-playback-audio-mode.ts`.
-    expect(mockSetAudioModeAsync).toHaveBeenLastCalledWith({
-      allowsRecording: false,
-      playsInSilentMode: true,
-      shouldRouteThroughEarpiece: false,
-      interruptionMode: 'mixWithOthers',
-    });
+    expect(mockSetAudioModeAsync).toHaveBeenLastCalledWith(APP_PLAYBACK_AUDIO_MODE);
   });
 
   it('blur без активной записи ничего не останавливает', async () => {
