@@ -726,7 +726,10 @@ describe('MotivationService feed tiers', () => {
     motivationPost.findMany.mockResolvedValue([]);
 
     await service.feedAttributions({ category: 'vedy', speaker: 'Прабхупада' });
-    await service.feedAttributions({ category: 'vedy', speaker: ' прабхупада ' });
+    await service.feedAttributions({
+      category: 'vedy',
+      speaker: ' прабхупада ',
+    });
     expect(groupBy).toHaveBeenCalledTimes(2);
 
     await service.feedAttributions({ category: 'praktika' });

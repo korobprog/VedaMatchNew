@@ -155,10 +155,11 @@ export class MotivationService {
   ) {}
 
   /** Списки фильтра ленты: одинаковы у всех читателей (VED-252). */
-  private readonly attributionsMemo = new TtlMemo<MotivationFeedAttributionsDto>(
-    ATTRIBUTIONS_TTL_MS,
-    ATTRIBUTIONS_MAX_KEYS,
-  );
+  private readonly attributionsMemo =
+    new TtlMemo<MotivationFeedAttributionsDto>(
+      ATTRIBUTIONS_TTL_MS,
+      ATTRIBUTIONS_MAX_KEYS,
+    );
 
   async preference(userId: string) {
     return (

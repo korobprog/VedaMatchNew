@@ -35,7 +35,7 @@ export class TtlMemo<T> {
       .then((value) => {
         // Самый старый ключ уходит первым: `Map` помнит порядок вставки.
         if (this.data.size >= this.maxKeys) {
-          const oldest = this.data.keys().next().value;
+          const oldest = this.data.keys().next().value as string | undefined;
           if (oldest !== undefined) this.data.delete(oldest);
         }
         this.data.set(key, { value, at: this.now() });
