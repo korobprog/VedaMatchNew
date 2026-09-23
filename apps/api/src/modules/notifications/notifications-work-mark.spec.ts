@@ -63,4 +63,52 @@ describe('NotificationsService.refreshWorkTaskMark', () => {
       2,
     );
   });
+
+  describe('«Чужое» (VED-320)', () => {
+    it('хозяевам — состояние, остальным получателям — «Чужое»', async () => {
+      const { service, calls } = createService();
+      await service.refreshWorkTaskMark('space-1', 'VED-42', 'testing', [], {
+        ownerIds: ['author', 'assignee', 'author'],
+      });
+      const url = '/work/planner/space-1?task=VED-42';
+      expect(calls).toEqual([
+        {
+          where: {
+            url,
+            category: 'work',
+            userId: { in: ['author', 'assignee'] },
+          },
+          data: { mark: 'testing' },
+        },
+        {
+          where: {
+            url,
+            category: 'work',
+            userId: { notIn: ['author', 'assignee'] },
+          },
+          data: { mark: 'foreign' },
+        },
+      ]);
+    });
+
+    it('без списка хозяев «Чужое» не ставится никому', async () => {
+      // Задача без исполнителя или издатель старой сборки: пометка одна на всех.
+      const { service, calls } = createService();
+      await service.refreshWorkTaskMark('space-1', 'VED-42', 'rework');
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.where).toEqual({
+        url: '/work/planner/space-1?task=VED-42',
+        category: 'work',
+      });
+    });
+
+    it('считает и те, и другие строки', async () => {
+      const { service } = createService();
+      expect(
+        await service.refreshWorkTaskMark('space-1', 'VED-42', 'done', [], {
+          ownerIds: ['a'],
+        }),
+      ).toBe(4);
+    });
+  });
 });

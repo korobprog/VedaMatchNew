@@ -33,4 +33,10 @@ describe('inboxMark', () => {
   it('незнакомый запасной значок гасится', () => {
     expect(inboxMark(null, 'mention')).toBeNull();
   });
+
+  it('«Чужое» из колонки состояния отдаётся как есть (VED-320)', () => {
+    expect(inboxMark('foreign', null)).toBe('foreign');
+    // И перебивает «Комментарий»: чья задача — важнее вида новости.
+    expect(inboxMark('foreign', 'comment')).toBe('foreign');
+  });
 });

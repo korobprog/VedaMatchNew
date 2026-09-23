@@ -51,6 +51,7 @@
   --color-mark-done: var(--vm-mark-done);
   --color-mark-rework: var(--vm-mark-rework);
   --color-mark-comment: var(--vm-mark-comment);
+  --color-mark-foreign: var(--vm-mark-foreign);
 
   /* Text colors */
   --color-text-0: var(--vm-text-0);
@@ -198,6 +199,13 @@
      Замер в ленте, подпись 11px, порог AA 4,5:1:
        --vm-mark-comment   7,58:1 светлая · 10,09:1 тёмная */
   --vm-mark-comment: #6B2DB3;
+  /* «Чужое» (VED-320) — задача, которую составил и ведёт другой участник.
+     Заказчик назвал тёмно-синий, но тёмно-синий уже носит «Выполнено»
+     (#15357F, насыщенный). Поэтому синий приглушённый, серо-стальной: та же
+     краска, но без яркости — читается «не моё, не тревожит» и не путается с
+     «Выполнено» ни по тону, ни по рамке (у «Чужого» она пунктирная).
+     Замеры — в описании PR, подпись 11px, порог AA 4,5:1. */
+  --vm-mark-foreign: #2E4A6A;
 
   --vm-text-0: #180F2C;
   --vm-text-1: #4B3B6C;
@@ -294,6 +302,7 @@
   --vm-mark-done: #8FB6FF;
   --vm-mark-rework: #FF8A85;
   --vm-mark-comment: #D0A6FF;
+  --vm-mark-foreign: #A7BCD6;
 
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
@@ -371,6 +380,7 @@
     --vm-mark-done: #8FB6FF;
     --vm-mark-rework: #FF8A85;
     --vm-mark-comment: #D0A6FF;
+    --vm-mark-foreign: #A7BCD6;
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;

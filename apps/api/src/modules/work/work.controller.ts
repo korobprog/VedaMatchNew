@@ -25,6 +25,7 @@ import type {
   CreateWorkSpaceRequest,
   CreateWorkTaskRequest,
   MoveWorkTaskRequest,
+  SetWorkTaskViewedRequest,
   UpdateWorkBoardRequest,
   UpdateWorkChecklistItemRequest,
   UpdateWorkColumnRequest,
@@ -368,6 +369,18 @@ export class WorkTasksController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.tasks.update(id, user.sub, body, user.onBehalfOf ?? null);
+  }
+
+  /** «Просмотрено» на карточке (VED-365): своя отметка, в обе стороны. */
+  @Post('tasks/:id/viewed')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 240 } })
+  setViewed(
+    @Param('id') id: string,
+    @Body() body: SetWorkTaskViewedRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.tasks.setViewed(id, user.sub, body?.viewed);
   }
 
   // Перетаскивание — самое частое действие на доске, и лимит на него отдельный:

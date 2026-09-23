@@ -11,6 +11,7 @@ import type {
   CreateWorkSpaceRequest,
   CreateWorkTaskRequest,
   MoveWorkTaskRequest,
+  SetWorkTaskViewedRequest,
   UpdateWorkChecklistItemRequest,
   UpdateWorkColumnRequest,
   UpdateWorkSpaceRequest,
@@ -28,6 +29,7 @@ import type {
   WorkSpaceSummaryDto,
   WorkTaskDto,
   WorkTaskSearchResponse,
+  WorkTaskViewedResponse,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -181,6 +183,12 @@ export const updateWorkTask = (taskId: string, body: UpdateWorkTaskRequest) =>
 
 export const moveWorkTask = (taskId: string, body: MoveWorkTaskRequest) =>
   send<WorkTaskDto>(`/work/tasks/${taskId}/move`, "POST", body);
+
+/** «Просмотрено» на карточке (VED-365): своя отметка, в обе стороны. */
+export const setWorkTaskViewed = (
+  taskId: string,
+  body: SetWorkTaskViewedRequest,
+) => send<WorkTaskViewedResponse>(`/work/tasks/${taskId}/viewed`, "POST", body);
 
 export const archiveWorkTask = (taskId: string) =>
   send<void>(`/work/tasks/${taskId}`, "DELETE");

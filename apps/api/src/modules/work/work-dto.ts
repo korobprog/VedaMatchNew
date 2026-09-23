@@ -12,6 +12,7 @@ import {
   type WorkTaskPriority,
 } from '@vedamatch/shared';
 import { resolveTaskStatusMark } from './work-task-status';
+import { NO_VIEWER_STATE, type WorkViewerState } from './work-viewer-state';
 import { workTaskKey } from './work-validate';
 
 /**
@@ -93,11 +94,16 @@ export interface WorkTaskRow {
  * (`work-task-status.ts`), чтобы ярлык на карточке и пометка в ленте
  * уведомлений не разъехались (VED-320). `null` — название неизвестно, ярлыка
  * не будет.
+ *
+ * `viewer` — что карточка значит для смотрящего: «Чужое» и «Просмотрено»
+ * (VED-320, VED-365). Считается пачкой на всю доску (`work-viewer-state.ts`),
+ * поэтому приезжает готовым.
  */
 export function toWorkTaskCard(
   task: WorkTaskRow,
   prefix: string,
   columnName: string | null,
+  viewer: WorkViewerState = NO_VIEWER_STATE,
 ): WorkTaskCardDto {
   return {
     id: task.id,
@@ -118,6 +124,8 @@ export function toWorkTaskCard(
     hasDescription: task.description.trim().length > 0,
     createdAt: task.createdAt.toISOString(),
     statusMark: resolveTaskStatusMark(columnName),
+    foreign: viewer.foreign,
+    viewed: viewer.viewed,
   };
 }
 

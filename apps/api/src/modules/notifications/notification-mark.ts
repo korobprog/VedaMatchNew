@@ -24,6 +24,14 @@ import {
  * Одной колонкой не обойтись: переезд в колонку без состояния обнулил бы
  * `mark`, и понять, что строка была комментарием, стало бы не из чего.
  */
+/**
+ * «Чужое» (VED-320) — пишется в `mark` вместо состояния тем получателям,
+ * кому задача не своя. В `mark`, а не в `markFallback`: это ответ на тот же
+ * вопрос «что с задачей для меня сейчас», и следующий переезд или смена
+ * исполнителя переписывают его так же, как состояние.
+ */
+export const FOREIGN_MARK = 'foreign' satisfies NotificationMark;
+
 export function inboxMark(
   mark: string | null | undefined,
   markFallback: string | null | undefined,
@@ -31,5 +39,6 @@ export function inboxMark(
   // Состояние — первым: «что с задачей сейчас» важнее вида новости. Через
   // parse, а не as: в колонке строка, и запись, сделанная сборкой с другим
   // набором, не должна утекать клиенту неизвестным кодом.
+  if (mark === FOREIGN_MARK) return FOREIGN_MARK;
   return parseTaskStatusMark(mark) ?? parseNotificationMark(markFallback);
 }

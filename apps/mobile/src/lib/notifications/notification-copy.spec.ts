@@ -33,13 +33,17 @@ describe('markView', () => {
     expect(markView('comment')?.label).toBe('Комментарий');
   });
 
+  it('задача не своя — «Чужое» (VED-320)', () => {
+    expect(markView('foreign')?.label).toBe('Чужое');
+  });
+
   it('состояния нет — значка нет', () => {
     expect(markView(null)).toBeNull();
     expect(markView(undefined)).toBeNull();
   });
 
   it('цвет рамки — имя токена, определённого в обеих темах', () => {
-    for (const mark of ['in_progress', 'testing', 'done', 'rework', 'comment'] as const) {
+    for (const mark of ['in_progress', 'testing', 'done', 'rework', 'comment', 'foreign'] as const) {
       const border = markView(mark)!.border;
       expect(typeof light[border]).toBe('string');
       expect(typeof dark[border]).toBe('string');

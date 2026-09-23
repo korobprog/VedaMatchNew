@@ -42,7 +42,7 @@ import {
   threadRefreshData,
   workStatusThreadKey,
 } from './inbox-thread';
-import { inboxMark } from './notification-mark';
+import { FOREIGN_MARK, inboxMark } from './notification-mark';
 import type { PushFailure } from './push-errors';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 
@@ -605,19 +605,38 @@ export class NotificationsService {
    * Заголовок и текст не трогаем: это новость на свою дату, и переписывать
    * «вернули в „Тестерование“» задним числом значило бы стирать историю.
    * Меняется ровно ответ на вопрос «где карточка сейчас».
+   *
+   * «Чужое» (VED-320). `ownerIds` — автор и исполнитель задачи, как их назвала
+   * «Работа». У них пометка — состояние, у остальных, у кого уведомление о
+   * задаче осталось (например, задачу у человека забрали), — `foreign`:
+   * заказчик просил, чтобы чужая задача не стояла у него «Тестированием».
+   * Кто хозяин, решает издатель; здесь только раскладка по строкам.
    */
   async refreshWorkTaskMark(
     spaceId: string,
     taskKey: string,
     mark: TaskStatusMark | null,
     liftRecipientIds: readonly string[] = [],
-    now = new Date(),
+    options: { now?: Date; ownerIds?: readonly string[] } = {},
   ): Promise<number> {
+    const now = options.now ?? new Date();
     const url = workTaskUrl(spaceId, taskKey);
+    const owners = options.ownerIds ? [...new Set(options.ownerIds)] : null;
     const { count } = await this.prisma.notificationItem.updateMany({
-      where: { url, category: 'work' },
+      where: {
+        url,
+        category: 'work',
+        ...(owners ? { userId: { in: owners } } : {}),
+      },
       data: { mark },
     });
+    let foreign = 0;
+    if (owners) {
+      ({ count: foreign } = await this.prisma.notificationItem.updateMany({
+        where: { url, category: 'work', userId: { notIn: owners } },
+        data: { mark: FOREIGN_MARK },
+      }));
+    }
 
     // Подъём строки о смене статуса (VED-320): «задача поднимается вверх по
     // ленте для всех остальных админов, но не для него». Кому — сказала
@@ -638,7 +657,7 @@ export class NotificationsService {
         data: threadLiftData(now),
       });
     }
-    return count;
+    return count + foreign;
   }
 
   /**

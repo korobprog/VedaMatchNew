@@ -605,8 +605,13 @@ export type NotificationCategory =
  *
  * Установленная сборка приложения незнакомый код не рисует
  * (`MARK_VIEWS[mark] ?? null`), поэтому новое значение ей не опасно.
+ *
+ * `foreign` — «Чужое» (VED-320): задачу составил и ведёт кто-то другой, и
+ * человеку, у которого осталось уведомление о ней (например, задачу у него
+ * забрали), она не «Тестерование», а просто не его. Ставится вместо
+ * состояния, для каждого получателя своё.
  */
-export type NotificationMark = TaskStatusMark | "comment";
+export type NotificationMark = TaskStatusMark | "comment" | "foreign";
 
 /**
  * Код значка из строки базы или чужой сборки. `null` — значения нет либо оно
@@ -616,7 +621,7 @@ export type NotificationMark = TaskStatusMark | "comment";
 export function parseNotificationMark(
   value: string | null | undefined,
 ): NotificationMark | null {
-  if (value === "comment") return value;
+  if (value === "comment" || value === "foreign") return value;
   return parseTaskStatusMark(value);
 }
 
@@ -846,6 +851,16 @@ export interface WorkTaskMarkRefreshedEvent {
    * ведёт.
    */
   liftRecipientIds: string[];
+  /**
+   * Чья это задача (VED-320): автор (и тот, от чьего имени её завёл агент) и
+   * исполнитель. У остальных получателей уведомлений о задаче пометка
+   * становится «Чужое», у этих — состояние.
+   *
+   * Не прислано — «Чужое» не ставится никому, пометка у всех одна: так у
+   * задачи без исполнителя (её может взять любой, чужой она не бывает) и у
+   * издателя старой сборки.
+   */
+  ownerIds?: string[];
 }
 
 export interface PushSubscriptionRequest {

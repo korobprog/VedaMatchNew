@@ -693,7 +693,7 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
         'VED-42',
         'done',
         ['user-2'],
-        minutes(7),
+        { now: minutes(7) },
       );
 
       const inbox = await service.listInbox('user-2');
@@ -718,7 +718,7 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
         'VED-42',
         'done',
         ['user-2'],
-        minutes(7),
+        { now: minutes(7) },
       );
 
       const own = store.inbox.find((row) => row.userId === 'user-1');
@@ -780,7 +780,7 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
         'VED-42',
         'done',
         ['user-2'],
-        minutes(7),
+        { now: minutes(7) },
       );
       await service.markRead('user-2');
       await service.refreshWorkTaskMark(
@@ -788,7 +788,7 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
         'VED-42',
         'testing',
         ['user-2'],
-        minutes(8),
+        { now: minutes(8) },
       );
 
       const inbox = await service.listInbox('user-2');
@@ -807,13 +807,9 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
       const { service, store } = await seeded();
       const before = store.inbox.map((row) => row.createdAt.getTime());
 
-      await service.refreshWorkTaskMark(
-        'space-1',
-        'VED-42',
-        'done',
-        [],
-        minutes(7),
-      );
+      await service.refreshWorkTaskMark('space-1', 'VED-42', 'done', [], {
+        now: minutes(7),
+      });
 
       expect(store.inbox.map((row) => row.createdAt.getTime())).toEqual(before);
       await expect(service.countUnread('user-2')).resolves.toBe(0);

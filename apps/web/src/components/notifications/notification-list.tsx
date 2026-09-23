@@ -47,6 +47,7 @@ import {
   inboxFeedFromPage,
   markInboxAllRead,
   openInboxItem,
+  withFreshMarks,
   splitInbox,
   toggleInboxRead,
   withUnreadTotal,
@@ -140,6 +141,42 @@ export function NotificationList() {
   useEffect(() => {
     load(applied);
   }, [applied, load]);
+
+  /* Вернулись на вкладку — пометки у показанных карточек догоняют задачу
+     (VED-312): «в уведомлениях Тестирование, а внутри На доработку» было и
+     оттого, что открытая страница читала ленту один раз. Только пометки:
+     порядок под пальцем не меняется, см. `withFreshMarks`. */
+  const shownCount = feed?.items.length ?? 0;
+  useEffect(() => {
+    if (shownCount === 0) return;
+    let inFlight = false;
+    const refresh = () => {
+      if (inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      const id = requestId.current;
+      void fetchInbox({
+        query: applied,
+        limit: Math.min(shownCount, MAX_RELOAD),
+      })
+        .then((page) => {
+          // Пока шёл запрос, начался поиск или перечитывание — ответ не наш.
+          if (id !== requestId.current) return;
+          setFeed((current) =>
+            current ? withFreshMarks(current, page.items) : current,
+          );
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [applied, shownCount]);
 
   function loadMore() {
     if (!nextCursor || loadingMore) return;

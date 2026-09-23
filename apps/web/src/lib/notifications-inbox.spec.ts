@@ -13,6 +13,7 @@ import {
   setItemRead,
   splitInbox,
   toggleInboxRead,
+  withFreshMarks,
   withUnreadTotal,
 } from "./notifications-inbox";
 
@@ -305,5 +306,44 @@ describe("лента целиком", () => {
 
     expect(countUnreadItems(all.items)).toBe(0);
     expect(all.unreadTotal).toBe(0);
+  });
+});
+
+describe("withFreshMarks (VED-312)", () => {
+  const feed = () =>
+    inboxFeedFromPage({
+      items: [
+        { ...item("a"), mark: "testing" },
+        { ...item("b"), mark: "comment" },
+        item("c"),
+      ],
+      unreadCount: 3,
+    });
+
+  it("пометка на экране догоняет задачу: «Тестерование» → «На доработку»", () => {
+    const next = withFreshMarks(feed(), [
+      { ...item("a"), mark: "rework" },
+      { ...item("c"), mark: "foreign" },
+    ]);
+    expect(next.items.map((row) => [row.id, row.mark])).toEqual([
+      ["a", "rework"],
+      ["b", "comment"],
+      ["c", "foreign"],
+    ]);
+  });
+
+  it("порядок и набор не трогает: новое сверху не вставляется", () => {
+    const next = withFreshMarks(feed(), [
+      { ...item("new"), mark: "testing" },
+      { ...item("c"), mark: "done" },
+    ]);
+    expect(next.items.map((row) => row.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("ничего не поменялось — тот же объект", () => {
+    const state = feed();
+    expect(withFreshMarks(state, [{ ...item("a"), mark: "testing" }])).toBe(
+      state,
+    );
   });
 });

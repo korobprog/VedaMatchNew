@@ -176,6 +176,35 @@ export function inboxFeedFromPage(page: {
 }
 
 /**
+ * Свежие пометки поверх уже показанной ленты (VED-312, VED-320).
+ *
+ * Заказчик: «в уведомлениях проставлено Тестирование, а заходишь внутрь — там
+ * На доработку». Сервер пометку давно держит свежей, но открытая страница
+ * читала ленту один раз: вкладка, оставленная на телефоне, показывала
+ * пометку часовой давности. Вернулись на вкладку — пометки догоняют.
+ *
+ * Только пометки, и только у тех карточек, что уже на экране: порядок и
+ * набор не трогаем — лента, переставленная под пальцем при возврате на
+ * вкладку, хуже устаревшего слова. Ничего не поменялось — тот же объект, без
+ * лишней отрисовки.
+ */
+export function withFreshMarks(
+  state: InboxFeedState,
+  fresh: readonly NotificationItemDto[],
+): InboxFeedState {
+  const marks = new Map(fresh.map((item) => [item.id, item.mark]));
+  let changed = false;
+  const items = state.items.map((item) => {
+    if (!marks.has(item.id)) return item;
+    const mark = marks.get(item.id) ?? null;
+    if (mark === item.mark) return item;
+    changed = true;
+    return { ...item, mark };
+  });
+  return changed ? { ...state, items } : state;
+}
+
+/**
  * Продолжение ленты (VED-267). Удержания переживают подгрузку: они про
  * карточки, которые уже на экране, а «Показать ещё» дописывает в хвост и
  * ничего не переставляет.
