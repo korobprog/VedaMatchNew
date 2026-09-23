@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LibraryCategoryTreeNode } from "@vedamatch/shared";
@@ -280,6 +280,47 @@ describe("AddEntryForm", () => {
       url: null,
       source: null,
       body: "Весь текст статьи",
+    });
+  });
+
+  // VED-372: «сделай то же самое для раздела Статья» — уборка пустых строк,
+  // как в форме поста блог-ленты, и в запись уезжает уже убранный текст.
+  it("у статьи убираются пустые строки, и в запись уезжает убранный текст", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ id: "entry-4" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AddEntryForm locale="ru" tree={tree} />);
+
+    await userEvent.click(screen.getByLabelText("Текст целиком здесь"));
+    await userEvent.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "О смирении",
+    );
+    const field = screen.getByRole("textbox", { name: /^Текст/ });
+    fireEvent.change(field, {
+      target: { value: "Первый абзац\n  \n\t\nВторой абзац\n\n\nТретий" },
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Убрать пустые строки" }),
+    );
+    expect(field).toHaveValue("Первый абзац\nВторой абзац\nТретий");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Убрано 4 пустые строки.",
+    );
+
+    await userEvent.click(screen.getByLabelText("Гита"));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/library/entry/entry-4?created=1");
+    });
+    const [, init] = postsTo(fetchMock, "/library/entries")[0];
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      body: "Первый абзац\nВторой абзац\nТретий",
     });
   });
 

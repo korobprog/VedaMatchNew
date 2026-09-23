@@ -1,3 +1,4 @@
+import { collapseBlankLines } from '@vedamatch/shared';
 import { entryLocatorError, normalizeEntryBody } from './entry-body';
 
 describe('normalizeEntryBody', () => {
@@ -81,5 +82,36 @@ describe('entryLocatorError', () => {
     expect(entryLocatorError({ ...none, type: 'article' })).toBe(
       'url_or_source_required',
     );
+  });
+});
+
+/**
+ * VED-372: форма статьи и катхи убирает пустые строки портальной
+ * `collapseBlankLines`. Сервер не должен переделывать её результат при
+ * сохранении — иначе автор видит в форме одно, а читатель получает другое.
+ */
+describe('normalizeEntryBody и уборка пустых строк в форме', () => {
+  // Вставка из мессенджера: «пустые» строки из пробелов и табуляций.
+  const pasted = 'Абзац один\n   \n\t\nАбзац два\n\n\n\nАбзац три';
+
+  it.each([0, 1])(
+    'сохраняет текст, убранный с «оставлять %i», без изменений',
+    (keep) => {
+      const { text } = collapseBlankLines(pasted, keep);
+      expect(normalizeEntryBody(text)).toBe(text);
+    },
+  );
+
+  it('«ни одной» склеивает абзацы в строки, и сервер этого не отменяет', () => {
+    expect(normalizeEntryBody(collapseBlankLines(pasted, 0).text)).toBe(
+      'Абзац один\nАбзац два\nАбзац три',
+    );
+  });
+
+  // Поэтому в форме «Образования» нет варианта «две»: сервер хранит не
+  // больше одной пустой строки, и выбор молча превращался бы в «одну».
+  it('двух пустых строк подряд не хранит', () => {
+    const { text } = collapseBlankLines(pasted, 2);
+    expect(normalizeEntryBody(text)).toBe(collapseBlankLines(pasted, 1).text);
   });
 });

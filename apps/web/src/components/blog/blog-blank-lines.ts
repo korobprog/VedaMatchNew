@@ -1,3 +1,4 @@
+import { collapseBlankLines, type BlankLinesResult } from "@vedamatch/shared";
 import { plural } from "@/lib/plural";
 
 /**
@@ -26,62 +27,14 @@ export const BLOG_BLANK_LINES_KEEP_CHOICES = [0, 1, 2] as const;
 /** По умолчанию не оставляем ни одной: именно об этом просил заказчик. */
 export const BLOG_BLANK_LINES_DEFAULT_KEEP = 0;
 
-export interface BlogBlankLinesResult {
-  /** Текст после уборки. */
-  text: string;
-  /** Сколько пустых строк убрано — это показывается человеку. */
-  removed: number;
-}
-
 /**
- * Убрать лишние пустые строки, оставив между абзацами не больше `keep`.
- *
- * Строки с содержимым не меняются вовсе: уборка занимается пустотой, а не
- * словами. Оставленная пустая строка становится действительно пустой —
- * пробелы и табуляции в ней не видны, но мешают следующей уборке и
- * серверному схлопыванию.
- *
- * Пустые строки в начале и в конце убираются всегда: сверху и снизу
- * абзацев, между которыми надо оставить воздух, нет.
- *
- * `keep` больше фактического числа пустых строк ничего не добавляет: это
- * «убрать лишние», а не «расставить отступы».
+ * Сама уборка — портальная функция из `@vedamatch/shared` (VED-372, вынесена
+ * при переносе в «Образование»): ею же пользуется форма статьи, и копия здесь
+ * разошлась бы с ней на первой же правке. Имена прежние, чтобы форма поста и
+ * её тесты не заметили переезда.
  */
-export function collapseBlankLines(
-  value: string,
-  keep: number = BLOG_BLANK_LINES_DEFAULT_KEEP,
-): BlogBlankLinesResult {
-  const limit = Number.isFinite(keep) ? Math.max(0, Math.trunc(keep)) : 0;
-  const normalized = value.replace(/\r\n?/g, "\n");
-  const lines = normalized.split("\n");
-
-  const out: string[] = [];
-  let pending = 0;
-  let seenContent = false;
-
-  for (const line of lines) {
-    if (line.trim() === "") {
-      pending += 1;
-      continue;
-    }
-    if (seenContent) {
-      // До первой строки с содержимым пустота не разделяет ничего, поэтому
-      // оставлять её незачем — как и в самом конце текста.
-      for (let index = 0; index < Math.min(pending, limit); index += 1) {
-        out.push("");
-      }
-    }
-    pending = 0;
-    seenContent = true;
-    out.push(line);
-  }
-
-  const text = out.join("\n");
-  // Считаем по числу строк: убираем мы только строки, а оставленную пустую
-  // всего лишь очищаем от пробелов — это не «убрано». Текст, который уборка
-  // не изменила, не убрал ничего, и пустой текст в том числе.
-  return { text, removed: text === normalized ? 0 : lines.length - out.length };
-}
+export { collapseBlankLines };
+export type BlogBlankLinesResult = BlankLinesResult;
 
 /**
  * Что сказать человеку после уборки. Отдельной функцией, потому что
