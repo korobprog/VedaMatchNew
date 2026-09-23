@@ -1,5 +1,11 @@
 import { getPublicMotivationPost } from "@/lib/motivation-api";
-import { clientHeaders, storyFileName } from "./story-file";
+import {
+  clientHeaders,
+  savedImageApiPath,
+  storyFileName,
+  storyQuality,
+  type StoryQuality,
+} from "./story-file";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -24,13 +30,17 @@ const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
  *
  * Адрес публичный, как и сама `/m/<slug>`: картинкой делятся с теми, у кого
  * аккаунта ещё нет.
+ *
+ * `?q=standard|max` — файл получше (VED-156, «3 кнопки сохранить изображение
+ * в разном качестве»); без параметра — лёгкий JPEG, как раньше.
  */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const upstream = await savedImage(slug, request.headers);
+  const quality = storyQuality(new URL(request.url).searchParams.get("q"));
+  const upstream = await savedImage(slug, quality, request.headers);
   if (upstream === "missing") return new Response("Not found", { status: 404 });
   if (!upstream) {
     // Хранилище или API молчат: пустой файл в галерее хуже честной ошибки —
@@ -44,7 +54,7 @@ export async function GET(
     headers: {
       "Content-Type": type,
       ...(length ? { "Content-Length": length } : {}),
-      "Content-Disposition": `attachment; filename="${storyFileName(slug, type)}"`,
+      "Content-Disposition": `attachment; filename="${storyFileName(slug, type, quality)}"`,
       // Файл меняется вместе с вёрсткой и правкой поста: короткий кэш снимает
       // повторные запросы и не держит старую картинку после выката.
       "Cache-Control": "public, max-age=300",
@@ -58,13 +68,14 @@ export async function GET(
  */
 async function savedImage(
   slug: string,
+  quality: StoryQuality,
   headers: Headers,
 ): Promise<Response | "missing" | null> {
   try {
-    const response = await fetch(
-      `${API_URL}/motivation/posts/${encodeURIComponent(slug)}/saved-image`,
-      { headers: clientHeaders(headers), cache: "no-store" },
-    );
+    const response = await fetch(`${API_URL}${savedImageApiPath(slug, quality)}`, {
+      headers: clientHeaders(headers),
+      cache: "no-store",
+    });
     if (response.status === 404) return "missing";
     if (response.ok && response.body) return response;
   } catch {

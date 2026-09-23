@@ -34,6 +34,7 @@ describe("postShareHref", () => {
         subtitleInPreview: "1",
         link: "/m/gita-2-62",
         file: "/m/gita-2-62/story",
+        fileQualities: "1",
         previewUrl: "https://cdn/x-story.png",
         sourceService: "motivation",
         sourceId: "gita-2-62",

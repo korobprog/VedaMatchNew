@@ -102,7 +102,32 @@ describe('MotivationSavedImageService', () => {
     await expect(service.forSlug('slug')).resolves.toEqual({
       kind: 'bytes',
       bytes: Buffer.from('jpeg'),
+      contentType: 'image/jpeg',
     });
+  });
+
+  it('максимум — своя сборка, PNG под своим ключом (VED-156)', async () => {
+    const { service, generation } = build();
+    await service.forSlug('slug', 'max');
+    const [, , quality] = compose.mock.calls[0] as [Buffer, unknown, string];
+    expect(quality).toBe('max');
+    const [key, , type] = generation.uploadStory.mock.calls[0] as [
+      string,
+      Buffer,
+      string,
+    ];
+    expect(key).toMatch(/\/s1-max-[0-9a-f]{16}\.png$/);
+    expect(type).toBe('image/png');
+  });
+
+  it('разные качества одного поста не склеиваются в одну сборку', async () => {
+    const { service } = build();
+    await Promise.all([
+      service.forSlug('slug', 'light'),
+      service.forSlug('slug', 'standard'),
+      service.forSlug('slug', 'max'),
+    ]);
+    expect(compose).toHaveBeenCalledTimes(3);
   });
 
   it('неопубликованный или чужой слаг — 404', async () => {

@@ -22,7 +22,8 @@ function one(value: string | string[] | undefined): string | undefined {
  * одной ссылки.
  *
  * `file` — путь к картинке на нашем домене (например `/m/<slug>/story`).
- * Чужой адрес сюда не пускается: см. isOwnFile.
+ * Чужой адрес сюда не пускается: см. isOwnFile. `fileQualities=1` — этот
+ * адрес отдаёт файл в трёх качествах (`?q=`), см. `SAVE_OPTIONS`.
  */
 export default async function SharePage({ searchParams }: { searchParams: Query }) {
   const user = await getProfile();
@@ -72,6 +73,10 @@ export default async function SharePage({ searchParams }: { searchParams: Query 
           link={link}
           previewUrl={one(params.previewUrl) ?? null}
           filePath={one(params.file) ?? null}
+          /* `fileQualities` — адрес файла понимает `?q=light|standard|max`,
+             и вместо одной «Сохранить картинку» будут три качества (VED-156).
+             Без параметра — одна кнопка, как было. */
+          fileQualities={one(params.fileQualities) === "1"}
           chatHref={chat.size > 0 ? `/chat/share?${chat.toString()}` : null}
         />
       </main>

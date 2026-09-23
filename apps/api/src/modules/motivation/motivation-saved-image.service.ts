@@ -8,12 +8,17 @@ import {
   savedImagePlan,
   type SavedImagePlan,
 } from './saved-image';
+import {
+  DEFAULT_SAVED_IMAGE_QUALITY,
+  savedImageFileType,
+  type SavedImageQuality,
+} from './saved-image-quality';
 
 export type SavedImageResult =
   /** Файл уже лежит в хранилище — отдаём ссылку на него. */
   | { kind: 'stored'; url: string }
   /** Хранилища нет (dev) или записать не вышло — отдаём байты напрямую. */
-  | { kind: 'bytes'; bytes: Buffer };
+  | { kind: 'bytes'; bytes: Buffer; contentType: string };
 
 /**
  * Файл для «Сохранить картинку» и «Отправить в приложение» (VED-227,
@@ -35,7 +40,10 @@ export class MotivationSavedImageService {
     private readonly generation: MotivationGenerationService,
   ) {}
 
-  async forSlug(slug: string): Promise<SavedImageResult> {
+  async forSlug(
+    slug: string,
+    quality: SavedImageQuality = DEFAULT_SAVED_IMAGE_QUALITY,
+  ): Promise<SavedImageResult> {
     const post = await this.prisma.motivationPost.findFirst({
       where: { slug, status: 'published' },
       select: {
@@ -81,10 +89,10 @@ export class MotivationSavedImageService {
     });
     if (!plan) throw new NotFoundException('У публикации нет картинки');
 
-    const key = savedImageKey(post.id, plan);
+    const key = savedImageKey(post.id, plan, quality);
     const running = this.inflight.get(key);
     if (running) return running;
-    const task = this.resolve(key, plan).finally(() =>
+    const task = this.resolve(key, plan, quality).finally(() =>
       this.inflight.delete(key),
     );
     this.inflight.set(key, task);
@@ -94,6 +102,7 @@ export class MotivationSavedImageService {
   private async resolve(
     key: string,
     plan: SavedImagePlan,
+    quality: SavedImageQuality,
   ): Promise<SavedImageResult> {
     const stored = await this.generation.findUploaded(key);
     if (stored) return { kind: 'stored', url: stored };
@@ -106,15 +115,17 @@ export class MotivationSavedImageService {
     const bytes = await composeSavedImage(
       Buffer.from(await response.arrayBuffer()),
       plan,
+      quality,
     );
+    const { contentType } = savedImageFileType(quality);
     try {
-      const url = await this.generation.uploadStory(key, bytes, 'image/jpeg');
+      const url = await this.generation.uploadStory(key, bytes, contentType);
       return { kind: 'stored', url };
     } catch (error) {
       // Без хранилища (локальная разработка) или при его сбое файл всё равно
       // нужен человеку прямо сейчас — отдаём собранное, кэш подождёт.
       this.logger.warn(`Saved image not cached (${key}): ${String(error)}`);
-      return { kind: 'bytes', bytes };
+      return { kind: 'bytes', bytes, contentType };
     }
   }
 }

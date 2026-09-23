@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  SAVE_OPTIONS,
   canShareFiles,
+  formatFileSize,
   isTelegramWebView,
+  qualityFileName,
+  qualityFilePath,
+  saveOptionState,
   shareButtonState,
   shareFileName,
   unsupportedShareMessage,
@@ -105,5 +110,71 @@ describe("unsupportedShareMessage", () => {
   it("в Telegram подсказывает, как выйти в Chrome", () => {
     expect(unsupportedShareMessage(true)).toContain("Открыть в браузере");
     expect(unsupportedShareMessage(false)).toContain("Сохранить картинку");
+  });
+});
+
+/**
+ * VED-156, дописка от 23.09: «Сделай 3 кнопки сохранить изображение в разном
+ * качестве, чтобы когда нужно хорошее качество можно было его получить».
+ */
+describe("три качества «Сохранить картинку»", () => {
+  const nbsp = "\u00a0";
+
+  it("три варианта по возрастанию веса, у каждого — оценка", () => {
+    expect(SAVE_OPTIONS.map((option) => option.quality)).toEqual([
+      "light",
+      "standard",
+      "max",
+    ]);
+    for (const option of SAVE_OPTIONS) expect(option.estimate).toMatch(/МБ$/);
+  });
+
+  it("адрес: лёгкое — прежний, остальные — с параметром качества", () => {
+    expect(qualityFilePath("/m/post/story", "light")).toBe("/m/post/story");
+    expect(qualityFilePath("/m/post/story", "standard")).toBe("/m/post/story?q=standard");
+    expect(qualityFilePath("/m/post/story?v=2", "max")).toBe("/m/post/story?v=2&q=max");
+  });
+
+  it("имя файла: у качеств разные, лёгкое — прежнее", () => {
+    expect(qualityFileName("/m/reel-33e14d6e-mu376h10/story", "image/jpeg", "light")).toBe(
+      "vedamatch-reel-33e14d6e-mu376h10.jpg",
+    );
+    expect(qualityFileName("/m/reel-33e14d6e-mu376h10/story", "image/jpeg", "standard")).toBe(
+      "vedamatch-reel-33e14d6e-mu376h10-hq.jpg",
+    );
+    expect(qualityFileName("/m/reel-33e14d6e-mu376h10/story", "image/png", "max")).toBe(
+      "vedamatch-reel-33e14d6e-mu376h10-max.png",
+    );
+  });
+
+  it("вес по-русски, число не отрывается от единицы", () => {
+    expect(formatFileSize(431_583)).toBe(`421${nbsp}КБ`);
+    expect(formatFileSize(2_933_000)).toBe(`2,8${nbsp}МБ`);
+    expect(formatFileSize(12_000_000)).toBe(`11${nbsp}МБ`);
+    expect(formatFileSize(10)).toBe(`1${nbsp}КБ`);
+  });
+
+  it("кнопка: оценка → индикатор → отметка с точным весом", () => {
+    const estimate = SAVE_OPTIONS[2]!.estimate;
+    expect(saveOptionState({ phase: "idle", size: null, estimate })).toEqual({
+      note: estimate,
+      busy: false,
+      saved: false,
+    });
+    expect(saveOptionState({ phase: "loading", size: null, estimate })).toEqual({
+      note: "Готовим…",
+      busy: true,
+      saved: false,
+    });
+    expect(saveOptionState({ phase: "saved", size: 2_933_000, estimate })).toEqual({
+      note: `✓ Сохранено · 2,8${nbsp}МБ`,
+      busy: false,
+      saved: true,
+    });
+    // Получили и отметка погасла — остаётся точный вес, а не оценка.
+    expect(saveOptionState({ phase: "idle", size: 2_933_000, estimate }).note).toBe(
+      `2,8${nbsp}МБ`,
+    );
+    expect(saveOptionState({ phase: "failed", size: null, estimate }).busy).toBe(false);
   });
 });

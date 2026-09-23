@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clientHeaders, storyFileName } from "./story-file";
+import {
+  clientHeaders,
+  savedImageApiPath,
+  storyFileName,
+  storyQuality,
+} from "./story-file";
 
 describe("storyFileName", () => {
   it("называет файл по слагу и настоящему типу", () => {
@@ -23,5 +28,27 @@ describe("clientHeaders", () => {
       cookie: "access_token=secret",
     });
     expect(clientHeaders(headers)).toEqual({ "x-forwarded-for": "203.0.113.7" });
+  });
+});
+
+describe("качество файла (VED-156)", () => {
+  it("пропускает только белый список, остальное — лёгкое", () => {
+    expect(storyQuality("standard")).toBe("standard");
+    expect(storyQuality("max")).toBe("max");
+    expect(storyQuality("light")).toBe("light");
+    expect(storyQuality(null)).toBe("light");
+    expect(storyQuality("MAX")).toBe("light");
+    expect(storyQuality("max&x=1")).toBe("light");
+  });
+
+  it("у каждого качества своё имя файла, лёгкое — прежнее", () => {
+    expect(storyFileName("post", "image/jpeg", "light")).toBe("vedamatch-post.jpg");
+    expect(storyFileName("post", "image/jpeg", "standard")).toBe("vedamatch-post-hq.jpg");
+    expect(storyFileName("post", "image/png", "max")).toBe("vedamatch-post-max.png");
+  });
+
+  it("лёгкое уходит в API без параметра, остальные — с ним", () => {
+    expect(savedImageApiPath("a b", "light")).toBe("/motivation/posts/a%20b/saved-image");
+    expect(savedImageApiPath("post", "max")).toBe("/motivation/posts/post/saved-image?q=max");
   });
 });

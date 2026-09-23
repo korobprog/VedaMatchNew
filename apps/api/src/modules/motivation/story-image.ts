@@ -480,6 +480,13 @@ export function buildStoryOverlaySvg(input: StoryOverlayInput): string {
  */
 export async function renderStoryOverlay(
   input: StoryOverlayInput,
+  /**
+   * Во сколько раз крупнее 1080×1920 нужен слой: «Максимум» сохраняемого
+   * файла (VED-156). Раскладка считается в прежних единицах, а SVG
+   * растрируется с большей плотностью — текст остаётся векторно-чётким, и
+   * вёрстка не расходится с обычным кадром ни на пиксель в пропорциях.
+   */
+  scale = 1,
 ): Promise<Buffer> {
   const maxWidth = (STORY_WIDTH - SIDE_PADDING * 2) * WIDTH_SAFETY;
   // Ступень подбираем тем же вызовом, что и SVG: разъедься эти два расчёта —
@@ -495,11 +502,29 @@ export async function renderStoryOverlay(
     layout: input.layout,
   });
   const logo = await sharp(brandLogoBuffer())
-    .resize(box.width, box.height, { fit: 'contain', background: TRANSPARENT })
+    .resize(Math.round(box.width * scale), Math.round(box.height * scale), {
+      fit: 'contain',
+      background: TRANSPARENT,
+    })
     .png()
     .toBuffer();
-  return sharp(Buffer.from(buildStoryOverlaySvg(input)))
-    .composite([{ input: logo, left: box.left, top: box.top }])
+  const svg = Buffer.from(buildStoryOverlaySvg(input));
+  const text =
+    scale === 1
+      ? sharp(svg)
+      : sharp(svg, { density: 72 * scale }).resize(
+          Math.round(STORY_WIDTH * scale),
+          Math.round(STORY_HEIGHT * scale),
+          { fit: 'fill' },
+        );
+  return sharp(await text.png().toBuffer())
+    .composite([
+      {
+        input: logo,
+        left: Math.round(box.left * scale),
+        top: Math.round(box.top * scale),
+      },
+    ])
     .png()
     .toBuffer();
 }
@@ -538,14 +563,25 @@ export async function composeStoryImage(
 export async function frameStoryImage(
   background: Buffer,
   overlay: StoryOverlayInput,
+  /**
+   * Размер кадра, 9:16. По умолчанию 1080×1920; крупнее — только для
+   * «Максимума» сохраняемого файла, и только если исходник позволяет.
+   */
+  size: { width: number; height: number } = {
+    width: STORY_WIDTH,
+    height: STORY_HEIGHT,
+  },
 ): Promise<Buffer> {
   const canvas = await sharp(background)
-    .resize(STORY_WIDTH, STORY_HEIGHT, { fit: 'cover', position: 'attention' })
+    .resize(size.width, size.height, { fit: 'cover', position: 'attention' })
     .toBuffer();
   return sharp(canvas)
     .composite([
       {
-        input: await renderStoryOverlay({ layout: 'row', ...overlay }),
+        input: await renderStoryOverlay(
+          { layout: 'row', ...overlay },
+          size.width / STORY_WIDTH,
+        ),
         top: 0,
         left: 0,
       },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { copyText } from "@/lib/copy-text";
 import { detectDisplayMode } from "@/lib/pwa/browser";
@@ -16,14 +16,23 @@ import {
   type MessengerId,
 } from "./share-targets";
 import {
+  SAVE_OPTIONS,
   canShareFiles,
   isTelegramWebView,
+  qualityFileName,
+  qualityFilePath,
+  saveOptionState,
   shareButtonState,
   shareFileName,
   toJpeg,
   unsupportedShareMessage,
   type FilePrepare,
+  type SavePhase,
+  type SaveQuality,
 } from "./share-file";
+
+/** Файл одного качества, уже полученный страницей. */
+type SavedFile = { url: string; name: string; size: number };
 
 /**
  * Экран «Поделиться»: две дороги, а не общий список кнопок.
@@ -41,6 +50,7 @@ export function ShareView({
   link,
   previewUrl,
   filePath,
+  fileQualities = false,
   chatHref,
 }: {
   text: string;
@@ -61,11 +71,28 @@ export function ShareView({
   previewUrl: string | null;
   /** Путь к файлу на нашем домене; null — картинки у карточки нет. */
   filePath: string | null;
+  /**
+   * Адрес файла понимает `?q=light|standard|max` — тогда вместо одной кнопки
+   * «Сохранить картинку» три качества (VED-156). Знает об этом только сервис,
+   * поэтому знание приходит адресом, как `sourceInPreview`.
+   */
+  fileQualities?: boolean;
   chatHref: string | null;
 }) {
   const [copied, setCopied] = useState<"text" | "link" | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  /** Что сохраняется прямо сейчас и что уже получено — по качествам. */
+  const [phases, setPhases] = useState<Record<SaveQuality, SavePhase>>({
+    light: "idle",
+    standard: "idle",
+    max: "idle",
+  });
+  const [heavy, setHeavy] = useState<Partial<Record<SaveQuality, SavedFile>>>({});
+  /** Какое качество сохранили последним — о нём говорит строка статуса. */
+  const [lastSaved, setLastSaved] = useState<SaveQuality | null>(null);
+  const savedTimers = useRef<Partial<Record<SaveQuality, number>>>({});
+  const heavyUrls = useRef<string[]>([]);
+  const saveLabelId = useId();
   /** Картинка, готовая к отдаче: скачана и переведена в JPEG заранее. */
   const [prepared, setPrepared] = useState<{ file: File; url: string } | null>(
     null,
@@ -126,6 +153,15 @@ export function ShareView({
       if (url) URL.revokeObjectURL(url);
     };
   }, [file]);
+
+  useEffect(() => {
+    const urls = heavyUrls.current;
+    const timers = savedTimers.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      Object.values(timers).forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
 
   async function copy(what: "text" | "link") {
     // Не скопировалось ни одним способом — текст остаётся на экране, его
@@ -206,9 +242,70 @@ export function ShareView({
    * было непонятно, нажалось ли. Самого конца загрузки браузер странице не
    * сообщает — говорим, что сохраняем и где искать.
    */
-  function markSaved() {
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 5000);
+  function markSaved(quality: SaveQuality) {
+    setPhases((current) => ({ ...current, [quality]: "saved" }));
+    setLastSaved(quality);
+    window.clearTimeout(savedTimers.current[quality]);
+    savedTimers.current[quality] = window.setTimeout(() => {
+      setPhases((current) =>
+        current[quality] === "saved" ? { ...current, [quality]: "idle" } : current,
+      );
+      setLastSaved((current) => (current === quality ? null : current));
+    }, 5000);
+  }
+
+  /** Готовый файл качества: лёгкий приготовлен заранее, остальные — по нажатию. */
+  function savedFile(quality: SaveQuality): SavedFile | null {
+    if (quality === "light")
+      return prepared
+        ? { url: prepared.url, name: prepared.file.name, size: prepared.file.size }
+        : null;
+    return heavy[quality] ?? null;
+  }
+
+  /**
+   * Нажатие на качество. Лёгкий файл уже лежит в памяти (или качается
+   * браузером по прямому адресу), и ссылка просто срабатывает. Хорошее и
+   * максимум заранее не грузим — это лишние мегабайты для тех, кому они не
+   * нужны; по нажатию страница сама получает файл, крутит индикатор и
+   * отдаёт файл браузеру. Так видно, что идёт работа, даже когда сборка
+   * PNG на сервере занимает пару секунд.
+   */
+  function save(event: React.MouseEvent<HTMLAnchorElement>, quality: SaveQuality) {
+    if (!file) return;
+    if (phases[quality] === "loading") {
+      event.preventDefault();
+      return;
+    }
+    setFileError(null);
+    if (quality === "light" || savedFile(quality)) {
+      markSaved(quality);
+      return;
+    }
+    event.preventDefault();
+    void fetchAndSave(quality);
+  }
+
+  async function fetchAndSave(quality: Exclude<SaveQuality, "light">) {
+    if (!file) return;
+    const title = SAVE_OPTIONS.find((option) => option.quality === quality)!.title;
+    setPhases((current) => ({ ...current, [quality]: "loading" }));
+    try {
+      const response = await fetch(qualityFilePath(file, quality));
+      if (!response.ok) throw new Error(String(response.status));
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      heavyUrls.current.push(url);
+      const name = qualityFileName(file, blob.type || "image/jpeg", quality);
+      setHeavy((current) => ({ ...current, [quality]: { url, name, size: blob.size } }));
+      downloadUrl(url, name);
+      markSaved(quality);
+    } catch {
+      setPhases((current) => ({ ...current, [quality]: "failed" }));
+      setFileError(
+        `Не получилось подготовить картинку «${title}». Нажмите ещё раз или сохраните «Лёгкое».`,
+      );
+    }
   }
 
   /**
@@ -241,6 +338,10 @@ export function ShareView({
     }, 1200);
   }
 
+  /** Качество, которое страница сейчас получает, — для строки статуса. */
+  const preparing =
+    SAVE_OPTIONS.find((option) => phases[option.quality] === "loading")?.title ?? null;
+
   return (
     <div className="space-y-6">
       <section className="glass overflow-hidden rounded-2xl border border-glass-brd">
@@ -264,15 +365,54 @@ export function ShareView({
           Истории ссылку не принимают — им нужен файл. Сохраните картинку или
           отдайте её сразу в приложение.
         </p>
-        {file ? (
+        {file && fileQualities ? (
+          <div className="space-y-3">
+            <div role="group" aria-labelledby={saveLabelId}>
+              <p id={saveLabelId} className="text-sm font-semibold text-text-0">
+                Сохранить картинку
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {SAVE_OPTIONS.map((option) => {
+                  const ready = savedFile(option.quality);
+                  return (
+                    <SaveOption
+                      key={option.quality}
+                      title={option.title}
+                      hint={option.hint}
+                      href={ready?.url ?? qualityFilePath(file, option.quality)}
+                      download={
+                        ready?.name ??
+                        qualityFileName(
+                          file,
+                          option.quality === "max" ? "image/png" : "image/jpeg",
+                          option.quality,
+                        )
+                      }
+                      state={saveOptionState({
+                        phase: phases[option.quality],
+                        size: ready?.size ?? null,
+                        estimate: option.estimate,
+                      })}
+                      onClick={(event) => save(event, option.quality)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            <ShareFileButton
+              state={shareButtonState({ prepare, sharing })}
+              onClick={() => void shareFile()}
+            />
+          </div>
+        ) : file ? (
           <div className="flex flex-wrap gap-2">
             <a
               href={prepared?.url ?? file}
               download={prepared?.file.name ?? shareFileName(file, "image/jpeg")}
-              onClick={markSaved}
+              onClick={() => markSaved("light")}
               className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 py-2 text-sm font-semibold"
             >
-              {saved ? "✓ Картинка сохранена" : "Сохранить картинку"}
+              {phases.light === "saved" ? "✓ Картинка сохранена" : "Сохранить картинку"}
             </a>
             <ShareFileButton
               state={shareButtonState({ prepare, sharing })}
@@ -284,7 +424,9 @@ export function ShareView({
         )}
         {/* Статус, а не всплывашка: скринридер прочитает, и глазу видно. */}
         <p role="status" aria-live="polite" className="text-sm text-text-1">
-          {saved
+          {preparing
+            ? `Готовим картинку «${preparing}» — это займёт несколько секунд.`
+            : lastSaved
             ? "Картинка сохраняется в «Загрузки» — оттуда её можно выложить в историю или статус."
             : waitNote
               ? "Картинка ещё готовится — подождите пару секунд, кнопка оживёт сама."
@@ -358,6 +500,70 @@ export function ShareView({
         через «Отправить в приложение».
       </p>
     </div>
+  );
+}
+
+/**
+ * Отдать браузеру уже полученный файл: невидимая ссылка со `download`.
+ * Адрес свой (`blob:`), поэтому имя файла браузер соблюдает.
+ */
+function downloadUrl(url: string, name: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+/**
+ * Одно качество «Сохранить картинку» (VED-156): название, для чего оно и
+ * вес файла. Пока файл готовится — крутится значок; сохранили — отметка и
+ * точный вес. Ссылка, а не кнопка: без скриптов и по долгому нажатию
+ * («Скачать ссылку») файл всё равно скачивается по прямому адресу.
+ */
+function SaveOption({
+  title,
+  hint,
+  href,
+  download,
+  state,
+  onClick,
+}: {
+  title: string;
+  hint: string;
+  href: string;
+  download: string;
+  state: { note: string; busy: boolean; saved: boolean };
+  onClick: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  return (
+    <a
+      href={href}
+      download={download}
+      onClick={onClick}
+      aria-busy={state.busy || undefined}
+      aria-disabled={state.busy || undefined}
+      className={`flex min-h-11 flex-col justify-center gap-0.5 rounded-xl border px-4 py-2 transition-colors hover:border-text-2 ${
+        state.saved ? "border-text-2" : "border-glass-brd"
+      } ${state.busy ? "cursor-progress" : ""}`}
+    >
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-semibold text-text-0">{title}</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-1">
+          {state.busy && (
+            <span
+              aria-hidden="true"
+              data-testid="save-spinner"
+              className="inline-block size-3 shrink-0 self-center rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
+            />
+          )}
+          {state.note}
+        </span>
+      </span>
+      <span className="text-xs text-text-1">{hint}</span>
+    </a>
   );
 }
 
