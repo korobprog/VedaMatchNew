@@ -225,6 +225,18 @@ export default function ServicesScreen() {
           <Text style={[styles.accountLinkText, { color: colors.text0 }]}>Аккаунт и способы входа</Text>
           <Text style={[styles.accountLinkArrow, { color: colors.text1 }]}>›</Text>
         </Pressable>
+
+        {/* Поддержка (VED-336) — рядом с «Аккаунтом»: на сайте она в панели
+            горячих кнопок, здесь «Сервисы» — то же место «всего остального». */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/support')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [styles.accountLink, { borderColor: colors.glassBorder, backgroundColor: colors.glass }, pressedStyle(pressed)]}
+        >
+          <Text style={[styles.accountLinkText, { color: colors.text0 }]}>Поддержка</Text>
+          <Text style={[styles.accountLinkArrow, { color: colors.text1 }]}>›</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );

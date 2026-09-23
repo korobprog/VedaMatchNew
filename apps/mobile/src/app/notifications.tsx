@@ -17,6 +17,7 @@ import { InlineError } from '@/components/inline-error';
 import { InboxSearchBox } from '@/components/notifications/inbox-search-box';
 import { NotificationCard } from '@/components/notifications/notification-card';
 import { RetryButton } from '@/components/retry-button';
+import { SupportLink } from '@/components/support/support-link';
 import { ChatListSkeleton } from '@/components/skeleton';
 import { appVariant } from '@/config/app-variant';
 import { serviceUrl } from '@/config/services';
@@ -302,6 +303,7 @@ export default function NotificationsScreen() {
               {loadError}
             </Text>
             <RetryButton onPress={() => void load(applied)} />
+            <SupportLink from="notifications" />
           </View>
         ) : (
           <ChatListSkeleton />

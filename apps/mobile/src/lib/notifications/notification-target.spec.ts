@@ -67,9 +67,10 @@ describe('resolveNotificationTarget', () => {
       kind: 'site',
       path: '/updates/news',
     });
-    expect(resolveNotificationTarget('/support/t-1')).toEqual({
+    // Гостевая ссылка на обращение — не обращение аккаунта, её держит сайт.
+    expect(resolveNotificationTarget('/support/track/tok')).toEqual({
       kind: 'site',
-      path: '/support/t-1',
+      path: '/support/track/tok',
     });
     // `?reel=` нужен форме: без него откроется пустая, а не тот рилс.
     expect(resolveNotificationTarget('/motivation/create?reel=r-1')).toEqual({
@@ -149,6 +150,17 @@ describe('pushDestination', () => {
       kind: 'route',
       pathname: '/notifications',
     });
+  });
+
+  it('ответ поддержки открывает само обращение, без id — список обращений (VED-336)', () => {
+    expect(resolveNotificationTarget('/support/t-1')).toEqual({ kind: 'support', ticketId: 't-1' });
+    expect(pushDestination('/support/t-1')).toEqual({
+      kind: 'route',
+      pathname: '/support/[id]',
+      params: { id: 't-1' },
+    });
+    expect(pushDestination('/support')).toEqual({ kind: 'route', pathname: '/support' });
+    expect(inboxDestination('/support/t-1?x=1').kind).toBe('route');
   });
 
   it('пуш без адреса ведёт в ленту, а не на список чатов', () => {
