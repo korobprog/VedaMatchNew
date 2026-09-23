@@ -79,6 +79,7 @@ import {
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
+import { BOARD_REFRESH_MS, shouldApplyBoardRefresh } from "./board-refresh";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
 import {
   MAX_FILES_AT_ONCE,
@@ -120,7 +121,17 @@ async function fetchSpaceBoard(
 
 export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [space, setSpace] = useState<WorkSpaceDto | null>(null);
-  const [board, setBoard] = useState<WorkBoardDto | null>(null);
+  const [board, setBoardState] = useState<WorkBoardDto | null>(null);
+  /* Номер своей правки доски (VED-272): каждая подстановка доски его
+     увеличивает. Перечитывание по таймеру сверяется с ним и не затирает
+     правку, сделанную, пока шёл запрос. */
+  const boardEdits = useRef(0);
+  const setBoard = useCallback((next: WorkBoardDto | null) => {
+    boardEdits.current += 1;
+    setBoardState(next);
+  }, []);
+  /** Сколько переносов ещё летит на сервер: доску под ними не перечитываем. */
+  const pendingMoves = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   /** Архив доски (VED-61): выполненные и убранные карточки. */
@@ -172,6 +183,55 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
      находки. Запрос при этом остаётся в поле — см. `searchBoardColumns`. */
   const [revealAll, setRevealAll] = useState(false);
   const boardId = board?.id;
+  const dragging = useRef(false);
+  useEffect(() => {
+    dragging.current = drag !== null;
+  }, [drag]);
+
+  /* Доска догоняет чужие правки (VED-272): вернулись на вкладку — и раз в
+     минуту, пока она на экране. Тестировщик перенёс карточку в «Выполнено»
+     — у остальных ярлык сменится без перезагрузки, как пометка в ленте. */
+  useEffect(() => {
+    if (!boardId) return;
+    let alive = true;
+    let inFlight = false;
+    async function refresh() {
+      if (!boardId || inFlight || document.visibilityState !== "visible") {
+        return;
+      }
+      if (pendingMoves.current > 0 || dragging.current) return;
+      inFlight = true;
+      const startedAt = boardEdits.current;
+      try {
+        const next = await getWorkBoard(boardId);
+        const apply = shouldApplyBoardRefresh({
+          startedAt,
+          current: boardEdits.current,
+          pendingMoves: pendingMoves.current,
+          dragging: dragging.current,
+        });
+        // Своим сеттером, а не `setBoard`: номер правки двигают только
+        // правки человека, иначе таймер отменял бы сам себя.
+        if (alive && apply) setBoardState(next);
+      } catch {
+        // Молча: сеть моргнула — следующий тик принесёт свежее, а ошибка
+        // поверх доски, которую человек не трогал, только пугала бы.
+      } finally {
+        inFlight = false;
+      }
+    }
+    const onVisible = () => void refresh();
+    const timer = window.setInterval(onVisible, BOARD_REFRESH_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [boardId]);
+
   useEffect(() => {
     if (!boardId || !isTaskQuery(query)) return;
     const text = query.trim();
@@ -245,13 +305,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     return () => {
       alive = false;
     };
-  }, [spaceId]);
+  }, [spaceId, setBoard]);
 
   const reload = useCallback(async () => {
     const loaded = await fetchSpaceBoard(spaceId);
     setSpace(loaded.space);
     setBoard(loaded.board);
-  }, [spaceId]);
+  }, [spaceId, setBoard]);
 
   /* Вернулись к выведенному заголовку — вернуть и фокус на кнопку, которой
      это сделали: она пересоздаётся, и без этого фокус остаётся на `body`.
@@ -293,6 +353,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       const before = board;
       const next = moveTaskLocally(board, taskId, columnId, index);
       setBoard(next);
+      pendingMoves.current += 1;
       try {
         await moveWorkTask(taskId, {
           columnId,
@@ -301,9 +362,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       } catch (cause) {
         setBoard(before);
         setError(cause instanceof Error ? cause.message : "Перенос не удался");
+      } finally {
+        pendingMoves.current -= 1;
       }
     },
-    [board, collapsed],
+    [board, collapsed, setBoard],
   );
 
   function measure(): Pick<DragState, "columns" | "cardsByColumn"> {
