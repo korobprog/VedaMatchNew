@@ -299,15 +299,18 @@ export function QuickPanel({
       ? "Горячие кнопки"
       : SHEET_TITLES[view];
 
+  /* Кнопки в шапке 44×44 — палец по ним попадает с первого раза; значок
+     прежний, 20px. Промежуток меньше соседского: поле нажатия у каждой и
+     так шире значка, и ряд на экране 320 не расползается. */
   return (
-    <div className="relative flex items-center gap-2" ref={panelRef}>
+    <div className="relative flex items-center gap-0.5" ref={panelRef}>
       <button
         type="button"
         onClick={() => show("history")}
         aria-expanded={view === "history"}
         aria-label="История"
         title="История"
-        className="flex size-9 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+        className="flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
       >
         <History className="size-5" />
       </button>
@@ -317,7 +320,7 @@ export function QuickPanel({
         onClick={() => show("tiles")}
         aria-expanded={view === "tiles"}
         aria-label="Горячие кнопки"
-        className="flex size-9 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+        className="flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
       >
         <Sparkles className="size-5" />
       </button>
