@@ -32,6 +32,7 @@ import {
   type UploadedPreviewFile,
 } from './library-entries.service';
 import { LibraryFilesService } from './library-files.service';
+import { LibraryShlokasService } from './library-shlokas.service';
 import { isAdmin } from './is-admin';
 
 @Controller('library/entries')
@@ -42,6 +43,7 @@ export class LibraryEntriesController {
     private readonly bookmarks: LibraryBookmarksService,
     private readonly comments: LibraryCommentsService,
     private readonly files: LibraryFilesService,
+    private readonly shlokas: LibraryShlokasService,
   ) {}
 
   @Get()
@@ -109,8 +111,11 @@ export class LibraryEntriesController {
     @Param('id') id: string,
   ) {
     const keys = await this.files.keysOf(id);
+    // Картинки шлоки (VED-386) — тем же порядком: ключи до, объекты после.
+    const imageKeys = await this.shlokas.imageKeysOf(id);
     await this.entries.remove(user.sub, isAdmin(user), id);
     await this.files.removeObjects(keys);
+    await this.shlokas.removeObjects(imageKeys);
   }
 
   @Post(':id/preview')

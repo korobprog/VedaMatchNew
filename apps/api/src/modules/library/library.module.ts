@@ -20,6 +20,8 @@ import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
 import { LibraryBookStorageService } from './library-book-storage.service';
 import { LibraryFilesService } from './library-files.service';
+import { LibraryShlokasController } from './library-shlokas.controller';
+import { LibraryShlokasService } from './library-shlokas.service';
 
 @Module({
   // CommunitiesModule — портальная инфраструктура, разрешённая контрактом:
@@ -33,6 +35,7 @@ import { LibraryFilesService } from './library-files.service';
     LibraryPreferencesController,
     LibraryAdminController,
     LibrarySectionRequestsController,
+    LibraryShlokasController,
   ],
   providers: [
     LibraryCategoriesService,
@@ -46,6 +49,7 @@ import { LibraryFilesService } from './library-files.service';
     LibraryAdminService,
     LibrarySectionRequestsService,
     LibraryAssistantListener,
+    LibraryShlokasService,
   ],
 })
 export class LibraryModule {}

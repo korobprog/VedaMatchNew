@@ -14,6 +14,8 @@ import type {
   LibraryFeedResponse,
   LibraryPreferencesDto,
   LibrarySectionRequestsState,
+  LibraryShlokaDto,
+  LibraryShlokaListResponse,
 } from "@vedamatch/shared";
 import { buildLibraryQuery } from "./library-query";
 
@@ -60,6 +62,16 @@ export const getLibraryEntry = (id: string) =>
 export const getLibraryComments = (entryId: string) =>
   libraryGet<LibraryCommentsResponse>(
     `/library/entries/${encodeURIComponent(entryId)}/comments`,
+  );
+
+/** Окно шлоки со стрелками по источнику (VED-386). */
+export const getLibraryShloka = (id: string) =>
+  libraryGet<LibraryShlokaDto>(`/library/shlokas/${encodeURIComponent(id)}`);
+
+/** Шлоки рубрики по порядку стихов — первая страница окна источника. */
+export const getLibraryShlokaList = (categorySlug: string) =>
+  libraryGet<LibraryShlokaListResponse>(
+    `/library/shlokas?category=${encodeURIComponent(categorySlug)}`,
   );
 
 export const getLibraryPreferences = () =>

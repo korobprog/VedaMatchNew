@@ -1,9 +1,26 @@
 import "@testing-library/jest-dom/vitest";
 import "fake-indexeddb/auto";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
 afterEach(() => cleanup());
+
+/**
+ * `next/font/google` работает только внутри сборщика Next: в vitest вызов
+ * шрифта — не функция, и падает сам импорт компонента. Шрифт стиха шлоки
+ * (VED-386) подключается в компоненте карточки ленты, поэтому без заглушки
+ * падали бы все тесты ленты Образования. Тестам нужна разметка, не шрифт.
+ */
+vi.mock("next/font/google", () => {
+  const font = () => ({ className: "", variable: "", style: { fontFamily: "" } });
+  return {
+    Tiro_Devanagari_Sanskrit: font,
+    Noto_Serif: font,
+    Unbounded: font,
+    Manrope: font,
+    IBM_Plex_Mono: font,
+  };
+});
 
 /**
  * jsdom не реализует EventSource, а живые ленты (друзья, чат) открывают его

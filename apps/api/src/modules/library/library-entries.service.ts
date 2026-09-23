@@ -71,6 +71,14 @@ const ENTRY_TYPES: LibraryEntryType[] = [
   'community',
   'other',
 ];
+/**
+ * Шлока (VED-386) в ленте фильтруется наравне с остальными, но общей
+ * формой не создаётся и в другой тип не превращается: её поля живут в
+ * `LibraryShloka`, и заводит их `LibraryShlokasService`.
+ */
+const FEED_TYPES: LibraryEntryType[] = [...ENTRY_TYPES, 'shloka'];
+/** Стих в карточке ленты — только начало: хватает на две-три строки. */
+const FEED_SHLOKA_TEXT_LENGTH = 400;
 
 export interface UploadedPreviewFile {
   buffer: Buffer;
@@ -83,6 +91,12 @@ export interface LibraryFeedFilters {
   /** `'false'` — только сама рубрика, без вложенных. */
   withDescendants?: string;
   type?: string;
+  /**
+   * Тип, который из ленты убрать. Нужен окну источника шлок: сами шлоки
+   * там стоят списком по порядку стихов, а ниже — остальные материалы
+   * раздела. Принимается только `shloka`.
+   */
+  excludeType?: string;
   language?: string;
   sort?: string;
   q?: string;
@@ -137,6 +151,7 @@ const ENTRY_SELECT = {
       },
     },
   },
+  shloka: { select: { verse: true, text: true } },
 } satisfies Prisma.LibraryEntrySelect;
 
 /**
@@ -481,7 +496,12 @@ export class LibraryEntriesService {
       }
     }
 
-    if (body.type !== undefined) {
+    if (body.type !== undefined && body.type !== existing.type) {
+      // Шлока в другой тип не превращается и из другого не получается:
+      // её поля живут отдельно и заводятся своей формой (VED-386).
+      if (existing.type === 'shloka') {
+        throw new BadRequestException('shloka_type_locked');
+      }
       if (!ENTRY_TYPES.includes(body.type)) {
         throw new BadRequestException('unsupported_type');
       }
@@ -796,9 +816,11 @@ export class LibraryEntriesService {
 
     if (
       filters.type &&
-      ENTRY_TYPES.includes(filters.type as LibraryEntryType)
+      FEED_TYPES.includes(filters.type as LibraryEntryType)
     ) {
       where.type = filters.type as LibraryEntryType;
+    } else if (filters.excludeType === 'shloka') {
+      where.type = { not: 'shloka' };
     }
     if (filters.language) {
       where.contentLanguage = normalizeLanguage(filters.language);
@@ -1034,5 +1056,14 @@ function toEntryDto(
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
     hasCustomPreview: entry.previewIsCustom,
+    // Только у шлоки: у остальных ключа нет вовсе, а не `null`.
+    ...(entry.shloka
+      ? {
+          shloka: {
+            verse: entry.shloka.verse,
+            text: entry.shloka.text.slice(0, FEED_SHLOKA_TEXT_LENGTH),
+          },
+        }
+      : {}),
   };
 }
