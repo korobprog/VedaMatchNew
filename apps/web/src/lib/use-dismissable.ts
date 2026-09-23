@@ -11,11 +11,18 @@ export function useDismissable(
   ref: RefObject<HTMLElement | null>,
   onClose: () => void,
   active = true,
+  /**
+   * Элемент снаружи, тап по которому НЕ закрывает: кнопка-переключатель,
+   * которая закроет сама своим кликом. Без этого тап закрывал, а клик следом
+   * открывал заново.
+   */
+  except?: RefObject<HTMLElement | null>,
 ) {
   useEffect(() => {
     if (!active) return;
     function onPointerDown(event: MouseEvent | TouchEvent) {
       const target = event.target as Node | null;
+      if (target && except?.current?.contains(target)) return;
       if (ref.current && target && !ref.current.contains(target)) onClose();
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -32,7 +39,7 @@ export function useDismissable(
       document.removeEventListener("touchstart", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [ref, onClose, active]);
+  }, [ref, onClose, active, except]);
 }
 
 /**

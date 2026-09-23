@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Columns2,
   HeartHandshake,
+  History,
   Images,
   Info,
   Mail,
@@ -49,6 +50,7 @@ import {
   usePortalWindows,
 } from "./portal-windows-store";
 import { CalculatorPad } from "./calculator-pad";
+import { HistorySheet } from "./history-sheet";
 import { FittedLabel } from "./fitted-label";
 import {
   BUILTIN_QUICK_ACTIONS,
@@ -94,6 +96,7 @@ const ICONS: Record<
 > = {
   window: Columns2,
   bookmarks: Bookmark,
+  history: History,
   search: Search,
   assistant: Bot,
   aphorism: Quote,
@@ -314,6 +317,9 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
   );
 }
 
+/** Кнопки, которые открывают шторку под плитками, а не уводят со страницы. */
+type SheetId = "calculator" | "info" | "calendar" | "bookmarks" | "history";
+
 function QuickTiles({
   config,
   catalog,
@@ -325,9 +331,7 @@ function QuickTiles({
   onChange: (next: QuickConfig) => void;
   onClose: () => void;
 }) {
-  const [sheet, setSheet] = useState<
-    "calculator" | "info" | "calendar" | "bookmarks" | null
-  >(null);
+  const [sheet, setSheet] = useState<SheetId | null>(null);
 
   if (config.ids.length === 0)
     return (
@@ -362,11 +366,7 @@ function QuickTiles({
               ) : (
                 <button
                   type="button"
-                  onClick={() =>
-                    setSheet(
-                      id as "calculator" | "info" | "calendar" | "bookmarks",
-                    )
-                  }
+                  onClick={() => setSheet(id as SheetId)}
                   className={tileClass}
                 >
                   <ActionIcon meta={meta} />
@@ -381,6 +381,9 @@ function QuickTiles({
       {sheet === "calculator" && <CalculatorPad onClose={() => setSheet(null)} />}
       {sheet === "info" && <InfoSheet onClose={() => setSheet(null)} />}
       {sheet === "calendar" && <CalendarSheet onClose={() => setSheet(null)} />}
+      {sheet === "history" && (
+        <HistorySheet onClose={() => setSheet(null)} onNavigate={onClose} />
+      )}
       {sheet === "bookmarks" && (
         <BookmarksSheet
           onClose={() => setSheet(null)}

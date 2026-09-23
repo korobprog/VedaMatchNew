@@ -6,6 +6,7 @@ import ru from "../../../messages/ru.json";
 import { QuickPanel } from "./quick-panel";
 import { resetDonationSettings } from "@/lib/donation-settings";
 import { resetPortalWindowsForTests } from "./portal-windows-store";
+import { noteNavigationHistory } from "./navigation-history-store";
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -181,11 +182,12 @@ describe("QuickPanel", () => {
       "aphorism",
       "calendar",
       "postcard",
+      "history",
     ]);
   });
 
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":[]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":[]}');
     // Опустошить панель может только админ: у остальных три кнопки
     // закреплены (VED-326), и пустой она не бывает.
     await openPanel({ admin: true });
@@ -197,7 +199,7 @@ describe("QuickPanel", () => {
      выключаются. Заказчик обвёл их на скриншоте — это то, что порталу нужно
      от каждого гостя, а случайно снятую галочку никто не вернёт. */
   it("три закреплённые кнопки стоят первыми, даже если их выключали", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["calendar"]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["calendar"]}');
     stubFetch().mockImplementation((url: string) =>
       Promise.resolve({
         ok: true,
@@ -320,6 +322,43 @@ describe("QuickPanel", () => {
     expect(link).toHaveTextContent("Музыка");
   });
 
+  /* VED-392: «История» — сервис один раз в начале строки, ступени за ним в
+     ту же строку, каждое звено ведёт назад. */
+  it("история складывает ступени одного сервиса в одну строку", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["history"]}');
+    for (const url of ["/music/playlists", "/work", "/work/boards/1", "/work/agenda"])
+      noteNavigationHistory(url);
+    const user = await openPanel();
+
+    await user.click(screen.getByRole("button", { name: /^История/ }));
+
+    const list = screen.getByRole("list", { name: "История перемещений" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    // Новые — сверху; сервис назван один раз, первым.
+    expect(rows[0]).toHaveTextContent("Работа·Доска·Повестка");
+    expect(within(rows[0]).getByRole("link", { name: "Работа" })).toHaveAttribute(
+      "href",
+      "/work",
+    );
+    expect(
+      within(rows[0]).getByRole("link", { name: "Работа · Повестка" }),
+    ).toHaveAttribute("href", "/work/agenda");
+    expect(rows[1]).toHaveTextContent("Музыка·Плейлисты");
+  });
+
+  it("история стирается кнопкой и говорит, что пусто", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["history"]}');
+    noteNavigationHistory("/work/agenda");
+    const user = await openPanel();
+
+    await user.click(screen.getByRole("button", { name: /^История/ }));
+    await user.click(screen.getByRole("button", { name: "Очистить историю" }));
+
+    expect(screen.getByText(/Пока пусто/)).toBeInTheDocument();
+    expect(window.localStorage.getItem("vedamatch:navigation-history")).toBeNull();
+  });
+
   // VED-345: горячая кнопка из закладки.
   it("делает из закладки горячую кнопку и убирает её крестиком", async () => {
     window.localStorage.setItem(STORAGE_KEY, '{"v":2,"ids":["bookmarks"]}');
@@ -405,7 +444,7 @@ describe("QuickPanel", () => {
   });
 
   it("выключенные пожертвования не рисуют кнопку доната", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["donate"]}');
     await openPanel({ admin: true });
 
     // Так же, как везде на портале: реквизитов нет — кнопки нет.
@@ -419,7 +458,7 @@ describe("QuickPanel", () => {
      Реквизиты нужны шторке, а не плитке, — и пока ответа нет, плитка стоит
      на месте и ведёт на /donate, ту же страницу с реквизитами. */
   it("плитка «Поддержать» стоит в панели, не дожидаясь сервера", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["donate"]}');
     // Сервер молчит навсегда: именно это и было видно как запаздывание.
     vi.stubGlobal(
       "fetch",
@@ -435,7 +474,7 @@ describe("QuickPanel", () => {
   });
 
   it("ответ сервера помнится на весь сеанс: второе открытие не ждёт", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["donate"]}');
     const fetchMock = stubFetch();
     fetchMock.mockImplementation((url: string) =>
       String(url).includes("/billing/donation")

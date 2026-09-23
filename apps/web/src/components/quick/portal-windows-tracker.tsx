@@ -20,11 +20,13 @@ import {
   stepPortalHistory,
   takePendingScroll,
 } from "./portal-windows-store";
+import { noteNavigationHistory } from "./navigation-history-store";
 
 /**
  * Следит за переходами портала и складывает их в историю активного окна
  * (VED-118), возвращает страницу на запомненное место (VED-325) и разбирает
- * аппаратную кнопку «назад» (VED-354).
+ * аппаратную кнопку «назад» (VED-354). Заодно пишет общую историю
+ * перемещений для горячей кнопки «История» (VED-392).
  *
  * Живёт в корневом layout, а не в группе `(portal)`: шапка с панелью
  * горячих кнопок рисуется и на страницах вне этой группы (Образование,
@@ -52,6 +54,9 @@ function Tracker() {
     hydratePortalWindows(url);
     markHistoryEntry();
     notePortalNavigation(url);
+    // История перемещений (VED-392) — тот же переход, но в общий список на
+    // устройстве, а не в историю одного окна.
+    noteNavigationHistory(url);
     const target = takePendingScroll(url);
     if (target === null) return;
     return restoreScroll(target);
