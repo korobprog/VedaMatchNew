@@ -71,6 +71,19 @@ describe('validateBlogPost', () => {
     ).toBe('text_too_long');
   });
 
+  // VED-371: прежние 5000 обрывали лекцию на середине. Предел поднят до
+  // 20000, и текст ровно в предел — с абзацами — должен проходить.
+  it('accepts a lecture-long text up to the raised limit', () => {
+    expect(BLOG_POST_TEXT_MAX_LENGTH).toBe(20000);
+    const paragraph = `${'слово '.repeat(99)}конец.`;
+    const text = Array.from({ length: 40 }, () => paragraph)
+      .join('\n\n')
+      .slice(0, BLOG_POST_TEXT_MAX_LENGTH)
+      .trim();
+    expect(text.length).toBeGreaterThan(19000);
+    expect(validateBlogPost({ title: null, text, imageCount: 0 })).toBeNull();
+  });
+
   it('rejects too many images', () => {
     expect(
       validateBlogPost({
@@ -119,6 +132,18 @@ describe('normalizeText', () => {
   // Иначе постом в ленту уезжает экран пустоты.
   it('collapses a run of blank lines', () => {
     expect(normalizeText('первый\n\n\n\n\nвторой')).toBe('первый\n\nвторой');
+  });
+
+  // VED-372: вставка из мессенджера приносит строки из пробелов, и до этой
+  // правки схлопывание их не замечало — в ленте оставалась дыра.
+  it('sees a line of spaces and tabs as blank', () => {
+    expect(normalizeText('первый\n \n\t\n  \nвторой')).toBe('первый\n\nвторой');
+    expect(normalizeText('первый\n   \nвторой')).toBe('первый\n\nвторой');
+  });
+
+  // Отступ в начале строки со словами — часть текста, а не пустота.
+  it('keeps the indentation of a line that has words', () => {
+    expect(normalizeText('первый\n    второй')).toBe('первый\n    второй');
   });
 
   it('trims the edges and survives garbage', () => {

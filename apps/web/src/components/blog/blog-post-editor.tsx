@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import {
   BLOG_IMAGE_MIME_TYPES,
   BLOG_POST_MAX_IMAGES,
-  BLOG_POST_TEXT_MAX_LENGTH,
   BLOG_POST_TITLE_MAX_LENGTH,
   type BlogImageDto,
   type BlogPostDto,
@@ -16,6 +15,9 @@ import {
   fetchBlogPost,
   updateBlogPost,
 } from "@/lib/blog-client-api";
+import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
+import { BlogTextCounter } from "./blog-text-counter";
+import { blogTextLimitState } from "./blog-text-limit";
 
 /**
  * Правка поста прямо в ленте (VED-321).
@@ -44,6 +46,8 @@ export function BlogPostEditor({
   const [note, setNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const counterId = useId();
+  const limit = blogTextLimitState(text);
   /** Человек уже что-то поменял — обновлением с сервера это не затираем. */
   const touched = useRef(false);
 
@@ -96,6 +100,11 @@ export function BlogPostEditor({
     setNote(null);
     if (!title.trim() && !text.trim() && total === 0) {
       setError(blogErrorText("post_empty"));
+      return;
+    }
+    // Как и в публикации: обрезать за человека нельзя — это его слова.
+    if (limit.over) {
+      setError(limit.label);
       return;
     }
 
@@ -161,6 +170,9 @@ export function BlogPostEditor({
       <label htmlFor={`blog-edit-text-${post.id}`} className="sr-only">
         Текст поста
       </label>
+      {/* Без `maxLength` (VED-371) — см. ту же причину в форме публикации.
+          Восемь строк, а не четыре: в поле теперь правят текст на восемь
+          страниц, и в окошко на четыре строки его не прочитать. */}
       <textarea
         id={`blog-edit-text-${post.id}`}
         value={text}
@@ -168,10 +180,23 @@ export function BlogPostEditor({
           touched.current = true;
           setText(event.target.value);
         }}
-        maxLength={BLOG_POST_TEXT_MAX_LENGTH}
-        rows={4}
+        rows={8}
         placeholder="Что происходит?"
+        aria-describedby={counterId}
+        aria-invalid={limit.over || undefined}
         className="mt-2 w-full rounded-lg border border-glass-brd bg-bg-1 px-3 py-2 text-sm leading-6 text-text-0 placeholder:text-text-2"
+      />
+      <BlogTextCounter id={counterId} state={limit} />
+      {/* Уборка пустых строк (VED-372) стоит именно в правке: разорванный
+          текст на скриншоте заказчика уже опубликован, и чинить его надо
+          здесь. */}
+      <BlogBlankLinesTool
+        value={text}
+        onChange={(next) => {
+          touched.current = true;
+          setText(next);
+        }}
+        disabled={pending}
       />
 
       {kept.length > 0 && (
