@@ -24,6 +24,12 @@ import { toMusicTrackDto } from './music-track-dto';
 import { isNowPlayingStale } from './now-playing-visibility';
 import { keepExistingInOrder, normalizePlaybackQueue } from './playback-queue';
 import { musicCoverBaseUrl } from './music-cover-file';
+import { historyResumePosition } from './music-history-resume';
+import {
+  PLAYER_SETTINGS_DEFAULTS,
+  parsePlayerSettingsPatch,
+  playerSettingsFromRow,
+} from './music-player-settings';
 
 /**
  * Состояние плеера, тик воспроизведения и настройки прослушивания.
@@ -88,7 +94,40 @@ const DEFAULT_SETTINGS: MusicSettingsDto = {
   nowPlayingVisibility: 'friends',
   autoplay: true,
   lineage: null,
+  ...PLAYER_SETTINGS_DEFAULTS,
 };
+
+/** Что читаем из `MusicSettings` — один список на чтение и на запись. */
+const SETTINGS_SELECT = {
+  nowPlayingVisibility: true,
+  autoplay: true,
+  lineage: true,
+  seekBackSeconds: true,
+  seekForwardSeconds: true,
+  playerShowSeek: true,
+  playerShowBookmark: true,
+  playerShowHistory: true,
+} as const;
+
+type SettingsRow = {
+  nowPlayingVisibility: MusicSettingsDto['nowPlayingVisibility'];
+  autoplay: boolean;
+  lineage: string | null;
+  seekBackSeconds: number;
+  seekForwardSeconds: number;
+  playerShowSeek: boolean;
+  playerShowBookmark: boolean;
+  playerShowHistory: boolean;
+};
+
+function settingsDto(row: SettingsRow): MusicSettingsDto {
+  return {
+    nowPlayingVisibility: row.nowPlayingVisibility,
+    autoplay: row.autoplay,
+    lineage: toLineagePreference(row.lineage),
+    ...playerSettingsFromRow(row),
+  };
+}
 
 @Injectable()
 export class MusicPlaybackService {
@@ -99,7 +138,9 @@ export class MusicPlaybackService {
     private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
+    this.publicBaseUrl = musicCoverBaseUrl(
+      config.get<string>('API_PUBLIC_URL'),
+    );
   }
 
   /**
@@ -384,15 +425,33 @@ export class MusicPlaybackService {
       take: HISTORY_PAGE_SIZE,
       include: { track: { include: TRACK_CARD_INCLUDE } },
     });
+    const visible = rows.filter((row) => row.track.status === 'published');
+
+    // Где остановился в каждой записи (VED-388): история в плеере ведёт
+    // туда, а не в начало. Позиции плеер и так хранит по записям — одним
+    // запросом по всем записям страницы, а не по запросу на строку.
+    const trackIds = [...new Set(visible.map((row) => row.trackId))];
+    const states =
+      trackIds.length === 0
+        ? []
+        : await this.prisma.musicPlayState.findMany({
+            where: { userId, trackId: { in: trackIds } },
+            select: { trackId: true, positionSeconds: true },
+          });
+    const positionOf = new Map(
+      states.map((state) => [state.trackId, state.positionSeconds]),
+    );
 
     return {
-      items: rows
-        .filter((row) => row.track.status === 'published')
-        .map((row) => ({
-          track: toMusicTrackDto(row.track, this.publicBaseUrl),
-          seconds: row.seconds,
-          listenedAt: row.listenedAt.toISOString(),
-        })),
+      items: visible.map((row) => ({
+        track: toMusicTrackDto(row.track, this.publicBaseUrl),
+        seconds: row.seconds,
+        listenedAt: row.listenedAt.toISOString(),
+        positionSeconds: historyResumePosition(
+          positionOf.get(row.trackId),
+          row.track.durationSeconds,
+        ),
+      })),
     };
   }
 
@@ -503,12 +562,10 @@ export class MusicPlaybackService {
   async getSettings(userId: string): Promise<MusicSettingsDto> {
     const row = await this.prisma.musicSettings.findUnique({
       where: { userId },
-      select: { nowPlayingVisibility: true, autoplay: true, lineage: true },
+      select: SETTINGS_SELECT,
     });
 
-    return row
-      ? { ...row, lineage: toLineagePreference(row.lineage) }
-      : DEFAULT_SETTINGS;
+    return row ? settingsDto(row) : DEFAULT_SETTINGS;
   }
 
   async updateSettings(
@@ -520,21 +577,26 @@ export class MusicPlaybackService {
     if (body.lineage !== undefined && !isLineagePreference(body.lineage)) {
       throw new BadRequestException('Неизвестная духовная линия');
     }
+    // Шаги перемотки и кнопки полосы плеера (VED-388).
+    const player = parsePlayerSettingsPatch(body);
+    if ('error' in player) throw new BadRequestException(player.error);
+
     const patch = {
       ...(body.nowPlayingVisibility === undefined
         ? {}
         : { nowPlayingVisibility: body.nowPlayingVisibility }),
       ...(body.autoplay === undefined ? {} : { autoplay: body.autoplay }),
       ...(body.lineage === undefined ? {} : { lineage: body.lineage }),
+      ...player.patch,
     };
 
     const row = await this.prisma.musicSettings.upsert({
       where: { userId },
       create: { userId, ...DEFAULT_SETTINGS, ...patch },
       update: patch,
-      select: { nowPlayingVisibility: true, autoplay: true, lineage: true },
+      select: SETTINGS_SELECT,
     });
 
-    return { ...row, lineage: toLineagePreference(row.lineage) };
+    return settingsDto(row);
   }
 }

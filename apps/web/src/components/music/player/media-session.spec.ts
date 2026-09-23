@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MusicTrackDto } from "@vedamatch/shared";
-import { buildMediaMetadata } from "./media-session";
+import {
+  applyMediaHandlers,
+  buildMediaMetadata,
+  mediaSeekDelta,
+} from "./media-session";
 
 const track = (over: Partial<MusicTrackDto> = {}): MusicTrackDto => ({
   id: "t1",
@@ -55,5 +59,54 @@ describe("buildMediaMetadata", () => {
     expect(buildMediaMetadata(track({ title: "  Гаура-арати  " })).title).toBe(
       "  Гаура-арати  ",
     );
+  });
+});
+
+describe("перемотка из системной карточки (VED-388)", () => {
+  const steps = { back: 10, forward: 30 };
+
+  it("без seekOffset берёт шаг из настроек, свой для каждой стороны", () => {
+    expect(mediaSeekDelta(-1, undefined, steps)).toBe(-10);
+    expect(mediaSeekDelta(1, undefined, steps)).toBe(30);
+  });
+
+  it("присланный системой шаг уважает, мусор — нет", () => {
+    expect(mediaSeekDelta(1, 5, steps)).toBe(5);
+    expect(mediaSeekDelta(-1, 0, steps)).toBe(-10);
+    expect(mediaSeekDelta(-1, Number.NaN, steps)).toBe(-10);
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "mediaSession");
+  });
+
+  it("seekbackward и seekforward зовут перемотку с шагами настроек", () => {
+    const handlers = new Map<string, (details: MediaSessionActionDetails) => void>();
+    Object.defineProperty(navigator, "mediaSession", {
+      configurable: true,
+      value: {
+        setActionHandler: (
+          action: string,
+          handler: (details: MediaSessionActionDetails) => void,
+        ) => handlers.set(action, handler),
+      },
+    });
+    const seekBy = vi.fn();
+
+    applyMediaHandlers(
+      {
+        play: vi.fn(),
+        pause: vi.fn(),
+        nextTrack: vi.fn(),
+        previousTrack: vi.fn(),
+        seekTo: vi.fn(),
+        seekBy,
+      },
+      steps,
+    );
+    handlers.get("seekbackward")?.({ action: "seekbackward" });
+    handlers.get("seekforward")?.({ action: "seekforward" });
+
+    expect(seekBy.mock.calls).toEqual([[-10], [30]]);
   });
 });

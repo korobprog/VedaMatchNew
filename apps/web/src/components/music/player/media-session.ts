@@ -62,16 +62,39 @@ export function applyMediaMetadata(track: MusicTrackDto): void {
   navigator.mediaSession.metadata = new MediaMetadata(meta);
 }
 
+/** Шаги перемотки из настроек плеера (VED-388): назад и вперёд — свои. */
+export interface MediaSeekSteps {
+  back: number;
+  forward: number;
+}
+
 /**
- * Кнопки. Ставятся один раз на набор обработчиков: система запоминает их и
- * зовёт, даже когда вкладка усыплена.
+ * На сколько сдвинуть звук по кнопке системной карточки.
  *
- * `seekbackward` и `seekforward` — те же 15 секунд, что у кнопок в полосе:
- * два разных шага в одном плеере человек воспринимает как поломку.
+ * `seekOffset` присылают не все: наушники и экран блокировки Android
+ * обычно молчат, и тогда берём шаг из настроек — тот же, что у кнопок на
+ * полосе. Два разных шага в одном плеере человек воспринимает как поломку.
+ */
+export function mediaSeekDelta(
+  direction: -1 | 1,
+  seekOffset: number | undefined,
+  steps: MediaSeekSteps,
+): number {
+  const fallback = direction < 0 ? steps.back : steps.forward;
+  const offset =
+    typeof seekOffset === "number" && Number.isFinite(seekOffset) && seekOffset > 0
+      ? seekOffset
+      : fallback;
+  return direction * offset;
+}
+
+/**
+ * Кнопки. Ставятся заново на каждый набор обработчиков и шагов: система
+ * запоминает их и зовёт, даже когда вкладка усыплена.
  */
 export function applyMediaHandlers(
   handlers: MediaSessionHandlers,
-  seekStepSeconds: number,
+  steps: MediaSeekSteps,
 ): void {
   if (!supported()) return;
 
@@ -92,10 +115,10 @@ export function applyMediaHandlers(
   set("nexttrack", () => handlers.nextTrack());
   set("previoustrack", () => handlers.previousTrack());
   set("seekbackward", (details) =>
-    handlers.seekBy(-(details.seekOffset ?? seekStepSeconds)),
+    handlers.seekBy(mediaSeekDelta(-1, details.seekOffset, steps)),
   );
   set("seekforward", (details) =>
-    handlers.seekBy(details.seekOffset ?? seekStepSeconds),
+    handlers.seekBy(mediaSeekDelta(1, details.seekOffset, steps)),
   );
   set("seekto", (details) => {
     if (typeof details.seekTime === "number") handlers.seekTo(details.seekTime);

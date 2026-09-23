@@ -5,8 +5,12 @@
 // втащить). Здесь только то, что зовёт сам плеер, а он живёт в корневом
 // layout и работает на любой странице портала.
 import type {
+  CreateMusicBookmarkRequest,
   MusicAlbumPageDto,
   MusicArtistPageDto,
+  MusicBookmarkDto,
+  MusicBookmarksDto,
+  MusicHistoryDto,
   MusicCatalogDto,
   MusicHeartbeatRequest,
   MusicPlaybackStateDto,
@@ -96,6 +100,35 @@ export const saveMusicSettings = (body: UpdateMusicSettingsRequest) =>
     method: "PUT",
     body: JSON.stringify(body),
   });
+
+/** Метки-закладки записи (VED-388). */
+export const getBookmarks = (trackId: string) =>
+  quiet<MusicBookmarksDto>(
+    `/music/bookmarks?trackId=${encodeURIComponent(trackId)}`,
+  );
+
+export const createBookmark = (body: CreateMusicBookmarkRequest) =>
+  quiet<MusicBookmarkDto>("/music/bookmarks", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const renameBookmark = (id: string, label: string | null) =>
+  quiet<MusicBookmarkDto>(`/music/bookmarks/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ label }),
+  });
+
+export const deleteBookmark = (id: string) =>
+  quiet<{ ok: true }>(`/music/bookmarks/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+/**
+ * История прослушиваний — для панели плеера (VED-388). Своя, браузерная:
+ * `getMusicHistory` из `music-api.ts` серверная и тянет `next/headers`.
+ */
+export const getListenHistory = () => quiet<MusicHistoryDto>("/music/listens");
 
 export const setTrackFavorite = (trackId: string, favorited: boolean) =>
   quiet<{ favorited: boolean }>(
