@@ -118,10 +118,14 @@ export function blogSourceMetaLine(post: BlogPostDto, now: Date = new Date()): s
   return [shown.author.name, blogPostDate(shown.createdAt, now)].filter((part) => part !== '').join(' · ');
 }
 
-/** Подпись к «Вся лента» под плитками: сколько ещё постов не поместилось. */
+/**
+ * Подпись к «Вся лента» под плитками: сколько ещё свежих постов не
+ * поместилось. Без остатка — «и прошлые посты», как на сайте: полоса
+ * показывает только текущую ленту, а архив лежит за этой строкой всегда.
+ */
 export function blogRestLabel(total: number, shown: number): string {
   const rest = Math.max(0, total - shown);
-  if (rest === 0) return 'Вся лента';
+  if (rest === 0) return 'Вся лента и прошлые посты';
   return `Вся лента · ещё ${rest} ${plural(rest, 'пост', 'поста', 'постов')}`;
 }
 

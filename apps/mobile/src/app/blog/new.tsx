@@ -50,6 +50,15 @@ export default function NewBlogPostScreen() {
   const [error, setError] = useState<string | null>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
 
+  /**
+   * Правка черновика снимает прежний отказ: живая проверка на A51 поймала
+   * «Напишите что-нибудь…», висящее над уже заполненной формой.
+   */
+  const edit = useCallback((change: (current: BlogDraft) => BlogDraft) => {
+    setDraft(change);
+    setError(null);
+  }, []);
+
   const counter = blogTextCounter(draft.text);
   const slots = remainingPhotoSlots(draft);
 
@@ -58,6 +67,7 @@ export default function NewBlogPostScreen() {
       const { photos, denial } = takeBlogAssets(assets, draft.photos.length);
       const { draft: next, dropped } = addBlogPhotos(draft, photos);
       setDraft(next);
+      setError(null);
       const notes = [denial, dropped > 0 ? `Больше ${BLOG_POST_MAX_IMAGES} фотографий в пост не поместится.` : null];
       const note = notes.filter((item) => item !== null).join(' ');
       setPhotoNote(note === '' ? null : note);
@@ -153,7 +163,7 @@ export default function NewBlogPostScreen() {
             accessibilityLabelledBy="blog-title-label"
             accessibilityLabel="Заголовок"
             value={draft.title}
-            onChangeText={(title) => setDraft((current) => ({ ...current, title }))}
+            onChangeText={(title) => edit((current) => ({ ...current, title }))}
             placeholder="О чём пост"
             placeholderTextColor={colors.text1}
             returnKeyType="next"
@@ -177,7 +187,7 @@ export default function NewBlogPostScreen() {
             accessibilityLabelledBy="blog-text-label"
             accessibilityLabel="Текст поста"
             value={draft.text}
-            onChangeText={(text) => setDraft((current) => ({ ...current, text }))}
+            onChangeText={(text) => edit((current) => ({ ...current, text }))}
             placeholder="Что происходит?"
             placeholderTextColor={colors.text1}
             multiline
@@ -214,7 +224,7 @@ export default function NewBlogPostScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Убрать фотографию ${index + 1}`}
-                    onPress={() => setDraft((current) => removeBlogPhoto(current, photo.key))}
+                    onPress={() => edit((current) => removeBlogPhoto(current, photo.key))}
                     disabled={sending}
                     android_ripple={ripple(colors.glassBorder)}
                     style={({ pressed }) => [styles.photoRemove, { backgroundColor: colors.bg1 }, pressedStyle(pressed)]}

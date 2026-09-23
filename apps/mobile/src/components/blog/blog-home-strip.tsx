@@ -119,8 +119,12 @@ export function BlogHomeStrip() {
           android_ripple={ripple(colors.glassBorder)}
           style={({ pressed }) => [styles.empty, { borderColor: colors.glassBorder, backgroundColor: colors.glass }, pressedStyle(pressed)]}
         >
+          {/* Полоса — только текущая лента (`/blog/home`). Пустая она не
+              значит «постов нет»: срок в ленте вышел, а архив остаётся за
+              «Вся лента» ниже. Живая проверка на A51 поймала первую
+              подпись «В ленте пока пусто» при непустом архиве. */}
           <Text style={[styles.emptyText, { color: colors.text1 }]}>
-            В ленте пока пусто. Напишите первый пост — его увидят все.
+            Свежих постов сейчас нет. Напишите свой — его увидят все.
           </Text>
         </Pressable>
       ) : (
@@ -137,7 +141,7 @@ export function BlogHomeStrip() {
         />
       )}
 
-      {posts && posts.length > 0 ? (
+      {posts ? (
         <Pressable
           accessibilityRole="link"
           onPress={openBlogFeed}

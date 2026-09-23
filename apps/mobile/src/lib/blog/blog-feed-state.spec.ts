@@ -131,12 +131,13 @@ describe('что показывать', () => {
     expect(blogSourceMetaLine(repost, now)).toBe('Радха деви даси · 20 сентября, 08:00');
   });
 
-  it('«Вся лента» говорит, сколько не поместилось', () => {
-    expect(blogRestLabel(4, 4)).toBe('Вся лента');
+  it('«Вся лента» говорит, сколько не поместилось, а без остатка — что там архив', () => {
+    expect(blogRestLabel(4, 4)).toBe('Вся лента и прошлые посты');
     expect(blogRestLabel(5, 4)).toBe('Вся лента · ещё 1 пост');
     expect(blogRestLabel(7, 4)).toBe('Вся лента · ещё 3 поста');
     expect(blogRestLabel(16, 4)).toBe('Вся лента · ещё 12 постов');
-    expect(blogRestLabel(2, 4)).toBe('Вся лента');
+    expect(blogRestLabel(2, 4)).toBe('Вся лента и прошлые посты');
+    expect(blogRestLabel(0, 0)).toBe('Вся лента и прошлые посты');
   });
 
   it('счётчик постов автора склоняется', () => {

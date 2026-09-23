@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { announceBlogChange, resetBlogChanges } from '@/lib/blog/blog-changes';
 import { blogPost } from '@/lib/blog/blog-fixtures';
 import { BlogHomeStrip } from './blog-home-strip';
-import { pressable, pressables, screenText } from './blog-test-helpers';
+import { pressable, screenText } from './blog-test-helpers';
 
 const mockHome = jest.fn<Promise<BlogHomeFeedResponse>, []>();
 const mockRead = jest.fn<Promise<boolean>, [string]>();
@@ -100,11 +100,14 @@ describe('полоса блог-ленты в «Чатах»', () => {
     expect(renderer.toJSON()).toBeNull();
   });
 
-  it('пустая лента — приглашение написать первый пост, без «Вся лента»', async () => {
+  it('свежих постов нет — приглашение написать, а архив всё равно доступен', async () => {
+    // Живая проверка: текущая лента пуста (срок вышел), а в архиве пост есть.
     mockHome.mockResolvedValue({ posts: [], total: 0 });
     const renderer = await render();
-    expect(screenText(renderer)).toContain('В ленте пока пусто');
-    expect(pressables(renderer, 'Вся лента')).toHaveLength(0);
+    expect(screenText(renderer)).toContain('Свежих постов сейчас нет');
+    expect(screenText(renderer)).not.toContain('пусто');
+    act(() => pressable(renderer, 'Вся лента и прошлые посты').props.onPress());
+    expect(mockOpenFeed).toHaveBeenCalled();
   });
 
   it('опубликованный на соседнем экране пост появляется сразу, полоса не растёт больше четырёх', async () => {

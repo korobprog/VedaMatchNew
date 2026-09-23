@@ -71,6 +71,9 @@ describe('новый пост', () => {
     await act(async () => pressable(renderer, 'Опубликовать').props.onPress());
     expect(mockCreate).not.toHaveBeenCalled();
     expect(screenText(renderer)).toContain('Напишите что-нибудь или добавьте фотографию.');
+    // Начал писать — прежний отказ уходит, а не висит над заполненной формой.
+    typeInto(renderer, 'Текст поста', 'П');
+    expect(screenText(renderer)).not.toContain('Напишите что-нибудь');
   });
 
   it('текст уходит на сервер, лента узнаёт о посте, экран закрывается', async () => {
