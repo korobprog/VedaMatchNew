@@ -10,6 +10,7 @@ import { removeSubscription } from "@/lib/notifications-api";
 import { Alert } from "@/components/ui/alert";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import { apiBase } from "@/lib/api-base";
+import { clearNavigationHistory } from "@/components/quick/navigation-history-store";
 
 const API_URL = apiBase();
 
@@ -48,6 +49,9 @@ export function LogoutButton({
       if (activeUserId) cleanupTasks.push(deleteVedabaseDb(activeUserId));
       await Promise.allSettled(cleanupTasks);
       localStorage.removeItem(activeUserKey);
+      // История перемещений (VED-392) живёт на устройстве: следующий
+      // вошедший не должен видеть, где ходил прежний.
+      clearNavigationHistory();
 
       router.replace("/");
       router.refresh();
