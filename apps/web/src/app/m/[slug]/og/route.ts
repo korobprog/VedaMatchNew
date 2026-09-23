@@ -1,29 +1,23 @@
 import sharp from "sharp";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 import {
-  OG_BACKDROP_BLUR,
-  OG_BACKDROP_BRIGHTNESS,
-  OG_BACKDROP_FALLBACK,
   OG_IMAGE_TYPE,
+  OG_TRANSPARENT_FALLBACK,
   encodeWithinLimit,
-  ogBackdropSampleSize,
   ogImageSource,
-  ogPreviewLayout,
+  ogPreviewSize,
 } from "@/lib/motivation-og-image";
 
 export const runtime = "nodejs";
 
 /**
  * Превью ссылки для мессенджеров (VED-201, VED-357) — лёгкий JPEG вместо
- * пятимегабайтного PNG сторис. Почему кадр именно такой, см.
- * `motivation-og-image.ts`.
+ * многомегабайтного исходника. Почему кадр именно такой и что пробовали до
+ * этого, см. `motivation-og-image.ts`.
  *
- * В кадре — сама иллюстрация целиком, без обрезки и без единой надписи, на
- * размытой копии себя самой. Раньше здесь стоял `fit: 'cover'` под жёсткие
- * 9:16, и у открытки, принесённой готовым файлом, срезало бока вместе с
- * надписью; потом кадр повторял пропорции исходника — и вертикальную
- * карточку WhatsApp свернул в миниатюру сбоку. Теперь кадр всегда альбомный
- * 1200×630, а картинка в него вписана.
+ * В кадре — сама иллюстрация целиком, в своих пропорциях, без полей, без
+ * обрезки и без единой надписи. Размер кадра считает `ogPreviewSize()` — та
+ * же функция, по которой страница объявляет `og:image:width`/`height`.
  *
  * Адрес публичный: бот Telegram, WhatsApp, Max или ВКонтакте приходит без
  * cookie, а префикс `/m/` открыт гостю в proxy.ts.
@@ -43,44 +37,34 @@ export async function GET(
 
   let bytes: Uint8Array;
   try {
-    // `rotate()` до замера: у кадра с телефона ширина и высота в метаданных
-    // записаны до поворота по EXIF, и раскладка вышла бы боком.
-    const upright = await sharp(original).rotate().toBuffer();
-    const meta = await sharp(upright).metadata();
-    if (!meta.width || !meta.height) throw new Error("no dimensions");
+    // Размер — уже с поворотом по EXIF: у кадра с телефона ширина и высота
+    // в метаданных записаны до поворота, и кадр вышел бы боком. Страница
+    // читает размер из заголовка с той же поправкой (`imageSizeFromHeader`).
+    const meta = await sharp(original).metadata();
+    const { width, height } = meta.autoOrient;
+    if (!width || !height) throw new Error("no dimensions");
 
-    const layout = ogPreviewLayout({ width: meta.width, height: meta.height });
-    const sample = ogBackdropSampleSize();
+    const size = ogPreviewSize({ width, height });
+    // `fill` здесь не искажает: размер посчитан из пропорций самой картинки,
+    // расхождение — доли пикселя на округлении. Зато файл совпадает с
+    // объявленным в метатегах до точки, чего `inside` не гарантирует.
+    // Промежуточный кадр — сырые пиксели: без лишнего пережатия и быстро.
+    const { data, info } = await sharp(original)
+      .rotate()
+      .resize(size.width, size.height, { fit: "fill" })
+      // Прозрачные края исходника при переводе в JPEG стали бы чёрными.
+      .flatten({ background: OG_TRANSPARENT_FALLBACK })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const raw = {
+      width: info.width,
+      height: info.height,
+      channels: info.channels,
+    };
 
-    // Подложка в два шага: сначала крошечная копия — её и размываем, потому
-    // что размытие стоит квадрат радиуса, — потом растягиваем до кадра.
-    // Одной цепочкой это не собрать: второй `resize` в sharp отменяет первый.
-    const blurred = await sharp(upright)
-      .resize(sample.width, sample.height, { fit: "cover" })
-      .blur(OG_BACKDROP_BLUR)
-      .modulate({ brightness: OG_BACKDROP_BRIGHTNESS })
-      .toBuffer();
-    const backdrop = await sharp(blurred)
-      .resize(layout.frame.width, layout.frame.height, { fit: "fill" })
-      // Края исходника могли быть прозрачными — под ними нужен свой фон,
-      // иначе при переводе в JPEG они станут чёрными пятнами.
-      .flatten({ background: OG_BACKDROP_FALLBACK })
-      .toBuffer();
-
-    // Сама иллюстрация: вписана целиком, пропорции исходника сохранены.
-    // Прозрачность не гасим — сквозь неё видно ту же картинку, размытую.
-    const art = await sharp(upright)
-      .resize(layout.art.width, layout.art.height, { fit: "fill" })
-      .toBuffer();
-
-    const frame = await sharp(backdrop)
-      .composite([{ input: art, left: layout.left, top: layout.top }])
-      .toBuffer();
-
-    // Кадр собран один раз, в лестницу уходит только сжатие: размер кадра
-    // постоянный, потому что он объявлен в `og:image:width`/`height`.
+    // Кадр собран один раз, в лестницу уходит только сжатие.
     ({ bytes } = await encodeWithinLimit(async ({ quality }) =>
-      sharp(frame)
+      sharp(data, { raw })
         // Базовый (не прогрессивный) JPEG: так его разбирают все боты.
         // `mozjpeg: true` здесь не годится — он включает прогрессивную
         // развёртку, поэтому берём из его набора только сжатие.
