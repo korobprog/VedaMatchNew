@@ -75,23 +75,45 @@ describe("resolveSideMenu", () => {
 });
 
 describe("toggleSideMenuItem", () => {
-  it("прячет сервис и возвращает его в конец", () => {
+  // VED-429: «они всегда добавлялись в самый верх под кнопку Главная».
+  it("прячет сервис и возвращает его в самый верх, под «Главную»", () => {
     const start = defaultSideMenu(SERVICES);
-    const hidden = toggleSideMenuItem(start, resolve(start), B);
-    expect(hidden).toEqual({ ids: [A, C], hidden: [B] });
-    expect(resolve(hidden)).toEqual([A, C]);
+    const hidden = toggleSideMenuItem(start, resolve(start), C);
+    expect(hidden).toEqual({ ids: [A, B], hidden: [C] });
+    expect(resolve(hidden)).toEqual([A, B]);
 
-    const back = toggleSideMenuItem(hidden, resolve(hidden), B);
-    expect(back).toEqual({ ids: [A, C, B], hidden: [] });
+    const back = toggleSideMenuItem(hidden, resolve(hidden), C);
+    expect(back).toEqual({ ids: [C, A, B], hidden: [] });
   });
 
-  it("добавляет горячую кнопку в конец и убирает её", () => {
+  it("возвращённый сервис встаёт выше горячих кнопок, а не за ними", () => {
+    const start = { ids: [A, "search", "bookmarks"], hidden: [B, C] };
+    const back = toggleSideMenuItem(start, resolve(start), B);
+    expect(resolve(back)).toEqual([B, A, "search", "bookmarks"]);
+  });
+
+  // VED-429: «горячие клавиши всегда добавлялись ниже Сервисов в своей группе».
+  it("горячая кнопка встаёт сразу под сервисами и убирается", () => {
     const start = defaultSideMenu(SERVICES);
     const added = toggleSideMenuItem(start, resolve(start), "search");
     expect(resolve(added)).toEqual([A, B, C, "search"]);
-    const removed = toggleSideMenuItem(added, resolve(added), "search");
-    expect(resolve(removed)).toEqual([A, B, C]);
+    const second = toggleSideMenuItem(added, resolve(added), "bookmarks");
+    expect(resolve(second)).toEqual([A, B, C, "bookmarks", "search"]);
+    const removed = toggleSideMenuItem(second, resolve(second), "search");
+    expect(resolve(removed)).toEqual([A, B, C, "bookmarks"]);
     expect(removed.hidden).toEqual([]);
+  });
+
+  it("горячая кнопка — за последним сервисом, даже если его переставили вниз", () => {
+    const start = { ids: [A, "search", B, C], hidden: [] };
+    const added = toggleSideMenuItem(start, resolve(start), "bookmarks");
+    expect(resolve(added)).toEqual([A, "search", B, C, "bookmarks"]);
+  });
+
+  it("без видимых сервисов горячая кнопка встаёт первой", () => {
+    const start = { ids: ["search"], hidden: [A, B, C] };
+    const added = toggleSideMenuItem(start, resolve(start), "bookmarks");
+    expect(resolve(added)).toEqual(["bookmarks", "search"]);
   });
 });
 
