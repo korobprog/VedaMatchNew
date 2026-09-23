@@ -24,6 +24,7 @@ import {
   type WorkAttachmentDto,
   type WorkTaskDto,
   type WorkTaskMarkRefreshedEvent,
+  type WorkTaskViewedResponse,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -50,6 +51,11 @@ import {
 } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { resolveTaskStatusMark } from './work-task-status';
+import {
+  loadCreatedOnBehalf,
+  loadWorkViewerState,
+  markOwnerIds,
+} from './work-viewer-state';
 import { WorkSpacesService } from './work-spaces.service';
 import {
   validateWorkUpload,
@@ -139,6 +145,56 @@ export class WorkTasksService {
     return task;
   }
 
+  /**
+   * Хозяева задачи для пометки в ленте (VED-320): с тем, от чьего имени её
+   * заводил агент, — иначе задача, составленная через Севака, у самого
+   * составившего числилась бы «Чужое».
+   */
+  private async markOwners(task: {
+    id: string;
+    assigneeId: string | null;
+    createdById: string | null;
+  }): Promise<string[] | undefined> {
+    if (!task.assigneeId) return undefined;
+    const onBehalf = await loadCreatedOnBehalf(this.prisma, [task.id]);
+    return markOwnerIds({
+      ...task,
+      createdOnBehalfOfId: onBehalf.get(task.id) ?? null,
+    });
+  }
+
+  /**
+   * «Просмотрено» (VED-365): своя отметка человека на карточке, в обе
+   * стороны. Смотреть доску может и тот, кому править её нельзя, — отметка
+   * ничего в задаче не меняет, поэтому права — как на просмотр.
+   *
+   * Повторное «просмотрено» переставляет дату: человек посмотрел снова, и
+   * отметка должна пережить уже случившиеся с тех пор чужие действия.
+   */
+  async setViewed(
+    taskId: string,
+    userId: string,
+    viewed: unknown,
+  ): Promise<WorkTaskViewedResponse> {
+    if (typeof viewed !== 'boolean') {
+      throw new BadRequestException('Нужно viewed: true или false');
+    }
+    const context = await this.taskContext(taskId);
+    assertWorkAccess(await this.spaces.roleOf(context.spaceId, userId), 'view');
+
+    if (viewed) {
+      const now = new Date();
+      await this.prisma.workTaskView.upsert({
+        where: { taskId_userId: { taskId, userId } },
+        create: { taskId, userId, viewedAt: now },
+        update: { viewedAt: now },
+      });
+    } else {
+      await this.prisma.workTaskView.deleteMany({ where: { taskId, userId } });
+    }
+    return { taskId, viewed };
+  }
+
   /** Карточка целиком — то, что открывается по нажатию. */
   async get(taskId: string, userId: string): Promise<WorkTaskDto> {
     const context = await this.taskContext(taskId);
@@ -170,6 +226,7 @@ export class WorkTasksService {
     });
     if (!task) throw new NotFoundException('Задача не найдена');
 
+    const viewer = await loadWorkViewerState(this.prisma, [task], userId);
     const card = toWorkTaskCard(
       {
         ...task,
@@ -177,6 +234,7 @@ export class WorkTasksService {
       },
       task.space.prefix,
       task.column.name,
+      viewer.get(task.id),
     );
 
     return {
@@ -375,6 +433,34 @@ export class WorkTasksService {
       }
     });
 
+    // Сменился исполнитель — сменилось и то, чья это задача (VED-320): у
+    // прежнего исполнителя в ленте она становится «Чужое», у нового — снова
+    // со статусом. Пометку уже лежащих уведомлений правим тем же событием,
+    // что и при переносе; поднимать в ленте нечего — колонка не менялась.
+    if (request.assigneeId !== undefined) {
+      const task = await this.prisma.workTask.findUnique({
+        where: { id: taskId },
+        select: {
+          id: true,
+          assigneeId: true,
+          createdById: true,
+          number: true,
+          space: { select: { prefix: true } },
+          column: { select: { name: true } },
+        },
+      });
+      if (task) {
+        this.events.emit(WORK_TASK_MARK_REFRESHED_EVENT, {
+          name: WORK_TASK_MARK_REFRESHED_EVENT,
+          spaceId: context.spaceId,
+          taskKey: workTaskKey(task.space.prefix, task.number),
+          statusMark: resolveTaskStatusMark(task.column.name),
+          liftRecipientIds: [],
+          ownerIds: await this.markOwners(task),
+        } satisfies WorkTaskMarkRefreshedEvent);
+      }
+    }
+
     // Поручение — единственная правка карточки, о которой человеку нужно
     // узнать сразу: остальные поля он увидит, когда откроет её сам.
     if (request.assigneeId && request.assigneeId !== userId) {
@@ -515,6 +601,7 @@ export class WorkTasksService {
             userId,
             members.map((member) => member.userId),
           ),
+          ownerIds: await this.markOwners(task),
         } satisfies WorkTaskMarkRefreshedEvent);
       }
     }

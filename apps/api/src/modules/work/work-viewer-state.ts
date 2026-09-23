@@ -1,0 +1,179 @@
+import type { Prisma } from '@prisma/client';
+import type { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * Что карточка значит для того, кто на неё смотрит (VED-320, VED-365).
+ *
+ * Два признака, оба — не свойство задачи, а отношение человека к ней:
+ *
+ * - «Чужое». Заказчик: задачи, которые «составил другой админ и он же
+ *   исполнитель», у меня не должны стоять «Тестированием» — это не моя
+ *   работа. И отдельно: «все задачи, которые составлял я, не должны
+ *   обозначаться статусом чужое». Отсюда правило: чужая — если я не автор и не
+ *   исполнитель. У автора и у исполнителя та же карточка показывает
+ *   настоящий статус.
+ * - «Просмотрено». Человек отметил задачу кнопкой, и после этого её не трогал
+ *   никто другой. Перенос или комментарий другого гасит отметку: заказчику
+ *   нужно «распознать задачи, которые я должен протестировать, над которыми
+ *   уже поработал второй админ и которые я ещё не смотрел».
+ */
+
+/** Кто задаче хозяин: автор и исполнитель. */
+export interface WorkTaskOwnership {
+  assigneeId: string | null;
+  createdById: string | null;
+  /**
+   * Человек, от чьего имени задачу завёл ИИ-агент. `createdById` у такой
+   * задачи — служебный аккаунт агента, а составлял её по сути этот человек:
+   * «задачи, которые составлял я», — это и они тоже.
+   */
+  createdOnBehalfOfId?: string | null;
+}
+
+/** Хозяева задачи без повторов и пустых мест. */
+export function workTaskOwnerIds(task: WorkTaskOwnership): string[] {
+  return [
+    ...new Set([task.createdById, task.createdOnBehalfOfId, task.assigneeId]),
+  ].filter((id): id is string => Boolean(id));
+}
+
+/**
+ * Чужая ли задача для смотрящего.
+ *
+ * Без исполнителя — не чужая: такую задачу может взять любой, и спрятать её
+ * значило бы спрятать работу, которую некому делать.
+ */
+export function isForeignWorkTask(
+  task: WorkTaskOwnership,
+  viewerId: string,
+): boolean {
+  if (!task.assigneeId) return false;
+  return !workTaskOwnerIds(task).includes(viewerId);
+}
+
+/**
+ * Кого уведомления о задаче считают её хозяевами (`ownerIds` события
+ * `work.task.mark-refreshed`): у остальных получателей пометка «Чужое».
+ * `undefined` — чужих у задачи нет (исполнитель не назначен), пометка у всех
+ * одна. Правило то же, что у `isForeignWorkTask`, — чтобы лента и доска не
+ * разошлись.
+ */
+export function markOwnerIds(task: WorkTaskOwnership): string[] | undefined {
+  if (!task.assigneeId) return undefined;
+  return workTaskOwnerIds(task);
+}
+
+/**
+ * Горит ли «Просмотрено»: отметка есть и она не старше последнего действия
+ * другого человека с задачей. Равенство — в пользу отметки: нажали в ту же
+ * миллисекунду, значит видели.
+ */
+export function isWorkTaskViewed(
+  viewedAt: Date | null | undefined,
+  changedByOthersAt: Date | null | undefined,
+): boolean {
+  if (!viewedAt) return false;
+  if (!changedByOthersAt) return true;
+  return viewedAt.getTime() >= changedByOthersAt.getTime();
+}
+
+/**
+ * Действия с задачей, сделанные не смотрящим. Своими считаются и действия
+ * агента от его имени: сам себе он «новое» не приносит.
+ */
+export function othersActivityWhere(
+  taskIds: string[],
+  viewerId: string,
+): Prisma.WorkActivityWhereInput {
+  return {
+    taskId: { in: taskIds },
+    AND: [
+      { OR: [{ actorId: null }, { actorId: { not: viewerId } }] },
+      { OR: [{ onBehalfOfId: null }, { onBehalfOfId: { not: viewerId } }] },
+    ],
+  };
+}
+
+export interface WorkViewerState {
+  foreign: boolean;
+  viewed: boolean;
+}
+
+export const NO_VIEWER_STATE: WorkViewerState = {
+  foreign: false,
+  viewed: false,
+};
+
+/**
+ * От чьего имени агент заводил задачи: `taskId → userId`. Запись о создании
+ * одна на задачу, и только у неё здесь есть смысл.
+ */
+export async function loadCreatedOnBehalf(
+  prisma: PrismaService,
+  taskIds: string[],
+): Promise<Map<string, string>> {
+  if (taskIds.length === 0) return new Map();
+  const rows = await prisma.workActivity.findMany({
+    where: {
+      taskId: { in: taskIds },
+      kind: 'task_created',
+      onBehalfOfId: { not: null },
+    },
+    select: { taskId: true, onBehalfOfId: true },
+  });
+  const byTask = new Map<string, string>();
+  for (const row of rows) {
+    if (row.taskId && row.onBehalfOfId) byTask.set(row.taskId, row.onBehalfOfId);
+  }
+  return byTask;
+}
+
+/**
+ * Оба признака для пачки карточек одним заходом: три запроса на доску, а не
+ * три на карточку.
+ */
+export async function loadWorkViewerState(
+  prisma: PrismaService,
+  tasks: ReadonlyArray<{
+    id: string;
+    assigneeId: string | null;
+    createdById: string | null;
+  }>,
+  viewerId: string,
+): Promise<Map<string, WorkViewerState>> {
+  const taskIds = tasks.map((task) => task.id);
+  if (taskIds.length === 0) return new Map();
+
+  const [onBehalf, views, changes] = await Promise.all([
+    loadCreatedOnBehalf(prisma, taskIds),
+    prisma.workTaskView.findMany({
+      where: { userId: viewerId, taskId: { in: taskIds } },
+      select: { taskId: true, viewedAt: true },
+    }),
+    prisma.workActivity.groupBy({
+      by: ['taskId'],
+      where: othersActivityWhere(taskIds, viewerId),
+      _max: { createdAt: true },
+    }),
+  ]);
+  const viewedAt = new Map(views.map((row) => [row.taskId, row.viewedAt]));
+  const changedAt = new Map(
+    changes.map((row) => [row.taskId, row._max.createdAt]),
+  );
+
+  return new Map(
+    tasks.map((task) => [
+      task.id,
+      {
+        foreign: isForeignWorkTask(
+          { ...task, createdOnBehalfOfId: onBehalf.get(task.id) ?? null },
+          viewerId,
+        ),
+        viewed: isWorkTaskViewed(
+          viewedAt.get(task.id),
+          changedAt.get(task.id),
+        ),
+      },
+    ]),
+  );
+}

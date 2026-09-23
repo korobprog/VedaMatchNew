@@ -442,6 +442,7 @@ model User {
   workActivityOnBehalf               WorkActivity[]                @relation("WorkActivityOnBehalf")
   workTaskNoticesReceived            WorkTaskNotice[]              @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]              @relation("WorkTaskNoticeActor")
+  workTaskViews                      WorkTaskView[]                @relation("WorkTaskViews")
   workVacancyResponses               WorkVacancyResponse[]         @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                  @relation("UserApiKeys")
   agentApiKeys                       UserApiKey[]                  @relation("AgentApiKeys")
@@ -5604,6 +5605,7 @@ model WorkTask {
   attachments WorkAttachment[]
   activity    WorkActivity[]
   notices     WorkTaskNotice[]
+  views       WorkTaskView[]
 
   @@unique([spaceId, number])
   @@index([columnId, position])
@@ -5743,6 +5745,24 @@ model WorkTaskNotice {
 
   @@unique([taskId, recipientId, actorId])
   @@index([notifyAt, claimedAt])
+}
+
+/// Отметка «Просмотрено» на карточке (VED-365): человек посмотрел задачу.
+///
+/// Своя у каждого: один проверил, другой ещё нет. Строка одна на пару
+/// «задача — человек», повторное нажатие переставляет дату. «Просмотрено»
+/// гаснет само, когда задачу после этого трогал кто-то другой (перенос,
+/// комментарий — `WorkActivity` не этого человека новее `viewedAt`): смотреть
+/// надо снова. Считается при чтении, здесь только дата.
+model WorkTaskView {
+  taskId   String
+  task     WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation("WorkTaskViews", fields: [userId], references: [id], onDelete: Cascade)
+  viewedAt DateTime @default(now())
+
+  @@id([taskId, userId])
+  @@index([userId])
 }
 
 /// Мой отклик в «Вакансиях» — для агенды «Мой день».

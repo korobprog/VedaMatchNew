@@ -25,6 +25,7 @@ import { toWorkLabel, toWorkMember, toWorkTaskCard } from './work-dto';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { resolveTaskStatusMark } from './work-task-status';
+import { loadWorkViewerState } from './work-viewer-state';
 import { WorkSpacesService } from './work-spaces.service';
 import {
   WORK_ARCHIVE_LIMIT,
@@ -120,12 +121,14 @@ export class WorkBoardsService {
       }),
     ]);
     const prefix = space?.prefix ?? '';
+    const shown = tasks.slice(0, WORK_ARCHIVE_LIMIT);
+    const viewer = await loadWorkViewerState(this.prisma, shown, userId);
 
     return {
       view,
       hasMore: tasks.length > WORK_ARCHIVE_LIMIT,
-      items: tasks.slice(0, WORK_ARCHIVE_LIMIT).map((task) => ({
-        ...toWorkTaskCard(task, prefix, task.column.name),
+      items: shown.map((task) => ({
+        ...toWorkTaskCard(task, prefix, task.column.name, viewer.get(task.id)),
         columnName: task.column.name,
         archivedAt: task.archivedAt?.toISOString() ?? null,
       })),
@@ -188,6 +191,12 @@ export class WorkBoardsService {
       },
     });
     if (!board) throw new NotFoundException('Доска не найдена');
+    // «Чужое» и «Просмотрено» — для этого смотрящего (VED-320, VED-365).
+    const viewer = await loadWorkViewerState(
+      this.prisma,
+      board.columns.flatMap((column) => column.tasks),
+      userId,
+    );
 
     return {
       id: board.id,
@@ -207,7 +216,12 @@ export class WorkBoardsService {
         // оптимистично и берёт ярлык отсюда (VED-311, VED-320).
         statusMark: resolveTaskStatusMark(column.name),
         tasks: column.tasks.map((task) =>
-          toWorkTaskCard(task, board.space.prefix, column.name),
+          toWorkTaskCard(
+            task,
+            board.space.prefix,
+            column.name,
+            viewer.get(task.id),
+          ),
         ),
       })),
     };

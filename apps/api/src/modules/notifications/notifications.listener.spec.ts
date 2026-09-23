@@ -869,12 +869,14 @@ describe('NotificationsListener wiring', () => {
       'VED-42',
       'testing',
       ['user-2'],
+      { ownerIds: undefined },
     );
     expect(notifications.refreshWorkTaskMark).toHaveBeenCalledWith(
       'space-1',
       'VED-43',
       'done',
       [],
+      { ownerIds: undefined },
     );
 
     await app.close();

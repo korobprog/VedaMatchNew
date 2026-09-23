@@ -489,6 +489,9 @@ export class NotificationsListener {
         event.statusMark,
         // Страховка от издателя старой сборки, где поля ещё не было.
         event.liftRecipientIds ?? [],
+        // «Чужое» у тех, кто задаче не хозяин (VED-320). Нет поля — нет и
+        // чужих: пометка у всех одна.
+        { ownerIds: event.ownerIds },
       )
       .catch((error) =>
         this.logger.warn(
