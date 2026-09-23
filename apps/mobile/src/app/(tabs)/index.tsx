@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlogHomeStrip } from '@/components/blog/blog-home-strip';
 import { ConversationRow } from '@/components/chat/conversation-row';
 import { QuickConferenceRow } from '@/components/chat/quick-conference-row';
 import { NotificationBell } from '@/components/notifications/notification-bell';
@@ -132,6 +133,10 @@ export default function ChatsScreen() {
           значком в ряду: у неё есть что сказать словами, включая потолок
           в четыре человека, а значок этого не скажет. */}
       <QuickConferenceRow />
+      {/* Блог-лента (VED-334): первое, что видно на главной сайта, — здесь
+          начало ленты полосой над беседами. Почему в «Чатах», а не шестой
+          вкладкой, — у компонента. Скрытая полоса не оставляет ничего. */}
+      <BlogHomeStrip />
       {requestsCount > 0 ? (
         <Pressable
           accessibilityRole="button"

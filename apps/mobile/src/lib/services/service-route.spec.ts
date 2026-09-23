@@ -15,6 +15,11 @@ describe('serviceTarget', () => {
     expect(target.kind === 'in-app' && target.path).not.toBe('/wellness/scan');
   });
 
+  it('«Блог-лента» открывается своими экранами — ленту не отправляют в браузер (VED-334)', () => {
+    expect(serviceTarget({ slug: 'blog', url: '/blog' })).toEqual({ kind: 'in-app', path: '/blog' });
+    expect(hasInAppScreen('blog')).toBe(true);
+  });
+
   it('остальные сервисы по-прежнему уходят на сайт', () => {
     expect(serviceTarget({ slug: 'market', url: '/market' })).toEqual({
       kind: 'site',
