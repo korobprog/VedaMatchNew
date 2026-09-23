@@ -50,7 +50,9 @@ export const iconDangerButton = `${iconButtonBase} border-red-400/40 text-red-50
 const iconTileBase =
   "inline-flex min-h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-0.5 py-1.5 text-center text-[10px] leading-tight tracking-tight whitespace-nowrap transition-colors disabled:opacity-50 min-[360px]:text-[11px] min-[400px]:px-1 min-[400px]:text-xs min-[400px]:tracking-normal";
 export const iconTile = `${iconTileBase} border-glass-brd text-text-1 hover:border-cyan/40 hover:text-text-0 aria-expanded:border-magenta aria-expanded:text-text-0`;
-export const iconTileDanger = `${iconTileBase} border-red-400/40 text-red-500 hover:bg-red-500/10 aria-expanded:bg-red-500/10`;
+/* Красный подписи — по теме (VED-343): `text-red-500` на светлой карточке
+   давал 3.75:1 — мало для 11px. `red-700` там ≈ 6:1, на тёмной `red-400`. */
+export const iconTileDanger = `${iconTileBase} border-red-400/40 text-red-700 hover:bg-red-500/10 aria-expanded:bg-red-500/10 dark:text-red-400`;
 
 export const badgeClass =
   "inline-flex items-center rounded-full border border-glass-brd px-2.5 py-1 text-xs font-medium text-text-1";
