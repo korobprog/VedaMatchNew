@@ -41,6 +41,18 @@ vi.mock("@/components/api-keys/api-keys-settings", () => ({
   ApiKeysSettings: () => null,
 }));
 
+// То же с настройками уведомлений (/notifications/preferences,
+// /notifications/delivery-status) и выбором общины (/communities/me): под
+// нагрузкой CI отказ приходил уже после разбора jsdom и падал с «window is not
+// defined» — прогон краснел при зелёных тестах.
+vi.mock("@/components/pwa/notification-settings", () => ({
+  NotificationSettings: () => null,
+}));
+
+vi.mock("@/components/communities/community-picker", () => ({
+  CommunityPicker: () => null,
+}));
+
 const user: UserProfile = {
   id: "user-1",
   email: "user@example.com",
