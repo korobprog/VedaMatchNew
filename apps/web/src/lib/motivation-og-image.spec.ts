@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   OG_IMAGE_ATTEMPTS,
   OG_IMAGE_MAX_BYTES,
-  OG_PREVIEW_HEIGHT,
+  OG_PREVIEW_MAX_HEIGHT,
   OG_PREVIEW_WIDTH,
   encodeWithinLimit,
-  ogBackdropSampleSize,
   ogImagePath,
   ogImageSource,
-  ogPreviewLayout,
+  ogPreviewSize,
   type OgEncoding,
 } from "./motivation-og-image";
 
@@ -27,7 +26,7 @@ describe("encodeWithinLimit", () => {
   it("тяжёлый кадр снижает качество, пока не уложится в предел", async () => {
     const result = await encodeWithinLimit(
       async ({ quality }) =>
-        new Uint8Array(quality > 70 ? OG_IMAGE_MAX_BYTES + 1 : 200_000),
+        new Uint8Array(quality > 70 ? OG_IMAGE_MAX_BYTES + 1 : 50_000),
     );
 
     expect(result.attempt.quality).toBeLessThanOrEqual(70);
@@ -61,8 +60,12 @@ describe("encodeWithinLimit", () => {
     }
   });
 
-  it("предел строже, чем у WhatsApp (~300 КБ)", () => {
-    expect(OG_IMAGE_MAX_BYTES).toBeLessThanOrEqual(300_000);
+  /**
+   * VED-357, седьмой круг. Крупно WhatsApp показывал лёгкий кадр PR #360, а
+   * миниатюры случались на 230–265 КБ. Предел — заметно меньше 100 КБ.
+   */
+  it("предел заметно меньше 100 КБ", () => {
+    expect(OG_IMAGE_MAX_BYTES).toBeLessThanOrEqual(90_000);
   });
 });
 
@@ -111,13 +114,13 @@ describe("ogImageSource", () => {
 });
 
 /**
- * VED-201, второй заход: «открытки, пересланные в мессенджеры, отображаются
- * урезанными» — кадр собирался жёстко под 9:16 с `fit: 'cover'`.
- * VED-357, четвёртый: кадр стал повторять пропорции исходника, и вертикальную
- * карточку WhatsApp свернул в миниатюру сбоку. Теперь кадр всегда альбомный
- * 1200×630, а картинка в него вписана целиком — ни одного срезанного пикселя.
+ * VED-201, второй заход: «открытки отображаются урезанными» — кадр
+ * собирался жёстко под 9:16 с `fit: 'cover'`.
+ * VED-357, PR #463: альбомный 1200×630 с иллюстрацией посередине на размытой
+ * копии — две трети карточки заняли поля, владелец назвал это уродством.
+ * Теперь кадр — сама картинка в своих пропорциях: ни полей, ни обрезки.
  */
-describe("ogPreviewLayout", () => {
+describe("ogPreviewSize", () => {
   const ratio = (size: { width: number; height: number }) =>
     size.width / size.height;
 
@@ -132,81 +135,74 @@ describe("ogPreviewLayout", () => {
     { width: 4000, height: 3000 },
   ];
 
-  it("кадр у всех постов один — иначе объявленный размер соврёт", () => {
+  it("иллюстрация рилса — вертикальные 630×945, как ширина варианта PR #360", () => {
+    expect(ogPreviewSize({ width: 1024, height: 1536 })).toEqual({
+      width: 630,
+      height: 945,
+    });
+  });
+
+  it("пропорции кадра — пропорции исходника: полей нет, обрезать нечего", () => {
     for (const source of SOURCES) {
-      expect(ogPreviewLayout(source).frame).toEqual({
-        width: OG_PREVIEW_WIDTH,
-        height: OG_PREVIEW_HEIGHT,
-      });
+      const size = ogPreviewSize(source);
+      // Округление до целой точки — не больше пикселя по любой стороне.
+      expect(Math.abs(size.height - (size.width * source.height) / source.width))
+        .toBeLessThanOrEqual(1);
     }
   });
 
-  it("кадр альбомный: WhatsApp большую карточку рисует такому", () => {
-    expect(OG_PREVIEW_WIDTH / OG_PREVIEW_HEIGHT).toBeGreaterThan(1.5);
-  });
-
-  it("картинка вписана целиком, пропорции исходника сохранены", () => {
+  it("ширина — OG_PREVIEW_WIDTH, если высота не упирается в потолок", () => {
     for (const source of SOURCES) {
-      const { art } = ogPreviewLayout(source);
-      expect(ratio(art)).toBeCloseTo(ratio(source), 1);
+      const size = ogPreviewSize(source);
+      if (size.height < OG_PREVIEW_MAX_HEIGHT) {
+        expect(size.width).toBe(OG_PREVIEW_WIDTH);
+      }
     }
   });
 
-  it("ничего не вылезает за кадр — срезать нечего", () => {
+  it("очень узкая упирается в высоту и становится уже, а не обрезается", () => {
+    const size = ogPreviewSize({ width: 200, height: 2000 });
+    expect(size.height).toBe(OG_PREVIEW_MAX_HEIGHT);
+    expect(size.width).toBe(112);
+    expect(ratio(size)).toBeCloseTo(0.1, 2);
+  });
+
+  it("сторис 9:16 ровно в потолок — тот же кадр 630×1120, что в PR #360", () => {
+    expect(ogPreviewSize({ width: 1080, height: 1920 })).toEqual({
+      width: 630,
+      height: 1120,
+    });
+  });
+
+  it("широкая открытка остаётся широкой", () => {
+    expect(ogPreviewSize({ width: 1600, height: 1200 })).toEqual({
+      width: 630,
+      height: 473,
+    });
+    expect(ogPreviewSize({ width: 3000, height: 800 })).toEqual({
+      width: 630,
+      height: 168,
+    });
+  });
+
+  it("мелкую картинку растягивает до ширины кадра, а не оставляет значком", () => {
+    expect(ogPreviewSize({ width: 240, height: 240 })).toEqual({
+      width: 630,
+      height: 630,
+    });
+  });
+
+  it("ни одна сторона не выходит за пределы", () => {
     for (const source of SOURCES) {
-      const { art, left, top } = ogPreviewLayout(source);
-      expect(left).toBeGreaterThanOrEqual(0);
-      expect(top).toBeGreaterThanOrEqual(0);
-      expect(left + art.width).toBeLessThanOrEqual(OG_PREVIEW_WIDTH);
-      expect(top + art.height).toBeLessThanOrEqual(OG_PREVIEW_HEIGHT);
+      const size = ogPreviewSize(source);
+      expect(size.width).toBeLessThanOrEqual(OG_PREVIEW_WIDTH);
+      expect(size.height).toBeLessThanOrEqual(OG_PREVIEW_MAX_HEIGHT);
     }
-  });
-
-  it("картинка стоит посередине — поля по бокам поровну", () => {
-    for (const source of SOURCES) {
-      const { art, left, top } = ogPreviewLayout(source);
-      expect(Math.abs(OG_PREVIEW_WIDTH - art.width - left * 2)).toBeLessThanOrEqual(1);
-      expect(Math.abs(OG_PREVIEW_HEIGHT - art.height - top * 2)).toBeLessThanOrEqual(1);
-    }
-  });
-
-  it("вертикальная упирается в высоту кадра, а не в ширину", () => {
-    // Рилс 2:3: выше кадра, поэтому его высота и задаёт масштаб.
-    expect(ogPreviewLayout({ width: 1024, height: 1536 }).art.height).toBe(
-      OG_PREVIEW_HEIGHT,
-    );
-  });
-
-  it("широкая упирается в ширину кадра", () => {
-    expect(ogPreviewLayout({ width: 3000, height: 800 }).art.width).toBe(
-      OG_PREVIEW_WIDTH,
-    );
-  });
-
-  it("мелкую картинку растягивает до кадра, а не оставляет значком", () => {
-    // Telegram мелкое превью показывает значком сбоку вместо большой карточки.
-    const { art } = ogPreviewLayout({ width: 240, height: 240 });
-    expect(art.height).toBe(OG_PREVIEW_HEIGHT);
-    expect(ratio(art)).toBeCloseTo(1, 2);
   });
 
   it("вырожденный размер не роняет расчёт", () => {
-    const { art } = ogPreviewLayout({ width: 0, height: 0 });
-    expect(art.width).toBeGreaterThan(0);
-    expect(art.height).toBeGreaterThan(0);
-  });
-});
-
-describe("ogBackdropSampleSize", () => {
-  it("копия под размытие держит пропорции кадра", () => {
-    const sample = ogBackdropSampleSize();
-    expect(sample.width / sample.height).toBeCloseTo(
-      OG_PREVIEW_WIDTH / OG_PREVIEW_HEIGHT,
-      1,
-    );
-  });
-
-  it("копия сильно меньше кадра — размытие стоит квадрат радиуса", () => {
-    expect(ogBackdropSampleSize().width).toBeLessThan(OG_PREVIEW_WIDTH / 4);
+    const size = ogPreviewSize({ width: 0, height: 0 });
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.height).toBeGreaterThan(0);
   });
 });

@@ -5,11 +5,11 @@ import { categoryLink } from "@/components/motivation/feed-style";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 import {
   OG_IMAGE_TYPE,
-  OG_PREVIEW_HEIGHT,
-  OG_PREVIEW_WIDTH,
   ogImagePath,
   ogImageSource,
+  ogPreviewSize,
 } from "@/lib/motivation-og-image";
+import { probeImageSize } from "@/lib/motivation-og-probe";
 import { buildShareMeta } from "./share-meta";
 
 /**
@@ -31,7 +31,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const post = await getPublicMotivationPost(slug);
   if (!post) return { title: "VedaMatch Inspiration" };
   const { title: shareTitle, description } = buildShareMeta(post);
-  const poster = ogImageSource(post) ? ogImagePath(slug) : null;
+  const source = ogImageSource(post);
+  const poster = source ? ogImagePath(slug) : null;
+  // Размер превью (VED-357): картинка повторяет пропорции исходника, поэтому
+  // страница узнаёт его размер по заголовку файла и считает кадр той же
+  // функцией, что и маршрут `/m/[slug]/og`. Не узнали — размеры не
+  // объявляем: бот прочтёт их из самого файла.
+  const sourceSize = source ? await probeImageSize(source) : null;
+  const previewSize = sourceSize ? ogPreviewSize(sourceSize) : null;
   return {
     title: `${post.title} — Inspiration`,
     description,
@@ -39,18 +46,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: post.videoUrl ? "video.other" : "article",
       title: shareTitle,
       description,
-      // Размеры объявлены (VED-357). Раньше их здесь не было: кадр повторял
-      // пропорции картинки и у каждого поста был свой, а врать про размер
-      // хуже, чем молчать. Но молчание стоило дорого — WhatsApp сворачивал
-      // вертикальную карточку в миниатюру сбоку. Теперь кадр у всех один,
-      // альбомный 1200×630 (`motivation-og-image.ts`), и числа честные.
+      // Размеры объявлены, когда известны (VED-357): с ними WhatsApp
+      // показывал превью крупно, во всю ширину пузыря (PR #360). Кадр —
+      // сама иллюстрация в своих пропорциях, без полей и без обрезки.
       images: poster
         ? [
             {
               url: poster,
               type: OG_IMAGE_TYPE,
-              width: OG_PREVIEW_WIDTH,
-              height: OG_PREVIEW_HEIGHT,
+              ...(previewSize ?? {}),
               alt: shareTitle,
             },
           ]
