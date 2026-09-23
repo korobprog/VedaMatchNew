@@ -4,8 +4,15 @@ describe('serviceTarget', () => {
   it('«Здоровье» открывается в приложении: в браузере телефона камеры нет', () => {
     expect(serviceTarget({ slug: 'wellness', url: '/wellness' })).toEqual({
       kind: 'in-app',
-      path: '/wellness/scan',
+      path: '/wellness',
     });
+  });
+
+  it('карточка ведёт в РАЗДЕЛ, а не сразу в сканер', () => {
+    // Сканер — одно из средств «Здоровья»; следующему нужно место рядом, а
+    // не кнопка внутри чужого экрана (VED-335, третий заход).
+    const target = serviceTarget({ slug: 'wellness', url: '/wellness' });
+    expect(target.kind === 'in-app' && target.path).not.toBe('/wellness/scan');
   });
 
   it('остальные сервисы по-прежнему уходят на сайт', () => {

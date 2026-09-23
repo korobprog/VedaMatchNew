@@ -9,12 +9,17 @@ import {
   Param,
   Patch,
   Post,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { normalizeBarcode } from './barcode';
+import {
+  hasCompositionWord,
+  NO_COMPOSITION_WORD_MESSAGE,
+} from './composition-word';
 import {
   parseProductInput,
   parseReportComment,
@@ -61,8 +66,20 @@ export class WellnessController {
   }
 
   /**
-   * Снимок состава, когда штрихкод не читается — стёрт, смят или его нет.
+   * Снимок состава: когда штрихкод не читается — стёрт, смят или его нет, — и
+   * когда товара нет в базе и его надо туда добавить.
    * Модель только читает буквы; вердикт считает наш код по справочнику.
+   *
+   * Снимок обязан содержать слово-заголовок состава («Состав», «Ингредиенты»,
+   * «Ingredients», «Склад»). Это не придирка: снимок — единственный путь, по
+   * которому в базу попадает состав со слов участника, и без проверки туда
+   * уйдёт снятый наугад бок пачки или таблица пищевой ценности, а потом
+   * ответит вердиктом другому человеку у полки. Подробности —
+   * `composition-word.ts`.
+   *
+   * 422, а не 400: тело запроса правильное, снимок настоящий — не подошло
+   * его содержимое, и на клиенте это отдельная подсказка «переснимите», а не
+   * «вы что-то сломали».
    */
   @Post('recognize')
   @Throttle({ default: { ttl: 60_000, limit: 12 } })
@@ -76,8 +93,11 @@ export class WellnessController {
       }
       throw error;
     }
-    const ingredientsRaw = await this.recognize.readLabel(image);
-    return { ingredientsRaw };
+    const reading = await this.recognize.readLabel(image);
+    if (!hasCompositionWord(reading.raw)) {
+      throw new UnprocessableEntityException(NO_COMPOSITION_WORD_MESSAGE);
+    }
+    return { ingredientsRaw: reading.ingredientsRaw };
   }
 
   /** Справочник ингредиентов: он же экран «что мы умеем находить». */

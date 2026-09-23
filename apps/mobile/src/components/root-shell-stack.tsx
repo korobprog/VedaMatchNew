@@ -92,8 +92,15 @@ function RootStackInner() {
               незачем. Экран ответа берёт штрихкод из адреса, а не из памяти
               сканера: так в него возвращаются из истории и попадают по
               ссылке, а вердикт всегда пересчитывается заново. */}
+          {/* Раздел «Здоровье» (VED-335): вход в сервис открывает ярлыки
+              средств, а не сразу сканер — сканер одно из них. */}
+          <Stack.Screen name="wellness/index" />
           <Stack.Screen name="wellness/scan" />
           <Stack.Screen name="wellness/result/[barcode]" />
+          {/* Съёмка состава, когда товара нет в базе: «не найдено» перестаёт
+              быть тупиком и становится путём пополнения базы. Штрихкод в
+              адресе — к нему и привяжется новая карточка. */}
+          <Stack.Screen name="wellness/label/[barcode]" />
           <Stack.Screen name="wellness/history" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
