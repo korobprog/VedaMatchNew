@@ -34,14 +34,21 @@ export const iconDangerButton = `${iconButtonBase} border-red-400/40 text-red-50
  * То же, что `iconButton`, но слово под значком читается сразу, без
  * наведения мышью: `title` на телефоне не показывается никогда, и голый
  * значок там — загадка, а не кнопка. Тап-цель остаётся ≥44px: `min-h-14`
- * берёт значок и строку подписи, ширину задаёт колонка сетки — даже на
- * 320px три колонки дают больше 44px каждая.
+ * берёт значок и строку подписи, ширину задаёт колонка сетки.
+ *
+ * Сетка — четыре колонки и на телефоне (VED-343), поэтому кегль подписи
+ * идёт от ширины экрана, а не один на всех. Замер в Chromium, самая длинная
+ * подпись «Поделиться»: клетка 59px на 320, 69px на 360, 79px на 400. При
+ * 12px слово занимает 69px и в 360 не входит, поэтому до 400px — 11px (на
+ * 320 — 10px) с плотным трекингом и почти без боковых полей; с 400px, где
+ * и живёт телефон заказчика (412px), — снова 12px, как было. Клетка во всех
+ * случаях не ниже 56px и не уже 59px — цель касания больше 44×44.
  *
  * Цвет подписи — `text-text-1`, а не `text-text-2`: вторичный на стекле не
  * добирает 4.5:1 на мелком кегле (замер записан в `globals.css`).
  */
 const iconTileBase =
-  "inline-flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-xl border px-1 py-1.5 text-center text-xs leading-tight transition-colors disabled:opacity-50";
+  "inline-flex min-h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-0.5 py-1.5 text-center text-[10px] leading-tight tracking-tight whitespace-nowrap transition-colors disabled:opacity-50 min-[360px]:text-[11px] min-[400px]:px-1 min-[400px]:text-xs min-[400px]:tracking-normal";
 export const iconTile = `${iconTileBase} border-glass-brd text-text-1 hover:border-cyan/40 hover:text-text-0 aria-expanded:border-magenta aria-expanded:text-text-0`;
 export const iconTileDanger = `${iconTileBase} border-red-400/40 text-red-500 hover:bg-red-500/10 aria-expanded:bg-red-500/10`;
 

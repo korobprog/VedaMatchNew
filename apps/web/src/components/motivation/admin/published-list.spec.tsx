@@ -115,14 +115,16 @@ describe("MotivationPublishedList", () => {
       ["Открыть в ленте", "В ленте"],
       ["Править текст", "Править"],
       ["Скрыть из ленты", "Скрыть"],
-      ["Читать полностью", "Читать"],
+      ["Поделиться афоризмом", "Поделиться"],
       ["Заменить картинку", "Заменить"],
       ["Удалить", "Удалить"],
       ["Поиск", "Поиск"],
       ["Скрытые", "Скрытые"],
     ] as const) {
       const control = screen.getByRole(
-        ["Открыть в ленте", "Скрытые"].includes(name) ? "link" : "button",
+        ["Открыть в ленте", "Скрытые", "Поделиться афоризмом"].includes(name)
+          ? "link"
+          : "button",
         { name },
       );
       expect(control).toHaveAttribute("title");
@@ -431,17 +433,15 @@ describe("MotivationPublishedList", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  // VED-264: «Показать текст афоризма полностью — быстро, без возвращения
-  // в ленту, из меню читать полностью».
-  describe("«Читать полностью» (VED-264)", () => {
-    it("раскрывает и сворачивает полный текст афоризма прямо в карточке", async () => {
-      const user = userEvent.setup();
+  // VED-343: «Сделай 2 ряда клавиш вместо трех. Кнопку читать замени на
+  // кнопку поделиться и уменьши размер кнопок чтобы влезли в 2 ряда по 4».
+  describe("«Поделиться» и сетка 4×2 (VED-343)", () => {
+    it("«Читать» больше нет — на его месте «Поделиться» на экран портала", () => {
       render(
         <MotivationPublishedList
           posts={[
             post({
               text: "Душа не умирает\n\nПояснение к стиху",
-              attributionSpeaker: "Прабхупада",
               attributionWork: "Бхагавад-гита",
               attributionLocator: "2.13",
             }),
@@ -449,25 +449,39 @@ describe("MotivationPublishedList", () => {
         />,
       );
 
-      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: "Читать полностью" }));
-
-      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
-      expect(screen.getByText(/Прабхупада · Бхагавад-гита · 2\.13/)).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: "Свернуть текст" }));
-
-      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Читать полностью" })).toBeNull();
+      const share = screen.getByRole("link", { name: "Поделиться афоризмом" });
+      const url = new URL(share.getAttribute("href")!, "https://x");
+      expect(url.pathname).toBe("/share");
+      // Тот же адрес, что у кнопки ленты: ссылка на пост и картинка Stories.
+      expect(url.searchParams.get("link")).toBe("/m/gita-2-13");
+      expect(url.searchParams.get("file")).toBe("/m/gita-2-13/story");
+      expect(url.searchParams.get("sourceService")).toBe("motivation");
+      // Делятся цитатой, а не пояснением.
+      expect(url.searchParams.get("text")).toBe("Душа не умирает");
     });
 
-    it("не уходит из «Опубликованных» и не открывает форму правки", async () => {
-      const user = userEvent.setup();
+    it("у скрытой карточки «Поделиться» неактивна: страницы поста нет", () => {
+      render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
+
+      const share = screen.getByRole("button", {
+        name: "Скрыто — поделиться можно после возврата в ленту",
+      });
+      expect(share).toBeDisabled();
+      expect(share).toHaveTextContent("Поделиться");
+    });
+
+    it("восемь кнопок стоят в четыре колонки на любом экране", () => {
       render(<MotivationPublishedList posts={[post()]} />);
 
-      await user.click(screen.getByRole("button", { name: "Читать полностью" }));
-
-      expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
+      const grid = screen.getByRole("button", { name: "Править текст" }).parentElement!;
+      const classes = grid.className.split(/\s+/);
+      expect(classes).toContain("grid-cols-4");
+      // Ни одной «телефонной» трёхколоночной раскладки не осталось.
+      expect(classes.some((name) => /grid-cols-3/.test(name))).toBe(false);
+      // Восемь клеток: семь кнопок-ссылок и выбор файла у «Заменить».
+      const cells = [...grid.children].filter((cell) => cell.tagName !== "INPUT");
+      expect(cells).toHaveLength(8);
     });
   });
 
