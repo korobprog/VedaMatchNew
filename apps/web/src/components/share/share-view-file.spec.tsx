@@ -97,7 +97,7 @@ describe("ShareView: картинка в приложение", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Сохранить картинку");
   });
 
-  it("«Сохранить картинку» отзывается и говорит, где искать файл", async () => {
+  it("без fileQualities — одна «Сохранить картинку», как раньше", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jpegResponse())));
     render(<ShareView {...PROPS} />);
     const save = await screen.findByRole("link", { name: "Сохранить картинку" });
@@ -107,5 +107,102 @@ describe("ShareView: картинка в приложение", () => {
     fireEvent.click(save);
     expect(screen.getByRole("link", { name: "✓ Картинка сохранена" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("«Загрузки»");
+  });
+});
+
+/**
+ * VED-156, дописка от 23.09: «Сделай 3 кнопки сохранить изображение в разном
+ * качестве, чтобы когда нужно хорошее качество можно было его получить».
+ */
+describe("ShareView: три качества «Сохранить картинку»", () => {
+  const clicks: string[] = [];
+
+  beforeEach(() => {
+    Object.assign(navigator, { share: vi.fn(), canShare: vi.fn(() => true) });
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:file-${++n}`);
+    URL.revokeObjectURL = vi.fn();
+    clicks.length = 0;
+    // Невидимая ссылка скачивания: jsdom не качает, запоминаем, что отдали.
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(`${this.download} ${this.getAttribute("href")}`);
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const pngResponse = () =>
+    ({
+      ok: true,
+      blob: () =>
+        Promise.resolve(new Blob([new Uint8Array(2_933_000)], { type: "image/png" })),
+    }) as unknown as Response;
+
+  it("три варианта в группе «Сохранить картинку», у каждого — вес", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jpegResponse())));
+    render(<ShareView {...PROPS} fileQualities />);
+
+    const group = screen.getByRole("group", { name: "Сохранить картинку" });
+    expect(group).toBeInTheDocument();
+    const light = await screen.findByRole("link", { name: /Лёгкое/ });
+    await waitFor(() => expect(light).toHaveAttribute("href", "blob:file-1"));
+    expect(light).toHaveAttribute("download", "vedamatch-reel-33e14d6e-mu376h10.jpg");
+
+    const standard = screen.getByRole("link", { name: /Хорошее/ });
+    expect(standard).toHaveAttribute("href", `${PROPS.filePath}?q=standard`);
+    expect(standard).toHaveAttribute("download", "vedamatch-reel-33e14d6e-mu376h10-hq.jpg");
+    const max = screen.getByRole("link", { name: /Максимум/ });
+    expect(max).toHaveAttribute("href", `${PROPS.filePath}?q=max`);
+    expect(max).toHaveTextContent("МБ");
+    // «Отправить в приложение» на месте и берёт лёгкий файл.
+    expect(screen.getByRole("button", { name: "Отправить в приложение" })).toBeInTheDocument();
+  });
+
+  it("максимум: индикатор, пока файл готовится, потом сохранение с точным весом", async () => {
+    const pending = deferred<Response>();
+    const fetchMock = vi.fn((url: string) =>
+      url.includes("q=max") ? pending.promise : Promise.resolve(jpegResponse()),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ShareView {...PROPS} fileQualities />);
+    await screen.findByRole("button", { name: "Отправить в приложение" });
+
+    const max = screen.getByRole("link", { name: /Максимум/ });
+    fireEvent.click(max);
+    expect(max).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("save-spinner")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Готовим картинку «Максимум»");
+    // Повторные нажатия, пока крутится, второй загрузки не начинают.
+    fireEvent.click(max);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("q=max"))).toHaveLength(1);
+
+    await act(async () => pending.resolve(pngResponse()));
+    await waitFor(() => expect(max).toHaveTextContent("✓ Сохранено · 2,8"));
+    expect(max).not.toHaveAttribute("aria-busy");
+    expect(clicks).toEqual(["vedamatch-reel-33e14d6e-mu376h10-max.png blob:file-2"]);
+    expect(screen.getByRole("status")).toHaveTextContent("«Загрузки»");
+    // Второй раз файл уже в памяти — ссылка отдаёт его сама, без загрузки.
+    expect(max).toHaveAttribute("href", "blob:file-2");
+  });
+
+  it("не получилось — говорит словами и предлагает лёгкое", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        url.includes("q=standard")
+          ? Promise.resolve({ ok: false, status: 502 } as Response)
+          : Promise.resolve(jpegResponse()),
+      ),
+    );
+    render(<ShareView {...PROPS} fileQualities />);
+    await screen.findByRole("button", { name: "Отправить в приложение" });
+    fireEvent.click(screen.getByRole("link", { name: /Хорошее/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("«Хорошее»");
+    expect(screen.getByRole("alert")).toHaveTextContent("«Лёгкое»");
+    expect(clicks).toEqual([]);
   });
 });

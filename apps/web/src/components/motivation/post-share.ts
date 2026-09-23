@@ -56,6 +56,9 @@ export function postShareHref(post: SharedPost): {
       subtitleInPreview: "1",
       link: `/m/${slug}`,
       file: `/m/${slug}/story`,
+      /* `/m/<slug>/story` понимает `?q=light|standard|max` — экран покажет
+         три качества «Сохранить картинку» (VED-156). */
+      fileQualities: "1",
       previewUrl: post.storyImageUrl || post.imageUrl,
       sourceService: "motivation",
       sourceId: post.slug,
