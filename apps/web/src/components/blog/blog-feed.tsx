@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import type { BlogFeedResponse, BlogPostDto } from "@vedamatch/shared";
-import { BlogApiError, fetchBlogFeed } from "@/lib/blog-client-api";
+import {
+  BlogApiError,
+  fetchBlogFavorites,
+  fetchBlogFeed,
+} from "@/lib/blog-client-api";
 import { BlogComposer } from "./blog-composer";
 import { BlogPostCard } from "./blog-post-card";
 
@@ -14,10 +18,13 @@ export function BlogFeed({
   initial,
   scope = "all",
   showComposer = true,
+  autoFocusComposer = false,
 }: {
   initial: BlogFeedResponse;
-  scope?: "current" | "all";
+  /** `favorites` — вкладка «Избранное» (VED-238). */
+  scope?: "current" | "all" | "favorites";
   showComposer?: boolean;
+  autoFocusComposer?: boolean;
 }) {
   const [posts, setPosts] = useState(initial.posts);
   const [cursor, setCursor] = useState(initial.nextCursor);
@@ -29,7 +36,10 @@ export function BlogFeed({
     setPending(true);
     setError(null);
     try {
-      const page = await fetchBlogFeed(scope, cursor);
+      const page =
+        scope === "favorites"
+          ? await fetchBlogFavorites(cursor)
+          : await fetchBlogFeed(scope, cursor);
       setPosts((current) => [...current, ...page.posts]);
       setCursor(page.nextCursor);
     } catch (cause) {
@@ -45,7 +55,11 @@ export function BlogFeed({
 
   function replace(post: BlogPostDto) {
     setPosts((current) =>
-      current.map((item) => (item.id === post.id ? post : item)),
+      // Во вкладке «Избранное» снятая звёздочка убирает пост из списка сразу:
+      // иначе вкладка показывает то, что уже не избранное.
+      scope === "favorites" && !post.favorited
+        ? current.filter((item) => item.id !== post.id)
+        : current.map((item) => (item.id === post.id ? post : item)),
     );
   }
 
@@ -53,13 +67,16 @@ export function BlogFeed({
     <div>
       {showComposer && (
         <BlogComposer
+          autoFocus={autoFocusComposer}
           onPublished={(post) => setPosts((current) => [post, ...current])}
         />
       )}
 
       {posts.length === 0 ? (
         <p className="rounded-2xl border border-glass-brd bg-glass px-4 py-8 text-center text-sm text-text-1">
-          Здесь пока пусто. Напишите первый пост — его увидят все на главной.
+          {scope === "favorites"
+            ? "В избранном пока пусто. Отметьте пост звёздочкой — он появится здесь."
+            : "Здесь пока пусто. Напишите первый пост — его увидят все на главной."}
         </p>
       ) : (
         /* `space-y-3`, а не 4 (VED-371): восемь пикселей между тремя

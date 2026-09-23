@@ -9,6 +9,7 @@ function makePost(overrides: Partial<BlogPostDto> = {}): BlogPostDto {
     title: "Праздник в храме",
     text: "Приходите в субботу к шести.",
     images: [],
+    media: [],
     createdAt: "2026-09-21T12:00:00.000Z",
     editedAt: null,
     feedUntil: null,
@@ -19,6 +20,7 @@ function makePost(overrides: Partial<BlogPostDto> = {}): BlogPostDto {
     canEdit: false,
     canManage: false,
     canModerate: false,
+    favorited: false,
     ...overrides,
   };
 }
@@ -43,7 +45,7 @@ describe("buildBlogPostCopy", () => {
       origin: "https://vedamatch.ru/",
     });
     expect(copy.split("\n\n").at(-1)).toBe(
-      "https://vedamatch.ru/blog?post=post-1",
+      "https://vedamatch.ru/blog/posts/post-1",
     );
   });
 
@@ -67,6 +69,7 @@ describe("buildBlogPostCopy", () => {
           title: "Праздник в храме",
           text: "Приходите в субботу к шести.",
           images: [],
+          media: [],
           createdAt: "2026-09-21T12:00:00.000Z",
         },
       }),
@@ -90,6 +93,7 @@ describe("buildBlogPostCopy", () => {
           title: null,
           text: "Приходите.",
           images: [],
+          media: [],
           createdAt: "2026-09-21T12:00:00.000Z",
         },
       }),
@@ -106,13 +110,13 @@ describe("buildBlogPostCopy", () => {
 describe("postLink", () => {
   it("points at the full feed with the post opened", () => {
     expect(postLink({ id: "a b" }, "https://vedamatch.ru")).toBe(
-      "https://vedamatch.ru/blog?post=a%20b",
+      "https://vedamatch.ru/blog/posts/a%20b",
     );
   });
 
   it("trims a trailing slash", () => {
     expect(postLink({ id: "x" }, "https://vedamatch.ru/")).toBe(
-      "https://vedamatch.ru/blog?post=x",
+      "https://vedamatch.ru/blog/posts/x",
     );
   });
 

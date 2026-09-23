@@ -59,8 +59,10 @@ type Attach = (node: HTMLParagraphElement | null) => void;
 export function useBlogTextFold(
   text: string,
   title: string | null = null,
+  /** Развёрнут с самого начала — страница одного поста (VED-238). */
+  initiallyExpanded = false,
 ): { fold: BlogTextFold; attachBody: Attach; attachTitle: Attach } {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [clipped, setClipped] = useState(false);
   const bodyId = useId();
   const titleId = useId();

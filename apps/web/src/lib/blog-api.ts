@@ -7,6 +7,7 @@ import type {
   BlogAuthorFeedResponse,
   BlogFeedResponse,
   BlogHomeFeedResponse,
+  BlogPostDto,
   BlogSettingsDto,
 } from "@vedamatch/shared";
 
@@ -47,6 +48,14 @@ export function getBlogAuthorFeed(
   return blogGet<BlogAuthorFeedResponse>(
     `/blog/authors/${encodeURIComponent(authorId)}`,
   );
+}
+
+export function getBlogPost(id: string): Promise<BlogPostDto | null> {
+  return blogGet<BlogPostDto>(`/blog/posts/${encodeURIComponent(id)}`);
+}
+
+export function getBlogFavorites(): Promise<BlogFeedResponse | null> {
+  return blogGet<BlogFeedResponse>("/blog/favorites");
 }
 
 /** null и для не-администратора: эндпоинт отвечает ему 403. */
