@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MotivationAdminCandidateDto } from "@vedamatch/shared";
 import { MotivationPublishedList } from "./published-list";
-import { SCROLL_NAV_GUTTER } from "./scroll-nav-buttons";
+import { SCROLL_NAV_GUTTER } from "@/components/ui/scroll-nav-buttons";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({

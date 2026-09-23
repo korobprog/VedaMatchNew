@@ -10,7 +10,7 @@ import { ArchiveList } from "./archive-list";
 import { ImageReviewCard } from "./image-review-card";
 import { LoadFailure } from "./load-failure";
 import { QuoteReviewCard } from "./quote-review-card";
-import { ScrollNavButtons } from "./scroll-nav-buttons";
+import { ScrollNavButtons } from "@/components/ui/scroll-nav-buttons";
 import {
   filterByQuery,
   selectImagePosts,
