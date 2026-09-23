@@ -72,6 +72,7 @@ export class MusicUploadsController {
       body?.lineage,
       body?.artistId,
       isAdmin(user),
+      body?.audiobookId,
     );
   }
 

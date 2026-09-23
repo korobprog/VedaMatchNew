@@ -50,6 +50,8 @@ describe("MusicUploadForm — матх записи", () => {
         "own_recording",
         expect.any(Function),
         null,
+        null,
+        null,
       ),
     );
   });
@@ -71,6 +73,8 @@ describe("MusicUploadForm — матх записи", () => {
         "own_recording",
         expect.any(Function),
         "sri_chaitanya_saraswat_math",
+        null,
+        null,
       ),
     );
   });
@@ -101,6 +105,32 @@ describe("MusicUploadForm — со страницы исполнителя (VED-
         expect.any(Function),
         null,
         "a1",
+        null,
+      ),
+    );
+  });
+});
+
+describe("MusicUploadForm — из редактора книги (VED-297)", () => {
+  it("называет книгу и отправляет её с каждым файлом", async () => {
+    const user = userEvent.setup();
+    render(
+      <MusicUploadForm audiobook={{ id: "book-1", title: "Бхагавад-гита" }} />,
+    );
+
+    expect(screen.getByText("Бхагавад-гита")).toBeInTheDocument();
+
+    await fillForm(user);
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+
+    await waitFor(() =>
+      expect(uploadMusicTrack).toHaveBeenCalledWith(
+        expect.any(File),
+        "own_recording",
+        expect.any(Function),
+        null,
+        null,
+        "book-1",
       ),
     );
   });

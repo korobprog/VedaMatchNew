@@ -10,6 +10,9 @@ import type {
   AddMusicIngestUrlsRequest,
   CreateMusicAlbumRequest,
   CreateMusicArtistRequest,
+  CreateMusicAudiobookRequest,
+  MusicAdminAudiobookChapterDto,
+  UpdateMusicAudiobookRequest,
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
   CreateMusicIngestBatchRequest,
@@ -230,6 +233,47 @@ export const removeTrackFromMusicSystemPlaylist = (
   send<unknown>(`/music/admin/catalog/playlists/${id}/tracks/${trackId}`, {
     method: "DELETE",
   });
+
+// ---------- Аудиокниги (VED-297) ----------
+
+export const createMusicAudiobook = (body: CreateMusicAudiobookRequest) =>
+  send<{ id: string; slug: string }>("/music/admin/audiobooks", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateMusicAudiobook = (
+  id: string,
+  body: UpdateMusicAudiobookRequest,
+) =>
+  send<{ id: string; slug: string }>(`/music/admin/audiobooks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+export const deleteMusicAudiobook = (id: string) =>
+  send<{ ok: true }>(`/music/admin/audiobooks/${id}`, { method: "DELETE" });
+
+/** Состав книги целиком, по порядку: добавить, убрать и переставить. */
+export const setMusicAudiobookChapters = (id: string, trackIds: string[]) =>
+  send<{ ok: true; chapterCount: number }>(
+    `/music/admin/audiobooks/${id}/chapters`,
+    { method: "PUT", body: JSON.stringify({ trackIds }) },
+  );
+
+/** Записи, которые ещё не главы: по слову или записи чтеца книги. */
+export const findMusicAudiobookCandidates = (
+  q: string,
+  readerId: string | null,
+) => {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("q", q.trim());
+  if (readerId) params.set("reader", readerId);
+  return send<MusicAdminAudiobookChapterDto[]>(
+    `/music/admin/audiobooks/candidates?${params.toString()}`,
+    { method: "GET" },
+  );
+};
 
 // ---------- Редакционное пополнение ----------
 //

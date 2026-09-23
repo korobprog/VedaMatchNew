@@ -9,6 +9,7 @@ import { cookies } from "next/headers";
 import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
+  MusicAudiobookPageDto,
   MusicAudiobooksDto,
   MusicCatalogDto,
   MusicCategoryDto,
@@ -71,11 +72,24 @@ export function getMusicCategories(): Promise<MusicCategoryDto[] | null> {
 }
 
 /**
- * Раздел «Аудиокниги» (VED-237) — чтецы и их записи. В общем каталоге их
- * нет: «отображение всех аудиокниг находится внутри этой кнопки».
+ * Раздел «Аудиокниги» (VED-237, VED-297): книги как самостоятельные
+ * единицы. В общем каталоге их глав нет: «отображение всех аудиокниг
+ * находится внутри этой кнопки».
  */
 export function getMusicAudiobooks(): Promise<MusicAudiobooksDto | null> {
   return musicGet<MusicAudiobooksDto>("/music/audiobooks");
+}
+
+/**
+ * Страница книги. С токеном — вместе с местом, где человек остановился;
+ * `null` — книги нет или это черновик, а смотрит не редакция.
+ */
+export function getMusicAudiobook(
+  slug: string,
+): Promise<MusicAudiobookPageDto | null> {
+  return musicGet<MusicAudiobookPageDto>(
+    `/music/audiobooks/${encodeURIComponent(slug)}`,
+  );
 }
 
 /** Свои плейлисты — для рельса, каталога и страницы списка. */

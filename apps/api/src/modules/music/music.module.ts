@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MusicAssistantListener } from './music-assistant.listener';
+import {
+  MusicAdminAudiobooksController,
+  MusicAudiobooksController,
+} from './music-audiobooks.controller';
+import { MusicAudiobooksService } from './music-audiobooks.service';
 import { AuthModule } from '../auth/auth.module';
 import {
   MusicAdminCatalogController,
@@ -39,6 +44,7 @@ import {
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 import { MusicWorkerService } from './music-worker.service';
+import { MusicDurationRecountService } from './music-duration-recount.service';
 
 /**
  * Сервис «Музыка». См. docs/music-service-plan.md.
@@ -56,6 +62,8 @@ import { MusicWorkerService } from './music-worker.service';
   imports: [AuthModule],
   controllers: [
     MusicCatalogController,
+    MusicAudiobooksController,
+    MusicAdminAudiobooksController,
     MusicStreamController,
     MusicCoversController,
     MusicCoverFilesController,
@@ -73,6 +81,7 @@ import { MusicWorkerService } from './music-worker.service';
   ],
   providers: [
     MusicCatalogService,
+    MusicAudiobooksService,
     MusicAdminCatalogService,
     MusicArtistTagsService,
     MusicAdminQueueService,
@@ -88,6 +97,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicIngestFetchService,
     MusicIngestProcessService,
     MusicWorkerService,
+    MusicDurationRecountService,
     MusicPurgeListener,
     MusicAssistantListener,
   ],

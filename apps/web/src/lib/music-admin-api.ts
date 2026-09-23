@@ -5,6 +5,7 @@
 import { cookies } from "next/headers";
 import type {
   MusicAdminAlbumsDto,
+  MusicAdminAudiobooksDto,
   MusicAdminArtistsDto,
   MusicAdminCategoriesDto,
   MusicAdminPlaylistDto,
@@ -53,6 +54,10 @@ export const getMusicAdminAlbums = () =>
 
 export const getMusicAdminCategories = () =>
   adminGet<MusicAdminCategoriesDto>("/music/admin/catalog/categories");
+
+/** Книги со всеми главами и записи чтецов «не в книге» (VED-297). */
+export const getMusicAdminAudiobooks = () =>
+  adminGet<MusicAdminAudiobooksDto>("/music/admin/audiobooks");
 
 /** Весь каталог любого статуса — список для правки и удаления. */
 export const getMusicAdminTracks = () =>

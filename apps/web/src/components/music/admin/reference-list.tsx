@@ -391,10 +391,12 @@ function Row({
               type="button"
               onClick={toggleAudiobook}
               disabled={pending}
-              aria-label={`«${row.primary}»: записи ${
-                row.isAudiobook ? "в разделе «Аудиокниги»" : "в Медиатеке"
-              }. Нажмите, чтобы перенести ${
-                row.isAudiobook ? "в Медиатеку" : "в «Аудиокниги»"
+              aria-label={`«${row.primary}»: ${
+                row.isAudiobook
+                  ? "чтец, записи вне Медиатеки"
+                  : "записи в Медиатеке"
+              }. Нажмите, чтобы ${
+                row.isAudiobook ? "вернуть в Медиатеку" : "отметить чтецом"
               }`}
               className={`shrink-0 self-center rounded-full border px-2 text-[11px] transition-colors disabled:opacity-50 ${
                 row.isAudiobook
@@ -405,7 +407,7 @@ function Row({
                   : "border-glass-brd text-text-2 hover:text-text-0"
               }`}
             >
-              {row.isAudiobook ? "аудиокниги" : "медиатека"}
+              {row.isAudiobook ? "чтец" : "медиатека"}
             </button>
           )}
           {kind === "category" && row.categoryKind && (

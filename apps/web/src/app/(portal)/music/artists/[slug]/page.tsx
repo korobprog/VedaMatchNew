@@ -7,6 +7,7 @@ import { getMusicArtist, getMusicCategories } from "@/lib/music-api";
 import { MusicArtistAdminCategory } from "@/components/music/artist-admin-category";
 import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
 import { MusicArtistPlayback } from "@/components/music/music-artist-playback";
+import { MusicAudiobookCard } from "@/components/music/audiobook-card";
 import { MusicCover } from "@/components/music/music-cover";
 import { plural } from "@/lib/plural";
 
@@ -42,6 +43,7 @@ export default async function MusicArtistPage({
   if (!page) notFound();
 
   const { artist, albums, tracks } = page;
+  const audiobooks = page.audiobooks ?? [];
   // Редакция Музыки: переименовать исполнителя на месте (VED-102) и грузить
   // записи с его именем (VED-114). Участнику сервер ни то ни другое не
   // примет, и кнопки ему только пообещали бы это.
@@ -115,6 +117,26 @@ export default async function MusicArtistPage({
           <p className="mt-6 max-w-2xl text-sm leading-relaxed text-text-1">
             {artist.bio}
           </p>
+        )}
+
+        {/* Книги в его чтении (VED-297) — у чтеца их может быть несколько,
+            и каждая открывается своей страницей с главами по порядку. */}
+        {audiobooks.length > 0 && (
+          <section className="mt-8" aria-labelledby="artist-audiobooks">
+            <h2
+              id="artist-audiobooks"
+              className="font-display text-base font-bold text-text-0"
+            >
+              Аудиокниги в его чтении
+            </h2>
+            <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {audiobooks.map((book) => (
+                <li key={book.id}>
+                  <MusicAudiobookCard book={book} />
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         {albums.length > 0 && (

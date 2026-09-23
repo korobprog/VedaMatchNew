@@ -4,7 +4,11 @@ import { canAdminService } from "@vedamatch/shared";
 import { MusicRail } from "@/components/music/music-rail";
 import { MyMusicUploadsList } from "@/components/music/my-uploads-list";
 import { MusicUploadForm } from "@/components/music/upload-form";
-import { getMusicArtist, getMyMusicUploads } from "@/lib/music-api";
+import {
+  getMusicArtist,
+  getMusicAudiobook,
+  getMyMusicUploads,
+} from "@/lib/music-api";
 import { getProfile } from "@/lib/api";
 import { formatBytes } from "@/lib/music-duration";
 
@@ -28,12 +32,20 @@ export const metadata: Metadata = {
 export default async function MyMusicUploadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ artist?: string | string[] }>;
+  searchParams: Promise<{
+    artist?: string | string[];
+    audiobook?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const artistSlug =
     (Array.isArray(params.artist) ? params.artist[0] : params.artist)?.trim() ||
     null;
+  const audiobookSlug =
+    (Array.isArray(params.audiobook)
+      ? params.audiobook[0]
+      : params.audiobook
+    )?.trim() || null;
   const [data, user] = await Promise.all([getMyMusicUploads(), getProfile()]);
 
   /**
@@ -61,6 +73,17 @@ export default async function MyMusicUploadsPage({
       : null;
   const artist = artistPage
     ? { id: artistPage.artist.id, name: artistPage.artist.name }
+    : null;
+
+  /* Пришли из редактора книги (VED-297) — файлы встают её главами. Тоже
+     только у редакции: черновик книги виден ей одной, а участнику сервер
+     место в книге не выдаст. */
+  const audiobookPage =
+    canReview && audiobookSlug
+      ? await getMusicAudiobook(audiobookSlug).catch(() => null)
+      : null;
+  const audiobook = audiobookPage
+    ? { id: audiobookPage.book.id, title: audiobookPage.book.title }
     : null;
 
   const pending =
@@ -91,7 +114,7 @@ export default async function MyMusicUploadsPage({
       )}
 
       <div className="mt-5">
-        <MusicUploadForm artist={artist} />
+        <MusicUploadForm artist={artist} audiobook={audiobook} />
       </div>
 
       {canReview && waiting > 0 && (

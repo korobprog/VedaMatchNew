@@ -44,7 +44,7 @@ export function MusicBulkArtistAudiobookBar({
       const what = `${result.updated} ${artistsWord(result.updated)}`;
       setDone(
         isAudiobook
-          ? `${what} — записи ушли в раздел «Аудиокниги».`
+          ? `${what} — записи ушли из Медиатеки. Соберите их в книги во вкладке «Аудиокниги».`
           : `${what} — записи вернулись в Медиатеку.`,
       );
       onClear();
@@ -80,7 +80,7 @@ export function MusicBulkArtistAudiobookBar({
           onClick={() => void apply(true)}
           className="h-9 rounded-lg border border-cyan/50 px-3 text-sm font-semibold text-text-0 disabled:opacity-50"
         >
-          {pending ? "Сохраняем…" : "В «Аудиокниги»"}
+          {pending ? "Сохраняем…" : "Отметить чтецами"}
         </button>
         <button
           type="button"
