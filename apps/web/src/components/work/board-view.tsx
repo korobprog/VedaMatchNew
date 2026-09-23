@@ -18,6 +18,7 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  Paperclip,
   Pencil,
   Plus,
   Search,
@@ -66,7 +67,7 @@ import {
 } from "./column-collapse";
 import { WorkArchivePanel } from "./archive-panel";
 import { WorkInvitePanel } from "./invite-panel";
-import { workPersonLabel } from "./person-label";
+import { workPersonLabel, workPersonShortLabel } from "./person-label";
 import { workToolbarButtonClass } from "./toolbar-button";
 import {
   TASK_SEARCH_DEBOUNCE_MS,
@@ -76,11 +77,11 @@ import {
   isTaskQuery,
   searchBoardColumns,
   searchColumns,
+  SEARCH_SHOW_ALL,
+  SEARCH_SHOW_FOUND,
   searchSummary,
-  searchToggleLabel,
 } from "./task-search";
 import { WorkTaskDialog } from "./task-dialog";
-import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
 import { BOARD_REFRESH_MS, shouldApplyBoardRefresh } from "./board-refresh";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
@@ -101,7 +102,16 @@ import {
 import { deriveTaskTitle, taskFromDraft } from "./task-title";
 import { PRIORITY_TITLE, priorityMark } from "./task-priority";
 import { groupTasksByPriority } from "./task-grouping";
-import { groupTasksByCreatedDate } from "./task-created-grouping";
+import {
+  groupTasksByCreatedDate,
+  groupTasksByEditedDate,
+} from "./task-created-grouping";
+import {
+  columnGroupOf,
+  isStatusColumn,
+  orderColumnsByKind,
+  splitColumnsByKind,
+} from "./task-section";
 import {
   readWorkGroupMode,
   writeWorkGroupMode,
@@ -169,9 +179,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
      а именно от этого и просили избавить. */
   const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
-  // Исполнитель и срок новой задачи. Заполнены заранее — см. openComposer.
+  // Исполнитель новой задачи. Заполнен заранее — см. openComposer.
   const [draftAssignee, setDraftAssignee] = useState("");
-  const [draftDue, setDraftDue] = useState("");
   const [draftPriority, setDraftPriority] =
     useState<WorkTaskPriority>("normal");
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -482,10 +491,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   }
 
   /**
-   * Задачу заводят одним движением, поэтому исполнитель и срок в форме уже
-   * стоят: себе и до конца сегодняшнего дня. Оба — самый частый случай, оба
-   * меняются на месте, и оба нужны, чтобы карточка сразу попала в «Мой день»,
-   * а не осела на доске без срока и без хозяина.
+   * Задачу заводят одним движением, поэтому исполнитель в форме уже стоит:
+   * себе — самый частый случай, меняется на месте.
+   *
+   * Срока в форме больше нет (VED-378, «спрячь графу Срок внутрь карточки»):
+   * его ставят в открытой карточке. Молча подставлять «сегодня до 23:59», как
+   * раньше, при спрятанном поле нельзя — назавтра каждая новая задача
+   * краснела бы просроченной, а откуда у неё срок, человек бы не знал.
    */
   function openComposer(columnId: string) {
     setComposerColumn(columnId);
@@ -497,7 +509,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         ? board.viewerId
         : "",
     );
-    setDraftDue(endOfDayInput(new Date()));
     // Важность — единственное поле формы, которое начинает с нуля: «срочно»
     // у прошлой задачи ничего не говорит о следующей, а тихо унаследованное
     // «срочно» обесценивает метку на всей доске.
@@ -514,7 +525,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
    */
   async function addTask(columnId: string) {
     if (!board || !draft.trim() || saving) return;
-    const dueAt = dueFromInput(draftDue);
     const { title, description } = taskFromDraft(draft, draftTitle);
     const files = draftFiles;
     setSaving(true);
@@ -524,7 +534,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         title,
         description: description || undefined,
         assigneeId: draftAssignee || null,
-        dueAt: dueAt ?? null,
+        dueAt: null,
         priority: draftPriority,
       });
       if (files.length > 0) {
@@ -540,6 +550,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       setDraftTitle(null);
       setDraftFiles([]);
       setDraftPriority("normal");
+      // Заведённая задача — форма прячется под «+ Задача» (VED-424): иначе
+      // она оставалась открытой и выкатывалась снова при каждом развороте
+      // раздела.
+      setComposerColumn(null);
       setBoard(await getWorkBoard(board.id));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не получилось");
@@ -580,7 +594,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
    */
   async function moveColumn(columnId: string, direction: -1 | 1) {
     if (!board) return;
-    const neighbours = columnNeighbours(board.columns, columnId, direction);
+    // Разделы и статусы стоят двумя группами (VED-430): колонку переставляют
+    // внутри своей группы, по соседям в ней.
+    const neighbours = columnNeighbours(
+      columnGroupOf(board.columns, columnId),
+      columnId,
+      direction,
+    );
     if (!neighbours) return;
     try {
       setBoard(await updateWorkColumn(columnId, neighbours));
@@ -627,6 +647,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     const next = toggleCollapsedColumn(collapsed, columnId);
     setCollapsed(next);
     writeCollapsedColumns(board.id, next);
+    if (composerColumn === columnId) closeEmptyComposer();
+  }
+
+  /**
+   * Пустая форма новой задачи прячется под «+ Задача», когда раздел
+   * сворачивают или разворачивают (VED-424): заказчик разворачивал раздел, а
+   * там снова выкатывалась форма, открытая когда-то раньше. Начатое описание
+   * или выбранные скриншоты форму держат — их не выбрасываем.
+   */
+  function closeEmptyComposer() {
+    if (!draft.trim() && draftFiles.length === 0) setComposerColumn(null);
   }
 
   /**
@@ -641,6 +672,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     );
     setCollapsed(next);
     writeCollapsedColumns(board.id, next);
+    closeEmptyComposer();
   }
 
   /** Переключить вид раздела (VED-51, VED-160). Нажатие на активный режим
@@ -656,7 +688,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
 
   function moveBeside(task: WorkTaskCardDto, direction: -1 | 1) {
     if (!board) return;
-    const columnId = columnBeside(board, task.columnId, direction);
+    // «Следующий» — следующий на экране: разделы, потом статусы (VED-430).
+    const columnId = columnBeside(
+      { ...board, columns: orderColumnsByKind(board.columns) },
+      task.columnId,
+      direction,
+    );
     if (columnId) void commitMove(task.id, columnId, 0);
   }
 
@@ -695,9 +732,23 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const foreignTotal = countForeign(board.columns);
   const activeFolder: WorkTaskFolder = foreignTotal > 0 ? folder : "mine";
   const inForeign = activeFolder === "foreign";
-  const shownColumns = searchActive
-    ? searchBoardColumns(board.columns, matches, revealAll)
-    : folderColumns(board.columns, activeFolder);
+  /* Сначала разделы, потом статусы (VED-430): «нужно отделить разделы
+     задач и разделы их статусов». Между группами — подпись «Статусы». */
+  const shownColumns = orderColumnsByKind(
+    searchActive
+      ? searchBoardColumns(board.columns, matches, revealAll)
+      : folderColumns(board.columns, activeFolder),
+  );
+  const firstStatusId = shownColumns.some((column) => !isStatusColumn(column))
+    ? shownColumns.find(isStatusColumn)?.id
+    : undefined;
+  /** Названия разделов — для подписи раздела на карточке в статусе. */
+  const sectionNames = new Map(
+    splitColumnsByKind(board.columns).sections.map((column) => [
+      column.id,
+      column.name,
+    ]),
+  );
   // Находки считаем по доске, а не по нарисованному: при «Показать все»
   // нарисовано всё.
   const found = searchActive
@@ -728,6 +779,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         </h1>
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
+        </span>
+        {/* Приглашения и участники — в строке с названием среды, а не в
+            панели вида (VED-421): «кнопку ссылка убери отсюда, он тут не в
+            тему и занимает место». Панель — про то, как разложить задачи;
+            состав среды — про саму среду, ему место рядом с её именем. */}
+        <span className="ml-auto">
+          <WorkInvitePanel
+            space={space}
+            viewerId={board.viewerId}
+            onChanged={reload}
+          />
         </span>
         {/* Один ряд, слева направо: «Свернуть все» (только на телефоне), «По
             дате», «По важности», «Архив», «Пригласить» — порядок, которого
@@ -805,6 +867,24 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           >
             По дате
           </button>
+          {/* «По правке» (VED-421) — сразу после «По дате», как просил
+              заказчик: задачи по времени создания и последней правки,
+              свежетронутые сверху. */}
+          <button
+            type="button"
+            aria-pressed={groupMode === "edited"}
+            onClick={() => toggleGroupMode("edited")}
+            title={
+              groupMode === "edited"
+                ? "Карточки собраны по последней правке; перетаскивание пока выключено"
+                : "Собрать карточки раздела по последней правке: свежетронутые сверху"
+            }
+            className={workToolbarButtonClass({
+              pressed: groupMode === "edited",
+            })}
+          >
+            По правке
+          </button>
           <button
             type="button"
             aria-pressed={groupMode === "priority"}
@@ -830,7 +910,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             <Archive aria-hidden className="size-4 shrink-0" />
             <span className="hidden sm:inline">Архив</span>
           </button>
-          <WorkInvitePanel space={space} onChanged={reload} />
         </div>
       </div>
 
@@ -857,30 +936,46 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           />
         </label>
         {searchActive && (
-          <p
-            role="status"
-            className="mt-1 flex items-center gap-2 text-xs text-text-1"
-          >
-            {searchSummary(found, countTasks(board))}
-            {/* Показана вся доска — сказать, где искать найденное. */}
-            {revealAll && found > 0 && " — отмечены «Найдено»"}
-            {searching && (
-              <Loader2 aria-hidden className="size-3.5 animate-spin" />
-            )}
-            {/* Высота 32 вместо 16 по строке текста: в такую пальцем
-                промахивались. */}
-            {/* «Показать все» больше не сбрасывает поиск (VED-131): запрос
-                остаётся в поле, доска показывается целиком, найденное
-                выделено. Той же кнопкой — обратно к одним находкам.
-                Высота 44 — цель для пальца. */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 sm:max-w-sm">
+            <p
+              role="status"
+              className="flex w-full items-center gap-2 text-xs text-text-1"
+            >
+              {searchSummary(found, countTasks(board))}
+              {/* Показана вся доска — сказать, где искать найденное. */}
+              {revealAll && found > 0 && " — отмечены «Найдено»"}
+              {searching && (
+                <Loader2 aria-hidden className="size-3.5 animate-spin" />
+              )}
+            </p>
+            {/* Две кнопки вместо одной с меняющейся подписью (VED-417):
+                «Показать найденные» слева, «Показать все» справа. Нажатая
+                видна рамкой и `aria-pressed`. «Показать все» по-прежнему не
+                сбрасывает поиск (VED-131): запрос остаётся в поле, найденное
+                выделено. Сбросить поиск — крестик в поле или Escape. */}
             <button
               type="button"
-              onClick={() => setRevealAll((value) => !value)}
-              className="min-h-11 px-1 font-semibold text-text-0 underline underline-offset-2"
+              aria-pressed={!revealAll}
+              onClick={() => setRevealAll(false)}
+              className={workToolbarButtonClass({
+                pressed: !revealAll,
+                extra: "min-h-11",
+              })}
             >
-              {searchToggleLabel(revealAll)}
+              {SEARCH_SHOW_FOUND}
             </button>
-          </p>
+            <button
+              type="button"
+              aria-pressed={revealAll}
+              onClick={() => setRevealAll(true)}
+              className={workToolbarButtonClass({
+                pressed: revealAll,
+                extra: "ml-auto min-h-11",
+              })}
+            >
+              {SEARCH_SHOW_ALL}
+            </button>
+          </div>
         )}
       </div>
 
@@ -943,6 +1038,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           карточку в соседний раздел можно стрелками на ней.
         </p>
       )}
+      {groupMode === "edited" && (
+        <p className="mb-3 text-xs text-text-2">
+          Карточки собраны по последней правке: сверху те, что завели или
+          меняли недавно, — поля, перенос, комментарий, чек-лист, вложения.
+          Перетаскивание пока выключено; перенести карточку в соседний раздел
+          можно стрелками на ней.
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="mb-3 text-sm text-magenta">
@@ -966,7 +1069,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           // прячет карточки, но не убирает их из колонки.
           const full =
             board.columns.find((item) => item.id === column.id) ?? column;
-          const index = board.columns.indexOf(full);
+          // Место внутри своей группы — разделов или статусов (VED-430):
+          // стрелки «раньше/позже» у заголовка ходят только по ней.
+          const group = columnGroupOf(board.columns, column.id);
+          const index = group.findIndex((item) => item.id === column.id);
           const over = isOverWip(full);
           const columnMatches = searchActive
             ? countMatches(full.tasks, matches)
@@ -992,6 +1098,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               // карточка легла бы не туда. Кнопки переноса работают всегда.
               draggable={!searchActive && groupMode === "none" && !inForeign}
               found={searchActive && revealAll && matches.has(task.id)}
+              // Задача в статусе говорит, о чём она (VED-430): «РАБОТА».
+              sectionName={
+                isStatusColumn(full) && task.sectionId
+                  ? (sectionNames.get(task.sectionId) ?? null)
+                  : null
+              }
               onOpen={() => setOpenTaskId(task.id)}
               onHandleDown={(event) => onHandleDown(event, task.id)}
               onHandleMove={onHandleMove}
@@ -1004,7 +1116,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               }}
             />
           );
-          return (
+          const section = (
             <section
               key={column.id}
               ref={(element) => {
@@ -1136,7 +1248,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                     </button>
                     <button
                       type="button"
-                      disabled={index === board.columns.length - 1}
+                      disabled={index === group.length - 1}
                       aria-label={`Переставить раздел «${column.name}» позже`}
                       onClick={() => void moveColumn(column.id, 1)}
                       className="rounded p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
@@ -1314,17 +1426,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                             ))}
                           </select>
                         </label>
-                        <label className="text-xs text-text-1">
-                          Срок
-                          <input
-                            type="datetime-local"
-                            value={draftDue}
-                            onChange={(event) =>
-                              setDraftDue(event.target.value)
-                            }
-                            className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
-                          />
-                        </label>
                         {/* Важность здесь же, а не в открытой карточке:
                             «срочно» известно в ту же секунду, что и название,
                             а за вторым заходом его обычно не ставят вовсе. */}
@@ -1440,19 +1541,26 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                       );
                     })}
                   </div>
-                ) : groupMode === "date" ? (
+                ) : groupMode === "date" || groupMode === "edited" ? (
                   <div className="flex min-h-[40px] flex-col gap-3">
-                    {groupTasksByCreatedDate(column.tasks, now).map((group) => (
-                      <div key={group.bucket}>
+                    {(groupMode === "edited"
+                      ? groupTasksByEditedDate(column.tasks, now)
+                      : groupTasksByCreatedDate(column.tasks, now)
+                    ).map((dateGroup) => (
+                      <div key={dateGroup.bucket}>
                         <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-text-2">
-                          <History aria-hidden className="size-3.5" />
-                          {group.title}
+                          {groupMode === "edited" ? (
+                            <Pencil aria-hidden className="size-3.5" />
+                          ) : (
+                            <History aria-hidden className="size-3.5" />
+                          )}
+                          {dateGroup.title}
                           <span className="font-normal">
-                            {group.tasks.length}
+                            {dateGroup.tasks.length}
                           </span>
                         </h3>
                         <ul className="flex flex-col gap-2">
-                          {group.tasks.map((task) => (
+                          {dateGroup.tasks.map((task) => (
                             <li key={task.id}>{renderCard(task)}</li>
                           ))}
                         </ul>
@@ -1475,6 +1583,27 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               </div>
             </section>
           );
+          /* Граница групп (VED-430): перед первой колонкой статуса — подпись
+             «Статусы». Не заголовок: названия колонок — h2, и лишний уровень
+             ломал бы их порядок для скринридера. */
+          if (column.id !== firstStatusId) return section;
+          return [
+            <div
+              key="status-divider"
+              className="flex items-center gap-2 pt-2 text-xs font-semibold uppercase tracking-wide text-text-1 sm:flex-col sm:justify-center sm:px-1 sm:pt-0"
+            >
+              <span
+                aria-hidden
+                className="h-px flex-1 bg-glass-brd sm:h-auto sm:w-px"
+              />
+              <span className="sm:[writing-mode:vertical-rl]">Статусы</span>
+              <span
+                aria-hidden
+                className="h-px flex-1 bg-glass-brd sm:h-auto sm:w-px"
+              />
+            </div>,
+            section,
+          ];
         })}
 
         {canManage &&
@@ -1562,6 +1691,7 @@ function TaskCard({
   canEdit,
   draggable,
   found = false,
+  sectionName = null,
   onOpen,
   onHandleDown,
   onHandleMove,
@@ -1576,6 +1706,8 @@ function TaskCard({
   draggable: boolean;
   /** Совпала с поиском, а на доске показано всё (VED-131) — выделить. */
   found?: boolean;
+  /** Раздел задачи, стоящей в колонке статуса (VED-430). */
+  sectionName?: string | null;
   onOpen: () => void;
   onHandleDown: (event: React.PointerEvent) => void;
   onHandleMove: (event: React.PointerEvent) => void;
@@ -1589,16 +1721,17 @@ function TaskCard({
     !task.completedAt &&
     new Date(task.dueAt) < new Date();
   const mark = priorityMark(task.priority);
+  const handle = canEdit && draggable;
 
   return (
     <div
       ref={cardRef}
-      className={`rounded-xl border border-glass-brd bg-bg-1 p-2 transition-opacity ${
+      className={`rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 transition-opacity ${
         mark?.edge ?? ""
       } ${found ? "ring-2 ring-gold" : ""} ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-start gap-1">
-        {canEdit && draggable && (
+        {handle && (
           // Ручка, а не вся карточка: перетаскивание за всю карточку отнимает
           // у телефона вертикальную прокрутку доски.
           // aria-hidden без role и без фокуса: для клавиатуры и скринридера
@@ -1615,24 +1748,43 @@ function TaskCard({
           </span>
         )}
         <button type="button" onClick={onOpen} className="flex-1 text-left">
-          <span className="block text-sm text-text-0">{task.title}</span>
+          <span className="block text-sm leading-snug text-text-0">
+            {task.title}
+          </span>
         </button>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-5 text-xs text-text-2">
+      {/* Одна строка сведений и действий (VED-431, VED-418): раньше под
+          названием шли три строки — номер со счётчиками, имя исполнителя
+          отдельной строкой справа и ещё строка со стрелками и «Просмотрено».
+          Заказчик: «много пустых мест», «перемести эти кнопки в направлении
+          стрелки» — вправо, в строку с номером. Стрелки и «Просмотрено»
+          прижаты вправо и переносятся под сведения, только если в строке им
+          не хватило места. */}
+      <div
+        className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-2 ${
+          handle ? "pl-5" : ""
+        }`}
+      >
         <span className="font-mono">{task.key}</span>
         {/* Состояние — сразу за номером (VED-311): «в каком состоянии задача»
-            человек спрашивает первым, и ответ должен попасться раньше срока и
-            счётчиков. Тот же компонент, что в ленте уведомлений, и тот же код
-            от сервера: расхождение между лентой и доской было отдельной
-            жалобой (VED-320). */}
-        {/* У чужой задачи — «Чужое» вместо состояния (VED-320): у меня она
-            не «Тестерование», это не моя работа. */}
+            человек спрашивает первым. У чужой задачи — «Чужое» вместо
+            состояния (VED-320). */}
         <StatusMarkBadge mark={taskMark(task)} />
-        {/* Находка среди всей доски (VED-131): рамка и слово. Одной рамки
-            мало — на солнце и дальтонику золото не отличить от края
-            важности. Слово цветом `text-1`, краска — только на обводке: у
-            золота на светлой теме 3,66:1, для подписи мало. */}
+        {/* Раздел задачи, уехавшей в статус (VED-430): в «Тестеровании»
+            видно, что она из «РАБОТЫ». */}
+        {sectionName && (
+          <span
+            title={`Раздел: ${sectionName}`}
+            className="max-w-[9rem] truncate rounded-full bg-glass px-1.5 py-0.5 text-[10px] text-text-1"
+          >
+            <span className="sr-only">Раздел: </span>
+            {sectionName}
+          </span>
+        )}
+        {/* Находка среди всей доски (VED-131): рамка и слово. Слово цветом
+            `text-1`, краска — только на обводке: у золота на светлой теме
+            3,66:1, для подписи мало. */}
         {found && (
           <span className="rounded-full border border-gold/60 px-1.5 py-0.5 text-[10px] font-medium text-text-1">
             Найдено
@@ -1659,6 +1811,7 @@ function TaskCard({
             className={`flex items-center gap-1 ${overdue ? "text-magenta" : ""}`}
           >
             <CalendarClock aria-hidden className="size-3.5" />
+            <span className="sr-only">Срок: </span>
             {new Date(task.dueAt).toLocaleDateString("ru-RU", {
               day: "numeric",
               month: "short",
@@ -1668,85 +1821,102 @@ function TaskCard({
         {task.checklistTotal > 0 && (
           <span className="flex items-center gap-1">
             <ListChecks aria-hidden className="size-3.5" />
+            <span className="sr-only">Чек-лист: </span>
             {task.checklistDone}/{task.checklistTotal}
           </span>
         )}
         {task.commentCount > 0 && (
           <span className="flex items-center gap-1">
             <MessageSquare aria-hidden className="size-3.5" />
+            <span className="sr-only">Комментарии: </span>
             {task.commentCount}
           </span>
         )}
-        {task.assignee && (
-          <span className="ml-auto truncate text-text-1">
-            {workPersonLabel(task.assignee)}
-          </span>
-        )}
-      </div>
-
-      {/* Нижняя строка: стрелки переноса и «Просмотрено» (VED-365) — там,
-          где заказчик поставил галочки на скриншоте, в одну строку и на
-          телефоне. */}
-      <div className="mt-1 flex items-center gap-1 pl-5">
-        {canEdit && (
-          // Клавиатурный путь к переносу. Перетаскивание мышью и пальцем
-          // работает, но им нельзя пользоваться с клавиатуры, а доска без
-          // переноса бесполезна — поэтому кнопки видны всегда, а не только на
-          // наведении.
-          //
-          // «Предыдущая» и «следующая», а не «слева» и «справа»: на телефоне
-          // колонки стоят столбиком, и «слева» там показывало бы вверх.
-          // Стрелка разворачивается вслед за раскладкой по той же причине.
-          <>
-            <button
-              type="button"
-              onClick={() => onMoveBeside(-1)}
-              aria-label={`Перенести «${task.title}» в предыдущий раздел`}
-              className="rounded p-1 text-text-2 hover:text-text-0"
-            >
-              <ChevronUp aria-hidden className="size-4 sm:hidden" />
-              <ChevronLeft aria-hidden className="hidden size-4 sm:block" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onMoveBeside(1)}
-              aria-label={`Перенести «${task.title}» в следующий раздел`}
-              className="rounded p-1 text-text-2 hover:text-text-0"
-            >
-              <ChevronDown aria-hidden className="size-4 sm:hidden" />
-              <ChevronRight aria-hidden className="hidden size-4 sm:block" />
-            </button>
-          </>
-        )}
-        {/* «Просмотрено» — своя отметка, у каждого своя: «эту я посмотрел».
-            Гаснет сама, когда задачу после этого переносит или комментирует
-            другой, — смотреть надо снова. Переключатель: `aria-pressed`
-            говорит скринридеру, отмечено ли, а галочка — глазам, не только
-            цвет. Пилюля маленькая, а цель нажатия — 44px по высоте:
-            отрицательные поля не раздувают карточку. */}
-        <button
-          type="button"
-          aria-pressed={task.viewed}
-          onClick={onToggleViewed}
-          aria-label={`Просмотрено: «${task.title}»`}
-          title={
-            task.viewed
-              ? "Вы отметили задачу просмотренной. Нажмите, чтобы снять отметку"
-              : "Отметить задачу просмотренной"
-          }
-          className="group -my-2.5 ml-1 inline-flex min-h-11 items-center py-2.5"
-        >
+        {/* Скрепка — к карточке приложены скриншоты или файлы (VED-431). */}
+        {task.attachmentCount > 0 && (
           <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-              task.viewed
-                ? "border-cyan bg-glass text-text-0"
-                : "border-text-2/60 text-text-1 group-hover:text-text-0"
-            }`}
+            className="flex items-center gap-1"
+            title={`Вложения: ${task.attachmentCount}`}
           >
-            {task.viewed && <Check aria-hidden className="size-3" />}
-            Просмотрено
+            <Paperclip aria-hidden className="size-3.5" />
+            <span className="sr-only">Вложения: </span>
+            {task.attachmentCount}
           </span>
-        </button>
+        )}
+        {/* Исполнитель — первым словом имени, в той же строке (VED-431):
+            полное имя справа занимало на телефоне отдельную строку. Полное —
+            в подсказке и для скринридера. */}
+        {task.assignee && (
+          <span
+            title={`Исполнитель: ${workPersonLabel(task.assignee)}`}
+            className="max-w-[8rem] truncate text-text-1"
+          >
+            <span className="sr-only">
+              Исполнитель: {workPersonLabel(task.assignee)}
+            </span>
+            <span aria-hidden>{workPersonShortLabel(task.assignee)}</span>
+          </span>
+        )}
+
+        <span className="ml-auto flex items-center gap-0.5">
+          {canEdit && (
+            // Клавиатурный путь к переносу. Перетаскивание мышью и пальцем
+            // работает, но им нельзя пользоваться с клавиатуры, а доска без
+            // переноса бесполезна — поэтому кнопки видны всегда.
+            //
+            // «Предыдущая» и «следующая», а не «слева» и «справа»: на
+            // телефоне колонки стоят столбиком, и «слева» там показывало бы
+            // вверх. Стрелка разворачивается вслед за раскладкой.
+            <>
+              <button
+                type="button"
+                onClick={() => onMoveBeside(-1)}
+                aria-label={`Перенести «${task.title}» в предыдущий раздел`}
+                className="rounded p-1 text-text-2 hover:text-text-0"
+              >
+                <ChevronUp aria-hidden className="size-4 sm:hidden" />
+                <ChevronLeft aria-hidden className="hidden size-4 sm:block" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMoveBeside(1)}
+                aria-label={`Перенести «${task.title}» в следующий раздел`}
+                className="rounded p-1 text-text-2 hover:text-text-0"
+              >
+                <ChevronDown aria-hidden className="size-4 sm:hidden" />
+                <ChevronRight aria-hidden className="hidden size-4 sm:block" />
+              </button>
+            </>
+          )}
+          {/* «Просмотрено» — своя отметка, у каждого своя (VED-365). Гаснет
+              сама, когда задачу после этого переносит или комментирует
+              другой. `aria-pressed` говорит скринридеру, отмечено ли, а
+              галочка — глазам. Пилюля маленькая, а цель нажатия — 44px по
+              высоте: отрицательные поля не раздувают строку. */}
+          <button
+            type="button"
+            aria-pressed={task.viewed}
+            onClick={onToggleViewed}
+            aria-label={`Просмотрено: «${task.title}»`}
+            title={
+              task.viewed
+                ? "Вы отметили задачу просмотренной. Нажмите, чтобы снять отметку"
+                : "Отметить задачу просмотренной"
+            }
+            className="group -my-2.5 ml-1 inline-flex min-h-11 items-center py-2.5"
+          >
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                task.viewed
+                  ? "border-cyan bg-glass text-text-0"
+                  : "border-text-2/60 text-text-1 group-hover:text-text-0"
+              }`}
+            >
+              {task.viewed && <Check aria-hidden className="size-3" />}
+              Просмотрено
+            </span>
+          </button>
+        </span>
       </div>
     </div>
   );

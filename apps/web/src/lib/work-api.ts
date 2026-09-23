@@ -30,6 +30,7 @@ import type {
   WorkTaskDto,
   WorkTaskSearchResponse,
   WorkTaskViewedResponse,
+  WorkMemberRole,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -101,6 +102,17 @@ export const deleteWorkSpace = (spaceId: string) =>
 
 export const leaveWorkSpace = (spaceId: string, userId: string) =>
   send<void>(`/work/spaces/${spaceId}/members/${userId}`, "DELETE");
+
+/**
+ * Сменить роль участника (VED-422). Владелец назначает любую роль, в том
+ * числе «владелец» — совладельца; основного владельца так не понизить.
+ */
+export const setWorkMemberRole = (
+  spaceId: string,
+  userId: string,
+  role: WorkMemberRole,
+) =>
+  send<void>(`/work/spaces/${spaceId}/members/${userId}`, "PATCH", { role });
 
 /**
  * ИИ-агенты, которых можно принять в среду. Пусто — либо все уже приняты,

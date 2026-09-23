@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
 import type {
   WorkBoardDto,
   WorkTaskDto,
@@ -22,6 +23,13 @@ import {
   updateWorkTask,
 } from "@/lib/work-api";
 import { uploadInTurn, uploadProblemMessage } from "./attach-files";
+import { isLongChecklistText } from "./checklist-text";
+import {
+  chooseSection,
+  chooseStatus,
+  placeStatusId,
+  splitColumnsByKind,
+} from "./task-section";
 import { workPersonLabel } from "./person-label";
 import { PRIORITY_TITLE } from "./task-priority";
 import {
@@ -31,6 +39,10 @@ import {
   taskEditsProblem,
   type TaskDraft,
 } from "./task-edits";
+
+/** Поле карточки: одинаковое у всех списков и у срока. */
+const FIELD_CLASS =
+  "mt-1 block w-full min-w-0 rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0";
 
 /** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
 function growToText(element: HTMLTextAreaElement): void {
@@ -67,10 +79,15 @@ export function WorkTaskDialog({
     title: "",
     description: "",
     columnId: "",
+    sectionId: null,
     assigneeId: null,
     priority: "normal",
     due: "",
   });
+  /** Какие длинные пункты чек-листа раскрыты кнопкой «Далее» (VED-375). */
+  const [expandedItems, setExpandedItems] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   /** Только что сохранили — показать «Сохранено», пока снова не начали править.
    *  Ставят и кнопка «Сохранить», и действия со своей кнопкой (чек-лист,
    *  вложения, комментарий): они уходят сразу, и об этом тоже надо сказать. */
@@ -137,7 +154,13 @@ export function WorkTaskDialog({
         setTask(latest);
       }
       if (pending.columnId) {
-        latest = await moveWorkTask(base.id, { columnId: pending.columnId });
+        latest = await moveWorkTask(base.id, {
+          columnId: pending.columnId,
+          // Раздел, выбранный вместе со статусом (VED-430), едет с переносом.
+          ...(pending.moveSectionId !== undefined
+            ? { sectionColumnId: pending.moveSectionId }
+            : {}),
+        });
       }
       return latest;
     },
@@ -234,6 +257,9 @@ export function WorkTaskDialog({
     });
   }
 
+  /* Раздел и статус — два поля (VED-430): колонки доски двумя группами. */
+  const { sections, statuses } = splitColumnsByKind(board.columns);
+
   /** Отменить правки: вернуть в поля то, что лежит на доске. */
   function discard() {
     if (!task) return;
@@ -260,8 +286,22 @@ export function WorkTaskDialog({
         ) : (
           <>
             <div className="mb-3 flex items-start gap-2">
-              <span className="mt-1 font-mono text-xs text-text-2">
-                {task.key}
+              <span className="mt-1 flex shrink-0 flex-col items-start gap-1">
+                <span className="font-mono text-xs text-text-2">{task.key}</span>
+                {/* Индикатор вложений (VED-431): скриншоты лежат внизу окна,
+                    под чек-листом, и об их существовании было не узнать, не
+                    долистав. Скрепка с числом у номера — и переход к ним. */}
+                {task.attachments.length > 0 && (
+                  <a
+                    href="#work-task-attachments"
+                    aria-label={`Вложения: ${task.attachments.length}. Перейти к ним`}
+                    title="Перейти к вложениям"
+                    className="-mx-1 inline-flex min-h-6 items-center gap-0.5 rounded px-1 text-xs text-text-1 hover:text-text-0"
+                  >
+                    <Paperclip aria-hidden className="size-3.5" />
+                    {task.attachments.length}
+                  </a>
+                )}
               </span>
               {/* Название целиком, а не первой строкой. В однострочном поле
                   длинное название обрывалось на середине слова, и карточка
@@ -304,29 +344,67 @@ export function WorkTaskDialog({
               </p>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-sm text-text-1">
-                Раздел
-                <select
-                  value={draft.columnId}
-                  disabled={!canEdit}
-                  onChange={(event) =>
-                    // Смена колонки из карточки — тот же перенос, что и
-                    // перетаскиванием (клавиатуре нужен свой путь), но
-                    // уходит кнопкой «Сохранить», как любая правка окна.
-                    edit({ columnId: event.target.value })
-                  }
-                  className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
-                >
-                  {board.columns.map((column) => (
-                    <option key={column.id} value={column.id}>
-                      {column.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            {/* Поля карточки — одной сеткой в два столбца и на телефоне
+                (VED-431, «много пустых мест»): раньше каждое поле стояло
+                своей строкой во всю ширину, и до описания надо было
+                листать. Раздел и статус — два поля, а не один список
+                (VED-430): «нужно отделить разделы задач и разделы их
+                статусов». */}
+            <div className="grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-3 sm:gap-x-3">
+              {sections.length > 0 && (
+                <label className="min-w-0 text-xs text-text-1">
+                  Раздел
+                  <select
+                    value={draft.sectionId ?? ""}
+                    disabled={!canEdit}
+                    onChange={(event) =>
+                      // Задача без статуса переезжает в выбранный раздел,
+                      // задача в статусе остаётся там — меняется только
+                      // раздел. Уходит кнопкой «Сохранить».
+                      edit(chooseSection(draft, event.target.value, board.columns))
+                    }
+                    className={FIELD_CLASS}
+                  >
+                    {draft.sectionId === null && (
+                      <option value="" disabled>
+                        Не указан
+                      </option>
+                    )}
+                    {sections.map((column) => (
+                      <option key={column.id} value={column.id}>
+                        {column.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
-              <label className="text-sm text-text-1">
+              {statuses.length > 0 && (
+                <label className="min-w-0 text-xs text-text-1">
+                  Статус
+                  <select
+                    value={placeStatusId(draft, board.columns)}
+                    disabled={!canEdit}
+                    onChange={(event) =>
+                      // Статус — та же колонка доски: задача переезжает в
+                      // неё, а раздел остаётся прежним.
+                      edit(chooseStatus(draft, event.target.value, board.columns))
+                    }
+                    className={FIELD_CLASS}
+                  >
+                    {sections.length > 0 && (
+                      <option value="">Без статуса</option>
+                    )}
+                    {statuses.map((column) => (
+                      <option key={column.id} value={column.id}>
+                        {column.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="min-w-0 text-xs text-text-1">
                 Исполнитель
                 <select
                   value={draft.assigneeId ?? ""}
@@ -334,7 +412,7 @@ export function WorkTaskDialog({
                   onChange={(event) =>
                     edit({ assigneeId: event.target.value || null })
                   }
-                  className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
+                  className={FIELD_CLASS}
                 >
                   <option value="">Никто</option>
                   {board.members.map((member) => (
@@ -345,7 +423,7 @@ export function WorkTaskDialog({
                 </select>
               </label>
 
-              <label className="text-sm text-text-1">
+              <label className="min-w-0 text-xs text-text-1">
                 Важность
                 <select
                   value={draft.priority}
@@ -353,7 +431,7 @@ export function WorkTaskDialog({
                   onChange={(event) =>
                     edit({ priority: event.target.value as WorkTaskPriority })
                   }
-                  className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
+                  className={FIELD_CLASS}
                 >
                   {Object.entries(PRIORITY_TITLE).map(([value, title]) => (
                     <option key={value} value={value}>
@@ -362,33 +440,32 @@ export function WorkTaskDialog({
                   ))}
                 </select>
               </label>
-            </div>
 
-            {/* Кто исполняет — выше, в поле; кто поставил — здесь, рядом со
-                сроком. Постановщика не выбирают: это тот, кто завёл карточку,
-                и подменять его задним числом значит переписывать, с кого
-                спрашивать. */}
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="text-sm text-text-1">
+              {/* Кто исполняет — в поле; кто поставил — здесь. Постановщика
+                  не выбирают: это тот, кто завёл карточку, и подменять его
+                  задним числом значит переписывать, с кого спрашивать. */}
+              <div className="min-w-0 text-xs text-text-1">
                 Задачу поставил
-                <p className="mt-1 truncate rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0">
+                <p className="mt-1 truncate rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0">
                   {task.createdBy?.name ?? "Неизвестно"}
                 </p>
               </div>
 
-              <label className="text-sm text-text-1">
+              {/* Срок живёт здесь, в карточке (VED-378): из формы новой
+                  задачи он убран. */}
+              <label className="min-w-0 text-xs text-text-1">
                 Срок
                 <input
                   type="datetime-local"
                   value={draft.due}
                   disabled={!canEdit}
                   onChange={(event) => edit({ due: event.target.value })}
-                  className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
+                  className={FIELD_CLASS}
                 />
               </label>
             </div>
 
-            <label className="mt-3 block text-sm text-text-1">
+            <label className="mt-2 block text-xs text-text-1">
               Описание
               <textarea
                 value={draft.description}
@@ -466,7 +543,7 @@ export function WorkTaskDialog({
             </h3>
             <ul className="mt-2 space-y-1">
               {task.checklist.map((item) => (
-                <li key={item.id} className="flex items-center gap-2">
+                <li key={item.id} className="flex items-start gap-2">
                   <input
                     type="checkbox"
                     checked={item.done}
@@ -479,14 +556,44 @@ export function WorkTaskDialog({
                       );
                     }}
                   />
-                  <label
-                    htmlFor={`check-${item.id}`}
-                    className={`flex-1 text-sm ${
-                      item.done ? "text-text-2 line-through" : "text-text-0"
-                    }`}
-                  >
-                    {item.text}
-                  </label>
+                  {/* Длинный пункт свёрнут до трёх строк и раскрывается
+                      кнопкой «Далее» (VED-375): лимит поднят до 2000 знаков,
+                      и продолжение больше не приходится заводить отдельным
+                      пунктом. */}
+                  <div className="min-w-0 flex-1">
+                    <label
+                      htmlFor={`check-${item.id}`}
+                      id={`check-text-${item.id}`}
+                      className={`block whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
+                        item.done ? "text-text-2 line-through" : "text-text-0"
+                      } ${
+                        isLongChecklistText(item.text) &&
+                        !expandedItems.has(item.id)
+                          ? "line-clamp-3"
+                          : ""
+                      }`}
+                    >
+                      {item.text}
+                    </label>
+                    {isLongChecklistText(item.text) && (
+                      <button
+                        type="button"
+                        aria-expanded={expandedItems.has(item.id)}
+                        aria-controls={`check-text-${item.id}`}
+                        onClick={() =>
+                          setExpandedItems((current) => {
+                            const next = new Set(current);
+                            if (next.has(item.id)) next.delete(item.id);
+                            else next.add(item.id);
+                            return next;
+                          })
+                        }
+                        className="min-h-6 text-xs font-semibold text-text-1 underline underline-offset-2 hover:text-text-0"
+                      >
+                        {expandedItems.has(item.id) ? "Свернуть" : "Далее"}
+                      </button>
+                    )}
+                  </div>
                   {canEdit && (
                     <button
                       type="button"
@@ -517,13 +624,24 @@ export function WorkTaskDialog({
                   });
                 }}
               >
-                <input
+                {/* Поле растёт под текст (VED-375): пункт теперь до 2000
+                    знаков. Enter — добавить, как было; Shift+Enter — новая
+                    строка внутри пункта. */}
+                <textarea
                   value={checklistDraft}
+                  rows={1}
                   onChange={(event) => setChecklistDraft(event.target.value)}
-                  maxLength={200}
+                  onInput={(event) => growToText(event.currentTarget)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  maxLength={WORK_CHECKLIST_TEXT_MAX}
                   placeholder="Добавить пункт"
                   aria-label="Новый пункт чек-листа"
-                  className="min-w-0 flex-1 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+                  className="min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
                 />
                 <button
                   type="submit"
@@ -535,7 +653,10 @@ export function WorkTaskDialog({
               </form>
             )}
 
-            <h3 className="mt-5 text-sm font-semibold text-text-0">
+            <h3
+              id="work-task-attachments"
+              className="mt-5 scroll-mt-4 text-sm font-semibold text-text-0"
+            >
               Вложения{" "}
               {task.attachments.length > 0 && (
                 <span className="font-normal text-text-2">

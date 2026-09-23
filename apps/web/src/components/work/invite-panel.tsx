@@ -18,6 +18,7 @@ import {
   listWorkInvites,
   listWorkSpaceAgents,
   revokeWorkInvite,
+  setWorkMemberRole,
 } from "@/lib/work-api";
 import { copyText } from "@/lib/copy-text";
 import { emptyHint } from "./invite-hints";
@@ -33,6 +34,17 @@ const ROLE_TITLE: Record<WorkMemberRole, string> = {
 };
 
 /**
+ * Роль в списке участников — с заглавной (VED-422): это подпись-статус
+ * человека, «Владелец», а не слово внутри фразы, как в «Роль: участник».
+ */
+const ROLE_LABEL: Record<WorkMemberRole, string> = {
+  owner: "Владелец",
+  admin: "Администратор",
+  member: "Участник",
+  viewer: "Наблюдатель",
+};
+
+/**
  * Приглашение ссылкой. Ссылка показывается ровно один раз — сразу после
  * создания: в базе лежит только её хеш, и второй раз собрать её неоткуда.
  * Поэтому свежая ссылка остаётся на экране, пока панель открыта, и рядом с
@@ -40,9 +52,12 @@ const ROLE_TITLE: Record<WorkMemberRole, string> = {
  */
 export function WorkInvitePanel({
   space,
+  viewerId,
   onChanged,
 }: {
   space: WorkSpaceDto;
+  /** Кто смотрит: свою роль из этого окна не меняют. */
+  viewerId?: string;
   onChanged: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,6 +73,10 @@ export function WorkInvitePanel({
   const [agents, setAgents] = useState<WorkPersonRefDto[]>([]);
 
   const canInvite = space.role === "owner" || space.role === "admin";
+  /* Роли раздаёт владелец (VED-422): и совладельца тоже. Основного владельца
+     (`space.ownerId`) не понизить — он уходит только передачей владения. */
+  const canChangeRoles = space.role === "owner";
+  const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -192,6 +211,22 @@ export function WorkInvitePanel({
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Сменить роль участника из списка — сразу, как выбор в списке. */
+  async function changeRole(userId: string, next: WorkMemberRole) {
+    setRoleBusyId(userId);
+    setError(null);
+    try {
+      await setWorkMemberRole(space.id, userId, next);
+      await onChanged();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Роль не сменилась",
+      );
+    } finally {
+      setRoleBusyId(null);
     }
   }
 
@@ -387,16 +422,53 @@ export function WorkInvitePanel({
               Участники
             </h3>
             <ul className="mt-2 space-y-1 text-sm">
-              {space.members.map((member) => (
-                <li key={member.userId} className="flex items-center gap-2">
-                  <span className="truncate text-text-0">
-                    {workPersonLabel(member)}
-                  </span>
-                  <span className="text-xs text-text-2">
-                    {ROLE_TITLE[member.role]}
-                  </span>
-                </li>
-              ))}
+              {space.members.map((member) => {
+                const primary = member.userId === space.ownerId;
+                // Агенту роль не меняют: он работает карточками, а
+                // раздавать роли — не его дело.
+                const editable =
+                  canChangeRoles &&
+                  !primary &&
+                  !member.isAgent &&
+                  member.userId !== viewerId;
+                return (
+                  <li
+                    key={member.userId}
+                    className="flex min-h-11 items-center gap-2"
+                  >
+                    <span className="min-w-0 truncate text-text-0">
+                      {workPersonLabel(member)}
+                    </span>
+                    {editable ? (
+                      <label className="ml-auto shrink-0">
+                        <span className="sr-only">
+                          Роль: {workPersonLabel(member)}
+                        </span>
+                        <select
+                          value={member.role}
+                          disabled={roleBusyId === member.userId}
+                          onChange={(event) =>
+                            void changeRole(
+                              member.userId,
+                              event.target.value as WorkMemberRole,
+                            )
+                          }
+                          className="min-h-11 rounded-xl border border-glass-brd bg-bg-1 px-2 text-xs text-text-0 disabled:opacity-50"
+                        >
+                          <option value="owner">{ROLE_LABEL.owner}</option>
+                          <option value="admin">{ROLE_LABEL.admin}</option>
+                          <option value="member">{ROLE_LABEL.member}</option>
+                          <option value="viewer">{ROLE_LABEL.viewer}</option>
+                        </select>
+                      </label>
+                    ) : (
+                      <span className="ml-auto shrink-0 text-xs text-text-1">
+                        {ROLE_LABEL[member.role]}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
 
             {agents.length > 0 && (

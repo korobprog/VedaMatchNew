@@ -11,6 +11,7 @@ const saved: TaskDraft = {
   title: "Кнопка",
   description: "Текст",
   columnId: "c1",
+  sectionId: "c1",
   assigneeId: null,
   priority: "normal",
   due: "",
@@ -22,6 +23,7 @@ describe("draftFromTask", () => {
       title: "Кнопка",
       description: "Текст",
       columnId: "c1",
+      sectionId: "c1",
       assignee: { userId: "u2", name: "Радха" } as never,
       priority: "high",
       dueAt: null,
@@ -30,6 +32,7 @@ describe("draftFromTask", () => {
       title: "Кнопка",
       description: "Текст",
       columnId: "c1",
+      sectionId: "c1",
       assigneeId: "u2",
       priority: "high",
       due: "",
@@ -46,6 +49,7 @@ describe("hasTaskEdits", () => {
   it.each([
     ["описание", { description: "Текст." }],
     ["раздел", { columnId: "c2" }],
+    ["раздел задачи в статусе", { sectionId: "c3" }],
     ["исполнитель", { assigneeId: "u2" }],
     ["важность", { priority: "high" as const }],
     ["срок", { due: "2026-09-30T18:00" }],
@@ -68,6 +72,20 @@ describe("pendingTaskEdits", () => {
       update: null,
       columnId: "c2",
     });
+  });
+
+  // VED-430: раздел и статус — разные поля.
+  it("раздел задачи в статусе — правка поля, без переезда", () => {
+    const inStatus = { ...saved, columnId: "done", sectionId: "c1" };
+    expect(pendingTaskEdits(inStatus, { ...inStatus, sectionId: "c3" })).toEqual(
+      { update: { sectionColumnId: "c3" }, columnId: null },
+    );
+  });
+
+  it("статус и раздел сразу — раздел едет вместе с переносом", () => {
+    expect(
+      pendingTaskEdits(saved, { ...saved, columnId: "done", sectionId: "c3" }),
+    ).toEqual({ update: null, columnId: "done", moveSectionId: "c3" });
   });
 
   it("исполнитель, важность и срок едут одним запросом", () => {
