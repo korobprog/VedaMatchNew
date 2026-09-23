@@ -21,7 +21,10 @@ export function historyResumePosition(
   positionSeconds: number | null | undefined,
   durationSeconds: number,
 ): number | null {
-  if (typeof positionSeconds !== 'number' || !Number.isFinite(positionSeconds)) {
+  if (
+    typeof positionSeconds !== 'number' ||
+    !Number.isFinite(positionSeconds)
+  ) {
     return null;
   }
   const at = Math.floor(positionSeconds);

@@ -24,7 +24,11 @@ export const PLAYER_SETTINGS_DEFAULTS = {
 
 export type PlayerSettingsPatch = Partial<typeof PLAYER_SETTINGS_DEFAULTS>;
 
-const FLAGS = ['playerShowSeek', 'playerShowBookmark', 'playerShowHistory'] as const;
+const FLAGS = [
+  'playerShowSeek',
+  'playerShowBookmark',
+  'playerShowHistory',
+] as const;
 const STEPS = ['seekBackSeconds', 'seekForwardSeconds'] as const;
 
 /**
