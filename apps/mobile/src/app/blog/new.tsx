@@ -198,7 +198,7 @@ export default function NewBlogPostScreen() {
 
         <View style={styles.field}>
           <Text style={[styles.label, { color: colors.text1 }]}>
-            Фотографии · {draft.photos.length} из {BLOG_POST_MAX_IMAGES}
+            {`Фотографии · ${draft.photos.length} из ${BLOG_POST_MAX_IMAGES}`}
           </Text>
           {draft.photos.length > 0 ? (
             <View style={styles.photos}>
