@@ -17,8 +17,10 @@ import { CopyField } from "./copy-field";
 export function TransferPurposeForm() {
   const [purposeId, setPurposeId] = useState(DONATE_PURPOSES[0].id);
   const [donorName, setDonorName] = useState("");
+  const [spiritualName, setSpiritualName] = useState("");
   const groupId = useId();
   const nameId = `${groupId}-name`;
+  const spiritualId = `${groupId}-spiritual`;
 
   const purpose =
     DONATE_PURPOSES.find((item) => item.id === purposeId) ?? DONATE_PURPOSES[0];
@@ -27,6 +29,7 @@ export function TransferPurposeForm() {
   const line = buildTransferPurpose({
     purposeText: purpose.transfer,
     donorName,
+    spiritualName,
   });
 
   return (
@@ -60,25 +63,44 @@ export function TransferPurposeForm() {
         </div>
       </fieldset>
 
-      <div className="mt-5">
-        <label htmlFor={nameId} className="block text-sm font-semibold text-text-0">
+      {/* VED-12: заказчик просит «полное ФИО, а также духовное имя, если
+          имеется» — два поля вместо одного «имя или духовное имя», чтобы по
+          выписке человека можно было узнать и в телеграм-группе портала. */}
+      <fieldset className="mt-5 border-0 p-0" aria-describedby={`${nameId}-hint`}>
+        <legend className="text-sm font-semibold text-text-0">
           Как вас подписать
-        </label>
+        </legend>
         <p id={`${nameId}-hint`} className="mt-1 text-xs text-text-1">
           Необязательно. Оставьте пустым — и перевод останется анонимным, мы всё
           равно увидим цель.
         </p>
+        <label htmlFor={nameId} className="mt-3 block text-xs text-text-1">
+          Полное ФИО
+        </label>
         <input
           id={nameId}
           type="text"
           value={donorName}
           onChange={(event) => setDonorName(event.target.value)}
-          aria-describedby={`${nameId}-hint`}
           maxLength={MAX_TRANSFER_PURPOSE}
-          placeholder="Имя или духовное имя"
-          className="mt-2 w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
+          autoComplete="name"
+          placeholder="Иванов Иван Иванович"
+          className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
         />
-      </div>
+        <label htmlFor={spiritualId} className="mt-3 block text-xs text-text-1">
+          Духовное имя, если есть
+        </label>
+        <input
+          id={spiritualId}
+          type="text"
+          value={spiritualName}
+          onChange={(event) => setSpiritualName(event.target.value)}
+          maxLength={MAX_TRANSFER_PURPOSE}
+          autoComplete="off"
+          placeholder="Кришна дас"
+          className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
+        />
+      </fieldset>
 
       <div className="mt-5">
         <p className="mb-2 text-sm font-semibold text-text-0">

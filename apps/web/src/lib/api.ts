@@ -27,6 +27,7 @@ import type {
   NotificationDeviceStats,
   NotificationDeliveryHealthResponse,
   AdminReleaseDto,
+  DonationRecipientDto,
   DonationSettingsDto,
   AdminRoadmapItemDto,
   CommunityStats,
@@ -240,6 +241,9 @@ export const getAdminPlatformSettings = () =>
 /** Публичные реквизиты для кнопки «поддержать»; enabled=false — кнопки нет. */
 export const getDonationSettings = () =>
   apiGetPublic<DonationSettingsDto>("/billing/donation");
+/** Фото получателей у кнопок «написать» на /donate (VED-12). */
+export const getDonationRecipients = () =>
+  apiGetPublic<DonationRecipientDto[]>("/billing/donation/recipients");
 /** Админский вид: то же поле enabled, но реквизиты видны и выключенными. */
 export const getAdminDonationSettings = () =>
   apiGet<DonationSettingsDto>("/admin/billing/donation");

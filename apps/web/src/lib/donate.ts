@@ -31,15 +31,21 @@ export interface TransferPurposeInput {
    * разработчикам» превращалась в «Дар на благодарность разработчикам».
    */
   purposeText: string;
-  /** Как подписаться — необязательно. */
+  /** Полное ФИО — необязательно. */
   donorName?: string | null;
+  /**
+   * Духовное имя, если есть (VED-12, текст заказчика от 21.09: «полное ФИО,
+   * а также духовное имя, если имеется»). Встаёт в скобках после ФИО, а без
+   * ФИО — само по себе.
+   */
+  spiritualName?: string | null;
 }
 
 /**
  * Строка для поля «назначение платежа».
  *
  * Собирается из цели и подписи: «Дар на разработку и поддержку Портала
- * VedaMatch. От: Кришна дас». Смысл карточки VED-11 ровно в этом — без
+ * VedaMatch. От: Иванов Иван Иванович (Кришна дас)». Смысл карточки VED-11 ровно в этом — без
  * подписанной цели перевод в выписке выглядит как безымянное поступление, и
  * мы не знаем ни на что его тратить, ни кого благодарить.
  *
@@ -50,11 +56,21 @@ export interface TransferPurposeInput {
 export function buildTransferPurpose({
   purposeText,
   donorName,
+  spiritualName,
 }: TransferPurposeInput): string {
   const head = cleanPurposePart(purposeText) || FALLBACK_TRANSFER_PURPOSE;
-  const name = cleanPurposePart(donorName ?? "");
+  const name = signature(
+    cleanPurposePart(donorName ?? ""),
+    cleanPurposePart(spiritualName ?? ""),
+  );
   const full = name ? `${head}. От: ${name}` : head;
   return clampByWord(full, MAX_TRANSFER_PURPOSE);
+}
+
+/** «ФИО (духовное имя)», либо то из двух, что заполнено. */
+function signature(fullName: string, spiritualName: string): string {
+  if (fullName && spiritualName) return `${fullName} (${spiritualName})`;
+  return fullName || spiritualName;
 }
 
 /**

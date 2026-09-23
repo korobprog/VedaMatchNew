@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildTransferPurpose, MAX_TRANSFER_PURPOSE } from "./donate";
-import { DONATE_PURPOSES } from "./donate-content";
+import {
+  DONATE_EXPENSES,
+  DONATE_PURPOSES,
+  DONATE_RECIPIENTS,
+} from "./donate-content";
 
 describe("buildTransferPurpose", () => {
   it("собирает цель и подпись в одну строку", () => {
@@ -10,6 +14,38 @@ describe("buildTransferPurpose", () => {
         donorName: "Кришна дас",
       }),
     ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Кришна дас");
+  });
+
+  it("ФИО и духовное имя — через скобки", () => {
+    expect(
+      buildTransferPurpose({
+        purposeText: "Благодарность разработчикам Портала VedaMatch",
+        donorName: "Иванов Иван Иванович",
+        spiritualName: "Кришна дас",
+      }),
+    ).toBe(
+      "Благодарность разработчикам Портала VedaMatch. От: Иванов Иван Иванович (Кришна дас)",
+    );
+  });
+
+  it("только духовное имя — без пустых скобок", () => {
+    expect(
+      buildTransferPurpose({
+        purposeText: "Дар на разработку и поддержку Портала VedaMatch",
+        donorName: "  ",
+        spiritualName: "Кришна дас",
+      }),
+    ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Кришна дас");
+  });
+
+  it("только ФИО — без скобок", () => {
+    expect(
+      buildTransferPurpose({
+        purposeText: "Дар на разработку и поддержку Портала VedaMatch",
+        donorName: "Иванов Иван Иванович",
+        spiritualName: "",
+      }),
+    ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Иванов Иван Иванович");
   });
 
   it("без подписи оставляет только цель", () => {
@@ -76,12 +112,35 @@ describe("buildTransferPurpose", () => {
     for (const purpose of DONATE_PURPOSES) {
       const result = buildTransferPurpose({
         purposeText: purpose.transfer,
-        donorName: "Кришна дас",
+        donorName: "Коробков Максим Сергеевич",
+        spiritualName: "Маму Тхакур дас",
       });
 
-      expect(result.endsWith("От: Кришна дас")).toBe(true);
+      expect(result.endsWith("От: Коробков Максим Сергеевич (Маму Тхакур дас)")).toBe(true);
       expect(result.length).toBeLessThanOrEqual(MAX_TRANSFER_PURPOSE);
     }
+  });
+});
+
+describe("DONATE_EXPENSES", () => {
+  it("пять статей в формулировках заказчика", () => {
+    // VED-12, текст заказчика от 21.09 в описании карточки.
+    expect(DONATE_EXPENSES.map((item) => item.title)).toEqual([
+      "Серверы и база данных",
+      "Хранилище и трафик",
+      "Расходы на ИИ",
+      "Домены и сертификаты",
+      "Другие расходы",
+    ]);
+  });
+});
+
+describe("DONATE_RECIPIENTS", () => {
+  it("Станислав первым, оба с подписью заказчика", () => {
+    expect(DONATE_RECIPIENTS.map((item) => item.name)).toEqual([
+      "Станислав Юрьев (Санкаршан д.)",
+      "Максим Коробков (Маму Тхакур д.)",
+    ]);
   });
 });
 

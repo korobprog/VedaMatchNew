@@ -205,6 +205,17 @@ export interface DonationSettingsDto {
   requisites: DonationRequisite[];
 }
 
+/**
+ * Получатель пожертвований на странице «Поддержать» (VED-12): фото профиля
+ * рядом с кнопкой «написать в личку». Подпись кнопки — на вебе
+ * (`lib/donate-content.ts`), сервер отдаёт только то, чего у веба нет.
+ */
+export interface DonationRecipientDto {
+  userId: string;
+  /** Ссылка на фото профиля; `null` — фото нет, веб рисует букву. */
+  avatarUrl: string | null;
+}
+
 export interface AdminUpdateDonationRequest {
   enabled?: boolean;
   text?: string | null;

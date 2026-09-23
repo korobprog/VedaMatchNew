@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
 import { Header } from "@/components/header";
 import { Navbar } from "@/components/landing/Navbar";
 import { BackgroundOrbs } from "@/components/landing/Orb";
@@ -8,8 +7,15 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { CopyField } from "@/components/donate/copy-field";
 import { ExpenseBreakdown } from "@/components/donate/expense-breakdown";
 import { TransferPurposeForm } from "@/components/donate/transfer-purpose";
-import { getDonationSettings, getProfile } from "@/lib/api";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
+  getDonationRecipients,
+  getDonationSettings,
+  getProfile,
+} from "@/lib/api";
+import {
+  DONATE_INTRO,
+  DONATE_OTHER_REQUISITES,
   DONATE_PURPOSE_EXPLAINER,
   DONATE_RECIPIENTS,
 } from "@/lib/donate-content";
@@ -31,6 +37,9 @@ export const metadata: Metadata = {
  * - быстрый перевод: имена, телефоны и карты получателей из админки (VED-12);
  * - статьи расходов (VED-62).
  *
+ * Тексты разделов — слово в слово из описания карточки VED-12 («Готово.
+ * Исправленный вариант», 21.09), они лежат в `lib/donate-content.ts`.
+ *
  * Каркас банковских реквизитов (счёт, БИК, корсчёт, зарубежный перевод) со
  * страницы снят: заказчик вычеркнул его целиком при разборе прода 21.09 —
  * счетов у портала нет, а пустые карточки «уточняется» только занимали экран.
@@ -42,8 +51,19 @@ export const metadata: Metadata = {
  * уже что-то делает (лента «Вдохновения», статистика), и ведёт сюда ссылкой.
  */
 export default async function DonatePage() {
-  const [user, donation] = await Promise.all([getProfile(), getDonationSettings()]);
+  const [user, donation, recipientPhotos] = await Promise.all([
+    getProfile(),
+    getDonationSettings(),
+    // Фото — украшение: упавший запрос не должен ронять страницу с
+    // реквизитами.
+    getDonationRecipients().catch(() => null),
+  ]);
   const quick = donation?.enabled ? donation.requisites : [];
+  // Фото не пришло (API недоступен, человека нет на стенде) — кнопка всё
+  // равно рисуется, с буквой имени вместо фото.
+  const photoOf = new Map(
+    (recipientPhotos ?? []).map((item) => [item.userId, item.avatarUrl]),
+  );
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -57,11 +77,7 @@ export default async function DonatePage() {
         <h1 className="mb-2 font-display text-2xl font-bold text-text-0 sm:text-3xl">
           Поддержать VedaMatch
         </h1>
-        <p className="mb-8 text-text-1">
-          Портал держится на пожертвованиях: подписки не покрывают счета за
-          серверы, хранилище и нейросети. Любая сумма помогает — и мы
-          показываем, на что она уходит.
-        </p>
+        <p className="mb-8 text-text-1">{DONATE_INTRO}</p>
 
         {/* VED-11: главная просьба страницы — подписанное назначение. Она идёт
             первой, до реквизитов: человек, уже открывший приложение банка,
@@ -71,7 +87,7 @@ export default async function DonatePage() {
             id="purpose"
             className="mb-2 font-display text-lg font-semibold text-text-0"
           >
-            Подпишите, пожалуйста, назначение перевода
+            Подпишите назначение перевода
           </h2>
           {/* Текст просьбы — из donate-content.ts: его меняют одной строкой,
               не трогая вёрстку, и он же стоит в шторке реквизитов. */}
@@ -140,12 +156,10 @@ export default async function DonatePage() {
             id="ask-recipients"
             className="mb-2 font-display text-lg font-semibold text-text-0"
           >
-            Нужны другие реквизиты
+            Если нужны другие реквизиты
           </h2>
           <p className="mb-4 text-sm text-text-1">
-            Дополнительные реквизиты — перевод из-за рубежа, другой банк, счёт
-            для организации — можно уточнить у получателей: напишите им в личку
-            в мессенджере портала.
+            {DONATE_OTHER_REQUISITES}
             {!user && (
               <>
                 {" "}
@@ -157,30 +171,39 @@ export default async function DonatePage() {
           <ul className="flex flex-wrap gap-2">
             {DONATE_RECIPIENTS.map((person) => (
               <li key={person.userId}>
+                {/* Заказчик: имя и фото профиля. «Написать» — только для
+                    скринридера: ссылка ведёт в личку, и без глагола голое
+                    имя звучало бы как ссылка на профиль. */}
                 <Link
                   href={`/chat/with/${person.userId}`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm font-medium text-text-0 transition-colors hover:bg-bg-2"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-glass-brd bg-bg-1 py-1.5 pl-1.5 pr-3 text-sm font-medium text-text-0 transition-colors hover:bg-bg-2"
                 >
-                  <MessageCircle aria-hidden className="size-4 shrink-0 text-cyan" />
-                  Написать: {person.name}
+                  <UserAvatar
+                    name={person.name}
+                    avatarUrl={photoOf.get(person.userId)}
+                    size={32}
+                  />
+                  <span>
+                    <span className="sr-only">Написать: </span>
+                    {person.name}
+                  </span>
                 </Link>
               </li>
             ))}
           </ul>
         </section>
 
-        {/* VED-62: смета. */}
+        {/* VED-62: смета. Заголовок и статьи — из текста заказчика в VED-12
+            (21.09); абзац «Это не благотворительный фонд…» он в свой вариант
+            раздела не включил, и вступление страницы теперь само говорит, что
+            расходы «указаны ниже». */}
         <section className="mb-10" aria-labelledby="expenses">
           <h2
             id="expenses"
-            className="mb-2 font-display text-lg font-semibold text-text-0"
+            className="mb-3 font-display text-lg font-semibold text-text-0"
           >
-            На что уходят деньги
+            На что нужны средства
           </h2>
-          <p className="mb-4 text-sm text-text-1">
-            Это не благотворительный фонд с отчётом аудитора, но порядок трат мы
-            показываем честно: вот статьи, за которые портал платит каждый месяц.
-          </p>
           <ExpenseBreakdown />
         </section>
 
