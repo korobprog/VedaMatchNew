@@ -5,7 +5,19 @@ import type {
   WellnessProductStatus,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { toCheckDto } from './check-dto';
+import { WellnessCheckService } from './wellness-check.service';
 import { WellnessService } from './wellness.service';
+
+/** Что нужно о карточке, чтобы решить её и сообщить автору. */
+const PRODUCT_FOR_DECISION = {
+  id: true,
+  barcode: true,
+  name: true,
+  ingredientsRaw: true,
+  status: true,
+  addedById: true,
+} as const;
 
 /**
  * Админка «Здоровья»: очередь продуктов, жалобы на состав и справочник
@@ -17,10 +29,16 @@ export class WellnessAdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wellness: WellnessService,
+    private readonly checks: WellnessCheckService,
   ) {}
 
-  products(status: WellnessProductStatus) {
-    return this.prisma.wellnessProduct.findMany({
+  /**
+   * Очередь продуктов. У каждой карточки — её автопроверка (VED-384): что
+   * предложил ИИ, чем подтвердил и почему не принял сам. Модератор — последняя
+   * ступень, и решать ему надо, видя всё это, а не заново с нуля.
+   */
+  async products(status: WellnessProductStatus) {
+    const rows = await this.prisma.wellnessProduct.findMany({
       where: { status },
       orderBy: { createdAt: 'asc' },
       take: 200,
@@ -44,8 +62,31 @@ export class WellnessAdminService {
             ingredient: { select: { key: true, nameRu: true, class: true } },
           },
         },
+        check: {
+          select: {
+            status: true,
+            reasons: true,
+            submittedName: true,
+            submittedBrand: true,
+            submittedIngredients: true,
+            aiFound: true,
+            aiNotFood: true,
+            aiName: true,
+            aiBrand: true,
+            aiIngredients: true,
+            aiConflicts: true,
+            sources: true,
+            attemptCount: true,
+            costUsdMicros: true,
+            finishedAt: true,
+          },
+        },
       },
     });
+    return rows.map(({ check, ...row }) => ({
+      ...row,
+      check: check ? toCheckDto(check) : null,
+    }));
   }
 
   /**
@@ -55,11 +96,11 @@ export class WellnessAdminService {
   async approve(id: string, adminId: string) {
     const product = await this.prisma.wellnessProduct.findUnique({
       where: { id },
-      select: { id: true, ingredientsRaw: true },
+      select: PRODUCT_FOR_DECISION,
     });
     if (!product) throw new NotFoundException('Продукт не найден');
     await this.wellness.storeComposition(product.id, product.ingredientsRaw);
-    return this.prisma.wellnessProduct.update({
+    const updated = await this.prisma.wellnessProduct.update({
       where: { id },
       data: {
         status: 'published',
@@ -69,12 +110,24 @@ export class WellnessAdminService {
       },
       select: { id: true, status: true },
     });
+    // Повторное одобрение уже опубликованного — не новость для автора.
+    if (product.status !== 'published') {
+      await this.checks.moderatorDecided({
+        product,
+        approved: true,
+        comment: null,
+      });
+    }
+    return updated;
   }
 
   async reject(id: string, adminId: string, reason: string) {
-    const exists = await this.prisma.wellnessProduct.count({ where: { id } });
-    if (!exists) throw new NotFoundException('Продукт не найден');
-    return this.prisma.wellnessProduct.update({
+    const product = await this.prisma.wellnessProduct.findUnique({
+      where: { id },
+      select: PRODUCT_FOR_DECISION,
+    });
+    if (!product) throw new NotFoundException('Продукт не найден');
+    const updated = await this.prisma.wellnessProduct.update({
       where: { id },
       data: {
         status: 'rejected',
@@ -84,6 +137,14 @@ export class WellnessAdminService {
       },
       select: { id: true, status: true },
     });
+    if (product.status !== 'rejected') {
+      await this.checks.moderatorDecided({
+        product,
+        approved: false,
+        comment: reason,
+      });
+    }
+    return updated;
   }
 
   reports() {

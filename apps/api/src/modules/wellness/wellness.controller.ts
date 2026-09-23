@@ -28,9 +28,20 @@ import {
   WellnessInputError,
 } from './wellness-dto';
 import { LabelImageError, parseImageDataUrl } from './label-recognition';
+import { WellnessCheckService } from './wellness-check.service';
 import { WellnessRecognizeService } from './wellness-recognize.service';
 import { WellnessRecipesService } from './wellness-recipes.service';
 import { WellnessService } from './wellness.service';
+
+function optionalImage(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  try {
+    return parseImageDataUrl(value);
+  } catch (error) {
+    if (error instanceof LabelImageError) return null;
+    throw error;
+  }
+}
 
 /**
  * Сервис «Здоровье», раздел «Сканер». Префикс маршрутов — слаг сервиса, как
@@ -43,6 +54,7 @@ export class WellnessController {
     private readonly wellness: WellnessService,
     private readonly recognize: WellnessRecognizeService,
     private readonly recipes: WellnessRecipesService,
+    private readonly checks: WellnessCheckService,
   ) {}
 
   /**
@@ -152,16 +164,22 @@ export class WellnessController {
     return { product, result };
   }
 
-  /** Состав с упаковки от человека. Уходит в очередь модерации. */
+  /**
+   * Состав с упаковки от человека. Черновик уходит на автопроверку ИИ
+   * (VED-384), а оттуда — в базу или модератору; ответ человеку придёт
+   * уведомлением. Снимок упаковки необязателен: битый или слишком большой
+   * просто не передаётся ИИ, карточка из-за него не теряется.
+   */
   @Post('products')
   @Throttle({ default: { ttl: 60_000, limit: 20 } })
   createProduct(
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: Record<string, unknown>,
   ) {
-    return this.wellness.createProduct(
+    return this.checks.submit(
       user.sub,
       this.parse(() => parseProductInput(body)),
+      optionalImage(body.labelImageDataUrl),
     );
   }
 

@@ -286,6 +286,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.wellnessProductChecked)
+  onWellnessProductChecked(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.teamApplicationReceived)
   onTeamApplicationReceived(event: NotificationEvent): void {
     void this.deliver(event);

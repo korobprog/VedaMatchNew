@@ -24,6 +24,7 @@ import {
   type AdminWellnessReport,
 } from "@/lib/wellness-admin-api";
 import { ingredientClassLabel } from "@/components/wellness/verdict-labels";
+import { CheckPanel } from "./check-panel";
 
 type Tab = "queue" | "reports" | "catalog" | "recipes";
 
@@ -126,6 +127,8 @@ function QueueTab() {
             Прислал: {item.addedBy?.name ?? "неизвестно"} ·{" "}
             {new Date(item.createdAt).toLocaleDateString("ru-RU")}
           </p>
+
+          {item.check && <CheckPanel check={item.check} />}
 
           <div className="mt-3 flex flex-wrap gap-2">
             <button

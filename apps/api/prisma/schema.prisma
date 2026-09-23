@@ -6318,6 +6318,7 @@ model WellnessProduct {
   scans       WellnessScan[]
   reports     WellnessProductReport[]
   basketItems WellnessBasketItem[]
+  check       WellnessProductCheck?
 
   @@index([status, createdAt])
 }
@@ -7062,4 +7063,75 @@ model ChatConferenceLink {
 
   @@index([expiresAt])
   @@index([createdById])
+}
+
+// ===== Wellness service: автопроверка карточек ИИ (VED-384) =====
+
+/// Где карточка на пути автопроверки. `queued`/`running` — рабочие состояния
+/// воркера; остальные окончательные. `review` — решать человеку: ИИ не нашёл
+/// товар, источники разошлись или проверку нечем было сделать. `cancelled` —
+/// модератор решил раньше, чем очередь дошла до карточки.
+enum WellnessCheckStatus {
+  queued
+  running
+  accepted
+  refined
+  review
+  rejected
+  cancelled
+}
+
+/// Автопроверка карточки, присланной человеком: одна на продукт, чтобы одну
+/// и ту же карточку не гоняли по платному поиску по кругу. Хранит, что
+/// прислал человек, что предложил ИИ, чем он это подтвердил и почему карточка
+/// не принята сама, — это и видит модератор.
+model WellnessProductCheck {
+  id        String          @id @default(uuid())
+  productId String          @unique
+  product   WellnessProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  status       WellnessCheckStatus @default(queued)
+  attemptCount Int                 @default(0)
+  errorCode    String?
+
+  /// Снимок упаковки data-URL. Живёт до конца проверки и стирается: хранить
+  /// фотографии в базе сервис не собирается, снимок нужен только ИИ.
+  labelImageDataUrl String?
+
+  /// Что прислал человек — до уточнения. Карточку ИИ может переписать, а
+  /// модератору нужно видеть обе версии.
+  submittedName        String
+  submittedBrand       String?
+  submittedIngredients String
+
+  /// Предложение ИИ. Пусто, пока проверка не прошла или ответ не разобран.
+  aiFound       Boolean?
+  aiNotFood     Boolean?
+  aiName        String?
+  aiBrand       String?
+  aiIngredients String?
+  aiConflicts   String[]
+
+  /// Источники с уровнем доверия (`verified`/`opened`/`claimed`), см.
+  /// `check-rule.ts`.
+  sources Json?
+
+  /// Коды причин из `WellnessCheckReason`: почему карточка у человека или
+  /// отклонена. У принятой — пусто.
+  reasons String[]
+
+  model        String?
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  searchCalls  Int     @default(0)
+  /// Оценка расходов в миллионных долях доллара: у одной проверки она меньше
+  /// цента, и в целых центах дневной бюджет не складывался бы.
+  costUsdMicros Int @default(0)
+
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([createdAt])
 }

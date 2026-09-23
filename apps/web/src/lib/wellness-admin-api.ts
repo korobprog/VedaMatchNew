@@ -2,6 +2,7 @@
 // у него другие маршруты и другие права, и мешать их в одном месте значит
 // однажды дёрнуть админский эндпоинт из пользовательского экрана.
 import type {
+  WellnessCheckDto,
   WellnessIngredientClass,
   WellnessIngredientDto,
   WellnessIngredientSeverity,
@@ -29,6 +30,8 @@ export interface AdminWellnessProduct {
     severity: WellnessIngredientSeverity;
     ingredient: { key: string; nameRu: string; class: WellnessIngredientClass };
   }[];
+  /** Автопроверка ИИ (VED-384); нет у карточек, присланных до неё. */
+  check: WellnessCheckDto | null;
 }
 
 export interface AdminWellnessRecipe {

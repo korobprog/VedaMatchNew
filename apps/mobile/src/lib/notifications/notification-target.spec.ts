@@ -198,3 +198,40 @@ describe('inboxDestination', () => {
     expect(inboxDestination('мусор')).toEqual({ kind: 'route', pathname: '/notifications' });
   });
 });
+
+describe('«Здоровье»: решение по присланной карточке (VED-384)', () => {
+  it('принятая карточка открывает нативный ответ по штрихкоду', () => {
+    expect(resolveNotificationTarget('/wellness/products/3017620422003')).toEqual({
+      kind: 'wellness-product',
+      barcode: '3017620422003',
+    });
+    expect(
+      routeOfTarget({ kind: 'wellness-product', barcode: '3017620422003' }),
+    ).toEqual({
+      kind: 'route',
+      pathname: '/wellness/result/[barcode]',
+      params: { barcode: '3017620422003' },
+    });
+  });
+
+  it('на проверке или отклонена — история проверок', () => {
+    expect(resolveNotificationTarget('/wellness/history')).toEqual({
+      kind: 'wellness-history',
+    });
+    expect(routeOfTarget({ kind: 'wellness-history' })).toEqual({
+      kind: 'route',
+      pathname: '/wellness/history',
+    });
+  });
+
+  it('не штрихкод в пути — не экран ответа, а сайт', () => {
+    expect(resolveNotificationTarget('/wellness/products/abc')).toEqual({
+      kind: 'site',
+      path: '/wellness/products/abc',
+    });
+    expect(resolveNotificationTarget('/wellness/recipes')).toEqual({
+      kind: 'site',
+      path: '/wellness/recipes',
+    });
+  });
+});

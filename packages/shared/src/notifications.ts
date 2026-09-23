@@ -1,5 +1,6 @@
 import type { Role, SpiritualStage } from "./index";
 import { parseTaskStatusMark, type TaskStatusMark } from "./task-status";
+import type { WellnessCheckReason } from "./wellness";
 
 /** Событие для уведомлений. Несёт факты, а не формулировки: тексты живут
  *  в apps/api/src/modules/notifications/notification-copy.ts. */
@@ -236,6 +237,26 @@ export type NotificationEvent =
       sectionSlug?: string;
       /** Комментарий администратора; при отказе это причина. */
       comment?: string;
+    }
+  | {
+      /**
+       * Решение по карточке продукта, присланной в «Здоровье» (VED-384). Уходит
+       * тому, кто прислал снимок: и после автопроверки ИИ, и после решения
+       * модератора. Причины — коды, формулировку собирает подписчик.
+       */
+      name: "wellness.product.checked";
+      recipientId: string;
+      productId: string;
+      barcode: string;
+      /** Название, под которым карточка теперь в базе (после уточнения). */
+      productName: string;
+      outcome: "accepted" | "refined" | "review" | "rejected";
+      decidedBy: "ai" | "moderator";
+      /** Что ИИ поправил, когда `outcome` — `refined`. */
+      refined: Array<"name" | "brand" | "ingredients">;
+      reasons: WellnessCheckReason[];
+      /** Причина отказа словами модератора. */
+      comment: string | null;
     }
   | {
       /** Кандидат подал заявку в команду проекта. Уходит активным админам:
