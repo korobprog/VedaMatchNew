@@ -224,9 +224,6 @@ const ui = {
     "lineage.filter": "Духовная линия материалов",
     "lineage.filterFailed": "Не удалось переключить линию, попробуйте ещё раз",
     "lineage.badgeAll": "Для всех линий",
-    "feed.emptyLineage":
-      "Для вашей линии здесь пока ничего нет. Материалы других линий скрыты",
-    "feed.showAllLineages": "Показать материалы всех линий",
     "category.empty": "В этом разделе ещё нет категорий",
     "category.entries": "материалов",
     // Подпись у числа рядом с рубрикой. Без неё «4» одинаково читается и как
@@ -514,9 +511,6 @@ const ui = {
     "lineage.filter": "Spiritual lineage of materials",
     "lineage.filterFailed": "Could not switch the lineage, please try again",
     "lineage.badgeAll": "For all lineages",
-    "feed.emptyLineage":
-      "Nothing here for your lineage yet. Materials of other lineages are hidden",
-    "feed.showAllLineages": "Show materials of all lineages",
     "category.empty": "This section has no categories yet",
     "category.entries": "materials",
     "count.children": "Subcategories inside",

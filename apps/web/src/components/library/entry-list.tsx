@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import type { LibraryFeedResponse, LibraryLocale } from "@vedamatch/shared";
 import { buildLibraryQuery } from "@/lib/library-query";
 import { EntryCard } from "./entry-card";
@@ -21,9 +20,11 @@ export function EntryList({
   locale: LibraryLocale;
   query: Record<string, string | string[] | undefined>;
   /**
-   * Лента отфильтрована по духовной линии. Пустота тогда — не «здесь ничего
-   * нет», а «для вашей линии пока ничего нет», и рядом ссылка посмотреть всё
-   * на один раз, без смены настройки.
+   * Лента отфильтрована по духовной линии. Пустоту тогда не подписываем
+   * вовсе (VED-396): «Пока ничего не добавлено» было бы неправдой — материалы
+   * других линий есть, а выбранную линию и «Все линии» показывает ряд кнопок
+   * над рубриками. Прежний блок «Для вашей линии здесь пока ничего нет ·
+   * Показать материалы всех линий» заказчик попросил убрать.
    */
   lineageFiltered?: boolean;
 }) {
@@ -62,22 +63,10 @@ export function EntryList({
   }
 
   if (feed.items.length === 0) {
+    if (lineageFiltered) return null;
     return (
       <p className="glass rounded-2xl border border-glass-brd p-6 text-sm text-text-1">
-        {lineageFiltered ? (
-          <>
-            {t(locale, "feed.emptyLineage")}
-            {" · "}
-            <Link
-              href={buildLibraryQuery({ ...query, lineage: "all", cursor: undefined })}
-              className="underline hover:text-text-0"
-            >
-              {t(locale, "feed.showAllLineages")}
-            </Link>
-          </>
-        ) : (
-          t(locale, "feed.empty")
-        )}
+        {t(locale, "feed.empty")}
       </p>
     );
   }
