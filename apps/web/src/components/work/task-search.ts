@@ -43,6 +43,57 @@ export function searchColumns<
     .filter((column) => column.tasks.length > 0);
 }
 
+/**
+ * «Показать все» (VED-131) — вся доска, а не одни находки, но поиск при этом
+ * остаётся: запрос стоит в поле, найденные карточки выделены.
+ *
+ * Два круга эта кнопка сбрасывала поиск. Заказчик: «нажимаешь на неё и не
+ * отображается запрос» — и это буквально то, что происходило: поле пустело,
+ * находки растворялись среди сотни карточек, и понять, где они, было уже
+ * нельзя. Кнопка обещала «все», а забирала найденное. Теперь «все» — это вся
+ * доска вместе с найденным, а вернуться к одним находкам можно той же кнопкой
+ * («Только найденные»). Сбросить поиск целиком — крестик в поле или Escape.
+ */
+export function searchBoardColumns<
+  Task extends { id: string },
+  Column extends SearchColumn<Task>,
+>(
+  columns: readonly Column[],
+  matches: ReadonlySet<string>,
+  revealAll: boolean,
+): Column[] {
+  return revealAll ? [...columns] : searchColumns(columns, matches);
+}
+
+/** Сколько карточек колонки нашлось — счётчик «2 из 14» в заголовке. */
+export function countMatches(
+  tasks: readonly { id: string }[],
+  matches: ReadonlySet<string>,
+): number {
+  return tasks.reduce((sum, task) => sum + (matches.has(task.id) ? 1 : 0), 0);
+}
+
+/**
+ * Свёрнута ли колонка на телефоне. Пока идёт поиск, колонка с находками
+ * раскрыта всегда: свёрнутая прятала бы найденное под заголовком (так кнопка
+ * «Показать все» и выглядела нерабочей в первый раз). Остальные — как их
+ * оставил человек.
+ */
+export function isColumnFolded(params: {
+  collapsed: readonly string[];
+  columnId: string;
+  searchActive: boolean;
+  hasMatches: boolean;
+}): boolean {
+  if (!params.collapsed.includes(params.columnId)) return false;
+  return !(params.searchActive && params.hasMatches);
+}
+
+/** Подпись кнопки-переключателя под полем поиска. */
+export function searchToggleLabel(revealAll: boolean): string {
+  return revealAll ? "Только найденные" : "Показать все";
+}
+
 export function countTasks(board: Pick<WorkBoardDto, "columns">): number {
   return board.columns.reduce((sum, column) => sum + column.tasks.length, 0);
 }

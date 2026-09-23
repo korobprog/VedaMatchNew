@@ -3,7 +3,6 @@ import {
   collapsedColumnsKey,
   everyColumnCollapsed,
   expandCollapsedColumn,
-  expandColumns,
   parseCollapsedColumns,
   serializeCollapsedColumns,
   toggleAllColumns,
@@ -71,24 +70,6 @@ describe("expandCollapsedColumn", () => {
   it("развёрнутую оставляет как есть", () => {
     const ids = ["c1"];
     expect(expandCollapsedColumn(ids, "c2")).toBe(ids);
-  });
-});
-
-// VED-131: «Показать все» в поиске раскрывает колонки с находками.
-describe("expandColumns", () => {
-  it("разворачивает перечисленные, остальные оставляет свёрнутыми", () => {
-    expect(expandColumns(["a", "b", "c"], ["a", "c"])).toEqual(["b"]);
-  });
-
-  it("ничего не свёрнуто из перечисленных — тот же список", () => {
-    const ids = ["b"];
-    expect(expandColumns(ids, ["a", "c"])).toBe(ids);
-  });
-
-  it("не меняет исходный список", () => {
-    const ids = ["a", "b"];
-    expandColumns(ids, ["a"]);
-    expect(ids).toEqual(["a", "b"]);
   });
 });
 
