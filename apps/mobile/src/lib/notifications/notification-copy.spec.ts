@@ -29,13 +29,17 @@ describe('markView', () => {
     expect(markView('rework')?.label).toBe('На доработку');
   });
 
+  it('комментарий к задаче без состояния — «Комментарий» (VED-298)', () => {
+    expect(markView('comment')?.label).toBe('Комментарий');
+  });
+
   it('состояния нет — значка нет', () => {
     expect(markView(null)).toBeNull();
     expect(markView(undefined)).toBeNull();
   });
 
   it('цвет рамки — имя токена, определённого в обеих темах', () => {
-    for (const mark of ['in_progress', 'testing', 'done', 'rework'] as const) {
+    for (const mark of ['in_progress', 'testing', 'done', 'rework', 'comment'] as const) {
       const border = markView(mark)!.border;
       expect(typeof light[border]).toBe('string');
       expect(typeof dark[border]).toBe('string');
