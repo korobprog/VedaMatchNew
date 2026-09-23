@@ -70,7 +70,8 @@ export function feedEnding(
   place: FeedPlace,
   categories: readonly Pick<MotivationCategoryDto, "slug" | "title">[],
 ): FeedEnding {
-  if (place.tab === "saved") return { title: "Это всё избранное", restartHref: null };
+  if (place.tab === "saved")
+    return { title: "Это всё избранное", restartHref: null };
   const work = place.work?.trim();
   const speaker = place.speaker?.trim();
   const category = place.category?.trim();
@@ -84,11 +85,15 @@ export function feedEnding(
     work,
   });
   const what = place.tab === "cards" ? "все открытки" : "все картинки";
-  if (work) return { title: `Вы посмотрели ${what} источника «${work}»`, restartHref };
-  if (speaker) return { title: `Вы посмотрели ${what} автора «${speaker}»`, restartHref };
+  if (work)
+    return { title: `Вы посмотрели ${what} источника «${work}»`, restartHref };
+  if (speaker)
+    return { title: `Вы посмотрели ${what} автора «${speaker}»`, restartHref };
   const title = categoryTitle(category!, categories);
   return {
-    title: title ? `Вы посмотрели ${what} раздела «${title}»` : `Вы посмотрели ${what} раздела`,
+    title: title
+      ? `Вы посмотрели ${what} раздела «${title}»`
+      : `Вы посмотрели ${what} раздела`,
     restartHref,
   };
 }
