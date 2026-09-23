@@ -12,7 +12,7 @@ const text = {
     "add.modeHint":
       "Стих в разделе-источнике: текст, перевод, пословный перевод, комментарий, изображения и прочтения других ачарьев.",
     "section.search": "Поиск по источнику",
-    "section.searchHint": "Номер стиха, слово из текста, перевода или комментария",
+    "section.searchHint": "Номер стиха или слово",
     "section.searchSubmit": "Найти",
     "section.empty": "В этом источнике пока нет шлок. Добавьте первую.",
     "section.nothingFound": "Ничего не нашлось. Попробуйте номер стиха или другое слово.",
@@ -101,7 +101,7 @@ const text = {
     "add.modeHint":
       "A verse in its source section: text, translation, word for word, purport, images and other acharyas' readings.",
     "section.search": "Search this source",
-    "section.searchHint": "Verse number, a word from the text, translation or purport",
+    "section.searchHint": "Verse number or a word",
     "section.searchSubmit": "Search",
     "section.empty": "No shlokas in this source yet. Add the first one.",
     "section.nothingFound": "Nothing found. Try a verse number or another word.",

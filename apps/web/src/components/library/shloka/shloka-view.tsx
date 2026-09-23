@@ -167,7 +167,7 @@ export function ShlokaView({
         />
         <h1
           id="shloka-heading"
-          className="text-center font-display text-xl font-bold text-text-0 sm:text-2xl"
+          className="text-center font-display text-lg font-bold text-text-0 sm:text-2xl"
         >
           {heading}
         </h1>
@@ -293,7 +293,7 @@ function NeighborLink({
     >
       {direction === "prev" && <Icon aria-hidden className="h-5 w-5 shrink-0" />}
       <span className="grid">
-        <span className="text-xs text-text-2">{label}</span>
+        <span className="text-xs text-text-1">{label}</span>
         <span className="font-mono text-sm font-medium">{verse}</span>
       </span>
       {direction === "next" && <Icon aria-hidden className="h-5 w-5 shrink-0" />}

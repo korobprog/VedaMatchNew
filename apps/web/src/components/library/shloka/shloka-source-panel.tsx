@@ -184,10 +184,11 @@ function ShlokaRow({
     <li>
       <Link
         href={shlokaHref(item.id)}
-        className="glass grid grid-cols-[4.25rem_1fr] gap-3 rounded-2xl border border-glass-brd p-3 transition-colors hover:border-gold/60 motion-reduce:transition-none"
+        className="glass grid grid-cols-[auto_1fr] items-start gap-3 rounded-2xl border border-glass-brd p-3 transition-colors hover:border-gold/60 motion-reduce:transition-none"
       >
-        <span className="flex min-h-11 items-start justify-center rounded-xl border border-gold/40 bg-bg-1 px-1 py-2 text-center font-mono text-sm font-medium text-text-0">
-          {item.verse ?? st(locale, "section.noVerse")}
+        <span className="flex min-h-11 min-w-[4.5rem] max-w-[7.5rem] items-center justify-center break-words rounded-xl border border-gold/40 bg-bg-1 px-1 py-2 text-center font-mono text-[13px] font-medium text-text-0">
+          {/* Неразрывный дефис: диапазон «2.62-63» не рвётся на две строки. */}
+          {item.verse?.replace(/-/g, "\u2011") ?? st(locale, "section.noVerse")}
         </span>
         <span className="grid min-w-0 gap-1">
           <span
@@ -202,7 +203,7 @@ function ShlokaRow({
             </span>
           )}
           {(item.imagesCount > 0 || item.acharyasCount > 0) && (
-            <span className="flex gap-3 text-xs text-text-2">
+            <span className="flex gap-3 text-xs text-text-1">
               {item.imagesCount > 0 && (
                 <span className="inline-flex items-center gap-1">
                   <ImageIcon aria-hidden className="h-3.5 w-3.5" />

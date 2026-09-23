@@ -43,7 +43,7 @@ export function ShlokaVerse({
             <p
               key={index}
               lang="sa"
-              className={large ? "text-[1.35rem] leading-[1.9] sm:text-2xl" : "text-xl leading-[1.8]"}
+              className={`text-balance ${large ? "text-[1.25rem] leading-[1.9] sm:text-2xl" : "text-lg leading-[1.8] sm:text-xl"}`}
             >
               {line.text}
             </p>
@@ -53,7 +53,7 @@ export function ShlokaVerse({
               // Латиница с диакритикой — санскрит в IAST; кириллица —
               // транслитерация для русского читателя, язык у неё страницы.
               lang={/\p{Script=Cyrillic}/u.test(line.text) ? undefined : "sa-Latn"}
-              className={`italic ${large ? "text-lg leading-8 sm:text-xl" : "text-base leading-7"}`}
+              className={`text-balance italic ${large ? "text-lg leading-8 sm:text-xl" : "text-base leading-7"}`}
             >
               {line.text}
             </p>

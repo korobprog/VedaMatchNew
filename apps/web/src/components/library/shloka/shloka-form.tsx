@@ -313,7 +313,7 @@ function Label({
     <span className="text-sm font-semibold text-text-1">
       {label}
       {required && (
-        <span className="font-normal text-text-2"> ({requiredLabel})</span>
+        <span className="font-normal text-text-1"> ({requiredLabel})</span>
       )}
     </span>
   );
@@ -359,7 +359,7 @@ function TextField({
         className={FIELD}
       />
       {hint && (
-        <p id={`${id}-hint`} className="mt-1 text-xs text-text-2">
+        <p id={`${id}-hint`} className="mt-1 text-xs text-text-1">
           {hint}
         </p>
       )}
@@ -408,7 +408,7 @@ function AreaField({
         style={verse ? { fontFamily: VERSE_FONT_FAMILY, fontSize: "1.1rem" } : undefined}
       />
       {hint && (
-        <p id={`${id}-hint`} className="mt-1 text-xs text-text-2">
+        <p id={`${id}-hint`} className="mt-1 text-xs text-text-1">
           {hint}
         </p>
       )}
@@ -431,7 +431,7 @@ function ImagesField({
       <p id={`${id}-label`}>
         <Label label={st(locale, "form.images")} />
       </p>
-      <p id={`${id}-hint`} className="mb-2 mt-1 text-xs text-text-2">
+      <p id={`${id}-hint`} className="mb-2 mt-1 text-xs text-text-1">
         {st(locale, "form.imagesHint")}
       </p>
       {images.length > 0 && (

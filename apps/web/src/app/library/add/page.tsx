@@ -4,7 +4,7 @@ import { redirectToLogin } from "@/lib/require-user";
 import { getLibraryPreferences } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
-import { t } from "@/components/library/i18n";
+import { entryTypeLabel, t } from "@/components/library/i18n";
 import { st } from "@/components/library/shloka/shloka-text";
 
 /**
@@ -52,7 +52,7 @@ export default async function LibraryAddPage({
               комментарий, картинки и прочтения ачарьев. */}
           <ModeCard
             href={`/library/add/shloka${query}`}
-            title={st(locale, "section.add")}
+            title={entryTypeLabel(locale, "shloka")}
             hint={st(locale, "add.modeHint")}
             action={st(locale, "section.add")}
           />
