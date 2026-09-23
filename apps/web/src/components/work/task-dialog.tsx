@@ -23,9 +23,14 @@ import {
 } from "@/lib/work-api";
 import { uploadInTurn, uploadProblemMessage } from "./attach-files";
 import { workPersonLabel } from "./person-label";
-import { dueFromInput, dueToInput } from "./task-due";
 import { PRIORITY_TITLE } from "./task-priority";
-import { hasTaskEdits, pendingTaskEdits, taskEditsProblem } from "./task-edits";
+import {
+  draftFromTask,
+  hasTaskEdits,
+  pendingTaskEdits,
+  taskEditsProblem,
+  type TaskDraft,
+} from "./task-edits";
 
 /** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
 function growToText(element: HTMLTextAreaElement): void {
@@ -54,10 +59,21 @@ export function WorkTaskDialog({
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
   const [checklistDraft, setChecklistDraft] = useState("");
-  /* Черновик названия и описания (VED-56): сохраняет кнопка «Сохранить» или
-     закрытие окна, а не потеря фокуса. */
-  const [draft, setDraft] = useState({ title: "", description: "" });
-  /** Только что сохранили — показать «Сохранено», пока снова не начали править. */
+  /* Черновик всех полей карточки (VED-56): название, описание, раздел,
+     исполнитель, важность и срок. Сохраняет кнопка «Сохранить» или закрытие
+     окна — ни потеря фокуса, ни выбор в списке на сервер сами не уходят,
+     иначе кнопка после такой правки не появлялась. */
+  const [draft, setDraft] = useState<TaskDraft>({
+    title: "",
+    description: "",
+    columnId: "",
+    assigneeId: null,
+    priority: "normal",
+    due: "",
+  });
+  /** Только что сохранили — показать «Сохранено», пока снова не начали править.
+   *  Ставят и кнопка «Сохранить», и действия со своей кнопкой (чек-лист,
+   *  вложения, комментарий): они уходят сразу, и об этом тоже надо сказать. */
   const [justSaved, setJustSaved] = useState(false);
   /** Идёт загрузка нескольких вложений: сколько ушло из скольких. */
   const [uploading, setUploading] = useState<{
@@ -80,7 +96,7 @@ export function WorkTaskDialog({
       .then((loaded) => {
         if (!alive) return;
         setTask(loaded);
-        setDraft({ title: loaded.title, description: loaded.description });
+        setDraft(draftFromTask(loaded));
       })
       .catch((cause: unknown) => {
         if (alive) {
@@ -100,11 +116,33 @@ export function WorkTaskDialog({
     if (titleRef.current) growToText(titleRef.current);
   }, [draft.title]);
 
-  const saved = task
-    ? { title: task.title, description: task.description }
-    : draft;
+  const saved = task ? draftFromTask(task) : draft;
   const dirty = Boolean(task) && hasTaskEdits(saved, draft);
   const problem = taskEditsProblem(draft);
+
+  /**
+   * Отправить черновик: поля карточки одним запросом, перенос — своим, он
+   * рождает уведомление о смене статуса. Возвращает карточку после последнего
+   * запроса; `null` — отправлять было нечего.
+   */
+  const commit = useCallback(
+    async (base: WorkTaskDto, next: TaskDraft): Promise<WorkTaskDto | null> => {
+      const pending = pendingTaskEdits(draftFromTask(base), next);
+      if (!pending) return null;
+      let latest = base;
+      if (pending.update) {
+        latest = await updateWorkTask(base.id, pending.update);
+        // Поля уже на сервере: если следом не пройдёт перенос, окно не должно
+        // показывать их несохранёнными.
+        setTask(latest);
+      }
+      if (pending.columnId) {
+        latest = await moveWorkTask(base.id, { columnId: pending.columnId });
+      }
+      return latest;
+    },
+    [],
+  );
 
   /**
    * Закрыть окно, не потеряв правок: несохранённое уходит на сервер. Раньше
@@ -112,20 +150,13 @@ export function WorkTaskDialog({
    * правка пропадала.
    */
   const requestClose = useCallback(() => {
-    const body =
-      task && canEdit
-        ? pendingTaskEdits(
-            { title: task.title, description: task.description },
-            draft,
-          )
-        : null;
-    if (body) {
-      void updateWorkTask(task!.id, body)
+    if (task && canEdit && pendingTaskEdits(draftFromTask(task), draft)) {
+      void commit(task, draft)
         .then(() => onChanged())
         .catch(() => undefined);
     }
     onClose();
-  }, [task, canEdit, draft, onChanged, onClose]);
+  }, [task, canEdit, draft, commit, onChanged, onClose]);
 
   // Escape закрывает окно: без этого на компьютере из карточки выходят мышью,
   // а с клавиатуры — никак.
@@ -152,15 +183,14 @@ export function WorkTaskDialog({
       const next = await action();
       if (next) setTask(next);
       await onChanged();
+      // Дошло — окно так и говорит. Правок в черновике это не касается: пока
+      // они есть, полоса показывает их, а не «Сохранено».
+      setJustSaved(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
     } finally {
       setBusy(false);
     }
-  }
-
-  function patch(body: Parameters<typeof updateWorkTask>[1]) {
-    void run(() => updateWorkTask(taskId, body));
   }
 
   /**
@@ -194,23 +224,20 @@ export function WorkTaskDialog({
     setJustSaved(false);
   }
 
-  /** «Сохранить»: название и описание одним запросом. */
+  /** «Сохранить»: все правки черновика разом. */
   function save() {
-    if (!task || problem) return;
-    const body = pendingTaskEdits(saved, draft);
-    if (!body) return;
+    if (!task || problem || !pendingTaskEdits(saved, draft)) return;
     void run(async () => {
-      const updated = await updateWorkTask(taskId, body);
-      setDraft({ title: updated.title, description: updated.description });
-      setJustSaved(true);
-      return updated;
+      const updated = await commit(task, draft);
+      if (updated) setDraft(draftFromTask(updated));
+      return updated ?? undefined;
     });
   }
 
   /** Отменить правки: вернуть в поля то, что лежит на доске. */
   function discard() {
     if (!task) return;
-    setDraft({ title: task.title, description: task.description });
+    setDraft(draftFromTask(task));
     setJustSaved(false);
   }
 
@@ -281,14 +308,14 @@ export function WorkTaskDialog({
               <label className="text-sm text-text-1">
                 Раздел
                 <select
-                  value={task.columnId}
+                  value={draft.columnId}
                   disabled={!canEdit}
-                  onChange={(event) => {
+                  onChange={(event) =>
                     // Смена колонки из карточки — тот же перенос, что и
-                    // перетаскиванием: клавиатуре нужен свой путь.
-                    const columnId = event.target.value;
-                    void run(() => moveWorkTask(task.id, { columnId }));
-                  }}
+                    // перетаскиванием (клавиатуре нужен свой путь), но
+                    // уходит кнопкой «Сохранить», как любая правка окна.
+                    edit({ columnId: event.target.value })
+                  }
                   className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
                 >
                   {board.columns.map((column) => (
@@ -302,10 +329,10 @@ export function WorkTaskDialog({
               <label className="text-sm text-text-1">
                 Исполнитель
                 <select
-                  value={task.assignee?.userId ?? ""}
+                  value={draft.assigneeId ?? ""}
                   disabled={!canEdit}
                   onChange={(event) =>
-                    patch({ assigneeId: event.target.value || null })
+                    edit({ assigneeId: event.target.value || null })
                   }
                   className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
                 >
@@ -321,10 +348,10 @@ export function WorkTaskDialog({
               <label className="text-sm text-text-1">
                 Важность
                 <select
-                  value={task.priority}
+                  value={draft.priority}
                   disabled={!canEdit}
                   onChange={(event) =>
-                    patch({ priority: event.target.value as WorkTaskPriority })
+                    edit({ priority: event.target.value as WorkTaskPriority })
                   }
                   className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
                 >
@@ -353,13 +380,9 @@ export function WorkTaskDialog({
                 Срок
                 <input
                   type="datetime-local"
-                  defaultValue={dueToInput(task.dueAt)}
+                  value={draft.due}
                   disabled={!canEdit}
-                  onChange={(event) => {
-                    const dueAt = dueFromInput(event.target.value);
-                    // undefined — поле ещё недописано: такое не сохраняем.
-                    if (dueAt !== undefined) patch({ dueAt });
-                  }}
+                  onChange={(event) => edit({ due: event.target.value })}
                   className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-2 py-2 text-sm text-text-0"
                 />
               </label>
@@ -389,9 +412,9 @@ export function WorkTaskDialog({
               />
             </label>
 
-            {/* Кнопка «Сохранить» (VED-56). Видна, пока есть несохранённые
-                правки, и прилипает к низу окна: название правят наверху, а
-                кнопка всё равно перед глазами. */}
+            {/* Кнопка «Сохранить» (VED-56). Видна после любой правки полей
+                карточки — от названия до срока — и прилипает к низу окна:
+                поля правят наверху, а кнопка всё равно перед глазами. */}
             {canEdit && (dirty || justSaved) && (
               <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3">
                 {dirty ? (
@@ -411,7 +434,7 @@ export function WorkTaskDialog({
                         type="button"
                         onClick={discard}
                         disabled={busy}
-                        className="rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
+                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
                       >
                         Отменить правки
                       </button>
@@ -419,7 +442,7 @@ export function WorkTaskDialog({
                         type="button"
                         onClick={save}
                         disabled={busy || Boolean(problem)}
-                        className="rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        className="min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         {busy ? "Сохраняем…" : "Сохранить"}
                       </button>
