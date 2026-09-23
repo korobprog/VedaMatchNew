@@ -7,6 +7,7 @@ import { useServiceNames } from "@/components/service-catalog-provider";
 import {
   inviteCopyLabel,
   useInviteCopy,
+  usePlayerHotkey,
   usePortalWindowSwitch,
 } from "./quick-action-hooks";
 import {
@@ -158,6 +159,7 @@ function SideMenuItem({
 
   if (meta.id === "window") return <WindowItem onClose={onClose} />;
   if (meta.id === "invite") return <InviteItem />;
+  if (meta.id === "player") return <PlayerItem meta={meta} onClose={onClose} />;
   // «Поддержать» в меню — страница с реквизитами: шторка доната живёт в
   // панели, а меню закрывается при переходе.
   const href = meta.id === "donate" ? "/donate" : meta.href;
@@ -206,6 +208,31 @@ function WindowItem({ onClose }: { onClose: () => void }) {
       <span className="min-w-0 truncate font-medium">
         {windowSwitch.options[0] ?? meta.label}
       </span>
+    </button>
+  );
+}
+
+/** «Плеер» (VED-416): меню закрывается, полоса плеера выкатывается и играет. */
+function PlayerItem({
+  meta,
+  onClose,
+}: {
+  meta: QuickActionMeta;
+  onClose: () => void;
+}) {
+  const player = usePlayerHotkey();
+  return (
+    <button
+      type="button"
+      title={meta.hint}
+      onClick={() => {
+        onClose();
+        void player.run();
+      }}
+      className={rowClass}
+    >
+      <QuickActionIcon meta={meta} className="h-5 w-5 shrink-0" />
+      <span className="min-w-0 truncate font-medium">{meta.label}</span>
     </button>
   );
 }

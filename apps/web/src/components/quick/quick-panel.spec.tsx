@@ -16,6 +16,20 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace, refresh: vi.fn() }),
 }));
 
+/* Плеер Музыки (VED-416): панель зовёт только его открытый способ —
+   `useMusicPlayer()`. Без провайдера он `null`, как в остальных тестах. */
+const music = vi.hoisted(() => ({
+  player: null as null | {
+    current: { id: string } | null;
+    isPlaying: boolean;
+    toggle: () => void;
+    play: (trackId: string, queue?: string[], resumeFrom?: number) => void;
+  },
+}));
+vi.mock("@/components/music/player/player-provider", () => ({
+  useMusicPlayer: () => music.player,
+}));
+
 const STORAGE_KEY = "vedamatch:quick-panel";
 
 function stubFetch(overrides: Record<string, unknown> = {}) {
@@ -62,6 +76,7 @@ beforeEach(() => {
   resetDonationSettings();
   push.mockClear();
   replace.mockClear();
+  music.player = null;
   stubFetch();
 });
 
@@ -186,11 +201,12 @@ describe("QuickPanel", () => {
       "calendar",
       "postcard",
       "history",
+      "player",
     ]);
   });
 
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":[]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":6,"ids":[]}');
     // Опустошить панель может только админ: у остальных три кнопки
     // закреплены (VED-326), и пустой она не бывает.
     await openPanel({ admin: true });
@@ -533,11 +549,17 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
     return user;
   }
 
-  it("«История» стоит слева от звёздочки и открывает одну историю, без плиток", async () => {
+  /* VED-412: по умолчанию «Истории» в шапке нет, но её можно поставить в
+     верхнюю панель — и тогда она открывает одну историю, без плиток. */
+  it("«История», поставленная в шапку, открывает одну историю, без плиток", async () => {
+    window.localStorage.setItem(
+      "vedamatch:header-toolbar",
+      JSON.stringify({ v: 1, ids: ["history", "hotkeys", "bell", "avatar"] }),
+    );
     noteNavigationHistory("/work/agenda");
     const user = renderPanel();
 
-    const history = screen.getByRole("button", { name: "История" });
+    const history = await screen.findByRole("button", { name: "История" });
     const star = screen.getByRole("button", { name: "Горячие кнопки" });
     // Слева — значит раньше в порядке документа: ряд идёт слева направо.
     expect(
@@ -559,15 +581,19 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
     // Второе нажатие закрывает, а не открывает заново.
     await user.click(history);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
 
-  it("звёздочка после истории открывает плитки", async () => {
-    const user = renderPanel();
-    await user.click(screen.getByRole("button", { name: "История" }));
-    await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+    // Звёздочка после истории открывает плитки.
+    await user.click(history);
+    await user.click(star);
     expect(
       screen.getByRole("dialog", { name: "Горячие кнопки" }),
     ).toBeInTheDocument();
+  });
+
+  it("по умолчанию «Истории» в шапке нет", () => {
+    renderPanel();
+    expect(screen.queryByRole("button", { name: "История" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
   });
 
   it("шторку открывают и снаружи — из бокового меню", async () => {
@@ -640,5 +666,64 @@ describe("QuickPanel: закладки на телефоне", () => {
     // И своей прокрутки у списка нет: две прокрутки одна в другой.
     const list = screen.getByRole("link", { name: /Шрила Прабхупада/ }).closest("ul")!;
     expect(list.parentElement!.className).not.toMatch(/max-h|overflow/);
+  });
+});
+
+/* VED-416: «Добавь в панель горячих клавиш кнопку ПЛЕЕР. При нажатии плеер
+   должен выкатываться на экран в свёрнутом виде и снимается с паузы». */
+describe("QuickPanel: кнопка «Плеер»", () => {
+  function playerStub(current: { id: string } | null, isPlaying: boolean) {
+    return { current, isPlaying, toggle: vi.fn(), play: vi.fn() };
+  }
+
+  async function pressPlayer() {
+    const reveal = vi.fn();
+    window.addEventListener("vedamatch:music-player-reveal", reveal);
+    const user = await openPanel();
+    await user.click(screen.getByRole("button", { name: /Плеер/ }));
+    window.removeEventListener("vedamatch:music-player-reveal", reveal);
+    return reveal;
+  }
+
+  it("стоит в панели по умолчанию", async () => {
+    await openPanel();
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    expect(within(panel).getByRole("button", { name: /Плеер/ })).toBeInTheDocument();
+  });
+
+  it("на паузе — снимает с паузы и выкатывает полосу свёрнутой", async () => {
+    const player = playerStub({ id: "t1" }, false);
+    music.player = player;
+    const reveal = await pressPlayer();
+    expect(reveal).toHaveBeenCalledTimes(1);
+    expect(player.toggle).toHaveBeenCalledTimes(1);
+    // Панель закрылась: плеер выкатывается на экран, а не под неё.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("играющую запись не ставит на паузу", async () => {
+    const player = playerStub({ id: "t1" }, true);
+    music.player = player;
+    const reveal = await pressPlayer();
+    expect(reveal).toHaveBeenCalledTimes(1);
+    expect(player.toggle).not.toHaveBeenCalled();
+  });
+
+  it("закрытый плеер поднимает недослушанное с той же секунды", async () => {
+    const player = playerStub(null, false);
+    music.player = player;
+    stubFetch({ trackId: "t2", queue: ["t1", "t2"], positionSeconds: 42 });
+    await pressPlayer();
+    await waitFor(() =>
+      expect(player.play).toHaveBeenCalledWith("t2", ["t1", "t2"], 42),
+    );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("играть нечего — ведёт в Медиатеку", async () => {
+    music.player = playerStub(null, false);
+    stubFetch({ trackId: null });
+    await pressPlayer();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/music"));
   });
 });

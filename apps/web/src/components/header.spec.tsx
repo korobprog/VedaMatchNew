@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/notifications/notification-bell", () => ({
-  NotificationBell: () => null,
+  NotificationBell: () => <a href="/notifications">Колокольчик</a>,
 }));
 vi.mock("@/components/market/cart-badge", () => ({ CartBadge: () => null }));
 vi.mock("@/components/locale-toggle", () => ({ LocaleToggle: () => null }));
@@ -151,16 +151,35 @@ describe("Header", () => {
     expect(document.activeElement).toBe(star);
   });
 
-  // VED-402: бургер ушёл в панель горячих кнопок, на его месте — «История».
-  it("бургера в шапке нет, слева от звёздочки — «История»", () => {
+  /* VED-412: «Оставь на верхней панели две кнопки как раньше — звёздочка и
+     колокольчик. А также верни в самую правую клавишу Меню». */
+  it("по умолчанию в шапке звёздочка, колокольчик, аватар и самым правым «Меню»", () => {
     renderHeader();
-    expect(screen.queryByRole("button", { name: "Открыть меню" })).toBeNull();
-    const history = screen.getByRole("button", { name: "История" });
+    expect(screen.queryByRole("button", { name: "История" })).toBeNull();
     const star = screen.getByRole("button", { name: "Горячие кнопки" });
-    expect(history.parentElement).toBe(star.parentElement);
-    expect(
-      history.compareDocumentPosition(star) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const bell = screen.getByRole("link", { name: "Колокольчик" });
+    const avatar = screen.getByRole("link", { name: "Р" });
+    const menu = screen.getByRole("button", { name: "Меню" });
+    const order = [star, bell, avatar, menu];
+    for (let i = 1; i < order.length; i += 1)
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("«Меню» в шапке открывает меню и получает фокус обратно", async () => {
+    renderHeader();
+    const menu = screen.getByRole("button", { name: "Меню" });
+    fireEvent.click(menu);
+    expect(screen.getByRole("dialog", { name: "Меню" })).toBeInTheDocument();
+    expect(menu).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(menu);
   });
 
   it("тап по подложке закрывает меню кликом, а не касанием", () => {
@@ -259,6 +278,87 @@ describe("Header: настройка меню", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "История" }));
     expect(screen.queryByRole("dialog", { name: "Меню" })).not.toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "История" })).toBeInTheDocument();
+  });
+});
+
+/* VED-412, VED-434: настройка верхней панели — из панели горячих кнопок и
+   из настройки меню. */
+describe("Header: верхняя панель", () => {
+  beforeEach(() => {
+    pathname = "/notices/my";
+    window.localStorage.clear();
+  });
+
+  function openHeaderSettings() {
+    fireEvent.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Настроить верхнюю панель" }),
+    );
+    return screen.getByRole("dialog", { name: "Верхняя панель" });
+  }
+
+  it("кнопка настройки стоит в заголовке панели слева от шестерёнки", () => {
+    renderHeader();
+    fireEvent.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    const header = within(panel).getByRole("button", {
+      name: "Настроить верхнюю панель",
+    });
+    expect(header.nextElementSibling).toBe(
+      within(panel).getByRole("button", { name: "Настроить панель" }),
+    );
+  });
+
+  it("убирает «Меню», ставит «Поиск» и помнит выбор", () => {
+    renderHeader();
+    const settings = openHeaderSettings();
+    fireEvent.click(within(settings).getByRole("switch", { name: /^Меню/ }));
+    fireEvent.click(within(settings).getByRole("switch", { name: /^Поиск/ }));
+
+    expect(screen.queryByRole("button", { name: "Меню" })).toBeNull();
+    const search = screen.getByRole("link", { name: "Поиск" });
+    expect(search).toHaveAttribute("href", "/search");
+    expect(
+      JSON.parse(window.localStorage.getItem("vedamatch:header-toolbar")!),
+    ).toEqual({ v: 1, ids: ["hotkeys", "search", "bell", "avatar"] });
+
+    // Звёздочка осталась одна из двух входов — её галочку не снять.
+    const star = within(settings).getByRole("switch", { name: /^Горячие кнопки/ });
+    expect(star).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(star);
+    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
+  });
+
+  it("колокольчик и аватар закреплены", () => {
+    renderHeader();
+    const settings = openHeaderSettings();
+    for (const name of [/^Уведомления/, /^Профиль/])
+      expect(within(settings).getByRole("switch", { name })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+  });
+
+  it("без звёздочки настройка шапки открывается из настройки меню", () => {
+    window.localStorage.setItem(
+      "vedamatch:header-toolbar",
+      JSON.stringify({ v: 1, ids: ["bell", "avatar", "menu"] }),
+    );
+    renderHeader();
+    expect(screen.queryByRole("button", { name: "Горячие кнопки" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Меню" }));
+    const dialog = screen.getByRole("dialog", { name: "Меню" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Настроить меню" }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Настроить верхнюю панель" }),
+    );
+    expect(screen.queryByRole("dialog", { name: "Меню" })).toBeNull();
+    const settings = screen.getByRole("dialog", { name: "Верхняя панель" });
+    fireEvent.click(
+      within(settings).getByRole("switch", { name: /^Горячие кнопки/ }),
+    );
+    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
   });
 });
 

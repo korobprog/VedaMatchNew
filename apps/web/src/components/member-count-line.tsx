@@ -47,15 +47,21 @@ export function MemberCountLine({
 
   if (effectiveMode(layout) === "compact") return null;
 
+  /* Число и приглашение посмотреть статистику — одной строкой (VED-433):
+     двумя строками они занимали над сеткой место под целую кнопку. Если
+     обращение по имени длинное и строка не помещается, приглашение
+     переносится целиком, а не рвётся посередине. */
   return (
     <p className="mb-8 text-sm text-text-2">
       <Link
         href="/stats"
-        className="group inline-block transition-colors hover:text-text-1"
+        className="group inline-flex flex-wrap items-baseline gap-x-2 transition-colors hover:text-text-1"
       >
-        Вместе нас:{" "}
-        <MemberCounter total={total} className="font-semibold text-text-0" />
-        <span className="block text-xs underline underline-offset-2 group-hover:text-text-0">
+        <span className="whitespace-nowrap">
+          Вместе нас:{" "}
+          <MemberCounter total={total} className="font-semibold text-text-0" />
+        </span>
+        <span className="text-xs underline underline-offset-2 group-hover:text-text-0">
           {statsCallToAction(greetName)}
         </span>
       </Link>

@@ -12,7 +12,11 @@ import {
   portalWindowButtonHint,
   portalWindowTargetUrl,
 } from "@/lib/portal-windows";
+import { getPlaybackState } from "@/lib/music-playback-api";
+import { useMusicPlayer } from "@/components/music/player/player-provider";
+import { revealMusicPlayerCollapsed } from "@/components/music/player/player-reveal";
 import { switchPortalWindows, usePortalWindows } from "./portal-windows-store";
+import { planPlayerHotkey, restorePlan } from "./player-hotkey";
 
 /*
  * Поведение горячих кнопок, у которых оно своё, а не переход по ссылке.
@@ -93,4 +97,40 @@ export function useInviteCopy() {
   }, []);
 
   return { state, copy };
+}
+
+/**
+ * Горячая кнопка «Плеер» (VED-416): полоса плеера выкатывается свёрнутой и
+ * играет — см. `player-hotkey.ts`, что делается в каком состоянии.
+ *
+ * Плеером управляем только его открытым способом: `useMusicPlayer()` для
+ * звука и событием `revealMusicPlayerCollapsed()` для полосы. Своего
+ * состояния у кнопки нет.
+ */
+export function usePlayerHotkey() {
+  const player = useMusicPlayer();
+  const router = useRouter();
+
+  const run = useCallback(async () => {
+    revealMusicPlayerCollapsed();
+    const step = planPlayerHotkey(
+      player
+        ? { hasTrack: Boolean(player.current), isPlaying: player.isPlaying }
+        : null,
+    );
+    if (step === "keep") return;
+    if (step === "resume") {
+      player?.toggle();
+      return;
+    }
+    const saved = player ? restorePlan(await getPlaybackState()) : null;
+    if (player && saved) {
+      // Полоса смонтирована и без записи — свернуться она уже успела.
+      player.play(saved.trackId, saved.queue, saved.positionSeconds);
+      return;
+    }
+    router.push("/music");
+  }, [player, router]);
+
+  return { run };
 }
