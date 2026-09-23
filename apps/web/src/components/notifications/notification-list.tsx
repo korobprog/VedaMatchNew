@@ -530,7 +530,9 @@ export function NotificationCard({
             >
               {item.title}
             </span>
-            <span className="shrink-0 text-xs text-text-2">
+            {/* `--vm-text-1`, а не `--vm-text-2`: на стекле тёмной темы
+                второй давал 4,07–4,14:1 при 12px, ниже AA (замер VED-404). */}
+            <span className="shrink-0 text-xs text-text-1">
               {when ?? formatWhen(item.createdAt)}
             </span>
           </span>
@@ -562,9 +564,14 @@ export function NotificationCard({
               — «https://github.com/…/pull/324» одним словом шире карточки на
               телефоне. Без переноса страница становилась шире экрана, Chrome
               на Android расширял под неё видимую область, и плеер, прибитый к
-              её краям, уезжал вправо и вниз за экран. */}
-          <span
-            className={`mt-1 block break-words text-sm ${muted ? "text-text-2" : "text-text-1"}`}
+              её краям, уезжал вправо и вниз за экран.
+
+              Текст прочитанного — `--vm-text-1`, как у нового: `--vm-text-2`
+              на стекле тёмной темы давал 4,05:1 при 14px, ниже AA, а история
+              уведомлений (VED-404) состоит из одного прочитанного. Прочитанное
+              и так отличается приглушённым заголовком, бледной рамкой и
+              галкой в кружке справа. */}
+          <span className="mt-1 block break-words text-sm text-text-1"
           >
             {item.body}
           </span>
