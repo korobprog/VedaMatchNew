@@ -71,6 +71,19 @@ describe('validateBlogPost', () => {
     ).toBe('text_too_long');
   });
 
+  // VED-371: прежние 5000 обрывали лекцию на середине. Предел поднят до
+  // 20000, и текст ровно в предел — с абзацами — должен проходить.
+  it('accepts a lecture-long text up to the raised limit', () => {
+    expect(BLOG_POST_TEXT_MAX_LENGTH).toBe(20000);
+    const paragraph = `${'слово '.repeat(99)}конец.`;
+    const text = Array.from({ length: 40 }, () => paragraph)
+      .join('\n\n')
+      .slice(0, BLOG_POST_TEXT_MAX_LENGTH)
+      .trim();
+    expect(text.length).toBeGreaterThan(19000);
+    expect(validateBlogPost({ title: null, text, imageCount: 0 })).toBeNull();
+  });
+
   it('rejects too many images', () => {
     expect(
       validateBlogPost({
