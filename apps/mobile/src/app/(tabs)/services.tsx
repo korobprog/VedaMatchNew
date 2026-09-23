@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
+import { SearchEntry } from '@/components/search/search-entry';
 import { RetryButton } from '@/components/retry-button';
 import { ServiceGridSkeleton } from '@/components/skeleton';
 import { QuickPinSettings } from '@/components/services/quick-pin-settings';
@@ -124,6 +125,7 @@ export default function ServicesScreen() {
       <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
         <View style={styles.staticBody}>
           {header}
+          <SearchEntry />
           <View style={styles.center}>
             <InlineError message={error} />
             <RetryButton onPress={retry} busy={retrying} />
@@ -140,6 +142,7 @@ export default function ServicesScreen() {
       <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
         <View style={styles.staticBody}>
           {header}
+          <SearchEntry />
           <ServiceGridSkeleton />
         </View>
       </View>
@@ -155,6 +158,9 @@ export default function ServicesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} />}
       >
         {header}
+        {/* Поиск по порталу (VED-337): люди, общины, переписка и материалы
+            сервисов — одной выдачей, см. `components/search/search-entry.tsx`. */}
+        <SearchEntry />
 
         {error ? (
           <View style={styles.errorBlock}>
