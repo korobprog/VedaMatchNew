@@ -1,9 +1,11 @@
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ConferenceReturn } from '@/components/chat/conference-return';
 import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
 import { PushBridge } from '@/lib/push/push-bridge';
+import { quickPinsStore } from '@/lib/services/quick-pins-store';
 import { TelegramShell } from '@/lib/telegram/telegram-shell';
 import { useTheme } from '@/theme/theme';
 
@@ -34,6 +36,12 @@ function RootStackInner() {
   const { scheme, colors } = useTheme();
   const { status } = useSession();
   const onboarding = useOnboardingGate();
+  // Закреплённое для панели быстрого доступа (VED-385) читается вместе с
+  // восстановлением сессии, а не когда откроются вкладки: вкладки ждут этого
+  // чтения, чтобы первый кадр сразу встал с панелью (`(tabs)/_layout.tsx`).
+  useEffect(() => {
+    void quickPinsStore.load();
+  }, []);
   if (status === 'loading') return null;
   return (
     <>
@@ -109,6 +117,16 @@ function RootStackInner() {
               адресе — к нему и привяжется новая карточка. */}
           <Stack.Screen name="wellness/label/[barcode]" />
           <Stack.Screen name="wellness/history" />
+          {/* Блог-лента (VED-334) — маршруты корневого стека, а не шестая
+              вкладка: начало ленты стоит полосой в «Чатах»
+              (`components/blog/blog-home-strip.tsx`), вся лента открывается
+              оттуда, из карточки «Блог-лента» в «Сервисах» и чипом панели
+              быстрого доступа. Экран поста берёт id из адреса — в него
+              попадают и с полосы, и из ленты, и из блога автора. */}
+          <Stack.Screen name="blog/index" />
+          <Stack.Screen name="blog/new" />
+          <Stack.Screen name="blog/post/[id]" />
+          <Stack.Screen name="blog/authors/[id]" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />

@@ -1,4 +1,4 @@
-import type { TaskStatusMark } from "@vedamatch/shared";
+import type { NotificationMark } from "@vedamatch/shared";
 
 /**
  * Как выглядит состояние задачи (VED-272, VED-312, VED-311).
@@ -38,7 +38,13 @@ export interface TaskStatusMarkView {
   className: string;
 }
 
-const MARK_VIEWS: Record<TaskStatusMark, TaskStatusMarkView> = {
+/**
+ * Ключ — `NotificationMark`, то есть четыре состояния задачи и «Комментарий»
+ * (VED-298). Карточка планировщика передаёт сюда только состояние
+ * (`TaskStatusMark`), так что «Комментарий» на доске не появляется: это вид
+ * новости в ленте, а не состояние задачи.
+ */
+const MARK_VIEWS: Record<NotificationMark, TaskStatusMarkView> = {
   in_progress: {
     label: "В работе",
     className: "border-mark-progress/60 text-mark-progress",
@@ -55,6 +61,14 @@ const MARK_VIEWS: Record<TaskStatusMark, TaskStatusMarkView> = {
     label: "На доработку",
     className: "border-mark-rework/60 text-mark-rework",
   },
+  /* Заказчик: «если уведомление о комментарии не имеет своего статуса, то
+     добавь ей цветной статус Комментарий» (VED-298). Цвет свой, фиолетовый:
+     четыре тона выше заняты, а спутать «Комментарий» с состоянием задачи
+     значило бы прочитать его как пятую колонку. */
+  comment: {
+    label: "Комментарий",
+    className: "border-mark-comment/60 text-mark-comment",
+  },
 };
 
 /**
@@ -63,7 +77,7 @@ const MARK_VIEWS: Record<TaskStatusMark, TaskStatusMarkView> = {
  * сделанная сборкой с другим набором, могла принести незнакомый код.
  */
 export function taskStatusMarkView(
-  mark: TaskStatusMark | null | undefined,
+  mark: NotificationMark | null | undefined,
 ): TaskStatusMarkView | null {
   if (!mark) return null;
   return MARK_VIEWS[mark] ?? null;

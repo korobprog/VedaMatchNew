@@ -28,7 +28,8 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { PicturePublishForm } from "./picture-publish-form";
-import { fieldLabelClass } from "./field-label";
+import { ATTRIBUTION_GROUP_CLASS, fieldLabelClass } from "./field-label";
+import { AttributionFieldLabel } from "./attribution-field-label";
 import { splitQuoteAndExplanation } from "./quote-text";
 import {
   ReelCategorySelect,
@@ -577,7 +578,7 @@ export function ReelWizard({
               `aria-label` на fieldset даёт скринридеру то же имя без лишней
               строки на экране. */}
           <fieldset
-            className="space-y-2 rounded-2xl border border-glass-brd p-3"
+            className={ATTRIBUTION_GROUP_CLASS}
             aria-label="Источник и автор"
           >
             {sourceKind === "vedabase" ? (
@@ -588,7 +589,7 @@ export function ReelWizard({
               </p>
             ) : (
               <label className="block text-sm text-text-1">
-                <span className={fieldLabelClass()}>Автор (необязательно)</span>
+                <AttributionFieldLabel kind="author" />
                 <input
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
@@ -596,7 +597,9 @@ export function ReelWizard({
                   placeholder="Кому принадлежат слова"
                   className={fieldClass}
                 />
-                <span className="mt-1 block text-xs text-text-2">
+                {/* `--vm-text-1`, а не `-2`: на маджента-заливке блока
+                    (VED-203) `-2` в тёмной теме даёт 4.37:1 — ниже AA. */}
+                <span className="mt-1 block text-xs text-text-1">
                   Пусто — подпишем вашим именем. Чужие слова честнее подписать
                   тем, кому они принадлежат.
                 </span>
@@ -604,7 +607,7 @@ export function ReelWizard({
             )}
             {sourceKind === "own" && (
               <label className="block text-sm text-text-1">
-                <span className={fieldLabelClass()}>Источник (необязательно)</span>
+                <AttributionFieldLabel kind="source" />
                 <input
                   value={work}
                   onChange={(e) => setWork(e.target.value)}
@@ -1363,7 +1366,7 @@ function ReelStatus({
               Открыть рилс
             </Link>
             {reel.post.storyImageUrl && (
-              <a href={reel.post.storyImageUrl} download className="btn-mint-outline rounded-xl px-4 py-2 text-sm font-medium">
+              <a href={`/m/${reel.post.slug}/story`} download className="btn-mint-outline rounded-xl px-4 py-2 text-sm font-medium">
                 ⤓ Скачать для Stories
               </a>
             )}

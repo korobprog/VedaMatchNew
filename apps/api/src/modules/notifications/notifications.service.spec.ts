@@ -727,6 +727,51 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
       await expect(service.countUnread('user-1')).resolves.toBe(0);
     });
 
+    it('комментарий без состояния задачи показывает «Комментарий», с состоянием — состояние (VED-298)', async () => {
+      const { service } = createService();
+      await service.addToInbox(
+        'user-2',
+        {
+          title: 'VED-42: новый комментарий',
+          body: 'Посмотрите ещё раз',
+          url,
+          category: 'work',
+          mark: null,
+          markFallback: 'comment',
+        },
+        minutes(1),
+      );
+      await service.addToInbox(
+        'user-2',
+        { ...statusNews('из «В работе»', 'testing'), mark: null },
+        minutes(2),
+      );
+
+      const commentMark = async () =>
+        (await service.listInbox('user-2')).items.find(
+          (item) => item.title === 'VED-42: новый комментарий',
+        )?.mark;
+      const statusMark = async () =>
+        (await service.listInbox('user-2')).items.find(
+          (item) => item.title === 'VED-42: сменился статус',
+        )?.mark;
+
+      // Карточка в «ВДОХНОВЕНИЕ.» — состояния нет.
+      expect(await commentMark()).toBe('comment');
+      expect(await statusMark()).toBeNull();
+
+      // Уехала в «Тестерование» — у обеих строк состояние.
+      await service.refreshWorkTaskMark('space-1', 'VED-42', 'testing');
+      expect(await commentMark()).toBe('testing');
+      expect(await statusMark()).toBe('testing');
+
+      // Вернулась в раздел без состояния — комментарий снова «Комментарий»:
+      // переезд переписал состояние, но не стёр, что строка — комментарий.
+      await service.refreshWorkTaskMark('space-1', 'VED-42', null);
+      expect(await commentMark()).toBe('comment');
+      expect(await statusMark()).toBeNull();
+    });
+
     it('туда-обратно: строка поднимается на каждом переносе, значок возвращается', async () => {
       const { service } = await seeded();
 

@@ -50,6 +50,7 @@
   --color-mark-testing: var(--vm-mark-testing);
   --color-mark-done: var(--vm-mark-done);
   --color-mark-rework: var(--vm-mark-rework);
+  --color-mark-comment: var(--vm-mark-comment);
 
   /* Text colors */
   --color-text-0: var(--vm-text-0);
@@ -189,6 +190,14 @@
   --vm-mark-testing: #07734F;
   --vm-mark-done: #15357F;
   --vm-mark-rework: #9B1B1B;
+  /* «Комментарий» (VED-298) — значок уведомления о комментарии к задаче,
+     у которой нет состояния. Заказчик цвет не назвал; фиолетовый — потому что
+     четыре тона выше уже заняты (коричневый, изумрудный, тёмно-синий,
+     тёмно-красный), а фиолетовым в ленте нарисован сам значок комментария.
+     На карточке планировщика его не бывает — это не состояние задачи.
+     Замер в ленте, подпись 11px, порог AA 4,5:1:
+       --vm-mark-comment   7,58:1 светлая · 10,09:1 тёмная */
+  --vm-mark-comment: #6B2DB3;
 
   --vm-text-0: #180F2C;
   --vm-text-1: #4B3B6C;
@@ -284,6 +293,7 @@
   --vm-mark-testing: #3FDFA8;
   --vm-mark-done: #8FB6FF;
   --vm-mark-rework: #FF8A85;
+  --vm-mark-comment: #D0A6FF;
 
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
@@ -360,6 +370,7 @@
     --vm-mark-testing: #3FDFA8;
     --vm-mark-done: #8FB6FF;
     --vm-mark-rework: #FF8A85;
+    --vm-mark-comment: #D0A6FF;
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;

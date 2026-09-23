@@ -1,5 +1,4 @@
 import type { ServiceCard as ServiceCardDto } from '@vedamatch/shared';
-import * as WebBrowser from 'expo-web-browser';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -7,14 +6,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
 import { ServiceGridSkeleton } from '@/components/skeleton';
+import { QuickPinSettings } from '@/components/services/quick-pin-settings';
 import { ServiceCard } from '@/components/services/service-card';
+import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
 import { SelfUpdateSection } from '@/components/self-update/self-update-section';
 import { appCapabilities, appVariant } from '@/config/app-variant';
-import { serviceUrl } from '@/config/services';
 import { useSession } from '@/lib/auth/session';
 import { createServicesApi } from '@/lib/services/services-api';
 import { describeServicesError } from '@/lib/services/services-error';
-import { serviceTarget } from '@/lib/services/service-route';
+import { openService as openServiceTarget } from '@/lib/services/open-service';
+import { quickPinsStore } from '@/lib/services/quick-pins-store';
 import { visibleServices } from '@/lib/services/services-list';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -37,6 +38,7 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
 export default function ServicesScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const topInset = useScreenTopInset();
   const { api, user, signOut } = useSession();
   const { webOrigin } = appVariant();
   const servicesApi = useMemo(() => createServicesApi(api), [api]);
@@ -57,6 +59,9 @@ export default function ServicesScreen() {
         setData(response);
         setError(null);
       }
+      // Свежий каталог освежает и снимок закреплённого на панели быстрого
+      // доступа (VED-385): переименованное — переименовать, ушедшее — убрать.
+      void quickPinsStore.reconcile(response);
     } catch (e) {
       if (request.current === id) {
         setError(describeServicesError(e));
@@ -91,28 +96,22 @@ export default function ServicesScreen() {
   // У «Здоровья» есть свой экран в приложении (VED-335): сканер состава
   // нельзя отправить в браузер телефона, там камеры либо нет, либо она
   // требует https и отдельного разрешения. Список таких сервисов — в
-  // `lib/services/service-route.ts`, а не `if` по месту.
+  // `lib/services/service-route.ts`, а не `if` по месту; само открытие —
+  // общее с чипами панели быстрого доступа (`lib/services/open-service.ts`).
   const openService = useCallback(
-    (service: ServiceCardDto) => {
-      const target = serviceTarget(service);
-      if (target.kind === 'in-app') {
-        router.push(target.path as never);
-        return;
-      }
-      void WebBrowser.openBrowserAsync(serviceUrl(webOrigin, target.url));
-    },
+    (service: ServiceCardDto) => openServiceTarget(service, webOrigin),
     [webOrigin],
   );
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+    <View style={[styles.header, { paddingTop: topInset + 16 }]}>
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
         Сервисы
       </Text>
-      {/* «Здоровье» с VED-335 открывается своим экраном, остальные — на
-          сайте: обещать «все в браузере» больше нельзя. */}
+      {/* «Здоровье» с VED-335 и «Блог-лента» с VED-334 открываются своими
+          экранами, остальные — на сайте: обещать «все в браузере» нельзя. */}
       <Text style={[styles.subtitle, { color: colors.text1 }]}>
-        Сканер состава работает прямо здесь, остальные — на сайте VedaMatch.
+        Блог-лента и сканер состава работают прямо здесь, остальные — на сайте VedaMatch.
       </Text>
     </View>
   );
@@ -163,6 +162,11 @@ export default function ServicesScreen() {
             <RetryButton onPress={retry} busy={retrying} />
           </View>
         ) : null}
+
+        {/* Настройка панели быстрого доступа (VED-385) — над каталогом:
+            пока ничего не закреплено, её подсказка и есть пустое состояние
+            панели, и видна она только здесь. */}
+        {list.length > 0 ? <QuickPinSettings services={data} /> : null}
 
         {list.length === 0 ? (
           <Text

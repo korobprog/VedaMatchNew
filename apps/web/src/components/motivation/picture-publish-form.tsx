@@ -26,7 +26,8 @@ import {
 } from "./clipboard-image";
 import { imageSizeRejection, readImageSize } from "./image-dimensions";
 import { categoriesAcceptingStyle } from "./feed-style";
-import { fieldLabelClass } from "./field-label";
+import { ATTRIBUTION_GROUP_CLASS, fieldLabelClass } from "./field-label";
+import { AttributionFieldLabel } from "./attribution-field-label";
 import {
   ReelCategorySelect,
   initialReelCategory,
@@ -311,11 +312,11 @@ export function PicturePublishForm({
           для скринридера несёт `aria-label` на самом fieldset, и оно дословно
           такое же, как в мастере роликов. */}
       <fieldset
-        className="space-y-2 rounded-2xl border border-glass-brd p-3"
+        className={ATTRIBUTION_GROUP_CLASS}
         aria-label="Источник и автор"
       >
         <label className="block text-sm text-text-1">
-          <span className={fieldLabelClass()}>Автор (необязательно)</span>
+          <AttributionFieldLabel kind="author" />
           <input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
@@ -325,7 +326,7 @@ export function PicturePublishForm({
           />
         </label>
         <label className="block text-sm text-text-1">
-          <span className={fieldLabelClass()}>Источник (необязательно)</span>
+          <AttributionFieldLabel kind="source" />
           <input
             value={work}
             onChange={(e) => setWork(e.target.value)}

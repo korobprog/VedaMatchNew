@@ -7,6 +7,7 @@ import {
 } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
 import { CoverPicture } from "./cover-picture";
+import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -39,7 +40,7 @@ export function EntryCard({
           <Link
             href={`/library/entry/${entry.id}`}
             aria-label={t(locale, "entry.play")}
-            className="relative mb-3 block overflow-hidden rounded-xl border border-glass-brd"
+            className="relative mb-3 block"
           >
             <PreviewImage locale={locale} src={entry.previewUrl} />
             <span className="absolute inset-0 flex items-center justify-center">
@@ -49,18 +50,23 @@ export function EntryCard({
             </span>
           </Link>
         ) : entry.url ? (
-          <OutsideLink
-            href={entry.url}
-            className="mb-3 block overflow-hidden rounded-xl border border-glass-brd"
-          >
+          <OutsideLink href={entry.url} className="mb-3 block">
             <PreviewImage locale={locale} src={entry.previewUrl} />
           </OutsideLink>
         ) : (
           // Без адреса открывать нечего, но обложку показываем: у материала
-          // из книги она единственное изображение и загружена вручную.
-          <span className="mb-3 block overflow-hidden rounded-xl border border-glass-brd">
+          // из книги и у катхи она единственное изображение и загружена
+          // вручную. Нажатие открывает её во весь экран — с приближением и
+          // «Скачать» (VED-138).
+          <CoverViewer
+            locale={locale}
+            entryId={entry.id}
+            src={entry.previewUrl}
+            alt={t(locale, "entry.preview")}
+            className="mb-3"
+          >
             <PreviewImage locale={locale} src={entry.previewUrl} />
-          </span>
+          </CoverViewer>
         ))}
 
       <div className="mb-2 flex items-center gap-2 text-xs text-text-2">
