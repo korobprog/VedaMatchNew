@@ -11,6 +11,8 @@ import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
+import { VERSE_FONT_FAMILY, verseFontVariables } from "./shloka/shloka-font";
+import { verseExcerpt } from "./shloka/shloka-mode";
 
 export function EntryCard({
   entry,
@@ -120,7 +122,7 @@ export function EntryCard({
             {title}
             <ExternalLink aria-hidden className="h-3.5 w-3.5" />
           </OutsideLink>
-        ) : entry.type === "katha" ? (
+        ) : entry.type === "katha" || entry.type === "shloka" ? (
           <Link href={`/library/entry/${entry.id}`} className="hover:underline">
             {title}
           </Link>
@@ -128,6 +130,17 @@ export function EntryCard({
           title
         )}
       </h3>
+
+      {/* Шлока показывает начало самого стиха — шрифтом для санскрита,
+          как в её окне (VED-386). */}
+      {entry.shloka && (
+        <p
+          className={`${verseFontVariables} mb-2 line-clamp-2 whitespace-pre-line text-[1.05rem] leading-7 text-text-0`}
+          style={{ fontFamily: VERSE_FONT_FAMILY }}
+        >
+          {verseExcerpt(entry.shloka.text)}
+        </p>
+      )}
 
       {description && (
         <p className="mb-3 line-clamp-2 text-sm text-text-1">{description}</p>

@@ -5,6 +5,7 @@ import { getLibraryPreferences } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { t } from "@/components/library/i18n";
+import { st } from "@/components/library/shloka/shloka-text";
 
 /**
  * Выбор режима заполнения. Отдельным экраном, а не переключателем внутри
@@ -46,6 +47,14 @@ export default async function LibraryAddPage({
             title={t(locale, "add.modePro")}
             hint={t(locale, "add.modeProHint")}
             action={t(locale, "add.modeProAction")}
+          />
+          {/* Шлока — своя форма (VED-386): стих, пословный перевод,
+              комментарий, картинки и прочтения ачарьев. */}
+          <ModeCard
+            href={`/library/add/shloka${query}`}
+            title={st(locale, "section.add")}
+            hint={st(locale, "add.modeHint")}
+            action={st(locale, "section.add")}
           />
         </div>
       </main>

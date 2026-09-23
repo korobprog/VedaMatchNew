@@ -6,6 +6,7 @@ import {
   getLibraryComments,
   getLibraryEntry,
   getLibraryPreferences,
+  getLibraryShloka,
 } from "@/lib/library-api";
 import { videoEmbedUrl, videoProviderName, videoSource } from "@vedamatch/shared";
 import { Header } from "@/components/header";
@@ -21,16 +22,22 @@ import { VideoEmbed } from "@/components/library/video-embed";
 import { entryTypeLabel, pickLocalized, t } from "@/components/library/i18n";
 import { kathaParagraphs } from "@/components/library/katha-text";
 import { EntryFiles } from "@/components/library/entry-files";
+import { ShlokaView } from "@/components/library/shloka/shloka-view";
 
 export default async function LibraryEntryPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  /** `created` — сюда пришли прямо из формы публикации (VED-91). */
-  searchParams: Promise<{ created?: string | string[] }>;
+  /** `created` — сюда пришли прямо из формы публикации (VED-91).
+   *  `mode=edit` — окно шлоки сразу в правке (VED-386). */
+  searchParams: Promise<{
+    created?: string | string[];
+    mode?: string | string[];
+  }>;
 }) {
-  const justCreated = Boolean((await searchParams).created);
+  const query = await searchParams;
+  const justCreated = Boolean(query.created);
   const user = await getProfile();
   if (!user) {
     const { id } = await params;
@@ -56,6 +63,55 @@ export default async function LibraryEntryPage({
         </main>
       </div>
     );
+  }
+
+  // Шлока — своё окно: стих, стрелки по источнику, «Чтение / Правка»
+  // (VED-386). Адрес общий с материалами — ссылки из ленты, поиска и
+  // избранного ведут сюда же.
+  if (entry.type === "shloka") {
+    const [shloka, shlokaComments] = await Promise.all([
+      getLibraryShloka(entry.id),
+      getLibraryComments(entry.id),
+    ]);
+    if (shloka) {
+      return (
+        <div className="relative min-h-dvh bg-bg-0">
+          <Header user={user} />
+          <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
+            <BackLink
+              locale={locale}
+              fallbackHref={
+                shloka.category ? `/library/${shloka.category.slug}` : "/library"
+              }
+            />
+            <ShlokaView
+              key={shloka.id}
+              locale={locale}
+              shloka={shloka}
+              initialMode={query.mode === "edit" ? "edit" : "read"}
+            />
+            <div className="my-6 flex flex-wrap items-center gap-3">
+              <BookmarkButton
+                locale={locale}
+                entryId={shloka.id}
+                initialBookmarked={shloka.bookmarked}
+                initialCount={shloka.bookmarkCount}
+              />
+              {shloka.addedBy && (
+                <p className="text-sm text-text-2">
+                  {t(locale, "entry.addedBy")}: {shloka.addedBy.name}
+                </p>
+              )}
+            </div>
+            <EntryComments
+              locale={locale}
+              entryId={shloka.id}
+              initialComments={shlokaComments?.items ?? []}
+            />
+          </main>
+        </div>
+      );
+    }
   }
 
   const title = pickLocalized(locale, {

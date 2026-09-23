@@ -10,6 +10,7 @@ import {
   getLibraryCommunities,
   getLibraryFeed,
   getLibraryPreferences,
+  getLibraryShlokaList,
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
@@ -18,6 +19,10 @@ import { CategoryNavigator } from "@/components/library/category-navigator";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
+import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
+import { ShlokaRootPanel } from "@/components/library/shloka/shloka-root-panel";
+import { ShlokaSourcePanel } from "@/components/library/shloka/shloka-source-panel";
+import { st } from "@/components/library/shloka/shloka-text";
 import {
   categoryPageSummary,
   pickLocalized,
@@ -50,19 +55,32 @@ export default async function LibraryCategoryPage({
   // прятало бы контент — рубрику убрали внутрь, и лента родителя опустела.
   const withDescendants = query.withDescendants !== "false";
 
-  const [page, tree, preferences, feed, communities] = await Promise.all([
+  const [page, tree, preferences, communities, shlokas] = await Promise.all([
     getLibraryCategoryPage(slug),
     getLibraryCategoryTree(),
     getLibraryPreferences(),
-    getLibraryFeed({
-      ...query,
-      categorySlug: slug,
-      withDescendants: withDescendants ? "true" : "false",
-    }),
     getLibraryCommunities(),
+    // Шлоки рубрики по порядку стихов (VED-386). Для обычной рубрики —
+    // пустой ответ, и страница остаётся прежней.
+    getLibraryShlokaList(slug).catch(() => null),
   ]);
 
   if (!page) notFound();
+
+  const shlokaMode = shlokaSectionMode({
+    category: page.category,
+    ancestors: page.ancestors,
+    shlokaTotal: shlokas?.total ?? 0,
+  });
+  // В окне источника шлоки стоят списком выше, а лента ниже — остальные
+  // материалы раздела, без повтора тех же шлок.
+  const feedQuery = {
+    ...query,
+    categorySlug: slug,
+    withDescendants: withDescendants ? "true" : "false",
+    ...(shlokaMode === "source" ? { excludeType: "shloka" } : {}),
+  };
+  const feed = await getLibraryFeed(feedQuery);
 
   const locale = preferences?.uiLanguage ?? "ru";
   const explicitLineage =
@@ -125,24 +143,65 @@ export default async function LibraryCategoryPage({
           canOrganize={category.canMove}
         />
 
-        {children.length > 0 && (
-          <DescendantsToggle locale={locale} enabled={withDescendants} />
+        {shlokaMode === "root" && (
+          <ShlokaRootPanel
+            locale={locale}
+            tree={tree ?? []}
+            categorySlug={category.slug}
+          />
         )}
 
-        <EntryFilters
-          locale={locale}
-          categories={children}
-          communities={communities ?? []}
-        />
-
-        {feed && (
-          <EntryList
-            key={JSON.stringify({ ...query, categorySlug: slug })}
-            initialFeed={feed}
+        {shlokaMode === "source" && shlokas && (
+          <ShlokaSourcePanel
             locale={locale}
-            query={{ ...query, categorySlug: slug }}
-            lineageFiltered={appliedLineage !== null}
+            categorySlug={category.slug}
+            initial={shlokas}
           />
+        )}
+
+        {shlokaMode === "source" ? (
+          // Прочие материалы раздела — только если они есть: пустая лента
+          // под списком шлок читалась бы как «здесь ничего нет».
+          feed &&
+          feed.total > 0 && (
+            <section aria-labelledby="other-materials">
+              <h2
+                id="other-materials"
+                className="mb-3 font-display text-lg font-bold text-text-0"
+              >
+                {st(locale, "section.otherMaterials")}
+              </h2>
+              <EntryList
+                key={JSON.stringify(feedQuery)}
+                initialFeed={feed}
+                locale={locale}
+                query={feedQuery}
+                lineageFiltered={appliedLineage !== null}
+              />
+            </section>
+          )
+        ) : (
+          <>
+            {children.length > 0 && (
+              <DescendantsToggle locale={locale} enabled={withDescendants} />
+            )}
+
+            <EntryFilters
+              locale={locale}
+              categories={children}
+              communities={communities ?? []}
+            />
+
+            {feed && (
+              <EntryList
+                key={JSON.stringify({ ...query, categorySlug: slug })}
+                initialFeed={feed}
+                locale={locale}
+                query={{ ...query, categorySlug: slug }}
+                lineageFiltered={appliedLineage !== null}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

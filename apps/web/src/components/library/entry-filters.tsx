@@ -17,6 +17,8 @@ const TYPES: LibraryEntryType[] = [
   "audio",
   "book",
   "katha",
+  // Шлоки (VED-386) — рядом с катхой: оба читаются прямо на портале.
+  "shloka",
   "course",
   "app",
   "telegram_channel",

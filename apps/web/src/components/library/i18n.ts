@@ -599,6 +599,7 @@ const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
     vk_group: "Группа ВКонтакте",
     community: "Община",
     other: "Другое",
+    shloka: "Шлока",
   },
   en: {
     website: "Website",
@@ -613,6 +614,7 @@ const entryTypes: Record<LibraryLocale, Record<LibraryEntryType, string>> = {
     vk_group: "VK group",
     community: "Community",
     other: "Other",
+    shloka: "Shloka",
   },
 };
 
