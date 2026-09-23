@@ -71,6 +71,9 @@ const MARK_VIEWS: Record<NotificationMark, MarkView> = {
   testing: { label: 'Тестерование', border: 'violet' },
   done: { label: 'Выполнено', border: 'cyan' },
   rework: { label: 'На доработку', border: 'magenta' },
+  // Уведомление о комментарии к задаче без состояния (VED-298). Золото —
+  // единственный акцент палитры, не занятый четырьмя состояниями выше.
+  comment: { label: 'Комментарий', border: 'gold' },
 };
 
 /** Вид значка по коду. `null` — значка нет: у уведомления не из «Работы»

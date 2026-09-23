@@ -56,7 +56,6 @@ import {
 import {
   everyColumnCollapsed,
   expandCollapsedColumn,
-  expandColumns,
   readCollapsedColumns,
   toggleAllColumns,
   toggleCollapsedColumn,
@@ -68,14 +67,19 @@ import { workPersonLabel } from "./person-label";
 import { workToolbarButtonClass } from "./toolbar-button";
 import {
   TASK_SEARCH_DEBOUNCE_MS,
+  countMatches,
   countTasks,
+  isColumnFolded,
   isTaskQuery,
+  searchBoardColumns,
   searchColumns,
   searchSummary,
+  searchToggleLabel,
 } from "./task-search";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
+import { BOARD_REFRESH_MS, shouldApplyBoardRefresh } from "./board-refresh";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
 import {
   MAX_FILES_AT_ONCE,
@@ -117,7 +121,17 @@ async function fetchSpaceBoard(
 
 export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [space, setSpace] = useState<WorkSpaceDto | null>(null);
-  const [board, setBoard] = useState<WorkBoardDto | null>(null);
+  const [board, setBoardState] = useState<WorkBoardDto | null>(null);
+  /* Номер своей правки доски (VED-272): каждая подстановка доски его
+     увеличивает. Перечитывание по таймеру сверяется с ним и не затирает
+     правку, сделанную, пока шёл запрос. */
+  const boardEdits = useRef(0);
+  const setBoard = useCallback((next: WorkBoardDto | null) => {
+    boardEdits.current += 1;
+    setBoardState(next);
+  }, []);
+  /** Сколько переносов ещё летит на сервер: доску под ними не перечитываем. */
+  const pendingMoves = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   /** Архив доски (VED-61): выполненные и убранные карточки. */
@@ -165,7 +179,59 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<Set<string> | null>(null);
   const [searching, setSearching] = useState(false);
+  /* «Показать все» (VED-131): вся доска с выделенными находками, а не одни
+     находки. Запрос при этом остаётся в поле — см. `searchBoardColumns`. */
+  const [revealAll, setRevealAll] = useState(false);
   const boardId = board?.id;
+  const dragging = useRef(false);
+  useEffect(() => {
+    dragging.current = drag !== null;
+  }, [drag]);
+
+  /* Доска догоняет чужие правки (VED-272): вернулись на вкладку — и раз в
+     минуту, пока она на экране. Тестировщик перенёс карточку в «Выполнено»
+     — у остальных ярлык сменится без перезагрузки, как пометка в ленте. */
+  useEffect(() => {
+    if (!boardId) return;
+    let alive = true;
+    let inFlight = false;
+    async function refresh() {
+      if (!boardId || inFlight || document.visibilityState !== "visible") {
+        return;
+      }
+      if (pendingMoves.current > 0 || dragging.current) return;
+      inFlight = true;
+      const startedAt = boardEdits.current;
+      try {
+        const next = await getWorkBoard(boardId);
+        const apply = shouldApplyBoardRefresh({
+          startedAt,
+          current: boardEdits.current,
+          pendingMoves: pendingMoves.current,
+          dragging: dragging.current,
+        });
+        // Своим сеттером, а не `setBoard`: номер правки двигают только
+        // правки человека, иначе таймер отменял бы сам себя.
+        if (alive && apply) setBoardState(next);
+      } catch {
+        // Молча: сеть моргнула — следующий тик принесёт свежее, а ошибка
+        // поверх доски, которую человек не трогал, только пугала бы.
+      } finally {
+        inFlight = false;
+      }
+    }
+    const onVisible = () => void refresh();
+    const timer = window.setInterval(onVisible, BOARD_REFRESH_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [boardId]);
+
   useEffect(() => {
     if (!boardId || !isTaskQuery(query)) return;
     const text = query.trim();
@@ -239,13 +305,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     return () => {
       alive = false;
     };
-  }, [spaceId]);
+  }, [spaceId, setBoard]);
 
   const reload = useCallback(async () => {
     const loaded = await fetchSpaceBoard(spaceId);
     setSpace(loaded.space);
     setBoard(loaded.board);
-  }, [spaceId]);
+  }, [spaceId, setBoard]);
 
   /* Вернулись к выведенному заголовку — вернуть и фокус на кнопку, которой
      это сделали: она пересоздаётся, и без этого фокус остаётся на `body`.
@@ -287,6 +353,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       const before = board;
       const next = moveTaskLocally(board, taskId, columnId, index);
       setBoard(next);
+      pendingMoves.current += 1;
       try {
         await moveWorkTask(taskId, {
           columnId,
@@ -295,9 +362,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       } catch (cause) {
         setBoard(before);
         setError(cause instanceof Error ? cause.message : "Перенос не удался");
+      } finally {
+        pendingMoves.current -= 1;
       }
     },
-    [board, collapsed],
+    [board, collapsed, setBoard],
   );
 
   function measure(): Pick<DragState, "columns" | "cardsByColumn"> {
@@ -572,32 +641,21 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
 
   const searchActive = matches !== null && isTaskQuery(query);
   const shownColumns = searchActive
-    ? searchColumns(board.columns, matches)
+    ? searchBoardColumns(board.columns, matches, revealAll)
     : board.columns;
-  const found = countTasks({ columns: shownColumns });
+  // Находки считаем по доске, а не по нарисованному: при «Показать все»
+  // нарисовано всё.
+  const found = searchActive
+    ? countTasks({ columns: searchColumns(board.columns, matches) })
+    : 0;
 
   function changeQuery(value: string) {
     setQuery(value);
     // Стёртый запрос возвращает доску сразу, не дожидаясь паузы.
-    if (!isTaskQuery(value)) setMatches(null);
-  }
-
-  /** «Показать все» (VED-131). На время поиска колонки с находками раскрыты
-      принудительно; простой сброс складывал их обратно, и у того, кто свернул
-      доску, найденные карточки пропадали под заголовками — кнопка выглядела
-      нерабочей. Эти колонки остаются раскрытыми, остальные — как были. */
-  function showWholeBoard() {
-    if (board && searchActive) {
-      const unfolded = expandColumns(
-        collapsed,
-        shownColumns.map((column) => column.id),
-      );
-      if (unfolded !== collapsed) {
-        setCollapsed(unfolded);
-        writeCollapsedColumns(board.id, unfolded);
-      }
+    if (!isTaskQuery(value)) {
+      setMatches(null);
+      setRevealAll(false);
     }
-    changeQuery("");
   }
 
   return (
@@ -749,17 +807,23 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             className="mt-1 flex items-center gap-2 text-xs text-text-1"
           >
             {searchSummary(found, countTasks(board))}
+            {/* Показана вся доска — сказать, где искать найденное. */}
+            {revealAll && found > 0 && " — отмечены «Найдено»"}
             {searching && (
               <Loader2 aria-hidden className="size-3.5 animate-spin" />
             )}
             {/* Высота 32 вместо 16 по строке текста: в такую пальцем
                 промахивались. */}
+            {/* «Показать все» больше не сбрасывает поиск (VED-131): запрос
+                остаётся в поле, доска показывается целиком, найденное
+                выделено. Той же кнопкой — обратно к одним находкам.
+                Высота 44 — цель для пальца. */}
             <button
               type="button"
-              onClick={showWholeBoard}
-              className="min-h-8 px-1 font-semibold text-text-0 underline underline-offset-2"
+              onClick={() => setRevealAll((value) => !value)}
+              className="min-h-11 px-1 font-semibold text-text-0 underline underline-offset-2"
             >
-              Показать все
+              {searchToggleLabel(revealAll)}
             </button>
           </p>
         )}
@@ -806,9 +870,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             board.columns.find((item) => item.id === column.id) ?? column;
           const index = board.columns.indexOf(full);
           const over = isOverWip(full);
-          // Свёрнутая колонка прятала бы найденное: на время поиска все
-          // колонки с совпадениями раскрыты.
-          const folded = !searchActive && collapsed.includes(column.id);
+          const columnMatches = searchActive
+            ? countMatches(full.tasks, matches)
+            : 0;
+          // Свёрнутая колонка прятала бы найденное: на время поиска колонки
+          // с совпадениями раскрыты, остальные — как их оставили.
+          const folded = isColumnFolded({
+            collapsed,
+            columnId: column.id,
+            searchActive,
+            hasMatches: columnMatches > 0,
+          });
           const bodyId = `work-column-body-${column.id}`;
           /* Карточка одна и та же в обоих видах — обычном и сгруппированном:
              две копии разъехались бы на первой же правке. */
@@ -821,6 +893,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               // поиска видны не все, а в группах порядок другой — и там, и там
               // карточка легла бы не туда. Кнопки переноса работают всегда.
               draggable={!searchActive && groupMode === "none"}
+              found={searchActive && revealAll && matches.has(task.id)}
               onOpen={() => setOpenTaskId(task.id)}
               onHandleDown={(event) => onHandleDown(event, task.id)}
               onHandleMove={onHandleMove}
@@ -894,12 +967,15 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                     className="w-28 rounded border border-glass-brd bg-bg-1 px-1 py-0.5 text-sm font-semibold text-text-0"
                   />
                 ) : (
-                  <h2 className="text-sm font-semibold text-text-0">
+                  // min-w-0 и перенос: на 320 точках длинное название
+                  // («ВДОХНОВЕНИЕ.») вместе со счётчиком «1 из 5» и кнопками
+                  // выталкивало карандаш за край экрана — страница ехала вбок.
+                  <h2 className="min-w-0 text-sm font-semibold text-text-0 [overflow-wrap:anywhere]">
                     {column.name}
                   </h2>
                 )}
                 <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
+                  className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${
                     over ? "bg-gold/20 text-gold" : "text-text-2"
                   }`}
                   title={
@@ -909,7 +985,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   }
                 >
                   {searchActive
-                    ? `${column.tasks.length} из ${full.tasks.length}`
+                    ? `${columnMatches} из ${full.tasks.length}`
                     : `${column.tasks.length}${
                         column.wipLimit > 0 ? ` / ${column.wipLimit}` : ""
                       }`}
@@ -1382,6 +1458,7 @@ function TaskCard({
   dragging,
   canEdit,
   draggable,
+  found = false,
   onOpen,
   onHandleDown,
   onHandleMove,
@@ -1393,6 +1470,8 @@ function TaskCard({
   dragging: boolean;
   canEdit: boolean;
   draggable: boolean;
+  /** Совпала с поиском, а на доске показано всё (VED-131) — выделить. */
+  found?: boolean;
   onOpen: () => void;
   onHandleDown: (event: React.PointerEvent) => void;
   onHandleMove: (event: React.PointerEvent) => void;
@@ -1411,7 +1490,7 @@ function TaskCard({
       ref={cardRef}
       className={`rounded-xl border border-glass-brd bg-bg-1 p-2 transition-opacity ${
         mark?.edge ?? ""
-      } ${dragging ? "opacity-40" : ""}`}
+      } ${found ? "ring-2 ring-gold" : ""} ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-start gap-1">
         {canEdit && draggable && (
@@ -1443,6 +1522,15 @@ function TaskCard({
             от сервера: расхождение между лентой и доской было отдельной
             жалобой (VED-320). */}
         <StatusMarkBadge mark={task.statusMark} />
+        {/* Находка среди всей доски (VED-131): рамка и слово. Одной рамки
+            мало — на солнце и дальтонику золото не отличить от края
+            важности. Слово цветом `text-1`, краска — только на обводке: у
+            золота на светлой теме 3,66:1, для подписи мало. */}
+        {found && (
+          <span className="rounded-full border border-gold/60 px-1.5 py-0.5 text-[10px] font-medium text-text-1">
+            Найдено
+          </span>
+        )}
         {/* Точка и слово вместе: цветного края мало — на солнце и при
             дальтонизме золото от пурпура не отличить. */}
         {mark && (

@@ -54,8 +54,10 @@ describe("CoverField", () => {
     );
     expect(preview.className).toContain("object-contain");
     expect(preview.className).not.toContain("object-cover");
-    // Поля вокруг — размытая копия той же картинки, а не пустая рамка.
+    // Тем же CoverPicture, что в карточке: рамка в пропорциях картинки,
+    // без полей и размытой подложки (VED-138).
     expect(preview.getAttribute("src")).toBe("blob:cover");
+    expect(document.querySelectorAll("img")).toHaveLength(1);
   });
 
   it("обещает, что картинку не обрежут", () => {

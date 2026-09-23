@@ -29,3 +29,42 @@ export function fieldLabelClass(extra?: string): string {
   const tail = extra?.trim();
   return tail ? `${FIELD_LABEL_BASE} ${tail}` : FIELD_LABEL_BASE;
 }
+
+/**
+ * Блок «Автор / Источник» в обеих половинах мастера (VED-203, второй круг).
+ *
+ * Заказчик после первого захода: «сделай оставшиеся графы автор и источник
+ * жирным шрифтом или как-то ещё выдели, чтобы они сразу бросались в глаза, а
+ * не сливались с остальным пейзажем». Полужирный `--vm-text-0` получили все
+ * подписи формы разом — и «Автор» снова стал одним из пяти одинаковых. Эти
+ * две графы теперь выделены отдельно, сразу тремя способами:
+ *
+ * - рамка блока — акцентная `--vm-magenta` в 2px с лёгкой заливкой того же
+ *   токена, а не нейтральная `--vm-glass-brd`, как у остальной формы;
+ * - подпись — заголовочным шрифтом (`--font-display`, Unbounded) и крупнее
+ *   остальных подписей: 16px против 14px;
+ * - значок слева в той же маджента (декоративный, `aria-hidden`).
+ *
+ * Сам текст подписи — `--vm-text-0`: маджента текстом на светлой теме даёт
+ * 4.46:1 (`CLAUDE.md`) и в мелком кегле не проходит, поэтому акцентный цвет
+ * несут рамка и значок, а не буквы. «(необязательно)» — обычным весом и
+ * `--vm-text-1`: `--vm-text-2` на подкрашенной заливке в тёмной теме не
+ * добирал бы 4.5:1.
+ */
+export const ATTRIBUTION_GROUP_CLASS =
+  "space-y-3 rounded-2xl border-2 border-magenta/50 bg-magenta/5 p-3";
+
+/** Строка подписи графы: значок, слово, «(необязательно)». */
+export const ATTRIBUTION_LABEL_CLASS =
+  "flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-text-0";
+
+/** Само слово «Автор»/«Источник» — то, что должно бросаться в глаза. */
+export const ATTRIBUTION_TITLE_CLASS =
+  "font-display text-base font-semibold";
+
+/** Хвост «(необязательно)» — тише слова, но не тише порога контраста. */
+export const ATTRIBUTION_OPTIONAL_CLASS =
+  "font-body text-xs font-normal text-text-1";
+
+/** Значок графы: акцентный токен, размер под кегль слова. */
+export const ATTRIBUTION_ICON_CLASS = "size-4 shrink-0 text-magenta";

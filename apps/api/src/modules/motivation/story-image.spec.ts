@@ -10,6 +10,7 @@ import {
   escapeXml,
   fitQuote,
   metaMaxWidth,
+  ROW_GAP,
   STORY_HEIGHT,
   STORY_WIDTH,
   wrapText,
@@ -299,6 +300,16 @@ describe('buildStoryOverlaySvg · знак в углу, подпись рядо�
     expect(box.top + box.height).toBeGreaterThan(STORY_HEIGHT - 120);
     for (const { y } of texts(svg, 'quote'))
       expect(y).toBeLessThanOrEqual(box.top);
+  });
+
+  it('между знаком и подписью справа заметный воздух (VED-227: «увеличь отступ»)', () => {
+    const svg = buildStoryOverlaySvg(input);
+    const box = brandLogoBox({ quoteLines: 1, metaLines: 1, layout: 'row' });
+    const side = [...texts(svg, 'meta'), ...texts(svg, 'disclosure')];
+    // Было 28 — заказчик просил отодвинуть надписи от знака.
+    expect(ROW_GAP).toBeGreaterThanOrEqual(44);
+    for (const { x } of side)
+      expect(x - (box.left + box.width)).toBeGreaterThanOrEqual(ROW_GAP);
   });
 
   it('подпись и отметка об ИИ стоят справа от знака, на его уровне', () => {

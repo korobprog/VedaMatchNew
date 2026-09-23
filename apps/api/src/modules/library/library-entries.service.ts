@@ -42,6 +42,7 @@ import {
   MAX_BODY_LENGTH,
   normalizeEntryBody,
 } from './entry-body';
+import { coverDisposition } from './cover-download';
 import { LibraryBookmarksService } from './library-bookmarks.service';
 import { LibraryCategoriesService } from './library-categories.service';
 import { LibraryPreviewsService } from './library-previews.service';
@@ -900,6 +901,29 @@ export class LibraryEntriesService {
       viewerId,
       viewerIsAdmin,
     );
+  }
+
+  /**
+   * Ссылка «Скачать картинку» материала (VED-138). Доступ тот же, что у
+   * страницы материала: скрытая жалобами запись отвечает 404. Скачать можно
+   * только свою копию обложки из бакета — у записи, чья картинка так и
+   * осталась адресом чужого сайта, ключа нет, и веб открывает её как есть.
+   */
+  async previewDownload(id: string): Promise<{ url: string }> {
+    const entry = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: { status: true, previewKey: true, titleRu: true, titleEn: true },
+    });
+    if (!entry || entry.status !== 'published') {
+      throw new NotFoundException('entry_not_found');
+    }
+    if (!entry.previewKey) throw new NotFoundException('preview_not_stored');
+    const url = await this.previews.signedDownload(
+      entry.previewKey,
+      coverDisposition(entry.titleRu ?? entry.titleEn, entry.previewKey),
+    );
+    if (!url) throw new NotFoundException('preview_not_stored');
+    return { url };
   }
 
   /** `null` — поиска нет; массив — найденные id в порядке релевантности. */

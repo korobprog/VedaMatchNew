@@ -27,8 +27,14 @@ export type NotificationTarget =
   /** Сама лента уведомлений. */
   | { kind: 'inbox' }
   /**
+   * Обращение в поддержку: нативный экран `support/[id]` (VED-336). Без id —
+   * список «Мои обращения». Ответ поддержки приходит пушем
+   * `support.ticket.replied` с путём `/support/<id>`.
+   */
+  | { kind: 'support'; ticketId: string | null }
+  /**
    * Раздел, которого в приложении нет: Рынок, Объявления, «Работа»,
-   * «Мотивация», «Музыка», Библиотека, поддержка, админка. Путь сохранён
+   * «Мотивация», «Музыка», Библиотека, админка. Путь сохранён
    * целиком вместе с `?query`: `/motivation/create?reel=<id>` без запроса
    * открыл бы пустую форму вместо нужного рилса.
    */
@@ -111,6 +117,12 @@ export function resolveNotificationTarget(url: unknown): NotificationTarget {
     return userId ? { kind: 'person', userId } : { kind: 'people' };
   }
 
+  // Поддержка (VED-336). Гостевая ссылка `/support/track/<token>` — не
+  // обращение аккаунта, её открывает сайт.
+  if (first === 'support' && second !== 'track') {
+    return { kind: 'support', ticketId: idOf(second) };
+  }
+
   if (first === 'communities') {
     const communityId = idOf(second);
     if (communityId) return { kind: 'community', communityId };
@@ -139,6 +151,10 @@ export function routeOfTarget(target: NotificationTarget): NotificationDestinati
       return { kind: 'route', pathname: '/people' };
     case 'inbox':
       return { kind: 'route', pathname: '/notifications' };
+    case 'support':
+      return target.ticketId
+        ? { kind: 'route', pathname: '/support/[id]', params: { id: target.ticketId } }
+        : { kind: 'route', pathname: '/support' };
     case 'site':
       return null;
   }

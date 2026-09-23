@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
+import { SupportLink } from '@/components/support/support-link';
 import { ScreenBack } from '@/components/wellness/screen-back';
 import { useSession } from '@/lib/auth/session';
 import { VerdictCard } from '@/components/wellness/verdict-card';
@@ -127,6 +128,9 @@ function Failure({
       {/* Кнопка появляется только там, где повтор помогает: «товара нет в
           базе» повторять бессмысленно, и кнопка была бы издевательством. */}
       {failure.retryable ? <RetryButton onPress={onRetry} busy={retrying} /> : null}
+      {/* Сломался сервер, а не «товара нет» и не сеть в подвале — тут есть
+          о чём написать поддержке (VED-336). */}
+      {failure.kind === 'server' || failure.kind === 'unknown' ? <SupportLink from="wellness" /> : null}
     </View>
   );
 }

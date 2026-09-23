@@ -1,4 +1,4 @@
-import type { TaskStatusMark } from "@vedamatch/shared";
+import type { NotificationMark } from "@vedamatch/shared";
 import { taskStatusMarkLabel, taskStatusMarkView } from "@/lib/status-mark";
 
 /**
@@ -19,7 +19,9 @@ import { taskStatusMarkLabel, taskStatusMarkView } from "@/lib/status-mark";
 export function StatusMarkBadge({
   mark,
 }: {
-  mark: TaskStatusMark | null | undefined;
+  /** Карточка планировщика передаёт состояние задачи, лента — ещё и
+   *  «Комментарий» (VED-298). */
+  mark: NotificationMark | null | undefined;
 }) {
   const view = taskStatusMarkView(mark);
   if (!view) return null;

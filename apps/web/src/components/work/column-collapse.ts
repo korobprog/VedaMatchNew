@@ -56,23 +56,6 @@ export function expandCollapsedColumn(
   return ids.includes(columnId) ? ids.filter((id) => id !== columnId) : ids;
 }
 
-/**
- * Разворачивает сразу несколько колонок. Если ни одна не была свёрнута,
- * возвращает тот же список — вызывающему незачем перезаписывать хранилище.
- *
- * Нужна для «Показать все» в поиске (VED-131): на время поиска колонки с
- * совпадениями раскрыты принудительно, и сброс поиска складывал их обратно —
- * у того, кто свернул доску целиком, найденные карточки пропадали под
- * заголовками, и кнопка выглядела нерабочей.
- */
-export function expandColumns(
-  ids: string[],
-  columnIds: readonly string[],
-): string[] {
-  const next = ids.filter((id) => !columnIds.includes(id));
-  return next.length === ids.length ? ids : next;
-}
-
 export function readCollapsedColumns(boardId: string): string[] {
   try {
     return parseCollapsedColumns(

@@ -196,6 +196,20 @@ describe("NotificationList", () => {
     expect(screen.getByText("На доработку")).toBeInTheDocument();
   });
 
+  /** VED-298: комментарий к задаче без состояния — цветной «Комментарий». */
+  it("показывает значок «Комментарий» у комментария без состояния задачи", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [item({ title: "VED-42: новый комментарий", mark: "comment" })],
+      unreadCount: 1,
+    });
+    render(<NotificationList />);
+
+    expect(await screen.findByText("Статус: Комментарий")).toBeInTheDocument();
+    expect(
+      screen.getByText("Комментарий").parentElement?.className,
+    ).toMatch(/text-mark-comment/);
+  });
+
   it("уведомление без состояния идёт без значка", async () => {
     fetchInbox.mockResolvedValue({ items: [item()], unreadCount: 1 });
     render(<NotificationList />);

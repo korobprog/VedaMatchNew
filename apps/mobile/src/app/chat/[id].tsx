@@ -35,6 +35,7 @@ import { ChatKeyboardAvoidingView as KeyboardAvoidingView } from '@/components/k
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { MessageMenu } from '@/components/chat/message-menu';
 import { MessagesSkeleton } from '@/components/skeleton';
+import { SupportLink } from '@/components/support/support-link';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import {
@@ -814,6 +815,8 @@ export default function ChatRoomScreen() {
             >
               <Text style={[styles.retryText, { color: colors.text0 }]}>Повторить</Text>
             </Pressable>
+            {/* Беседа не открылась — пожаловаться прямо отсюда (VED-336). */}
+            <SupportLink from="chat" />
           </View>
         ) : !detail ? (
           <MessagesSkeleton />

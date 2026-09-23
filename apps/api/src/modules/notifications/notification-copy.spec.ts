@@ -797,3 +797,72 @@ describe('групповой звонок в беседе', () => {
     );
   });
 });
+
+/**
+ * VED-298: «если уведомление о комментарии не имеет своего статуса, добавь ей
+ * цветной статус Комментарий». Значок вида новости едет отдельно от
+ * состояния задачи — переезд карточки переписывает состояние, а комментарий
+ * остаётся комментарием.
+ */
+describe('buildNotification · значок «Комментарий»', () => {
+  const base = {
+    recipientId: 'u1',
+    spaceId: 'space-1',
+    taskKey: 'VED-42',
+    taskTitle: 'Починить ссылки',
+    actorName: 'Санкаршан',
+  } as const;
+
+  it('комментарий к задаче вне колонок состояния несёт «Комментарий»', () => {
+    const content = buildNotification({
+      ...base,
+      name: 'work.task.commented',
+      excerpt: 'Посмотрите ещё раз',
+      commentCount: 1,
+      columnName: 'ВДОХНОВЕНИЕ.',
+      statusMark: null,
+    });
+    expect(content).toMatchObject({ mark: null, markFallback: 'comment' });
+  });
+
+  it('у комментария к задаче с состоянием значок — состояние, запасной не мешает', () => {
+    const content = buildNotification({
+      ...base,
+      name: 'work.task.commented',
+      excerpt: 'Посмотрите ещё раз',
+      commentCount: 2,
+      columnName: 'Тестерование',
+      statusMark: 'testing',
+    });
+    expect(content).toMatchObject({ mark: 'testing', markFallback: 'comment' });
+  });
+
+  it('смена статуса, возврат и поручение «Комментарием» не становятся', () => {
+    const moved = buildNotification({
+      ...base,
+      name: 'work.task.status-changed',
+      fromColumnName: 'Тестерование',
+      toColumnName: 'ВДОХНОВЕНИЕ.',
+      // Перенос с приложенным комментарием — это перенос: побеждает он.
+      commentExcerpt: 'Вернул в раздел',
+      commentCount: 1,
+      statusMark: null,
+    });
+    const returned = buildNotification({
+      ...base,
+      name: 'work.task.returned',
+      columnName: 'РАЗНОЕ.',
+      statusMark: null,
+    });
+    const assigned = buildNotification({
+      ...base,
+      name: 'work.task.assigned',
+      spaceName: 'VedaMatch',
+      columnName: 'РАЗНОЕ.',
+      statusMark: null,
+    });
+    expect(moved.markFallback).toBeUndefined();
+    expect(returned.markFallback).toBeUndefined();
+    expect(assigned.markFallback).toBeUndefined();
+  });
+});

@@ -18,7 +18,12 @@ const DISCLOSURE_SIZE = 22;
  * столбике: рядом с двумя строками текста маленький кружок терялся.
  */
 const ROW_LOGO_HEIGHT = 88;
-const ROW_GAP = 28;
+/**
+ * Воздух между знаком и подписью справа. Было 28 — заказчик: «логотип
+ * слишком близко к надписям справа. Немного увеличь отступ» (VED-227).
+ * Экспортируется ради теста: промежуток обязан остаться заметным.
+ */
+export const ROW_GAP = 48;
 /** Промежуток между строкой подписи и отметкой об ИИ под ней. */
 const ROW_DISCLOSURE_STEP = 38;
 /** Воздух между последней строкой цитаты и полосой со знаком. */
@@ -515,10 +520,29 @@ export async function composeStoryImage(
   background: Buffer,
   overlay: StoryOverlayInput,
 ): Promise<Buffer> {
+  const framed = await frameStoryImage(background, overlay);
+  // Та же отметка, что и на пикселях, но в метаданных: надпись площадка может
+  // обрезать при перекадрировании, а чанк читает автоматика.
+  return withPngText(framed, [
+    { keyword: 'Comment', text: AI_DISCLOSURE },
+    { keyword: 'Software', text: 'VedaMatch' },
+  ]);
+}
+
+/**
+ * Кадр без метаданных: фон 1080×1920 и слой подписи в строчной раскладке.
+ * Общий для хранимой сторис и для файла, который человек сохраняет с экрана
+ * «Поделиться» (`saved-image.ts`), — иначе их вёрстка разошлась бы при
+ * первой же правке отступов.
+ */
+export async function frameStoryImage(
+  background: Buffer,
+  overlay: StoryOverlayInput,
+): Promise<Buffer> {
   const canvas = await sharp(background)
     .resize(STORY_WIDTH, STORY_HEIGHT, { fit: 'cover', position: 'attention' })
     .toBuffer();
-  const framed = await sharp(canvas)
+  return sharp(canvas)
     .composite([
       {
         input: await renderStoryOverlay({ layout: 'row', ...overlay }),
@@ -528,10 +552,4 @@ export async function composeStoryImage(
     ])
     .png()
     .toBuffer();
-  // Та же отметка, что и на пикселях, но в метаданных: надпись площадка может
-  // обрезать при перекадрировании, а чанк читает автоматика.
-  return withPngText(framed, [
-    { keyword: 'Comment', text: AI_DISCLOSURE },
-    { keyword: 'Software', text: 'VedaMatch' },
-  ]);
 }

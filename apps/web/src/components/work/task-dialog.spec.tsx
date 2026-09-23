@@ -4,14 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkBoardDto, WorkTaskDto } from "@vedamatch/shared";
 import { WorkTaskDialog } from "./task-dialog";
 import {
-  hasTaskEdits,
-  pendingTaskEdits,
-  taskEditsProblem,
-} from "./task-edits";
-import {
   attachWorkFile,
   deleteWorkTaskForever,
   getWorkTask,
+  moveWorkTask,
+  updateWorkChecklistItem,
   updateWorkTask,
 } from "@/lib/work-api";
 
@@ -63,8 +60,11 @@ const task = {
 const board = {
   id: "b1",
   role: "owner",
-  columns: [{ id: "c1", name: "Работа", tasks: [] }],
-  members: [],
+  columns: [
+    { id: "c1", name: "Работа", tasks: [] },
+    { id: "c2", name: "Тестерование", tasks: [] },
+  ],
+  members: [{ userId: "u2", name: "Радха" }],
 } as unknown as WorkBoardDto;
 
 function open() {
@@ -79,41 +79,12 @@ beforeEach(() => {
   vi.mocked(updateWorkTask).mockImplementation((_id, body) =>
     Promise.resolve({ ...task, ...body } as WorkTaskDto),
   );
+  vi.mocked(moveWorkTask).mockReset();
+  vi.mocked(moveWorkTask).mockImplementation((_id, body) =>
+    Promise.resolve({ ...task, columnId: body.columnId } as WorkTaskDto),
+  );
   vi.mocked(deleteWorkTaskForever).mockReset();
   vi.mocked(deleteWorkTaskForever).mockResolvedValue(undefined);
-});
-
-describe("task edits", () => {
-  const saved = { title: "Кнопка", description: "Текст" };
-
-  it("counts only real changes as edits", () => {
-    expect(
-      hasTaskEdits(saved, { title: " Кнопка ", description: "Текст" }),
-    ).toBe(false);
-    expect(
-      hasTaskEdits(saved, { title: "Кнопка", description: "Текст." }),
-    ).toBe(true);
-  });
-
-  it("sends only what changed", () => {
-    expect(
-      pendingTaskEdits(saved, {
-        title: "Кнопка «Сохранить»",
-        description: "Текст",
-      }),
-    ).toEqual({ title: "Кнопка «Сохранить»" });
-    expect(pendingTaskEdits(saved, saved)).toBeNull();
-  });
-
-  // Пустое название не сохраняется, но описание из-за него не теряется.
-  it("drops an empty title but keeps the description", () => {
-    expect(taskEditsProblem({ title: "  ", description: "" })).toBe(
-      "Название не может быть пустым",
-    );
-    expect(
-      pendingTaskEdits(saved, { title: "", description: "Новое" }),
-    ).toEqual({ description: "Новое" });
-  });
 });
 
 describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () => {
@@ -198,6 +169,136 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     });
     expect(props.onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+  });
+});
+
+/**
+ * VED-56, второй круг: «Сделай, чтобы кнопка сохранить появлялась после любой
+ * правки. Сейчас не так». Раньше раздел, исполнитель, важность и срок уходили
+ * на сервер в момент выбора, и кнопки после них не было.
+ */
+describe("WorkTaskDialog — кнопка «Сохранить» после любой правки (VED-56)", () => {
+  it("появляется после смены важности и ничего не отправляет до нажатия", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Важность"), "high");
+
+    expect(screen.getByText("Есть несохранённые правки")).toBeInTheDocument();
+    expect(updateWorkTask).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", { priority: "high" });
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+  });
+
+  it("появляется после смены исполнителя", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Исполнитель"), "u2");
+
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
+    expect(updateWorkTask).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
+  });
+
+  it("появляется после смены раздела; перенос уходит своим запросом", async () => {
+    const user = userEvent.setup();
+    const props = open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Раздел"), "c2");
+
+    expect(moveWorkTask).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
+    expect(updateWorkTask).not.toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    expect(props.onChanged).toHaveBeenCalled();
+  });
+
+  it("появляется после смены срока", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    const due = screen.getByLabelText("Срок");
+    await user.type(due, "2026-09-30T18:00");
+
+    expect(screen.getByText("Есть несохранённые правки")).toBeInTheDocument();
+    expect(updateWorkTask).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", {
+      dueAt: new Date("2026-09-30T18:00").toISOString(),
+    });
+  });
+
+  it("правка поля и раздела вместе — оба запроса одной кнопкой", async () => {
+    const user = userEvent.setup();
+    open();
+    const title = await screen.findByLabelText("Название задачи");
+
+    await user.type(title, "!");
+    await user.selectOptions(screen.getByLabelText("Раздел"), "c2");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", {
+      title: "Кнопка сохранить!",
+    });
+    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
+  });
+
+  it("«Отменить правки» возвращает и списки", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Важность"), "high");
+    await user.click(screen.getByRole("button", { name: "Отменить правки" }));
+
+    expect(screen.getByLabelText("Важность")).toHaveValue("normal");
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+  });
+
+  it("закрытие окна не теряет выбранного в списке", async () => {
+    const user = userEvent.setup();
+    const props = open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Исполнитель"), "u2");
+    await user.selectOptions(screen.getByLabelText("Раздел"), "c2");
+    await user.keyboard("{Escape}");
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" }),
+    );
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
+  });
+
+  it("галочка чек-листа уходит сразу, и окно говорит «Сохранено»", async () => {
+    // У пункта чек-листа нет черновика: нажатие на галочку — уже решение.
+    // Но и здесь человек должен видеть, что дошло.
+    const withItem = {
+      ...task,
+      checklist: [{ id: "i1", text: "Проверить", done: false, position: 0 }],
+      checklistTotal: 1,
+    } as unknown as WorkTaskDto;
+    vi.mocked(getWorkTask).mockResolvedValue(withItem);
+    vi.mocked(updateWorkChecklistItem).mockResolvedValue({
+      ...withItem,
+      checklist: [{ id: "i1", text: "Проверить", done: true, position: 0 }],
+    } as unknown as WorkTaskDto);
+    const user = userEvent.setup();
+    open();
+
+    await user.click(await screen.findByLabelText("Проверить"));
+
+    expect(updateWorkChecklistItem).toHaveBeenCalledWith("i1", { done: true });
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
   });
 });
 

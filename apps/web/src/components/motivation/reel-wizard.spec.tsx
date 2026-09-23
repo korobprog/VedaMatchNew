@@ -1,10 +1,14 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationReelDto } from "@vedamatch/shared";
 import { ReelWizard } from "./reel-wizard";
 import { POLL_INTERVAL_MS, POLL_SILENT_FAILURE_LIMIT } from "./reel-wizard-copy";
-import { fieldLabelClass } from "./field-label";
+import {
+  ATTRIBUTION_GROUP_CLASS,
+  ATTRIBUTION_TITLE_CLASS,
+  fieldLabelClass,
+} from "./field-label";
 import { tapButtonClass, tapFieldClass } from "./tap-target";
 
 const quota = { enabled: true, unlimited: false, limit: 1, used: 0, remaining: 1 };
@@ -193,15 +197,16 @@ describe("ReelWizard", () => {
     render(<ReelWizard prefill={{}} donation={null} />);
 
     await screen.findByText("Сегодня: 0 из 1");
-    for (const text of [
-      "Текст цитаты",
-      "Ваша мысль под цитатой (необязательно)",
-      "Автор (необязательно)",
-      "Источник (необязательно)",
-    ])
+    for (const text of ["Текст цитаты", "Ваша мысль под цитатой (необязательно)"])
       // Тот же класс, что и у открыток: две половины одного мастера не
       // должны выглядеть по-разному.
       expect(screen.getByText(text).className).toContain(fieldLabelClass());
+    // «Автор» и «Источник» — сильнее остальных (VED-203, второй круг), и
+    // тем же оформлением, что у открыток.
+    const group = screen.getByRole("group", { name: "Источник и автор" });
+    expect(group.className).toBe(ATTRIBUTION_GROUP_CLASS);
+    for (const word of ["Автор", "Источник"])
+      expect(within(group).getByText(word).className).toBe(ATTRIBUTION_TITLE_CLASS);
   });
 
   it("поля и кнопки шага «Текст» дотягивают до тап-цели", async () => {
