@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import { Injectable, Logger } from '@nestjs/common';
 import type { RawAudioMetadata } from './music-metadata-parse';
 
@@ -35,6 +36,31 @@ export class MusicMetadataReader {
       // Нечитаемые теги — не сбой сервиса: загрузку отклонит валидатор,
       // потому что без длительности запись в каталоге бесполезна.
       this.logger.warn(`Теги не прочитались: ${String(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Длительность по файлу целиком (VED-310): поток читается до конца, и
+   * `duration: true` велит пакету пересчитать кадры, а не верить заголовку
+   * или первому кадру. Обложки пропускаем — они здесь не нужны, а в памяти
+   * заняли бы сотню килобайт на запись. `null` — не прочиталось.
+   */
+  async readDuration(
+    stream: Readable,
+    mime: string,
+    totalBytes: number,
+  ): Promise<number | null> {
+    try {
+      const { parseStream } = await import('music-metadata');
+      const result = await parseStream(
+        stream,
+        { mimeType: mime, size: totalBytes },
+        { duration: true, skipCovers: true },
+      );
+      return result.format.duration ?? null;
+    } catch (error) {
+      this.logger.warn(`Длительность не прочиталась: ${String(error)}`);
       return null;
     }
   }

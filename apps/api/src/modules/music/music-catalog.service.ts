@@ -5,7 +5,6 @@ import type {
   LineagePreference,
   MusicAlbumPageDto,
   MusicArtistPageDto,
-  MusicAudiobooksDto,
   MusicCatalogDto,
   MusicCategoryDto,
   MusicPlaylistCardDto,
@@ -16,8 +15,8 @@ import { resolveContentLineage, toLineagePreference } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { NormalizedMusicTrackQuery } from './music-catalog-query';
 import {
-  audiobookArtistCondition,
-  audiobookScopeCondition,
+  catalogArtistCondition,
+  catalogOnlyCondition,
 } from './music-audiobook-scope';
 import { countTracksByCategory } from './music-category-counts';
 import {
@@ -39,13 +38,6 @@ const SHOWCASE_FRESH = 10;
  */
 const SHOWCASE_ARTISTS = 100;
 const SHOWCASE_PLAYLISTS = 4;
-/**
- * Сколько записей отдаёт раздел «Аудиокниги» (VED-237). Больше витрины:
- * глава книги без соседних глав бесполезна, а листать раздел «показать
- * ещё» пока незачем — счёт книг идёт на единицы. Упрётся — здесь и
- * появится курсор, как у каталога.
- */
-const AUDIOBOOK_TRACKS = 200;
 
 /**
  * `include` карточки каталога. Одной константой, чтобы выдача витрины,
@@ -115,9 +107,9 @@ export class MusicCatalogService {
     rootSlug: string | null = null,
   ): Promise<MusicCatalogDto> {
     const lineage = await this.viewerLineage(viewerId, null);
-    // Аудиокниги живут отдельным разделом (VED-237) и в витрину не идут ни
-    // записями, ни карточками чтецов, ни числом над заголовком.
-    const notAudiobook = audiobookScopeCondition('catalog');
+    // Аудиокниги живут отдельным разделом (VED-237, VED-297) и в витрину не
+    // идут ни главами, ни карточками чтецов, ни числом над заголовком.
+    const notAudiobook = catalogOnlyCondition();
 
     const [categories, fresh, artists, systemPlaylists, totalTracks] =
       await Promise.all([
@@ -168,18 +160,23 @@ export class MusicCatalogService {
     );
   }
 
-  private async listShowcaseArtists(
-    scope: 'catalog' | 'audiobooks' = 'catalog',
-  ) {
+  private async listShowcaseArtists() {
     // Исполнители без единой опубликованной записи в витрине не нужны:
-    // кружок, ведущий на пустую страницу, — обещание, которого нет.
+    // кружок, ведущий на пустую страницу, — обещание, которого нет. Главы
+    // книг (VED-297) записями Медиатеки не считаются: исполнитель, у
+    // которого есть только главы, в витрину не идёт, а у остальных число под
+    // кружком — ровно то, что откроется в каталоге.
+    const catalogTrack = {
+      status: 'published' as const,
+      audiobookChapter: { is: null },
+    };
     const artists = await this.prisma.musicArtist.findMany({
       where: {
-        ...audiobookArtistCondition(scope),
-        tracks: { some: { status: 'published' } },
+        ...catalogArtistCondition(),
+        tracks: { some: catalogTrack },
       },
       include: {
-        _count: { select: { tracks: { where: { status: 'published' } } } },
+        _count: { select: { tracks: { where: catalogTrack } } },
       },
       orderBy: [{ isVerified: 'desc' }, { name: 'asc' }],
       take: SHOWCASE_ARTISTS,
@@ -227,12 +224,6 @@ export class MusicCatalogService {
   async listTracks(
     query: NormalizedMusicTrackQuery,
     viewerId: string | null = null,
-    /**
-     * Срез каталога (VED-237). По умолчанию — обычная Медиатека: аудиокниги
-     * не показываются ни в выдаче фильтров, ни в поиске, их «отображение
-     * находится внутри кнопки». Раздел зовёт тот же метод со своим срезом.
-     */
-    scope: 'catalog' | 'audiobooks' = 'catalog',
   ): Promise<MusicTrackListDto> {
     const lineage = await this.viewerLineage(viewerId, query.lineage);
 
@@ -250,7 +241,9 @@ export class MusicCatalogService {
     // условие вторым спредом значило бы молча стереть первое.
     const andConditions = [
       ...lineageAndConditions(lineage),
-      audiobookScopeCondition(scope),
+      // Аудиокниги (VED-237, VED-297) не показываются ни в выдаче фильтров,
+      // ни в поиске: их «отображение находится внутри кнопки».
+      catalogOnlyCondition(),
       ...(query.root
         ? [{ artist: { rootCategory: { slug: query.root } } }]
         : []),
@@ -365,46 +358,6 @@ export class MusicCatalogService {
     if (!visible) throw new NotFoundException('Запись не найдена');
 
     return toMusicTrackDetailDto(track, this.publicBaseUrl);
-  }
-
-  /**
-   * Раздел «Аудиокниги» (VED-237) — та же витрина, только своим срезом:
-   * карточки чтецов и записи списком. Порядок записей общий для Музыки —
-   * по алфавиту (VED-273): главы книги ищут по названию, а не по дате
-   * заливки.
-   *
-   * Линия зрителя действует и здесь: книга с линией показывается тем же
-   * правилом, что и запись каталога, — иначе раздел стал бы единственным
-   * местом портала, где настройка линии молча не работает.
-   */
-  async audiobooks(
-    viewerId: string | null = null,
-  ): Promise<MusicAudiobooksDto> {
-    const lineage = await this.viewerLineage(viewerId, null);
-    const where = {
-      status: 'published' as const,
-      AND: [
-        ...lineageAndConditions(lineage),
-        audiobookScopeCondition('audiobooks'),
-      ],
-    };
-
-    const [artists, tracks, totalTracks] = await Promise.all([
-      this.listShowcaseArtists('audiobooks'),
-      this.prisma.musicTrack.findMany({
-        where,
-        include: TRACK_CARD_INCLUDE,
-        orderBy: [{ title: 'asc' }, { id: 'desc' }],
-        take: AUDIOBOOK_TRACKS,
-      }),
-      this.prisma.musicTrack.count({ where }),
-    ]);
-
-    return {
-      artists,
-      tracks: tracks.map((row) => toMusicTrackDto(row, this.publicBaseUrl)),
-      totalTracks,
-    };
   }
 
   async getArtist(slug: string): Promise<MusicArtistPageDto> {

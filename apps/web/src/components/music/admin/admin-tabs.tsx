@@ -12,7 +12,13 @@ export function MusicAdminTabs({
   pendingCount = 0,
   openReports = 0,
 }: {
-  active: "ingest" | "queue" | "catalog" | "playlists" | "reports";
+  active:
+    | "ingest"
+    | "queue"
+    | "catalog"
+    | "playlists"
+    | "audiobooks"
+    | "reports";
   pendingCount?: number;
   openReports?: number;
 }) {
@@ -35,6 +41,11 @@ export function MusicAdminTabs({
       key: "playlists" as const,
       href: "/admin/music/playlists",
       label: "Подборки",
+    },
+    {
+      key: "audiobooks" as const,
+      href: "/admin/music/audiobooks",
+      label: "Аудиокниги",
     },
   ];
 

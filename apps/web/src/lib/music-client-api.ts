@@ -59,6 +59,11 @@ export async function uploadMusicTrack(
    * Сервер учитывает его только от редакции Музыки.
    */
   artistId: string | null = null,
+  /**
+   * Книга, в конец которой встаёт запись главой (VED-297) — загрузка из
+   * редактора книги. Сервер учитывает её только от редакции Музыки.
+   */
+  audiobookId: string | null = null,
 ): Promise<CompleteMusicUploadResponse> {
   const created = await send<CreateMusicUploadResponse>("/music/uploads", {
     method: "POST",
@@ -85,6 +90,7 @@ export async function uploadMusicTrack(
         fileName: file.name,
         lineage,
         ...(artistId ? { artistId } : {}),
+        ...(audiobookId ? { audiobookId } : {}),
       }),
     },
   );

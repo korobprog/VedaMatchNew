@@ -285,6 +285,11 @@ export class MusicUploadsService {
     requestedArtistId?: string | null,
     /** Может ли загрузивший подписывать запись исполнителем: только редакция. */
     canAssignArtist = false,
+    /**
+     * Книга, в конец которой встаёт запись главой (VED-297), — загрузка из
+     * редактора книги. Право то же, что у исполнителя: только редакция.
+     */
+    requestedAudiobookId?: string | null,
   ): Promise<CompleteMusicUploadResponse> {
     const upload = await this.prisma.musicUpload.findUnique({
       where: { id: uploadId },
@@ -373,8 +378,14 @@ export class MusicUploadsService {
        угаданного. Поправить может модератор в очереди и редакция в форме
        правки каталога. */
     const lineage = this.uploadLineage(requestedLineage);
+    const audiobook = await this.uploadAudiobook(
+      requestedAudiobookId,
+      canAssignArtist,
+    );
+    // Глава без явного исполнителя получает чтеца книги: иначе в плеере под
+    // главой стояло бы «Исполнитель не указан».
     const artistId = await this.uploadArtist(
-      requestedArtistId,
+      requestedArtistId ?? audiobook?.readerId,
       canAssignArtist,
     );
     const coverKey = embeddedCover
@@ -414,6 +425,22 @@ export class MusicUploadsService {
           checksum: object.etag,
         },
       });
+
+      if (audiobook) {
+        // В конец книги: файлы пачки уходят по одному и по порядку выбора,
+        // так что главы встают в том порядке, в каком их выбрали.
+        const last = await tx.musicAudiobookChapter.aggregate({
+          where: { audiobookId: audiobook.id },
+          _max: { position: true },
+        });
+        await tx.musicAudiobookChapter.create({
+          data: {
+            audiobookId: audiobook.id,
+            trackId: created.id,
+            position: (last._max.position ?? 0) + 1,
+          },
+        });
+      }
 
       return created;
     });
@@ -466,6 +493,23 @@ export class MusicUploadsService {
       select: { id: true },
     });
     return artist?.id ?? null;
+  }
+
+  /**
+   * Книга для загрузки главы (VED-297). Как и исполнитель — не отказ, а
+   * `null`, когда права нет или книги не нашлось: файл уже в бакете, и
+   * уронить заливку из-за места в книге значило бы потерять запись.
+   */
+  private async uploadAudiobook(
+    requested: string | null | undefined,
+    allowed: boolean,
+  ): Promise<{ id: string; readerId: string | null } | null> {
+    if (!requested || typeof requested !== 'string' || !allowed) return null;
+    const book = await this.prisma.musicAudiobook.findUnique({
+      where: { id: requested },
+      select: { id: true, readerId: true },
+    });
+    return book ?? null;
   }
 
   private async fail(uploadId: string, reason: string): Promise<void> {

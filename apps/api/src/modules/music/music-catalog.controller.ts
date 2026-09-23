@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { OptionalAuthGuard, OptionalUser } from '../auth/auth.guard';
+import { MusicAudiobooksService } from './music-audiobooks.service';
 import { MusicCatalogService } from './music-catalog.service';
 import {
   normalizeMusicTrackQuery,
@@ -19,7 +20,10 @@ import { isAdmin } from './is-admin';
 @Controller('music')
 @UseGuards(OptionalAuthGuard)
 export class MusicCatalogController {
-  constructor(private readonly catalog: MusicCatalogService) {}
+  constructor(
+    private readonly catalog: MusicCatalogService,
+    private readonly audiobooks: MusicAudiobooksService,
+  ) {}
 
   /**
    * Витрина и поиск знают, кто смотрит: преданный видит записи своей
@@ -37,18 +41,6 @@ export class MusicCatalogController {
   @Get('categories')
   categories() {
     return this.catalog.listCategories();
-  }
-
-  /**
-   * Раздел «Аудиокниги» (VED-237). Отдельной выдачей, а не параметром
-   * витрины: обычный каталог аудиокниг не показывает вовсе, и смешивать два
-   * списка в одном ответе значило бы каждый раз объяснять, какой из них
-   * сейчас нужен. Буквальный путь регистрируется до `tracks/:id` и `:slug`
-   * по общему правилу Nest — здесь он и так выше них по файлу.
-   */
-  @Get('audiobooks')
-  audiobooks(@OptionalUser() user?: AccessTokenPayload) {
-    return this.catalog.audiobooks(user?.sub ?? null);
   }
 
   @Get('tracks')
@@ -72,9 +64,15 @@ export class MusicCatalogController {
     );
   }
 
+  /**
+   * Страница исполнителя. Книги в его чтении (VED-297) дочитываются здесь,
+   * а не в `getArtist`: это другой сервис модуля, и витрине они не нужны.
+   */
   @Get('artists/:slug')
-  artist(@Param('slug') slug: string) {
-    return this.catalog.getArtist(slug);
+  async artist(@Param('slug') slug: string) {
+    const page = await this.catalog.getArtist(slug);
+    const audiobooks = await this.audiobooks.byReader(page.artist.id);
+    return { ...page, audiobooks };
   }
 
   @Get('albums/:slug')

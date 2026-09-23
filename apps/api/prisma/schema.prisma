@@ -4755,16 +4755,16 @@ enum MusicReportStatus {
 
 /// Исполнитель: киртанья, группа или храм.
 model MusicArtist {
-  id         String          @id @default(uuid())
-  slug       String          @unique
-  name       String
-  kind       MusicArtistKind @default(unknown)
-  bio        String?
+  id             String          @id @default(uuid())
+  slug           String          @unique
+  name           String
+  kind           MusicArtistKind @default(unknown)
+  bio            String?
   /// Ключ обложки в S3. Обложки, в отличие от аудио, публичные: их кеширует
   /// CDN и они нужны в SSR-разметке.
-  coverKey   String?
+  coverKey       String?
   /// Отметка редакции «это тот самый человек», а не значок портала.
-  isVerified Boolean         @default(false)
+  isVerified     Boolean         @default(false)
   /// Корневая категория витрины («Традиционное»/«Современное», VED-165-2).
   /// Раньше её ставили записи за записью (`MusicTrackCategory`), но
   /// тестировщик попросил разметку по исполнителю целиком — так проще для
@@ -4772,20 +4772,22 @@ model MusicArtist {
   /// вкладку, без повторной правки. `kind` категории обязан быть `root`,
   /// это проверяет сервис, а не база.
   rootCategoryId String?
-  rootCategory   MusicCategory?     @relation("MusicArtistRootCategory", fields: [rootCategoryId], references: [id], onDelete: SetNull)
+  rootCategory   MusicCategory?  @relation("MusicArtistRootCategory", fields: [rootCategoryId], references: [id], onDelete: SetNull)
   /// Раздел «Аудиокниги» (VED-237): все записи этого исполнителя — главы
   /// книг, а не киртаны. Отметка стоит у исполнителя, а не у записи, по той
   /// же причине, что и корневая категория выше: редакция размечает чтеца
   /// один раз, и каждая новая его глава попадает в раздел сама. В общем
   /// каталоге такие записи не показываются — «отображение всех аудиокниг
   /// находится внутри кнопки», как и просили в карточке.
-  isAudiobook    Boolean            @default(false)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  isAudiobook    Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   albums        MusicAlbum[]
   tracks        MusicTrack[]
   ingestBatches MusicIngestBatch[]
+  /// Книги, которые он читает (VED-297). У чтеца их может быть несколько.
+  audiobooks    MusicAudiobook[]   @relation("MusicAudiobookReader")
 
   @@index([kind])
   @@index([rootCategoryId])
@@ -4907,6 +4909,13 @@ model MusicTrack {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  /// Когда длительность сверена с файлом целиком (VED-310). При загрузке
+  /// читается только первый мегабайт, и `durationSeconds` у части записей —
+  /// оценка по размеру и битрейту: у VBR без заголовка Xing она врёт в разы.
+  /// `null` — ещё не сверена; такие записи по одной подбирает фоновая
+  /// стадия, дочитывает файл до конца и ставит точное число.
+  durationCheckedAt DateTime?
+
   categories       MusicTrackCategory[]
   items            MusicPlaylistItem[]
   favorites        MusicFavorite[]
@@ -4914,14 +4923,17 @@ model MusicTrack {
   nowPlaying       MusicNowPlaying[]
   listens          MusicListen[]
   reports          MusicReport[]
-  ingestItem       MusicIngestItem?     @relation("MusicIngestDraft")
-  ingestDuplicates MusicIngestItem[]    @relation("MusicIngestDuplicate")
+  ingestItem       MusicIngestItem?       @relation("MusicIngestDraft")
+  ingestDuplicates MusicIngestItem[]      @relation("MusicIngestDuplicate")
+  /// Глава аудиокниги (VED-297). Запись — глава не больше чем одной книги.
+  audiobookChapter MusicAudiobookChapter?
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([artistId])
   @@index([albumId])
   @@index([uploadedById, status])
   @@index([lineage, status, publishedAt(sort: Desc)])
+  @@index([durationCheckedAt])
 }
 
 /// Связь трека с разделами каталога. Обычно их у записи одна-две.
@@ -4933,6 +4945,56 @@ model MusicTrackCategory {
 
   @@id([trackId, categoryId])
   @@index([categoryId])
+}
+
+/// Аудиокнига (VED-237 → VED-297): самостоятельная единица раздела
+/// «Аудиокниги» — своё название, обложка, автор текста, чтец и главы по
+/// порядку. До неё книгой считалась карточка чтеца, и у чтеца с двумя
+/// книгами главы обеих лежали вперемешку.
+///
+/// Разные начитки одной книги — разные строки с одним названием и разными
+/// чтецами: у каждой начитки свой порядок глав и своя длительность.
+model MusicAudiobook {
+  id          String       @id @default(uuid())
+  slug        String       @unique
+  title       String
+  /// Автор текста строкой («Шрила Прабхупада»): справочника авторов нет, а
+  /// заводить его ради подписи под обложкой рано.
+  author      String?
+  /// Чтец — исполнитель из справочника. `SetNull`: уход исполнителя из
+  /// справочника не уносит книгу с главами.
+  readerId    String?
+  reader      MusicArtist? @relation("MusicAudiobookReader", fields: [readerId], references: [id], onDelete: SetNull)
+  description String?
+  coverKey    String?
+  /// Черновик собирается у редакции, в разделе его нет. Книга без единой
+  /// опубликованной главы не показывается, даже отмеченная опубликованной.
+  isPublished Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  chapters MusicAudiobookChapter[]
+
+  @@index([readerId])
+  @@index([isPublished, title])
+}
+
+/// Глава книги — запись каталога на своём месте. Название главы — название
+/// записи: второе поле под то же самое разъезжалось бы с карточкой плеера.
+model MusicAudiobookChapter {
+  id          String         @id @default(uuid())
+  audiobookId String
+  audiobook   MusicAudiobook @relation(fields: [audiobookId], references: [id], onDelete: Cascade)
+  /// Уникально: запись — глава одной книги. Иначе у вопросов «в каком
+  /// разделе показывать запись» и «откуда продолжать» нет одного ответа.
+  trackId     String         @unique
+  track       MusicTrack     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  /// Порядковый номер с единицы, без дыр: список глав переписывается
+  /// целиком одним действием редакции (`PUT .../chapters`).
+  position    Int
+  createdAt   DateTime       @default(now())
+
+  @@index([audiobookId, position])
 }
 
 /// Плейлист. `isSystem` — собранные редакцией подборки вроде «утренний

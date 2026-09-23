@@ -41,6 +41,7 @@ const BASES: { value: MusicUploadRightsBasis; label: string }[] = [
  */
 export function MusicUploadForm({
   artist = null,
+  audiobook = null,
 }: {
   /**
    * Исполнитель, со страницы которого пришли (VED-114): все файлы пачки
@@ -48,6 +49,11 @@ export function MusicUploadForm({
    * поле всё равно не примет.
    */
   artist?: { id: string; name: string } | null;
+  /**
+   * Книга, из редактора которой пришли (VED-297): файлы встают её главами
+   * в конец, по порядку выбора. Только у редакции, как и исполнитель.
+   */
+  audiobook?: { id: string; title: string } | null;
 } = {}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -124,7 +130,8 @@ export function MusicUploadForm({
           basis as MusicUploadRightsBasis,
           setProgress,
           lineageFromSelect(lineage),
-          ...(artist ? [artist.id] : []),
+          artist?.id ?? null,
+          audiobook?.id ?? null,
         );
         ok += 1;
         // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
@@ -185,6 +192,12 @@ export function MusicUploadForm({
         файле они записаны неточно, переделывать и перезаливать не нужно.
         Файлы уходят по очереди; неудача одного не останавливает остальные.
       </p>
+      {audiobook && (
+        <p className="mt-2 rounded-lg border border-cyan/40 bg-cyan/10 px-3 py-2 text-sm text-text-0">
+          Книга: <span className="font-semibold">{audiobook.title}</span> —
+          файлы встанут её главами в конец, в том порядке, в каком выбраны.
+        </p>
+      )}
       {artist && (
         <p className="mt-2 rounded-lg border border-cyan/40 bg-cyan/10 px-3 py-2 text-sm text-text-0">
           Исполнитель: <span className="font-semibold">{artist.name}</span> —

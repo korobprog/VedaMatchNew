@@ -1,27 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getMusicAudiobooks } from "@/lib/music-api";
-import { MusicArtistsSection } from "@/components/music/music-artists-section";
+import { MusicAudiobookCard } from "@/components/music/audiobook-card";
 import { MusicRail } from "@/components/music/music-rail";
-import { MusicTrackList } from "@/components/music/music-track-list";
 import { plural } from "@/lib/plural";
 
 export const metadata: Metadata = {
   title: "Аудиокниги",
-  description: "Книги и лекции в записи: главы подряд, плеер на весь портал",
+  description: "Книги и лекции в записи: главы по порядку, продолжение с места",
 };
 
 /**
- * Раздел «Аудиокниги» (VED-237).
+ * Раздел «Аудиокниги» (VED-237 → VED-297).
  *
- * Устроен как витрина Медиатеки — чтецы карточками, записи списком, — но
- * своим срезом каталога: сюда попадают записи исполнителей, отмеченных в
- * справочниках как чтецы («это аудиокниги»). В общем каталоге их нет, и
- * это прямое требование карточки: «отображение всех аудиокниг должно
- * находиться внутри этой кнопки».
- *
- * Разметка стоит у исполнителя, а не у записи (та же схема, что у корневой
- * категории, VED-165-2): новая глава того же чтеца попадает в раздел сама.
+ * Каждая книга — самостоятельная единица: своя плитка с обложкой, автором
+ * и чтецом, внутри — главы по порядку. Раньше раздел показывал чтецов и
+ * все их записи вперемешку, и у чтеца с двумя книгами главы обеих лежали
+ * одним списком. В общем каталоге глав нет: «отображение всех аудиокниг
+ * находится внутри этой кнопки».
  */
 export default async function MusicAudiobooksPage() {
   const page = await getMusicAudiobooks();
@@ -39,7 +35,7 @@ export default async function MusicAudiobooksPage() {
     );
   }
 
-  const { artists, tracks, totalTracks } = page;
+  const { books } = page;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10 lg:flex-row">
@@ -50,64 +46,43 @@ export default async function MusicAudiobooksPage() {
       <div className="min-w-0 flex-1">
         <Link
           href="/music"
-          className="inline-flex items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
         >
           <span aria-hidden="true">←</span> Медиатека
         </Link>
 
-        <header className="mt-4 flex flex-col gap-1.5">
+        <header className="mt-2 flex flex-col gap-1.5">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
               Аудиокниги
             </h1>
-            {totalTracks > 0 && (
-              <span
-                title={`Всего записей в разделе: ${totalTracks}`}
-                className="font-mono text-xs font-medium text-text-2"
-              >
-                {totalTracks}{" "}
-                {plural(totalTracks, "запись", "записи", "записей")}
+            {books.length > 0 && (
+              <span className="font-mono text-xs font-medium text-text-2">
+                {books.length} {plural(books.length, "книга", "книги", "книг")}
               </span>
             )}
           </div>
           <p className="text-sm text-text-2">
-            Книги и лекции в записи. Главы идут подряд: включите первую —
-            плеер дослушает книгу до конца.
+            Книги и лекции в записи. Главы идут по порядку, а плеер помнит,
+            где вы остановились, — продолжить можно с того же места на любом
+            устройстве.
           </p>
         </header>
 
-        {artists.length > 0 && (
-          <section className="mt-8" aria-labelledby="audiobook-artists">
-            <h2
-              id="audiobook-artists"
-              className="font-display text-base font-bold text-text-0"
-            >
-              Чтецы
-            </h2>
-            {/* Карточка чтеца ведёт на его обычную страницу исполнителя: там
-                уже есть и список записей, и «Слушать всё до конца» — книга
-                целиком, без отдельной страницы под неё. */}
-            <MusicArtistsSection artists={artists} />
-          </section>
+        {books.length === 0 ? (
+          <p className="mt-8 text-sm text-text-1">
+            Аудиокниг пока нет. Редакция собирает их в админке Музыки, во
+            вкладке «Аудиокниги».
+          </p>
+        ) : (
+          <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {books.map((book) => (
+              <li key={book.id}>
+                <MusicAudiobookCard book={book} />
+              </li>
+            ))}
+          </ul>
         )}
-
-        <section className="mt-8" aria-labelledby="audiobook-tracks">
-          <h2
-            id="audiobook-tracks"
-            className="font-display text-base font-bold text-text-0"
-          >
-            Все записи
-          </h2>
-          {tracks.length === 0 ? (
-            <p className="mt-3 text-sm text-text-1">
-              Аудиокниг пока нет. Редакция отмечает чтеца в админке Музыки —
-              «Справочники» → «Исполнители» → «Аудиокниги», — и все его
-              записи, включая будущие, появляются здесь.
-            </p>
-          ) : (
-            <MusicTrackList tracks={tracks} />
-          )}
-        </section>
       </div>
     </main>
   );
