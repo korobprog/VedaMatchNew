@@ -198,7 +198,8 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, gap: 16 },
   status: { fontFamily: fonts.body, fontSize: 12, minHeight: 16 },
   note: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
-  block: { gap: 12 },
+  // «Повторить» — по своей ширине, как в ленте уведомлений, а не на всю строку.
+  block: { gap: 12, alignItems: 'flex-start' },
   empty: { borderWidth: 1, borderRadius: radius.md, borderCurve: 'continuous', padding: 16, gap: 6 },
   emptyTitle: { fontFamily: fonts.bodySemiBold, fontSize: 15, lineHeight: 21 },
   emptyBody: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
