@@ -1,8 +1,16 @@
-import { DONATION_RECIPIENT_IDS, toDonationRecipients } from './donation-recipients';
+import {
+  DONATION_RECIPIENT_IDS,
+  toDonationRecipients,
+} from './donation-recipients';
 
 describe('toDonationRecipients', () => {
-  const resolve = (user: { avatarKey: string | null; avatarUrl: string | null }) =>
-    Promise.resolve(user.avatarKey ? `signed:${user.avatarKey}` : user.avatarUrl);
+  const resolve = (user: {
+    avatarKey: string | null;
+    avatarUrl: string | null;
+  }) =>
+    Promise.resolve(
+      user.avatarKey ? `signed:${user.avatarKey}` : user.avatarUrl,
+    );
 
   it('отдаёт получателей в порядке списка, а не базы', async () => {
     const result = await toDonationRecipients(
@@ -20,9 +28,11 @@ describe('toDonationRecipients', () => {
   });
 
   it('кого нет в базе — без фото, но в ответе', async () => {
-    const result = await toDonationRecipients(['a', 'x'], [
-      { id: 'a', avatarKey: null, avatarUrl: null },
-    ], resolve);
+    const result = await toDonationRecipients(
+      ['a', 'x'],
+      [{ id: 'a', avatarKey: null, avatarUrl: null }],
+      resolve,
+    );
     expect(result).toEqual([
       { userId: 'a', avatarUrl: null },
       { userId: 'x', avatarUrl: null },
