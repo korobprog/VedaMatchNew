@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MotivationAdminCandidateDto } from "@vedamatch/shared";
 import { MotivationPublishedList } from "./published-list";
+import { SCROLL_NAV_GUTTER } from "./scroll-nav-buttons";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -431,6 +432,99 @@ describe("MotivationPublishedList", () => {
 
     expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  // VED-264: «Показать текст афоризма полностью — быстро, без возвращения
+  // в ленту». Кнопку «Читать» забрала «Поделиться» (VED-343), поэтому
+  // разворачивает нажатие на сам текст.
+  describe("полный текст по нажатию на сам текст (VED-264)", () => {
+    const longPost = () =>
+      post({
+        text: "Душа не умирает\n\nПояснение к стиху",
+        attributionSpeaker: "Прабхупада",
+        attributionWork: "Бхагавад-гита",
+        attributionLocator: "2.13",
+      });
+
+    it("свёрнуто — только афоризм в четыре строки, без пояснения и подписи", () => {
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      const toggle = screen.getByRole("button", { name: /Показать полностью/ });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(within(toggle).getByText("Душа не умирает")).toHaveClass("line-clamp-4");
+      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Прабхупада · Бхагавад-гита/)).not.toBeInTheDocument();
+    });
+
+    it("нажатие на текст раскрывает его целиком и сворачивает обратно", async () => {
+      const user = userEvent.setup();
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      await user.click(screen.getByText("Душа не умирает"));
+
+      const toggle = screen.getByRole("button", { name: /Свернуть/ });
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(within(toggle).getByText("Душа не умирает")).not.toHaveClass("line-clamp-4");
+      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
+      expect(screen.getByText("Прабхупада · Бхагавад-гита · 2.13")).toBeInTheDocument();
+      // Развёрнутое содержимое — то, чем кнопка управляет.
+      const region = document.getElementById(toggle.getAttribute("aria-controls")!);
+      expect(region).toContainElement(screen.getByText("Пояснение к стиху"));
+
+      await user.click(toggle);
+
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+    });
+
+    it("работает с клавиатуры: Enter раскрывает, пробел сворачивает", async () => {
+      const user = userEvent.setup();
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      const toggle = screen.getByRole("button", { name: /Показать полностью/ });
+      toggle.focus();
+      await user.keyboard("{Enter}");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await user.keyboard(" ");
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("карточки раскрываются независимо и не открывают правку", async () => {
+      const user = userEvent.setup();
+      render(
+        <MotivationPublishedList
+          posts={[
+            longPost(),
+            post({ id: "post-2", slug: "other", text: "Второй афоризм\n\nВторое пояснение" }),
+          ]}
+        />,
+      );
+
+      await user.click(screen.getByText("Душа не умирает"));
+      await user.click(screen.getByText("Второй афоризм"));
+
+      // Первая не свернулась, когда раскрыли вторую: иначе страница прыгала
+      // бы под пальцем.
+      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
+      expect(screen.getByText("Второе пояснение")).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
+    });
+
+    it("отдельной кнопки «Читать» так и нет — сетка остаётся 4×2", () => {
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      expect(screen.queryByRole("button", { name: /Читать/ })).toBeNull();
+      const grid = screen.getByRole("button", { name: "Править текст" }).parentElement!;
+      expect([...grid.children].filter((cell) => cell.tagName !== "INPUT")).toHaveLength(8);
+    });
+  });
+
+  // Плавающие кнопки прокрутки ложились на правый столбец кнопок карточки.
+  it("список на телефоне оставляет справа поле под кнопки прокрутки (VED-264)", () => {
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    const list = screen.getByRole("list");
+    expect(list.className.split(/\s+/)).toContain(SCROLL_NAV_GUTTER);
   });
 
   // VED-343: «Сделай 2 ряда клавиш вместо трех. Кнопку читать замени на

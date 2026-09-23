@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   Eye,
   EyeOff,
@@ -36,7 +37,8 @@ import {
   titleOf,
 } from "./post-action-labels";
 import { postShareHref } from "../post-share";
-import { ScrollNavButtons } from "./scroll-nav-buttons";
+import { cardText, expandHint } from "./card-text";
+import { SCROLL_NAV_GUTTER, ScrollNavButtons } from "./scroll-nav-buttons";
 import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";
@@ -111,6 +113,20 @@ export function MotivationPublishedList({
     [posts, openSlug],
   );
   const [editing, setEditing] = useState<string | null>(openId);
+  /**
+   * Карточки с развёрнутым текстом (VED-264). Каждая сама по себе, а не
+   * «одна открытая за раз»: свернуть чужую карточку выше по списку значило
+   * бы сдвинуть страницу под пальцем.
+   */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleExpanded = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   /** Карточка, у которой спросили «удалить?»: вопрос встаёт под ней. */
   const [deleting, setDeleting] = useState<string | null>(null);
   /** Ошибки загрузки картинки — под карточкой, а не в клетке значка. */
@@ -233,7 +249,12 @@ export function MotivationPublishedList({
       ) : (
         // На широком экране — две колонки: карточка стала узкой и высокой, и
         // в одну колонку справа от кнопок оставалась пустая полоса.
-        <ul className="mt-4 grid items-start gap-3 lg:grid-cols-2">
+        // Справа на телефоне — поле под плавающие кнопки прокрутки
+        // (`SCROLL_NAV_GUTTER`): без него они ложились на правый столбец
+        // кнопок карточки, и «Поделиться»/«Скрытые» было не нажать.
+        <ul
+          className={`mt-4 grid items-start gap-3 lg:grid-cols-2 ${SCROLL_NAV_GUTTER}`}
+        >
           {found.map((post) => (
             <li
               key={post.id}
@@ -261,13 +282,14 @@ export function MotivationPublishedList({
                 )}
 
                 <div className="min-w-0 flex-1">
-                  {/* Только сам афоризм: заголовок убран вовсе, автор,
-                      дата и категория только занимали место. У открытки
-                      текст бывает пустым — тогда хоть заголовок, собранный
-                      сервером. */}
-                  <p className="line-clamp-4 text-sm text-text-0">
-                    {aphorismOf(post)}
-                  </p>
+                  {/* Свёрнуто — только сам афоризм: автор, дата и категория
+                      только занимали место (VED-199). Нажатие на текст
+                      раскрывает его целиком (VED-264). */}
+                  <ExpandableCardText
+                    post={post}
+                    expanded={expanded.has(post.id)}
+                    onToggle={() => toggleExpanded(post.id)}
+                  />
                   {post.status === "hidden" && (
                     <span className={`${badgeClass} mt-1`}>Скрыто из ленты</span>
                   )}
@@ -369,9 +391,69 @@ export function MotivationPublishedList({
   );
 }
 
-/** Афоризм без пояснения; у открытки без набранного текста — заголовок. */
-function aphorismOf(post: MotivationAdminCandidateDto): string {
-  return splitQuoteAndExplanation(post.text).quote || post.title || post.slug;
+/**
+ * Текст карточки, который раскрывается нажатием на него самого (VED-264:
+ * «показать текст афоризма полностью — быстро, без возвращения в ленту»).
+ *
+ * Отдельной кнопки «Читать» больше нет — её клетку забрала «Поделиться»
+ * (VED-343), а четвёртого ряда кнопок заказчик не хочет. Поэтому кнопка —
+ * сам текст: настоящий `<button>` с `aria-expanded`, он берёт фокус с
+ * клавиатуры и срабатывает на Enter и пробел. Подсказка «Показать
+ * полностью» со стрелкой под текстом — чтобы догадаться, что абзац
+ * нажимается; она же заканчивает имя кнопки для скринридера.
+ *
+ * Внутри кнопки только строчные элементы (`span` с `block`): абзацы в
+ * `<button>` HTML не допускает.
+ */
+function ExpandableCardText({
+  post,
+  expanded,
+  onToggle,
+}: {
+  post: MotivationAdminCandidateDto;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const id = useId();
+  const { quote, explanation, attribution } = cardText(post);
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      aria-controls={id}
+      className="group block w-full rounded-md text-left"
+    >
+      <span id={id} className="block">
+        <span
+          // Без `block` у свёрнутого: `line-clamp` работает только на
+          // `display: -webkit-box`, и `block` рядом молча его отменял.
+          className={`text-sm text-text-0 ${
+            expanded ? "block whitespace-pre-line" : "line-clamp-4"
+          }`}
+        >
+          {quote}
+        </span>
+        {expanded && explanation && (
+          <span className="mt-2 block whitespace-pre-line text-sm text-text-1">
+            {explanation}
+          </span>
+        )}
+        {expanded && attribution && (
+          <span className="mt-2 block text-xs text-text-2">{attribution}</span>
+        )}
+      </span>
+      <span className="mt-1 inline-flex min-h-6 items-center gap-0.5 text-xs font-medium text-text-1 group-hover:text-text-0">
+        {expandHint(expanded)}
+        <ChevronDown
+          aria-hidden
+          className={`size-4 transition-transform motion-reduce:transition-none ${
+            expanded ? "rotate-180" : ""
+          }`}
+        />
+      </span>
+    </button>
+  );
 }
 
 /**
@@ -380,8 +462,9 @@ function aphorismOf(post: MotivationAdminCandidateDto): string {
  * скрыть, поделиться. Ряд второй: заменить картинку, удалить, поиск,
  * «Скрытые».
  *
- * «Поделиться» стоит на месте «Читать полностью» (VED-264): полный текст
- * редакция читала в ленте, а отправить афоризм из карточки было нечем. Под
+ * «Поделиться» стоит на месте «Читать полностью» (VED-264): отправить
+ * афоризм из карточки было нечем, а полный текст теперь раскрывается
+ * нажатием на сам текст (`ExpandableCardText`), без отдельной клетки. Под
  * «←» у подсвеченной карточки встаёт «Заменить» — промах по нему безопасен:
  * он открывает выбор файла, а не меняет картинку сразу.
  *

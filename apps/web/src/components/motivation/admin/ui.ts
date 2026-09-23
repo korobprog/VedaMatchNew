@@ -37,18 +37,20 @@ export const iconDangerButton = `${iconButtonBase} border-red-400/40 text-red-50
  * берёт значок и строку подписи, ширину задаёт колонка сетки.
  *
  * Сетка — четыре колонки и на телефоне (VED-343), поэтому кегль подписи
- * идёт от ширины экрана, а не один на всех. Замер в Chromium, самая длинная
- * подпись «Поделиться»: клетка 59px на 320, 69px на 360, 79px на 400. При
- * 12px слово занимает 69px и в 360 не входит, поэтому до 400px — 11px (на
- * 320 — 10px) с плотным трекингом и почти без боковых полей; с 400px, где
- * и живёт телефон заказчика (412px), — снова 12px, как было. Клетка во всех
- * случаях не ниже 56px и не уже 59px — цель касания больше 44×44.
+ * идёт от ширины экрана, а не один на всех. С VED-264 список на телефоне
+ * отдаёт 24px справа под кнопки прокрутки (`SCROLL_NAV_GUTTER`), и клетка
+ * стала уже. Замер в Chromium, самая длинная подпись «Поделиться»: клетка
+ * 57px на 320, 63px на 360, 76px на 412. Слово занимает 55px при 10px,
+ * 61px при 11px и 69px при 12px, поэтому до 380px — 10px (на 320 ещё и без
+ * боковых полей), до 440px — 11px, включая телефон заказчика (412px: в 12px
+ * слово на 3px шире клетки), с 440px — 12px. Клетка во всех случаях не ниже
+ * 56px и не уже 57px — цель касания больше 44×44.
  *
  * Цвет подписи — `text-text-1`, а не `text-text-2`: вторичный на стекле не
  * добирает 4.5:1 на мелком кегле (замер записан в `globals.css`).
  */
 const iconTileBase =
-  "inline-flex min-h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-0.5 py-1.5 text-center text-[10px] leading-tight tracking-tight whitespace-nowrap transition-colors disabled:opacity-50 min-[360px]:text-[11px] min-[400px]:px-1 min-[400px]:text-xs min-[400px]:tracking-normal";
+  "inline-flex min-h-14 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-0 py-1.5 text-center text-[10px] leading-tight tracking-tight whitespace-nowrap transition-colors disabled:opacity-50 min-[360px]:px-0.5 min-[380px]:text-[11px] min-[400px]:px-1 min-[440px]:text-xs min-[440px]:tracking-normal";
 export const iconTile = `${iconTileBase} border-glass-brd text-text-1 hover:border-cyan/40 hover:text-text-0 aria-expanded:border-magenta aria-expanded:text-text-0`;
 /* Красный подписи — по теме (VED-343): `text-red-500` на светлой карточке
    давал 3.75:1 — мало для 11px. `red-700` там ≈ 6:1, на тёмной `red-400`. */
