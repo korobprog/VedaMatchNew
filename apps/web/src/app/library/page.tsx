@@ -130,7 +130,10 @@ export default async function LibraryPage({
 
         {feed && (
           <EntryList
-            key={JSON.stringify(params)}
+            // Линия — в ключе: кнопка линии меняет настройку, а не адрес, и
+            // без неё лента после router.refresh() держала бы старую выдачу
+            // в своём состоянии — подпись новая, материалы прежние.
+            key={`${JSON.stringify(params)}|${appliedLineage ?? "all"}`}
             initialFeed={feed}
             locale={locale}
             query={params}
