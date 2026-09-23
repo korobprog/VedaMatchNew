@@ -56,7 +56,11 @@ describe('readCheckSettings', () => {
     expect(settings).toEqual({
       enabled: true,
       model: 'gpt-5.5',
-      rates: { inCentsPerMtok: 250, outCentsPerMtok: 1500, centsPerSearch: 2.5 },
+      rates: {
+        inCentsPerMtok: 250,
+        outCentsPerMtok: 1500,
+        centsPerSearch: 2.5,
+      },
       dailyBudgetUsdMicros: 1_000_000,
       dailyChecks: 10,
       userDailyChecks: 0,
@@ -65,7 +69,11 @@ describe('readCheckSettings', () => {
 });
 
 describe('checkCostUsdMicros', () => {
-  const rates = { inCentsPerMtok: 250, outCentsPerMtok: 1500, centsPerSearch: 1 };
+  const rates = {
+    inCentsPerMtok: 250,
+    outCentsPerMtok: 1500,
+    centsPerSearch: 1,
+  };
 
   it('живая проба: 37 410 входных, 380 выходных, один поиск ≈ 10.9 цента', () => {
     // 37410 × 2.5$/M = 0.0935$, 380 × 15$/M = 0.0057$, поиск 0.01$.
@@ -119,7 +127,11 @@ describe('admitToRun', () => {
 
   it('до лимитов — можно', () => {
     expect(
-      admitToRun({ settings, spentTodayUsdMicros: 2_999_999, checksRunToday: 39 }),
+      admitToRun({
+        settings,
+        spentTodayUsdMicros: 2_999_999,
+        checksRunToday: 39,
+      }),
     ).toBeNull();
   });
 
@@ -131,7 +143,11 @@ describe('admitToRun', () => {
 
   it('потраченный бюджет останавливает', () => {
     expect(
-      admitToRun({ settings, spentTodayUsdMicros: 3_000_000, checksRunToday: 0 }),
+      admitToRun({
+        settings,
+        spentTodayUsdMicros: 3_000_000,
+        checksRunToday: 0,
+      }),
     ).toBe('daily_budget');
   });
 
@@ -148,8 +164,8 @@ describe('admitToRun', () => {
 
 describe('startOfUtcDay', () => {
   it('полночь по UTC того же дня', () => {
-    expect(startOfUtcDay(new Date('2026-09-23T23:59:59.999Z')).toISOString()).toBe(
-      '2026-09-23T00:00:00.000Z',
-    );
+    expect(
+      startOfUtcDay(new Date('2026-09-23T23:59:59.999Z')).toISOString(),
+    ).toBe('2026-09-23T00:00:00.000Z');
   });
 });

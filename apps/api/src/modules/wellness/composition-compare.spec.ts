@@ -11,7 +11,9 @@ import {
 describe('compositionTokens', () => {
   it('приводит регистр и «ё», отбрасывает цифры, проценты и служебные слова', () => {
     expect([
-      ...compositionTokens('Состав: Сахар 20%, МАСЛО пальмовое, ёмкость. Может содержать следы'),
+      ...compositionTokens(
+        'Состав: Сахар 20%, МАСЛО пальмовое, ёмкость. Может содержать следы',
+      ),
     ]).toEqual(['сахар', 'масло', 'пальмовое', 'емкость']);
   });
 
@@ -22,8 +24,10 @@ describe('compositionTokens', () => {
 
 describe('compositionAgreement', () => {
   it('один состав с опечатками распознавания и другой пунктуацией — почти 1', () => {
-    const photo = 'сахар, масло пальмовое, фундук 13%, какао обезжиренное 7.4%, молоко сухое обезжиренное 6.6%, эмульгатор лецитин соевый, ванилин';
-    const page = 'Сахар; масло пальмовое; фундук (13 %); какао обезжиренное (7,4%); молоко сухое обезжиренное; эмульгатор: лецитин (соевый); ванилин.';
+    const photo =
+      'сахар, масло пальмовое, фундук 13%, какао обезжиренное 7.4%, молоко сухое обезжиренное 6.6%, эмульгатор лецитин соевый, ванилин';
+    const page =
+      'Сахар; масло пальмовое; фундук (13 %); какао обезжиренное (7,4%); молоко сухое обезжиренное; эмульгатор: лецитин (соевый); ванилин.';
     expect(compositionAgreement(photo, page)).toBeGreaterThan(0.95);
   });
 
@@ -49,7 +53,8 @@ describe('compositionAgreement', () => {
 
 describe('compositionCoverage', () => {
   it('доля слов состава, найденных на длинной странице', () => {
-    const page = 'Купить пасту. Состав: сахар, масло пальмовое, фундук. Доставка завтра.';
+    const page =
+      'Купить пасту. Состав: сахар, масло пальмовое, фундук. Доставка завтра.';
     expect(compositionCoverage(page, 'сахар, масло пальмовое, фундук')).toBe(1);
     expect(compositionCoverage(page, 'сахар, желатин')).toBe(0.5);
   });
@@ -61,11 +66,15 @@ describe('compositionCoverage', () => {
 
 describe('sameProductName', () => {
   it('короткое название человека и длинное из магазина — один товар', () => {
-    expect(sameProductName('Нутелла', 'Паста ореховая Нутелла 350 г')).toBe(true);
+    expect(sameProductName('Нутелла', 'Паста ореховая Нутелла 350 г')).toBe(
+      true,
+    );
   });
 
   it('общее значимое слово — достаточно', () => {
-    expect(sameProductName('Хлебцы гречневые', 'Гречневые хлебцы Dr. Korner')).toBe(true);
+    expect(
+      sameProductName('Хлебцы гречневые', 'Гречневые хлебцы Dr. Korner'),
+    ).toBe(true);
   });
 
   it('совсем разные слова — повод подозревать чужой штрихкод', () => {
@@ -118,6 +127,8 @@ describe('catalogFingerprint', () => {
 
   it('равные отпечатки совпадают, лишняя запись — нет', () => {
     expect(sameFingerprint(['a:contains'], ['a:contains'])).toBe(true);
-    expect(sameFingerprint(['a:contains'], ['a:contains', 'b:hidden'])).toBe(false);
+    expect(sameFingerprint(['a:contains'], ['a:contains', 'b:hidden'])).toBe(
+      false,
+    );
   });
 });

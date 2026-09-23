@@ -56,7 +56,9 @@ describe('buildCheckRequest', () => {
       brand: 'Ferrero',
     }) as { input: { content: { text?: string }[] }[] };
     expect(body.input[0].content).toHaveLength(1);
-    expect(body.input[0].content[0].text).toContain('Производитель со слов человека: Ferrero');
+    expect(body.input[0].content[0].text).toContain(
+      'Производитель со слов человека: Ferrero',
+    );
   });
 });
 

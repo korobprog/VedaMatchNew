@@ -90,9 +90,9 @@ describe('htmlToText', () => {
   });
 
   it('раскрывает сущности и склеивает пробелы', () => {
-    expect(htmlToText('<p>Соль&nbsp;&amp;&#32;перец &#x421;</p>\n\n<!-- x -->')).toBe(
-      'Соль & перец С',
-    );
+    expect(
+      htmlToText('<p>Соль&nbsp;&amp;&#32;перец &#x421;</p>\n\n<!-- x -->'),
+    ).toBe('Соль & перец С');
   });
 });
 
@@ -100,7 +100,9 @@ describe('pageMentionsBarcode', () => {
   const code = '4607017099360';
 
   it('находит код как отдельное число', () => {
-    expect(pageMentionsBarcode(`Штрихкод: ${code}. Вес 350 г`, code)).toBe(true);
+    expect(pageMentionsBarcode(`Штрихкод: ${code}. Вес 350 г`, code)).toBe(
+      true,
+    );
   });
 
   it('склеивает код, разбитый пробелами и дефисами', () => {
@@ -117,7 +119,9 @@ describe('pageMentionsBarcode', () => {
   });
 
   it('UPC-A и тот же код в GTIN-13 с ведущим нулём — один товар', () => {
-    expect(pageMentionsBarcode('UPC 012345678905', '12345678905'.padStart(12, '0'))).toBe(true);
+    expect(
+      pageMentionsBarcode('UPC 012345678905', '12345678905'.padStart(12, '0')),
+    ).toBe(true);
     expect(pageMentionsBarcode('UPC 036000291452', '0036000291452')).toBe(true);
     expect(pageMentionsBarcode('EAN 0036000291452', '036000291452')).toBe(true);
   });

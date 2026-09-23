@@ -81,7 +81,11 @@ describe('decideCheck — когда карточку принимает маш�
   it('ИИ уточнил название и производителя — «уточнено и принято»', () => {
     const decision = decideCheck(
       input({
-        submitted: { name: 'Nutella', brand: null, ingredientsRaw: COMPOSITION },
+        submitted: {
+          name: 'Nutella',
+          brand: null,
+          ingredientsRaw: COMPOSITION,
+        },
       }),
     );
     expect(decision.outcome).toBe('refined');
@@ -142,7 +146,9 @@ describe('decideCheck — когда карточка ждёт человека'
 
   it('источники противоречат — к человеку, хоть всё остальное и сошлось', () => {
     expect(
-      reviewed({ proposal: proposal({ conflicts: ['у магазина другой вес'] }) }),
+      reviewed({
+        proposal: proposal({ conflicts: ['у магазина другой вес'] }),
+      }),
     ).toEqual(['sources_conflict']);
   });
 
@@ -174,7 +180,10 @@ describe('decideCheck — когда карточка ждёт человека'
   it('главная страница сайта не подтверждает товар (как в живой пробе)', () => {
     expect(
       reviewed({
-        sources: [STRONG_SOURCES[0], source('https://barcodenest.com/', 'opened')],
+        sources: [
+          STRONG_SOURCES[0],
+          source('https://barcodenest.com/', 'opened'),
+        ],
       }),
     ).toEqual(['too_few_sources']);
   });
@@ -200,7 +209,9 @@ describe('decideCheck — когда карточка ждёт человека'
     expect(
       reviewed({
         sources: [
-          source('https://shop.ru/p', 'verified', { confirmsIngredients: true }),
+          source('https://shop.ru/p', 'verified', {
+            confirmsIngredients: true,
+          }),
           source('https://b.ru/p', 'opened'),
         ],
       }),
@@ -264,7 +275,10 @@ describe('decideCheck — когда карточка отклоняется', (
     const decision = decideCheck(
       input({
         proposal: proposal({ notFood: true }),
-        sources: [source('https://a.ru/p', 'opened'), source('https://b.ru/p', 'opened')],
+        sources: [
+          source('https://a.ru/p', 'opened'),
+          source('https://b.ru/p', 'opened'),
+        ],
       }),
     );
     expect(decision.outcome).toBe('review');
@@ -272,9 +286,9 @@ describe('decideCheck — когда карточка отклоняется', (
   });
 
   it('больше ничего машина не отклоняет: не найдено — не отказ', () => {
-    expect(decideCheck(input({ proposal: proposal({ found: false }) })).outcome).toBe(
-      'review',
-    );
+    expect(
+      decideCheck(input({ proposal: proposal({ found: false }) })).outcome,
+    ).toBe('review');
   });
 });
 
@@ -318,7 +332,12 @@ describe('pagesToFetch', () => {
         ],
         ['https://d.ru/p'],
       ),
-    ).toEqual(['https://c.ru/p', 'https://b.ru/p', 'https://d.ru/p', 'https://a.ru/p']);
+    ).toEqual([
+      'https://c.ru/p',
+      'https://b.ru/p',
+      'https://d.ru/p',
+      'https://a.ru/p',
+    ]);
   });
 
   it('главные страницы и внутренние адреса сервер не открывает', () => {
@@ -326,7 +345,9 @@ describe('pagesToFetch', () => {
       pagesToFetch(
         [
           claimed('https://barcodenest.com/', { confirmsIngredients: true }),
-          claimed('http://169.254.169.254/latest', { confirmsIngredients: true }),
+          claimed('http://169.254.169.254/latest', {
+            confirmsIngredients: true,
+          }),
           claimed('http://localhost/admin', { confirmsIngredients: true }),
           claimed('https://shop.ru/p'),
         ],
