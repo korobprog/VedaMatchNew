@@ -89,7 +89,12 @@ export async function countTracksByCategory(
   onlyPublished: boolean,
   rootSlug: string | null = null,
 ): Promise<Map<string, number>> {
-  const trackFilter = onlyPublished ? { status: 'published' as const } : {};
+  // Витрина считает только записи Медиатеки: главы книг (VED-297) там не
+  // показываются, и число над вкладкой не должно их обещать. Справочник
+  // админки (`onlyPublished: false`) считает всё, как и раньше.
+  const trackFilter = onlyPublished
+    ? { status: 'published' as const, audiobookChapter: { is: null } }
+    : {};
 
   const [styleGroups, artistsWithRoot] = await Promise.all([
     prisma.musicTrackCategory.groupBy({

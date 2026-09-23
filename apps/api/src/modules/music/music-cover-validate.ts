@@ -26,6 +26,7 @@ export const MUSIC_COVER_SCOPES: readonly MusicCoverScope[] = [
   'artist',
   'album',
   'playlist',
+  'audiobook',
 ];
 
 /** Расширение по типу: оно попадает в имя объекта и в адрес на CDN. */

@@ -42,6 +42,10 @@ function prismaMock() {
     musicTrackCategory: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    musicAudiobookChapter: {
+      aggregate: jest.fn().mockResolvedValue({ _max: { position: 4 } }),
+      create: jest.fn().mockResolvedValue({}),
+    },
   };
 
   return {
@@ -71,6 +75,14 @@ function prismaMock() {
         findUnique: jest.fn((args: { where: { id: string } }) =>
           Promise.resolve<{ id: string } | null>({ id: args.where.id }),
         ),
+      },
+      // Книги (VED-297): по умолчанию книги нет.
+      musicAudiobook: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(
+            null as { id: string; readerId: string | null } | null,
+          ),
       },
       $transaction: jest.fn().mockImplementation((fn) => fn(tx)),
     },
@@ -358,6 +370,54 @@ describe('MusicUploadsService.completeUpload', () => {
     expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
       data: expect.not.objectContaining({ artistId: expect.anything() }),
     });
+  });
+
+  // VED-297: «Загрузить главы» в редакторе книги — запись встаёт в конец
+  // книги и получает чтеца, если исполнитель не выбран явно.
+  it('загрузка из редактора книги ставит запись последней главой с чтецом', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.musicAudiobook.findUnique.mockResolvedValue({
+      id: 'book-1',
+      readerId: 'reader-1',
+    });
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'glava-5.mp3',
+      null,
+      undefined,
+      true,
+      'book-1',
+    );
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ artistId: 'reader-1' }),
+    });
+    expect(prisma.tx.musicAudiobookChapter.create).toHaveBeenCalledWith({
+      data: { audiobookId: 'book-1', trackId: 't1', position: 5 },
+    });
+  });
+
+  it('участнику место в книге не выдаётся — как и подпись исполнителем', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'glava-5.mp3',
+      null,
+      undefined,
+      false,
+      'book-1',
+    );
+
+    expect(prisma.prisma.musicAudiobook.findUnique).not.toHaveBeenCalled();
+    expect(prisma.tx.musicAudiobookChapter.create).not.toHaveBeenCalled();
   });
 
   it('и у не-преданного тоже «для всех линий», а не ISKCON', async () => {

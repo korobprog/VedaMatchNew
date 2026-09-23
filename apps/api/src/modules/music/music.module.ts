@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MusicAssistantListener } from './music-assistant.listener';
+import {
+  MusicAdminAudiobooksController,
+  MusicAudiobooksController,
+} from './music-audiobooks.controller';
+import { MusicAudiobooksService } from './music-audiobooks.service';
 import { AuthModule } from '../auth/auth.module';
 import {
   MusicAdminCatalogController,
@@ -56,6 +61,8 @@ import { MusicWorkerService } from './music-worker.service';
   imports: [AuthModule],
   controllers: [
     MusicCatalogController,
+    MusicAudiobooksController,
+    MusicAdminAudiobooksController,
     MusicStreamController,
     MusicCoversController,
     MusicCoverFilesController,
@@ -73,6 +80,7 @@ import { MusicWorkerService } from './music-worker.service';
   ],
   providers: [
     MusicCatalogService,
+    MusicAudiobooksService,
     MusicAdminCatalogService,
     MusicArtistTagsService,
     MusicAdminQueueService,

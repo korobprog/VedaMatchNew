@@ -145,10 +145,10 @@ export interface MusicArtistDto {
    */
   rootCategoryId: string | null;
   /**
-   * Исполнитель раздела «Аудиокниги» (VED-237): его записи — главы книг, и
-   * в общем каталоге они не показываются. Отметка у исполнителя по той же
-   * причине, что и корневая категория выше: новая глава попадает в раздел
-   * без отдельной правки.
+   * Чтец раздела «Аудиокниги» (VED-237): его записи — главы книг, и в общем
+   * каталоге они не показываются. С VED-297 книга — отдельная единица
+   * (`MusicAudiobookCardDto`), а отметка у чтеца только держит его новые
+   * записи вне Медиатеки, пока редакция не разложит их по книгам.
    */
   isAudiobook: boolean;
 }
@@ -339,6 +339,11 @@ export interface MusicArtistPageDto {
   artist: MusicArtistDto;
   albums: MusicAlbumDto[];
   tracks: MusicTrackDto[];
+  /**
+   * Книги, которые он читает (VED-297). Необязательное: старые клиенты его
+   * не ждут, и пустой список отсутствию равносилен.
+   */
+  audiobooks?: MusicAudiobookCardDto[];
 }
 
 export interface MusicAlbumPageDto {
@@ -462,19 +467,113 @@ export interface MusicBulkArtistAudiobookResult {
 }
 
 /**
- * Раздел «Аудиокниги» (VED-237) — то же устройство, что у витрины
- * Медиатеки, только внутри кнопки: чтецы карточками и записи списком.
- * Отдельная выдача, а не параметр витрины: общий каталог аудиокниг не
- * показывает вовсе, и смешивать два списка в одном ответе значило бы
- * каждый раз объяснять, какой из них сейчас нужен.
+ * Карточка аудиокниги (VED-297) — плитка раздела «Аудиокниги» и шапка
+ * страницы книги.
+ *
+ * Книга — самостоятельная единица, а не карточка чтеца: у одного чтеца
+ * несколько книг, у одной книги — несколько начиток (это разные книги с
+ * одним названием и разными чтецами).
  */
+export interface MusicAudiobookCardDto {
+  id: string;
+  slug: string;
+  title: string;
+  /** Автор текста строкой; `null` — не указан. */
+  author: string | null;
+  /** Чтец из справочника исполнителей; `null` — не указан. */
+  reader: MusicArtistRefDto | null;
+  /**
+   * Обложка книги, а без неё — обложка чтеца: пустой плитки в разделе быть
+   * не должно.
+   */
+  coverUrl: string | null;
+  /** Сколько опубликованных глав. */
+  chapterCount: number;
+  /** Суммарная длительность опубликованных глав, секунды. */
+  totalSeconds: number;
+}
+
+/** Раздел «Аудиокниги»: книги по названию. Черновиков и пустых книг нет. */
 export interface MusicAudiobooksDto {
-  /** Чтецы и авторы — карточки раздела. */
-  artists: MusicArtistDto[];
-  /** Записи раздела; порядок — общий для Музыки, по алфавиту (VED-273). */
-  tracks: MusicTrackDto[];
-  /** Сколько всего записей в разделе. */
-  totalTracks: number;
+  books: MusicAudiobookCardDto[];
+}
+
+/**
+ * Откуда продолжать книгу. Считается по позициям, которые плеер сохраняет
+ * для каждой записи (`MusicPlayState`): берётся глава, которую слушали
+ * последней; дослушанная до конца — значит следующая с начала.
+ */
+export interface MusicAudiobookResumeDto {
+  trackId: string;
+  /** Номер главы с единицы — для подписи «Продолжить: глава 3». */
+  chapterNumber: number;
+  positionSeconds: number;
+}
+
+export interface MusicAudiobookPageDto {
+  book: MusicAudiobookCardDto & { description: string | null };
+  /** Опубликованные главы по порядку книги. */
+  chapters: MusicTrackDto[];
+  /**
+   * `null` — гость, книгу ещё не начинали или дослушали до конца: тогда
+   * страница предлагает слушать с начала.
+   */
+  resume: MusicAudiobookResumeDto | null;
+}
+
+/** Глава в редакторе книги: статус виден, чтобы черновик не терялся. */
+export interface MusicAdminAudiobookChapterDto {
+  trackId: string;
+  title: string;
+  status: MusicTrackStatus;
+  durationSeconds: number;
+  artistName: string | null;
+}
+
+export interface MusicAdminAudiobookDto {
+  id: string;
+  slug: string;
+  title: string;
+  author: string | null;
+  description: string | null;
+  readerId: string | null;
+  readerName: string | null;
+  coverKey: string | null;
+  coverUrl: string | null;
+  isPublished: boolean;
+  /** Все главы по порядку, любого статуса. */
+  chapters: MusicAdminAudiobookChapterDto[];
+}
+
+export interface MusicAdminAudiobooksDto {
+  books: MusicAdminAudiobookDto[];
+  /**
+   * Записи чтецов (исполнителей с отметкой «Аудиокниги»), не разложенные ни
+   * по одной книге. В Медиатеке их нет, в разделе тоже — пока редакция не
+   * добавит их главами. Список, чтобы они не пропадали из виду.
+   */
+  unassigned: MusicAdminAudiobookChapterDto[];
+}
+
+export interface CreateMusicAudiobookRequest {
+  title: string;
+  author?: string | null;
+  description?: string | null;
+  readerId?: string | null;
+  /** Ключ залитой обложки. `null` — снять. */
+  coverKey?: string | null;
+  isPublished?: boolean;
+}
+
+export type UpdateMusicAudiobookRequest = Partial<CreateMusicAudiobookRequest>;
+
+/**
+ * Состав книги целиком, по порядку: добавить, убрать и переставить главы —
+ * одно и то же действие. Запись из чужой книги сервис не заберёт молча, а
+ * откажет с названием той книги.
+ */
+export interface SetMusicAudiobookChaptersRequest {
+  trackIds: string[];
 }
 
 // ===== Загрузка (этап 2) =====
@@ -518,6 +617,12 @@ export interface CompleteMusicUploadRequest {
    * имя на ней было бы подлогом. От остальных поле молча не учитывается.
    */
   artistId?: string | null;
+  /**
+   * Книга, в конец которой встаёт запись главой (VED-297): загрузка со
+   * страницы книги в админке. Только от редакции, как и `artistId`; без
+   * `artistId` запись получает чтеца книги.
+   */
+  audiobookId?: string | null;
 }
 
 export interface CompleteMusicUploadResponse {
@@ -547,7 +652,12 @@ export type MusicCoverMime = (typeof MUSIC_COVER_ACCEPTED_MIME)[number];
  * Чему принадлежит обложка. Входит в ключ объекта, поэтому выписанной под
  * плейлист ссылкой нельзя подменить обложку записи в каталоге.
  */
-export type MusicCoverScope = 'track' | 'artist' | 'album' | 'playlist';
+export type MusicCoverScope =
+  | 'track'
+  | 'artist'
+  | 'album'
+  | 'playlist'
+  | 'audiobook';
 
 export interface CreateMusicCoverUploadRequest {
   scope: MusicCoverScope;

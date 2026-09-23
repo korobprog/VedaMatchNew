@@ -43,12 +43,16 @@ const query = {
 };
 
 /**
- * Срез «не аудиокнига» (VED-237) стоит в `AND` каждой выдачи каталога:
- * записи отмеченных чтецов живут в своём разделе. Держим константой, чтобы
- * проверки линии и категорий читались про своё, а не про аудиокниги.
+ * Срез «не аудиокнига» (VED-237, VED-297) стоит в `AND` каждой выдачи
+ * каталога: главы книг и записи отмеченных чтецов живут в своём разделе.
+ * Держим константой, чтобы проверки линии и категорий читались про своё, а
+ * не про аудиокниги.
  */
 const NOT_AUDIOBOOK = {
-  OR: [{ artistId: null }, { artist: { isAudiobook: false } }],
+  AND: [
+    { OR: [{ artistId: null }, { artist: { isAudiobook: false } }] },
+    { audiobookChapter: { is: null } },
+  ],
 };
 
 /**
@@ -326,8 +330,8 @@ describe('MusicCatalogService — исполнители витрины', () => 
 });
 
 // VED-237: «отображение всех аудиокниг должно находиться внутри этой
-// кнопки» — значит, в каталоге их нет ни одной, а в разделе нет ничего,
-// кроме них. Оба среза строятся из одной отметки у исполнителя.
+// кнопки» — значит, в каталоге их нет ни одной: ни глав книг (VED-297), ни
+// записей отмеченных чтецов. Сам раздел — `music-audiobooks.service.ts`.
 describe('MusicCatalogService — раздел «Аудиокниги»', () => {
   it('витрина, поиск и счётчик обходят записи отмеченных чтецов', async () => {
     const { service: catalog, prisma } = service();
@@ -342,37 +346,5 @@ describe('MusicCatalogService — раздел «Аудиокниги»', () => 
     expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
       where: { isAudiobook: false },
     });
-  });
-
-  it('раздел показывает только записи чтецов и по алфавиту (VED-273)', async () => {
-    const prisma = prismaMock();
-    prisma.musicTrack.count.mockResolvedValue(42);
-    const { service: catalog } = service(prisma);
-
-    const result = await catalog.audiobooks(null);
-
-    expect(result.totalTracks).toBe(42);
-    const args = firstCallArg(prisma.musicTrack.findMany) as {
-      where: { AND: unknown[] };
-      orderBy: unknown;
-    };
-    expect(args.where.AND).toEqual([{ artist: { isAudiobook: true } }]);
-    expect(args.orderBy).toEqual([{ title: 'asc' }, { id: 'desc' }]);
-    expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
-      where: { isAudiobook: true },
-    });
-  });
-
-  it('линия слушателя действует и в разделе', async () => {
-    const prisma = prismaMock();
-    prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'ipbys' });
-    const { service: catalog } = service(prisma);
-
-    await catalog.audiobooks('u1');
-
-    expect(whereOf(prisma).AND).toEqual([
-      { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
-      { artist: { isAudiobook: true } },
-    ]);
   });
 });
