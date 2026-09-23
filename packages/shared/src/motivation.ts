@@ -1,10 +1,20 @@
-export type MotivationProfileType = 'user' | 'in_goodness' | 'yogi' | 'devotee';
-export type MotivationAudienceTrack = 'universal' | 'vaishnava';
-export type MotivationAttributionKind = 'exact_quote' | 'faithful_paraphrase' | 'ai_reflection';
-export type MotivationLanguage = 'ru' | 'en' | 'hi';
-export type MotivationReviewStatus = 'discovered' | 'source_verified' | 'text_review' | 'image_queued' | 'image_review' | 'published' | 'rejected' | 'failed';
-export type MotivationQuoteSourceType = 'vedamatch_library' | 'approved_web' | 'manual';
-export type MotivationTranslationKind = 'official' | 'vedamatch';
+export type MotivationProfileType = "user" | "in_goodness" | "yogi" | "devotee";
+export type MotivationAudienceTrack = "universal" | "vaishnava";
+export type MotivationAttributionKind =
+  "exact_quote" | "faithful_paraphrase" | "ai_reflection";
+export type MotivationLanguage = "ru" | "en" | "hi";
+export type MotivationReviewStatus =
+  | "discovered"
+  | "source_verified"
+  | "text_review"
+  | "image_queued"
+  | "image_review"
+  | "published"
+  | "rejected"
+  | "failed";
+export type MotivationQuoteSourceType =
+  "vedamatch_library" | "approved_web" | "manual";
+export type MotivationTranslationKind = "official" | "vedamatch";
 /**
  * Визуальные стили иллюстрации.
  *
@@ -14,18 +24,18 @@ export type MotivationTranslationKind = 'official' | 'vedamatch';
  * рисунку, какой бы стиль ни выбрали.
  */
 export type MotivationVisualStyle =
-  | 'spiritual_watercolor'
-  | 'cinematic_nature'
-  | 'indian_miniature'
-  | 'sacred_architecture'
-  | 'minimal_symbolism'
-  | 'warm_documentary'
-  | 'cosmic_contemplation'
-  | 'historical_editorial'
-  | 'cinematic_film'
-  | 'epic_wide'
-  | 'night_devotional'
-  | 'painterly_realism';
+  | "spiritual_watercolor"
+  | "cinematic_nature"
+  | "indian_miniature"
+  | "sacred_architecture"
+  | "minimal_symbolism"
+  | "warm_documentary"
+  | "cosmic_contemplation"
+  | "historical_editorial"
+  | "cinematic_film"
+  | "epic_wide"
+  | "night_devotional"
+  | "painterly_realism";
 
 export interface MotivationQuoteTranslationDto {
   language: MotivationLanguage;
@@ -48,7 +58,7 @@ export interface MotivationQuoteDto {
   translations: MotivationQuoteTranslationDto[];
 }
 
-export type MotivationPostOrigin = 'editorial' | 'user';
+export type MotivationPostOrigin = "editorial" | "user";
 
 /**
  * Фоновая запись Вдохновения — спокойный инструментал, под который читают.
@@ -149,11 +159,11 @@ export interface MotivationPostDto {
   feedTier?: MotivationFeedTier;
 }
 
-export type MotivationFeedTier = 'fresh' | 'unseen' | 'seen';
+export type MotivationFeedTier = "fresh" | "unseen" | "seen";
 
 // ===== Свой рилс (пользовательские посты) =====
 
-export type MotivationAiModerationMode = 'off' | 'assist' | 'autonomous';
+export type MotivationAiModerationMode = "off" | "assist" | "autonomous";
 
 /**
  * Откуда цитата. Своя — свободный текст без проверенного источника: такой
@@ -162,7 +172,7 @@ export type MotivationAiModerationMode = 'off' | 'assist' | 'autonomous';
  */
 export type MotivationReelSource =
   | {
-      kind: 'own';
+      kind: "own";
       text: string;
       author?: string | null;
       /**
@@ -171,7 +181,7 @@ export type MotivationReelSource =
        */
       work?: string | null;
     }
-  | { kind: 'vedabase'; text: string; bookSlug: string; chapterSlug: string };
+  | { kind: "vedabase"; text: string; bookSlug: string; chapterSlug: string };
 
 /** Найденный в книгах фрагмент: готов и к показу, и к проверке по главе. */
 export interface MotivationReelSourceHit {
@@ -214,13 +224,13 @@ export interface MotivationReelCreateInput {
  * поста: отдельного состояния у рилса нет, мастер лишь читает пост.
  */
 export type MotivationReelStage =
-  | 'ai_review'
-  | 'admin_review'
-  | 'rejected'
-  | 'generating'
-  | 'image_review'
-  | 'published'
-  | 'failed';
+  | "ai_review"
+  | "admin_review"
+  | "rejected"
+  | "generating"
+  | "image_review"
+  | "published"
+  | "failed";
 
 export interface MotivationReelDto {
   id: string;
@@ -250,19 +260,14 @@ export interface MotivationReelDto {
   videoRejectionNotice: string | null;
   /** Можно написать администратору: рилс отклонён и обращения ещё не было. */
   canAppeal: boolean;
-  sourceKind: MotivationReelSource['kind'];
+  sourceKind: MotivationReelSource["kind"];
   createdAt: string;
   post: MotivationPostDto;
 }
 
 /** Состояние ролика для кнопки «оживить»: очередь, работа, готово, сбой. */
 export type MotivationReelVideoState =
-  | 'none'
-  | 'queued'
-  | 'running'
-  | 'review'
-  | 'ready'
-  | 'failed';
+  "none" | "queued" | "running" | "review" | "ready" | "failed";
 
 /** Что автор выбирает перед сборкой ролика. Всё необязательно. */
 export interface MotivationReelVideoOptions {
@@ -273,7 +278,7 @@ export interface MotivationReelVideoOptions {
   /** Длина ролика в секундах; null — посчитать по озвучке или тексту. */
   seconds?: number | null;
   /** Движение в кадре: пресет вместо промпта. */
-  motion?: 'calm' | 'nature' | 'zoom' | null;
+  motion?: "calm" | "nature" | "zoom" | null;
 }
 
 /** Музыкальная подложка на выбор автору. */
@@ -302,7 +307,28 @@ export interface MotivationReelCreateResult {
   reason: string | null;
 }
 
-export interface MotivationFeedResponse { items: MotivationPostDto[]; nextCursor: string | null }
+export interface MotivationFeedResponse {
+  items: MotivationPostDto[];
+  nextCursor: string | null;
+  /**
+   * Первая страница начата не с начала ленты, а с места, где человек
+   * остановился, или с поста из `?from=` (VED-432). Лента предлагает «С
+   * начала»: листать можно только вперёд, и начало иначе не найти.
+   */
+  resumed?: boolean;
+}
+/**
+ * Где человек остановился в ленте раздела или источника (VED-432). Те же
+ * параметры, что у ленты: по ним сервер собирает ключ позиции.
+ */
+export interface MotivationFeedPositionUpdate {
+  /** Slug поста на экране. */
+  post: string;
+  category?: string;
+  style?: "art" | "cards";
+  speaker?: string;
+  work?: string;
+}
 /**
  * Пункт фильтра ленты по автору или источнику (VED-206). `label` — как
  * показать и что отправить в `?speaker=` / `?work=`: сервер сравнивает без
@@ -317,8 +343,12 @@ export interface MotivationFeedAttributionsDto {
   speakers: MotivationAttributionOptionDto[];
   works: MotivationAttributionOptionDto[];
 }
-export interface MotivationLikeResponse { likeCount: number; isLiked: boolean }
-export type MotivationPostStatus = 'draft' | 'generating' | 'published' | 'failed' | 'hidden';
+export interface MotivationLikeResponse {
+  likeCount: number;
+  isLiked: boolean;
+}
+export type MotivationPostStatus =
+  "draft" | "generating" | "published" | "failed" | "hidden";
 /** Сколько вдохновений в сервисе — цифра над лентой. */
 export interface MotivationStatsDto {
   published: number;
@@ -332,7 +362,13 @@ export interface MotivationAdminPostDto extends MotivationPostDto {
 }
 /** Последнее слово ИИ-модератора по посту — для карточки очереди. */
 export interface MotivationAdminAiVerdictDto {
-  action: 'ai_suggest' | 'ai_escalate' | 'ai_approve' | 'ai_reject' | 'ai_error' | 'ai_publish';
+  action:
+    | "ai_suggest"
+    | "ai_escalate"
+    | "ai_approve"
+    | "ai_reject"
+    | "ai_error"
+    | "ai_publish";
   /** Что предложила модель (approve/reject/escalate) и что исполнилось. */
   decision: string | null;
   resolved: string | null;
@@ -385,7 +421,7 @@ export interface MotivationAdminCandidateDto extends MotivationAdminPostDto {
  * рывок, а вшитая позже подпись при движении кадра начинает плыть.
  */
 export const DEFAULT_MOTIVATION_VIDEO_PROMPT =
-  'Gentle natural motion: soft breeze in the leaves, slow drifting clouds, warm sunrise light. Camera almost still.';
+  "Gentle natural motion: soft breeze in the leaves, slow drifting clouds, warm sunrise light. Camera almost still.";
 
 /**
  * Сохранение промптов из админки. Поля независимы: отправляется то, что
@@ -408,27 +444,27 @@ export interface MotivationPromptUpdate {
  * возьмёт деньги ровно так же, как за верный запрос.
  */
 export const MOTIVATION_VOICES = [
-  'Rachel',
-  'Aria',
-  'Roger',
-  'Sarah',
-  'Laura',
-  'Charlie',
-  'George',
-  'Callum',
-  'River',
-  'Liam',
-  'Charlotte',
-  'Alice',
-  'Matilda',
-  'Will',
-  'Jessica',
-  'Eric',
-  'Chris',
-  'Brian',
-  'Daniel',
-  'Lily',
-  'Bill',
+  "Rachel",
+  "Aria",
+  "Roger",
+  "Sarah",
+  "Laura",
+  "Charlie",
+  "George",
+  "Callum",
+  "River",
+  "Liam",
+  "Charlotte",
+  "Alice",
+  "Matilda",
+  "Will",
+  "Jessica",
+  "Eric",
+  "Chris",
+  "Brian",
+  "Daniel",
+  "Lily",
+  "Bill",
 ] as const;
 
 export type MotivationVoice = (typeof MOTIVATION_VOICES)[number];
@@ -438,18 +474,19 @@ export type MotivationVoice = (typeof MOTIVATION_VOICES)[number];
  * говорят о звучании, а выбирать вслепую из двадцати одного имени невозможно.
  * Голоса без подписи показываются своим именем.
  */
-export const MOTIVATION_VOICE_LABELS: Partial<Record<MotivationVoice, string>> = {
-  Aria: 'Женский, тёплый',
-  Sarah: 'Женский, спокойный',
-  Laura: 'Женский, светлый',
-  Alice: 'Женский, ясный',
-  Charlotte: 'Женский, мягкий',
-  Roger: 'Мужской, глубокий',
-  Charlie: 'Мужской, мягкий',
-  George: 'Мужской, строгий',
-  Brian: 'Мужской, спокойный',
-  Daniel: 'Мужской, ровный',
-};
+export const MOTIVATION_VOICE_LABELS: Partial<Record<MotivationVoice, string>> =
+  {
+    Aria: "Женский, тёплый",
+    Sarah: "Женский, спокойный",
+    Laura: "Женский, светлый",
+    Alice: "Женский, ясный",
+    Charlotte: "Женский, мягкий",
+    Roger: "Мужской, глубокий",
+    Charlie: "Мужской, мягкий",
+    George: "Мужской, строгий",
+    Brian: "Мужской, спокойный",
+    Daniel: "Мужской, ровный",
+  };
 
 /** Голос на выбор автору: подпись и готовый образец, если он уже записан. */
 export interface MotivationVoiceOptionDto {
@@ -469,19 +506,16 @@ export interface MotivationVoiceOptionDto {
 // ===== Жалобы =====
 
 export type MotivationReportReason =
-  | 'spam'
-  | 'offensive'
-  | 'wrong_source'
-  | 'other';
+  "spam" | "offensive" | "wrong_source" | "other";
 
 export const MOTIVATION_REPORT_REASONS: readonly {
   value: MotivationReportReason;
   label: string;
 }[] = [
-  { value: 'spam', label: 'Реклама или спам' },
-  { value: 'offensive', label: 'Оскорбление или вражда' },
-  { value: 'wrong_source', label: 'Неверный источник цитаты' },
-  { value: 'other', label: 'Другое' },
+  { value: "spam", label: "Реклама или спам" },
+  { value: "offensive", label: "Оскорбление или вражда" },
+  { value: "wrong_source", label: "Неверный источник цитаты" },
+  { value: "other", label: "Другое" },
 ];
 
 export interface MotivationReportInput {
@@ -555,11 +589,7 @@ export interface MotivationAdminReelDto {
 }
 
 export type MotivationAdminReelFilter =
-  | 'all'
-  | 'waiting'
-  | 'rejected'
-  | 'appealed'
-  | 'published';
+  "all" | "waiting" | "rejected" | "appealed" | "published";
 
 /** Счётчики за сегодня для вкладки «Модерация ИИ». */
 export interface MotivationAiStatsDto {
@@ -651,44 +681,44 @@ export type MotivationModelOption = { id: string; note: string };
  */
 export const MOTIVATION_VIDEO_MODELS: MotivationModelOption[] = [
   {
-    id: 'fal-ai/bytedance/seedance/v1/pro/fast/image-to-video',
-    note: '~$0.10 за 5 с в 720p ($1 за 1M токенов) — самый дешёвый',
+    id: "fal-ai/bytedance/seedance/v1/pro/fast/image-to-video",
+    note: "~$0.10 за 5 с в 720p ($1 за 1M токенов) — самый дешёвый",
   },
   {
-    id: 'wan/v2.6/image-to-video/flash',
-    note: '$0.25 за 5 с ($0.05 за секунду), плавное движение',
+    id: "wan/v2.6/image-to-video/flash",
+    note: "$0.25 за 5 с ($0.05 за секунду), плавное движение",
   },
   {
-    id: 'fal-ai/bytedance/seedance/v1/pro/image-to-video',
-    note: '~$0.26 за 5 с ($2.50 за 1M токенов) — качество выше fast',
+    id: "fal-ai/bytedance/seedance/v1/pro/image-to-video",
+    note: "~$0.26 за 5 с ($2.50 за 1M токенов) — качество выше fast",
   },
   {
-    id: 'fal-ai/vidu/q3/image-to-video',
-    note: '$0.35 за 5 с в 540p, $0.77 в 720p ($0.07 за секунду, ×2.2 за HD)',
+    id: "fal-ai/vidu/q3/image-to-video",
+    note: "$0.35 за 5 с в 540p, $0.77 в 720p ($0.07 за секунду, ×2.2 за HD)",
   },
 ];
 
 export const MOTIVATION_VOICE_MODELS: MotivationModelOption[] = [
   {
-    id: 'fal-ai/elevenlabs/tts/eleven-v3',
-    note: '$0.10 за 1000 знаков, 70+ языков',
+    id: "fal-ai/elevenlabs/tts/eleven-v3",
+    note: "$0.10 за 1000 знаков, 70+ языков",
   },
   {
-    id: 'fal-ai/elevenlabs/tts/multilingual-v2',
-    note: '$0.10 за 1000 знаков, ставка на стабильность',
+    id: "fal-ai/elevenlabs/tts/multilingual-v2",
+    note: "$0.10 за 1000 знаков, ставка на стабильность",
   },
   {
-    id: 'fal-ai/elevenlabs/tts/turbo-v2.5',
-    note: '$0.05 за 1000 знаков — вдвое дешевле, для рилсов участников',
+    id: "fal-ai/elevenlabs/tts/turbo-v2.5",
+    note: "$0.05 за 1000 знаков — вдвое дешевле, для рилсов участников",
   },
   {
-    id: 'fal-ai/minimax/speech-02-hd',
-    note: '$0.10 за 1000 знаков, 300+ голосов, свои имена голосов',
+    id: "fal-ai/minimax/speech-02-hd",
+    note: "$0.10 за 1000 знаков, 300+ голосов, свои имена голосов",
   },
 ];
 
 export const MOTIVATION_IMAGE_MODELS: MotivationModelOption[] = [
-  { id: 'gpt-image-2', note: 'через ваш relay' },
+  { id: "gpt-image-2", note: "через ваш relay" },
 ];
 
 /**
@@ -697,19 +727,22 @@ export const MOTIVATION_IMAGE_MODELS: MotivationModelOption[] = [
  * стоит как восемь минут Lyria.
  */
 export const MOTIVATION_MUSIC_MODELS: MotivationModelOption[] = [
-  { id: 'fal-ai/lyria2', note: '$0.10 за 30 с ($0.20 за минуту) — цена/качество' },
-  { id: 'cassetteai/music-generator', note: '$0.02 за минуту — заметно проще' },
   {
-    id: 'fal-ai/ace-step',
-    note: '$0.0002 за секунду ($0.012 за минуту) — дешевле всех, качество среднее',
+    id: "fal-ai/lyria2",
+    note: "$0.10 за 30 с ($0.20 за минуту) — цена/качество",
+  },
+  { id: "cassetteai/music-generator", note: "$0.02 за минуту — заметно проще" },
+  {
+    id: "fal-ai/ace-step",
+    note: "$0.0002 за секунду ($0.012 за минуту) — дешевле всех, качество среднее",
   },
   {
-    id: 'fal-ai/elevenlabs/music',
-    note: '$0.80 за минуту, округление вверх до минуты — самая дорогая',
+    id: "fal-ai/elevenlabs/music",
+    note: "$0.80 за минуту, округление вверх до минуты — самая дорогая",
   },
 ];
 
-export type MotivationTrackStatus = 'draft' | 'approved' | 'rejected';
+export type MotivationTrackStatus = "draft" | "approved" | "rejected";
 
 /**
  * Трек музыкальной подложки. Промпт хранится рядом не для истории: по нему
@@ -751,12 +784,7 @@ export type MotivationSettingsUpdate = Partial<{
 }>;
 
 export type MotivationVideoStatus =
-  | 'none'
-  | 'queued'
-  | 'running'
-  | 'review'
-  | 'ready'
-  | 'failed';
+  "none" | "queued" | "running" | "review" | "ready" | "failed";
 /**
  * Настройки ленты. `profileTypes` — какие профили показывать; пустой список
  * означает «как на самоидентификации», а не «ничего не показывать».
@@ -820,9 +848,15 @@ export interface MotivationAdminUpdate {
     locator?: string | null;
   };
 }
-export interface MotivationApproveTextInput { visualStyle?: MotivationVisualStyle }
-export interface MotivationRejectInput { reason: string }
-export interface MotivationRegenerateImageInput { visualStyle?: MotivationVisualStyle }
+export interface MotivationApproveTextInput {
+  visualStyle?: MotivationVisualStyle;
+}
+export interface MotivationRejectInput {
+  reason: string;
+}
+export interface MotivationRegenerateImageInput {
+  visualStyle?: MotivationVisualStyle;
+}
 
 export interface MotivationAuthorWatchDto {
   id: string;
@@ -833,7 +867,10 @@ export interface MotivationAuthorWatchDto {
   lastSearchedAt: string | null;
   lastResultCount: number;
 }
-export interface MotivationAuthorWatchInput { name: string; language?: string }
+export interface MotivationAuthorWatchInput {
+  name: string;
+  language?: string;
+}
 
 export interface MotivationSourceWatchDto {
   id: string;
@@ -844,7 +881,10 @@ export interface MotivationSourceWatchDto {
   lastFetchedAt: string | null;
   lastResultCount: number;
 }
-export interface MotivationSourceWatchInput { url: string; label?: string }
+export interface MotivationSourceWatchInput {
+  url: string;
+  label?: string;
+}
 
 /**
  * Категория справочника. Вложенность ровно в два уровня: у категории верхнего
@@ -874,11 +914,11 @@ export interface MotivationCategoryDto {
  * `both` — категория общая и стоит в меню той ленты, где в ней что-то есть;
  * пустая общая видна в обоих меню, пока редакция не решит, чья она.
  */
-export type MotivationCategoryFeed = 'both' | 'art' | 'cards';
+export type MotivationCategoryFeed = "both" | "art" | "cards";
 export const MOTIVATION_CATEGORY_FEEDS: readonly MotivationCategoryFeed[] = [
-  'both',
-  'art',
-  'cards',
+  "both",
+  "art",
+  "cards",
 ];
 
 export interface MotivationCategoryInput {
@@ -951,14 +991,17 @@ export interface MotivationManualPostResult {
   reviewStatus: MotivationReviewStatus;
 }
 
-export interface MotivationSearchResult { foundCount: number }
+export interface MotivationSearchResult {
+  foundCount: number;
+}
 
 /**
  * Тип книги в библиотеке. На цитаты разбираются только `scripture` и
  * `teaching`: в биографии повествование ведёт биограф, и его слова нельзя
  * приписывать герою книги.
  */
-export type MotivationBookKind = 'scripture' | 'teaching' | 'biography' | 'other';
+export type MotivationBookKind =
+  "scripture" | "teaching" | "biography" | "other";
 export interface MotivationBookDto {
   id: string;
   slug: string;
@@ -967,7 +1010,9 @@ export interface MotivationBookDto {
   language: string;
   kind: MotivationBookKind;
 }
-export interface MotivationBookKindInput { kind: MotivationBookKind }
+export interface MotivationBookKindInput {
+  kind: MotivationBookKind;
+}
 
 /** Живое состояние воркера Motivation: то, чего нет в базе. */
 export interface MotivationWorkerHealth {

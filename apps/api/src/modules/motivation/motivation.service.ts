@@ -37,6 +37,7 @@ import type {
   MotivationManualQuoteResult,
   MotivationPostDto,
   MotivationPreferenceUpdate,
+  MotivationFeedPositionUpdate,
   MotivationPromptUpdate,
   MotivationReportInput,
   MotivationReportResult,
@@ -114,7 +115,8 @@ import { MotivationCopyService } from './motivation-copy.service';
 import { MotivationGenerationService } from './motivation-generation.service';
 import { MotivationSourceFetchService } from './motivation-source-fetch.service';
 import { QuoteDiscoveryService } from './quote-discovery.service';
-import { pictureTitle } from './picture-post';
+import { freshPictureTitle, pictureTitle } from './picture-post';
+import { feedPositionKey, startOffset } from './feed-position';
 import { assertSafeFetchUrl } from './quote-source-policy';
 import { quoteFingerprint } from './quote-normalizer';
 import { libraryLinkFromAttribution } from './vedabase-link';
@@ -291,6 +293,18 @@ export class MotivationService {
        */
       post?: string;
       /**
+       * Slug поста, с которого начать ленту раздела или источника (VED-432):
+       * в отличие от `post`, дальше идёт не начало ленты, а следующие за ним
+       * посты по порядку. Поста в этой ленте нет — он открывается первым,
+       * как `post`.
+       */
+      from?: string;
+      /**
+       * Начать с места, где человек остановился в этой ленте (VED-432).
+       * Позиции нет — лента с начала.
+       */
+      resume?: boolean;
+      /**
        * Откуда взялась картинка: `uploaded` — фотография, которую принёс
        * человек, `generated` — работа нейросети. Нужен папке: под «готовым
        * афоризмом» имелись в виду именно наложенные на фотографии, а в общей
@@ -388,6 +402,23 @@ export class MotivationService {
        ведёт на адрес без фильтра — фильтр, выбранный после него, это новая
        просьба, и перемешанная книга на неё не отвечает. */
     const verseOrder = Boolean(workKey);
+    /* Лента раздела или источника читается подряд, как книга (VED-432):
+       первую страницу можно начать с поста из `?from=` или с места, где
+       человек остановился. Личная лента, избранное и «Вперемешку» позиции не
+       помнят — постоянного порядка у них нет. */
+    const positionKey =
+      query.favorites || (query.shuffle && !verseOrder)
+        ? null
+        : feedPositionKey({
+            style: query.style,
+            categories,
+            speakerKey,
+            workKey,
+          });
+    const startId =
+      positionKey && cursor.since === undefined
+        ? await this.feedStartId(userId, positionKey, query)
+        : null;
     const where = {
       ...(personalized
         ? {
@@ -528,12 +559,21 @@ export class MotivationService {
               : posts.map((post) => ({ post })),
             sourceOf,
           );
+    /** Первая страница начата с середины ленты (VED-432). */
+    let resumed = false;
     let page: {
       items: { post: Loaded; tier?: MotivationFeedTier }[];
       cursor: ReturnType<typeof feedPage>['cursor'];
     };
     if (verseOrder) {
-      const slice = await this.verseOrderSlice(where, cursor, limit, language);
+      const slice = await this.verseOrderSlice(
+        where,
+        cursor,
+        limit,
+        language,
+        startId,
+      );
+      resumed = slice.resumed;
       const loaded = slice.ids.length
         ? await this.prisma.motivationPost.findMany({
             where: { id: { in: slice.ids } },
@@ -548,13 +588,32 @@ export class MotivationService {
         }),
         cursor: slice.cursor,
       };
-    } else page = feedPage(order(posts), cursor, limit);
+    } else {
+      const ordered = order(posts);
+      const offset = startOffset(
+        ordered.map(({ post }) => post.id),
+        startId,
+      );
+      resumed = offset !== null && offset > 0;
+      page = feedPage(
+        ordered,
+        offset === null ? cursor : { ...cursor, universal: offset },
+        limit,
+      );
+    }
     // Закреплённый пост берём тем же запросом, что и ленту: у публичного DTO
     // нет ни автора, ни отметок зрителя, и слайд выходил бы обеднённым.
+    /* `?from=` поста, которого в этой ленте нет, открывает его первым, как
+       `?post=`: на цитату нажали — её и надо показать. */
+    const pinnedSlug =
+      query.post ??
+      (query.from && !page.items.some(({ post }) => post.slug === query.from)
+        ? query.from
+        : undefined);
     const pinned =
-      query.post && !cursor.since
+      pinnedSlug && !cursor.since
         ? await this.prisma.motivationPost.findFirst({
-            where: { slug: query.post, status: MotivationPostStatus.published },
+            where: { slug: pinnedSlug, status: MotivationPostStatus.published },
             include,
           })
         : null;
@@ -578,7 +637,74 @@ export class MotivationService {
               ...(shuffleSeed ? { shuffleSeed } : {}),
             })
           : null,
+      ...(resumed ? { resumed: true } : {}),
     };
+  }
+
+  /**
+   * Пост, с которого начать ленту раздела или источника (VED-432): из
+   * `?from=` или сохранённая позиция при `?resume=1`. Снятый с показа пост
+   * позицией не считается — лента тогда с начала.
+   */
+  private async feedStartId(
+    userId: string,
+    positionKey: string,
+    query: { from?: string; resume?: boolean },
+  ): Promise<string | null> {
+    if (query.from) {
+      const post = await this.prisma.motivationPost.findFirst({
+        where: { slug: query.from, status: MotivationPostStatus.published },
+        select: { id: true },
+      });
+      return post?.id ?? null;
+    }
+    if (!query.resume) return null;
+    const saved = await this.prisma.motivationFeedPosition.findUnique({
+      where: { userId_feedKey: { userId, feedKey: positionKey } },
+      select: { postId: true, post: { select: { status: true } } },
+    });
+    return saved?.post.status === MotivationPostStatus.published
+      ? saved.postId
+      : null;
+  }
+
+  /**
+   * Запомнить, где человек остановился в ленте раздела или источника
+   * (VED-432). Ключ собирается так же, как при чтении ленты, поэтому
+   * «Бхагавад-гита 2.7» из подписи и «Бхагавад-гита» с главной — одна
+   * позиция. Личная лента позиции не помнит — такой запрос молча
+   * пропускается.
+   */
+  async saveFeedPosition(
+    userId: string,
+    input: MotivationFeedPositionUpdate,
+  ): Promise<void> {
+    const text = (value: unknown) =>
+      typeof value === 'string' && value.trim() ? value : undefined;
+    const slug = text(input?.post);
+    if (!slug || slug.length > 200)
+      throw new BadRequestException('Не указан пост');
+    const style =
+      input.style === 'art' || input.style === 'cards'
+        ? input.style
+        : undefined;
+    const key = feedPositionKey({
+      style,
+      categories: feedCategories(text(input.category)),
+      speakerKey: attributionFilter(text(input.speaker)),
+      workKey: attributionFilter(text(input.work), sourceKey),
+    });
+    if (!key) return;
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { slug, status: MotivationPostStatus.published },
+      select: { id: true },
+    });
+    if (!post) return;
+    await this.prisma.motivationFeedPosition.upsert({
+      where: { userId_feedKey: { userId, feedKey: key } },
+      create: { userId, feedKey: key, postId: post.id },
+      update: { postId: post.id },
+    });
   }
 
   /**
@@ -591,6 +717,8 @@ export class MotivationService {
     cursor: ReturnType<typeof decodeMotivationCursor>,
     limit: number,
     language: string,
+    /** Пост, с которого начать первую страницу (VED-432). */
+    startId: string | null = null,
   ) {
     const light = await this.prisma.motivationPost.findMany({
       where,
@@ -605,17 +733,26 @@ export class MotivationService {
       orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
       take: VERSE_ORDER_LIMIT,
     });
+    const sorted = sortByLocator(
+      light.map(({ translations, ...post }) => ({
+        ...post,
+        title: translations[0]?.title ?? null,
+      })),
+    );
+    const offset = startOffset(
+      sorted.map((post) => post.id),
+      startId,
+    );
     const slice = feedPage(
-      sortByLocator(
-        light.map(({ translations, ...post }) => ({
-          ...post,
-          title: translations[0]?.title ?? null,
-        })),
-      ),
-      cursor,
+      sorted,
+      offset === null ? cursor : { ...cursor, universal: offset },
       limit,
     );
-    return { ids: slice.items.map((post) => post.id), cursor: slice.cursor };
+    return {
+      ids: slice.items.map((post) => post.id),
+      cursor: slice.cursor,
+      resumed: offset !== null && offset > 0,
+    };
   }
 
   /**
@@ -1030,8 +1167,23 @@ export class MotivationService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    /* Названия разделов — словами (VED-301): и в подписи карточки, и в
+       автоматическом заголовке «Картинка из раздела «…»», который иначе
+       показывал бы slug или прежнее название. */
+    const categoryTitles = new Map(
+      (
+        await this.prisma.motivationCategory.findMany({
+          select: { slug: true, title: true },
+        })
+      ).map((row) => [row.slug, row.title]),
+    );
     return posts.map((post) => ({
-      ...this.dto({ ...post, favorites: [], views: [] }),
+      ...this.dto({
+        ...post,
+        categoryTitle: categoryTitles.get(post.category) ?? post.category,
+        favorites: [],
+        views: [],
+      }),
       status: post.status,
       generationStage: post.generationStage,
       generationErrorCode: post.generationErrorCode,
@@ -1681,7 +1833,11 @@ export class MotivationService {
       captionInImage: Boolean(
         (post as { captionInImage?: boolean }).captionInImage,
       ),
-      title: t?.title ?? '',
+      // Название раздела в автоматическом заголовке — нынешнее (VED-301).
+      title: freshPictureTitle(
+        t?.title ?? '',
+        post.categoryTitle ?? post.category,
+      ),
       text: post.explanationHiddenAt ? quoteOf(t?.text ?? '') : (t?.text ?? ''),
       storyText: t?.storyText ?? '',
       imageText: t?.imageText ?? '',

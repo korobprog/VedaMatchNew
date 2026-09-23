@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -25,6 +26,7 @@ import type {
   MotivationManualPostInput,
   MotivationManualQuoteInput,
   MotivationPreferenceUpdate,
+  MotivationFeedPositionUpdate,
   MotivationPromptUpdate,
   MotivationAdminReelFilter,
   MotivationEventInput,
@@ -119,8 +121,13 @@ export class MotivationController {
     @Query('style') style?: string,
     @Query('speaker') speaker?: string,
     @Query('work') work?: string,
+    @Query('from') from?: string,
+    @Query('resume') resume?: string,
   ) {
     return this.service.feed(user.sub, {
+      // С поста или с места, где остановился (VED-432).
+      from: from || undefined,
+      resume: resume === '1',
       // Автор и источник (VED-206). Разбор и нормализацию делает сервис.
       speaker,
       work,
@@ -167,6 +174,20 @@ export class MotivationController {
   @UseGuards(AuthGuard)
   preference(@CurrentUser() user: AccessTokenPayload) {
     return this.service.preference(user.sub);
+  }
+  /**
+   * Где человек остановился в ленте раздела или источника (VED-432). Лента
+   * шлёт пост на экране, когда он продержался пару секунд; кнопки на главной
+   * потом открывают ленту с этого места.
+   */
+  @Put('motivation/feed-position')
+  @UseGuards(AuthGuard)
+  async saveFeedPosition(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() input: MotivationFeedPositionUpdate,
+  ): Promise<{ ok: true }> {
+    await this.service.saveFeedPosition(user.sub, input);
+    return { ok: true };
   }
   @Patch('motivation/preferences')
   @UseGuards(AuthGuard)

@@ -80,6 +80,28 @@ export function pictureTitle(text: string, categoryTitle: string): string {
   return `${(space > TITLE_MAX / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.!?—-]+$/, '')}…`;
 }
 
+/**
+ * Заголовок «Картинка из раздела «…»» с нынешним названием раздела (VED-301).
+ *
+ * Такой заголовок собирается один раз, при загрузке картинки без текста, и
+ * навсегда запоминал тогдашнее название: после переименования «Философии» в
+ * «Мудрость мира» редакция видела старое слово, а поправить его было негде —
+ * поля заголовка в форме нет. Поэтому название раздела подставляется при
+ * каждом чтении: переименование видно сразу и везде, а в базе ничего
+ * переписывать не нужно. Заголовок, написанный руками или собранный из
+ * цитаты, остаётся как есть.
+ */
+export function freshPictureTitle(
+  title: string,
+  categoryTitle: string,
+): string {
+  if (!AUTO_TITLE.test(title)) return title;
+  const current = categoryTitle.trim();
+  return current ? pictureTitle('', current) : title;
+}
+
+const AUTO_TITLE = /^Картинка из раздела «[^»]*»$/;
+
 /** Своя папка, а не `uploads/`: там кадры рилсов, обрезанные под 9:16. */
 export function pictureImageKey(postId: string, version: number): string {
   return `motivation/pictures/${postId}/v${version}.webp`;
