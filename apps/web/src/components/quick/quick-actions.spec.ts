@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   BUILTIN_QUICK_ACTIONS,
   DEFAULT_QUICK_ACTIONS,
+  PINNED_QUICK_ACTIONS,
   addCustomQuickAction,
   customQuickActionId,
+  lockedQuickActions,
   moveQuickAction,
   parseQuickConfig,
+  pinQuickActions,
   quickActionCatalog,
   quickActionMeta,
   removeCustomQuickAction,
@@ -26,7 +29,7 @@ describe("parseQuickConfig", () => {
   });
 
   it("возвращает сохранённый порядок как есть", () => {
-    expect(parseQuickConfig('{"v":3,"ids":["donate","aphorism"]}')).toEqual({
+    expect(parseQuickConfig('{"v":4,"ids":["donate","aphorism"]}')).toEqual({
       ids: ["donate", "aphorism"],
       custom: [],
     });
@@ -41,16 +44,16 @@ describe("parseQuickConfig", () => {
   it("молча выбрасывает кнопки, которых больше нет", () => {
     // В хранилище лежит набор с прошлой версии портала.
     expect(
-      parseQuickConfig('{"v":3,"ids":["donate","transits","qr"]}').ids,
+      parseQuickConfig('{"v":4,"ids":["donate","transits","qr"]}').ids,
     ).toEqual(["donate"]);
   });
 
   it("пустой набор — это выбор: панель можно опустошить", () => {
-    expect(parseQuickConfig('{"v":3,"ids":[]}').ids).toEqual([]);
+    expect(parseQuickConfig('{"v":4,"ids":[]}').ids).toEqual([]);
   });
 
   it("убирает дубли: две одинаковые кнопки — сбой, а не выбор", () => {
-    expect(parseQuickConfig('{"v":3,"ids":["donate","donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":4,"ids":["donate","donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -58,7 +61,7 @@ describe("parseQuickConfig", () => {
   it("сервисную кнопку узнаёт по слагу, а не по каталогу с сервера", () => {
     // Каталог приезжает запросом, а набор разбирается сразу при открытии.
     expect(
-      parseQuickConfig('{"v":3,"ids":["service:work","service:выдумка"]}').ids,
+      parseQuickConfig('{"v":4,"ids":["service:work","service:выдумка"]}').ids,
     ).toEqual(["service:work"]);
   });
 
@@ -70,14 +73,32 @@ describe("parseQuickConfig", () => {
       "search",
       "donate",
       "aphorism",
+      // VED-326: «Открытка» приехала ещё позже — она дописывается в конец.
+      "postcard",
     ]);
   });
 
-  it("запись второй версии принимает как есть: своих кнопок тогда не было", () => {
+  it("запись второй версии дополняется: своих кнопок тогда не было", () => {
     expect(parseQuickConfig('{"v":2,"ids":["donate"]}')).toEqual({
-      ids: ["donate"],
+      ids: ["donate", "postcard"],
       custom: [],
     });
+  });
+
+  /* VED-326: «Открытку» просили добавить всем, а не только новичкам. Правило
+     «выключенная кнопка остаётся выключенной» она не нарушает: выключить её
+     до этой версии было нельзя — кнопки не существовало. */
+  it("запись третьей версии получает «Открытку» в конец", () => {
+    expect(parseQuickConfig('{"v":3,"ids":["donate","aphorism"]}')).toEqual({
+      ids: ["donate", "aphorism", "postcard"],
+      custom: [],
+    });
+  });
+
+  it("«Открытка» не задваивается, если человек её уже включил", () => {
+    expect(parseQuickConfig('{"v":3,"ids":["postcard","donate"]}').ids).toEqual(
+      ["postcard", "donate"],
+    );
   });
 
   it("переживает круг через сохранение", () => {
@@ -90,7 +111,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка на чужой сайт в панель не попадает", () => {
     const raw = JSON.stringify({
-      v: 3,
+      v: 4,
       ids: ["custom:https://example.com"],
       custom: [{ label: "Не наше", href: "https://example.com" }],
     });
@@ -99,7 +120,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка без подписи — сбой хранилища, а не кнопка", () => {
     const raw = JSON.stringify({
-      v: 3,
+      v: 4,
       ids: ["custom:/work"],
       custom: [{ label: "  ", href: "/work" }],
     });
@@ -253,13 +274,68 @@ describe("каталог кнопок", () => {
     expect(quickActionMeta("service:выдумка")).toBeNull();
   });
 
-  it("три кнопки перемещения по порталу стоят в панели по умолчанию", () => {
-    // VED-163: окно, закладки и поиск — не «что держать под рукой».
+  it("закреплённые три стоят первыми в наборе по умолчанию", () => {
+    // VED-326, п. 6: заказчик обвёл их на скриншоте и назвал порядок.
     expect(DEFAULT_QUICK_ACTIONS.slice(0, 3)).toEqual([
-      "window",
-      "bookmarks",
       "search",
+      "donate",
+      "invite",
     ]);
+    expect(PINNED_QUICK_ACTIONS).toEqual(["search", "donate", "invite"]);
+  });
+
+  it("способы перемещаться по порталу из панели по умолчанию не ушли", () => {
+    // VED-163: окно, закладки и поиск — не «что держать под рукой».
+    for (const id of ["window", "bookmarks", "search"])
+      expect(DEFAULT_QUICK_ACTIONS).toContain(id);
+  });
+
+  it("«Открытка» ведёт в «Открытки» вперемешку, как «Афоризм» — в ленту", () => {
+    // VED-326: «по принципу Афоризма» — тот же случайный порядок, но вторая
+    // лента Вдохновения. Вкладка обязана ехать вместе с порядком, иначе
+    // человек окажется в «Для вас».
+    expect(quickActionMeta("postcard")?.href).toBe(
+      "/motivation?tab=cards&order=random",
+    );
+    expect(quickActionMeta("aphorism")?.href).toBe("/motivation?order=random");
+  });
+});
+
+// VED-326, п. 6: три кнопки, которые человек не выключает.
+describe("закреплённые кнопки", () => {
+  it("у обычного человека закреплены три, у админа — ни одной", () => {
+    expect(lockedQuickActions(false)).toEqual(["search", "donate", "invite"]);
+    expect(lockedQuickActions(true)).toEqual([]);
+  });
+
+  it("недостающие закреплённые добавляются, и всегда первыми", () => {
+    expect(pinQuickActions(["info", "donate"], PINNED_QUICK_ACTIONS)).toEqual([
+      "search",
+      "donate",
+      "invite",
+      "info",
+    ]);
+  });
+
+  it("порядок закреплённых не зависит от того, как их переставили", () => {
+    expect(
+      pinQuickActions(["invite", "info", "donate", "search"], PINNED_QUICK_ACTIONS),
+    ).toEqual(["search", "donate", "invite", "info"]);
+  });
+
+  it("у админа набор остаётся таким, каким он его оставил", () => {
+    expect(pinQuickActions(["info", "donate"], lockedQuickActions(true))).toEqual([
+      "info",
+      "donate",
+    ]);
+  });
+
+  it("закреплённую кнопку не вытолкнуть снизу, а обычную не поднять выше них", () => {
+    const ids = ["search", "donate", "invite", "info"];
+    // Четвёртая кнопка «вверх» — упирается в закреплённые.
+    expect(moveQuickAction(ids, "info", -1, 3)).toEqual(ids);
+    // Сама закреплённая тоже не двигается: её место занято границей.
+    expect(moveQuickAction(ids, "invite", 1, 3)).toEqual(ids);
   });
 
   it("идентификаторы не повторяются", () => {

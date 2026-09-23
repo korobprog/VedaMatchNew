@@ -29,6 +29,7 @@ export type BuiltinQuickActionId =
   | "search"
   | "assistant"
   | "aphorism"
+  | "postcard"
   | "collections"
   | "calendar"
   | "calculator"
@@ -95,6 +96,16 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     label: "Афоризм",
     hint: "Открывает Вдохновение вперемешку — случайная цитата вместо ленты по порядку",
     href: "/motivation?order=random",
+  },
+  {
+    id: "postcard",
+    kind: "builtin",
+    // VED-326: та же кнопка, что «Афоризм», но для второй ленты Вдохновения.
+    // Открытка — это цитата, УЖЕ напечатанная на картинке: её пересылают
+    // целиком, а афоризм читают. Два разных повода зайти, и оба случайные.
+    label: "Открытка",
+    hint: "Открывает «Открытки» вперемешку — случайная цитата, напечатанная на картинке",
+    href: "/motivation?tab=cards&order=random",
   },
   {
     id: "collections",
@@ -175,27 +186,76 @@ const ADDED_QUICK_ACTIONS: readonly QuickActionId[] = [
 ];
 
 /**
- * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
- * поэтому набор перестал быть просто списком идентификаторов.
+ * Кнопка «Открытка» приехала в четвёртой версии записи (VED-326).
+ *
+ * Правило «выключенная кнопка остаётся выключенной» она не нарушает:
+ * выключить её человек ещё не мог — до этой версии её не существовало. Раз
+ * заказчик просил её добавить, она обязана доехать и до тех, у кого панель
+ * давно настроена, иначе «добавил» означает «добавил новичкам».
  */
-const CONFIG_VERSION = 3;
+const QUICK_ACTIONS_ADDED_IN_V4: readonly QuickActionId[] = ["postcard"];
+
+/**
+ * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
+ * четвёртая — «Открытку» (VED-326).
+ */
+const CONFIG_VERSION = 4;
+
+/**
+ * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
+ *
+ * Заказчик обвёл их на скриншоте и назвал порядок: «Поиск», «Поддержать»,
+ * «Пригласить». Это не «что держать под рукой» — это три вещи, которые
+ * порталу нужны от каждого гостя: найти, помочь деньгами, позвать своих.
+ * Человек, который случайно снял с них галочку, о них больше не вспомнит.
+ *
+ * У админов их не закрепляем: админ живёт в панели каждый день и набирает её
+ * под свою работу, а «Поддержать» ему показывать незачем.
+ */
+export const PINNED_QUICK_ACTIONS: readonly QuickActionId[] = [
+  "search",
+  "donate",
+  "invite",
+];
+
+const NOTHING_PINNED: readonly QuickActionId[] = [];
+
+/** Что закреплено у этого человека. У админа — ничего. */
+export function lockedQuickActions(admin: boolean): readonly QuickActionId[] {
+  return admin ? NOTHING_PINNED : PINNED_QUICK_ACTIONS;
+}
+
+/**
+ * Поставить закреплённые кнопки в начало в их порядке, добавив недостающие.
+ *
+ * Применяется и при чтении хранилища, и при каждом сохранении: закрепление,
+ * которое переживает только загрузку страницы, — это не закрепление.
+ */
+export function pinQuickActions(
+  ids: readonly QuickActionId[],
+  locked: readonly QuickActionId[],
+): QuickActionId[] {
+  if (locked.length === 0) return [...ids];
+  return [...locked, ...ids.filter((id) => !locked.includes(id))];
+}
 
 /**
  * Что стоит в панели у человека, который ничего не настраивал.
  *
- * Не все двенадцать: заполненная до краёв с первого открытия панель не
+ * Не все четырнадцать: заполненная до краёв с первого открытия панель не
  * читается как настраиваемая — её начинают разбирать, а не собирать.
- * Окно, закладки и поиск стоят первыми и включены всегда (VED-163): это не
- * «что держать под рукой», а три способа перемещаться по порталу, и человек,
- * который их не включил, просто не узнает, что они есть.
+ * Первыми — закреплённые три (VED-326), за ними способы перемещаться по
+ * порталу: окно, закладки (VED-163). Человек, который их не включил, просто
+ * не узнает, что они есть.
  */
 export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
-  ...ADDED_QUICK_ACTIONS,
+  ...PINNED_QUICK_ACTIONS,
+  "window",
+  "bookmarks",
   "assistant",
   "aphorism",
+  "postcard",
   "calendar",
-  "invite",
-  "donate",
   "support",
 ];
 
@@ -313,8 +373,17 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
       const custom = parseCustom(record.custom);
       return { ids: dedupe(record.ids, custom), custom };
     }
+    // Третья версия: всё то же, плюс кнопки, которых тогда не было.
+    if (record.v === 3) {
+      const custom = parseCustom(record.custom);
+      return { ids: withAdded(dedupe(record.ids, custom), QUICK_ACTIONS_ADDED_IN_V4), custom };
+    }
     // Вторая версия: те же идентификаторы, своих кнопок ещё не было.
-    if (record.v === 2) return { ids: dedupe(record.ids, []), custom: [] };
+    if (record.v === 2)
+      return {
+        ids: withAdded(dedupe(record.ids, []), QUICK_ACTIONS_ADDED_IN_V4),
+        custom: [],
+      };
     return fallback();
   }
 
@@ -322,7 +391,18 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
   // ставим их первыми — иначе человек с настроенной панелью о них не узнает.
   const kept = dedupe(parsed, []);
   const missing = ADDED_QUICK_ACTIONS.filter((id) => !kept.includes(id));
-  return { ids: [...missing, ...kept], custom: [] };
+  return {
+    ids: withAdded([...missing, ...kept], QUICK_ACTIONS_ADDED_IN_V4),
+    custom: [],
+  };
+}
+
+/** Дописать в конец кнопки, которых в записи ещё не могло быть. */
+function withAdded(
+  ids: readonly QuickActionId[],
+  added: readonly QuickActionId[],
+): QuickActionId[] {
+  return [...ids, ...added.filter((id) => !ids.includes(id))];
 }
 
 export function serializeQuickConfig(config: QuickConfig): string {
@@ -391,15 +471,21 @@ export function toggleQuickAction(
  * Сдвинуть кнопку на шаг. Кнопками, а не перетаскиванием: панель открывают
  * с телефона одной рукой, и жест на восьми строках промахивается чаще, чем
  * попадает.
+ *
+ * `floor` — сколько первых мест заняты закреплёнными кнопками (VED-326):
+ * ниже этой границы не спускается закреплённая и выше неё не поднимается
+ * обычная. Иначе «вверх» у четвёртой кнопки выталкивал бы «Пригласить» с
+ * его места, а закрепление значило бы только «включена».
  */
 export function moveQuickAction(
   ids: readonly QuickActionId[],
   id: QuickActionId,
   delta: -1 | 1,
+  floor = 0,
 ): QuickActionId[] {
   const at = ids.indexOf(id);
   const to = at + delta;
-  if (at === -1 || to < 0 || to >= ids.length) return [...ids];
+  if (at < floor || to < floor || to >= ids.length) return [...ids];
   const next = [...ids];
   [next[at], next[to]] = [next[to], next[at]];
   return next;

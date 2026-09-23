@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import ru from "../../../messages/ru.json";
 import { QuickPanel } from "./quick-panel";
+import { resetDonationSettings } from "@/lib/donation-settings";
 import { resetPortalWindowsForTests } from "./portal-windows-store";
 
 const push = vi.fn();
@@ -54,6 +55,9 @@ beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
   resetPortalWindowsForTests();
+  // Настройки пожертвований помнятся на весь сеанс страницы (VED-380), а у
+  // теста сеанс свой: иначе ответ одного доезжает до следующего.
+  resetDonationSettings();
   push.mockClear();
   replace.mockClear();
   stubFetch();
@@ -63,13 +67,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function openPanel() {
+async function openPanel({ admin = false } = {}) {
   const user = userEvent.setup();
   // Названия разделов в списке закладок приходят из каталога сервисов, а он
   // знает язык интерфейса — отсюда провайдер вокруг панели.
   render(
     <NextIntlClientProvider locale="ru" messages={ru}>
-      <QuickPanel />
+      <QuickPanel admin={admin} />
     </NextIntlClientProvider>,
   );
   await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
@@ -168,17 +172,93 @@ describe("QuickPanel", () => {
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
     await user.click(screen.getByRole("button", { name: "Выше: Афоризм" }));
 
+    // Первые три — закреплённые (VED-326): стрелка двигает кнопку в своей
+    // части списка, а не выталкивает «Пригласить» с третьего места.
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids).toEqual([
+      "search",
+      "donate",
+      "invite",
       "aphorism",
       "calendar",
+      "postcard",
     ]);
   });
 
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":2,"ids":[]}');
-    await openPanel();
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":[]}');
+    // Опустошить панель может только админ: у остальных три кнопки
+    // закреплены (VED-326), и пустой она не бывает.
+    await openPanel({ admin: true });
 
     expect(screen.getByText(/Панель пуста/)).toBeInTheDocument();
+  });
+
+  /* VED-326, п. 6: «Поиск», «Поддержать», «Пригласить» стоят первыми и не
+     выключаются. Заказчик обвёл их на скриншоте — это то, что порталу нужно
+     от каждого гостя, а случайно снятую галочку никто не вернёт. */
+  it("три закреплённые кнопки стоят первыми, даже если их выключали", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["calendar"]}');
+    stubFetch().mockImplementation((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          String(url).includes("/billing/donation")
+            ? {
+                enabled: true,
+                text: "",
+                requisites: [{ kind: "sbp", label: "СБП", value: "+7" }],
+              }
+            : {},
+      }),
+    );
+    await openPanel();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Поддержать/ })).toBeInTheDocument(),
+    );
+
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    // Шторка доната живёт внутри своей плитки, поэтому сверяем начало строки,
+    // а не её целиком.
+    const tiles = within(panel)
+      .getAllByRole("listitem")
+      .map((item) => item.textContent?.slice(0, 10));
+    expect(tiles.slice(0, 3)).toEqual(["Поиск", "Поддержать", "Пригласить"]);
+  });
+
+  it("галочка у закреплённой кнопки не снимается", async () => {
+    const user = await openPanel();
+
+    await user.click(screen.getByRole("button", { name: "Настроить панель" }));
+    const toggle = screen.getByRole("switch", { name: /Поиск/ });
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    await user.click(toggle);
+
+    expect(
+      JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)?.ids ?? [
+        "search",
+      ],
+    ).toContain("search");
+  });
+
+  it("у админа закреплений нет: панель у него рабочая", async () => {
+    const user = await openPanel({ admin: true });
+
+    await user.click(screen.getByRole("button", { name: "Настроить панель" }));
+    await user.click(screen.getByRole("switch", { name: /Поиск/ }));
+
+    expect(
+      JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids,
+    ).not.toContain("search");
+  });
+
+  // VED-326: «Открытка» — то же, что «Афоризм», но для второй ленты.
+  it("«Открытка» открывает «Открытки» вперемешку", async () => {
+    await openPanel();
+
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    expect(
+      within(panel).getByRole("link", { name: /Открытка/ }),
+    ).toHaveAttribute("href", "/motivation?tab=cards&order=random");
   });
 
   it("считает в калькуляторе, не уводя со страницы", async () => {
@@ -325,12 +405,68 @@ describe("QuickPanel", () => {
   });
 
   it("выключенные пожертвования не рисуют кнопку доната", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":2,"ids":["donate"]}');
-    await openPanel();
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    await openPanel({ admin: true });
 
     // Так же, как везде на портале: реквизитов нет — кнопки нет.
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: /Поддержать/ })).not.toBeInTheDocument(),
+      expect(screen.queryByText("Поддержать")).not.toBeInTheDocument(),
     );
+  });
+
+  /* VED-380. Заказчик заметил, что «Поддержать» появляется с запаздыванием:
+     плитка ходила за реквизитами сама и до ответа не рисовала ничего.
+     Реквизиты нужны шторке, а не плитке, — и пока ответа нет, плитка стоит
+     на месте и ведёт на /donate, ту же страницу с реквизитами. */
+  it("плитка «Поддержать» стоит в панели, не дожидаясь сервера", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    // Сервер молчит навсегда: именно это и было видно как запаздывание.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => new Promise(() => {})),
+    );
+
+    await openPanel({ admin: true });
+
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    expect(
+      within(panel).getByRole("link", { name: /Поддержать/ }),
+    ).toHaveAttribute("href", "/donate");
+  });
+
+  it("ответ сервера помнится на весь сеанс: второе открытие не ждёт", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    const fetchMock = stubFetch();
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes("/billing/donation")
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({
+              enabled: true,
+              text: "",
+              requisites: [{ kind: "sbp", label: "СБП", value: "+7" }],
+            }),
+          })
+        : Promise.resolve({ ok: true, json: async () => ({}) }),
+    );
+
+    const user = await openPanel({ admin: true });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Поддержать/ })).toBeInTheDocument(),
+    );
+    const asked = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).includes("/billing/donation"),
+    ).length;
+
+    // Закрыли и открыли снова: кнопка на месте сразу, нового запроса нет.
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+    await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+
+    expect(screen.getByRole("button", { name: /Поддержать/ })).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("/billing/donation"),
+      ),
+    ).toHaveLength(asked);
   });
 });

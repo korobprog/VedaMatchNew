@@ -620,9 +620,12 @@
   animation: vm-quick-attention 1.6s ease-in-out 3;
 }
 
-/* Навёл, нажал или добрался табом — подсветка ни к чему: человек уже здесь. */
+/* Навёл, нажал или добрался табом — подсветка ни к чему: человек уже здесь.
+   `:has(:focus-visible)` обязателен: подсветка висит на обёртке плитки
+   (VED-380), а фокус достаётся кнопке внутри неё. */
 .vm-quick-attention:hover,
-.vm-quick-attention:focus-visible {
+.vm-quick-attention:focus-visible,
+.vm-quick-attention:has(:focus-visible) {
   animation: none;
 }
 

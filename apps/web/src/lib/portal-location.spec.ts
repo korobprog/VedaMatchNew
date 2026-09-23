@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { portalLocationLabel, portalLocationSlug } from "./portal-location";
+import {
+  PORTAL_LOCATION_LIMIT,
+  portalLocation,
+  portalLocationLabel,
+  portalLocationLabels,
+  portalLocationOptions,
+  portalLocationSlug,
+  portalLocationStep,
+  portalLocationTitle,
+  shortenPortalLocation,
+} from "./portal-location";
 
 describe("portalLocationSlug", () => {
   it("берёт первый сегмент пути", () => {
@@ -14,26 +24,175 @@ describe("portalLocationSlug", () => {
   });
 });
 
-describe("portalLocationLabel", () => {
+describe("portalLocationStep", () => {
+  it("берёт второй сегмент", () => {
+    expect(portalLocationStep("/work/boards/1")).toBe("boards");
+    expect(portalLocationStep("/music/playlists?tab=all")).toBe("playlists");
+    expect(portalLocationStep("/work")).toBe("");
+  });
+});
+
+describe("portalLocation", () => {
   it("сервис называет по-человечески", () => {
-    expect(portalLocationLabel("/work/boards/1")).toBe("Работа");
-    expect(portalLocationLabel("/union")).toBe("Знакомства");
+    expect(portalLocation("/union")).toEqual({ root: "Знакомства", step: null });
   });
 
   it("имя берётся из каталога, а не из кода: правка в админке доезжает", () => {
-    expect(portalLocationLabel("/work", () => "Служение")).toBe("Служение");
+    expect(portalLocation("/work", () => "Служение").root).toBe("Служение");
   });
 
   it("разделы самого портала тоже названы", () => {
-    expect(portalLocationLabel("/")).toBe("Главная");
-    expect(portalLocationLabel("/notifications")).toBe("Уведомления");
+    expect(portalLocation("/")).toEqual({ root: "Главная", step: null });
+    expect(portalLocation("/notifications").root).toBe("Уведомления");
+  });
+
+  it("VED-374: Блог-лента опознаётся, а не зовётся «Порталом»", () => {
+    expect(portalLocation("/blog")).toEqual({ root: "Блог", step: null });
+    expect(portalLocation("/blog/authors/42")).toEqual({
+      root: "Блог",
+      step: "Авторы",
+    });
+  });
+
+  it("VED-374: ступень внутри сервиса", () => {
+    expect(portalLocation("/work/boards/7")).toEqual({
+      root: "Работа",
+      step: "Доска",
+    });
+    expect(portalLocation("/music/playlists")).toEqual({
+      root: "Музыка",
+      step: "Плейлисты",
+    });
+  });
+
+  it("незнакомая ступень не показывается: на втором месте бывает номер", () => {
+    expect(portalLocation("/chat/8f21ab")).toEqual({
+      root: "Общение",
+      step: null,
+    });
+    expect(portalLocation("/notices/1487")).toEqual({
+      root: "Объявления",
+      step: null,
+    });
   });
 
   it("незнакомый адрес — «Портал», а не выдуманное название", () => {
-    expect(portalLocationLabel("/какая-то-новая-страница")).toBe("Портал");
+    expect(portalLocation("/kakaya-to-novaya-stranica")).toEqual({
+      root: "Портал",
+      step: null,
+    });
+  });
+
+  it("у неопознанного корня ступень не выдумывается", () => {
+    expect(portalLocation("/nechto/boards")).toEqual({
+      root: "Портал",
+      step: null,
+    });
   });
 
   it("окно, которое ещё не открывали", () => {
-    expect(portalLocationLabel(null)).toBe("Новое окно");
+    expect(portalLocation(null)).toEqual({ root: "Новое окно", step: null });
+  });
+});
+
+describe("portalLocationTitle", () => {
+  it("в подсказке место названо целиком", () => {
+    expect(portalLocationTitle("/motivation/collections")).toBe(
+      "Вдохновение · Картинки",
+    );
+    expect(portalLocationTitle("/blog")).toBe("Блог");
+  });
+});
+
+describe("shortenPortalLocation", () => {
+  it("помещается целиком — показываем целиком", () => {
+    expect(shortenPortalLocation("Работа", "Доска", 14)).toBe("Работа · Доска");
+  });
+
+  it("не помещается — выбрасываем начало, ступень остаётся", () => {
+    expect(shortenPortalLocation("Вдохновение", "Картинки", 14)).toBe(
+      "Картинки",
+    );
+  });
+
+  it("длинная ступень режется с конца многоточием", () => {
+    expect(shortenPortalLocation("Астрология", "Совместимость", 10)).toBe(
+      "Совместим…",
+    );
+  });
+
+  it("пробел перед многоточием не остаётся", () => {
+    expect(shortenPortalLocation("Портал", "Кого найти", 6)).toBe("Кого…");
+  });
+
+  it("корень без ступени тоже режется, а не переносится", () => {
+    expect(shortenPortalLocation("Добро пожаловать", null, 14)).toBe(
+      "Добро пожалов…",
+    );
+  });
+});
+
+describe("portalLocationLabel", () => {
+  it("VED-374: ступень видна, корневого сервиса одного мало", () => {
+    expect(portalLocationLabel("/blog/authors/42")).toBe("Блог · Авторы");
+    expect(portalLocationLabel("/work/planner/1")).toBe("Планировщик");
+  });
+
+  it("подпись не длиннее предела: иначе съезжает значок окна", () => {
+    const urls = [
+      "/blog",
+      "/blog/authors/42",
+      "/astro/compatibility",
+      "/motivation/collections",
+      "/music/audiobooks",
+      "/work/planner/1",
+      "/union/recommendations",
+      "/welcome",
+      "/wellness/products/4601234567890",
+      null,
+    ];
+    for (const url of urls) {
+      expect(portalLocationLabel(url).length).toBeLessThanOrEqual(
+        PORTAL_LOCATION_LIMIT,
+      );
+    }
+  });
+
+  it("длинное имя из каталога тоже укладывается в строку", () => {
+    expect(
+      portalLocationLabel("/work", () => "Совместное служение").length,
+    ).toBeLessThanOrEqual(PORTAL_LOCATION_LIMIT);
+  });
+});
+
+/* VED-391 сузил плитку до четырёх в ряд, и один вариант подписи перестал
+   подходить всем экранам: плитка меряет лестницу вариантов сама. */
+describe("portalLocationOptions", () => {
+  it("от полного к короткому: сначала «корень · ступень», потом ступень", () => {
+    expect(portalLocationOptions("Блог", "Авторы")).toEqual([
+      "Блог · Авторы",
+      "Авторы",
+    ]);
+  });
+
+  it("полное длиннее предела — в лестнице его нет вовсе", () => {
+    expect(portalLocationOptions("Вдохновение", "Картинки")).toEqual([
+      "Картинки",
+    ]);
+  });
+
+  it("без ступени — один корень", () => {
+    expect(portalLocationOptions("Работа", null)).toEqual(["Работа"]);
+  });
+
+  it("первый вариант — ровно то, что пишет portalLocationLabel", () => {
+    for (const url of ["/blog/authors/1", "/work/planner/1", "/union", null]) {
+      expect(portalLocationLabels(url)[0]).toBe(portalLocationLabel(url));
+    }
+  });
+
+  it("ни один вариант не длиннее предела", () => {
+    for (const option of portalLocationLabels("/astro/compatibility"))
+      expect(option.length).toBeLessThanOrEqual(PORTAL_LOCATION_LIMIT);
   });
 });
