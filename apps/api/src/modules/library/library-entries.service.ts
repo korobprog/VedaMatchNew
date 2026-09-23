@@ -185,10 +185,7 @@ export class LibraryEntriesService {
       select: { spiritualStage: true, lineage: true },
     });
     return user
-      ? {
-          spiritualStage: user.spiritualStage,
-          lineage: toLineageId(user.lineage),
-        }
+      ? { spiritualStage: user.spiritualStage, lineage: toLineageId(user.lineage) }
       : null;
   }
 
@@ -212,10 +209,7 @@ export class LibraryEntriesService {
       }),
       this.lineageViewer(viewerId),
     ]);
-    return resolveContentLineage(
-      viewer,
-      toLineagePreference(preference?.lineage),
-    );
+    return resolveContentLineage(viewer, toLineagePreference(preference?.lineage));
   }
 
   /**
@@ -339,9 +333,7 @@ export class LibraryEntriesService {
 
     const language = normalizeLanguage(body.contentLanguage);
     // Обложку тянуть неоткуда, когда нет адреса.
-    const previewUrl = normalized
-      ? await resolvePreviewUrl(normalized.url)
-      : null;
+    const previewUrl = normalized ? await resolvePreviewUrl(normalized.url) : null;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.libraryEntry.create({
@@ -550,13 +542,9 @@ export class LibraryEntriesService {
 
     if (body.titleRu !== undefined || body.titleEn !== undefined) {
       const titleRu =
-        body.titleRu !== undefined
-          ? trimOrNull(body.titleRu)
-          : existing.titleRu;
+        body.titleRu !== undefined ? trimOrNull(body.titleRu) : existing.titleRu;
       const titleEn =
-        body.titleEn !== undefined
-          ? trimOrNull(body.titleEn)
-          : existing.titleEn;
+        body.titleEn !== undefined ? trimOrNull(body.titleEn) : existing.titleEn;
       if (!titleRu && !titleEn) throw new BadRequestException('title_required');
       for (const title of [titleRu, titleEn]) {
         if (title && title.length > MAX_TITLE_LENGTH) {
@@ -631,7 +619,7 @@ export class LibraryEntriesService {
 
       if (categoryIds) {
         const currentIds = existing.categories.map((link) => link.category.id);
-        const toRemove = currentIds.filter((cid) => !categoryIds.includes(cid));
+        const toRemove = currentIds.filter((cid) => !categoryIds!.includes(cid));
         const toAdd = categoryIds.filter((cid) => !currentIds.includes(cid));
 
         if (toRemove.length > 0) {
@@ -807,9 +795,7 @@ export class LibraryEntriesService {
       select: { id: true, slug: true, name: true },
       orderBy: { name: 'asc' },
     });
-    const byId = new Map(
-      counts.map((row) => [row.communityId, row._count._all]),
-    );
+    const byId = new Map(counts.map((row) => [row.communityId, row._count._all]));
 
     return communities.map((community) => ({
       id: community.id,
@@ -828,7 +814,10 @@ export class LibraryEntriesService {
     const cursor = decodeCursor(filters.cursor);
     const where: Prisma.LibraryEntryWhereInput = { status: 'published' };
 
-    if (filters.type && FEED_TYPES.includes(filters.type as LibraryEntryType)) {
+    if (
+      filters.type &&
+      FEED_TYPES.includes(filters.type as LibraryEntryType)
+    ) {
       where.type = filters.type as LibraryEntryType;
     } else if (filters.excludeType === 'shloka') {
       where.type = { not: 'shloka' };
