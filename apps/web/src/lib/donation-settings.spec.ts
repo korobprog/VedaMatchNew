@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DonationSettingsDto } from "@vedamatch/shared";
 import {
   donateTileView,
   loadDonationSettings,
@@ -6,7 +7,7 @@ import {
   resetDonationSettings,
 } from "./donation-settings";
 
-const ENABLED = {
+const ENABLED: DonationSettingsDto = {
   enabled: true,
   text: "",
   requisites: [{ kind: "sbp", label: "СБП", value: "+7 900 000-00-00" }],
