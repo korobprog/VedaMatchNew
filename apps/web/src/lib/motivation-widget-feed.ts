@@ -10,28 +10,57 @@ import { buildMotivationQuickAccess } from "./motivation-quick-access";
  * Раньше это была личная лента человека: первым шёл свежий пост его
  * направления — нередко вайшнавский термин без пояснения, непонятный тому,
  * кто на портале первый день. Главную видят все, поэтому афоризм здесь должен
- * читаться без подготовки, и лучше всего для этого подходит «Философия».
+ * читаться без подготовки, и лучше всего для этого подходит папка
+ * общечеловеческих афоризмов — была «Философия», теперь «Мудрость мира».
  *
  * Берём её вперемешку: так афоризм меняется от захода к заходу, а не стоит
  * одним и тем же, пока в папку не добавят новый.
  */
 
-/** Название папки, из которой карточка берёт афоризмы. */
-export const WIDGET_CATEGORY_TITLE = "Философия";
+/**
+ * Папка виджета — по слагу, а не по названию.
+ *
+ * Первая версия искала папку по названию «Философия», и переименование в
+ * «Мудрость мира» (22.09) молча отправило карточку обратно в личную ленту.
+ * Слаг при переименовании не меняется: админка правит только `title`
+ * (`MotivationCategoriesService.update`), а `slug` выдаётся один раз при
+ * создании. `filosofiya-2` — слаг этой папки на проде, сверено по базе
+ * 23.09: «Мудрость мира», 28 публикаций.
+ *
+ * Названия — запасной путь, если папку удалят и заведут заново (слаг тогда
+ * будет другим): нынешнее и прежнее. Нет ни слага, ни названий — личная
+ * лента, как было до VED-79.
+ */
+export const WIDGET_CATEGORY = {
+  slugs: ["filosofiya-2"],
+  titles: ["Мудрость мира", "Философия"],
+} as const;
+
+/** Название без регистра, лишних пробелов и различия «е»/«ё». */
+function normalizeTitle(title: string): string {
+  return title.trim().replace(/\s+/g, " ").toLocaleLowerCase("ru").replace(/ё/g, "е");
+}
 
 /**
- * Слаг папки по названию, а не зашитый строкой: слаги у категорий заводит
- * админка, и на проде он может оказаться не тем, что получился бы из
- * транслитерации. Нет такой папки — `null`.
+ * Слаг папки для карточки. Сначала — по стабильному слагу, затем по
+ * названиям в порядке `WIDGET_CATEGORY.titles`. Нет такой папки — `null`.
  */
 export function widgetCategorySlug(
   categories: readonly MotivationCategoryDto[] | null | undefined,
 ): string | null {
-  const wanted = WIDGET_CATEGORY_TITLE.toLocaleLowerCase("ru");
-  const found = (categories ?? []).find(
-    (category) => category.title.trim().toLocaleLowerCase("ru") === wanted,
-  );
-  return found?.slug ?? null;
+  const list = categories ?? [];
+  for (const slug of WIDGET_CATEGORY.slugs) {
+    const found = list.find((category) => category.slug === slug);
+    if (found) return found.slug;
+  }
+  for (const title of WIDGET_CATEGORY.titles) {
+    const wanted = normalizeTitle(title);
+    const found = list.find(
+      (category) => normalizeTitle(category.title) === wanted,
+    );
+    if (found) return found.slug;
+  }
+  return null;
 }
 
 export interface WidgetFeedSources {
@@ -41,7 +70,7 @@ export interface WidgetFeedSources {
 }
 
 /**
- * Лента для карточки. Если «Философии» нет или в ней не нашлось ни одного
+ * Лента для карточки. Если папки нет или в ней не нашлось ни одного
  * афоризма с текстом (одни открытки с цитатой на картинке), откатываемся к
  * личной ленте: пустая карточка хуже, чем не тот афоризм.
  */
@@ -52,8 +81,8 @@ export async function loadWidgetFeed(
     await sources.categories().catch(() => null),
   );
   if (slug) {
-    const philosophy = await sources.feed(slug).catch(() => null);
-    if (buildMotivationQuickAccess(philosophy).quote) return philosophy;
+    const wisdom = await sources.feed(slug).catch(() => null);
+    if (buildMotivationQuickAccess(wisdom).quote) return wisdom;
   }
   return sources.feed().catch(() => null);
 }
