@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
+import { ScreenBack } from '@/components/wellness/screen-back';
 import { useSession } from '@/lib/auth/session';
 import { HISTORY_EMPTY, describeHistoryItem } from '@/lib/wellness/history-copy';
 import type { VerdictTone } from '@/lib/wellness/verdict-copy';
@@ -68,6 +69,7 @@ export default function WellnessHistoryScreen() {
         { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
       ]}
     >
+      <ScreenBack />
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
         Последние проверки
       </Text>

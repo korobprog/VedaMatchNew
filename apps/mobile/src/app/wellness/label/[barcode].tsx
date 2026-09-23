@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
+import { PersonKeyboardAwareScroll as KeyboardAwareScrollView } from '@/components/keyboard-controller-web';
 import { CameraGate } from '@/components/wellness/camera-gate';
+import { ScreenBack } from '@/components/wellness/screen-back';
 import { VerdictCard } from '@/components/wellness/verdict-card';
 import { useSession } from '@/lib/auth/session';
 import { cameraAccess } from '@/lib/wellness/camera-access';
@@ -252,14 +254,21 @@ function Answer({
   }, [barcode, ingredientsRaw, name, wellness]);
 
   return (
-    <ScrollView
+    /* Поле «Название с упаковки» уходило под клавиатуру целиком — дефект
+       найден пользователем на сборке 5018. Обычный `ScrollView` клавиатуру не
+       видит; `KeyboardAwareScrollView` из `react-native-keyboard-controller` —
+       принятый в проекте способ для форм (`profile.tsx`, `people/[id].tsx`).
+       `bottomOffset` поднимает поле вместе с подписью и кнопкой под ним. */
+    <KeyboardAwareScrollView
       style={{ backgroundColor: colors.bg0 }}
+      bottomOffset={160}
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
       ]}
       keyboardShouldPersistTaps="handled"
     >
+      <ScreenBack />
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
         Ответ по снимку
       </Text>
@@ -267,11 +276,46 @@ function Answer({
 
       {saved ? (
         <View style={[styles.savedCard, { backgroundColor: colors.bg1, borderColor: colors.success }]}>
-          <Text style={[styles.hintTitle, { color: colors.text0 }]}>Отправлено на проверку</Text>
+          <Text accessibilityRole="header" style={[styles.hintTitle, { color: colors.text0 }]}>
+            Отправлено на проверку
+          </Text>
           <Text style={[styles.body, { color: colors.text1 }]}>
             Пока карточку видят только модераторы: чужой состав с опечаткой молча
             отвечал бы неправдой всем. Ваш ответ уже выше и никуда не денется.
           </Text>
+          {/* Дело сделано — отсюда должен быть очевидный выход. Первым
+              «к сканеру»: человек у полки проверяет не один продукт, и
+              следующий шаг почти всегда этот. `navigate`, а не `push`:
+              сканер уже лежит в стеке ниже, и новый его экземпляр поверх
+              старого сломал бы «назад». */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/wellness/scan')}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [
+              styles.primary,
+              { backgroundColor: colors.magenta },
+              pressedStyle(pressed),
+            ]}
+          >
+            <Text style={[styles.primaryText, { color: colors.onAccent }]}>
+              Готово, вернуться к сканеру
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/wellness/history')}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [
+              styles.secondary,
+              { borderColor: colors.glassBorder },
+              pressedStyle(pressed),
+            ]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.text0 }]}>
+              К моим проверкам
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <View style={[styles.saveCard, { backgroundColor: colors.bg1 }]}>
@@ -332,9 +376,11 @@ function Answer({
           pressedStyle(pressed),
         ]}
       >
-        <Text style={[styles.secondaryText, { color: colors.text0 }]}>Переснять состав</Text>
+        <Text style={[styles.secondaryText, { color: colors.text0 }]}>
+          {saved ? 'Снять ещё состав' : 'Переснять состав'}
+        </Text>
       </Pressable>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { InlineError } from '@/components/inline-error';
 import { RetryButton } from '@/components/retry-button';
+import { ScreenBack } from '@/components/wellness/screen-back';
 import { useSession } from '@/lib/auth/session';
 import { VerdictCard } from '@/components/wellness/verdict-card';
 import { MISSING_PRODUCT_COPY, isMissingProduct } from '@/lib/wellness/verdict-copy';
@@ -82,6 +83,10 @@ export default function WellnessResultScreen() {
         { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
       ]}
     >
+      {/* Выход наверху: сюда приходят и со сканера, и из истории, и по
+          ссылке — нижняя кнопка «Проверить ещё продукт» для второго и
+          третьего случая называлась бы неправдой. */}
+      <ScreenBack />
       <View style={styles.head}>
         <Text accessibilityRole="header" style={[styles.screenTitle, { color: colors.text0 }]}>
           Ответ сканера
