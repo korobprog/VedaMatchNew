@@ -326,7 +326,7 @@ export class NotificationsListener {
         mark: content.mark ?? null,
         // Ветка (VED-320): повторная смена статуса задачи обновляет и
         // поднимает уже лежащую строку, а не кладёт рядом вторую.
-        threadKey: content.threadKey ?? null,
+        ...(content.threadKey ? { threadKey: content.threadKey } : {}),
       });
 
       const payload = {

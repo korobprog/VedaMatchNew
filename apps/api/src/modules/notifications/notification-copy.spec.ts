@@ -75,6 +75,62 @@ describe('buildNotification · уведомления «Работ» ведут 
 });
 
 /**
+ * VED-320: смена статуса задачи — одна обновляющаяся строка в ленте. Ветку
+ * задаёт подписчик: издатель сообщил факт переезда, а как новость ляжет в
+ * ленту, решается здесь.
+ */
+describe('buildNotification · ветка смены статуса в ленте', () => {
+  const base = {
+    recipientId: 'u1',
+    spaceId: 'space-1',
+    taskKey: 'VED-42',
+    taskTitle: 'Починить ссылки',
+    actorName: 'Санкаршан',
+  } as const;
+  const thread = 'work-status:/work/planner/space-1?task=VED-42';
+
+  it('переезд и возврат — одна ветка на задачу', () => {
+    const moved = buildNotification({
+      ...base,
+      name: 'work.task.status-changed',
+      fromColumnName: 'В работе',
+      toColumnName: 'Тестирование',
+      statusMark: 'testing',
+    });
+    const returned = buildNotification({
+      ...base,
+      name: 'work.task.returned',
+      columnName: 'На доработку',
+      statusMark: 'rework',
+    });
+    expect(moved.threadKey).toBe(thread);
+    expect(returned.threadKey).toBe(thread);
+  });
+
+  it('комментарий и поручение — свои строки, без ветки', () => {
+    // Вопрос в комментарии не должен пропасть из ленты оттого, что карточку
+    // следом передвинули.
+    const commented = buildNotification({
+      ...base,
+      name: 'work.task.commented',
+      excerpt: 'Проверь, пожалуйста',
+      commentCount: 1,
+      columnName: 'Тестирование',
+      statusMark: 'testing',
+    });
+    const assigned = buildNotification({
+      ...base,
+      name: 'work.task.assigned',
+      spaceName: 'VedaMatch',
+      columnName: 'В работе',
+      statusMark: 'in_progress',
+    });
+    expect(commented.threadKey).toBeUndefined();
+    expect(assigned.threadKey).toBeUndefined();
+  });
+});
+
+/**
  * VED-298: комментарий и перенос, сделанные одним человеком в одно окно,
  * приезжают одним событием. Формулировку из двух частей собирает подписчик —
  * издатель прислал факт: колонки, текст реплики и их число.

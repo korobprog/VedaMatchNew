@@ -1,4 +1,8 @@
-import { WORK_EVENTS, workTaskRecipients } from './work-events';
+import {
+  WORK_EVENTS,
+  workTaskLiftRecipients,
+  workTaskRecipients,
+} from './work-events';
 
 describe('WORK_EVENTS', () => {
   it('имена совпадают с контрактом уведомлений', () => {
@@ -43,5 +47,38 @@ describe('workTaskRecipients', () => {
     expect(
       workTaskRecipients({ assigneeId: null, createdById: null }, 'me'),
     ).toEqual([]);
+  });
+});
+
+describe('workTaskLiftRecipients (VED-320)', () => {
+  const task = { assigneeId: 'stas', createdById: 'mamu' };
+
+  it('поднимает задачу у второго, но не у того, кто двигал', () => {
+    expect(workTaskLiftRecipients(task, 'mamu', ['mamu', 'stas'])).toEqual([
+      'stas',
+    ]);
+    expect(workTaskLiftRecipients(task, 'stas', ['mamu', 'stas'])).toEqual([
+      'mamu',
+    ]);
+  });
+
+  it('двигает третий — поднимается у обоих', () => {
+    expect(
+      workTaskLiftRecipients(task, 'agent', ['mamu', 'stas', 'agent']).sort(),
+    ).toEqual(['mamu', 'stas']);
+  });
+
+  it('автор и исполнитель в одном лице двигает сам — поднимать некому', () => {
+    expect(
+      workTaskLiftRecipients(
+        { assigneeId: 'mamu', createdById: 'mamu' },
+        'mamu',
+        ['mamu', 'stas'],
+      ),
+    ).toEqual([]);
+  });
+
+  it('исключённому из среды задача не поднимается', () => {
+    expect(workTaskLiftRecipients(task, 'mamu', ['mamu'])).toEqual([]);
   });
 });

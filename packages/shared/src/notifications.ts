@@ -1,11 +1,11 @@
-import type { Role, SpiritualStage } from './index';
-import type { TaskStatusMark } from './task-status';
+import type { Role, SpiritualStage } from "./index";
+import type { TaskStatusMark } from "./task-status";
 
 /** Событие для уведомлений. Несёт факты, а не формулировки: тексты живут
  *  в apps/api/src/modules/notifications/notification-copy.ts. */
 export type NotificationEvent =
   | {
-      name: 'union.chat.message-sent';
+      name: "union.chat.message-sent";
       recipientId: string;
       senderName: string;
       /** Полный текст: обрезает его модуль уведомлений, а не издатель. */
@@ -13,12 +13,12 @@ export type NotificationEvent =
       requestId: string;
     }
   | {
-      name: 'union.connection.requested';
+      name: "union.connection.requested";
       recipientId: string;
       senderName: string;
     }
   | {
-      name: 'union.connection.accepted';
+      name: "union.connection.accepted";
       recipientId: string;
       senderName: string;
       /**
@@ -35,47 +35,47 @@ export type NotificationEvent =
        * события запрос лежал бы молча: адресат узнавал бы о нём, только
        * случайно заглянув в раздел астрологии.
        */
-      name: 'astro.compatibility.requested';
+      name: "astro.compatibility.requested";
       recipientId: string;
       senderName: string;
     }
   | {
-      name: 'astro.compatibility.accepted';
+      name: "astro.compatibility.accepted";
       recipientId: string;
       senderName: string;
     }
   | {
-      name: 'contacts.request.received';
+      name: "contacts.request.received";
       recipientId: string;
       senderName: string;
     }
   | {
-      name: 'contacts.request.accepted';
+      name: "contacts.request.accepted";
       recipientId: string;
       /** Имя того, кто открыл контакты. */
       senderName: string;
       /** Карточка, на которой теперь видны способы связи. */
       ownerUserId: string;
     }
-  | { name: 'support.ticket.replied'; recipientId: string; ticketId: string }
+  | { name: "support.ticket.replied"; recipientId: string; ticketId: string }
   | {
       /**
        * Пользователь или гость написал в поддержку — новое обращение или
        * сообщение в уже существующем. Уходит всем активным админам: без
        * сигнала обращение просто лежит в очереди до случайного захода в раздел.
        */
-      name: 'support.ticket.received';
+      name: "support.ticket.received";
       recipientId: string;
       ticketId: string;
     }
   | {
-      name: 'astro.transit.digest-ready';
+      name: "astro.transit.digest-ready";
       recipientId: string;
       /** Готовая фраза дня — самодостаточна, подписчик её не переписывает. */
       excerpt: string;
     }
   | {
-      name: 'market.chat.message-sent';
+      name: "market.chat.message-sent";
       recipientId: string;
       senderName: string;
       /** Полный текст: обрезает его модуль уведомлений, а не издатель. */
@@ -83,7 +83,7 @@ export type NotificationEvent =
       conversationId: string;
     }
   | {
-      name: 'market.order.created';
+      name: "market.order.created";
       recipientId: string;
       buyerName: string;
       orderId: string;
@@ -92,7 +92,7 @@ export type NotificationEvent =
       itemsCount: number;
     }
   | {
-      name: 'market.order.status-changed';
+      name: "market.order.status-changed";
       recipientId: string;
       shopName: string;
       orderId: string;
@@ -100,15 +100,15 @@ export type NotificationEvent =
       /** Строковый литерал, а не импорт из market.ts: notifications.ts —
        *  портальная инфраструктура и не должна зависеть от сервиса. */
       status:
-        | 'new_request'
-        | 'accepted'
-        | 'in_progress'
-        | 'completed'
-        | 'declined_by_seller'
-        | 'cancelled_by_buyer';
+        | "new_request"
+        | "accepted"
+        | "in_progress"
+        | "completed"
+        | "declined_by_seller"
+        | "cancelled_by_buyer";
     }
   | {
-      name: 'market.listing.published';
+      name: "market.listing.published";
       recipientId: string;
       /** На что человек подписан: магазин, раздел или категория. */
       sourceName: string;
@@ -116,7 +116,7 @@ export type NotificationEvent =
       listingId: string;
     }
   | {
-      name: 'notices.notice.published';
+      name: "notices.notice.published";
       recipientId: string;
       /** На что человек подписан: рубрика, город или община. */
       sourceName: string;
@@ -124,7 +124,7 @@ export type NotificationEvent =
       noticeId: string;
     }
   | {
-      name: 'notices.response.received';
+      name: "notices.response.received";
       recipientId: string;
       /** Имя откликнувшегося — уже через resolveDisplayName. */
       senderName: string;
@@ -132,23 +132,23 @@ export type NotificationEvent =
       noticeId: string;
     }
   | {
-      name: 'notices.response.accepted';
+      name: "notices.response.accepted";
       recipientId: string;
       noticeTitle: string;
       noticeId: string;
     }
   | {
-      name: 'market.listing.price-dropped';
+      name: "market.listing.price-dropped";
       recipientId: string;
       listingTitle: string;
       listingId: string;
       /** Минорные единицы: форматирование — забота слоя копирайта. */
       priceMinor: number;
       previousPriceMinor: number;
-      currency: 'rub' | 'usd' | 'eur' | 'inr';
+      currency: "rub" | "usd" | "eur" | "inr";
     }
   | {
-      name: 'market.review.received';
+      name: "market.review.received";
       recipientId: string;
       authorName: string;
       rating: number;
@@ -160,7 +160,7 @@ export type NotificationEvent =
        * коды изменённых полей, а не готовую фразу: подписи собирает модуль
        * уведомлений — см. docs/service-module-contract.md.
        */
-      name: 'portal.profile.edited-by-admin';
+      name: "portal.profile.edited-by-admin";
       recipientId: string;
       /** `name`, `spiritualName`, `birthDate`, `gender`, `about`, `languages`, `homeLocation`, `socialLinks`, `messengers`. */
       fields: string[];
@@ -173,7 +173,7 @@ export type NotificationEvent =
        * регистрации: портал большой, и без объяснения человек упирается в
        * восемь сервисов, не понимая, с какого начать.
        */
-      name: 'portal.welcome';
+      name: "portal.welcome";
       recipientId: string;
       /**
        * Имя для обращения — уже наружное, собранное `resolveDisplayName`:
@@ -184,21 +184,21 @@ export type NotificationEvent =
     }
   | {
       /** Новость от администрации портала: рассылает админ вручную. */
-      name: 'portal.announcement.published';
+      name: "portal.announcement.published";
       recipientId: string;
       announcementId: string;
       title: string;
       excerpt: string;
     }
   | {
-      name: 'motivation.reel.published';
+      name: "motivation.reel.published";
       recipientId: string;
       reelId: string;
       /** Slug опубликованного поста: ведём сразу на него. */
       slug: string;
     }
   | {
-      name: 'motivation.reel.rejected';
+      name: "motivation.reel.rejected";
       recipientId: string;
       reelId: string;
       /** Причина простым языком — её же видит автор в мастере. */
@@ -206,7 +206,7 @@ export type NotificationEvent =
     }
   | {
       /** Ролик принят администратором и стал виден автору. */
-      name: 'motivation.video.ready';
+      name: "motivation.video.ready";
       recipientId: string;
       reelId: string;
     }
@@ -215,7 +215,7 @@ export type NotificationEvent =
        * Ролик собран и ждёт приёмки. Уходит администраторам: до приёмки он
        * виден только в очереди, и без сигнала о нём никто не узнает.
        */
-      name: 'motivation.video.review';
+      name: "motivation.video.review";
       recipientId: string;
       reelId: string;
     }
@@ -227,7 +227,7 @@ export type NotificationEvent =
        * «section» с тех пор, когда разделы были отдельной моделью:
        * события уже разосланы и лежат в базе, переименовывать нечего.
        */
-      name: 'library.section-request.decided';
+      name: "library.section-request.decided";
       recipientId: string;
       requestId: string;
       titleRu: string;
@@ -240,7 +240,7 @@ export type NotificationEvent =
   | {
       /** Кандидат подал заявку в команду проекта. Уходит активным админам:
        *  без сигнала заявка лежит в очереди до случайного захода в раздел. */
-      name: 'team.application.received';
+      name: "team.application.received";
       recipientId: string;
       applicationId: string;
       /** Название роли для текста уведомления — без похода в БД получателем. */
@@ -248,7 +248,7 @@ export type NotificationEvent =
     }
   | {
       /** Сообщение в сервисе «Общение»: личный диалог, группа или канал. */
-      name: 'chat.message-sent';
+      name: "chat.message-sent";
       recipientId: string;
       senderName: string;
       /** Название группы или канала; у личного диалога пусто. */
@@ -258,7 +258,7 @@ export type NotificationEvent =
     }
   | {
       /** Первое сообщение от незнакомого человека — лежит в запросах. */
-      name: 'chat.request-received';
+      name: "chat.request-received";
       recipientId: string;
       senderName: string;
       body: string;
@@ -272,24 +272,24 @@ export type NotificationEvent =
        * `callerAvatarUrl` и `expiresAt` нужны именно нативному экрану
        * входящего вызова — карточка звонка рисуется без похода в API.
        */
-      name: 'chat.call-incoming';
+      name: "chat.call-incoming";
       recipientId: string;
       callerName: string;
       /** `null`, когда у звонившего нет аватара. */
       callerAvatarUrl: string | null;
       callId: string;
       conversationId: string;
-      callKind: 'audio' | 'video';
+      callKind: "audio" | "video";
       /** ISO-момент, когда дозвон истечёт (сейчас — `RING_TIMEOUT_MS` вперёд). */
       expiresAt: string;
     }
   | {
       /** Звонок не приняли за время дозвона. */
-      name: 'chat.call-missed';
+      name: "chat.call-missed";
       recipientId: string;
       callerName: string;
       conversationId: string;
-      callKind: 'audio' | 'video';
+      callKind: "audio" | "video";
     }
   | {
       /**
@@ -307,7 +307,7 @@ export type NotificationEvent =
        * Событие самодостаточно: название беседы и имя зовущего едут в нём,
        * подписчик не дочитывает их из таблиц «Общения».
        */
-      name: 'chat.group-call-started';
+      name: "chat.group-call-started";
       recipientId: string;
       /** Название группы — без него непонятно, куда зовут. */
       conversationTitle: string;
@@ -319,14 +319,14 @@ export type NotificationEvent =
     }
   | {
       /** Запись прошла проверку и появилась в общем каталоге. */
-      name: 'music.track.published';
+      name: "music.track.published";
       recipientId: string;
       trackId: string;
       title: string;
     }
   | {
       /** Редакция отказала. Причина обязательна — без неё человек зальёт то же. */
-      name: 'music.track.rejected';
+      name: "music.track.rejected";
       recipientId: string;
       trackId: string;
       title: string;
@@ -337,19 +337,19 @@ export type NotificationEvent =
        * Запись скрыта жалобами слушателей и ждёт решения редакции. Скрытие
        * обратимо: сообщаем факт, а не приговор.
        */
-      name: 'music.track.hidden-by-reports';
+      name: "music.track.hidden-by-reports";
       recipientId: string;
       trackId: string;
       title: string;
       /** Вид жалобы, перешедшей порог: по нему подписчик выбирает слова. */
-      kind: 'copyright' | 'content' | 'quality';
+      kind: "copyright" | "content" | "quality";
     }
   | {
       /**
        * Задачу поручили человеку. Ключ и название едут в событии: подписчик
        * не имеет права дочитывать их из таблиц «Работы».
        */
-      name: 'work.task.assigned';
+      name: "work.task.assigned";
       recipientId: string;
       spaceId: string;
       taskKey: string;
@@ -380,7 +380,7 @@ export type NotificationEvent =
        * тут же последовал перенос карточки, отдельным событием не едет вовсе —
        * его текст приезжает вместе с переездом (VED-298).
        */
-      name: 'work.task.commented';
+      name: "work.task.commented";
       recipientId: string;
       spaceId: string;
       taskKey: string;
@@ -404,7 +404,7 @@ export type NotificationEvent =
        * карточки по доске уведомлять незачем, а возврат сделанного — это
        * новость для того, кто её делал.
        */
-      name: 'work.task.returned';
+      name: "work.task.returned";
       recipientId: string;
       spaceId: string;
       taskKey: string;
@@ -437,7 +437,7 @@ export type NotificationEvent =
        * карточка не поднимает никого зря. Поэтому здесь уже итог — колонка,
        * где задача осталась, а не та, куда её на секунду положили.
        */
-      name: 'work.task.status-changed';
+      name: "work.task.status-changed";
       recipientId: string;
       spaceId: string;
       taskKey: string;
@@ -460,7 +460,7 @@ export type NotificationEvent =
     }
   | {
       /** Именное приглашение в рабочую среду. */
-      name: 'work.invite.received';
+      name: "work.invite.received";
       recipientId: string;
       spaceName: string;
       /** Кто зовёт; null — приглашение пережило удаление автора. */
@@ -477,12 +477,12 @@ export type NotificationEvent =
        * подписчик (Чат, Уведомления, агенда Работы) не имеет права
        * дочитывать их из таблиц «Вакансий».
        */
-      name: 'vacancies.response.created';
+      name: "vacancies.response.created";
       /** Автор предложения. */
       recipientId: string;
       offerId: string;
       offerTitle: string;
-      offerKind: 'work' | 'seva' | 'task';
+      offerKind: "work" | "seva" | "task";
       responseId: string;
       responderId: string;
       responderName: string;
@@ -490,30 +490,30 @@ export type NotificationEvent =
     }
   | {
       /** Автор открыл диалог, принял или отклонил отклик. */
-      name: 'vacancies.response.status-changed';
+      name: "vacancies.response.status-changed";
       /** Соискатель. */
       recipientId: string;
       offerId: string;
       offerTitle: string;
-      offerKind: 'work' | 'seva' | 'task';
+      offerKind: "work" | "seva" | "task";
       responseId: string;
       authorId: string;
-      status: 'in_dialog' | 'accepted' | 'declined';
+      status: "in_dialog" | "accepted" | "declined";
     }
   | {
       /** Предложение закрыто: место занято, ждать ответа больше незачем. */
-      name: 'vacancies.offer.closed';
+      name: "vacancies.offer.closed";
       /** Соискатель с живым откликом. Одно событие на получателя. */
       recipientId: string;
       offerId: string;
       offerTitle: string;
-      offerKind: 'work' | 'seva' | 'task';
+      offerKind: "work" | "seva" | "task";
       responseId: string;
       authorId: string;
     }
   | {
       /** Неделя прошла, решения не было — запись вернулась автору. */
-      name: 'music.track.review-expired';
+      name: "music.track.review-expired";
       recipientId: string;
       trackId: string;
       title: string;
@@ -529,7 +529,7 @@ export type NotificationEvent =
        * публичной страницы, где гость ещё не человек портала, — поэтому имя
        * строкой, а не идентификатором.
        */
-      name: 'travel.booking.created';
+      name: "travel.booking.created";
       recipientId: string;
       bookingId: string;
       bookingNumber: number;
@@ -546,13 +546,13 @@ export type NotificationEvent =
        * Решение по заявке. Получатель — гость, если он человек портала;
        * заявке с публичной страницы уведомлять некого, и событие не шлётся.
        */
-      name: 'travel.booking.status-changed';
+      name: "travel.booking.status-changed";
       recipientId: string;
       bookingId: string;
       bookingNumber: number;
       stayId: string;
       stayName: string;
-      status: 'accepted' | 'declined' | 'checked_in' | 'completed';
+      status: "accepted" | "declined" | "checked_in" | "completed";
       /** Причина отказа, когда она есть. */
       reason: string | null;
     };
@@ -564,28 +564,28 @@ export type NotificationEvent =
  * Имена событий поэтому — строковые литералы, проверяемые типом выше.
  */
 
-export type NotificationEventName = NotificationEvent['name'];
+export type NotificationEventName = NotificationEvent["name"];
 
 /** Категории совпадают с тумблерами в NotificationPreferencesDto. */
 export type NotificationCategory =
-  | 'announcements'
-  | 'notices'
-  | 'chat'
+  | "announcements"
+  | "notices"
+  | "chat"
   /**
    * Звонки — отдельная категория, а не часть `chat` (VED-361). Человек вправе
    * заглушить болтливую переписку и при этом не пропустить звонок, а прежде
    * выключенные «Сообщения» гасили и входящий вызов: при закрытом приложении
    * телефон о нём просто не узнавал.
    */
-  | 'calls'
-  | 'connections'
-  | 'support'
-  | 'transits'
-  | 'market'
-  | 'motivation'
-  | 'music'
-  | 'work'
-  | 'travel';
+  | "calls"
+  | "connections"
+  | "support"
+  | "transits"
+  | "market"
+  | "motivation"
+  | "music"
+  | "work"
+  | "travel";
 
 /**
  * Значок состояния рядом с уведомлением (VED-272) — тот же код состояния, что
@@ -704,8 +704,10 @@ export interface NotificationReadStateResponse {
  * человека не доходило ничего. Теперь новая категория, не заведя себе поле,
  * не даст собраться ни этому файлу, ни значениям по умолчанию.
  */
-export interface NotificationPreferencesDto
-  extends Record<NotificationCategory, boolean> {
+export interface NotificationPreferencesDto extends Record<
+  NotificationCategory,
+  boolean
+> {
   enabled: boolean;
   chat: boolean;
   /**
@@ -767,15 +769,15 @@ export type UpdateNotificationPreferencesRequest =
  * событие не идёт — своего текста у него нет, см. `USER_REGISTERED_EVENT` за
  * образец события вне `NotificationEvent`.
  */
-export const CHAT_CALL_ENDED_EVENT = 'chat.call-ended';
+export const CHAT_CALL_ENDED_EVENT = "chat.call-ended";
 
 export type ChatCallEndedPushReason =
-  | 'answered_elsewhere'
-  | 'declined'
-  | 'missed'
-  | 'cancelled'
-  | 'ended'
-  | 'failed';
+  | "answered_elsewhere"
+  | "declined"
+  | "missed"
+  | "cancelled"
+  | "ended"
+  | "failed";
 
 export interface ChatCallEndedEvent {
   name: typeof CHAT_CALL_ENDED_EVENT;
@@ -799,7 +801,7 @@ export interface ChatCallEndedEvent {
  * увидел «Тестирование» в уведомлении и «На доработку» в планировщике и
  * справедливо сказал, что такого быть не должно.
  */
-export const WORK_TASK_MARK_REFRESHED_EVENT = 'work.task.mark-refreshed';
+export const WORK_TASK_MARK_REFRESHED_EVENT = "work.task.mark-refreshed";
 
 export interface WorkTaskMarkRefreshedEvent {
   name: typeof WORK_TASK_MARK_REFRESHED_EVENT;
@@ -830,8 +832,8 @@ export interface PushSubscriptionRequest {
 }
 
 /** Служба доставки пушей в приложение. */
-export type NotificationDeviceProvider = 'fcm' | 'rustore';
-export type NotificationDevicePlatform = 'android' | 'ios';
+export type NotificationDeviceProvider = "fcm" | "rustore";
+export type NotificationDevicePlatform = "android" | "ios";
 
 /** Телефон сообщает свой токен после входа и при каждой его смене. */
 export interface RegisterNotificationDeviceRequest {
@@ -900,10 +902,10 @@ export interface NotificationDeliveryStatusDto {
  *   что: возможно, ей просто нечего было отправлять;
  * - `dead` — правило сочло мёртвой, идёт отсрочка до удаления.
  */
-export type NotificationDeliveryPointState = 'alive' | 'silent' | 'dead';
+export type NotificationDeliveryPointState = "alive" | "silent" | "dead";
 
 /** Откуда точка доставки: браузер, приложение или бот. */
-export type NotificationDeliveryPointKind = 'web' | 'app' | 'telegram';
+export type NotificationDeliveryPointKind = "web" | "app" | "telegram";
 
 /** Одна точка доставки в разделе админки. */
 export interface NotificationDeliveryPointDto {
@@ -1019,17 +1021,13 @@ export interface NotificationAudienceFilter {
   /** Роли. Пусто — все. */
   roles?: Role[];
   /** `paid` — активный платный доступ на сейчас, `unpaid` — его нет. */
-  payment?: 'paid' | 'unpaid';
+  payment?: "paid" | "unpaid";
   /** Только те, у кого есть хотя бы одна подписка на веб-пуш. */
   withPushOnly?: boolean;
 }
 
 export type NotificationBroadcastStatus =
-  | 'draft'
-  | 'sending'
-  | 'sent'
-  | 'failed'
-  | 'cancelled';
+  "draft" | "sending" | "sent" | "failed" | "cancelled";
 
 export interface NotificationBroadcastDto {
   id: string;
