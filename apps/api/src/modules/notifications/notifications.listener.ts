@@ -324,6 +324,9 @@ export class NotificationsListener {
         // Значок состояния (VED-272) живёт только в ленте: в пуш он не едет —
         // там одна строка текста, и места под пометку у шторки нет.
         mark: content.mark ?? null,
+        // Ветка (VED-320): повторная смена статуса задачи обновляет и
+        // поднимает уже лежащую строку, а не кладёт рядом вторую.
+        threadKey: content.threadKey ?? null,
       });
 
       const payload = {
@@ -467,7 +470,8 @@ export class NotificationsListener {
 
   /**
    * Карточка переехала — пометка состояния у уже лежащих уведомлений об этой
-   * задаче догоняет её (VED-320).
+   * задаче догоняет её, а строка о смене статуса поднимается у всех, кого
+   * назвала «Работа», — то есть у всех, кроме двигавшего (VED-320).
    *
    * Не новость, а поправка: ничего не создаётся и никуда не отправляется,
    * поэтому мимо `deliver()`. Осечка тут не должна валить перенос карточки на
@@ -477,7 +481,13 @@ export class NotificationsListener {
   @OnEvent(WORK_TASK_MARK_REFRESHED_EVENT)
   onWorkTaskMarkRefreshed(event: WorkTaskMarkRefreshedEvent): void {
     void this.notifications
-      .refreshWorkTaskMark(event.spaceId, event.taskKey, event.statusMark)
+      .refreshWorkTaskMark(
+        event.spaceId,
+        event.taskKey,
+        event.statusMark,
+        // Страховка от издателя старой сборки, где поля ещё не было.
+        event.liftRecipientIds ?? [],
+      )
       .catch((error) =>
         this.logger.warn(
           `Пометка состояния ${event.taskKey} не обновлена: ${String(error)}`,

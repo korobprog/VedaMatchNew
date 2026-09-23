@@ -4,6 +4,7 @@ import type {
   NotificationEventName,
   NotificationMark,
 } from '@vedamatch/shared';
+import { workStatusThreadKey } from './inbox-thread';
 
 export type { NotificationCategory };
 
@@ -189,6 +190,12 @@ export interface NotificationContent {
    * таблиц «Работы» он не вправе. Остальные уведомления живут без значка.
    */
   mark?: NotificationMark | null;
+  /**
+   * Ветка новости в ленте (VED-320, `inbox-thread.ts`): есть — у человека
+   * лежит одна строка на ключ, и эта новость её обновляет и поднимает; нет —
+   * новость ложится своей строкой. В пуш не едет: там своя склейка — `tag`.
+   */
+  threadKey?: string;
 }
 
 /**
@@ -558,6 +565,11 @@ export function buildNotification(
         tag: `work-returned:${event.taskKey}`,
         category: 'work',
         mark: event.statusMark,
+        // Возврат — та же смена статуса, только в обратную сторону, и в ленте
+        // живёт в той же строке, что и прочие переезды карточки.
+        threadKey: workStatusThreadKey(
+          workTaskUrl(event.spaceId, event.taskKey),
+        ),
       };
     case 'work.task.status-changed':
       return {
@@ -576,6 +588,13 @@ export function buildNotification(
         // Состояние карточки, посчитанное «Работой» по колонке, в которой она
         // осталась после окна дозревания.
         mark: event.statusMark,
+        // В ленте — одна строка на задачу, которая поднимается на каждой смене
+        // статуса (VED-320). Поручение и комментарий в неё не входят: это
+        // другие новости, и комментарий с вопросом не должен пропасть из ленты
+        // оттого, что карточку следом передвинули.
+        threadKey: workStatusThreadKey(
+          workTaskUrl(event.spaceId, event.taskKey),
+        ),
       };
     case 'work.invite.received':
       return {
