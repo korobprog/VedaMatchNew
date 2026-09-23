@@ -105,6 +105,34 @@ describe("ServiceGrid", () => {
     expect(view).toHaveClass("ml-auto");
   });
 
+  /**
+   * VED-383: ряд не помещался в 320 точек и толкал вправо всю страницу, а за
+   * правый край уезжал именно переключатель вида — настройка пропадала с
+   * экрана. Перенос выбран вместо своей горизонтальной прокрутки: прокрутка
+   * оставила бы переключатель за краем ровно так же.
+   */
+  it("переносит ряд настроек, а не растягивает страницу", () => {
+    render(
+      <ServiceGrid
+        services={SERVICES}
+        userId={USER}
+        toolbarStart={<button type="button">Настроить кнопки</button>}
+      />,
+    );
+
+    const view = screen.getByRole("group", { name: "Вид сервисов" });
+    expect(view.closest("div.mb-3")).toHaveClass("flex-wrap");
+  });
+
+  // VED-383: подпись короткая, имя — полное, как у соседних «Кнопок».
+  it("подписывает перестановку коротко, но называет её полностью", () => {
+    render(grid());
+
+    const reorder = screen.getByRole("button", { name: "Изменить порядок" });
+    expect(reorder).toHaveTextContent("Порядок");
+    expect(reorder).toHaveAttribute("title", "Изменить порядок");
+  });
+
   it("в компактном режиме описаний нет", () => {
     writeLayout(USER, { mode: "compact" });
     render(grid());

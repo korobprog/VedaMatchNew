@@ -22,6 +22,7 @@ import {
 import { copyText } from "@/lib/copy-text";
 import { emptyHint } from "./invite-hints";
 import { workPersonLabel } from "./person-label";
+import { workToolbarButtonClass } from "./toolbar-button";
 import { buildWorkInviteShareHref } from "./work-share";
 
 const ROLE_TITLE: Record<WorkMemberRole, string> = {
@@ -205,13 +206,18 @@ export function WorkInvitePanel({
       {/* На доске (board-view.tsx) кнопка стоит в тесном ряду тулбара:
           на телефоне остаётся только значок, подпись уходит в `aria-label`,
           текст рядом со значком возвращается от sm и шире, где место уже не
-          в обрез (VED-160, круг 3). */}
+          в обрез (VED-160, круг 3).
+
+          Вид ряда задаёт общий с соседями `toolbar-button.ts`. Своих классов
+          здесь больше нет: заливка `bg-glass` вместо рамки и `text-sm` вместо
+          `text-xs` делали эту кнопку единственной необведённой в ряду
+          (VED-280). */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Пригласить"
         title="Пригласить"
-        className="flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl bg-glass px-3 py-2 text-sm text-text-0"
+        className={workToolbarButtonClass()}
       >
         <Link2 aria-hidden className="size-4 shrink-0" />
         <span className="hidden sm:inline">Пригласить</span>
