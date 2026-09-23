@@ -33,7 +33,7 @@ const pin = (slug: string, name = `Сервис ${slug}`): QuickPin => ({ slug, 
 const slugs = (pins: readonly QuickPin[]) => pins.map((item) => item.slug);
 
 describe('предел панели', () => {
-  it('пять — ровно ряд чипов на экране 412 dp без прокрутки', () => {
+  it('пять — как пунктов нижнего меню; шестой уводил бы ряд за край', () => {
     expect(QUICK_PIN_LIMIT).toBe(5);
   });
 

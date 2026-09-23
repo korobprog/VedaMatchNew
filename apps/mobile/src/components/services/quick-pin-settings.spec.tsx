@@ -143,6 +143,19 @@ describe('QuickPinSettings', () => {
     expect(JSON.stringify(alert.props.children)).toContain('Открепите один, чтобы закрепить «Знакомства»');
   });
 
+  // Дефект первой сборки на A51: сообщение стояло под списком из дюжины
+  // строк, за краем экрана, и шестое нажатие выглядело как «ничего».
+  it('сообщение о полной панели стоит над списком, рядом со счётчиком', async () => {
+    const five = ['Здоровье', 'Медиатека', 'Библиотека', 'Рынок', 'Объявления'].map((name) => pin(byName(name)));
+    const { store } = await storeWith(five);
+    const tree = await render(store);
+    await press(tree, 'Настроить быстрый доступ');
+    await press(tree, 'Закрепить сверху: Знакомства');
+    const shown = text(tree);
+    expect(shown.indexOf('Открепите один')).toBeGreaterThan(-1);
+    expect(shown.indexOf('Открепите один')).toBeLessThan(shown.indexOf('"Здоровье"'));
+  });
+
   it('стрелки меняют порядок и сохраняют его', async () => {
     const three = ['Здоровье', 'Медиатека', 'Библиотека'].map((name) => pin(byName(name)));
     const { store, saved } = await storeWith(three);

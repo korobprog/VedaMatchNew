@@ -151,6 +151,17 @@ describe('QuickBar', () => {
     expect(box.minWidth).toBeGreaterThanOrEqual(hitTarget);
   });
 
+  // Дефект первой сборки на A51: чип шириной 70 обрезал «Медиатека» до
+  // «Медиат…». Ширина чипа — по имени, общей фиксированной быть не должно.
+  it('у чипа нет общей ширины — длинное имя не обрезается', async () => {
+    mockList.mockResolvedValue([card('library', 'Библиотека')]);
+    const tree = await render(await storeWith([pin('library', 'Библиотека')]));
+    const style = chips(tree)[0].props.style({ pressed: false }).flat().filter(Boolean);
+    const box = Object.assign({}, ...style) as { width?: unknown; maxWidth?: unknown };
+    expect(box.width).toBeUndefined();
+    expect(box.maxWidth).toBeUndefined();
+  });
+
   it('панель занимает вырез сама: верхний отступ — высота выреза', async () => {
     mockList.mockResolvedValue([card('music', 'Медиатека')]);
     const tree = await render(await storeWith([pin('music', 'Медиатека')]));

@@ -119,21 +119,23 @@ const ICON_SIZE = 20;
 
 const styles = StyleSheet.create({
   bar: { borderBottomWidth: StyleSheet.hairlineWidth },
-  // Поля 12 и промежуток 6 — из расчёта предела: пять чипов по 70 на 412 dp
-  // (`QUICK_PIN_LIMIT` в `quick-pins.ts`).
   row: { paddingHorizontal: 12, paddingVertical: 4, gap: 6 },
+  // Ширина — по имени сервиса, а не общая на всех. Первая сборка держала
+  // чип шириной 70, и на A51 с крупным системным шрифтом «Медиатека»,
+  // «Библиотека» и «Астрология» обрезались до «Медиат…»: чип, который
+  // приходится угадывать по трём буквам, хуже, чем ряд, который иногда
+  // надо чуть прокрутить (ряд — горизонтальный `ScrollView`).
   chip: {
-    width: 70,
     minWidth: hitTarget,
     minHeight: hitTarget,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    paddingHorizontal: 4,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderWidth: 1,
     borderRadius: radius.sm,
     overflow: 'hidden',
   },
-  label: { fontFamily: fonts.bodySemiBold, fontSize: 11, lineHeight: 14, maxWidth: '100%' },
+  label: { fontFamily: fonts.bodySemiBold, fontSize: 11, lineHeight: 14 },
 });

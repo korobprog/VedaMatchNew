@@ -86,6 +86,17 @@ export function QuickPinSettings({
 
       <Text style={[styles.summary, { color: colors.text1 }]}>{summary}</Text>
 
+      {/* Над списком, а не под ним: в первой сборке сообщение стояло в конце
+          карточки, под дюжиной строк, и на телефоне оказывалось за краем
+          экрана — нажатие на шестой сервис выглядело как «ничего не
+          произошло». Здесь оно рядом со счётчиком «5 из 5», который и
+          объясняет. */}
+      {notice ? (
+        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.notice, { color: colors.text0 }]}>
+          {notice}
+        </Text>
+      ) : null}
+
       {open ? (
         <View style={styles.list}>
           {[...pinnedCards, ...rest].map((service) => {
@@ -142,11 +153,6 @@ export function QuickPinSettings({
         </View>
       ) : null}
 
-      {notice ? (
-        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.notice, { color: colors.text0 }]}>
-          {notice}
-        </Text>
-      ) : null}
     </View>
   );
 }
