@@ -147,6 +147,62 @@ describe("ReelsFeed", () => {
   });
 
   // VED-135: на пустом тёмном экране разделителя — кнопки категорий вверху.
+  // VED-432: лента раздела запоминает пост, провисевший на экране.
+  it("запоминает место в ленте раздела, а в личной ленте — нет", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = fetchOk({ ok: true });
+      const { unmount } = render(
+        <ReelsFeed
+          initial={{ items: [post("a"), post("b")], nextCursor: null }}
+          tab="forYou"
+          donation={null}
+          category="filosofiya-2"
+        />,
+      );
+      await vi.advanceTimersByTimeAsync(1600);
+      const put = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/motivation/feed-position"));
+      expect(put).toBeDefined();
+      expect(put![1]).toMatchObject({ method: "PUT" });
+      expect(JSON.parse(put![1].body as string)).toEqual({
+        post: "a",
+        style: "art",
+        category: "filosofiya-2",
+      });
+      unmount();
+
+      const personal = fetchOk({ ok: true });
+      render(
+        <ReelsFeed
+          initial={{ items: [post("a")], nextCursor: null }}
+          tab="forYou"
+          donation={null}
+        />,
+      );
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(
+        personal.mock.calls.some(([url]) => String(url).endsWith("/motivation/feed-position")),
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("лента, открытая с места остановки, предлагает «С начала»", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("c"), post("d")], nextCursor: null, resumed: true }}
+        tab="cards"
+        donation={null}
+        category="filosofiya-2"
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: "Лента открыта с места, где вы остановились. Открыть с начала" }),
+    ).toHaveAttribute("href", "/motivation?tab=cards&category=filosofiya-2");
+  });
+
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
     fetchOk({});
     render(
@@ -179,9 +235,18 @@ describe("ReelsFeed", () => {
       );
       expect(within(nav).getByRole("link", { name: "Гуру" })).toHaveAttribute("aria-current", "page");
       // Кнопки стоят над текстом слайда, а не под ним.
-      const heading = within(slide).getByText(/Вы посмотрели всё новое|На сегодня это всё/);
+      // В конце ленты раздела (VED-432) — «посмотрели все открытки раздела».
+      const heading = within(slide).getByText(
+        /Вы посмотрели всё новое|Вы посмотрели все открытки раздела «Гуру»/,
+      );
       expect(nav.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+    // Лента раздела кончилась — «Начать сначала» ведёт в её начало, без resume.
+    const end = within(feed).getByRole("region", { name: "Конец ленты" });
+    expect(within(end).getByRole("link", { name: /Начать сначала/ })).toHaveAttribute(
+      "href",
+      "/motivation?tab=cards&category=guru",
+    );
   });
 
   it("без непустых категорий кнопок нет", () => {

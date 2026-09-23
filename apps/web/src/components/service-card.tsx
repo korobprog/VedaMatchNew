@@ -9,6 +9,7 @@ export function ServiceCard({
   badgeCount,
   extra,
   headerExtra,
+  href,
   isPinned,
   onOpen,
   dragHandleProps,
@@ -22,6 +23,12 @@ export function ServiceCard({
    * карточки (`relative z-10`), см. комментарий у ссылки названия.
    */
   headerExtra?: ReactNode;
+  /**
+   * Куда ведёт нажатие на карточку, если не на главную страницу сервиса
+   * (VED-432: «Вдохновение» открывает ленту «Мудрости мира» с места, где
+   * человек остановился). Решает сам сервис через `extras` главной.
+   */
+  href?: string;
   /**
    * Закреплена ли карточка — только вид (золотая рамка). Кнопка
    * «Закрепить» из шапки убрана (VED-401: «убери насовсем кнопку
@@ -93,7 +100,7 @@ export function ServiceCard({
               service.name
             ) : (
               <Link
-                href={service.url}
+                href={href ?? service.url}
                 onClick={onOpen}
                 className="after:absolute after:inset-0 after:rounded-2xl after:content-['']"
               >

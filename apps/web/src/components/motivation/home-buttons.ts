@@ -42,6 +42,12 @@ export interface HomeButton {
 }
 
 export interface HomeButtons {
+  /**
+   * Сама карточка «Вдохновения» (VED-432): «Лента» папки «Мудрость мира» —
+   * картинки нейросети — с места, где человек остановился. Папки нет —
+   * `null`, карточка ведёт на главную сервиса, как раньше.
+   */
+  card: string | null;
   source: HomeButton;
   /** Нет ни выбранной, ни умолчательной папки — кнопки нет. */
   cards: HomeButton | null;
@@ -52,9 +58,12 @@ type HomePreference = Pick<
   "homeSourceWork" | "homeCategorySlug"
 >;
 
-/** Ссылка на ленту одного источника. */
+/**
+ * Ссылка на ленту одного источника — с места, где человек остановился
+ * (VED-432): новичок увидит начало книги, вернувшийся — свой стих.
+ */
 export function sourceFeedHref(work: string): string {
-  return reelsHref({ work });
+  return reelsHref({ work, resume: true });
 }
 
 /**
@@ -66,7 +75,12 @@ export function categoryCardsHref(
   category: Pick<MotivationCategoryDto, "slug" | "artCount" | "cardsCount">,
 ): string {
   const onlyArt = (category.cardsCount ?? 0) === 0 && (category.artCount ?? 0) > 0;
-  return reelsHref({ tab: onlyArt ? "forYou" : "cards", category: category.slug });
+  // С места, где человек остановился (VED-432), новичок — с начала.
+  return reelsHref({
+    tab: onlyArt ? "forYou" : "cards",
+    category: category.slug,
+    resume: true,
+  });
 }
 
 export function resolveHomeButtons(
@@ -85,7 +99,9 @@ export function resolveHomeButtons(
   const category =
     chosen ?? list.find((item) => item.slug === fallbackSlug) ?? null;
 
+  const wisdom = widgetCategorySlug(list);
   return {
+    card: wisdom ? reelsHref({ category: wisdom, resume: true }) : null,
     source: {
       href: sourceFeedHref(work),
       title: work,

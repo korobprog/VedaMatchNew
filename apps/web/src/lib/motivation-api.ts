@@ -83,8 +83,15 @@ export const getMotivationFeed = (
   style?: "art" | "cards",
   /** Фильтр по автору и источнику (VED-206). */
   attribution?: { speaker?: string; work?: string },
+  /**
+   * С какого места начать ленту раздела или источника (VED-432): с поста
+   * `from` или с места, где человек остановился (`resume`).
+   */
+  start?: { from?: string; resume?: boolean },
 ) => {
   const query = new URLSearchParams();
+  if (start?.from) query.set("from", start.from);
+  else if (start?.resume) query.set("resume", "1");
   if (attribution?.speaker) query.set("speaker", attribution.speaker);
   if (attribution?.work) query.set("work", attribution.work);
   if (filter === "favorites") query.set("filter", "favorites");

@@ -60,6 +60,11 @@ import {
 } from "./attribution-filter";
 import { FeedAttributionFilter } from "./feed-attribution-filter";
 import { postShareHref } from "./post-share";
+import {
+  FEED_POSITION_DELAY_MS,
+  feedEnding,
+  feedPositionBody,
+} from "./feed-position";
 import { SourceLink } from "./source-link";
 import {
   attributionParts,
@@ -316,6 +321,29 @@ export function ReelsFeed({
     return () => clearTimeout(timer);
   }, [activeIndex, items]);
 
+  /* Место остановки в ленте раздела или источника (VED-432): пост, который
+     провисел на экране полторы секунды. Кнопки на главной потом откроют
+     ленту с него. Пролистанное мельком местом не считается, а повторно тот
+     же пост не шлём. Ошибка сети не мешает читать — просто место не
+     запомнится. */
+  const savedPositionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const post = items[activeIndex];
+    if (!post || savedPositionRef.current === post.slug) return;
+    const body = feedPositionBody({ tab, order, category, speaker, work }, post.slug);
+    if (!body) return;
+    const timer = setTimeout(() => {
+      savedPositionRef.current = post.slug;
+      void apiFetch(`${API_URL}/motivation/feed-position`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch(() => undefined);
+    }, FEED_POSITION_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [activeIndex, items, tab, order, category, speaker, work]);
+
   /**
    * Что сейчас на экране. Наблюдатель стоит только на постах, а ряд кнопок
    * должен прятаться и на разделителе, и на финальном слайде — поэтому тип
@@ -417,6 +445,9 @@ export function ReelsFeed({
 
   const slides = buildSlides(items, dividerAt, Boolean(cursor));
   const filterState: FeedFilterState = { tab, order, category, speaker, work };
+  /* Финал ленты раздела или источника (VED-432): «посмотрели всё — начать
+     сначала или выбрать другой раздел». */
+  const ending = feedEnding(filterState, categories);
   const categoryNav = (className?: string) => (
     <FeedCategoryNav
       tab={tab}
@@ -607,6 +638,21 @@ export function ReelsFeed({
       {/* Значок фильтра по автору и источнику (VED-206) — в самом ряду
           вкладок (VED-252), а не отдельной строкой под ним. */}
       <Tabs tab={tab} order={order} category={category} filterState={filterState} />
+      {/* Лента открыта с места, где человек остановился, или с цитаты с
+          главной (VED-432). Листать можно только вперёд, поэтому на первой
+          картинке — дорога к началу ленты. Дальше не мешает кадру. */}
+      {initial.resumed && ending.restartHref && activeIndex === 0 && onPost && (
+        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center">
+          <Link
+            href={ending.restartHref}
+            aria-label="Лента открыта с места, где вы остановились. Открыть с начала"
+            className="pointer-events-auto inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/25 bg-black/55 px-4 text-xs font-medium text-white backdrop-blur transition hover:bg-black/70"
+          >
+            <span aria-hidden="true">↺</span>
+            С начала
+          </Link>
+        </div>
+      )}
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -696,6 +742,7 @@ export function ReelsFeed({
                 key="end"
                 donation={donation}
                 tab={tab}
+                ending={ending}
                 error={error}
                 onRetry={loadMore}
                 categoryNav={categoryNav}
@@ -1699,12 +1746,15 @@ function DividerSlide({
 function EndSlide({
   donation,
   tab,
+  ending,
   error,
   onRetry,
   categoryNav,
 }: {
   donation: DonationSettingsDto | null;
   tab: ReelsTab;
+  /** Заголовок и «Начать сначала» у ленты раздела или источника (VED-432). */
+  ending: { title: string; restartHref: string | null };
   error: string | null;
   onRetry: () => void;
   categoryNav: (className?: string) => ReactNode;
@@ -1722,17 +1772,37 @@ function EndSlide({
           </>
         ) : (
           <>
-            <p className="font-display text-xl font-semibold">{tab === "saved" ? "Это всё избранное" : "На сегодня это всё"}</p>
-            <p className="max-w-xs text-sm text-white/75">
-              Завтра появится новый пост дня. А сегодняшний вечер — повод сделать
-              свой: цитата, кадр и, если захотите, видео.
-            </p>
+            <p className="font-display text-xl font-semibold">{ending.title}</p>
+            {ending.restartHref ? (
+              /* Лента раздела кончилась (VED-432): начать её сначала или
+                 выбрать другой раздел — кнопки разделов стоят выше. */
+              <p className="max-w-xs text-sm text-white/75">
+                Можно начать сначала или выбрать другой раздел выше.
+              </p>
+            ) : (
+              <p className="max-w-xs text-sm text-white/75">
+                Завтра появится новый пост дня. А сегодняшний вечер — повод сделать
+                свой: цитата, кадр и, если захотите, видео.
+              </p>
+            )}
             <div className="flex flex-wrap justify-center gap-2">
+              {ending.restartHref && (
+                <Link
+                  href={ending.restartHref}
+                  className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 py-2 text-sm font-semibold"
+                >
+                  ↺ Начать сначала
+                </Link>
+              )}
               {/* Из «Открыток» (VED-240) — сразу на «Готовая картинка с
                   цитатой», а не на «Написать самому» по умолчанию. */}
               <Link
                 href={tab === "cards" ? "/motivation/create?tab=cards" : "/motivation/create"}
-                className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+                className={
+                  ending.restartHref
+                    ? "inline-flex min-h-11 items-center rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+                    : "btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+                }
               >
                 ✨ Создать рилс
               </Link>
