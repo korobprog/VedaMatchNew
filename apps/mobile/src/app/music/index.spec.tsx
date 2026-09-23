@@ -84,11 +84,11 @@ afterEach(() => {
 });
 
 describe('экран Медиатеки', () => {
-  it('разделы как на сайте и записи свежими первыми', async () => {
+  it('разделы как на сайте и записи по алфавиту', async () => {
     const renderer = await render();
-    expect(mockTracks).toHaveBeenCalledWith({ root: null, category: null, query: '', sort: 'fresh' }, null);
+    expect(mockTracks).toHaveBeenCalledWith({ root: null, category: null, query: '', sort: 'title' }, null);
     const text = screenText(renderer);
-    for (const label of ['Всё', 'Традиционное', 'Аудиокниги', 'Все стили', 'Киртан', 'Новое', 'Популярное']) {
+    for (const label of ['Всё', 'Традиционное', 'Аудиокниги', 'Все стили', 'Киртан', 'По алфавиту', 'Новое', 'Популярное']) {
       expect(text).toContain(label);
     }
     expect(text).toContain('Шри Гуруваштака');

@@ -1,3 +1,5 @@
+import { MUSIC_DEFAULT_TRACK_SORT, type MusicTrackSort } from '@vedamatch/shared';
+
 /**
  * Запрос выдачи Медиатеки (VED-331) — та же строка, что строит сайт
  * (`apps/web/src/app/(portal)/music/page.tsx`), и те же правила, что
@@ -5,12 +7,17 @@
  * заменяет умолчанием, поэтому приложение незнакомого и не шлёт.
  */
 
-export type MediaSort = 'fresh' | 'popular' | 'title';
+export type MediaSort = MusicTrackSort;
 
+/**
+ * Ряд «Порядок». Умолчание — по алфавиту, общее с сайтом и сервером
+ * (`MUSIC_DEFAULT_TRACK_SORT`, решение заказчика VED-273): знакомая запись
+ * лежит там же, где вчера, а не уезжает от каждой новой загрузки.
+ */
 export const MEDIA_SORTS: readonly { value: MediaSort; label: string }[] = [
+  { value: 'title', label: 'По алфавиту' },
   { value: 'fresh', label: 'Новое' },
   { value: 'popular', label: 'Популярное' },
-  { value: 'title', label: 'По алфавиту' },
 ];
 
 /** Как `MUSIC_SEARCH_MAX_LENGTH` на сервере: длиннее он всё равно обрежет. */
@@ -28,7 +35,7 @@ export interface MediaFilter {
   sort: MediaSort;
 }
 
-export const DEFAULT_MEDIA_FILTER: MediaFilter = { root: null, category: null, query: '', sort: 'fresh' };
+export const DEFAULT_MEDIA_FILTER: MediaFilter = { root: null, category: null, query: '', sort: MUSIC_DEFAULT_TRACK_SORT };
 
 /**
  * Поисковая строка как её поймёт сервер: пробелы схлопнуты, края срезаны,

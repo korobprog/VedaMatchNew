@@ -21,8 +21,8 @@ describe('normalizeMediaSearch', () => {
 });
 
 describe('mediaTracksPath', () => {
-  it('умолчание: свежее, без фильтров, порция 30', () => {
-    expect(query(mediaTracksPath(DEFAULT_MEDIA_FILTER, null))).toEqual({ sort: 'fresh', limit: '30' });
+  it('умолчание: по алфавиту, как у сайта (VED-273), без фильтров, порция 30', () => {
+    expect(query(mediaTracksPath(DEFAULT_MEDIA_FILTER, null))).toEqual({ sort: 'title', limit: '30' });
   });
 
   it('вкладка, стиль, поиск и курсор — как у сайта', () => {
@@ -50,7 +50,7 @@ describe('mediaTracksPath', () => {
     expect(mediaFilterKey({ ...DEFAULT_MEDIA_FILTER, query: 'нама ' })).toBe(
       mediaFilterKey({ ...DEFAULT_MEDIA_FILTER, query: '  нама' }),
     );
-    expect(mediaFilterKey({ ...DEFAULT_MEDIA_FILTER, sort: 'title' })).not.toBe(mediaFilterKey(DEFAULT_MEDIA_FILTER));
+    expect(mediaFilterKey({ ...DEFAULT_MEDIA_FILTER, sort: 'fresh' })).not.toBe(mediaFilterKey(DEFAULT_MEDIA_FILTER));
   });
 });
 
