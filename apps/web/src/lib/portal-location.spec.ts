@@ -3,6 +3,8 @@ import {
   PORTAL_LOCATION_LIMIT,
   portalLocation,
   portalLocationLabel,
+  portalLocationLabels,
+  portalLocationOptions,
   portalLocationSlug,
   portalLocationStep,
   portalLocationTitle,
@@ -160,5 +162,37 @@ describe("portalLocationLabel", () => {
     expect(
       portalLocationLabel("/work", () => "Совместное служение").length,
     ).toBeLessThanOrEqual(PORTAL_LOCATION_LIMIT);
+  });
+});
+
+/* VED-391 сузил плитку до четырёх в ряд, и один вариант подписи перестал
+   подходить всем экранам: плитка меряет лестницу вариантов сама. */
+describe("portalLocationOptions", () => {
+  it("от полного к короткому: сначала «корень · ступень», потом ступень", () => {
+    expect(portalLocationOptions("Блог", "Авторы")).toEqual([
+      "Блог · Авторы",
+      "Авторы",
+    ]);
+  });
+
+  it("полное длиннее предела — в лестнице его нет вовсе", () => {
+    expect(portalLocationOptions("Вдохновение", "Картинки")).toEqual([
+      "Картинки",
+    ]);
+  });
+
+  it("без ступени — один корень", () => {
+    expect(portalLocationOptions("Работа", null)).toEqual(["Работа"]);
+  });
+
+  it("первый вариант — ровно то, что пишет portalLocationLabel", () => {
+    for (const url of ["/blog/authors/1", "/work/planner/1", "/union", null]) {
+      expect(portalLocationLabels(url)[0]).toBe(portalLocationLabel(url));
+    }
+  });
+
+  it("ни один вариант не длиннее предела", () => {
+    for (const option of portalLocationLabels("/astro/compatibility"))
+      expect(option.length).toBeLessThanOrEqual(PORTAL_LOCATION_LIMIT);
   });
 });

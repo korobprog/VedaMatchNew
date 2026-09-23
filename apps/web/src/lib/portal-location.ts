@@ -26,17 +26,17 @@ export const PORTAL_LOCATION_JOINER = " · ";
 /**
  * Предел подписи в знаках (VED-374).
  *
- * Критерий приёмки заказчик назвал сам: значок окна не должен смещаться.
- * Плитка панели высотой 72px центрирует значок и подпись по вертикали, и
- * вторая строка подписи поднимает значок вверх. Значит подпись обязана
- * помещаться в одну строку. Ширина плитки при узкой панели — 94px, из них
- * под текст остаётся ~87px, а 11px Manrope тратит на кириллическую букву
- * около 6px: четырнадцать знаков — это замеренная вместимость строки, а не
- * круглое число (замер и цифры — в отчёте по VED-374).
+ * «Надпись не должна быть длинной» — это предел по смыслу, а не по
+ * пикселям: четырнадцать знаков — строка самой широкой плитки (панель в
+ * 26rem, 11px Manrope, ~85px под текст).
  *
- * Предел здесь не единственная защита: сама плитка обрезает подпись в одну
- * строку средствами CSS. Но CSS режет посреди слова, а знание о том, ЧТО
- * именно выбросить, есть только здесь.
+ * Помещается ли подпись в плитку ЭТОГО экрана, решает не он. После VED-391
+ * панель на телефоне встаёт в четыре столбца, и ширина плитки гуляет от
+ * ~63px (экран 320) до ~93px (широкий экран). Поэтому здесь готовится
+ * лестница вариантов — от полного к короткому (`portalLocationOptions`), а
+ * плитка меряет их по своей фактической ширине и берёт первый, что влез.
+ * CSS-обрезка многоточием остаётся последней страховкой: она режет посреди
+ * слова, а знание о том, ЧТО выбросить, есть только здесь.
  */
 export const PORTAL_LOCATION_LIMIT = 14;
 
@@ -98,7 +98,9 @@ const PORTAL_SECTIONS: Readonly<Record<string, string>> = {
   users: "Люди",
   vacancies: "Вакансии",
   vaishnava: "Вайшнавам",
-  welcome: "Добро пожаловать",
+  // Мастер первого входа. Заголовок страницы — «Добро пожаловать», но
+  // на кнопке это 99px при 71 доступных на телефоне (VED-391).
+  welcome: "Первые шаги",
 };
 
 /**
@@ -272,9 +274,10 @@ export function portalLocationTitle(
  *
  * Правило обрезки: выбрасывается НАЧАЛО, а не конец. Длинное название —
  * это всегда «сервис · ступень», и из двух половин общая (сервис) хуже
- * частной (ступень): сервис человек и так узнаёт по значку и по тому, что
- * сам это окно оставил, а «Картинки» или «Плейлисты» — единственное, чего он
- * про второе окно не помнит. Обрезать конец значило бы вернуться ровно к
+ * частной (ступень): сервис человек помнит — он сам это окно там оставил, —
+ * а «Картинки» или «Плейлисты» — как раз то, чего он про второе окно не
+ * помнит. (Значок у кнопки — всегда значок окна, а не сервиса, так что на
+ * него здесь не рассчитываем.) Обрезать конец значило бы вернуться ровно к
  * тому, на что жаловались: на кнопке снова один корневой сервис.
  *
  * И только если сама ступень длиннее строки — режем её с конца многоточием:
@@ -285,8 +288,39 @@ export function portalLocationLabel(
   resolve?: (slug: string, fallback: string) => string,
   limit: number = PORTAL_LOCATION_LIMIT,
 ): string {
+  return portalLocationLabels(url, resolve, limit)[0]!;
+}
+
+/**
+ * Все допустимые подписи места — от самой полной к самой короткой (VED-374,
+ * VED-391). Плитка берёт первую, что влезла в её фактическую ширину; первая
+ * в списке — то же, что `portalLocationLabel`.
+ */
+export function portalLocationLabels(
+  url: string | null,
+  resolve?: (slug: string, fallback: string) => string,
+  limit: number = PORTAL_LOCATION_LIMIT,
+): string[] {
   const { root, step } = portalLocation(url, resolve);
-  return shortenPortalLocation(root, step, limit);
+  return portalLocationOptions(root, step, limit);
+}
+
+/**
+ * Лестница подписей по правилу обрезки из `portalLocationLabel`: сначала
+ * «корень · ступень», потом одна ступень, и только последней — ступень,
+ * обрезанная с конца. Каждый вариант не длиннее `limit`.
+ */
+export function portalLocationOptions(
+  root: string,
+  step: string | null,
+  limit: number = PORTAL_LOCATION_LIMIT,
+): string[] {
+  if (!step) return [clip(root, limit)];
+  const full = `${root}${PORTAL_LOCATION_JOINER}${step}`;
+  const options = full.length <= limit ? [full] : [];
+  const short = clip(step, limit);
+  if (!options.includes(short)) options.push(short);
+  return options;
 }
 
 export function shortenPortalLocation(
@@ -294,10 +328,7 @@ export function shortenPortalLocation(
   step: string | null,
   limit: number = PORTAL_LOCATION_LIMIT,
 ): string {
-  if (!step) return clip(root, limit);
-  const full = `${root}${PORTAL_LOCATION_JOINER}${step}`;
-  if (full.length <= limit) return full;
-  return clip(step, limit);
+  return portalLocationOptions(root, step, limit)[0]!;
 }
 
 function clip(value: string, limit: number): string {

@@ -38,17 +38,18 @@ import {
   useServiceCatalog,
   useServiceNames,
 } from "@/components/service-catalog-provider";
-import { portalLocationLabel, portalLocationTitle } from "@/lib/portal-location";
+import { portalLocationLabels, portalLocationTitle } from "@/lib/portal-location";
 import {
   nextPortalWindow,
   portalWindowButtonHint,
-  portalWindowButtonLabel,
+  portalWindowTargetUrl,
 } from "@/lib/portal-windows";
 import {
   switchPortalWindows,
   usePortalWindows,
 } from "./portal-windows-store";
 import { CalculatorPad } from "./calculator-pad";
+import { FittedLabel } from "./fitted-label";
 import {
   BUILTIN_QUICK_ACTIONS,
   CUSTOM_ACTION_PREFIX,
@@ -242,10 +243,25 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
             панели её нет, она открывается прямо над текстом страницы — и
             строки просвечивали сквозь подписи плиток. Панель не стекло:
             под ней ничего не должно быть видно.
+
+            Ширина (VED-391). На телефоне панель занимает страницу целиком,
+            отступив от краёв те же 12 пикселей, что были справа, — и в ряд
+            встают четыре кнопки вместо трёх. На широком экране она
+            останавливается на 26rem: это ровно четыре плитки прежнего
+            размера с промежутками, а растянутая на два монитора панель
+            превратила бы плитки в полосы и увела бы их от кнопки, которой
+            её открыли.
+
+            Четыре столбца на экране 360 оставляли подписи 63px — меньше,
+            чем занимают «Уведомления» или «Вдохновение» (70–71px в шрифте
+            плитки). Поэтому боковые поля панели 8px вместо 12, промежуток
+            между плитками 4px вместо 6 и поле внутри плитки 2px вместо 4:
+            под подпись остаётся 70.5px. Заголовок сдвинут на те же 4px
+            обратно и стоит, где стоял.
           */
-          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd bg-bg-1 p-3 shadow-xl"
+          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(26rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd bg-bg-1 px-2 py-3 shadow-xl"
         >
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between pl-1">
             {/* Номера окна в заголовке больше нет (VED-326): где человек
                 находится, теперь написано на самой кнопке окна — названием
                 места, а не цифрой. */}
@@ -322,7 +338,9 @@ function QuickTiles({
 
   return (
     <>
-      <ul className="grid grid-cols-3 gap-1.5">
+      {/* Четыре в ряд (VED-391): панель занимает всю ширину телефона, и
+          третий столбец оставлял справа пустое поле шириной с плитку. */}
+      <ul className="grid grid-cols-4 gap-1">
         {config.ids.map((id) => {
           const meta = quickActionMeta(id, catalog);
           // Кнопки может не быть: сервис выключили, страницу закладки
@@ -411,17 +429,16 @@ function ActionIcon({ meta }: { meta: QuickActionMeta }) {
  * окно помнит свой последний адрес и положение прокрутки.
  *
  * На кнопке подпись короткая, в подсказке и у скринридера — полная: короткая
- * обязана держаться в одну строку, иначе вторая строка поднимает значок
- * окна (VED-374), а в подсказке места сколько угодно.
+ * обязана держаться в одну строку (VED-374), а в подсказке места сколько
+ * угодно. Какой из коротких вариантов влезает, решает ширина плитки на этом
+ * экране (`FittedLabel`): после VED-391 плиток в ряду четыре, и на телефоне
+ * «Блог · Авторы» уступает место «Авторам».
  */
 function WindowTile({ onSwitch }: { onSwitch: () => void }) {
   const router = useRouter();
   const state = usePortalWindows();
   const names = useServiceNames();
-  const label = useCallback(
-    (url: string | null) => portalLocationLabel(url, names),
-    [names],
-  );
+  const options = portalLocationLabels(portalWindowTargetUrl(state), names);
   const title = useCallback(
     (url: string | null) => portalLocationTitle(url, names),
     [names],
@@ -448,15 +465,10 @@ function WindowTile({ onSwitch }: { onSwitch: () => void }) {
       className={tileClass}
     >
       <Columns2 className={TILE_ICON} />
-      {/* Одна строка, а не `line-clamp-2` (VED-374): плитка центрирует
-          содержимое по вертикали, и вторая строка подписи поднимает значок
-          окна — ровно то смещение, которое заказчик назвал критерием.
-          Название уже укорочено по смыслу (`portalLocationLabel`), а
-          `truncate` здесь — страховка на случай длинного имени из каталога:
-          режет CSS, но значок остаётся на месте. */}
-      <span className="w-full truncate">
-        {portalWindowButtonLabel(state, label)}
-      </span>
+      {/* Одна строка, а не `line-clamp-2` (VED-374): «надпись не должна
+          быть длинной». Значок от числа строк больше не зависит вовсе —
+          его держит верхний отступ плитки (`tileInnerClass`). */}
+      <FittedLabel options={options} />
     </button>
   );
 }
@@ -465,9 +477,17 @@ function WindowTile({ onSwitch }: { onSwitch: () => void }) {
  * Плитка без рамки. Отдельно от `tileClass` ради доната: подсветка
  * `vm-quick-attention` красит рамку, а у доната рамка уехала на обёртку
  * (см. `DonateTile`), и вторая рамка внутри читалась бы как кнопка в кнопке.
+ *
+ * Значок стоит на отступе сверху, а не по центру (VED-374, VED-391). При
+ * `justify-center` вторая строка подписи поднимала значок на полстроки — у
+ * окна, у длинного имени сервиса, у своей кнопки из закладки, — и ряд
+ * значков шёл ступенькой. 14px сверху — ровно то место, где значок стоял
+ * при одной строке: 72px − рамка 2px − значок 24 − промежуток 4 − строка
+ * 13.75 = 28.25, пополам 14.1. Вторая строка теперь растёт вниз и
+ * помещается: 14 + 24 + 4 + 27.5 = 69.5 из 70.
  */
 const tileInnerClass =
-  "flex h-[72px] w-full flex-col items-center justify-center gap-1 rounded-xl px-1 text-center text-[11px] font-medium leading-tight text-text-1 transition-colors hover:text-text-0";
+  "flex h-[72px] w-full flex-col items-center justify-start gap-1 rounded-xl px-0.5 pt-3.5 text-center text-[11px] font-medium leading-tight text-text-1 transition-colors hover:text-text-0";
 
 const tileClass = `${tileInnerClass} border border-glass-brd bg-white/4`;
 
