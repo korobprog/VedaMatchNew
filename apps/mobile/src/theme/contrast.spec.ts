@@ -158,6 +158,18 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   { name: 'вердикт «подходит» в строке истории', text: 'success', surface: 'bg0' },
   { name: 'вердикт «сомнительно» в строке истории', text: 'warning', surface: 'bg0' },
   { name: 'вердикт «не подходит» в строке истории', text: 'danger', surface: 'bg0' },
+  // Панель быстрого доступа (VED-385, `components/quick-bar/quick-bar.tsx`):
+  // чип — стекло на непрозрачной полосе `bg0`, подпись 11 px `text0`. Мелкий
+  // текст, поэтому никаких акцентов в подписи: `cyan` и `magenta` на светлой
+  // теме мелким не проходят (CLAUDE.md).
+  { name: 'подпись чипа панели быстрого доступа', text: 'text0', surface: 'glass' },
+  // Её настройка во вкладке «Сервисы» (`components/services/quick-pin-settings.tsx`)
+  // — карточка на стекле: заголовок, названия сервисов и стрелки — `text0`,
+  // счётчик «2 из 5», подсказка и название, которое уже не влезает, — `text1`.
+  // Сообщение «панель заполнена» — `text0`, как и остальной текст действия.
+  { name: 'название сервиса и стрелки в настройке панели', text: 'text0', surface: 'glass' },
+  { name: 'счётчик и подсказка настройки панели', text: 'text1', surface: 'glass' },
+  { name: 'галочка закреплённого на заливке magenta', text: 'onAccent', surface: 'magenta' },
 ];
 
 describe.each([
@@ -214,6 +226,12 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   // Рамка поля поиска, когда в нём что-то набрано: подсказка «здесь
   // фильтр», а не замена обводке фокуса — её рисует система.
   { name: 'рамка заполненного поля поиска', graphic: 'magenta', surface: 'bg1' },
+  // Квадрат-переключатель в настройке панели быстрого доступа (VED-385):
+  // пустой — обводка `text1`, закреплённый — заливка `magenta`, оба на
+  // стекле карточки. Состояние дублирует `accessibilityState.checked` и
+  // галочка внутри, цвет — не единственная примета.
+  { name: 'обводка незакреплённого сервиса на стекле', graphic: 'text1', surface: 'glass' },
+  { name: 'заливка закреплённого сервиса на стекле', graphic: 'magenta', surface: 'glass' },
 ];
 
 describe.each([

@@ -6,7 +6,7 @@ import { ServiceIcon } from '@/components/services/service-icons';
 import { appVariant } from '@/config/app-variant';
 import { useSession } from '@/lib/auth/session';
 import { openService } from '@/lib/services/open-service';
-import { quickPinsStore, useQuickPins } from '@/lib/services/quick-pins-store';
+import { quickPinsStore, useQuickPins, type QuickPinsStore } from '@/lib/services/quick-pins-store';
 import { serviceIconKind } from '@/lib/services/service-icon-kind';
 import { hasInAppScreen } from '@/lib/services/service-route';
 import { createServicesApi } from '@/lib/services/services-api';
@@ -37,18 +37,19 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const ENTER = FadeIn.duration(DURATION_MS).easing(EASE_OUT).reduceMotion(ReduceMotion.System);
 const EXIT = FadeOut.duration(DURATION_MS).easing(EASE_OUT).reduceMotion(ReduceMotion.System);
 
-export function QuickBar() {
+/** `store` подменяется только в тестах; в приложении — общий `quickPinsStore`. */
+export function QuickBar({ store = quickPinsStore }: { store?: QuickPinsStore }) {
   return (
     <LayoutAnimationConfig skipEntering>
-      <QuickBarInner />
+      <QuickBarInner store={store} />
     </LayoutAnimationConfig>
   );
 }
 
-function QuickBarInner() {
+function QuickBarInner({ store }: { store: QuickPinsStore }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const pins = useQuickPins();
+  const pins = useQuickPins(store);
   const { api } = useSession();
   const { webOrigin } = appVariant();
   const hasPins = pins.length > 0;
@@ -63,13 +64,13 @@ function QuickBarInner() {
     createServicesApi(api)
       .list()
       .then((cards) => {
-        if (alive) void quickPinsStore.reconcile(cards);
+        if (alive) void store.reconcile(cards);
       })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [api, hasPins]);
+  }, [api, hasPins, store]);
 
   if (!hasPins) return null;
 

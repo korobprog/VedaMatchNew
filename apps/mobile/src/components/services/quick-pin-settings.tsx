@@ -2,7 +2,7 @@ import type { ServiceCard } from '@vedamatch/shared';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { QUICK_PIN_LIMIT, isPinned, pinnableServices } from '@/lib/services/quick-pins';
-import { quickPinsStore, useQuickPins } from '@/lib/services/quick-pins-store';
+import { quickPinsStore, useQuickPins, type QuickPinsStore } from '@/lib/services/quick-pins-store';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -25,9 +25,16 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
  * Пятый закреплён — остальные строки не выключаются, а на нажатие объясняют,
  * почему не выйдет: молча неработающий переключатель хуже слов.
  */
-export function QuickPinSettings({ services }: { services: readonly ServiceCard[] }) {
+export function QuickPinSettings({
+  services,
+  store = quickPinsStore,
+}: {
+  services: readonly ServiceCard[];
+  /** Подменяется только в тестах. */
+  store?: QuickPinsStore;
+}) {
   const { colors } = useTheme();
-  const pins = useQuickPins();
+  const pins = useQuickPins(store);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -38,7 +45,7 @@ export function QuickPinSettings({ services }: { services: readonly ServiceCard[
   const full = pins.length >= QUICK_PIN_LIMIT;
 
   async function toggle(service: ServiceCard) {
-    const outcome = await quickPinsStore.toggle(service);
+    const outcome = await store.toggle(service);
     setNotice(
       outcome === 'full'
         ? `Сверху помещается ${QUICK_PIN_LIMIT} сервисов. Открепите один, чтобы закрепить «${service.name}».`
@@ -116,13 +123,13 @@ export function QuickPinSettings({ services }: { services: readonly ServiceCard[
                       glyph="↑"
                       label={`Раньше: ${service.name}`}
                       disabled={index === 0}
-                      onPress={() => void quickPinsStore.move(service.slug, -1)}
+                      onPress={() => void store.move(service.slug, -1)}
                     />
                     <Arrow
                       glyph="↓"
                       label={`Позже: ${service.name}`}
                       disabled={index === pinnedCards.length - 1}
-                      onPress={() => void quickPinsStore.move(service.slug, 1)}
+                      onPress={() => void store.move(service.slug, 1)}
                     />
                   </>
                 ) : null}
