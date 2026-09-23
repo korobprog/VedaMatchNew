@@ -235,3 +235,26 @@ describe('«Здоровье»: решение по присланной кар�
     });
   });
 });
+
+describe('новая версия приложения: пуш «Доступна новая версия»', () => {
+  it('путь /app — раздел обновления, а не лента и не браузер', () => {
+    expect(resolveNotificationTarget('/app')).toEqual({ kind: 'app-update' });
+    expect(resolveNotificationTarget('/app/')).toEqual({ kind: 'app-update' });
+    expect(resolveNotificationTarget('/app?from=push')).toEqual({ kind: 'app-update' });
+  });
+
+  it('нажатие открывает вкладку «Сервисы» с проверкой обновления', () => {
+    expect(pushDestination('/app')).toEqual({ kind: 'route', pathname: '/services' });
+  });
+
+  it('из ленты — туда же: страница загрузки на сайте телефону с приложением не нужна', () => {
+    expect(inboxDestination('/app')).toEqual({ kind: 'route', pathname: '/services' });
+  });
+
+  it('глубже /app — это не пуш об обновлении, а обычный путь сайта', () => {
+    expect(resolveNotificationTarget('/app/privacy')).toEqual({
+      kind: 'site',
+      path: '/app/privacy',
+    });
+  });
+});
