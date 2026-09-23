@@ -3,6 +3,7 @@
 // хелперы lib/api.ts.
 import type {
   NotificationDeliveryStatusDto,
+  NotificationHistoryResponse,
   NotificationInboxResponse,
   NotificationPreferencesDto,
   NotificationReadStateRequest,
@@ -81,7 +82,24 @@ export function fetchInbox(
   return request(`/notifications/inbox${search ? `?${search}` : ""}`);
 }
 
-/** Без `ids` помечает прочитанным всё непрочитанное. */
+/**
+ * Порция истории уведомлений (VED-404): прочитанное в порядке последнего
+ * контакта. Курсор — строка из прошлого ответа, внутрь клиент не смотрит.
+ */
+export function fetchInboxHistory(
+  options: { cursor?: string | null; limit?: number } = {},
+): Promise<NotificationHistoryResponse> {
+  const params = new URLSearchParams();
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.limit) params.set("limit", String(options.limit));
+  const search = params.toString();
+  return request(`/notifications/history${search ? `?${search}` : ""}`);
+}
+
+/**
+ * Без `ids` помечает прочитанным всё непрочитанное. С `ids` — ещё и отметка
+ * контакта (VED-404): открытое уже прочитанное поднимается в истории.
+ */
 export function markInboxRead(ids?: string[]): Promise<{ ok: true }> {
   return request("/notifications/inbox/read", {
     method: "POST",

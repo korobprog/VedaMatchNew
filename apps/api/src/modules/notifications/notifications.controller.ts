@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import type {
   AccessTokenPayload,
   NotificationDeliveryStatusDto,
+  NotificationHistoryResponse,
   NotificationInboxResponse,
   NotificationPreferencesDto,
   NotificationReadStateRequest,
@@ -115,7 +116,25 @@ export class NotificationsController {
     return this.notifications.listInbox(user.sub, { cursor, query, limit });
   }
 
-  /** Пустой `ids` — «прочитано всё»: страница списка гасит счётчик целиком. */
+  /**
+   * История уведомлений (VED-404): прочитанное в порядке последнего контакта.
+   * `cursor` — строка из прошлого ответа, `limit` — размер порции.
+   */
+  @UseGuards(AuthGuard)
+  @Get('history')
+  history(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ): Promise<NotificationHistoryResponse> {
+    return this.notifications.listHistory(user.sub, { cursor, limit });
+  }
+
+  /**
+   * Пустой `ids` — «прочитано всё»: страница списка гасит счётчик целиком.
+   * С `ids` это ещё и отметка контакта (VED-404): открытие уже прочитанного
+   * поднимает его в истории.
+   */
   @UseGuards(AuthGuard)
   @Post('inbox/read')
   async markRead(

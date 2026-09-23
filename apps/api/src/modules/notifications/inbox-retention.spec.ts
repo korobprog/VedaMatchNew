@@ -7,11 +7,21 @@ import {
 const now = new Date('2026-09-22T12:00:00.000Z');
 
 /** Подходит ли строка под условие удаления — та же проверка, что сделает база. */
-function expired(row: { createdAt: Date; readAt: Date | null }): boolean {
+function expired(row: {
+  createdAt: Date;
+  readAt: Date | null;
+  contactAt?: Date | null;
+}): boolean {
+  const contactAt = row.contactAt === undefined ? row.readAt : row.contactAt;
   const where = buildInboxPurgeWhere(now);
-  const [byRead, byAge] = where.OR;
+  const [byContact, byRead, byAge] = where.OR;
   return (
-    (row.readAt !== null && row.readAt < byRead.readAt.lt) ||
+    (row.readAt !== null &&
+      contactAt !== null &&
+      contactAt < byContact.contactAt.lt) ||
+    (row.readAt !== null &&
+      contactAt === null &&
+      row.readAt < byRead.readAt.lt) ||
     row.createdAt < byAge.createdAt.lt
   );
 }
@@ -39,6 +49,37 @@ describe('buildInboxPurgeWhere', () => {
         readAt: new Date('2026-09-14T12:00:00Z'),
       }),
     ).toBe(true);
+  });
+
+  it('неделя считается от последнего контакта, а не от прочтения (VED-404)', () => {
+    // Прочитано восемь дней назад, открыто из истории вчера — остаётся.
+    expect(
+      expired({
+        createdAt: new Date('2026-09-13T12:00:00Z'),
+        readAt: new Date('2026-09-14T12:00:00Z'),
+        contactAt: new Date('2026-09-21T12:00:00Z'),
+      }),
+    ).toBe(false);
+  });
+
+  it('прочитанное без отметки контакта — по дате прочтения, как было', () => {
+    expect(
+      expired({
+        createdAt: new Date('2026-09-10T12:00:00Z'),
+        readAt: new Date('2026-09-14T12:00:00Z'),
+        contactAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('контакт с непрочитанным (вернул в непрочитанные) неделю не отсчитывает', () => {
+    expect(
+      expired({
+        createdAt: new Date('2026-09-10T12:00:00Z'),
+        readAt: null,
+        contactAt: new Date('2026-09-11T12:00:00Z'),
+      }),
+    ).toBe(false);
   });
 
   /** Иначе лента человека, переставшего заходить, растёт без конца. */

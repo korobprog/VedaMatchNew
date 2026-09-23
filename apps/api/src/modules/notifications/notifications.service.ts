@@ -11,6 +11,7 @@ import type {
   NotificationPreferencesDto,
   NotificationDeviceStats,
   NotificationDeliveryStatusDto,
+  NotificationHistoryResponse,
   NotificationReadStateResponse,
   PushSubscriptionRequest,
   UpdateNotificationPreferencesRequest,
@@ -43,6 +44,17 @@ import {
   workStatusThreadKey,
 } from './inbox-thread';
 import { FOREIGN_MARK, inboxMark } from './notification-mark';
+import {
+  buildHistoryWhere,
+  clampHistoryLimit,
+  closedTaskReaders,
+  contactOnlyData,
+  HISTORY_ORDER_BY,
+  parseHistoryCursor,
+  readContactData,
+  readStateData,
+  sliceHistoryPage,
+} from './inbox-history';
 import type { PushFailure } from './push-errors';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 
@@ -665,14 +677,106 @@ export class NotificationsService {
    * гасит счётчик целиком, когда человек открыл страницу.
    */
   async markRead(userId: string, ids?: string[]): Promise<void> {
+    const now = new Date();
+    const only = ids && ids.length > 0 ? { id: { in: ids } } : {};
     await this.prisma.notificationItem.updateMany({
-      where: {
-        userId,
-        readAt: null,
-        ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
-      },
-      data: { readAt: new Date() },
+      where: { userId, readAt: null, ...only },
+      data: readContactData(now),
     });
+    // Открытие уже прочитанного — тоже контакт (VED-404): такое уведомление
+    // поднимается в истории. Только по названным `id`: «прочитано всё» —
+    // жест над непрочитанным, прочитанное он не трогает.
+    if (ids && ids.length > 0) {
+      await this.prisma.notificationItem.updateMany({
+        where: { userId, readAt: { not: null }, ...only },
+        data: contactOnlyData(now),
+      });
+    }
+  }
+
+  /**
+   * История уведомлений (VED-404): прочитанное в порядке последнего контакта.
+   * Порции — как у ленты, keyset по `[userId, contactAt]`; правила выборки и
+   * курсор — в `inbox-history.ts`.
+   */
+  async listHistory(
+    userId: string,
+    options: { cursor?: unknown; limit?: unknown } = {},
+  ): Promise<NotificationHistoryResponse> {
+    const parsed = parseHistoryCursor(options.cursor);
+    if (parsed.kind === 'invalid')
+      throw new BadRequestException('Некорректный курсор истории');
+    const limit = clampHistoryLimit(options.limit);
+    const rows = await this.prisma.notificationItem.findMany({
+      where: buildHistoryWhere(
+        userId,
+        parsed.kind === 'cursor' ? parsed.cursor : null,
+      ),
+      orderBy: HISTORY_ORDER_BY,
+      take: limit + 1,
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        url: true,
+        category: true,
+        createdAt: true,
+        readAt: true,
+        contactAt: true,
+        mark: true,
+        markFallback: true,
+      },
+    });
+    const page = sliceHistoryPage(rows, limit);
+    return {
+      items: page.items.map((row) => ({
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        url: row.url,
+        category: row.category as NotificationCategory,
+        createdAt: row.createdAt.toISOString(),
+        readAt: row.readAt?.toISOString() ?? null,
+        contactAt: row.contactAt?.toISOString() ?? null,
+        mark: inboxMark(row.mark, row.markFallback),
+      })),
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  /**
+   * Человек закрыл задачу «Работы» (VED-406) — его непрочитанные уведомления
+   * о ней гаснут и уходят в историю.
+   *
+   * Жалоба: «Почему мне выкатывают уведомления со статусом ВЫПОЛНЕНО?» На
+   * проде это были «Задачу вернули» от ИИ-агента, взявшего карточки в тест.
+   * Заказчик принял работу прямо на доске, уведомления так и остались
+   * непрочитанными, а пометка, догоняющая карточку (VED-320), перекрасила их
+   * в «Выполнено». Новостью для него они перестали быть в тот миг, когда он
+   * сам закрыл задачу: закрытие и есть контакт с ними.
+   *
+   * Только непрочитанное: прочитанное уже разобрано, и его место в истории —
+   * по настоящему контакту. Ищем по адресу, как `refreshWorkTaskMark`: FK на
+   * задачу чужого сервиса у уведомления нет и быть не может.
+   */
+  async readClosedWorkTask(
+    spaceId: string,
+    taskKey: string,
+    readerIds: readonly (string | null | undefined)[],
+    now = new Date(),
+  ): Promise<number> {
+    const readers = closedTaskReaders(readerIds);
+    if (readers.length === 0) return 0;
+    const { count } = await this.prisma.notificationItem.updateMany({
+      where: {
+        userId: { in: readers },
+        url: workTaskUrl(spaceId, taskKey),
+        category: 'work',
+        readAt: null,
+      },
+      data: readContactData(now),
+    });
+    return count;
   }
 
   /**
@@ -688,10 +792,11 @@ export class NotificationsService {
    * проверяется после неё, поэтому по чужому `id` приходит 404, а не 403 —
    * отличать «нет такого» от «есть, но не ваше» посторонний не должен.
    *
-   * `readAt` у уже прочитанного не переставляется: повторное нажатие на ту же
-   * сторону — не событие. На порядок ленты это не влияет (VED-153 сортирует по
-   * `createdAt`), но дата прочтения — это ответ на вопрос «когда я это
-   * видел», и обновлять её задним числом незачем.
+   * `readAt` у уже прочитанного не переставляется: на порядок ленты это не
+   * влияет (VED-153 сортирует по `createdAt`), но дата прочтения — это ответ
+   * на вопрос «когда я это впервые прочёл», и обновлять её задним числом
+   * незачем. Переставляется `contactAt` — повторное нажатие тоже контакт, и
+   * уведомление поднимается в истории (VED-404).
    */
   async setReadState(
     userId: string,
@@ -704,13 +809,14 @@ export class NotificationsService {
     });
     if (!current) throw new NotFoundException('Уведомление не найдено');
 
-    const readAt = read ? (current.readAt ?? new Date()) : null;
-    if (readAt?.getTime() !== current.readAt?.getTime()) {
-      await this.prisma.notificationItem.update({
-        where: { id: current.id },
-        data: { readAt },
-      });
-    }
+    // Нажатие — контакт при любом исходе (VED-404), поэтому пишем всегда:
+    // даже повторное «прочитано» поднимает уведомление в истории.
+    const data = readStateData(current.readAt, read, new Date());
+    const readAt = data.readAt;
+    await this.prisma.notificationItem.update({
+      where: { id: current.id },
+      data,
+    });
 
     return {
       id: current.id,

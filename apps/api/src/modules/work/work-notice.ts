@@ -1,3 +1,5 @@
+import { isFinishedColumn } from './work-task-status';
+
 /**
  * Дозревание уведомлений о работе с карточкой.
  *
@@ -112,7 +114,9 @@ export function resolveWorkNotice(window: WorkNoticeWindow): WorkNoticeOutcome {
   }
 
   const from = window.from as WorkNoticeColumn;
-  if (from.isDone && !window.to.isDone) {
+  // Возврат — выезд из колонки сделанной работы, а не из любой, отмеченной
+  // флагом (VED-406): см. `isFinishedColumn`.
+  if (isFinishedColumn(from) && !window.to.isDone) {
     return {
       kind: 'returned',
       columnName: window.to.name,

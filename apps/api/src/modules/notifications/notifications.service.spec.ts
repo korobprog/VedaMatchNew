@@ -12,6 +12,8 @@ interface InboxRow {
   category: string;
   createdAt: Date;
   readAt: Date | null;
+  /** Последний контакт (VED-404); нет поля — строка из фикстуры без него. */
+  contactAt?: Date | null;
   mark?: string | null;
   threadKey?: string | null;
 }
@@ -24,6 +26,7 @@ interface InboxWhere {
   category?: string;
   threadKey?: string;
   readAt?: null | { lt: Date } | { not: null };
+  contactAt?: Date | null | { lt: Date } | { not: null };
   createdAt?: Date | { lt: Date };
   id?: string | { in: string[] } | { lt: string };
   title?: { contains: string; mode?: string };
@@ -55,6 +58,18 @@ function matchesInbox(row: InboxRow, where: InboxWhere): boolean {
     (row.readAt === null || row.readAt >= where.readAt.lt)
   )
     return false;
+  if (where.contactAt !== undefined) {
+    const contactAt = row.contactAt ?? null;
+    const cond = where.contactAt;
+    if (cond === null) {
+      if (contactAt !== null) return false;
+    } else if (cond instanceof Date) {
+      if (contactAt === null || contactAt.getTime() !== cond.getTime())
+        return false;
+    } else if ('not' in cond) {
+      if (contactAt === null) return false;
+    } else if (contactAt === null || contactAt >= cond.lt) return false;
+  }
   if (where.createdAt instanceof Date) {
     if (row.createdAt.getTime() !== where.createdAt.getTime()) return false;
   } else if (where.createdAt && row.createdAt >= where.createdAt.lt)
@@ -97,6 +112,12 @@ type InboxUniqueWhere =
 /** Порядок выборки Prisma: свежее сверху, совпавшая дата — по `id` вниз. */
 function compareInboxFixtures(a: InboxRow, b: InboxRow): number {
   const byDate = b.createdAt.getTime() - a.createdAt.getTime();
+  return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
+}
+
+/** Порядок истории: последний контакт сверху, совпавшая дата — по `id`. */
+function compareByContact(a: InboxRow, b: InboxRow): number {
+  const byDate = (b.contactAt?.getTime() ?? 0) - (a.contactAt?.getTime() ?? 0);
   return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
 }
 
@@ -152,11 +173,24 @@ function createService() {
         ),
       ),
       findMany: jest.fn(
-        ({ where, take }: { where: InboxWhere; take?: number }) =>
+        ({
+          where,
+          take,
+          orderBy,
+        }: {
+          where: InboxWhere;
+          take?: number;
+          orderBy?: Array<Record<string, string>>;
+        }) =>
           Promise.resolve(
             store.inbox
               .filter((row) => matchesInbox(row, where))
-              .sort(compareInboxFixtures)
+              // История (VED-404) упорядочена по контакту, лента — по дате.
+              .sort(
+                orderBy?.[0] && 'contactAt' in orderBy[0]
+                  ? compareByContact
+                  : compareInboxFixtures,
+              )
               .slice(0, take),
           ),
       ),
@@ -855,18 +889,22 @@ describe('NotificationsService.setReadState (VED-143)', () => {
     await expect(service.countUnread('user-1')).resolves.toBe(1);
   });
 
-  it('повторное нажатие на ту же сторону не двигает дату прочтения', async () => {
+  it('повторное нажатие на ту же сторону не двигает дату прочтения, но это контакт (VED-404)', async () => {
     const { service, store } = createService();
     await service.addToInbox('user-1', draft);
     const id = store.inbox[0].id;
     const first = await service.setReadState('user-1', id, true);
-    const updatesAfterFirst = store.inboxUpdates;
+    const firstContact = store.inbox[0].contactAt;
+    expect(firstContact).toEqual(new Date(first.readAt as string));
 
+    await new Promise((resolve) => setTimeout(resolve, 2));
     const second = await service.setReadState('user-1', id, true);
 
     expect(second.readAt).toBe(first.readAt);
-    // До базы повторное нажатие не доходит вовсе.
-    expect(store.inboxUpdates).toBe(updatesAfterFirst);
+    // Контакт переставлен: уведомление поднимается в истории.
+    expect(store.inbox[0].contactAt!.getTime()).toBeGreaterThan(
+      firstContact!.getTime(),
+    );
   });
 
   it('чужое уведомление не найдётся', async () => {
@@ -1429,5 +1467,215 @@ describe('NotificationsService.saveSubscription — отметка жизни (V
     expect(saved.lastSeenAt).toBeInstanceOf(Date);
     expect(saved.failureCount).toBe(0);
     expect(saved.deadSince).toBeNull();
+  });
+});
+
+describe('NotificationsService: история уведомлений (VED-404)', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 0, 24, 9, minute));
+
+  /** Три прочитанных и одно непрочитанное; контакт у каждого свой. */
+  function seed(store: { inbox: InboxRow[] }) {
+    const row = (
+      id: string,
+      createdMinute: number,
+      readMinute: number | null,
+    ): InboxRow => ({
+      id,
+      userId: 'user-1',
+      title: id,
+      body: '',
+      url: `/x/${id}`,
+      category: 'chat',
+      createdAt: at(createdMinute),
+      readAt: readMinute === null ? null : at(readMinute),
+      contactAt: readMinute === null ? null : at(readMinute),
+    });
+    store.inbox.push(
+      row('old', 1, 20),
+      row('mid', 5, 10),
+      row('new', 9, 12),
+      row('unread', 15, null),
+      { ...row('other', 1, 30), userId: 'user-2' },
+    );
+  }
+
+  it('только прочитанное этого человека, последний контакт сверху', async () => {
+    const { service, store } = createService();
+    seed(store);
+
+    const history = await service.listHistory('user-1');
+
+    // Не порядок прихода (new, mid, old), а порядок контакта.
+    expect(history.items.map((item) => item.id)).toEqual(['old', 'new', 'mid']);
+    expect(history.items[0].contactAt).toBe(at(20).toISOString());
+    expect(history.nextCursor).toBeNull();
+  });
+
+  it('открытие прочитанного поднимает его в истории, дата прочтения прежняя', async () => {
+    const { service, store } = createService();
+    seed(store);
+
+    await service.markRead('user-1', ['mid']);
+
+    const history = await service.listHistory('user-1');
+    expect(history.items[0].id).toBe('mid');
+    expect(history.items[0].readAt).toBe(at(10).toISOString());
+  });
+
+  it('прочтение непрочитанного кладёт его в историю первым', async () => {
+    const { service, store } = createService();
+    seed(store);
+
+    await service.markRead('user-1', ['unread']);
+
+    const history = await service.listHistory('user-1');
+    expect(history.items.map((item) => item.id)).toEqual([
+      'unread',
+      'old',
+      'new',
+      'mid',
+    ]);
+  });
+
+  it('«прочитано всё» не трогает контакт с уже прочитанным', async () => {
+    const { service, store } = createService();
+    seed(store);
+
+    await service.markRead('user-1');
+
+    const byId = new Map(store.inbox.map((row) => [row.id, row]));
+    expect(byId.get('mid')!.contactAt).toEqual(at(10));
+    expect(byId.get('unread')!.contactAt).toEqual(byId.get('unread')!.readAt);
+  });
+
+  it('возвращённое в непрочитанные из истории уходит', async () => {
+    const { service, store } = createService();
+    seed(store);
+
+    await service.setReadState('user-1', 'old', false);
+
+    const history = await service.listHistory('user-1');
+    expect(history.items.map((item) => item.id)).toEqual(['new', 'mid']);
+  });
+
+  it('порциями: курсор продолжает с того же места', async () => {
+    const { service, store } = createService();
+    seed(store);
+
+    const first = await service.listHistory('user-1', { limit: '2' });
+    expect(first.items.map((item) => item.id)).toEqual(['old', 'new']);
+    const second = await service.listHistory('user-1', {
+      limit: '2',
+      cursor: first.nextCursor,
+    });
+    expect(second.items.map((item) => item.id)).toEqual(['mid']);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('битый курсор — 400, а не история с начала', async () => {
+    const { service } = createService();
+    await expect(
+      service.listHistory('user-1', { cursor: 'мусор' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('подъём строки ветки контактом не считается (VED-320)', async () => {
+    const { service, store } = createService();
+    const url = '/work/planner/space-1?task=VED-42';
+    store.inbox.push({
+      id: 'thread',
+      userId: 'user-1',
+      title: 'VED-42: сменился статус',
+      body: '',
+      url,
+      category: 'work',
+      createdAt: at(1),
+      readAt: at(2),
+      contactAt: at(2),
+      threadKey: `work-status:${url}`,
+    });
+
+    await service.refreshWorkTaskMark('space-1', 'VED-42', 'rework', [
+      'user-1',
+    ]);
+
+    expect(store.inbox[0].readAt).toBeNull();
+    expect(store.inbox[0].contactAt).toEqual(at(2));
+  });
+});
+
+describe('NotificationsService.readClosedWorkTask (VED-406)', () => {
+  const url = '/work/planner/space-1?task=VED-380';
+  const row = (
+    id: string,
+    userId: string,
+    patch: Partial<InboxRow> = {},
+  ): InboxRow => ({
+    id,
+    userId,
+    title: 'Задачу вернули',
+    body: '',
+    url,
+    category: 'work',
+    createdAt: new Date('2026-09-23T06:12:53Z'),
+    readAt: null,
+    mark: 'testing',
+    ...patch,
+  });
+
+  it('гасит закрывшему его непрочитанное о задаче и кладёт в историю', async () => {
+    const { service, store } = createService();
+    store.inbox.push(row('mine', 'stas'));
+    const now = new Date('2026-09-23T08:01:37Z');
+
+    const count = await service.readClosedWorkTask(
+      'space-1',
+      'VED-380',
+      ['stas', null],
+      now,
+    );
+
+    expect(count).toBe(1);
+    expect(store.inbox[0]).toMatchObject({ readAt: now, contactAt: now });
+    await expect(service.countUnread('stas')).resolves.toBe(0);
+    const history = await service.listHistory('stas');
+    expect(history.items.map((item) => item.id)).toEqual(['mine']);
+  });
+
+  it('чужие уведомления, другие задачи и прочитанное не трогает', async () => {
+    const { service, store } = createService();
+    const earlier = new Date('2026-09-23T07:00:00Z');
+    store.inbox.push(
+      row('assignee', 'sevak'),
+      row('other-task', 'stas', {
+        url: '/work/planner/space-1?task=VED-381',
+      }),
+      row('not-work', 'stas', { category: 'chat' }),
+      row('read', 'stas', { readAt: earlier, contactAt: earlier }),
+    );
+
+    await service.readClosedWorkTask('space-1', 'VED-380', ['stas']);
+
+    const byId = new Map(store.inbox.map((item) => [item.id, item]));
+    expect(byId.get('assignee')!.readAt).toBeNull();
+    expect(byId.get('other-task')!.readAt).toBeNull();
+    expect(byId.get('not-work')!.readAt).toBeNull();
+    expect(byId.get('read')!.contactAt).toEqual(earlier);
+  });
+
+  it('агент закрыл от имени человека — гаснет у обоих', async () => {
+    const { service, store } = createService();
+    store.inbox.push(row('human', 'stas'), row('agent', 'sevak'));
+
+    await service.readClosedWorkTask('space-1', 'VED-380', ['sevak', 'stas']);
+
+    expect(store.inbox.every((item) => item.readAt !== null)).toBe(true);
+  });
+
+  it('без читателей в базу не ходит', async () => {
+    const { service } = createService();
+    await expect(
+      service.readClosedWorkTask('space-1', 'VED-380', [null]),
+    ).resolves.toBe(0);
   });
 });

@@ -1,4 +1,8 @@
-import { resolveTaskStatusMark } from './work-task-status';
+import {
+  closesTask,
+  isFinishedColumn,
+  resolveTaskStatusMark,
+} from './work-task-status';
 
 describe('resolveTaskStatusMark', () => {
   it('узнаёт четыре состояния из карточки VED-272', () => {
@@ -37,5 +41,37 @@ describe('resolveTaskStatusMark', () => {
   it('не подписывает колонку, которая лишь содержит знакомое слово', () => {
     // «Выполнено в прошлом квартале» — другая колонка, а не «Выполнено».
     expect(resolveTaskStatusMark('Выполнено в прошлом квартале')).toBeNull();
+  });
+});
+
+describe('isFinishedColumn — колонка сделанной работы (VED-406)', () => {
+  it('«Выполнено» и «Готово» с флагом — сделанное', () => {
+    expect(isFinishedColumn({ name: 'Выполнено', isDone: true })).toBe(true);
+    expect(isFinishedColumn({ name: 'Готово', isDone: true })).toBe(true);
+  });
+
+  it('тематическая колонка с флагом — не сделанное', () => {
+    // Так на доске портала отмечены «РАЗНОЕ.», «МУЗЫКА», «ОБРАЗОВАНИЕ».
+    expect(isFinishedColumn({ name: 'РАЗНОЕ.', isDone: true })).toBe(false);
+    expect(isFinishedColumn({ name: 'МУЗЫКА', isDone: true })).toBe(false);
+  });
+
+  it('«Готово» без флага задачу не закрывает — и сделанным не считается', () => {
+    expect(isFinishedColumn({ name: 'Готово', isDone: false })).toBe(false);
+  });
+});
+
+describe('closesTask — въезд закрывает задачу для двигавшего (VED-406)', () => {
+  it('флаг «завершающая» закрывает', () => {
+    expect(closesTask({ name: 'РАЗНОЕ.', isDone: true })).toBe(true);
+  });
+
+  it('имя сделанного закрывает и без флага', () => {
+    expect(closesTask({ name: 'Выполнено', isDone: false })).toBe(true);
+  });
+
+  it('рабочие колонки не закрывают', () => {
+    expect(closesTask({ name: 'Тестерование', isDone: false })).toBe(false);
+    expect(closesTask({ name: 'На доработку', isDone: false })).toBe(false);
   });
 });

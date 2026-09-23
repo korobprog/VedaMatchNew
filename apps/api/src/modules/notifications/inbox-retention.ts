@@ -10,8 +10,9 @@
  */
 
 /**
- * Прочитанное живёт неделю, а не четверть часа: список показывает его ниже
- * непрочитанного, и вернуться к уже открытому уведомлению — обычное дело.
+ * Прочитанное живёт неделю после последнего контакта, а не четверть часа:
+ * список показывает его ниже непрочитанного, история (VED-404) — в порядке
+ * контакта, и вернуться к уже открытому уведомлению — обычное дело.
  */
 export const READ_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -20,12 +21,22 @@ export const UNREAD_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Условие Prisma: ровно те строки, которым пора уйти. */
 export interface InboxPurgeWhere {
-  OR: [{ readAt: { lt: Date } }, { createdAt: { lt: Date } }];
+  OR: [
+    { readAt: { not: null }; contactAt: { lt: Date } },
+    { readAt: { lt: Date }; contactAt: null },
+    { createdAt: { lt: Date } },
+  ];
 }
 
 /**
- * Просроченное на момент `now`: прочитанное старше недели и вообще что угодно
- * старше месяца.
+ * Просроченное на момент `now`: прочитанное, с которым неделю не было
+ * контакта, и вообще что угодно старше месяца.
+ *
+ * Неделя считается от последнего контакта (VED-404), а не от прочтения:
+ * уведомление, открытое вчера из истории, не должно пропасть завтра только
+ * потому, что впервые его прочли шесть дней назад. Строка без `contactAt`
+ * (прочитана сборкой, которая колонки ещё не знала) — по дате прочтения, как
+ * было.
  *
  * Без `userId`: чистит воркер, и чистит у всех сразу. Привязка к читателю была
  * не только медленной, но и дырявой — у человека, переставшего заходить на
@@ -33,9 +44,11 @@ export interface InboxPurgeWhere {
  */
 export function buildInboxPurgeWhere(now: Date): InboxPurgeWhere {
   const ms = now.getTime();
+  const weekAgo = new Date(ms - READ_RETENTION_MS);
   return {
     OR: [
-      { readAt: { lt: new Date(ms - READ_RETENTION_MS) } },
+      { readAt: { not: null }, contactAt: { lt: weekAgo } },
+      { readAt: { lt: weekAgo }, contactAt: null },
       { createdAt: { lt: new Date(ms - UNREAD_RETENTION_MS) } },
     ],
   };

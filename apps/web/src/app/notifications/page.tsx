@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { History } from "lucide-react";
 import { Header } from "@/components/header";
 import { redirectToLogin } from "@/lib/require-user";
 import { NotificationList } from "@/components/notifications/notification-list";
@@ -18,11 +20,31 @@ export default async function NotificationsPage() {
     <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
-        <h1 className="mb-1 font-display text-2xl font-bold text-text-0 sm:text-3xl">
-          Уведомления
-        </h1>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
+            Уведомления
+          </h1>
+          {/* История уведомлений (VED-404) — тем же значком, что «История»
+              переходов на панели быстрых кнопок (VED-392): заказчик просил
+              «по типу истории навигации, такой же значок». Полное имя для
+              скринридера содержит видимую подпись — голосовая команда
+              «нажми История» находит кнопку. */}
+          <Link
+            href="/notifications/history"
+            aria-label="История уведомлений"
+            title="История уведомлений"
+            className="glass inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-glass-brd px-3 text-sm font-medium text-text-1 transition-colors hover:border-magenta/40 hover:text-text-0 min-[400px]:px-4"
+          >
+            <History className="h-[18px] w-[18px]" aria-hidden="true" />
+            {/* На 320–360 заголовок «Уведомления» шрифтом Unbounded и подпись
+                рядом не помещаются: остаётся значок, имя для скринридера
+                то же. */}
+            <span className="hidden min-[400px]:inline">История</span>
+          </Link>
+        </div>
         <p className="mb-6 text-sm text-text-1">
-          Новое сверху. Прочитанное остаётся неделю и удаляется само.
+          Новое сверху. Прочитанное остаётся неделю после последнего открытия и
+          удаляется само.
         </p>
 
         <NotificationList />
