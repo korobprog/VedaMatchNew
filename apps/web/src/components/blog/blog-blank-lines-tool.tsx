@@ -47,7 +47,14 @@ export function BlogBlankLinesTool({
 }) {
   const keepId = useId();
   const [keep, setKeep] = useState<number>(BLOG_BLANK_LINES_DEFAULT_KEEP);
-  const [note, setNote] = useState<string | null>(null);
+  /**
+   * Итог последнего нажатия и текст, к которому он относится. Как только
+   * человек правит поле сам, «Убрано 6 пустых строк» говорит уже не о том,
+   * что он видит, — такую подпись прячем, а не оставляем висеть.
+   */
+  const [note, setNote] = useState<{ message: string; forValue: string } | null>(
+    null,
+  );
   /**
    * Что было до уборки и что получилось. Пара, а не одна строка: пока
    * `after` совпадает с полем, отменять безопасно — человек с тех пор ничего
@@ -62,7 +69,10 @@ export function BlogBlankLinesTool({
 
   function clean() {
     const result = collapseBlankLines(value, keep);
-    setNote(blogBlankLinesMessage(result.removed));
+    setNote({
+      message: blogBlankLinesMessage(result.removed),
+      forValue: result.text,
+    });
     if (result.text === value) {
       // Ничего не изменилось — отменять нечего, и старую отмену держать
       // нельзя: она вернула бы текст к позапрошлому состоянию.
@@ -77,7 +87,7 @@ export function BlogBlankLinesTool({
     if (!applied) return;
     onChange(applied.before);
     setApplied(null);
-    setNote("Текст возвращён как был.");
+    setNote({ message: "Текст возвращён как был.", forValue: applied.before });
   }
 
   return (
@@ -125,7 +135,7 @@ export function BlogBlankLinesTool({
       {/* Живая область на месте: скринридер читает итог уборки, а не
           догадывается о нём по изменившемуся полю. */}
       <p role="status" className="mt-1 min-h-4 text-xs text-text-1">
-        {note}
+        {note?.forValue === value ? note.message : null}
       </p>
     </div>
   );
