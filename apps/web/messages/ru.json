@@ -45,7 +45,14 @@
     "rewards": "Баллы и приглашения",
     "donate": "Поддержать",
     "whatsNew": "Что нового",
-    "assistant": "Ассистент"
+    "assistant": "Ассистент",
+    "customizeMenu": "Настроить меню",
+    "customizeDone": "Готово",
+    "menuVisible": "В меню",
+    "menuHidden": "Скрытые сервисы",
+    "menuHotkeys": "Горячие кнопки",
+    "moveUp": "Выше",
+    "moveDown": "Ниже"
   },
   "Landing": {
     "nav": {

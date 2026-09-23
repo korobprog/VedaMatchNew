@@ -1,22 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Bookmark,
   Bot,
   Calculator,
   CalendarDays,
   Check,
-  ChevronDown,
-  ChevronUp,
   Columns2,
   HeartHandshake,
   History,
   Images,
   Info,
   Mail,
+  Menu,
   Quote,
   Search,
   Settings2,
@@ -25,8 +31,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { RewardsMeDto } from "@vedamatch/shared";
-import { API_URL, apiFetch } from "@/lib/http-client";
 import {
   donateTileView,
   loadDonationSettings,
@@ -39,28 +43,25 @@ import {
   useServiceCatalog,
   useServiceNames,
 } from "@/components/service-catalog-provider";
-import { portalLocationLabels, portalLocationTitle } from "@/lib/portal-location";
-import {
-  nextPortalWindow,
-  portalWindowButtonHint,
-  portalWindowTargetUrl,
-} from "@/lib/portal-windows";
-import {
-  switchPortalWindows,
-  usePortalWindows,
-} from "./portal-windows-store";
 import { CalculatorPad } from "./calculator-pad";
 import { HistorySheet } from "./history-sheet";
 import { FittedLabel } from "./fitted-label";
 import {
+  inviteCopyLabel,
+  useInviteCopy,
+  usePortalWindowSwitch,
+} from "./quick-action-hooks";
+import { TuneRow } from "./tune-row";
+import {
   BUILTIN_QUICK_ACTIONS,
   CUSTOM_ACTION_PREFIX,
+  REQUIRED_QUICK_ACTIONS,
   addCustomQuickAction,
+  arrangeQuickActions,
   customQuickActionId,
   lockedQuickActions,
   moveQuickAction,
   parseQuickConfig,
-  pinQuickActions,
   quickActionCatalog,
   quickActionMeta,
   removeCustomQuickAction,
@@ -73,10 +74,10 @@ import {
   type QuickActionMeta,
   type QuickConfig,
 } from "./quick-actions";
-import { copyText } from "@/lib/copy-text";
 
 /** Раскладка панели живёт на устройстве — см. комментарий в quick-actions.ts. */
-const STORAGE_KEY = "vedamatch:quick-panel";
+export const QUICK_PANEL_STORAGE_KEY = "vedamatch:quick-panel";
+const STORAGE_KEY = QUICK_PANEL_STORAGE_KEY;
 
 /*
  * Про цвет мелких подписей внутри панели и её шторок.
@@ -94,6 +95,9 @@ const ICONS: Record<
   BuiltinQuickActionId,
   React.ComponentType<{ className?: string }>
 > = {
+  // VED-402: те же три полоски, что были у бургера в шапке, — по ним меню
+  // и ищут.
+  menu: Menu,
   window: Columns2,
   bookmarks: Bookmark,
   history: History,
@@ -122,6 +126,41 @@ const ICONS: Record<
  */
 const TILE_ICON = "size-6";
 
+/** Кнопки, которые открывают шторку под плитками, а не уводят со страницы. */
+export type QuickSheetId =
+  | "calculator"
+  | "info"
+  | "calendar"
+  | "bookmarks"
+  | "history";
+
+const SHEET_TITLES: Record<QuickSheetId, string> = {
+  calculator: "Калькулятор",
+  info: "Что нужно знать",
+  calendar: "Календарь",
+  bookmarks: "Закладки",
+  history: "История",
+};
+
+export function isQuickSheetId(id: string): id is QuickSheetId {
+  return id in SHEET_TITLES;
+}
+
+/**
+ * Что панель показывает: плитки целиком или одну шторку без плиток.
+ *
+ * Одну шторку — когда её открыли не плиткой, а снаружи: кнопкой «История» в
+ * шапке (VED-402) или горячей кнопкой из бокового меню (VED-408). Человек
+ * просил историю, а не сетку из шестнадцати плиток, под которой её ещё надо
+ * найти. Шторка та же самая, что под плиткой, — второй копии нет.
+ */
+type PanelView = "tiles" | QuickSheetId;
+
+/** Чем панель управляют снаружи: шапка и боковое меню. */
+export interface QuickPanelHandle {
+  openSheet: (sheet: QuickSheetId) => void;
+}
+
 /**
  * Панель горячих кнопок: короткий путь к тому, за чем возвращаются каждый
  * день, из любого места портала.
@@ -135,13 +174,51 @@ const TILE_ICON = "size-6";
  *
  * `admin` — у администрации портала панель полностью своя (VED-326): три
  * закреплённые кнопки у неё не закрепляются.
+ *
+ * `onOpenMenu` — плитка «Меню» (VED-402): боковое меню живёт в шапке, панель
+ * только просит его открыть.
+ *
+ * Кнопка «История» (VED-402) стоит в шапке слева от звёздочки, но живёт
+ * здесь, внутри той же обёртки: иначе тап по ней при открытой истории был бы
+ * «тапом мимо панели», закрывал бы её, а клик следом открывал бы снова.
  */
-export function QuickPanel({ admin = false }: { admin?: boolean }) {
-  const [open, setOpen] = useState(false);
+export function QuickPanel({
+  admin = false,
+  onOpenMenu,
+  ref,
+}: {
+  admin?: boolean;
+  /** `trigger` — звёздочка: на неё вернуть фокус, когда меню закроют. */
+  onOpenMenu?: (trigger: HTMLElement | null) => void;
+  ref?: Ref<QuickPanelHandle>;
+}) {
+  const [view, setView] = useState<PanelView | null>(null);
+  const open = view !== null;
   const [tuning, setTuning] = useState(false);
   const [config, setConfig] = useState<QuickConfig>({ ids: [], custom: [] });
   const panelRef = useRef<HTMLDivElement>(null);
+  const starRef = useRef<HTMLButtonElement>(null);
   const locked = lockedQuickActions(admin);
+
+  const close = useCallback(() => {
+    setView(null);
+    setTuning(false);
+  }, []);
+  const show = useCallback((next: PanelView) => {
+    setTuning(false);
+    setView((current) => (current === next ? null : next));
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openSheet: (sheet) => {
+        setTuning(false);
+        setView(sheet);
+      },
+    }),
+    [],
+  );
 
   const names = useServiceNames();
   const catalogMap = useServiceCatalog();
@@ -172,7 +249,7 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
       }
     };
     const stored = read();
-    setConfig({ ...stored, ids: pinQuickActions(stored.ids, locked) });
+    setConfig({ ...stored, ids: arrangeQuickActions(stored.ids, locked) });
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [locked]);
 
@@ -188,7 +265,7 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
     (next: QuickConfig) => {
       // Закрепление применяется на каждом сохранении: то, что переживает
       // только загрузку страницы, закреплением не является.
-      const pinned = { ...next, ids: pinQuickActions(next.ids, locked) };
+      const pinned = { ...next, ids: arrangeQuickActions(next.ids, locked) };
       setConfig(pinned);
       try {
         window.localStorage.setItem(STORAGE_KEY, serializeQuickConfig(pinned));
@@ -203,10 +280,10 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
     };
     const onClick = (event: MouseEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!panelRef.current?.contains(event.target as Node)) close();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onClick);
@@ -214,24 +291,41 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onClick);
     };
-  }, [open]);
+  }, [open, close]);
+
+  const title = tuning
+    ? "Настроить панель"
+    : view === null || view === "tiles"
+      ? "Горячие кнопки"
+      : SHEET_TITLES[view];
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative flex items-center gap-2" ref={panelRef}>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
+        onClick={() => show("history")}
+        aria-expanded={view === "history"}
+        aria-label="История"
+        title="История"
+        className="flex size-9 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+      >
+        <History className="size-5" />
+      </button>
+      <button
+        ref={starRef}
+        type="button"
+        onClick={() => show("tiles")}
+        aria-expanded={view === "tiles"}
         aria-label="Горячие кнопки"
         className="flex size-9 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
       >
         <Sparkles className="size-5" />
       </button>
 
-      {open && (
+      {view && (
         <div
           role="dialog"
-          aria-label="Горячие кнопки"
+          aria-label={title}
           /*
             Прижата к правому краю окна, а не к кнопке.
 
@@ -261,33 +355,42 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
             между плитками 4px вместо 6 и поле внутри плитки 2px вместо 4:
             под подпись остаётся 70.5px. Заголовок сдвинут на те же 4px
             обратно и стоит, где стоял.
+
+            Высота (VED-399). Панель не длиннее экрана и листается сама:
+            шестнадцать плиток и шторка закладок под ними уходили за нижний
+            край, а `fixed` не прокручивается вместе со страницей — третья
+            закладка оставалась там, куда палец не достаёт. `overscroll-
+            contain`: докрученная до конца панель не тащит за собой
+            страницу под ней.
           */
-          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 w-[min(26rem,calc(100vw-1.5rem))] rounded-2xl border border-glass-brd bg-bg-1 px-2 py-3 shadow-xl"
+          className="fixed right-3 top-[calc(3.5rem+env(safe-area-inset-top)+0.25rem)] z-50 max-h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] w-[min(26rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain rounded-2xl border border-glass-brd bg-bg-1 px-2 py-3 shadow-xl"
         >
           <div className="mb-2 flex items-center justify-between pl-1">
             {/* Номера окна в заголовке больше нет (VED-326): где человек
                 находится, теперь написано на самой кнопке окна — названием
                 места, а не цифрой. */}
             <h2 className="min-w-0 truncate font-display text-sm font-bold text-text-0">
-              {tuning ? "Настроить панель" : "Горячие кнопки"}
+              {title}
             </h2>
             <div className="flex items-center gap-1">
+              {view === "tiles" && (
+                <button
+                  type="button"
+                  onClick={() => setTuning((value) => !value)}
+                  aria-pressed={tuning}
+                  aria-label={tuning ? "Готово" : "Настроить панель"}
+                  className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                >
+                  {tuning ? (
+                    <Check className="size-5" />
+                  ) : (
+                    <Settings2 className="size-5" />
+                  )}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setTuning((value) => !value)}
-                aria-pressed={tuning}
-                aria-label={tuning ? "Готово" : "Настроить панель"}
-                className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-              >
-                {tuning ? (
-                  <Check className="size-5" />
-                ) : (
-                  <Settings2 className="size-5" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
+                onClick={close}
                 aria-label="Закрыть"
                 className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
               >
@@ -296,7 +399,15 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
             </div>
           </div>
 
-          {tuning ? (
+          {view !== "tiles" ? (
+            <QuickSheet
+              sheet={view}
+              config={config}
+              onChange={save}
+              onClose={close}
+              onNavigate={close}
+            />
+          ) : tuning ? (
             <QuickSettings
               config={config}
               catalog={catalog}
@@ -308,7 +419,15 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
               config={config}
               catalog={catalog}
               onChange={save}
-              onClose={() => setOpen(false)}
+              onClose={close}
+              onOpenMenu={
+                onOpenMenu
+                  ? () => {
+                      close();
+                      onOpenMenu(starRef.current);
+                    }
+                  : undefined
+              }
             />
           )}
         </div>
@@ -317,23 +436,81 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
   );
 }
 
-/** Кнопки, которые открывают шторку под плитками, а не уводят со страницы. */
-type SheetId = "calculator" | "info" | "calendar" | "bookmarks" | "history";
+/**
+ * Одна шторка — калькулятор, календарь, закладки, история. Рисуется и под
+ * плитками, и одна в панели (см. `PanelView`).
+ */
+function QuickSheet({
+  sheet,
+  config,
+  onChange,
+  onClose,
+  onNavigate,
+}: {
+  sheet: QuickSheetId;
+  config: QuickConfig;
+  onChange: (next: QuickConfig) => void;
+  onClose: () => void;
+  /** Переход по ссылке из шторки закрывает и саму панель. */
+  onNavigate: () => void;
+}) {
+  switch (sheet) {
+    case "calculator":
+      return <CalculatorPad onClose={onClose} />;
+    case "info":
+      return <InfoSheet onClose={onClose} />;
+    case "calendar":
+      return <CalendarSheet onClose={onClose} />;
+    case "history":
+      return <HistorySheet onClose={onClose} onNavigate={onNavigate} />;
+    case "bookmarks":
+      return (
+        <BookmarksSheet
+          onClose={onClose}
+          onNavigate={onNavigate}
+          pinned={(path) => config.ids.includes(customQuickActionId(path))}
+          onPin={(item) =>
+            onChange(
+              addCustomQuickAction(config, {
+                label: item.title,
+                href: item.path,
+              }),
+            )
+          }
+        />
+      );
+  }
+}
 
 function QuickTiles({
   config,
   catalog,
   onChange,
   onClose,
+  onOpenMenu,
 }: {
   config: QuickConfig;
   catalog: QuickActionMeta[];
   onChange: (next: QuickConfig) => void;
   onClose: () => void;
+  onOpenMenu?: () => void;
 }) {
-  const [sheet, setSheet] = useState<SheetId | null>(null);
+  const [sheet, setSheet] = useState<QuickSheetId | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
-  if (config.ids.length === 0)
+  /* Шторка открывается под плитками, а панель на телефоне почти в экран
+     высотой: без прокрутки к ней нажатие выглядело бы как «ничего не
+     произошло» (VED-399). `nearest` — на широком экране, где шторка и так
+     видна, ничего не дёргается. */
+  useEffect(() => {
+    if (sheet) sheetRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [sheet]);
+
+  // Меню открывает шапка; панель без неё (в тестах, в песочнице) плитку
+  // «Меню» просто не рисует — кнопка в пустоту хуже, чем никакой.
+  const ids = config.ids.filter((id) => id !== "menu" || onOpenMenu);
+
+  if (ids.length === 0)
     return (
       <p className="px-1 py-2 text-sm text-text-1">
         Панель пуста. Нажмите шестерёнку и выберите, что держать под рукой.
@@ -345,7 +522,7 @@ function QuickTiles({
       {/* Четыре в ряд (VED-391): панель занимает всю ширину телефона, и
           третий столбец оставлял справа пустое поле шириной с плитку. */}
       <ul className="grid grid-cols-4 gap-1">
-        {config.ids.map((id) => {
+        {ids.map((id) => {
           const meta = quickActionMeta(id, catalog);
           // Кнопки может не быть: сервис выключили, страницу закладки
           // удалили. Молча пропускаем — чинить это человеку нечем.
@@ -358,18 +535,30 @@ function QuickTiles({
                 <WindowTile onSwitch={onClose} />
               ) : id === "invite" ? (
                 <InviteTile />
+              ) : id === "menu" ? (
+                <button
+                  type="button"
+                  onClick={onOpenMenu}
+                  aria-haspopup="dialog"
+                  className={tileClass}
+                >
+                  <QuickActionIcon meta={meta} />
+                  <span className="line-clamp-2">{meta.label}</span>
+                </button>
               ) : meta.href ? (
                 <Link href={meta.href} onClick={onClose} className={tileClass}>
-                  <ActionIcon meta={meta} />
+                  <QuickActionIcon meta={meta} />
                   <span className="line-clamp-2">{meta.label}</span>
                 </Link>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setSheet(id as SheetId)}
+                  onClick={() => {
+                    if (isQuickSheetId(id)) setSheet(id);
+                  }}
                   className={tileClass}
                 >
-                  <ActionIcon meta={meta} />
+                  <QuickActionIcon meta={meta} />
                   <span className="line-clamp-2">{meta.label}</span>
                 </button>
               )}
@@ -378,26 +567,16 @@ function QuickTiles({
         })}
       </ul>
 
-      {sheet === "calculator" && <CalculatorPad onClose={() => setSheet(null)} />}
-      {sheet === "info" && <InfoSheet onClose={() => setSheet(null)} />}
-      {sheet === "calendar" && <CalendarSheet onClose={() => setSheet(null)} />}
-      {sheet === "history" && (
-        <HistorySheet onClose={() => setSheet(null)} onNavigate={onClose} />
-      )}
-      {sheet === "bookmarks" && (
-        <BookmarksSheet
-          onClose={() => setSheet(null)}
-          onNavigate={onClose}
-          pinned={(path) => config.ids.includes(customQuickActionId(path))}
-          onPin={(item) =>
-            onChange(
-              addCustomQuickAction(config, {
-                label: item.title,
-                href: item.path,
-              }),
-            )
-          }
-        />
+      {sheet && (
+        <div ref={sheetRef} className="scroll-mb-3">
+          <QuickSheet
+            sheet={sheet}
+            config={config}
+            onChange={onChange}
+            onClose={() => setSheet(null)}
+            onNavigate={onClose}
+          />
+        </div>
       )}
     </>
   );
@@ -406,21 +585,29 @@ function QuickTiles({
 /**
  * Значок кнопки: у сервиса свой, тот же, что в сетке портала, — по нему
  * сервис узнают, а не читают подпись. У остальных — значок из списка, у
- * своей кнопки из закладки — закладка.
+ * своей кнопки из закладки — закладка. Тот же значок стоит у кнопки и в
+ * боковом меню (VED-408).
  */
-function ActionIcon({ meta }: { meta: QuickActionMeta }) {
+export function QuickActionIcon({
+  meta,
+  className = TILE_ICON,
+}: {
+  meta: QuickActionMeta;
+  className?: string;
+}) {
   if (meta.kind === "service") {
     return (
       <ServiceIcon
         slug={serviceActionSlug(meta.id) ?? undefined}
-        className={TILE_ICON}
+        className={className}
       />
     );
   }
-  if (meta.kind === "custom") return <Bookmark className={TILE_ICON} />;
+  if (meta.kind === "custom") return <Bookmark className={className} />;
   const Icon = ICONS[meta.id as BuiltinQuickActionId];
-  return <Icon className={TILE_ICON} />;
+  return <Icon className={className} />;
 }
+
 
 /**
  * Второе окно портала (VED-118, VED-163, VED-326, VED-374).
@@ -438,40 +625,21 @@ function ActionIcon({ meta }: { meta: QuickActionMeta }) {
  * «Блог · Авторы» уступает место «Авторам».
  */
 function WindowTile({ onSwitch }: { onSwitch: () => void }) {
-  const router = useRouter();
-  const state = usePortalWindows();
-  const names = useServiceNames();
-  const options = portalLocationLabels(portalWindowTargetUrl(state), names);
-  const title = useCallback(
-    (url: string | null) => portalLocationTitle(url, names),
-    [names],
-  );
+  const windowSwitch = usePortalWindowSwitch();
 
   return (
     <button
       type="button"
-      title={portalWindowButtonHint(state, title)}
-      aria-label={portalWindowButtonHint(state, title)}
-      onClick={() => {
-        const target = switchPortalWindows(
-          nextPortalWindow(state, state.windows.length),
-          window.scrollY,
-        );
-        onSwitch();
-        /* `replace`, а не `push` (VED-354): переключение окна — это не шаг
-           по истории, а смена того, ЧЬЮ историю мы листаем. Записью в общей
-           истории вкладки оно ломало аппаратную кнопку «назад»: она честно
-           возвращала к предыдущей записи, а предыдущая принадлежала другому
-           окну. */
-        router.replace(target.url);
-      }}
+      title={windowSwitch.hint}
+      aria-label={windowSwitch.hint}
+      onClick={() => windowSwitch.go(onSwitch)}
       className={tileClass}
     >
       <Columns2 className={TILE_ICON} />
       {/* Одна строка, а не `line-clamp-2` (VED-374): «надпись не должна
           быть длинной». Значок от числа строк больше не зависит вовсе —
           его держит верхний отступ плитки (`tileInnerClass`). */}
-      <FittedLabel options={options} />
+      <FittedLabel options={windowSwitch.options} />
     </button>
   );
 }
@@ -536,37 +704,14 @@ function DonateTile() {
   );
 }
 
-/**
- * Ссылка-приглашение в буфер, не уводя со страницы: за ней и приходят —
- * скинуть другу в мессенджер. Полный текст приглашения остаётся в «Баллах»,
- * его собирает сервер из каталога сервисов.
- */
+/** Ссылка-приглашение в буфер — см. `useInviteCopy`. */
 function InviteTile() {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-
-  async function copy() {
-    try {
-      const response = await apiFetch(`${API_URL}/rewards/me`);
-      if (!response.ok) throw new Error("rewards");
-      const me = (await response.json()) as RewardsMeDto;
-      if (!(await copyText(me.link))) throw new Error("clipboard");
-      setState("copied");
-      window.setTimeout(() => setState("idle"), 2000);
-    } catch {
-      setState("failed");
-    }
-  }
+  const invite = useInviteCopy();
 
   return (
-    <button type="button" onClick={() => void copy()} className={tileClass}>
+    <button type="button" onClick={() => void invite.copy()} className={tileClass}>
       <Share2 className={TILE_ICON} />
-      <span className="line-clamp-2">
-        {state === "copied"
-          ? "Скопировано"
-          : state === "failed"
-            ? "Не вышло"
-            : "Пригласить"}
-      </span>
+      <span className="line-clamp-2">{inviteCopyLabel(invite.state)}</span>
     </button>
   );
 }
@@ -706,9 +851,10 @@ function QuickSettings({
   ].filter((group) => group.items.length > 0);
 
   return (
-    /* Список длиннее экрана: сервисов дюжина, да ещё свои кнопки. Прокрутка
-       внутри панели, а не рост панели за край окна. */
-    <div className="max-h-[60vh] overflow-y-auto">
+    /* Список длиннее экрана: сервисов дюжина, да ещё свои кнопки. Листается
+       вся панель (VED-399), а не второй прокруткой внутри неё: две
+       прокрутки одна в другой палец путает. */
+    <div>
       {groups.map((group) => (
         <section key={group.key} className="mb-2 last:mb-0">
           {/* Не заголовок разметкой: панель открывается поверх страницы, и
@@ -724,102 +870,38 @@ function QuickSettings({
             {group.items.map((meta) => {
               const on = config.ids.includes(meta.id);
               const fixed = locked.includes(meta.id);
+              // «Меню» не выключается, но переставляется (VED-402).
+              const required = REQUIRED_QUICK_ACTIONS.includes(meta.id);
+              const move = (delta: -1 | 1) => () =>
+                onChange({
+                  ...config,
+                  ids: moveQuickAction(config.ids, meta.id, delta, locked.length),
+                });
               return (
-                <li key={meta.id} className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    /* `aria-disabled`, а не `disabled`: кнопка остаётся в
-                       порядке обхода табом, и скринридер успевает прочитать,
-                       почему галочка не снимается. */
-                    aria-disabled={fixed || undefined}
-                    onClick={() => {
-                      if (fixed) return;
-                      onChange({
-                        ...config,
-                        ids: toggleQuickAction(config.ids, meta.id),
-                      });
-                    }}
-                    className={`flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left ${
-                      fixed ? "cursor-default" : "hover:bg-white/4"
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                        on
-                          ? "border-mint-edge bg-mint text-on-mint"
-                          : "border-glass-brd"
-                      }`}
-                    >
-                      {on && <Check className="size-3" />}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm text-text-0">
-                        {meta.label}
-                      </span>
-                      <span className="block truncate text-[11px] text-text-1">
-                        {fixed ? "Всегда в панели" : meta.hint}
-                      </span>
-                    </span>
-                  </button>
-                  {on && !fixed && (
-                    <>
-                      <button
-                        type="button"
-                        aria-label={`Выше: ${meta.label}`}
-                        onClick={() =>
-                          onChange({
-                            ...config,
-                            ids: moveQuickAction(
-                              config.ids,
-                              meta.id,
-                              -1,
-                              locked.length,
-                            ),
-                          })
-                        }
-                        className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-                      >
-                        <ChevronUp className="size-5" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Ниже: ${meta.label}`}
-                        onClick={() =>
-                          onChange({
-                            ...config,
-                            ids: moveQuickAction(
-                              config.ids,
-                              meta.id,
-                              1,
-                              locked.length,
-                            ),
-                          })
-                        }
-                        className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-                      >
-                        <ChevronDown className="size-5" />
-                      </button>
-                    </>
-                  )}
-                  {/* Свою кнопку из закладки можно убрать совсем (VED-345):
-                      галочка только выключает, а выключенная чужая страница
-                      осталась бы в списке навсегда. */}
-                  {meta.id.startsWith(CUSTOM_ACTION_PREFIX) && (
-                    <button
-                      type="button"
-                      aria-label={`Удалить из панели горячих клавиш: ${meta.label}`}
-                      onClick={() =>
-                        onChange(removeCustomQuickAction(config, meta.id))
-                      }
-                      className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-                    >
-                      <X className="size-5" />
-                    </button>
-                  )}
-                </li>
+                <TuneRow
+                  key={meta.id}
+                  label={meta.label}
+                  hint={fixed || required ? "Всегда в панели" : meta.hint}
+                  on={on}
+                  fixed={fixed || required}
+                  onToggle={() =>
+                    onChange({
+                      ...config,
+                      ids: toggleQuickAction(config.ids, meta.id),
+                    })
+                  }
+                  onUp={on && !fixed ? move(-1) : undefined}
+                  onDown={on && !fixed ? move(1) : undefined}
+                  /* Свою кнопку из закладки можно убрать совсем (VED-345):
+                     галочка только выключает, а выключенная чужая страница
+                     осталась бы в списке навсегда. */
+                  onRemove={
+                    meta.id.startsWith(CUSTOM_ACTION_PREFIX)
+                      ? () => onChange(removeCustomQuickAction(config, meta.id))
+                      : undefined
+                  }
+                  removeLabel={`Удалить из панели горячих клавиш: ${meta.label}`}
+                />
               );
             })}
           </ul>

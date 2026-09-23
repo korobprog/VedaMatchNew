@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import ru from "../../../messages/ru.json";
-import { QuickPanel } from "./quick-panel";
+import { createRef } from "react";
+import { QuickPanel, type QuickPanelHandle } from "./quick-panel";
 import { resetDonationSettings } from "@/lib/donation-settings";
 import { resetPortalWindowsForTests } from "./portal-windows-store";
 import { noteNavigationHistory } from "./navigation-history-store";
@@ -179,6 +180,8 @@ describe("QuickPanel", () => {
       "search",
       "donate",
       "invite",
+      // VED-402: «Меню» доехало до старой записи сразу за закреплёнными.
+      "menu",
       "aphorism",
       "calendar",
       "postcard",
@@ -330,7 +333,9 @@ describe("QuickPanel", () => {
       noteNavigationHistory(url);
     const user = await openPanel();
 
-    await user.click(screen.getByRole("button", { name: /^История/ }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^История/ }),
+    );
 
     const list = screen.getByRole("list", { name: "История перемещений" });
     const rows = within(list).getAllByRole("listitem");
@@ -352,7 +357,9 @@ describe("QuickPanel", () => {
     noteNavigationHistory("/work/agenda");
     const user = await openPanel();
 
-    await user.click(screen.getByRole("button", { name: /^История/ }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^История/ }),
+    );
     await user.click(screen.getByRole("button", { name: "Очистить историю" }));
 
     expect(screen.getByText(/Пока пусто/)).toBeInTheDocument();
@@ -507,5 +514,131 @@ describe("QuickPanel", () => {
         String(call[0]).includes("/billing/donation"),
       ),
     ).toHaveLength(asked);
+  });
+});
+
+/* VED-402: кнопка «История» в шапке слева от звёздочки и плитка «Меню»
+   вместо бургера. */
+describe("QuickPanel: «История» в шапке и плитка «Меню»", () => {
+  function renderPanel(props: {
+    onOpenMenu?: (trigger: HTMLElement | null) => void;
+    ref?: React.Ref<QuickPanelHandle>;
+  } = {}) {
+    const user = userEvent.setup();
+    render(
+      <NextIntlClientProvider locale="ru" messages={ru}>
+        <QuickPanel {...props} />
+      </NextIntlClientProvider>,
+    );
+    return user;
+  }
+
+  it("«История» стоит слева от звёздочки и открывает одну историю, без плиток", async () => {
+    noteNavigationHistory("/work/agenda");
+    const user = renderPanel();
+
+    const history = screen.getByRole("button", { name: "История" });
+    const star = screen.getByRole("button", { name: "Горячие кнопки" });
+    // Слева — значит раньше в порядке документа: ряд идёт слева направо.
+    expect(
+      history.compareDocumentPosition(star) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(history);
+    const dialog = screen.getByRole("dialog", { name: "История" });
+    expect(history).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(dialog).getByRole("list", { name: "История перемещений" }),
+    ).toBeInTheDocument();
+    // Плиток нет: просили историю, а не сетку, под которой её надо искать.
+    expect(within(dialog).queryByRole("link", { name: /Афоризм/ })).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Настроить панель" }),
+    ).toBeNull();
+
+    // Второе нажатие закрывает, а не открывает заново.
+    await user.click(history);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("звёздочка после истории открывает плитки", async () => {
+    const user = renderPanel();
+    await user.click(screen.getByRole("button", { name: "История" }));
+    await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+    expect(
+      screen.getByRole("dialog", { name: "Горячие кнопки" }),
+    ).toBeInTheDocument();
+  });
+
+  it("шторку открывают и снаружи — из бокового меню", async () => {
+    const ref = createRef<QuickPanelHandle>();
+    renderPanel({ ref });
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    ref.current!.openSheet("bookmarks");
+    expect(
+      await screen.findByRole("dialog", { name: "Закладки" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: /Шрила Прабхупада/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("плитка «Меню» закрывает панель и просит шапку открыть меню", async () => {
+    const onOpenMenu = vi.fn();
+    const user = renderPanel({ onOpenMenu });
+    const star = screen.getByRole("button", { name: "Горячие кнопки" });
+    await user.click(star);
+
+    // В первом ряду, сразу за тремя закреплёнными.
+    const dialog = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    const tiles = within(dialog).getAllByRole("listitem");
+    expect(tiles[3]).toHaveTextContent("Меню");
+
+    await user.click(within(dialog).getByRole("button", { name: "Меню" }));
+    expect(onOpenMenu).toHaveBeenCalledWith(star);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("«Меню» не выключается, но переставляется", async () => {
+    const user = renderPanel({ onOpenMenu: vi.fn() });
+    await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+    await user.click(screen.getByRole("button", { name: "Настроить панель" }));
+
+    const menu = screen.getByRole("switch", { name: /Меню/ });
+    expect(menu).toHaveAttribute("aria-disabled", "true");
+    expect(menu).toHaveTextContent("Всегда в панели");
+    await user.click(menu);
+    expect(menu).toHaveAttribute("aria-checked", "true");
+
+    await user.click(screen.getByRole("button", { name: "Ниже: Меню" }));
+    const ids = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids;
+    expect(ids.slice(0, 5)).toEqual(["search", "donate", "invite", "window", "menu"]);
+  });
+});
+
+/* VED-399: закладки листаются, а название страницы стоит в кнопке. */
+describe("QuickPanel: закладки на телефоне", () => {
+  it("панель не длиннее экрана и листается сама", async () => {
+    await openPanel();
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    expect(panel.className).toContain("overflow-y-auto");
+    expect(panel.className).toMatch(/max-h-\[calc\(100dvh/);
+  });
+
+  it("название страницы — в кнопке «Добавить/Убрать», а не строкой под ней", async () => {
+    document.title = "Dj Mpeg Alex — VedaMatch";
+    window.localStorage.setItem(STORAGE_KEY, '{"v":5,"ids":["bookmarks"]}');
+    const user = await openPanel();
+    await user.click(screen.getByRole("button", { name: /Закладки/ }));
+
+    const add = await screen.findByRole("button", {
+      name: /Добавить эту страницу.*Dj Mpeg Alex/,
+    });
+    expect(add).toBeInTheDocument();
+    // Строки с названием под кнопкой больше нет — только в самой кнопке.
+    expect(screen.getAllByText("Dj Mpeg Alex")).toHaveLength(1);
+    // И своей прокрутки у списка нет: две прокрутки одна в другой.
+    const list = screen.getByRole("link", { name: /Шрила Прабхупада/ }).closest("ul")!;
+    expect(list.parentElement!.className).not.toMatch(/max-h|overflow/);
   });
 });
