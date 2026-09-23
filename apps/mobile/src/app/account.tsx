@@ -433,6 +433,29 @@ export default function AccountScreen() {
           onEnable={() => void enableTelegramNotifications()}
         />
 
+        {/* Поддержка (VED-336): на сайте она ушла с главной в панель горячих
+            кнопок, а в приложении её не было вовсе. «Аккаунт» — то место, где
+            ищут помощь по своему аккаунту; из состояний ошибки на экранах
+            ведёт своя кнопка, с уже подставленным экраном. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Поддержка"
+          accessibilityHint="Мои обращения и новое обращение в поддержку"
+          onPress={() => router.push('/support')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [
+            styles.row,
+            { backgroundColor: colors.glass, borderColor: colors.glassBorder },
+            pressedStyle(pressed),
+          ]}
+        >
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, { color: colors.text0 }]}>Поддержка</Text>
+            <Text style={[styles.rowState, { color: colors.text1 }]}>Написать нам и посмотреть ответы</Text>
+          </View>
+          <Text style={[styles.rowLabel, { color: colors.text1 }]}>›</Text>
+        </Pressable>
+
         <Pressable
           accessibilityRole="button"
           onPress={() => void signOut()}

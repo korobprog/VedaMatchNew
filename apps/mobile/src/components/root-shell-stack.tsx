@@ -79,6 +79,13 @@ function RootStackInner() {
               Сюда же приземляются пуши о разделах, которых в приложении
               нет, — раньше они вели на список чатов. */}
           <Stack.Screen name="notifications" />
+          {/* Поддержка (VED-336) — те же обращения, что на сайте, своими
+              экранами. Вход — строкой «Поддержка» в «Аккаунте» и кнопкой
+              «Написать в поддержку» в состояниях ошибки; сюда же ведёт пуш
+              «Ответ поддержки». */}
+          <Stack.Screen name="support/index" />
+          <Stack.Screen name="support/new" />
+          <Stack.Screen name="support/[id]" />
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="chat/requests" />
           {/* Создание групп и каналов и управление участниками (VED-292) —

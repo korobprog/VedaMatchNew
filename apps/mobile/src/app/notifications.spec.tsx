@@ -248,6 +248,13 @@ describe('экран уведомлений', () => {
     expect(texts(renderer)).toContain('Заголовок a');
   });
 
+  it('лента не загрузилась — можно написать в поддержку прямо отсюда, экран подставится (VED-336)', async () => {
+    mockInbox.mockRejectedValueOnce(new TypeError('Network request failed'));
+    const renderer = await render();
+    await act(async () => byText(renderer, 'Написать в поддержку').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/support/new', params: { from: 'notifications' } });
+  });
+
   it('непрочитанное выделено секцией «Новое» со счётчиком', async () => {
     mockInbox.mockResolvedValue(
       page([item('a'), item('b', { readAt: new Date().toISOString() })]),
