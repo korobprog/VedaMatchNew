@@ -1,0 +1,41 @@
+diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..3ed659b67deb39d057251345fd81bd18c5b23f25 100644
+--- a/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -365,6 +365,11 @@ class AudioModule : Module() {
+           player.onPlaybackStateChange = { isPlaying ->
+             if (!isPlaying && shouldReleaseFocus()) {
+               releaseAudioFocus()
++            } else if (isPlaying && !focusAcquired) {
++              // VedaMatch (VED-331): lock screen, notification and headset
++              // buttons call ExoPlayer.play() directly, bypassing Function("play");
++              // without focus the app would keep playing into a phone call.
++              requestAudioFocus()
+             }
+           }
+           players[player.id] = player
+@@ -687,6 +692,8 @@ class AudioModule : Module() {
+           playlist.onPlaybackStateChange = { isPlaying ->
+             if (!isPlaying && shouldReleaseFocus()) {
+               releaseAudioFocus()
++            } else if (isPlaying && !focusAcquired) {
++              requestAudioFocus()
+             }
+           }
+           playlists[playlist.id] = playlist
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+index c76a9fd2a53743a691782e0f67d0d71401df58f6..d72550a2e4f15d14dce34b4dea948b53b5c355ab 100644
+--- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -37,6 +37,11 @@ class AudioPlayer(
+   player = ExoPlayer.Builder(context)
+     .setLooper(context.mainLooper)
+     .setAudioAttributes(AudioAttributes.DEFAULT, false)
++    // VedaMatch (VED-331): pause when audio would be rerouted to the speaker
++    // (wired or Bluetooth headphones disconnected) and keep CPU + Wi-Fi awake
++    // while streaming with the screen off. Both are held only while playing.
++    .setHandleAudioBecomingNoisy(true)
++    .setWakeMode(C.WAKE_MODE_NETWORK)
+     .setSeekForwardIncrementMs(SEEK_JUMP_INTERVAL_MS)
+     .setSeekBackIncrementMs(SEEK_JUMP_INTERVAL_MS)
+     .apply {
