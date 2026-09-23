@@ -38,7 +38,7 @@ import {
 } from "./post-action-labels";
 import { postShareHref } from "../post-share";
 import { cardText, expandHint } from "./card-text";
-import { SCROLL_NAV_GUTTER, ScrollNavButtons } from "./scroll-nav-buttons";
+import { SCROLL_NAV_GUTTER, ScrollNavButtons } from "@/components/ui/scroll-nav-buttons";
 import { UploadCardImage } from "./upload-card-image";
 import { LoadFailure } from "./load-failure";
 import { useAdminCommand } from "./use-admin-command";

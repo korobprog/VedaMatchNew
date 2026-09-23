@@ -34,6 +34,10 @@ import {
   setHistoryItemRead,
 } from "@/lib/notifications-history";
 import { setUnreadCount } from "@/lib/notifications-unread";
+import {
+  SCROLL_NAV_GUTTER,
+  ScrollNavButtons,
+} from "@/components/ui/scroll-nav-buttons";
 import { NotificationCard } from "./notification-list";
 
 export function NotificationHistory() {
@@ -148,7 +152,12 @@ export function NotificationHistory() {
       </p>
 
       {groups.map((group) => (
-        <section key={group.key} aria-label={group.label}>
+        // Поле справа — под кнопки прокрутки на телефоне, как в ленте.
+        <section
+          key={group.key}
+          aria-label={group.label}
+          className={SCROLL_NAV_GUTTER}
+        >
           <h2 className="mb-3 text-sm font-semibold text-text-1">
             {group.label}
           </h2>
@@ -184,6 +193,9 @@ export function NotificationHistory() {
           )}
         </div>
       )}
+
+      {/* Полоса прокрутки — та же, что в ленте уведомлений (VED-251). */}
+      <ScrollNavButtons />
     </div>
   );
 }

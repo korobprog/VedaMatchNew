@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NotificationItemDto } from "@vedamatch/shared";
+import { SCROLL_NAV_GUTTER } from "@/components/ui/scroll-nav-buttons";
 import { NotificationList } from "./notification-list";
 
 const { fetchInbox, markInboxRead, setInboxItemRead, setUnreadCount } =
@@ -18,6 +19,13 @@ vi.mock("@/lib/notifications-api", () => ({
   setInboxItemRead,
 }));
 vi.mock("@/lib/notifications-unread", () => ({ setUnreadCount }));
+// Полоса прокрутки сама прячется, пока листать нечего, а jsdom страницу не
+// раскладывает — высота у неё нулевая. Проверяем, что полоса поставлена;
+// как она себя ведёт, проверяет её собственный тест.
+vi.mock("@/components/ui/scroll-nav-buttons", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/ui/scroll-nav-buttons")>()),
+  ScrollNavButtons: () => <div data-testid="scroll-nav" />,
+}));
 
 function item(overrides: Partial<NotificationItemDto> = {}): NotificationItemDto {
   return {
@@ -582,5 +590,24 @@ describe("NotificationList: своя отметка у карточки (VED-143
     expect(
       await screen.findByRole("button", { name: "Отметить все прочитанными" }),
     ).toBeInTheDocument();
+  });
+
+  // VED-251: «примени такую же полоску в окне списка уведомлений».
+  it("ставит полосу прокрутки и отодвигает от неё карточки на телефоне", async () => {
+    fetchInbox.mockResolvedValue({
+      items: [
+        item(),
+        item({ id: "n2", title: "Старое", readAt: new Date().toISOString() }),
+      ],
+      unreadCount: 1,
+    });
+
+    render(<NotificationList />);
+
+    expect(await screen.findByTestId("scroll-nav")).toBeInTheDocument();
+    for (const name of ["Непрочитанные", "Прочитанные"]) {
+      const region = screen.getByRole("region", { name });
+      expect(region.className.split(/\s+/)).toContain(SCROLL_NAV_GUTTER);
+    }
   });
 });

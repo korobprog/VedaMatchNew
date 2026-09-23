@@ -56,6 +56,10 @@ import {
 import { setUnreadCount } from "@/lib/notifications-unread";
 import { NotificationIcon } from "@/components/icons/notification-icons";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
+import {
+  SCROLL_NAV_GUTTER,
+  ScrollNavButtons,
+} from "@/components/ui/scroll-nav-buttons";
 
 /**
  * Пауза перед запросом при наборе. Меньше — сервер получает запрос на каждую
@@ -343,8 +347,13 @@ export function NotificationList() {
         {readAnnounce}
       </p>
 
+      {/* Поле справа у разделов — под плавающие кнопки прокрутки на телефоне
+          (VED-251, `SCROLL_NAV_GUTTER`): без него колонка стрелок ложилась
+          на кнопку отметки прочтения. Строке поиска поле не нужно: её
+          правый край и так кончается в 76px от края экрана — там стоит
+          подпись «Ищем…». */}
       {unread.length > 0 && (
-        <section aria-label="Непрочитанные">
+        <section aria-label="Непрочитанные" className={SCROLL_NAV_GUTTER}>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-text-0">
               {/* Непрочитанного столько же, сколько на колокольчике: число
@@ -380,7 +389,7 @@ export function NotificationList() {
       {!searchActive && <NewsLink />}
 
       {read.length > 0 && (
-        <section aria-label="Прочитанные">
+        <section aria-label="Прочитанные" className={SCROLL_NAV_GUTTER}>
           <h2 className="mb-3 text-sm font-semibold text-text-2">
             {searchActive ? "Найдено в прочитанном" : "Прочитанное"}
           </h2>
@@ -417,6 +426,11 @@ export function NotificationList() {
           )}
         </div>
       )}
+
+      {/* Та же полоса прокрутки, что в редакции Вдохновения (VED-251: «примени
+          такую же полоску в окне списка уведомлений»). Сама прячется, пока
+          листать нечего. */}
+      <ScrollNavButtons />
     </div>
   );
 }
