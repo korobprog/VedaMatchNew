@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 /** Разделы сервиса. Все на месте: заделов больше не осталось. */
 const LINKS = [
   { href: "/wellness", label: "Обзор" },
-  { href: "/wellness/scan", label: "Проверить" },
+  { href: "/wellness/scan", label: "Сканер" },
   { href: "/wellness/basket", label: "Корзина" },
   { href: "/wellness/recipes", label: "Рецепты" },
   { href: "/wellness/diet", label: "Мои ограничения" },

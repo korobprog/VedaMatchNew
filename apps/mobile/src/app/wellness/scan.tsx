@@ -16,6 +16,7 @@ import {
 } from '@/lib/wellness/aim-state';
 import { barcodeFromScan } from '@/lib/wellness/barcode';
 import { cameraAccess } from '@/lib/wellness/camera-access';
+import { torchCopy, torchEnabled, zoomCopy } from '@/lib/wellness/torch-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -61,7 +62,11 @@ export default function WellnessScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const access = cameraAccess(permission);
 
-  const [torch, setTorch] = useState(false);
+  // Желание человека и фактическое горение разведены (`torch-state.ts`):
+  // пока он читает ответ, светодиод гасим, но выбор помним — иначе фонарик
+  // приходится включать заново на каждый продукт.
+  const [torchWanted, setTorchWanted] = useState(false);
+  const [focused, setFocused] = useState(true);
   const [zoomStep, setZoomStep] = useState(0);
   const [sawAt, setSawAt] = useState<number | null>(null);
   const [lookup, setLookup] = useState<LookupPhase>('idle');
@@ -95,9 +100,11 @@ export default function WellnessScanScreen() {
   useFocusEffect(
     useCallback(() => {
       // Возврат с экрана ответа: прицел снова пустой, код снова принимается,
-      // отсчёт помощи начинается заново.
+      // отсчёт помощи начинается заново. Фонарик возвращается сам, если был
+      // включён, — гасится только на время ухода.
       restart();
-      return () => setTorch(false);
+      setFocused(true);
+      return () => setFocused(false);
     }, [restart]),
   );
 
@@ -198,7 +205,7 @@ export default function WellnessScanScreen() {
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"
-        enableTorch={torch}
+        enableTorch={torchEnabled({ wanted: torchWanted, focused })}
         zoom={ZOOM_STEPS[zoomStep]}
         barcodeScannerSettings={{ barcodeTypes: [...FOOD_BARCODES] }}
         onBarcodeScanned={onBarcode}
@@ -213,19 +220,20 @@ export default function WellnessScanScreen() {
         pointerEvents="box-none"
       >
         <View style={styles.bar} pointerEvents="box-none">
-          <OverlayButton label="Назад" onPress={() => router.back()} />
+          <OverlayButton
+            copy={{ label: 'Назад', accessibilityLabel: 'Назад, к разделу «Здоровье»' }}
+            onPress={() => router.back()}
+          />
           <View style={styles.barRight}>
             <OverlayButton
-              label={`Приблизить, сейчас ${zoomStep + 1} из ${ZOOM_STEPS.length}`}
-              short={zoomStep === 0 ? 'Приблизить' : `Зум ${zoomStep + 1}×`}
+              copy={zoomCopy(zoomStep, ZOOM_STEPS.length)}
               active={zoomStep > 0}
               onPress={() => setZoomStep((step) => (step + 1) % ZOOM_STEPS.length)}
             />
             <OverlayButton
-              label={torch ? 'Выключить фонарик' : 'Включить фонарик'}
-              short={torch ? 'Фонарик выкл.' : 'Фонарик'}
-              active={torch}
-              onPress={() => setTorch((value) => !value)}
+              copy={torchCopy(torchWanted)}
+              active={torchWanted}
+              onPress={() => setTorchWanted((value) => !value)}
             />
           </View>
         </View>
@@ -313,16 +321,23 @@ function Header({ onHistory }: { onHistory(): void }) {
  * Кнопка поверх видоискателя. Подпись словом, а не значком: значок на
  * картинке с камеры не читается ни глазом, ни скринридером, а обещать
  * контраст поверх произвольного кадра нельзя — поэтому под текстом своя
- * непрозрачная подложка `bg1`, пара с `text0` уже замерена.
+ * непрозрачная подложка, пара с текстом замерена в `theme/contrast.spec.ts`.
+ *
+ * Два правила, оба из живой проверки на A51:
+ *
+ * 1. **Ширина фиксирована** (`minWidth`), а подпись не растёт вместе с
+ *    состоянием: иначе соседняя кнопка уезжает из-под пальца, и это читается
+ *    как «кнопка не работает» (`torch-state.ts`).
+ * 2. **Включённое состояние — заливка, а не тонкая обводка.** В магазине при
+ *    свете светодиод глазом почти не виден, и обводка на вопрос «включилось?»
+ *    не отвечает. Заливка `magenta` с текстом `onAccent` — уже замеренная пара.
  */
 function OverlayButton({
-  label,
-  short,
+  copy,
   onPress,
   active = false,
 }: {
-  label: string;
-  short?: string;
+  copy: { label: string; accessibilityLabel: string };
   onPress(): void;
   active?: boolean;
 }) {
@@ -330,17 +345,27 @@ function OverlayButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={copy.accessibilityLabel}
       accessibilityState={{ selected: active }}
       onPress={onPress}
       android_ripple={ripple(colors.glassBorder)}
       style={({ pressed }) => [
         styles.overlayButton,
-        { backgroundColor: colors.bg1, borderColor: active ? colors.gold : colors.glassBorder },
+        {
+          backgroundColor: active ? colors.magenta : colors.bg1,
+          borderColor: active ? colors.magenta : colors.glassBorder,
+        },
         pressedStyle(pressed),
       ]}
     >
-      <Text style={[styles.overlayButtonText, { color: colors.text0 }]}>{short ?? label}</Text>
+      <Text
+        style={[
+          styles.overlayButtonText,
+          { color: active ? colors.onAccent : colors.text0 },
+        ]}
+      >
+        {copy.label}
+      </Text>
     </Pressable>
   );
 }
@@ -352,7 +377,9 @@ const styles = StyleSheet.create({
   barRight: { flexDirection: 'row', gap: 8 },
   overlayButton: {
     minHeight: hitTarget,
-    minWidth: hitTarget,
+    // Ширина под самую длинную подпись: кнопки не должны двигаться при смене
+    // состояния — на этом человек и терял фонарик.
+    minWidth: 104,
     borderWidth: 1,
     borderRadius: radius.sm,
     borderCurve: 'continuous',
