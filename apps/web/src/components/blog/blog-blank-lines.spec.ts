@@ -95,7 +95,9 @@ describe("collapseBlankLines", () => {
   });
 
   it("offers the choices the form shows", () => {
-    expect(BLOG_BLANK_LINES_KEEP_CHOICES).toEqual([0, 1, 2]);
+    // «Две» нет: сервер схлопывает пустые строки до одной, и выбор «две»
+    // молча превращался бы в «одну» при сохранении.
+    expect(BLOG_BLANK_LINES_KEEP_CHOICES).toEqual([0, 1]);
     expect(BLOG_BLANK_LINES_DEFAULT_KEEP).toBe(0);
   });
 });
