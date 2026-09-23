@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   primaryText: { fontFamily: fonts.bodyBold, fontSize: 15 },
-  block: { gap: 12 },
+  block: { gap: 12, alignItems: 'flex-start' },
   section: {
     fontFamily: fonts.bodySemiBold,
     fontSize: 13,
