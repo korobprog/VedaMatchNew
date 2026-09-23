@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { buildBlogTextPreview } from "./blog-text-preview";
+import { buildBlogTextPreview, type BlogTextPreview } from "./blog-text-preview";
 
 /**
  * Текст поста в ленте: начало и кнопка «Далее» (VED-371).
@@ -10,55 +10,121 @@ import { buildBlogTextPreview } from "./blog-text-preview";
  * Пост теперь бывает длинным (20000 знаков), и развёрнутый целиком он
  * занимает экран целиком: до второго поста надо прокручивать. Поэтому в
  * ленте видно начало, а полный текст раскрывается нажатием — по просьбе
- * заказчика кнопкой-надписью «Далее» во всю ширину карточки, а не ссылкой в
- * конце абзаца, которую на телефоне надо ловить пальцем.
+ * заказчика крупной кнопкой-надписью «Далее», а не ссылкой в конце абзаца,
+ * которую на телефоне надо ловить пальцем.
  *
- * Свёрнутый текст не спрятан в разметке, а не отрисован вовсе: `line-clamp`
- * оставил бы в карточке весь текст, а лента на телефоне из нескольких
- * длинных постов — это лишняя работа для верстки на каждой прокрутке.
+ * Состояние свёртки вынесено в `useBlogTextFold`, а кнопка — в отдельный
+ * `BlogMoreButton`: карточка ставит «Далее» в ряд действий под постом, а не
+ * отдельной строкой. Отдельная строка в 56px на каждую карточку — это ровно
+ * та высота, которой не хватало, чтобы на экране 375×812 помещались три
+ * поста.
+ *
+ * Свёрнутый текст ограничен дважды. `buildBlogTextPreview` отрезает начало
+ * заранее, при SSR тоже, — так карточка знает, что разворачивать есть что, и
+ * длинный текст не попадает в разметку целиком. А `line-clamp-3` держит
+ * высоту: абзац в 120 знаков на узком экране всё равно может лечь в четыре
+ * строки. Если после этого текст не влез, это видно по `scrollHeight`, и
+ * «Далее» появляется и тогда, — иначе обрезанный CSS хвост было бы не
+ * достать.
  */
+
+export interface BlogTextFold {
+  text: string;
+  preview: BlogTextPreview;
+  expanded: boolean;
+  /** Есть ли что разворачивать: `false` — кнопки «Далее» быть не должно. */
+  canExpand: boolean;
+  toggle: () => void;
+  bodyId: string;
+  bodyRef: React.RefObject<HTMLParagraphElement | null>;
+}
+
+export function useBlogTextFold(text: string): BlogTextFold {
+  const [expanded, setExpanded] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const bodyId = useId();
+  const bodyRef = useRef<HTMLParagraphElement>(null);
+  const preview = useMemo(() => buildBlogTextPreview(text), [text]);
+
+  useLayoutEffect(() => {
+    // Мерить можно только свёрнутый вид: развёрнутый не обрезан по
+    // определению, и последнее измерение остаётся в силе.
+    if (expanded || preview.truncated) return;
+    const node = bodyRef.current;
+    if (!node) return;
+    const measure = () => setClipped(node.scrollHeight > node.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [expanded, preview.truncated, text]);
+
+  return {
+    text,
+    preview,
+    expanded,
+    canExpand: preview.truncated || clipped,
+    toggle: () => setExpanded((current) => !current),
+    bodyId,
+    bodyRef,
+  };
+}
+
 export function BlogPostText({
-  text,
+  fold,
   className,
 }: {
-  text: string;
+  fold: BlogTextFold;
   /** Отступы задаёт карточка: в репосте текст лежит в своей рамке. */
   className?: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const bodyId = useId();
-  if (text === "") return null;
-
-  const preview = buildBlogTextPreview(text);
-  const shown = expanded || !preview.truncated ? text : preview.text;
+  if (fold.text === "") return null;
+  const shown =
+    fold.expanded || !fold.preview.truncated ? fold.text : fold.preview.text;
 
   return (
-    <div className={className}>
-      <p
-        id={bodyId}
-        className="whitespace-pre-line text-sm leading-6 text-text-1"
-      >
-        {shown}
-      </p>
-      {preview.truncated && (
-        <button
-          type="button"
-          onClick={() => setExpanded((current) => !current)}
-          aria-expanded={expanded}
-          aria-controls={bodyId}
-          /* Во всю ширину и 48px высотой: «достаточно крупная
-             кнопка-надпись» из VED-371. Подпись 16px — её читают, а не
-             угадывают по стрелке. */
-          className="mt-2 flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl border border-glass-brd bg-bg-1 text-base font-semibold text-text-0 hover:border-cyan/60"
-        >
-          {expanded ? (
-            <ChevronUp aria-hidden className="size-4" />
-          ) : (
-            <ChevronDown aria-hidden className="size-4" />
-          )}
-          {expanded ? "Свернуть" : "Далее"}
-        </button>
+    <p
+      id={fold.bodyId}
+      ref={fold.bodyRef}
+      className={`whitespace-pre-line text-sm leading-6 text-text-1 ${
+        fold.expanded ? "" : "line-clamp-3"
+      } ${className ?? ""}`}
+    >
+      {shown}
+    </p>
+  );
+}
+
+/**
+ * «Далее» / «Свернуть». Подпись 16px и полужирная, высота 48px: это
+ * «достаточно крупная кнопка-надпись» из VED-371 — её читают, а не угадывают
+ * по стрелке, и попадают пальцем с первого раза.
+ */
+export function BlogMoreButton({
+  fold,
+  className,
+}: {
+  fold: BlogTextFold;
+  className?: string;
+}) {
+  if (!fold.canExpand) return null;
+  return (
+    <button
+      type="button"
+      onClick={fold.toggle}
+      aria-expanded={fold.expanded}
+      aria-controls={fold.bodyId}
+      className={`inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-glass-brd bg-bg-1 px-4 text-base font-semibold text-text-0 hover:border-cyan/60 ${
+        className ?? ""
+      }`}
+    >
+      {fold.expanded ? (
+        <ChevronUp aria-hidden className="size-4" />
+      ) : (
+        <ChevronDown aria-hidden className="size-4" />
       )}
-    </div>
+      {fold.expanded ? "Свернуть" : "Далее"}
+    </button>
   );
 }
