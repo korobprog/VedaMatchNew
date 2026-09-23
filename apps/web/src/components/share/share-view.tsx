@@ -15,7 +15,15 @@ import {
   shouldFallBackToSite,
   type MessengerId,
 } from "./share-targets";
-import { shareFileName, toJpeg } from "./share-file";
+import {
+  canShareFiles,
+  isTelegramWebView,
+  shareButtonState,
+  shareFileName,
+  toJpeg,
+  unsupportedShareMessage,
+  type FilePrepare,
+} from "./share-file";
 
 /**
  * Экран «Поделиться»: две дороги, а не общий список кнопок.
@@ -62,6 +70,15 @@ export function ShareView({
   const [prepared, setPrepared] = useState<{ file: File; url: string } | null>(
     null,
   );
+  /* Состояние подготовки и отправки — ради индикатора ожидания (VED-156):
+     без него кнопка молчала, пока грузилась картинка, и человек жал её по
+     десять раз, не понимая, работает ли она. */
+  const [prepare, setPrepare] = useState<FilePrepare>("loading");
+  const [sharing, setSharing] = useState(false);
+  /** Окно не умеет отдавать файл в приложения — сказать заранее, а не после нажатия. */
+  const [unsupported, setUnsupported] = useState<string | null>(null);
+  /** Нажали, пока индикатор крутится, — объяснить словами, а не молчать. */
+  const [waitNote, setWaitNote] = useState(false);
   /** Источник для тела сообщения: пусто, если он уже в заголовке превью. */
   const messageSource = sourceInPreview ? null : source;
   const message = shareText({ text, source: messageSource, link });
@@ -78,7 +95,9 @@ export function ShareView({
     void (async () => {
       try {
         const response = await fetch(file);
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(String(response.status));
+        // Сервер отдаёт JPEG — перекодировать нечего; `toJpeg` остаётся
+        // страховкой на случай запасного PNG.
         const jpeg = await toJpeg(await response.blob());
         if (cancelled) return;
         const ready = new File([jpeg], shareFileName(file, jpeg.type), {
@@ -86,8 +105,20 @@ export function ShareView({
         });
         url = URL.createObjectURL(ready);
         setPrepared({ file: ready, url });
+        setPrepare("ready");
+        setWaitNote(false);
+        if (!canShareFiles(navigator, ready)) {
+          setUnsupported(
+            unsupportedShareMessage(
+              isTelegramWebView(navigator.userAgent, window as never),
+            ),
+          );
+        }
       } catch {
         // Сеть или формат — останется запасной путь по нажатию.
+        if (cancelled) return;
+        setPrepare("failed");
+        setWaitNote(false);
       }
     })();
     return () => {
@@ -111,13 +142,30 @@ export function ShareView({
    */
   async function shareFile() {
     if (!file) return;
+    const state = shareButtonState({ prepare, sharing });
+    // Индикатор уже крутится: повторное нажатие ничего не должно делать —
+    // второй вызов `navigator.share`, пока открыт первый, браузер отвергнет.
+    if (state.busy) {
+      // Шторка уже открывается — тут и говорить нечего, её сейчас покажут.
+      if (!sharing) setWaitNote(true);
+      return;
+    }
+    setWaitNote(false);
     setFileError(null);
+    if (unsupported) {
+      setFileError(unsupported);
+      return;
+    }
     if (!navigator.share) {
       setFileError(
-        "Этот браузер не умеет отдавать картинку в приложения — сохраните её и выложите вручную.",
+        unsupportedShareMessage(isTelegramWebView(navigator.userAgent, window as never)),
       );
       return;
     }
+    setSharing(true);
+    // Шторка на некоторых телефонах не сообщает, что её закрыли, — не
+    // оставляем кнопку крутиться вечно.
+    const release = window.setTimeout(() => setSharing(false), 15000);
     try {
       // Готовая картинка — шторку зовём сразу, пока нажатие ещё «свежее».
       let ready = prepared?.file;
@@ -130,9 +178,9 @@ export function ShareView({
         });
       }
       const payload = { files: [ready] };
-      if (navigator.canShare && !navigator.canShare(payload)) {
+      if (!canShareFiles(navigator, ready)) {
         setFileError(
-          "Это устройство не умеет отдавать картинку в приложения — сохраните её и выложите вручную.",
+          unsupportedShareMessage(isTelegramWebView(navigator.userAgent, window as never)),
         );
         return;
       }
@@ -147,6 +195,9 @@ export function ShareView({
         return;
       }
       setFileError("Не получилось передать картинку. Сохраните её кнопкой рядом.");
+    } finally {
+      window.clearTimeout(release);
+      setSharing(false);
     }
   }
 
@@ -219,17 +270,14 @@ export function ShareView({
               href={prepared?.url ?? file}
               download={prepared?.file.name ?? shareFileName(file, "image/jpeg")}
               onClick={markSaved}
-              className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold"
+              className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 py-2 text-sm font-semibold"
             >
               {saved ? "✓ Картинка сохранена" : "Сохранить картинку"}
             </a>
-            <button
-              type="button"
+            <ShareFileButton
+              state={shareButtonState({ prepare, sharing })}
               onClick={() => void shareFile()}
-              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
-            >
-              Отправить в приложение
-            </button>
+            />
           </div>
         ) : (
           <p className="text-sm text-text-2">У этой карточки нет картинки.</p>
@@ -238,10 +286,17 @@ export function ShareView({
         <p role="status" aria-live="polite" className="text-sm text-text-1">
           {saved
             ? "Картинка сохраняется в «Загрузки» — оттуда её можно выложить в историю или статус."
-            : ""}
+            : waitNote
+              ? "Картинка ещё готовится — подождите пару секунд, кнопка оживёт сама."
+              : ""}
         </p>
+        {unsupported && !fileError && (
+          <p className="text-sm text-text-1">{unsupported}</p>
+        )}
         {fileError && (
-          <p role="alert" className="text-sm text-magenta">
+          /* Не магента: мелким текстом на светлой теме она даёт 4.46:1 —
+             ниже порога (см. CLAUDE.md). Внимание привлекает role="alert". */
+          <p role="alert" className="text-sm font-medium text-text-0">
             {fileError}
           </p>
         )}
@@ -303,5 +358,42 @@ export function ShareView({
         через «Отправить в приложение».
       </p>
     </div>
+  );
+}
+
+/**
+ * «Отправить в приложение» с индикатором ожидания (VED-156).
+ *
+ * Пока картинка готовится или открывается шторка, кнопка крутит значок и
+ * говорит, что происходит; нажатия в это время ничего не делают. Кнопку не
+ * выключаем атрибутом `disabled`: выключенная теряет фокус и пропадает для
+ * скринридера — вместо этого `aria-disabled` и `aria-busy`.
+ */
+function ShareFileButton({
+  state,
+  onClick,
+}: {
+  state: { label: string; busy: boolean };
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-disabled={state.busy || undefined}
+      aria-busy={state.busy || undefined}
+      className={`inline-flex min-h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0 ${
+        state.busy ? "cursor-progress" : ""
+      }`}
+    >
+      {state.busy && (
+        <span
+          aria-hidden="true"
+          data-testid="share-spinner"
+          className="inline-block size-4 shrink-0 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
+        />
+      )}
+      {state.label}
+    </button>
   );
 }

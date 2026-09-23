@@ -148,7 +148,7 @@ export function MotivationPostCard({ post }: { post: MotivationPostDto }) {
             Отправить в чат
           </Link>
           {post.storyImageUrl && (
-            <a href={post.storyImageUrl} download className="col-span-2 rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-amber-700">Скачать для Stories</a>
+            <a href={`/m/${post.slug}/story`} download className="col-span-2 rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-amber-700">Скачать для Stories</a>
           )}
           {/* Внутрь ленты: `/m/<slug>` — страница для гостей и внешних ссылок,
               участнику она показывает пост в отрыве от ленты. Ссылка «Поделиться»
