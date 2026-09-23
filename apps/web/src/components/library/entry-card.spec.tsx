@@ -90,6 +90,27 @@ describe("EntryCard", () => {
     expect(cover?.getAttribute("href")).toBe("https://example.com/a");
   });
 
+  it("opens a katha cover full screen instead of a link (VED-138)", () => {
+    render(
+      <EntryCard
+        entry={{
+          ...entry,
+          type: "katha",
+          url: null,
+          domain: null,
+          previewUrl: "https://cdn.vedamatch.ru/library/previews/entry-1.webp",
+        }}
+        locale="ru"
+      />,
+    );
+
+    const cover = screen.getByAltText("Обложка материала");
+    expect(cover.closest("a")).toBeNull();
+    const button = screen.getByRole("button", { name: "Увеличить картинку" });
+    expect(button).toContainElement(cover);
+    expect(button).toHaveAttribute("aria-haspopup", "dialog");
+  });
+
   it("opens the external url in a new tab", () => {
     render(<EntryCard entry={entry} locale="ru" />);
     const link = screen.getByRole("link", { name: /Лекция по Гите/ });

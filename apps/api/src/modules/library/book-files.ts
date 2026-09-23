@@ -130,7 +130,17 @@ export function bookDisposition(
   name: string,
   format: LibraryBookFormat,
 ): string {
-  const kind = format === 'pdf' ? 'inline' : 'attachment';
+  return contentDisposition(format === 'pdf' ? 'inline' : 'attachment', name);
+}
+
+/**
+ * Content-Disposition с именем файла двумя способами — см. bookDisposition.
+ * Общий для книг и для скачивания обложки (VED-138).
+ */
+export function contentDisposition(
+  kind: 'inline' | 'attachment',
+  name: string,
+): string {
   const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   const encoded = encodeURIComponent(name).replace(
     /['()*]/g,

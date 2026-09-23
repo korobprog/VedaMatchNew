@@ -188,3 +188,34 @@ describe('LibraryPreviewsService', () => {
     expect(prisma.libraryEntry.update).not.toHaveBeenCalled();
   });
 });
+
+describe('LibraryPreviewsService.signedDownload (VED-138)', () => {
+  it('подписывает GET с Content-Disposition в параметрах ссылки', async () => {
+    const service = new LibraryPreviewsService(
+      prismaMock() as never,
+      configMock({ ...S3_ENV, S3_ENDPOINT: 'https://s3.example.ru' }) as never,
+    );
+
+    const url = await service.signedDownload(
+      'library/previews/entry-1-1a2b3c4d.webp',
+      'attachment; filename="cover.webp"',
+    );
+
+    expect(url).toContain('library/previews/entry-1-1a2b3c4d.webp');
+    expect(url).toContain('X-Amz-Signature=');
+    expect(url).toContain(
+      `response-content-disposition=${encodeURIComponent('attachment; filename="cover.webp"')}`,
+    );
+  });
+
+  it('без S3 ссылки нет', async () => {
+    const service = new LibraryPreviewsService(
+      prismaMock() as never,
+      configMock({}) as never,
+    );
+
+    await expect(
+      service.signedDownload('library/previews/x.webp', 'attachment'),
+    ).resolves.toBeNull();
+  });
+});
