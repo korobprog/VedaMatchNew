@@ -58,7 +58,8 @@ export function HistorySheet({
 
   return (
     <div className="mt-3 rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm text-text-1">
-      <div className="max-h-[46vh] overflow-y-auto">
+      {/* Своей прокрутки нет: листается вся панель (VED-399). */}
+      <div>
         {groups.length === 0 ? (
           <p className="px-1 py-2 text-xs text-text-1">
             Пока пусто. Здесь появятся сервисы и разделы, где вы побываете, —

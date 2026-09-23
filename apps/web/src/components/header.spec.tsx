@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserProfile } from "@vedamatch/shared";
@@ -66,9 +73,22 @@ function renderHeader() {
   );
 }
 
+/** Меню открывается плиткой «Меню» в панели горячих кнопок (VED-402). */
+function openMenu() {
+  fireEvent.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+  fireEvent.click(
+    within(screen.getByRole("dialog", { name: "Горячие кнопки" })).getByRole(
+      "button",
+      { name: "Меню" },
+    ),
+  );
+  return screen.getByRole("dialog", { name: "Меню" });
+}
+
 describe("Header", () => {
   beforeEach(() => {
     pathname = "/notices/my";
+    window.localStorage.clear();
   });
 
   it("lists every service from service-content and marks the current one", () => {
@@ -97,8 +117,7 @@ describe("Header", () => {
         <Header user={{ ...user, role: "admin" } as unknown as UserProfile} />
       </NextIntlClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Открыть меню" }));
-    const dialog = screen.getByRole("dialog", { name: "Меню" });
+    const dialog = openMenu();
 
     const links = [...dialog.querySelectorAll("a")].map((a) =>
       a.getAttribute("href"),
@@ -117,14 +136,10 @@ describe("Header", () => {
 
   it("opens the drawer as a dialog, closes it on Escape and returns focus", async () => {
     renderHeader();
-    const burger = screen.getByRole("button", { name: "Открыть меню" });
-    expect(burger).toHaveAttribute("aria-expanded", "false");
+    const star = screen.getByRole("button", { name: "Горячие кнопки" });
 
-    fireEvent.click(burger);
-    const dialog = screen.getByRole("dialog", { name: "Меню" });
+    const dialog = openMenu();
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(burger).toHaveAttribute("aria-expanded", "true");
-    expect(burger).toHaveAttribute("aria-controls", dialog.id);
     expect(document.body.style.overflow).toBe("hidden");
 
     fireEvent.keyDown(document, { key: "Escape" });
@@ -132,18 +147,118 @@ describe("Header", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
     expect(document.body.style.overflow).toBe("");
-    expect(document.activeElement).toBe(burger);
+    // Плитки «Меню» уже нет — фокус возвращается на звёздочку панели.
+    expect(document.activeElement).toBe(star);
   });
 
-  it("бургер при открытом меню закрывает его, а не открывает заново", () => {
+  // VED-402: бургер ушёл в панель горячих кнопок, на его месте — «История».
+  it("бургера в шапке нет, слева от звёздочки — «История»", () => {
     renderHeader();
-    const burger = screen.getByRole("button", { name: "Открыть меню" });
-    fireEvent.click(burger);
-    const close = screen.getByRole("button", { name: "Закрыть меню", expanded: true });
-    // Тап по бургеру — это mousedown снаружи панели и следом клик.
-    fireEvent.mouseDown(close);
-    fireEvent.click(close);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть меню" })).toBeNull();
+    const history = screen.getByRole("button", { name: "История" });
+    const star = screen.getByRole("button", { name: "Горячие кнопки" });
+    expect(history.parentElement).toBe(star.parentElement);
+    expect(
+      history.compareDocumentPosition(star) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("тап по подложке закрывает меню кликом, а не касанием", () => {
+    renderHeader();
+    openMenu();
+    const backdrop = screen.getByTestId("drawer-backdrop");
+    // Палец коснулся подложки — меню ещё на месте: иначе остаток касания
+    // доставался бы странице под ним (VED-408).
+    fireEvent.touchStart(backdrop, { touches: [{ clientX: 380, clientY: 300 }] });
+    fireEvent.mouseDown(backdrop);
+    expect(screen.getByRole("dialog", { name: "Меню" })).toBeInTheDocument();
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole("dialog", { name: "Меню" })).not.toBeInTheDocument();
+  });
+
+  it("подложка накрывает и шапку: за пределами меню ничего не нажимается", () => {
+    renderHeader();
+    openMenu();
+    const backdrop = screen.getByTestId("drawer-backdrop");
+    // Шапка — `z-50`, подложка и панель выше неё.
+    expect(backdrop.className).toContain("z-[60]");
+    expect(screen.getByRole("dialog", { name: "Меню" }).className).toContain(
+      "z-[60]",
+    );
+  });
+});
+
+/* VED-408: настройка бокового меню — прятать сервисы, добавлять горячие
+   кнопки и переставлять то и другое. */
+describe("Header: настройка меню", () => {
+  beforeEach(() => {
+    pathname = "/notices/my";
+    window.localStorage.clear();
+  });
+
+  const serviceLinks = (dialog: HTMLElement) =>
+    [...dialog.querySelectorAll("nav a")].map((a) => a.getAttribute("href"));
+
+  it("кнопка настройки стоит в строке «Главной», слева от крестика", () => {
+    renderHeader();
+    const dialog = openMenu();
+    const tune = within(dialog).getByRole("button", { name: "Настроить меню" });
+    const close = within(dialog).getByRole("button", { name: "Закрыть меню" });
+    expect(tune.nextElementSibling).toBe(close);
+    expect(tune).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("прячет сервис, добавляет горячую кнопку и переставляет их", () => {
+    renderHeader();
+    let dialog = openMenu();
+    const first = SERVICE_CONTENT[0];
+    const second = SERVICE_CONTENT[1];
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Настроить меню" }));
+    // Спрятать первый сервис.
+    fireEvent.click(
+      within(dialog).getByRole("switch", {
+        name: new RegExp(first.name),
+      }),
+    );
+    // Добавить «Поиск» — встаёт в конец — и поднять его на шаг.
+    fireEvent.click(within(dialog).getByRole("switch", { name: /^Поиск/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Выше: Поиск" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Готово" }));
+
+    let links = serviceLinks(dialog);
+    expect(links).not.toContain(first.route);
+    expect(links[1]).toBe(second.route);
+    expect(links.at(-2)).toBe("/search");
+    expect(links.at(-1)).toBe(SERVICE_CONTENT.at(-1)!.route);
+
+    // Настройка живёт между заходами.
+    fireEvent.keyDown(document, { key: "Escape" });
+    dialog = openMenu();
+    links = serviceLinks(dialog);
+    expect(links).not.toContain(first.route);
+    expect(links.at(-2)).toBe("/search");
+  });
+
+  it("служебные ссылки на время настройки убраны, после — на месте", () => {
+    renderHeader();
+    const dialog = openMenu();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Настроить меню" }));
+    expect(within(dialog).queryByRole("link", { name: /Что нового/ })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Готово" }));
+    expect(within(dialog).getByRole("link", { name: /Что нового/ })).toBeInTheDocument();
+  });
+
+  it("горячая кнопка со шторкой открывает её в панели и закрывает меню", () => {
+    window.localStorage.setItem(
+      "vedamatch:side-menu",
+      JSON.stringify({ v: 1, ids: ["history"], hidden: [] }),
+    );
+    renderHeader();
+    const dialog = openMenu();
+    fireEvent.click(within(dialog).getByRole("button", { name: "История" }));
+    expect(screen.queryByRole("dialog", { name: "Меню" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "История" })).toBeInTheDocument();
   });
 });
 
@@ -213,6 +328,43 @@ describe("Header: свайп от края", () => {
 
     swipe([200, 300], [100, 302], dialog);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  /* VED-408: меню закрывается посреди мазка, а палец ещё на стекле. Хвост
+     касания не должен нажать ничего на странице под ним. */
+  it("после закрытия мазком хвост касания забирает заслон, а не страница", () => {
+    vi.useFakeTimers();
+    try {
+      renderHeader();
+      const pageButton = document.createElement("button");
+      const pressed = vi.fn();
+      pageButton.addEventListener("click", pressed);
+      document.body.appendChild(pageButton);
+
+      swipe([3, 300], [90, 300]);
+      const dialog = screen.getByRole("dialog", { name: "Меню" });
+      // Мазок к краю, начатый в панели и ушедший за неё.
+      fireEvent.touchStart(dialog, { touches: [{ clientX: 200, clientY: 300 }] });
+      fireEvent.touchMove(dialog, { touches: [{ clientX: 195, clientY: 301 }] });
+      fireEvent.touchMove(dialog, { touches: [{ clientX: 100, clientY: 302 }] });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      // Меню уже нет, а над страницей — прозрачный заслон.
+      const shield = screen.getByTestId("drawer-backdrop");
+      expect(shield.className).not.toContain("bg-bg-0");
+      fireEvent.pointerUp(shield);
+      fireEvent.click(shield);
+      expect(pressed).not.toHaveBeenCalled();
+
+      // Опускается вскоре после того, как палец поднят.
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(screen.queryByTestId("drawer-backdrop")).not.toBeInTheDocument();
+      pageButton.remove();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("вертикальная прокрутка у края и свайп из середины меню не открывают", () => {

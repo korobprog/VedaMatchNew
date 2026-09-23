@@ -45,7 +45,14 @@
     "rewards": "Points & invites",
     "donate": "Support us",
     "whatsNew": "What's new",
-    "assistant": "Assistant"
+    "assistant": "Assistant",
+    "customizeMenu": "Customize menu",
+    "customizeDone": "Done",
+    "menuVisible": "In the menu",
+    "menuHidden": "Hidden services",
+    "menuHotkeys": "Quick buttons",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "Landing": {
     "nav": {

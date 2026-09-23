@@ -24,6 +24,7 @@
 import { SERVICE_CONTENT } from "@/lib/service-content";
 
 export type BuiltinQuickActionId =
+  | "menu"
   | "window"
   | "bookmarks"
   | "history"
@@ -61,6 +62,16 @@ export interface QuickActionMeta {
 }
 
 export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
+  {
+    id: "menu",
+    kind: "builtin",
+    // VED-402: бывший бургер шапки. Место в шапке отдано «Истории», а меню
+    // переехало сюда плиткой — тем же списком сервисов, языком, темой и
+    // выходом, что и раньше.
+    label: "Меню",
+    hint: "Боковое меню: все сервисы, язык, тема, баллы и выход",
+    href: null,
+  },
   {
     id: "window",
     kind: "builtin",
@@ -245,6 +256,18 @@ export const PINNED_QUICK_ACTIONS: readonly QuickActionId[] = [
 
 const NOTHING_PINNED: readonly QuickActionId[] = [];
 
+/**
+ * Кнопки, которые нельзя выключить, но можно переставить (VED-402).
+ *
+ * «Меню» — единственная кнопка, которой открывается боковое меню, с тех пор
+ * как бургер ушёл из шапки: свайп от края — это жест, а у жеста обязана быть
+ * кнопочная замена (WCAG 2.5.1). Выключи её человек — и выход из аккаунта,
+ * язык и тема на телефоне остались бы только за жестом, о котором он может
+ * не знать. Закреплённой первой тройкой (VED-326) она не стала: там порядок
+ * назвал заказчик, и у админа закреплений нет вовсе, а меню нужно всем.
+ */
+export const REQUIRED_QUICK_ACTIONS: readonly QuickActionId[] = ["menu"];
+
 /** Что закреплено у этого человека. У админа — ничего. */
 export function lockedQuickActions(admin: boolean): readonly QuickActionId[] {
   return admin ? NOTHING_PINNED : PINNED_QUICK_ACTIONS;
@@ -265,16 +288,37 @@ export function pinQuickActions(
 }
 
 /**
+ * Порядок панели, какой её рисуют: закреплённые первыми (`pinQuickActions`),
+ * а обязательной кнопки, которой в записи нет, — сразу за ними (VED-402).
+ *
+ * Так «Меню» доезжает до всех, у кого панель давно настроена, и встаёт на
+ * видное место в первом ряду, а не в конец, куда дописывались «Открытка» и
+ * «История»: бургер был на виду, и меню не должно потеряться при переезде.
+ * Записанное место человека не трогаем — переставить её можно.
+ */
+export function arrangeQuickActions(
+  ids: readonly QuickActionId[],
+  locked: readonly QuickActionId[],
+): QuickActionId[] {
+  const pinned = pinQuickActions(ids, locked);
+  const missing = REQUIRED_QUICK_ACTIONS.filter((id) => !pinned.includes(id));
+  if (missing.length === 0) return pinned;
+  const at = locked.length;
+  return [...pinned.slice(0, at), ...missing, ...pinned.slice(at)];
+}
+
+/**
  * Что стоит в панели у человека, который ничего не настраивал.
  *
  * Не все пятнадцать: заполненная до краёв с первого открытия панель не
  * читается как настраиваемая — её начинают разбирать, а не собирать.
- * Первыми — закреплённые три (VED-326), за ними способы перемещаться по
- * порталу: окно, закладки (VED-163). Человек, который их не включил, просто
+ * Первыми — закреплённые три (VED-326), за ними «Меню» (VED-402) и способы
+ * перемещаться по порталу: окно, закладки (VED-163). Человек, который их не включил, просто
  * не узнает, что они есть.
  */
 export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   ...PINNED_QUICK_ACTIONS,
+  ...REQUIRED_QUICK_ACTIONS,
   "window",
   "bookmarks",
   "history",

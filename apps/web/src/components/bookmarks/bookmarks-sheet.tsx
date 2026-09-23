@@ -118,26 +118,33 @@ export function BookmarksSheet({
 
   return (
     <div className="mt-3 rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm text-text-1">
+      {/* Название страницы — в самой кнопке, справа от действия (VED-399):
+          отдельной строкой под кнопкой оно съедало высоту целой закладки,
+          и на телефоне третья закладка уходила за край. Какую страницу
+          кнопка добавит или уберёт, видно там же, где на неё нажимают. */}
       <button
         type="button"
         onClick={() => void toggleHere()}
         disabled={!here || busy || items === null}
-        className="flex w-full items-center gap-2 rounded-lg border border-glass-brd px-3 py-2 text-left text-sm text-text-0 transition-colors hover:bg-white/4 disabled:opacity-60"
+        title={here?.title}
+        className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-glass-brd px-3 py-2 text-left text-sm text-text-0 transition-colors hover:bg-white/4 disabled:opacity-60"
       >
         {busy ? (
           <Loader2 className="size-4 shrink-0 motion-safe:animate-spin" />
         ) : (
           <BookmarkPlus className="size-4 shrink-0" />
         )}
-        <span className="min-w-0 truncate">
+        <span className="shrink-0">
           {saved ? "Убрать эту страницу" : "Добавить эту страницу"}
         </span>
+        {here && (
+          <span className="ml-auto min-w-0 truncate text-[11px] text-text-1">
+            {/* Для скринридера — отдельной фразой, а не слитно с действием. */}
+            <span className="sr-only">: </span>
+            {here.title}
+          </span>
+        )}
       </button>
-      {here && (
-        <p className="mt-1 truncate px-1 text-[11px] text-text-1" title={here.title}>
-          {here.title}
-        </p>
-      )}
 
       {/* Цветом только рамка: `--vm-magenta` на светлой теме даёт 4.46:1 и
           мелким текстом запрещён (см. «Дизайн-система» в CLAUDE.md), а
@@ -151,7 +158,10 @@ export function BookmarksSheet({
         </p>
       )}
 
-      <div className="mt-3 max-h-[46vh] overflow-y-auto">
+      {/* Своей прокрутки у списка нет: листается вся панель (VED-399).
+          Вложенная прокрутка с потолком в полэкрана внутри панели, которая
+          сама не листалась, и прятала третью закладку. */}
+      <div className="mt-3">
         {items === null ? (
           <p className="px-1 py-2 text-xs text-text-1">Загружаем…</p>
         ) : items.length === 0 ? (

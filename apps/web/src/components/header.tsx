@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isPortalAdmin } from "@vedamatch/shared";
 import type { UserProfile } from "@vedamatch/shared";
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Menu,
+  Check,
+  Settings2,
   X,
   Home,
   HeartHandshake,
@@ -20,7 +21,16 @@ import {
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
 import { CartBadge } from "@/components/market/cart-badge";
-import { QuickPanel } from "@/components/quick/quick-panel";
+import {
+  QuickPanel,
+  type QuickPanelHandle,
+  type QuickSheetId,
+} from "@/components/quick/quick-panel";
+import {
+  SideMenuItems,
+  SideMenuSettings,
+  useSideMenu,
+} from "@/components/quick/side-menu";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
@@ -29,6 +39,7 @@ import { useServiceNames } from "@/components/service-catalog-provider";
 import { SERVICE_CONTENT } from "@/lib/service-content";
 import { useDialogFocus, useDismissable } from "@/lib/use-dismissable";
 import { useEdgeSwipe, type EdgeSide } from "@/lib/use-edge-swipe";
+import { useTouchShield } from "@/lib/use-touch-shield";
 
 interface NavItem {
   href: string;
@@ -143,28 +154,53 @@ export function Header({ user }: { user: UserProfile }) {
   const tCommon = useTranslations("Common");
   const navItems = useNavItems();
   /*
-    Боковое меню на телефоне — одно и то же, но выдвигается с любой стороны
-    (VED-191): кнопкой-бургером и свайпом от правого края влево — справа,
-    свайпом от левого края вправо — слева. Открыто не больше одного.
+    Боковое меню — одно и то же, но выдвигается с любой стороны (VED-191):
+    плиткой «Меню» в панели горячих кнопок и свайпом от правого края влево —
+    справа, свайпом от левого края вправо — слева. Открыто не больше одного.
+
+    Бургера в шапке больше нет (VED-402): его место заняла кнопка «История»,
+    а сам он переехал плиткой в панель горячих кнопок.
   */
   const [drawer, setDrawer] = useState<EdgeSide | null>(null);
   const isOpen = drawer !== null;
+  /* Настройка меню (VED-408): пока она открыта, в меню вместо списка —
+     галочки и стрелки, а служебные ссылки под ним убраны. */
+  const [tuning, setTuning] = useState(false);
   const pathname = usePathname();
   const drawerId = useId();
   const drawerRef = useRef<HTMLDivElement>(null);
-  const burgerRef = useRef<HTMLButtonElement>(null);
-  /* Куда вернуть фокус при закрытии: на бургер, если открыли им, и туда,
-     где он был, если открыли свайпом, — иначе после жеста фокус прыгал бы в
-     шапку, а клавиатура и скринридер теряли место на странице. */
+  const quickRef = useRef<QuickPanelHandle>(null);
+  /* Куда вернуть фокус при закрытии: на звёздочку, если меню открыли плиткой
+     «Меню», и туда, где он был, если открыли свайпом, — иначе после жеста
+     фокус прыгал бы в шапку, а клавиатура и скринридер теряли место. */
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const [shielded, raiseShield] = useTouchShield();
+  const closeDrawer = useCallback(() => {
+    setDrawer(null);
+    setTuning(false);
+  }, []);
   const openDrawer = useCallback((side: EdgeSide, from: HTMLElement | null) => {
     returnFocusRef.current = from;
     setDrawer(side);
   }, []);
-  // Бургер — «снаружи» панели, но тап по нему не должен закрывать её
-  // отдельно от своего же клика: иначе клик тут же открыл бы её снова.
-  useDismissable(drawerRef, closeDrawer, isOpen, burgerRef);
+  /*
+    Закрывается меню крестиком, Escape, тапом по подложке и мазком к краю —
+    но НЕ касанием снаружи в момент, когда палец коснулся стекла (VED-408).
+    Раньше меню пропадало уже на `touchstart` по подложке, и остаток того же
+    касания — мазок, которым человек закрывал меню, — доставался странице:
+    срабатывали кнопки и ссылки под пальцем. Теперь тап по подложке — это
+    `click` по самой подложке, а она на месте до конца касания.
+  */
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      closeDrawer();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, closeDrawer]);
   useDialogFocus(isOpen, drawerRef, returnFocusRef);
   useEdgeSwipe({
     open: drawer,
@@ -175,7 +211,11 @@ export function Header({ user }: { user: UserProfile }) {
         active instanceof HTMLElement && active !== document.body ? active : null,
       );
     },
-    onClose: closeDrawer,
+    // Меню закрывается посреди мазка — хвост мазка забирает заслон.
+    onClose: () => {
+      raiseShield();
+      closeDrawer();
+    },
   });
   const currentAttr = (href: string) =>
     isCurrentRoute(pathname, href) ? ("page" as const) : undefined;
@@ -243,8 +283,14 @@ export function Header({ user }: { user: UserProfile }) {
                 плавающей кнопкой поверх страницы: снизу уже стоит полоса
                 плеера, а на Знакомствах ещё и своя нижняя панель.
                 Админу три закреплённые кнопки не закрепляются (VED-326):
-                панель у него рабочая, и «Поддержать» ему показывать незачем. */}
-            <QuickPanel admin={isPortalAdmin(user)} />
+                панель у него рабочая, и «Поддержать» ему показывать незачем.
+                Слева от звёздочки — «История» (VED-402): её рисует сама
+                панель, см. комментарий у `QuickPanel`. */}
+            <QuickPanel
+              ref={quickRef}
+              admin={isPortalAdmin(user)}
+              onOpenMenu={(trigger) => openDrawer("right", trigger)}
+            />
             <NotificationBell />
             <LocaleToggle className="hidden sm:flex" />
             <ThemeToggle className="hidden sm:flex" />
@@ -274,22 +320,6 @@ export function Header({ user }: { user: UserProfile }) {
               )}
             </Link>
             
-            {/* Mobile menu button */}
-            <button
-              ref={burgerRef}
-              type="button"
-              onClick={() =>
-                isOpen ? closeDrawer() : openDrawer("right", burgerRef.current)
-              }
-              className="md:hidden p-2 rounded-lg text-text-1 hover:text-text-0 hover:bg-glass transition-colors"
-              aria-label={isOpen ? t("closeMenu") : t("openMenu")}
-              aria-expanded={isOpen}
-              aria-controls={drawerId}
-            >
-              {/* Без поворота (VED-191): меню появляется мгновенно, и
-                  значок меняется вместе с ним, а не догоняет его. */}
-              {isOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
           </div>
         </div>
       </header>
@@ -302,58 +332,86 @@ export function Header({ user }: { user: UserProfile }) {
 
         Панель одна и та же с обеих сторон — тот же список, те же кнопки;
         меняется только край, к которому она прижата, и сторона рамки.
+
+        Подложка лежит выше шапки (VED-408): раньше шапка оставалась над ней
+        живой, потому что в ней был бургер, закрывающий меню. Бургера нет, и
+        мазок, закрывающий меню, не должен задевать ни шапку, ни полосу
+        плеера внизу — ничего за пределами панели.
+
+        Подложка живёт чуть дольше меню: пока поднят заслон (см.
+        `useTouchShield`), она прозрачная и забирает себе хвост мазка. Это
+        тот же элемент — React его не пересоздаёт, — поэтому касание,
+        начатое на подложке, до конца остаётся на ней.
       */}
+      {(drawer || shielded) && (
+        <div
+          aria-hidden="true"
+          data-testid="drawer-backdrop"
+          className={`fixed inset-0 z-[60] ${
+            drawer ? "bg-bg-0/95 backdrop-blur-xl" : ""
+          }`}
+          onClick={(event) => {
+            if (drawer) closeDrawer();
+            else event.preventDefault();
+          }}
+        />
+      )}
       {drawer && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-bg-0/95 backdrop-blur-xl md:hidden"
-            onClick={closeDrawer}
-          />
-          <div
-            ref={drawerRef}
-            id={drawerId}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("menu")}
-            tabIndex={-1}
-            data-side={drawer}
-            className={`fixed top-0 bottom-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-bg-1 outline-none md:hidden ${
-              drawer === "right"
-                ? "right-0 border-l border-glass-brd"
-                : "left-0 border-r border-glass-brd"
-            }`}
-          >
+        <div
+          ref={drawerRef}
+          id={drawerId}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("menu")}
+          tabIndex={-1}
+          data-side={drawer}
+          className={`fixed top-0 bottom-0 z-[60] w-72 max-w-[85vw] overflow-y-auto overscroll-contain bg-bg-1 outline-none ${
+            drawer === "right"
+              ? "right-0 border-l border-glass-brd"
+              : "left-0 border-r border-glass-brd"
+          }`}
+        >
               {/* Место под шапку не резервируем: панель накрывает её целиком,
                   и полоса в высоту шапки читалась как пустое место (VED-15).
                   Своего ряда у крестика тоже нет — он занимал ту же пустую
                   строку над «Главной». Теперь крестик стоит справа в строке
-                  «Главной», а список начинается от самого верха панели. */}
-              <div className="relative flex h-full flex-col p-6 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-                <button
-                  type="button"
-                  onClick={closeDrawer}
-                  aria-label={t("closeMenu")}
-                  className="absolute right-3 top-[calc(1.125rem+env(safe-area-inset-top))] z-10 rounded-lg p-2 text-text-1 transition-colors hover:bg-glass hover:text-text-0"
-                >
-                  <X size={20} />
-                </button>
-                <nav aria-label={t("services")} className="flex flex-col gap-1">
-                  {navItems.map((item, index) => (
-                    <div key={item.href}>
-                      <Link
-                        href={item.href}
-                        aria-current={currentAttr(item.href)}
-                        onClick={closeDrawer}
-                        // Первой строке — место справа под крестик: иначе
-                        // подсветка «Главной» уходила бы под кнопку.
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0 ${index === 0 ? "mr-8" : ""}`}
-                      >
-                        {item.icon}
-                        <span className="font-medium">{item.label}</span>
-                      </Link>
-                    </div>
-                  ))}
-                </nav>
+                  «Главной», а список начинается от самого верха панели.
+                  Слева от крестика — настройка меню (VED-408): заказчик
+                  отметил это место на скриншоте. */}
+              <div
+                className={`relative flex h-full flex-col pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] ${
+                  tuning ? "px-3" : "px-6"
+                }`}
+              >
+                <div className="absolute right-3 top-[calc(0.875rem+env(safe-area-inset-top))] z-10 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setTuning((value) => !value)}
+                    aria-pressed={tuning}
+                    aria-label={tuning ? t("customizeDone") : t("customizeMenu")}
+                    title={tuning ? t("customizeDone") : t("customizeMenu")}
+                    className="flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+                  >
+                    {tuning ? <Check size={20} /> : <Settings2 size={20} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeDrawer}
+                    aria-label={t("closeMenu")}
+                    className="flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <DrawerNav
+                  tuning={tuning}
+                  homeLabel={navItems[0].label}
+                  currentAttr={currentAttr}
+                  onClose={closeDrawer}
+                  onOpenSheet={(sheet) => quickRef.current?.openSheet(sheet)}
+                />
+                {!tuning && (
+                <>
                 {/* Админка и «Добавить новость» — под списком сервисов
                     (VED-15): первой в панели должна стоять «Главная», за
                     ней сервисы, и только потом служебное. Раньше блок
@@ -458,10 +516,71 @@ export function Header({ user }: { user: UserProfile }) {
                   </Link>
                   <LogoutItem />
                 </div>
+                </>
+                )}
               </div>
-          </div>
-        </>
+        </div>
       )}
     </>
+  );
+}
+
+/**
+ * Список бокового меню: «Главная», за ней сервисы и горячие кнопки в том
+ * порядке и составе, какой выбрал человек (VED-408), — или их настройка.
+ *
+ * Отдельным компонентом, потому что настройка меню читается из хранилища
+ * при монтировании (`useSideMenu`), а монтируется он только в открытом
+ * меню — на сервере меню не рисуется, и расхождения гидратации нет.
+ */
+function DrawerNav({
+  tuning,
+  homeLabel,
+  currentAttr,
+  onClose,
+  onOpenSheet,
+}: {
+  tuning: boolean;
+  homeLabel: string;
+  currentAttr: (href: string) => "page" | undefined;
+  onClose: () => void;
+  onOpenSheet: (sheet: QuickSheetId) => void;
+}) {
+  const t = useTranslations("Header");
+  const menu = useSideMenu();
+
+  if (tuning)
+    return (
+      <>
+        {/* Место справа — под настройку и крестик, как у «Главной». */}
+        <p className="mr-[5.25rem] flex min-h-12 items-center px-1 font-display text-sm font-bold text-text-0">
+          {t("customizeMenu")}
+        </p>
+        <SideMenuSettings menu={menu} />
+      </>
+    );
+
+  return (
+    <nav aria-label={t("services")} className="flex flex-col gap-1">
+      <div>
+        <Link
+          href="/"
+          aria-current={currentAttr("/")}
+          onClick={onClose}
+          // Место справа — под настройку меню и крестик: иначе подсветка
+          // «Главной» уходила бы под кнопки.
+          className="mr-[5.25rem] flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0"
+        >
+          <Home size={20} />
+          <span className="font-medium">{homeLabel}</span>
+        </Link>
+      </div>
+      <SideMenuItems
+        menu={menu}
+        currentAttr={currentAttr}
+        onClose={onClose}
+        onOpenSheet={onOpenSheet}
+      />
+    </nav>
   );
 }
