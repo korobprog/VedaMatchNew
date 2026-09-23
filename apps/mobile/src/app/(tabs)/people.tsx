@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PeopleDirectorySection } from '@/components/people/people-directory-section';
 import { PeopleRequestsSection } from '@/components/people/people-requests-section';
 import { useSession } from '@/lib/auth/session';
@@ -10,6 +9,7 @@ import { createPeopleApi } from '@/lib/people/people-api';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
 
 type Segment = 'directory' | 'requests';
 
@@ -30,14 +30,15 @@ function openPerson(userId: string) {
  */
 export default function PeopleScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  // Под панелью быстрого доступа вырез уже занят ею (VED-385).
+  const topInset = useScreenTopInset();
   const { api } = useSession();
   const peopleApi = useMemo(() => createPeopleApi(api), [api]);
   const chatApi = useMemo(() => createChatApi(api), [api]);
   const [segment, setSegment] = useState<Segment>('directory');
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bg0, paddingTop: insets.top + 16 }]}>
+    <View style={[styles.root, { backgroundColor: colors.bg0, paddingTop: topInset + 16 }]}>
       <View style={styles.header}>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
           Люди

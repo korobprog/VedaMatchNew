@@ -2,7 +2,6 @@ import type { ChatConversationSummary } from '@vedamatch/shared';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConversationRow } from '@/components/chat/conversation-row';
 import { QuickConferenceRow } from '@/components/chat/quick-conference-row';
 import { NotificationBell } from '@/components/notifications/notification-bell';
@@ -16,6 +15,7 @@ import { setUnreadCount } from '@/lib/notifications/unread-store';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
 
 const keyOf = (item: ChatConversationSummary) => item.id;
 
@@ -25,7 +25,8 @@ function openConversation(id: string) {
 
 export default function ChatsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  // Под панелью быстрого доступа вырез уже занят ею (VED-385).
+  const topInset = useScreenTopInset();
   const { api, user } = useSession();
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
@@ -102,7 +103,7 @@ export default function ChatsScreen() {
   );
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+    <View style={[styles.header, { paddingTop: topInset + 16 }]}>
       <View style={styles.titleRow}>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
           Чаты

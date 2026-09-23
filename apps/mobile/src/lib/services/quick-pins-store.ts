@@ -78,8 +78,10 @@ export function createQuickPinsStore(storage: KeyValueStorage): QuickPinsStore {
   function load(): Promise<QuickPin[]> {
     if (loaded) return Promise.resolve(pins);
     if (!loading) {
-      loading = storage
-        .getItem(QUICK_PINS_STORAGE_KEY)
+      // `Promise.resolve().then(...)`: синхронный отказ нативного модуля
+      // (в вебе, в тестах) обязан стать пустой панелью, а не исключением.
+      loading = Promise.resolve()
+        .then(() => storage.getItem(QUICK_PINS_STORAGE_KEY))
         .then(parseQuickPins, () => [] as QuickPin[])
         .then((read) => {
           // Правки (`toggle`/`move`/`reconcile`) сами ждут `load()`, поэтому
@@ -132,4 +134,19 @@ export function useQuickPins(store: QuickPinsStore = quickPinsStore): QuickPin[]
     void store.load();
   }, [store]);
   return pins;
+}
+
+/**
+ * Прочитано ли хранилище. Вкладки ждут этого, прежде чем рисоваться: иначе
+ * экран чатов на первом кадре встал бы без панели, а через кадр съехал бы
+ * вниз на её высоту. Чтение запускается раньше, вместе с восстановлением
+ * сессии (`root-shell-stack.tsx`), так что к моменту вкладок оно обычно уже
+ * закончено.
+ */
+export function useQuickPinsLoaded(store: QuickPinsStore = quickPinsStore): boolean {
+  const loaded = useSyncExternalStore(store.subscribe, store.isLoaded, store.isLoaded);
+  useEffect(() => {
+    void store.load();
+  }, [store]);
+  return loaded;
 }

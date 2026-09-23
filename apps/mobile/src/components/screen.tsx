@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
 import { useTheme } from '@/theme/theme';
 import { fonts } from '@/theme/tokens';
 
@@ -20,12 +20,14 @@ interface Props {
 /** Каркас экрана вкладки: заголовок Unbounded и прокручиваемое тело. */
 export function Screen({ title, subtitle, children, onTitleLongPress }: Props) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  // Под панелью быстрого доступа вырез уже занят ею (VED-385); вне вкладок
+  // хук отдаёт обычный `insets.top`.
+  const topInset = useScreenTopInset();
 
   return (
     <ScrollView
       style={{ backgroundColor: colors.bg0 }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topInset + 20 }]}
     >
       <View style={styles.header}>
         <Text
