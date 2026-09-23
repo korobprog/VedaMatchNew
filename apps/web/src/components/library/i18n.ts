@@ -221,6 +221,8 @@ const ui = {
     "add.lineageHint":
       "Преданные видят материалы своей линии и «для всех». По умолчанию — ваша линия либо ISKCON",
     "lineage.all": "Все линии",
+    "lineage.filter": "Духовная линия материалов",
+    "lineage.filterFailed": "Не удалось переключить линию, попробуйте ещё раз",
     "lineage.badgeAll": "Для всех линий",
     "feed.emptyLineage":
       "Для вашей линии здесь пока ничего нет. Материалы других линий скрыты",
@@ -509,6 +511,8 @@ const ui = {
     "add.lineageHint":
       "Devotees see materials of their own lineage plus those marked for all. Defaults to your lineage or ISKCON",
     "lineage.all": "All lineages",
+    "lineage.filter": "Spiritual lineage of materials",
+    "lineage.filterFailed": "Could not switch the lineage, please try again",
     "lineage.badgeAll": "For all lineages",
     "feed.emptyLineage":
       "Nothing here for your lineage yet. Materials of other lineages are hidden",

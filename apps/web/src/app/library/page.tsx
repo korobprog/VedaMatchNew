@@ -2,14 +2,13 @@ import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
 import type { Metadata } from "next";
 import {
-  isDevotee,
   isLineagePreference,
   resolveContentLineage,
 } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { LineagePrompt } from "@/components/lineage-prompt";
 import { LineageStatus } from "@/components/lineage-status";
-import { LibraryLineageSwitch } from "@/components/library/lineage-switch";
+import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
 import {
   getLibraryCategoryTree,
   getLibraryCommunities,
@@ -56,8 +55,12 @@ export default async function LibraryPage({
   const appliedLineage = explicitLineage
     ? resolveContentLineage(null, explicitLineage)
     : resolveContentLineage(user, preferences?.lineage ?? null);
-  const showsLineageSwitch =
-    Boolean(user && isDevotee(user)) || (preferences?.lineage ?? null) !== null;
+  // Кнопки линий видны всем (VED-395): у ищущего без настройки нажата «все
+  // линии», и выдача та же, что была, — но сузить её он теперь может в одно
+  // касание, а не через профиль.
+  const lineageViewer = user
+    ? { spiritualStage: user.spiritualStage, lineage: user.lineage }
+    : null;
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -89,16 +92,18 @@ export default async function LibraryPage({
               {t(locale, "nav.add")}
             </Link>
             <LocaleSwitch locale={locale} />
-            {showsLineageSwitch && (
-              <span id="lineage-switch" className="scroll-mt-24">
-                <LibraryLineageSwitch
-                  locale={locale}
-                  value={preferences?.lineage ?? null}
-                  profileLineage={user?.lineage ?? null}
-                />
-              </span>
-            )}
           </div>
+        </div>
+
+        {/* Якорь `#lineage-switch` прежний: на него ведут «настроить» в
+            подписи и подсказка выбрать линию со страниц рубрик. */}
+        <div id="lineage-switch" className="scroll-mt-24">
+          <LibraryLineageFilter
+            locale={locale}
+            applied={appliedLineage}
+            preference={preferences?.lineage ?? null}
+            viewer={lineageViewer}
+          />
         </div>
 
         {user && (
@@ -106,7 +111,7 @@ export default async function LibraryPage({
             user={user}
             serviceName="Образования"
             settingsHref="#lineage-switch"
-            settingsLabel="в списке линий над рубриками"
+            settingsLabel="в ряду линий над рубриками"
           />
         )}
 
