@@ -97,7 +97,7 @@ describe("sourceOptions", () => {
     expect(
       sourceOptions([{ label: "Бхагавад-гита", count: 40 }], null),
     ).toEqual([
-      { value: "", label: "По умолчанию — Бхагавад-гита" },
+      { value: "", label: "Бхагавад-гита — по умолчанию" },
       { value: "Бхагавад-гита", label: "Бхагавад-гита (40)" },
     ]);
   });
@@ -114,7 +114,7 @@ describe("categoryOptions", () => {
     const onlyArt = category("Практика", "praktika", { art: 4 });
 
     expect(categoryOptions([wisdom, empty, onlyArt], null)).toEqual([
-      { value: "", label: "По умолчанию — Мудрость мира" },
+      { value: "", label: "Мудрость мира — по умолчанию" },
       { value: "filosofiya-2", label: "Мудрость мира (открыток: 25)" },
       { value: "praktika", label: "Практика (только афоризмы)" },
     ]);

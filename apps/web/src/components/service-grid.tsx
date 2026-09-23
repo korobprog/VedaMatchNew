@@ -335,14 +335,16 @@ export function ServiceGrid({
                   <button
                     type="button"
                     onClick={() => togglePin(service.id)}
+                    /* Переключатель: имя постоянное, состояние — в
+                       `aria-pressed`. Меняющееся имя вместе с `aria-pressed`
+                       читалка объявила бы дважды («Открепить, нажата»), а
+                       видимое слово обязано входить в имя (WCAG 2.5.3). */
                     aria-pressed={pinnedId === service.id}
-                    aria-label={
-                      pinnedId === service.id
-                        ? `Открепить: ${service.name}`
-                        : `Закрепить сверху: ${service.name}`
-                    }
+                    aria-label={`Закрепить сверху: ${service.name}`}
                     title={
-                      pinnedId === service.id ? "Открепить" : "Закрепить сверху"
+                      pinnedId === service.id
+                        ? "Закреплена сверху — нажмите, чтобы открепить"
+                        : "Закрепить сверху"
                     }
                     className={`mr-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors ${
                       pinnedId === service.id
@@ -355,7 +357,7 @@ export function ServiceGrid({
                       className="size-4"
                       fill={pinnedId === service.id ? "currentColor" : "none"}
                     />
-                    {pinnedId === service.id ? "Закреплена" : "Закрепить"}
+                    Закрепить
                   </button>
                   <button
                     type="button"

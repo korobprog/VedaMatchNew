@@ -108,7 +108,8 @@ export interface HomeButtonOption {
 
 /**
  * Пункты выбора источника в настройках. Первым — «по умолчанию» (пустое
- * значение). Сохранённый источник, которого сейчас нет в списке (все стихи
+ * значение); название впереди пометки: на 320px поле обрезает конец строки,
+ * и видно должно остаться, что выбрано. Сохранённый источник, которого сейчас нет в списке (все стихи
  * сняли с показа), остаётся пунктом: иначе форма молча показала бы другой
  * выбор, и сохранение затёрло бы настройку.
  */
@@ -117,7 +118,7 @@ export function sourceOptions(
   saved: string | null | undefined,
 ): HomeButtonOption[] {
   const options: HomeButtonOption[] = [
-    { value: "", label: `По умолчанию — ${DEFAULT_HOME_SOURCE_WORK}` },
+    { value: "", label: `${DEFAULT_HOME_SOURCE_WORK} — по умолчанию` },
     ...works.map((work) => ({
       value: work.label,
       label: `${work.label} (${work.count})`,
@@ -143,7 +144,7 @@ export function categoryOptions(
   return [
     {
       value: "",
-      label: `По умолчанию — ${fallback?.title ?? DEFAULT_HOME_CATEGORY.titles[0]}`,
+      label: `${fallback?.title ?? DEFAULT_HOME_CATEGORY.titles[0]} — по умолчанию`,
     },
     ...categories
       .filter(

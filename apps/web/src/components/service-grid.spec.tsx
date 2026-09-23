@@ -149,8 +149,10 @@ describe("ServiceGrid", () => {
     );
 
     expect(readLayout(USER).pinnedId).toBe("astro");
-    const pinned = screen.getByRole("button", { name: "Открепить: Астрология" });
-    expect(pinned).toHaveAttribute("aria-pressed", "true");
+    const pinned = screen.getByRole("button", {
+      name: "Закрепить сверху: Астрология",
+      pressed: true,
+    });
     // Закреплённая встаёт первой.
     expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent(
       "Астрология",
