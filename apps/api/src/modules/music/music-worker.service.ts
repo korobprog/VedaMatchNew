@@ -8,6 +8,7 @@ import { MusicIngestProcessService } from './music-ingest-process.service';
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 import { MusicPlaybackService } from './music-playback.service';
+import { MusicDurationRecountService } from './music-duration-recount.service';
 
 /**
  * Фоновая стадия сервиса: чистка брошенных загрузок, записи, по которым
@@ -33,6 +34,13 @@ const TICK_MS = 10 * 60 * 1000;
  */
 const INGEST_TICK_MS = 15 * 1000;
 
+/**
+ * Сверка длительности с файлом (VED-310) — своим таймером раз в минуту: она
+ * читает файлы целиком, и в тике приёма задерживала бы то, чего ждут на
+ * экране, а в десятиминутном тике уборки проходила бы каталог сутками.
+ */
+const DURATION_TICK_MS = 60 * 1000;
+
 @Injectable()
 export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MusicWorkerService.name);
@@ -40,12 +48,15 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   private running = false;
   private ingestTimer?: NodeJS.Timeout;
   private ingestRunning = false;
+  private durationTimer?: NodeJS.Timeout;
+  private durationRunning = false;
 
   constructor(
     private readonly uploads: MusicUploadsService,
     private readonly reports: MusicReportsService,
     private readonly playback: MusicPlaybackService,
     private readonly ingest: MusicIngestProcessService,
+    private readonly durations: MusicDurationRecountService,
   ) {}
 
   onModuleInit() {
@@ -60,11 +71,31 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
       INGEST_TICK_MS,
     );
     this.ingestTimer.unref();
+
+    this.durationTimer = setInterval(
+      () => void this.durationTick(),
+      DURATION_TICK_MS,
+    );
+    this.durationTimer.unref();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
     if (this.ingestTimer) clearInterval(this.ingestTimer);
+    if (this.durationTimer) clearInterval(this.durationTimer);
+  }
+
+  /** Сверка длительности по файлу (VED-310), пачкой в несколько записей. */
+  private async durationTick(): Promise<void> {
+    if (this.durationRunning) return;
+    this.durationRunning = true;
+    try {
+      await this.stage('сверка длительности по файлу', () =>
+        this.durations.recountNext(),
+      );
+    } finally {
+      this.durationRunning = false;
+    }
   }
 
   /**

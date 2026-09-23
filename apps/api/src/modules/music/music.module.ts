@@ -44,6 +44,7 @@ import {
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 import { MusicWorkerService } from './music-worker.service';
+import { MusicDurationRecountService } from './music-duration-recount.service';
 
 /**
  * Сервис «Музыка». См. docs/music-service-plan.md.
@@ -96,6 +97,7 @@ import { MusicWorkerService } from './music-worker.service';
     MusicIngestFetchService,
     MusicIngestProcessService,
     MusicWorkerService,
+    MusicDurationRecountService,
     MusicPurgeListener,
     MusicAssistantListener,
   ],
