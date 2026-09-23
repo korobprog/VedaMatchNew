@@ -52,8 +52,13 @@ export class BlogController {
 
   /** Виджет главной: несколько свежих постов и счётчик «и ещё N». */
   @Get('home')
-  home(@CurrentUser() user: AccessTokenPayload) {
-    return this.blog.home(user.sub, isAdmin(user));
+  home(
+    @CurrentUser() user: AccessTokenPayload,
+    // `view=carousel` — карусель веба на 10 постов; без него прежние 4 для
+    // полосы в приложении (установленные сборки параметр не шлют).
+    @Query('view') view?: string,
+  ) {
+    return this.blog.home(user.sub, isAdmin(user), view);
   }
 
   /** `scope=all` — архив со всеми прошлыми постами. */

@@ -40,12 +40,17 @@ export const BLOG_MIN_FEED_LIFETIME_HOURS = 1;
 export const BLOG_MAX_FEED_LIFETIME_HOURS = 24 * 365;
 
 /**
- * Сколько постов листает виджет главной. Виджет — карусель по одному посту
- * на экран телефона (VED-238, «как в Instagram»), поэтому высота главной от
- * этого числа не растёт; десять — чтобы листать было что, но ответ главной
- * не тяжелел.
+ * Сколько постов отдаёт `GET /blog/home` по умолчанию. На это число
+ * опирается полоса ленты в приложении (`blog-home-strip.tsx`), и уже
+ * установленные сборки зовут эндпоинт без параметров — менять нельзя.
  */
-export const BLOG_HOME_PREVIEW_SIZE = 10;
+export const BLOG_HOME_PREVIEW_SIZE = 4;
+/**
+ * Сколько постов листает карусель на главной веба (VED-238, «как в
+ * Instagram»): `GET /blog/home?view=carousel`. По одному посту на экран
+ * телефона, поэтому высота главной от этого числа не растёт.
+ */
+export const BLOG_HOME_CAROUSEL_SIZE = 10;
 /** Размер страницы полной ленты. */
 export const BLOG_FEED_PAGE_SIZE = 12;
 

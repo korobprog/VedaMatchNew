@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  BLOG_HOME_PREVIEW_SIZE,
   BLOG_MAX_POSTS_PER_DAY,
   resolveDisplayName,
   type BlogAuthorDto,
@@ -28,6 +27,7 @@ import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
 import {
   BLOG_PAGE_SIZE,
   blogCursorFilter,
+  blogHomeTake,
   blogOrderBy,
   decodeBlogCursor,
   takeBlogPage,
@@ -145,6 +145,7 @@ export class BlogService {
   async home(
     userId: string,
     viewerIsAdmin: boolean,
+    view?: string,
   ): Promise<BlogHomeFeedResponse> {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const now = new Date();
@@ -155,7 +156,7 @@ export class BlogService {
         where,
         select: postSelect(viewer.userId),
         orderBy: blogOrderBy(),
-        take: BLOG_HOME_PREVIEW_SIZE,
+        take: blogHomeTake(view),
       }),
       this.prisma.blogPost.count({ where }),
     ]);

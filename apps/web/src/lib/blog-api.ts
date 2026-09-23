@@ -33,7 +33,9 @@ async function blogGet<T>(path: string): Promise<T | null> {
 }
 
 export function getBlogHomeFeed(): Promise<BlogHomeFeedResponse | null> {
-  return blogGet<BlogHomeFeedResponse>("/blog/home");
+  // Карусель на главной листает больше постов, чем полоса в приложении,
+  // которой эндпоинт по умолчанию отдаёт четыре (VED-238).
+  return blogGet<BlogHomeFeedResponse>("/blog/home?view=carousel");
 }
 
 export function getBlogFeed(
