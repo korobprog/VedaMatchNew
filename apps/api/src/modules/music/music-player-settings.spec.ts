@@ -9,7 +9,9 @@ describe('parsePlayerSettingsPatch', () => {
     expect(parsePlayerSettingsPatch({ seekBackSeconds: 30 })).toEqual({
       patch: { seekBackSeconds: 30 },
     });
-    expect(parsePlayerSettingsPatch({ autoplay: false })).toEqual({ patch: {} });
+    expect(parsePlayerSettingsPatch({ autoplay: false })).toEqual({
+      patch: {},
+    });
   });
 
   it('принимает все шаги из списка', () => {

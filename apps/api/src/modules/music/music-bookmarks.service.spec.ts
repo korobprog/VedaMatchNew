@@ -67,7 +67,11 @@ describe('MusicBookmarksService.create', () => {
 
     await service(prisma).create('u1', { trackId: 't1', positionSeconds: 12 });
 
-    expect(prisma.musicBookmark.create.mock.calls[0][0].data.label).toBeNull();
+    expect(prisma.musicBookmark.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ label: null }) as unknown,
+      }),
+    );
   });
 
   it('без места в записи — отказ', async () => {

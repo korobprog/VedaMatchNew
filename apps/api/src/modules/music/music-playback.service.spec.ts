@@ -338,11 +338,15 @@ describe('MusicPlaybackService.settings', () => {
       playerShowHistory: true,
     });
 
-    expect(prisma.musicSettings.upsert.mock.calls[0][0].update).toEqual({
-      seekBackSeconds: 5,
-      seekForwardSeconds: 60,
-      playerShowHistory: true,
-    });
+    expect(prisma.musicSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: {
+          seekBackSeconds: 5,
+          seekForwardSeconds: 60,
+          playerShowHistory: true,
+        },
+      }),
+    );
     expect(result).toMatchObject({
       seekBackSeconds: 5,
       seekForwardSeconds: 60,
@@ -744,9 +748,11 @@ describe('MusicPlaybackService.history', () => {
     ]);
     // Одним запросом на всю страницу, без повторов.
     expect(prisma.musicPlayState.findMany).toHaveBeenCalledTimes(1);
-    expect(
-      prisma.musicPlayState.findMany.mock.calls[0][0].where.trackId.in,
-    ).toEqual(['t1', 't2', 't3']);
+    expect(prisma.musicPlayState.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'u1', trackId: { in: ['t1', 't2', 't3'] } },
+      }),
+    );
   });
 
   it('снятые с витрины записи пропускает', async () => {

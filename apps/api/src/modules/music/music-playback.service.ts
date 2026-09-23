@@ -138,7 +138,9 @@ export class MusicPlaybackService {
     private readonly bus: EventEmitter2,
     config: ConfigService,
   ) {
-    this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
+    this.publicBaseUrl = musicCoverBaseUrl(
+      config.get<string>('API_PUBLIC_URL'),
+    );
   }
 
   /**
