@@ -26,6 +26,7 @@ export function BlogCarousel({
   renderSlide,
   perView = "one",
   dots = false,
+  focusable = false,
 }: {
   count: number;
   /** Имя группы для скринридера: «Блог-лента», «Вложения поста». */
@@ -35,6 +36,12 @@ export function BlogCarousel({
   perView?: "one" | "responsive";
   /** Точки под рамкой — в развороте поста; на главной их нет (чек-лист). */
   dots?: boolean;
+  /**
+   * Лента сама встаёт в порядок Tab. Нужно, когда в слайдах нечего
+   * фокусировать (фотографии поста): иначе клавиатуре их не пролистать. На
+   * главной не нужно — там каждый слайд ссылка, и Tab листает по ним.
+   */
+  focusable?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -82,7 +89,9 @@ export function BlogCarousel({
       <div
         ref={scroller}
         onScroll={sync}
-        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        tabIndex={focusable ? 0 : undefined}
+        aria-label={focusable ? `${label}. Листать стрелками` : undefined}
+        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain focus-visible:outline-offset-[-3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {Array.from({ length: count }, (_, slide) => (
           <div

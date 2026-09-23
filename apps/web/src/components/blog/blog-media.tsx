@@ -60,6 +60,7 @@ export function BlogMedia({
       count={media.length}
       label={`Вложения поста: ${media.length}`}
       dots
+      focusable
       renderSlide={(index) => (
         <BlogFrame aspect={aspect}>{item(media[index], index)}</BlogFrame>
       )}

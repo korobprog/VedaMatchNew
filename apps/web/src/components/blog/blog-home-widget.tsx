@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { EyeOff, Images, PenLine, Play, Rows3, Star } from "lucide-react";
+import { EyeOff, PenLine, Play, Rows3, Star } from "lucide-react";
 import type { BlogHomeFeedResponse, BlogPostDto } from "@vedamatch/shared";
 import {
   BLOG_HOME_COOKIE,
@@ -202,7 +202,11 @@ function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) 
   return (
     <Link
       href={`/blog/posts/${encodeURIComponent(slide.id)}`}
-      className="group block focus-visible:outline-offset-[-3px]"
+      /* Обводка фокуса — на слое поверх слайда, а не на самой ссылке:
+         рамка картинки позиционирована и рисуется поверх обводки родителя,
+         и та пропадала бы целиком под снимком. Замена, а не отключение:
+         обводка та же, что у глобального `*:focus-visible`. */
+      className="group relative block focus-visible:outline-none after:pointer-events-none after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-[-4px] focus-visible:after:outline-magenta focus-visible:after:outline-solid"
     >
       <BlogFrame aspect={aspect}>
         {slide.coverUrl ? (
@@ -223,15 +227,6 @@ function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) 
             className="absolute left-1/2 top-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-bg-0/85 text-text-0"
           >
             <Play className="ml-0.5 size-6 fill-current" />
-          </span>
-        )}
-        {slide.mediaCount > 1 && (
-          <span
-            aria-hidden
-            className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-bg-0/85 px-2 py-0.5 text-[11px] font-semibold text-text-0"
-          >
-            <Images className="size-3" />
-            {slide.mediaCount}
           </span>
         )}
       </BlogFrame>
