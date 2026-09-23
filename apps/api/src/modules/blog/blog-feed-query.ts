@@ -1,4 +1,8 @@
 import { Prisma } from '@prisma/client';
+import {
+  BLOG_HOME_CAROUSEL_SIZE,
+  BLOG_HOME_PREVIEW_SIZE,
+} from '@vedamatch/shared';
 
 /**
  * Порядок выдачи и курсор блог-ленты (VED-238).
@@ -64,6 +68,15 @@ export function decodeBlogCursor(
  */
 export function blogOrderBy(): Prisma.BlogPostOrderByWithRelationInput[] {
   return [{ pinned: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }];
+}
+
+/**
+ * Сколько постов отдаёт виджет главной. Без параметра — прежние четыре:
+ * их ждёт полоса в приложении, и сборки на телефонах параметр не шлют.
+ * `carousel` — карусель веба (VED-238). Любое другое значение — как без него.
+ */
+export function blogHomeTake(view: string | undefined): number {
+  return view === 'carousel' ? BLOG_HOME_CAROUSEL_SIZE : BLOG_HOME_PREVIEW_SIZE;
 }
 
 /** Условие «строго после курсора» для keyset-пагинации. */

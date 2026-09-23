@@ -87,6 +87,7 @@ describe('что показывать', () => {
     title: 'Оригинал',
     text: 'Слова оригинала',
     images: [{ id: 'i1', url: 'https://cdn/i1.jpg', width: 800, height: 600 }],
+    media: [],
     createdAt: new Date(2026, 8, 20, 8, 0).toISOString(),
   };
   const repost = blogPost('rep', { title: null, text: '', repostOf: source });

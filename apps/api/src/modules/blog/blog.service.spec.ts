@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { BlogService } from './blog.service';
 import type { BlogImagesService } from './blog-images.service';
+import type { BlogVideoService } from './blog-video.service';
 import type { ModerationService } from '../moderation/moderation.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 
@@ -40,6 +41,7 @@ function storedPost(over: Record<string, unknown> = {}) {
     editedAt: null,
     author,
     images: [],
+    favorites: [],
     repostOf: null,
     ...over,
   };
@@ -68,13 +70,40 @@ function build(post: ReturnType<typeof storedPost> | null) {
   const images = {
     configured: true,
     removeMany: fn(() => Promise.resolve()),
+    storePostImage: fn(() =>
+      Promise.resolve({
+        key: 'blog/post-1/new.webp',
+        url: 'https://cdn/new.webp',
+        width: 800,
+        height: 600,
+        sizeBytes: 1000,
+      }),
+    ),
+    storePostVideo: fn(() =>
+      Promise.resolve({
+        key: 'blog/post-1/v.mp4',
+        url: 'https://cdn/v.mp4',
+        posterKey: 'blog/post-1/v.webp',
+        posterUrl: 'https://cdn/v.webp',
+        sizeBytes: 5000,
+      }),
+    ),
+  };
+  const video = {
+    inspect: fn(() =>
+      Promise.resolve({
+        info: { durationSec: 12, width: 720, height: 1280 },
+        poster: Buffer.from('poster'),
+      }),
+    ),
   };
   const service = new BlogService(
     prisma as unknown as PrismaService,
     moderation as unknown as ModerationService,
     images as unknown as BlogImagesService,
+    video as unknown as BlogVideoService,
   );
-  return { service, prisma, images };
+  return { service, prisma, images, video };
 }
 
 describe('BlogService.update', () => {
@@ -152,7 +181,15 @@ describe('BlogService.update', () => {
   it('leaves the images alone when the request says nothing about them', async () => {
     const { service, prisma, images } = build(
       storedPost({
-        images: [{ id: 'img-1', storageKey: 'blog/1.webp', position: 0 }],
+        images: [
+          {
+            id: 'img-1',
+            kind: 'photo',
+            storageKey: 'blog/1.webp',
+            posterKey: null,
+            position: 0,
+          },
+        ],
       }),
     );
 
@@ -166,8 +203,20 @@ describe('BlogService.update', () => {
     const { service, prisma, images } = build(
       storedPost({
         images: [
-          { id: 'img-1', storageKey: 'blog/1.webp', position: 0 },
-          { id: 'img-2', storageKey: 'blog/2.webp', position: 1 },
+          {
+            id: 'img-1',
+            kind: 'video',
+            storageKey: 'blog/1.mp4',
+            posterKey: 'blog/1.webp',
+            position: 0,
+          },
+          {
+            id: 'img-2',
+            kind: 'photo',
+            storageKey: 'blog/2.webp',
+            posterKey: null,
+            position: 1,
+          },
         ],
       }),
     );
@@ -186,6 +235,207 @@ describe('BlogService.update', () => {
       where: { id: 'img-2' },
       data: { position: 0 },
     });
-    expect(images.removeMany).toHaveBeenCalledWith(['blog/1.webp']);
+    // У ролика в бакете два объекта — файл и обложка, уходят оба.
+    expect(images.removeMany).toHaveBeenCalledWith([
+      'blog/1.mp4',
+      'blog/1.webp',
+    ]);
+  });
+
+  // Роликов в посте не больше одного (VED-116): второй получает отказ, а
+  // текст и прочее сохраняются.
+  it('refuses a second video but keeps the edit', async () => {
+    const { service, prisma, video } = build(
+      storedPost({
+        images: [
+          {
+            id: 'vid-1',
+            kind: 'video',
+            storageKey: 'blog/1.mp4',
+            posterKey: 'blog/1.webp',
+            position: 0,
+          },
+        ],
+      }),
+    );
+
+    const result = await service.update(
+      'author',
+      false,
+      'post-1',
+      { text: 'Новый' },
+      [
+        {
+          buffer: Buffer.from('x'),
+          mimetype: 'video/mp4',
+          size: 10,
+          originalname: 'b.mp4',
+        },
+      ],
+    );
+
+    expect(result.failed).toEqual([
+      { name: 'b.mp4', reason: 'too_many_videos' },
+    ]);
+    expect(video.inspect).not.toHaveBeenCalled();
+    expect(prisma.blogPost.update).toHaveBeenCalled();
+  });
+});
+
+describe('BlogService media', () => {
+  function withCreate(post = storedPost()) {
+    const built = build(post);
+    const prisma = built.prisma as unknown as Record<
+      string,
+      Record<string, jest.Mock>
+    >;
+    prisma.blogPost.create = fn(() => Promise.resolve({ id: 'post-1' }));
+    prisma.blogPost.count = fn(() => Promise.resolve(0));
+    prisma.blogPost.delete = fn(() => Promise.resolve({}));
+    prisma.blogPostImage.create = fn(() => Promise.resolve({}));
+    prisma.blogSettings = {
+      findUnique: fn(() => Promise.resolve({ feedLifetimeHours: 72 })),
+    };
+    return { ...built, prisma };
+  }
+
+  // Длительность — замер сервера, а не число из браузера.
+  it('stores a video with the poster and the measured duration', async () => {
+    const { service, prisma, images } = withCreate();
+
+    const result = await service.create('author', false, { text: 'Ролик' }, [
+      {
+        buffer: Buffer.from('v'),
+        mimetype: 'video/mp4',
+        size: 100,
+        originalname: 'a.mp4',
+      },
+    ]);
+
+    expect(result.failed).toEqual([]);
+    expect(images.storePostVideo).toHaveBeenCalledWith(
+      'post-1',
+      expect.objectContaining({ mimetype: 'video/mp4' }),
+      Buffer.from('poster'),
+      '.mp4',
+    );
+    const created = prisma.blogPostImage.create.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
+    expect(created[0].data).toMatchObject({
+      kind: 'video',
+      posterUrl: 'https://cdn/v.webp',
+      durationSec: 12,
+      width: 720,
+      height: 1280,
+      position: 0,
+    });
+  });
+
+  // Ролик длиннее предела не должен успеть лечь в бакет.
+  it('refuses a video that is too long before uploading it', async () => {
+    const { service, images, video } = withCreate();
+    video.inspect.mockResolvedValue({
+      info: { durationSec: 301, width: 720, height: 1280 },
+      poster: Buffer.from('p'),
+    });
+
+    const result = await service.create('author', false, { text: 'Длинный' }, [
+      {
+        buffer: Buffer.from('v'),
+        mimetype: 'video/mp4',
+        size: 100,
+        originalname: 'long.mp4',
+      },
+    ]);
+
+    expect(result.failed).toEqual([
+      { name: 'long.mp4', reason: 'video_too_long' },
+    ]);
+    expect(images.storePostVideo).not.toHaveBeenCalled();
+  });
+
+  // Видео и фото — в одной карусели, фото прежним клиентам — отдельно.
+  it('keeps photos in images and everything in media', async () => {
+    const { service } = build(
+      storedPost({
+        images: [
+          {
+            id: 'v',
+            kind: 'video',
+            url: 'v.mp4',
+            width: 1,
+            height: 2,
+            posterUrl: 'v.webp',
+            durationSec: 5,
+          },
+          {
+            id: 'p',
+            kind: 'photo',
+            url: 'p.webp',
+            width: 3,
+            height: 4,
+            posterUrl: null,
+            durationSec: null,
+          },
+        ],
+        favorites: [{ userId: 'viewer' }],
+      }),
+    );
+
+    const post = await service.post('viewer', false, 'post-1');
+
+    expect(post.images).toEqual([
+      { id: 'p', url: 'p.webp', width: 3, height: 4 },
+    ]);
+    expect(post.media.map((item) => item.kind)).toEqual(['video', 'photo']);
+    expect(post.favorited).toBe(true);
+  });
+});
+
+describe('BlogService favorites', () => {
+  function withFavorites(post: ReturnType<typeof storedPost> | null) {
+    const built = build(post);
+    const prisma = built.prisma as unknown as Record<
+      string,
+      Record<string, jest.Mock>
+    >;
+    prisma.blogFavorite = {
+      upsert: fn(() => Promise.resolve({})),
+      deleteMany: fn(() => Promise.resolve({ count: 1 })),
+    };
+    return { ...built, prisma };
+  }
+
+  it('adds and removes idempotently', async () => {
+    const { service, prisma } = withFavorites(storedPost());
+
+    await expect(
+      service.setFavorite('viewer', false, 'post-1', true),
+    ).resolves.toEqual({
+      favorited: true,
+    });
+    expect(prisma.blogFavorite.upsert).toHaveBeenCalledWith({
+      where: { userId_postId: { userId: 'viewer', postId: 'post-1' } },
+      update: {},
+      create: { userId: 'viewer', postId: 'post-1' },
+    });
+
+    // Снять звёздочку можно и с поста, которого уже нет: ответ тот же.
+    await expect(
+      service.setFavorite('viewer', false, 'gone', false),
+    ).resolves.toEqual({
+      favorited: false,
+    });
+    expect(prisma.blogFavorite.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'viewer', postId: 'gone' },
+    });
+  });
+
+  it('answers 404 for a missing post', async () => {
+    const { service } = withFavorites(null);
+    await expect(
+      service.setFavorite('viewer', false, 'post-1', true),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

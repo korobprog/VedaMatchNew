@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Copy, Check, Pencil, Repeat2, Trash2, Pin } from "lucide-react";
+import { Copy, Check, Pencil, Repeat2, Trash2, Pin, Star } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { copyText } from "@/lib/copy-text";
 import { buildBlogPostCopy } from "@/lib/blog-copy";
@@ -10,9 +10,11 @@ import {
   BlogApiError,
   deleteBlogPost,
   repostBlogPost,
+  setBlogFavorite,
   setBlogPostPinned,
 } from "@/lib/blog-client-api";
-import { BlogImages } from "./blog-images";
+import { BlogMedia } from "./blog-media";
+import { postMedia } from "./blog-media-list";
 import { BlogLifetimeControl } from "./blog-lifetime-control";
 import { BlogPostEditor } from "./blog-post-editor";
 import {
@@ -49,10 +51,13 @@ export function BlogPostCard({
   post,
   onChanged,
   onRemoved,
+  expanded = false,
 }: {
   post: BlogPostDto;
   onChanged?: (post: BlogPostDto) => void;
   onRemoved?: (id: string) => void;
+  /** Страница одного поста: текст сразу целиком, без «Далее». */
+  expanded?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState(false);
@@ -64,7 +69,9 @@ export function BlogPostCard({
   const { fold, attachBody, attachTitle } = useBlogTextFold(
     post.text,
     source ? null : post.title,
+    expanded,
   );
+  const favorited = post.favorited ?? false;
 
   /** Выход из правки возвращает клавиатуру на кнопку, которой её открыли. */
   function closeEditor() {
@@ -105,6 +112,23 @@ export function BlogPostCard({
     } catch (cause) {
       setError(cause instanceof BlogApiError ? cause.message : "Не вышло.");
       setPending(false);
+    }
+  }
+
+  /**
+   * «Избранное» (VED-238). Звёздочка меняется сразу, а не после ответа: на
+   * медленной сети нажатие без отклика нажимают второй раз, и второе
+   * нажатие снимало бы только что поставленную отметку.
+   */
+  async function toggleFavorite() {
+    const next = !favorited;
+    setError(null);
+    onChanged?.({ ...post, favorited: next });
+    try {
+      await setBlogFavorite(post.id, next);
+    } catch (cause) {
+      onChanged?.({ ...post, favorited });
+      setError(cause instanceof BlogApiError ? cause.message : "Не вышло.");
     }
   }
 
@@ -163,7 +187,7 @@ export function BlogPostCard({
             <RepostSource source={source} />
           ) : (
             <>
-              <BlogImages images={post.images} alt={post.title} />
+              <BlogMedia media={postMedia(post)} alt={post.title} />
               {/* 16px, а не 18px (VED-371): Unbounded широкий, и при 18px
                   заголовок в три слова на телефоне ложился в две строки —
                   22px на карточку, которых не хватало третьему посту.
@@ -205,6 +229,18 @@ export function BlogPostCard({
               <span className={ACTION_LABEL}>
                 {copied ? "Скопировано" : "Копировать"}
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              aria-pressed={favorited}
+              className={`${ACTION} hover:border-gold/60`}
+            >
+              <Star
+                aria-hidden
+                className={`size-3.5 ${favorited ? "fill-gold text-gold" : ""}`}
+              />
+              <span className={ACTION_LABEL}>Избранное</span>
             </button>
             <button
               type="button"
@@ -307,7 +343,7 @@ function RepostSource({
           {source.title}
         </p>
       )}
-      <BlogImages images={source.images} alt={source.title} compact />
+      <BlogMedia media={postMedia(source)} alt={source.title} compact />
       {/* Чужой длинный текст сворачивается так же: репост вдвое длиннее
           оригинала — это не то, что человек пересылал. */}
       <BlogPostText fold={fold} attach={attachBody} className="mt-2" />

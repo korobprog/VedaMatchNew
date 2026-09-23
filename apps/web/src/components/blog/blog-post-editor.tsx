@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { Film, ImagePlus, X } from "lucide-react";
 import {
-  BLOG_IMAGE_MIME_TYPES,
   BLOG_POST_MAX_IMAGES,
   BLOG_POST_TITLE_MAX_LENGTH,
-  type BlogImageDto,
+  type BlogMediaDto,
   type BlogPostDto,
 } from "@vedamatch/shared";
 import {
@@ -16,6 +15,12 @@ import {
   updateBlogPost,
 } from "@/lib/blog-client-api";
 import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
+import {
+  BLOG_MEDIA_ACCEPT,
+  isBlogVideoFile,
+  pickBlogFiles,
+} from "./blog-file-pick";
+import { blogMediaPreviewUrl, postMedia } from "./blog-media-list";
 import { BlogTextCounter } from "./blog-text-counter";
 import { blogTextLimitState } from "./blog-text-limit";
 
@@ -39,7 +44,7 @@ export function BlogPostEditor({
 }) {
   const [title, setTitle] = useState(post.title ?? "");
   const [text, setText] = useState(post.text);
-  const [kept, setKept] = useState<BlogImageDto[]>(post.images);
+  const [kept, setKept] = useState<BlogMediaDto[]>(() => postMedia(post));
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +74,7 @@ export function BlogPostEditor({
         if (!alive || touched.current) return;
         setTitle(fresh.title ?? "");
         setText(fresh.text);
-        setKept(fresh.images);
+        setKept(postMedia(fresh));
       })
       .catch(() => {
         // Не доехало — правим то, что показано: отказ от правки из-за
@@ -82,14 +87,21 @@ export function BlogPostEditor({
 
   const total = kept.length + files.length;
 
+  /** Те же правила, что в форме публикации, плюс то, что уже лежит в посте. */
   function pick(list: FileList | null) {
     if (!list) return;
     touched.current = true;
-    setFiles((current) =>
-      [...current, ...Array.from(list)].slice(
-        0,
-        Math.max(0, BLOG_POST_MAX_IMAGES - kept.length),
-      ),
+    const result = pickBlogFiles(files, Array.from(list), {
+      total: kept.length,
+      videos: kept.filter((item) => item.kind === "video").length,
+    });
+    setFiles(result.files);
+    setNote(
+      result.rejected.length > 0
+        ? `Не добавлены: ${result.rejected
+            .map((item) => `${item.name} — ${blogErrorText(item.reason)}`)
+            .join("; ")}`
+        : null,
     );
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -122,7 +134,7 @@ export function BlogPostEditor({
             .join("; ")}`,
         );
         setFiles([]);
-        setKept(saved.post.images);
+        setKept(postMedia(saved.post));
         setPending(false);
         return;
       }
@@ -202,16 +214,29 @@ export function BlogPostEditor({
       {kept.length > 0 && (
         <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {kept.map((image, index) => (
-            <li key={image.id}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={image.url}
-                alt=""
-                className="aspect-square w-full rounded-t-lg bg-bg-2 object-cover"
-              />
+            <li key={image.id} className="relative">
+              {blogMediaPreviewUrl(image) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={blogMediaPreviewUrl(image) ?? undefined}
+                  alt=""
+                  className="aspect-square w-full rounded-t-lg bg-bg-2 object-cover"
+                />
+              ) : (
+                <span className="block aspect-square w-full rounded-t-lg bg-bg-2" />
+              )}
+              {image.kind === "video" && (
+                <span className="absolute left-1 top-1 rounded-full bg-bg-0/85 p-1 text-text-0">
+                  <Film aria-hidden className="size-3.5" />
+                </span>
+              )}
               <button
                 type="button"
-                aria-label={`Убрать фотографию ${index + 1}`}
+                aria-label={
+                  image.kind === "video"
+                    ? `Убрать ролик ${index + 1}`
+                    : `Убрать фотографию ${index + 1}`
+                }
                 onClick={() => {
                   touched.current = true;
                   setKept((current) =>
@@ -238,6 +263,9 @@ export function BlogPostEditor({
               key={`${file.name}-${index}`}
               className="flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd bg-bg-1 px-2 py-1 text-xs text-text-1"
             >
+              {isBlogVideoFile(file) && (
+                <Film aria-hidden className="size-3.5 shrink-0" />
+              )}
               <span className="max-w-40 truncate">{file.name}</span>
               <button
                 type="button"
@@ -263,12 +291,12 @@ export function BlogPostEditor({
           }`}
         >
           <ImagePlus aria-hidden className="size-4" />
-          Добавить фотографии
+          Добавить фото или ролик
           <input
             ref={inputRef}
             type="file"
             multiple
-            accept={BLOG_IMAGE_MIME_TYPES.join(",")}
+            accept={BLOG_MEDIA_ACCEPT}
             disabled={total >= BLOG_POST_MAX_IMAGES}
             onChange={(event) => pick(event.target.files)}
             className="sr-only"
@@ -303,7 +331,7 @@ export function BlogPostEditor({
         </p>
       )}
       {note && (
-        <p role="status" className="mt-2 text-xs text-text-2">
+        <p role="status" className="mt-2 text-xs text-text-1">
           {note}
         </p>
       )}

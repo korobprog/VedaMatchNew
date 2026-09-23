@@ -6,6 +6,7 @@ import { BlogImagesService } from './blog-images.service';
 import { BlogPurgeListener } from './blog-purge.listener';
 import { BlogController } from './blog.controller';
 import { BlogService } from './blog.service';
+import { BlogVideoService } from './blog-video.service';
 
 /**
  * Сервис «Блог-лента». По контракту сервисного модуля импортирует только
@@ -20,6 +21,11 @@ import { BlogService } from './blog.service';
 @Module({
   imports: [AuthModule, ModerationModule],
   controllers: [BlogAdminController, BlogController],
-  providers: [BlogService, BlogImagesService, BlogPurgeListener],
+  providers: [
+    BlogService,
+    BlogImagesService,
+    BlogVideoService,
+    BlogPurgeListener,
+  ],
 })
 export class BlogModule {}

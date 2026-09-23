@@ -7,7 +7,6 @@ import {
 } from '@aws-sdk/client-s3';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { BLOG_IMAGE_MAX_BYTES, BLOG_IMAGE_MIME_TYPES } from '@vedamatch/shared';
 
 /**
  * Картинки блог-ленты. Копия notice-images.service.ts: контракт сервисного
@@ -24,14 +23,19 @@ import { BLOG_IMAGE_MAX_BYTES, BLOG_IMAGE_MIME_TYPES } from '@vedamatch/shared';
 const IMAGE_WIDTH = 1600;
 const IMAGE_QUALITY = 80;
 
-export const MAX_UPLOAD_BYTES = BLOG_IMAGE_MAX_BYTES;
-export const ALLOWED_IMAGE_MIME = new Set<string>(BLOG_IMAGE_MIME_TYPES);
-
 export interface UploadedImageFile {
   buffer: Buffer;
   mimetype: string;
   size: number;
   originalname?: string;
+}
+
+export interface StoredVideo {
+  key: string;
+  url: string;
+  posterKey: string;
+  posterUrl: string;
+  sizeBytes: number;
 }
 
 export interface StoredImage {
@@ -77,16 +81,6 @@ export class BlogImagesService {
     return Boolean(this.s3Client && this.bucket && this.publicUrl);
   }
 
-  /** `null` — файл прошёл проверку. */
-  validate(
-    file: UploadedImageFile | undefined,
-  ): 'unsupported_type' | 'file_too_large' | null {
-    if (!file) return 'unsupported_type';
-    if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) return 'unsupported_type';
-    if (file.size > MAX_UPLOAD_BYTES) return 'file_too_large';
-    return null;
-  }
-
   /**
    * Ключ случайный: перестановка картинок в карусели меняет только
    * `position` в базе и никогда не переписывает объекты в S3.
@@ -96,6 +90,34 @@ export class BlogImagesService {
     file: UploadedImageFile,
   ): Promise<StoredImage | null> {
     return this.store(`blog/${postId}/${randomUUID()}.webp`, file.buffer);
+  }
+
+  /**
+   * Ролик и его обложка — два объекта с общим именем (VED-116).
+   *
+   * Ролик кладём как есть: перекодировать пятидесятимегабайтный файл прямо в
+   * запросе — минута ожидания ради сомнительной экономии, а размер и так
+   * ограничен на входе. Обложку уже пережал `BlogVideoService`.
+   */
+  async storePostVideo(
+    postId: string,
+    file: UploadedImageFile,
+    poster: Buffer,
+    extension: string,
+  ): Promise<StoredVideo | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+    const base = `blog/${postId}/${randomUUID()}`;
+    const key = `${base}${extension}`;
+    const posterKey = `${base}.webp`;
+    await this.put(key, file.buffer, file.mimetype);
+    await this.put(posterKey, poster, 'image/webp');
+    return {
+      key,
+      url: this.urlFor(key),
+      posterKey,
+      posterUrl: this.urlFor(posterKey),
+      sizeBytes: file.size,
+    };
   }
 
   /**
@@ -132,23 +154,31 @@ export class BlogImagesService {
 
     const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
 
-    await this.s3Client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: data,
-        ContentType: 'image/webp',
-        CacheControl: 'public, max-age=31536000, immutable',
-        ACL: 'public-read',
-      }),
-    );
+    await this.put(key, data, 'image/webp');
 
     return {
       key,
-      url: `${this.publicUrl.replace(/\/$/, '')}/${key}`,
+      url: this.urlFor(key),
       width: info.width,
       height: info.height,
       sizeBytes: info.size,
     };
+  }
+
+  private async put(key: string, body: Buffer, contentType: string) {
+    await this.s3Client!.send(
+      new PutObjectCommand({
+        Bucket: this.bucket!,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        CacheControl: 'public, max-age=31536000, immutable',
+        ACL: 'public-read',
+      }),
+    );
+  }
+
+  private urlFor(key: string): string {
+    return `${this.publicUrl!.replace(/\/$/, '')}/${key}`;
   }
 }

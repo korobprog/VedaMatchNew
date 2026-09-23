@@ -19,6 +19,7 @@ describe('buildBlogPostCopy', () => {
         title: 'Оригинал',
         text: 'Слова',
         images: [],
+        media: [],
         createdAt: new Date().toISOString(),
       },
     });

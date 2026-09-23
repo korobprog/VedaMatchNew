@@ -1,9 +1,8 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Film, ImagePlus, X } from "lucide-react";
 import {
-  BLOG_IMAGE_MIME_TYPES,
   BLOG_POST_MAX_IMAGES,
   BLOG_POST_TITLE_MAX_LENGTH,
   type BlogPostDto,
@@ -14,6 +13,11 @@ import {
   createBlogPost,
 } from "@/lib/blog-client-api";
 import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
+import {
+  BLOG_MEDIA_ACCEPT,
+  isBlogVideoFile,
+  pickBlogFiles,
+} from "./blog-file-pick";
 import { BlogTextCounter } from "./blog-text-counter";
 import { blogTextLimitState } from "./blog-text-limit";
 
@@ -26,8 +30,11 @@ import { blogTextLimitState } from "./blog-text-limit";
  */
 export function BlogComposer({
   onPublished,
+  autoFocus = false,
 }: {
   onPublished?: (post: BlogPostDto) => void;
+  /** Пришли карандашом «Написать пост» с главной — курсор сразу в форму. */
+  autoFocus?: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -36,13 +43,29 @@ export function BlogComposer({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
   const counterId = useId();
   const limit = blogTextLimitState(text);
 
+  useEffect(() => {
+    if (autoFocus) titleRef.current?.focus();
+  }, [autoFocus]);
+
+  /**
+   * Фото и ролик (VED-116). Что сервер всё равно отвергнет — слишком большой
+   * файл, второй ролик, .mov, — отсекаем сразу и говорим почему, а не гоним
+   * мегабайты по мобильной сети ради отказа.
+   */
   function pick(list: FileList | null) {
     if (!list) return;
-    setFiles((current) =>
-      [...current, ...Array.from(list)].slice(0, BLOG_POST_MAX_IMAGES),
+    const result = pickBlogFiles(files, Array.from(list));
+    setFiles(result.files);
+    setNote(
+      result.rejected.length > 0
+        ? `Не добавлены: ${result.rejected
+            .map((item) => `${item.name} — ${blogErrorText(item.reason)}`)
+            .join("; ")}`
+        : null,
     );
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -97,6 +120,7 @@ export function BlogComposer({
       </label>
       <input
         id="blog-title"
+        ref={titleRef}
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         maxLength={BLOG_POST_TITLE_MAX_LENGTH}
@@ -128,8 +152,13 @@ export function BlogComposer({
           {files.map((file, index) => (
             <li
               key={`${file.name}-${index}`}
-              className="flex items-center gap-1.5 rounded-lg border border-glass-brd bg-bg-1 px-2 py-1 text-xs text-text-1"
+              className="flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd bg-bg-1 pl-2 text-xs text-text-1"
             >
+              {isBlogVideoFile(file) ? (
+                <Film aria-hidden className="size-3.5 shrink-0" />
+              ) : (
+                <ImagePlus aria-hidden className="size-3.5 shrink-0" />
+              )}
               <span className="max-w-40 truncate">{file.name}</span>
               <button
                 type="button"
@@ -139,7 +168,7 @@ export function BlogComposer({
                     current.filter((_, position) => position !== index),
                   )
                 }
-                className="text-text-2 hover:text-magenta"
+                className="flex size-11 items-center justify-center text-text-1 hover:text-magenta"
               >
                 <X aria-hidden className="size-3.5" />
               </button>
@@ -149,14 +178,19 @@ export function BlogComposer({
       )}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:border-cyan/60">
+        {/* Фокус виден на самой подписи: поле выбора файла спрятано, и
+            обводка на нём никому не видна. */}
+        <label className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:border-cyan/60 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-magenta">
           <ImagePlus aria-hidden className="size-4" />
-          Фотографии
+          Фото или ролик
+          <span className="text-text-1">
+            {files.length > 0 && `· ${files.length} из ${BLOG_POST_MAX_IMAGES}`}
+          </span>
           <input
             ref={inputRef}
             type="file"
             multiple
-            accept={BLOG_IMAGE_MIME_TYPES.join(",")}
+            accept={BLOG_MEDIA_ACCEPT}
             onChange={(event) => pick(event.target.files)}
             className="sr-only"
           />
@@ -164,9 +198,13 @@ export function BlogComposer({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-on-mint disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-on-mint disabled:opacity-60"
         >
-          {pending ? "Публикую…" : "Опубликовать"}
+          {pending
+            ? files.some(isBlogVideoFile)
+              ? "Загружаю ролик…"
+              : "Публикую…"
+            : "Опубликовать"}
         </button>
       </div>
 
@@ -175,7 +213,13 @@ export function BlogComposer({
           {error}
         </p>
       )}
-      {note && <p className="mt-2 text-xs text-text-2">{note}</p>}
+      {/* Первая ступень, а не вторая: вторая на стекле тёмной темы ниже
+          порога для 12px, а это сообщение надо прочитать. */}
+      {note && (
+        <p role="status" className="mt-2 text-xs text-text-1">
+          {note}
+        </p>
+      )}
     </form>
   );
 }
