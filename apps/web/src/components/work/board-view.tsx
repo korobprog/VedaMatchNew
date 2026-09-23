@@ -894,14 +894,19 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             type="button"
             aria-pressed={inForeign}
             onClick={() => setFolder(inForeign ? "mine" : "foreign")}
-            className={workToolbarButtonClass({ pressed: inForeign })}
+            className={workToolbarButtonClass({
+              pressed: inForeign,
+              extra: "min-h-11",
+            })}
           >
             {inForeign ? (
               <FolderOpen aria-hidden className="size-4 shrink-0" />
             ) : (
               <FolderClosed aria-hidden className="size-4 shrink-0" />
             )}
-            Чужие
+            {/* Пробел — для скринридера: без него имя кнопки читается
+                слитно, «Чужие4». Во флексе он места не занимает. */}
+            Чужие{" "}
             <span className="font-mono">{foreignTotal}</span>
           </button>
           <p className="min-w-0 flex-1 text-xs text-text-1">

@@ -162,7 +162,10 @@ describe('loadWorkViewerState', () => {
         { taskId: 'moved', viewedAt: new Date('2026-09-24T10:05:00Z') },
       ],
       changes: [
-        { taskId: 'moved', _max: { createdAt: new Date('2026-09-24T10:06:00Z') } },
+        {
+          taskId: 'moved',
+          _max: { createdAt: new Date('2026-09-24T10:06:00Z') },
+        },
       ],
     });
     const state = await loadWorkViewerState(

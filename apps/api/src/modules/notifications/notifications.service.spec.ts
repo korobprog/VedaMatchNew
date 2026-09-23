@@ -807,13 +807,9 @@ describe('NotificationsService: ветка смены статуса (VED-320)',
       const { service, store } = await seeded();
       const before = store.inbox.map((row) => row.createdAt.getTime());
 
-      await service.refreshWorkTaskMark(
-        'space-1',
-        'VED-42',
-        'done',
-        [],
-        { now: minutes(7) },
-      );
+      await service.refreshWorkTaskMark('space-1', 'VED-42', 'done', [], {
+        now: minutes(7),
+      });
 
       expect(store.inbox.map((row) => row.createdAt.getTime())).toEqual(before);
       await expect(service.countUnread('user-2')).resolves.toBe(0);
