@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatKeyboardAvoidingView as KeyboardAvoidingView } from '@/components/keyboard-controller-web';
 import { AimFrame } from '@/components/wellness/aim-frame';
@@ -16,6 +16,7 @@ import {
 } from '@/lib/wellness/aim-state';
 import { barcodeFromScan } from '@/lib/wellness/barcode';
 import { cameraAccess } from '@/lib/wellness/camera-access';
+import { scannerCameraOn } from '@/lib/wellness/camera-power';
 import { torchCopy, torchEnabled, zoomCopy } from '@/lib/wellness/torch-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -67,6 +68,10 @@ export default function WellnessScanScreen() {
   // приходится включать заново на каждый продукт.
   const [torchWanted, setTorchWanted] = useState(false);
   const [focused, setFocused] = useState(true);
+  // Свернули приложение или пришёл звонок — камеру отпускаем. На Android
+  // CameraX привязан к жизненному циклу activity и остановится сам, но
+  // размонтирование делает это сразу и одинаково на обеих платформах.
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const [zoomStep, setZoomStep] = useState(0);
   const [sawAt, setSawAt] = useState<number | null>(null);
   const [lookup, setLookup] = useState<LookupPhase>('idle');
@@ -107,6 +112,13 @@ export default function WellnessScanScreen() {
       return () => setFocused(false);
     }, [restart]),
   );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) =>
+      setAppActive(next === 'active'),
+    );
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (lookup !== 'idle') return undefined;
@@ -200,16 +212,26 @@ export default function WellnessScanScreen() {
     );
   }
 
+  // Камера монтируется, только когда нужна (`camera-power.ts`). Не `active`
+  // и не прозрачность: `active` у `CameraView` — свойство только для iOS, а
+  // спрятанный экземпляр на Android остаётся привязанным к жизненному циклу
+  // и продолжает держать камеру. Размонтирование зовёт `unbindAll()` — тот
+  // же вызов, что и `pausePreview()` внутри библиотеки.
+  const cameraOn = scannerCameraOn({ focused, appActive, lookup });
+
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        enableTorch={torchEnabled({ wanted: torchWanted, focused })}
-        zoom={ZOOM_STEPS[zoomStep]}
-        barcodeScannerSettings={{ barcodeTypes: [...FOOD_BARCODES] }}
-        onBarcodeScanned={onBarcode}
-      />
+      {cameraOn ? (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          active
+          enableTorch={torchEnabled({ wanted: torchWanted, focused })}
+          zoom={ZOOM_STEPS[zoomStep]}
+          barcodeScannerSettings={{ barcodeTypes: [...FOOD_BARCODES] }}
+          onBarcodeScanned={onBarcode}
+        />
+      ) : null}
       {/* Клавиатура закрывала поле ручного ввода и кнопку «Проверить состав»
           целиком — найдено живой проверкой на A51 (снимок `ved335-16`). Лист
           поднимается над клавиатурой тем же способом, что формы «Общения»

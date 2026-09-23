@@ -1,9 +1,11 @@
 import type { WellnessScanResult } from '@vedamatch/shared';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +22,7 @@ import { ScreenBack } from '@/components/wellness/screen-back';
 import { VerdictCard } from '@/components/wellness/verdict-card';
 import { useSession } from '@/lib/auth/session';
 import { cameraAccess } from '@/lib/wellness/camera-access';
+import { labelCameraOn, showFrozenShot } from '@/lib/wellness/camera-power';
 import {
   LABEL_QUALITY_STEPS,
   decideLabelShot,
@@ -74,6 +77,24 @@ export default function WellnessLabelScreen() {
   const [stage, setStage] = useState<Stage>({ kind: 'aim' });
   const [failure, setFailure] = useState<ScanFailure | null>(null);
   const [tooBig, setTooBig] = useState<string | null>(null);
+  /** Снятый кадр: он остаётся на экране вместо живого видоискателя. */
+  const [shot, setShot] = useState<string | null>(null);
+  const [focused, setFocused] = useState(true);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) =>
+      setAppActive(next === 'active'),
+    );
+    return () => sub.remove();
+  }, []);
 
   const onCameraReady = useCallback(async () => {
     try {
@@ -89,24 +110,40 @@ export default function WellnessLabelScreen() {
     }
   }, []);
 
+  /**
+   * Затвор нажат. Отдельно от стадии: между нажатием и готовым кадром
+   * проходит заметное время, и всё это время камера ещё нужна (стадия
+   * остаётся `aim`), а вот второе нажатие — уже нет.
+   */
+  const [shooting, setShooting] = useState(false);
+
   const shoot = useCallback(
     async (attempt = 0): Promise<void> => {
       setFailure(null);
       setTooBig(null);
-      setStage({ kind: 'reading' });
+      setShooting(true);
       try {
-        const shot = await camera.current?.takePictureAsync({
+        const picture = await camera.current?.takePictureAsync({
           quality: LABEL_QUALITY_STEPS[attempt],
           base64: true,
           imageType: 'jpg',
         });
-        if (!shot?.base64) {
+        if (!picture?.base64) {
           setTooBig('Снимок не получился — попробуйте ещё раз.');
           setStage({ kind: 'aim' });
           return;
         }
-        const decision = decideLabelShot(shot.base64, attempt);
-        if (decision.kind === 'retry') return shoot(attempt + 1);
+        // Кадр снят: камеру отпускаем (стадия `reading` её размонтирует), а
+        // на экране остаётся сам снимок — человеку видно, что именно ушло в
+        // разбор, и телефон перестаёт греться.
+        setShot(picture.uri ?? null);
+        setStage({ kind: 'reading' });
+        const decision = decideLabelShot(picture.base64, attempt);
+        if (decision.kind === 'retry') {
+          // Пересжимаем — для этого камера нужна снова.
+          setStage({ kind: 'aim' });
+          return shoot(attempt + 1);
+        }
         if (decision.kind === 'too-big') {
           setTooBig(decision.message);
           setStage({ kind: 'aim' });
@@ -121,6 +158,8 @@ export default function WellnessLabelScreen() {
       } catch (error) {
         setFailure(describeScanError(error));
         setStage({ kind: 'aim' });
+      } finally {
+        setShooting(false);
       }
     },
     [wellness],
@@ -155,22 +194,41 @@ export default function WellnessLabelScreen() {
         result={stage.result}
         ingredientsRaw={stage.ingredientsRaw}
         barcode={barcode}
-        onRetake={() => setStage({ kind: 'aim' })}
+        onRetake={() => {
+          setShot(null);
+          setStage({ kind: 'aim' });
+        }}
       />
     );
   }
 
-  const busy = stage.kind === 'reading';
+  const busy = shooting || stage.kind === 'reading';
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0 }]}>
-      <CameraView
-        ref={camera}
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        pictureSize={pictureSize}
-        onCameraReady={() => void onCameraReady()}
-      />
+      {/* Камера монтируется, только пока целятся (`camera-power.ts`):
+          `active` у `CameraView` — свойство только для iOS, а спрятанный
+          экземпляр на Android продолжает держать камеру. Размонтирование
+          зовёт `unbindAll()` — тот же вызов, что и `pausePreview()`. */}
+      {labelCameraOn({ focused, appActive, stage: stage.kind }) ? (
+        <CameraView
+          ref={camera}
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          active
+          pictureSize={pictureSize}
+          onCameraReady={() => void onCameraReady()}
+        />
+      ) : null}
+      {showFrozenShot({ stage: stage.kind, hasShot: Boolean(shot) }) && shot ? (
+        <Image
+          source={{ uri: shot }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      ) : null}
       <View style={[styles.overlay, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
         <View style={[styles.hintCard, { backgroundColor: colors.bg1, borderColor: colors.glassBorder }]}>
           <Text accessibilityRole="header" style={[styles.hintTitle, { color: colors.text0 }]}>
@@ -198,7 +256,7 @@ export default function WellnessLabelScreen() {
             ]}
           >
             <Text style={[styles.primaryText, { color: colors.onAccent }]}>
-              {busy ? 'Читаем состав…' : 'Снять состав'}
+              {stage.kind === 'reading' ? 'Читаем состав…' : busy ? 'Снимаем…' : 'Снять состав'}
             </Text>
           </Pressable>
           <Pressable
