@@ -11,6 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  FolderClosed,
+  FolderOpen,
   GripVertical,
   History,
   ListChecks,
@@ -36,6 +38,7 @@ import {
   getWorkSpace,
   moveWorkTask,
   searchWorkBoardTasks,
+  setWorkTaskViewed,
   updateWorkColumn,
 } from "@/lib/work-api";
 import { plural } from "@/lib/plural";
@@ -81,6 +84,15 @@ import { dueFromInput, endOfDayInput } from "./task-due";
 import { findTaskByKey, parseFocusKey } from "./task-focus";
 import { BOARD_REFRESH_MS, shouldApplyBoardRefresh } from "./board-refresh";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
+import {
+  boardDropIndex,
+  countForeign,
+  folderColumns,
+  foreignFolderHint,
+  setTaskViewedLocally,
+  taskMark,
+  type WorkTaskFolder,
+} from "./foreign-tasks";
 import {
   MAX_FILES_AT_ONCE,
   uploadInTurn,
@@ -182,6 +194,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   /* «Показать все» (VED-131): вся доска с выделенными находками, а не одни
      находки. Запрос при этом остаётся в поле — см. `searchBoardColumns`. */
   const [revealAll, setRevealAll] = useState(false);
+  /* Какая «папка» открыта (VED-320): свои задачи или чужие — те, что
+     составил и ведёт другой участник. По умолчанию свои, и на каждом заходе
+     заново: заказчик просил, чтобы чужих «не было видно по умолчанию». */
+  const [folder, setFolder] = useState<WorkTaskFolder>("mine");
   const boardId = board?.id;
   const dragging = useRef(false);
   useEffect(() => {
@@ -431,7 +447,38 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const target = drag.started ? drag.target : null;
     setDrag(null);
-    if (target) void commitMove(drag.taskId, target.columnId, target.index);
+    if (!target) return;
+    // Щель считали по нарисованному, а чужие карточки в колонке спрятаны
+    // (VED-320): переводим место в индекс во всей колонке.
+    const column = board?.columns.find((item) => item.id === target.columnId);
+    const index = column
+      ? boardDropIndex(
+          column.tasks,
+          (task) => !task.foreign,
+          drag.taskId,
+          target.index,
+        )
+      : target.index;
+    void commitMove(drag.taskId, target.columnId, index);
+  }
+
+  /**
+   * «Просмотрено» (VED-365): своя отметка на карточке, сразу и без ожидания
+   * сервера. Неудача возвращает кнопку и говорит почему — иначе человек
+   * уверен, что отметил, а после перезагрузки отметки нет.
+   */
+  async function toggleViewed(taskId: string, viewed: boolean) {
+    if (!board) return;
+    const before = board;
+    setBoard(setTaskViewedLocally(board, taskId, viewed));
+    try {
+      await setWorkTaskViewed(taskId, { viewed });
+    } catch (cause) {
+      setBoard(before);
+      setError(
+        cause instanceof Error ? cause.message : "Отметка не сохранилась",
+      );
+    }
   }
 
   /**
@@ -640,9 +687,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const now = new Date();
 
   const searchActive = matches !== null && isTaskQuery(query);
+  /* «Чужие» (VED-320) — отдельная папка: по умолчанию их на доске нет, есть
+     кнопка с числом. Чужих не осталось (забрали себе, закрыли) — папка
+     закрывается сама, иначе человек смотрел бы на пустую доску. Поиск ищет
+     по всей доске, чужое тоже: найденное прятать нельзя, а ярлык «Чужое»
+     скажет, чьё оно. */
+  const foreignTotal = countForeign(board.columns);
+  const activeFolder: WorkTaskFolder = foreignTotal > 0 ? folder : "mine";
+  const inForeign = activeFolder === "foreign";
   const shownColumns = searchActive
     ? searchBoardColumns(board.columns, matches, revealAll)
-    : board.columns;
+    : folderColumns(board.columns, activeFolder);
   // Находки считаем по доске, а не по нарисованному: при «Показать все»
   // нарисовано всё.
   const found = searchActive
@@ -829,6 +884,44 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         )}
       </div>
 
+      {/* Папка «Чужие» (VED-320). Кнопка, а не третья вкладка вида: это не
+          способ разложить доску, а место, куда убрано не своё, — «зайдя
+          туда». Подпись рядом объясняет, почему карточек меньше, чем было:
+          без неё спрятанное читалось бы как пропажа. */}
+      {foreignTotal > 0 && !searchActive && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <button
+            type="button"
+            aria-pressed={inForeign}
+            onClick={() => setFolder(inForeign ? "mine" : "foreign")}
+            className={workToolbarButtonClass({ pressed: inForeign })}
+          >
+            {inForeign ? (
+              <FolderOpen aria-hidden className="size-4 shrink-0" />
+            ) : (
+              <FolderClosed aria-hidden className="size-4 shrink-0" />
+            )}
+            Чужие
+            <span className="font-mono">{foreignTotal}</span>
+          </button>
+          <p className="min-w-0 flex-1 text-xs text-text-1">
+            {foreignFolderHint(foreignTotal, activeFolder)}
+            {inForeign && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => setFolder("mine")}
+                  className="min-h-11 font-semibold text-text-0 underline underline-offset-2"
+                >
+                  К своим задачам
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       {/* Сказать про выключенное перетаскивание словами: иначе карточка,
           которая перестала браться пальцем, читается как поломка. */}
       {groupMode === "priority" && (
@@ -892,13 +985,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               // Место вставки считается по порядку видимых карточек: во время
               // поиска видны не все, а в группах порядок другой — и там, и там
               // карточка легла бы не туда. Кнопки переноса работают всегда.
-              draggable={!searchActive && groupMode === "none"}
+              draggable={!searchActive && groupMode === "none" && !inForeign}
               found={searchActive && revealAll && matches.has(task.id)}
               onOpen={() => setOpenTaskId(task.id)}
               onHandleDown={(event) => onHandleDown(event, task.id)}
               onHandleMove={onHandleMove}
               onHandleUp={onHandleUp}
               onMoveBeside={(direction) => moveBeside(task, direction)}
+              onToggleViewed={() => void toggleViewed(task.id, !task.viewed)}
               cardRef={(element) => {
                 if (element) cardRefs.current.set(task.id, element);
                 else cardRefs.current.delete(task.id);
@@ -1099,7 +1193,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                 id={bodyId}
                 className={folded ? "hidden sm:block" : undefined}
               >
+                {/* В папке «Чужие» новую задачу не заводят: заведённая
+                    своя туда и не попала бы. */}
                 {canEdit &&
+                  !inForeign &&
                   (composerColumn === column.id ? (
                     <form
                       className="mb-2"
@@ -1377,6 +1474,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
 
         {canManage &&
           !searchActive &&
+          !inForeign &&
           (columnDraft === null ? (
             <button
               type="button"
@@ -1464,6 +1562,7 @@ function TaskCard({
   onHandleMove,
   onHandleUp,
   onMoveBeside,
+  onToggleViewed,
   cardRef,
 }: {
   task: WorkTaskCardDto;
@@ -1477,6 +1576,7 @@ function TaskCard({
   onHandleMove: (event: React.PointerEvent) => void;
   onHandleUp: (event: React.PointerEvent) => void;
   onMoveBeside: (direction: -1 | 1) => void;
+  onToggleViewed: () => void;
   cardRef: (element: HTMLElement | null) => void;
 }) {
   const overdue =
@@ -1521,7 +1621,9 @@ function TaskCard({
             счётчиков. Тот же компонент, что в ленте уведомлений, и тот же код
             от сервера: расхождение между лентой и доской было отдельной
             жалобой (VED-320). */}
-        <StatusMarkBadge mark={task.statusMark} />
+        {/* У чужой задачи — «Чужое» вместо состояния (VED-320): у меня она
+            не «Тестерование», это не моя работа. */}
+        <StatusMarkBadge mark={taskMark(task)} />
         {/* Находка среди всей доски (VED-131): рамка и слово. Одной рамки
             мало — на солнце и дальтонику золото не отличить от края
             важности. Слово цветом `text-1`, краска — только на обводке: у
@@ -1577,35 +1679,70 @@ function TaskCard({
         )}
       </div>
 
-      {canEdit && (
-        // Клавиатурный путь к переносу. Перетаскивание мышью и пальцем работает,
-        // но им нельзя пользоваться с клавиатуры, а доска без переноса
-        // бесполезна — поэтому кнопки видны всегда, а не только на наведении.
-        //
-        // «Предыдущая» и «следующая», а не «слева» и «справа»: на телефоне
-        // колонки стоят столбиком, и «слева» там показывало бы вверх. Стрелка
-        // разворачивается вслед за раскладкой по той же причине.
-        <div className="mt-1 flex gap-1 pl-5">
-          <button
-            type="button"
-            onClick={() => onMoveBeside(-1)}
-            aria-label={`Перенести «${task.title}» в предыдущий раздел`}
-            className="rounded p-1 text-text-2 hover:text-text-0"
+      {/* Нижняя строка: стрелки переноса и «Просмотрено» (VED-365) — там,
+          где заказчик поставил галочки на скриншоте, в одну строку и на
+          телефоне. */}
+      <div className="mt-1 flex items-center gap-1 pl-5">
+        {canEdit && (
+          // Клавиатурный путь к переносу. Перетаскивание мышью и пальцем
+          // работает, но им нельзя пользоваться с клавиатуры, а доска без
+          // переноса бесполезна — поэтому кнопки видны всегда, а не только на
+          // наведении.
+          //
+          // «Предыдущая» и «следующая», а не «слева» и «справа»: на телефоне
+          // колонки стоят столбиком, и «слева» там показывало бы вверх.
+          // Стрелка разворачивается вслед за раскладкой по той же причине.
+          <>
+            <button
+              type="button"
+              onClick={() => onMoveBeside(-1)}
+              aria-label={`Перенести «${task.title}» в предыдущий раздел`}
+              className="rounded p-1 text-text-2 hover:text-text-0"
+            >
+              <ChevronUp aria-hidden className="size-4 sm:hidden" />
+              <ChevronLeft aria-hidden className="hidden size-4 sm:block" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onMoveBeside(1)}
+              aria-label={`Перенести «${task.title}» в следующий раздел`}
+              className="rounded p-1 text-text-2 hover:text-text-0"
+            >
+              <ChevronDown aria-hidden className="size-4 sm:hidden" />
+              <ChevronRight aria-hidden className="hidden size-4 sm:block" />
+            </button>
+          </>
+        )}
+        {/* «Просмотрено» — своя отметка, у каждого своя: «эту я посмотрел».
+            Гаснет сама, когда задачу после этого переносит или комментирует
+            другой, — смотреть надо снова. Переключатель: `aria-pressed`
+            говорит скринридеру, отмечено ли, а галочка — глазам, не только
+            цвет. Пилюля маленькая, а цель нажатия — 44px по высоте:
+            отрицательные поля не раздувают карточку. */}
+        <button
+          type="button"
+          aria-pressed={task.viewed}
+          onClick={onToggleViewed}
+          aria-label={`Просмотрено: «${task.title}»`}
+          title={
+            task.viewed
+              ? "Вы отметили задачу просмотренной. Нажмите, чтобы снять отметку"
+              : "Отметить задачу просмотренной"
+          }
+          className="group -my-2.5 ml-1 inline-flex min-h-11 items-center py-2.5"
+        >
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              task.viewed
+                ? "border-cyan bg-glass text-text-0"
+                : "border-text-2/60 text-text-1 group-hover:text-text-0"
+            }`}
           >
-            <ChevronUp aria-hidden className="size-4 sm:hidden" />
-            <ChevronLeft aria-hidden className="hidden size-4 sm:block" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onMoveBeside(1)}
-            aria-label={`Перенести «${task.title}» в следующий раздел`}
-            className="rounded p-1 text-text-2 hover:text-text-0"
-          >
-            <ChevronDown aria-hidden className="size-4 sm:hidden" />
-            <ChevronRight aria-hidden className="hidden size-4 sm:block" />
-          </button>
-        </div>
-      )}
+            {task.viewed && <Check aria-hidden className="size-3" />}
+            Просмотрено
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

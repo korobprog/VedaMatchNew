@@ -123,7 +123,8 @@ export async function loadCreatedOnBehalf(
   });
   const byTask = new Map<string, string>();
   for (const row of rows) {
-    if (row.taskId && row.onBehalfOfId) byTask.set(row.taskId, row.onBehalfOfId);
+    if (row.taskId && row.onBehalfOfId)
+      byTask.set(row.taskId, row.onBehalfOfId);
   }
   return byTask;
 }
@@ -169,10 +170,7 @@ export async function loadWorkViewerState(
           { ...task, createdOnBehalfOfId: onBehalf.get(task.id) ?? null },
           viewerId,
         ),
-        viewed: isWorkTaskViewed(
-          viewedAt.get(task.id),
-          changedAt.get(task.id),
-        ),
+        viewed: isWorkTaskViewed(viewedAt.get(task.id), changedAt.get(task.id)),
       },
     ]),
   );

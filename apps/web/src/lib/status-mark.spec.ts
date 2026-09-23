@@ -86,3 +86,23 @@ describe("значок «Комментарий»", () => {
     expect(className).not.toMatch(/\bbg-|#[0-9a-f]{3,8}/i);
   });
 });
+
+/**
+ * VED-320: «Статус для таких задач, которые составил другой админ и он же
+ * исполнитель, — Чужое. Цвет — тёмно-синий».
+ */
+describe("значок «Чужое»", () => {
+  it("подписан словом «Чужое» и читается скринридером", () => {
+    const view = taskStatusMarkView("foreign")!;
+    expect(view.label).toBe("Чужое");
+    expect(taskStatusMarkLabel(view)).toBe("Статус: Чужое");
+  });
+
+  it("свой токен и пунктирная рамка — не спутать с «Выполнено»", () => {
+    const { className } = taskStatusMarkView("foreign")!;
+    expect(className).toContain("text-mark-foreign");
+    expect(className).toContain("border-dashed");
+    expect(className).not.toBe(taskStatusMarkView("done")!.className);
+    expect(className).not.toMatch(/\bbg-|#[0-9a-f]{3,8}/i);
+  });
+});

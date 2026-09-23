@@ -31,6 +31,8 @@ function item(over: Partial<WorkArchiveItemDto> = {}): WorkArchiveItemDto {
     attachmentCount: 0,
     hasDescription: false,
     createdAt: "2026-09-01T00:00:00.000Z",
+    foreign: false,
+    viewed: false,
     columnName: "Выполнено",
     archivedAt: null,
     ...over,
