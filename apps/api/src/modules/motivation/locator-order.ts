@@ -113,9 +113,7 @@ export interface LocatedPost {
  * лента Гиты открывалась единственным пронумерованным 2.62, а дальше шло
  * вразнобой — ровно то, что прислали в VED-389.
  */
-export function effectiveLocator(
-  post: Omit<LocatedPost, 'id'>,
-): string | null {
+export function effectiveLocator(post: Omit<LocatedPost, 'id'>): string | null {
   return (
     post.attributionLocator?.trim() ||
     splitWorkLocator(post.attributionWork).locator ||
@@ -153,7 +151,10 @@ export function sortByLocator<T extends LocatedPost>(posts: readonly T[]): T[] {
  * Ключ источника даёт вызывающий (обычно нормализованное название): посты
  * без источника не трогаются.
  */
-export function orderWithinSlots<T extends LocatedPost>(items: readonly T[], sourceOf: (item: T) => string | null): T[] {
+export function orderWithinSlots<T extends LocatedPost>(
+  items: readonly T[],
+  sourceOf: (item: T) => string | null,
+): T[] {
   const groups = new Map<string, number[]>();
   items.forEach((item, index) => {
     const source = sourceOf(item);

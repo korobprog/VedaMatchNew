@@ -264,7 +264,7 @@ function FilterSheet({ state, onClose }: { state: FeedFilterState; onClose: () =
             <Link
               href={filterHref(state, { work: null, speaker: null })}
               onClick={onClose}
-              className="ml-auto mr-2 inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-semibold text-white underline-offset-4 hover:bg-white/10 hover:underline"
+              className="ml-auto mr-2 inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-xs font-semibold text-white underline-offset-4 hover:bg-white/10 hover:underline"
             >
               Снять фильтр
             </Link>

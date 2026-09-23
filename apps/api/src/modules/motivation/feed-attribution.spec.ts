@@ -155,12 +155,9 @@ describe('splitWorkLocator (номер стиха записан в источн
     '2.11',
     '',
     'Глава 2',
-  ])(
-    '%s — без номера',
-    (value) => {
-      expect(splitWorkLocator(value).locator).toBeNull();
-    },
-  );
+  ])('%s — без номера', (value) => {
+    expect(splitWorkLocator(value).locator).toBeNull();
+  });
 
   it('ключ источника не видит номер стиха', () => {
     expect(workKey('Бхагавад-гита 2.11')).toBe(workKey('бхагавад-гита'));

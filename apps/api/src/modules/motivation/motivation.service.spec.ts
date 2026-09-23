@@ -550,7 +550,11 @@ describe('MotivationService feed tiers', () => {
     ];
     const { service, motivationPost } = build(day(10), []);
     motivationPost.findMany.mockImplementation(
-      (args: { distinct?: string[]; select?: unknown; where: { id?: { in: string[] } } }) => {
+      (args: {
+        distinct?: string[];
+        select?: unknown;
+        where: { id?: { in: string[] } };
+      }) => {
         if (args.distinct)
           return Promise.resolve([
             { attributionWork: 'Бхагавад-гита' },
