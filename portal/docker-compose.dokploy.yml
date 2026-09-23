@@ -119,10 +119,12 @@ services:
       # умолчания в коде (`check-budget.ts`); `WELLNESS_AUTO_CHECK=0` выключает.
       WELLNESS_AUTO_CHECK: ${WELLNESS_AUTO_CHECK:-}
       WELLNESS_SEARCH_MODEL: ${WELLNESS_SEARCH_MODEL:-}
-      # Модель, читающая снимок состава. Без этой строки переменная не доезжала
-      # до контейнера, и распознавание падало на MOTIVATION_TEXT_MODEL
-      # (gemini-3.6-flash). Решение пользователя 24.09: gpt-5.4 лучше.
-      WELLNESS_VISION_MODEL: ${WELLNESS_VISION_MODEL:-gpt-5.4}
+      # Модель, читающая снимок состава. Пустое значение — берётся модель
+      # «Вдохновения» (MOTIVATION_TEXT_MODEL, gemini-3.6-flash): человек стоит с
+      # телефоном и ждёт ответа, решение пользователя 24.09 — важнее скорость.
+      # Фоновая проверка в интернете (WELLNESS_SEARCH_MODEL) — на gpt-5.4: там
+      # никто не ждёт, а поиск в интернете умеет только она.
+      WELLNESS_VISION_MODEL: ${WELLNESS_VISION_MODEL:-}
       WELLNESS_AI_USD_CENTS_PER_MTOK_IN: ${WELLNESS_AI_USD_CENTS_PER_MTOK_IN:-}
       WELLNESS_AI_USD_CENTS_PER_MTOK_OUT: ${WELLNESS_AI_USD_CENTS_PER_MTOK_OUT:-}
       WELLNESS_AI_USD_CENTS_PER_SEARCH: ${WELLNESS_AI_USD_CENTS_PER_SEARCH:-}
