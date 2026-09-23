@@ -85,6 +85,8 @@ export const createWellnessProduct = (body: {
   name: string;
   brand?: string;
   ingredientsRaw: string;
+  /** Снимок упаковки: по нему автопроверка узнаёт товар (VED-384). */
+  labelImageDataUrl?: string;
 }) =>
   request<WellnessProductCard>("/wellness/products", {
     method: "POST",

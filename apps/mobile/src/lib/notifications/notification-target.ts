@@ -33,6 +33,13 @@ export type NotificationTarget =
    */
   | { kind: 'support'; ticketId: string | null }
   /**
+   * «Здоровье» (VED-384): решение по присланной карточке. Принятая ведёт на
+   * ответ по штрихкоду — нативный экран `wellness/result/[barcode]`,
+   * остальные — в историю проверок `wellness/history`.
+   */
+  | { kind: 'wellness-product'; barcode: string }
+  | { kind: 'wellness-history' }
+  /**
    * Раздел, которого в приложении нет: Рынок, Объявления, «Работа»,
    * «Мотивация», «Музыка», Библиотека, админка. Путь сохранён
    * целиком вместе с `?query`: `/motivation/create?reel=<id>` без запроса
@@ -123,6 +130,14 @@ export function resolveNotificationTarget(url: unknown): NotificationTarget {
     return { kind: 'support', ticketId: idOf(second) };
   }
 
+  if (first === 'wellness') {
+    const barcode = second === 'products' ? third : undefined;
+    if (barcode && /^\d{8,14}$/.test(barcode)) {
+      return { kind: 'wellness-product', barcode };
+    }
+    if (second === 'history') return { kind: 'wellness-history' };
+  }
+
   if (first === 'communities') {
     const communityId = idOf(second);
     if (communityId) return { kind: 'community', communityId };
@@ -155,6 +170,14 @@ export function routeOfTarget(target: NotificationTarget): NotificationDestinati
       return target.ticketId
         ? { kind: 'route', pathname: '/support/[id]', params: { id: target.ticketId } }
         : { kind: 'route', pathname: '/support' };
+    case 'wellness-product':
+      return {
+        kind: 'route',
+        pathname: '/wellness/result/[barcode]',
+        params: { barcode: target.barcode },
+      };
+    case 'wellness-history':
+      return { kind: 'route', pathname: '/wellness/history' };
     case 'site':
       return null;
   }

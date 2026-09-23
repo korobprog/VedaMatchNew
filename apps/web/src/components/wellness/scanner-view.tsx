@@ -181,6 +181,9 @@ export function ScannerView() {
     };
   }, [mode, cameraReady, send, stopCamera]);
 
+  // Последний снимок состава: уходит вместе с карточкой на автопроверку.
+  const [labelImage, setLabelImage] = useState<string | null>(null);
+
   const onPhoto = useCallback(
     async (file: File) => {
       setBusy(true);
@@ -194,6 +197,7 @@ export function ScannerView() {
           );
           return;
         }
+        setLabelImage(image);
         await send({ kind: "photo", ingredientsRaw });
       } catch (cause) {
         setError(
@@ -332,6 +336,7 @@ export function ScannerView() {
       {result && (
         <ScanOutcome
           result={result}
+          labelImage={result.kind === "photo" ? labelImage : null}
           onPhotoRequested={() => {
             stopCamera();
             setMode("photo");
@@ -373,9 +378,11 @@ function ModeButton({
  */
 function ScanOutcome({
   result,
+  labelImage,
   onPhotoRequested,
 }: {
   result: WellnessScanResult;
+  labelImage: string | null;
   onPhotoRequested: () => void;
 }) {
   return (
@@ -432,6 +439,7 @@ function ScanOutcome({
         <SaveProduct
           barcode={result.barcode}
           ingredientsRaw={result.ingredientsRaw}
+          labelImage={labelImage}
         />
       )}
     </div>
@@ -445,9 +453,11 @@ function ScanOutcome({
 function SaveProduct({
   barcode,
   ingredientsRaw,
+  labelImage,
 }: {
   barcode: string | null;
   ingredientsRaw: string;
+  labelImage: string | null;
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState(barcode ?? "");
@@ -460,7 +470,8 @@ function SaveProduct({
         role="status"
         className="rounded-2xl border border-glass-brd px-4 py-3 text-sm text-cyan"
       >
-        Спасибо. Продукт ушёл на проверку — после неё его увидят все.
+        Спасибо. Сверим продукт с открытыми источниками и пришлём ответ в
+        уведомления. Если что-то не сойдётся, его посмотрит модератор.
       </p>
     );
   }
@@ -471,7 +482,12 @@ function SaveProduct({
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);
-        void createWellnessProduct({ barcode: code, name, ingredientsRaw })
+        void createWellnessProduct({
+          barcode: code,
+          name,
+          ingredientsRaw,
+          ...(labelImage ? { labelImageDataUrl: labelImage } : {}),
+        })
           .then(() => setSaved(true))
           .catch((cause) =>
             setError(

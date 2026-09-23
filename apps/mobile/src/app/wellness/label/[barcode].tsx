@@ -60,7 +60,13 @@ const IS_WEB = Platform.OS === 'web';
 type Stage =
   | { kind: 'aim' }
   | { kind: 'reading' }
-  | { kind: 'answer'; result: WellnessScanResult; ingredientsRaw: string };
+  | {
+      kind: 'answer';
+      result: WellnessScanResult;
+      ingredientsRaw: string;
+      /** Снимок уходит с карточкой на автопроверку ИИ (VED-384). */
+      imageDataUrl: string;
+    };
 
 export default function WellnessLabelScreen() {
   const { colors } = useTheme();
@@ -154,7 +160,12 @@ export default function WellnessLabelScreen() {
         // Вердикт считает тот же сервер и по тем же правилам, что для
         // штрихкода. Заодно проверка попадает в историю.
         const result = await wellness.scan({ kind: 'photo', ingredientsRaw });
-        setStage({ kind: 'answer', result, ingredientsRaw });
+        setStage({
+          kind: 'answer',
+          result,
+          ingredientsRaw,
+          imageDataUrl: decision.imageDataUrl,
+        });
       } catch (error) {
         setFailure(describeScanError(error));
         setStage({ kind: 'aim' });
@@ -193,6 +204,7 @@ export default function WellnessLabelScreen() {
       <Answer
         result={stage.result}
         ingredientsRaw={stage.ingredientsRaw}
+        imageDataUrl={stage.imageDataUrl}
         barcode={barcode}
         onRetake={() => {
           setShot(null);
@@ -281,11 +293,13 @@ export default function WellnessLabelScreen() {
 function Answer({
   result,
   ingredientsRaw,
+  imageDataUrl,
   barcode,
   onRetake,
 }: {
   result: WellnessScanResult;
   ingredientsRaw: string;
+  imageDataUrl: string;
   barcode: string;
   onRetake(): void;
 }) {
@@ -302,14 +316,19 @@ function Answer({
     setSaving(true);
     setFailure(null);
     try {
-      await wellness.createProduct({ barcode, name: name.trim(), ingredientsRaw });
+      await wellness.createProduct({
+        barcode,
+        name: name.trim(),
+        ingredientsRaw,
+        labelImageDataUrl: imageDataUrl,
+      });
       setSaved(true);
     } catch (error) {
       setFailure(describeScanError(error));
     } finally {
       setSaving(false);
     }
-  }, [barcode, ingredientsRaw, name, wellness]);
+  }, [barcode, imageDataUrl, ingredientsRaw, name, wellness]);
 
   return (
     /* Поле «Название с упаковки» уходило под клавиатуру целиком — дефект
@@ -338,8 +357,9 @@ function Answer({
             Отправлено на проверку
           </Text>
           <Text style={[styles.body, { color: colors.text1 }]}>
-            Пока карточку видят только модераторы: чужой состав с опечаткой молча
-            отвечал бы неправдой всем. Ваш ответ уже выше и никуда не денется.
+            Сверим продукт с открытыми источниками и пришлём ответ в уведомления.
+            Если что-то не сойдётся, карточку посмотрит модератор: чужой состав с
+            опечаткой молча отвечал бы неправдой всем. Ваш ответ уже выше.
           </Text>
           {/* Дело сделано — отсюда должен быть очевидный выход. Первым
               «к сканеру»: человек у полки проверяет не один продукт, и
