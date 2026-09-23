@@ -128,6 +128,18 @@ export class LibraryEntriesController {
   }
 
   /**
+   * «Скачать картинку» из просмотра обложки (VED-138): подписанная ссылка,
+   * по которой хранилище отдаёт копию файлом, с заголовком в имени. Ссылкой,
+   * а не байтами через API: картинка лежит в бакете, гонять её через Node
+   * незачем. Лимит — против перебора, читателю хватит с запасом.
+   */
+  @Get(':id/preview/download')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  previewDownload(@Param('id') id: string) {
+    return this.entries.previewDownload(id);
+  }
+
+  /**
    * Заявка на заливку файла книги: в ответ — подписанный PUT в бакет. Сам
    * файл через API не идёт, см. LibraryFilesService.
    */

@@ -157,8 +157,13 @@ function PreviewUploader({
         // Тем же CoverPicture, что и на странице: миниатюра с object-cover
         // кадрировала картинку, и автор правил обрезку, которой на самом
         // деле нет (VED-344).
-        <span className="block w-28 overflow-hidden rounded-lg border border-glass-brd">
-          <CoverPicture src={entry.previewUrl} alt={t(locale, "entry.preview")} />
+        <span className="block w-28">
+          <CoverPicture
+            src={entry.previewUrl}
+            alt={t(locale, "entry.preview")}
+            maxHeight="7rem"
+            rounded="rounded-lg"
+          />
         </span>
       )}
       <div>

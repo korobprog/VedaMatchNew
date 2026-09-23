@@ -12,6 +12,7 @@ import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { BookmarkButton } from "@/components/library/bookmark-button";
 import { CoverPicture } from "@/components/library/cover-picture";
+import { CoverViewer } from "@/components/library/cover-viewer";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
@@ -107,28 +108,26 @@ export default async function LibraryEntryPage({
             title={title}
           />
         ) : (
-          entry.previewUrl &&
-          // Без адреса обложка остаётся картинкой без ссылки: открывать
-          // нечего, но показать её надо — у материала из книги она вообще
-          // единственное изображение, и загружали её вручную.
-          (entry.url ? (
-            <OutsideLink
-              href={entry.url}
-              className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd"
+          entry.previewUrl && (
+            // Картинка на странице материала открывается во весь экран — с
+            // приближением и «Скачать» (VED-138). К источнику ведёт кнопка
+            // «Открыть» ниже: раньше туда вела и сама картинка, но на своей
+            // странице от нажатия на картинку ждут именно её, крупно.
+            <CoverViewer
+              locale={locale}
+              entryId={entry.id}
+              src={entry.previewUrl}
+              alt={t(locale, "entry.preview")}
+              className="mb-4"
             >
               <CoverPicture
                 src={entry.previewUrl}
                 alt={t(locale, "entry.preview")}
+                maxHeight="70vh"
+                rounded="rounded-2xl"
               />
-            </OutsideLink>
-          ) : (
-            <span className="mb-4 block overflow-hidden rounded-2xl border border-glass-brd">
-              <CoverPicture
-                src={entry.previewUrl}
-                alt={t(locale, "entry.preview")}
-              />
-            </span>
-          ))
+            </CoverViewer>
+          )
         )}
         <h1 className="mb-3 font-display text-2xl font-bold text-text-0">
           {title}

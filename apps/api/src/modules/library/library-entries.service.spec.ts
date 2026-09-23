@@ -738,6 +738,75 @@ describe('LibraryEntriesService.byId', () => {
   });
 });
 
+describe('LibraryEntriesService.previewDownload (VED-138)', () => {
+  function serviceWith(
+    row: Record<string, unknown> | null,
+    signed: string | null = 'https://s3.example/signed',
+  ) {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(row);
+    const signedDownload = jest.fn().mockResolvedValue(signed);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock({ signedDownload }) as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+    return { service, signedDownload };
+  }
+
+  const STORED = {
+    status: 'published',
+    previewKey: 'library/previews/entry-1-1a2b3c4d.webp',
+    titleRu: 'Нрисимха-чатурдаши',
+    titleEn: null,
+  };
+
+  it('подписывает свою копию обложки файлом, с заголовком в имени', async () => {
+    const { service, signedDownload } = serviceWith(STORED);
+
+    await expect(service.previewDownload('entry-1')).resolves.toEqual({
+      url: 'https://s3.example/signed',
+    });
+    const [key, disposition] = signedDownload.mock.calls[0] as [string, string];
+    expect(key).toBe(STORED.previewKey);
+    expect(disposition).toMatch(/^attachment; /);
+    expect(disposition).toContain(
+      encodeURIComponent('Нрисимха-чатурдаши.webp'),
+    );
+  });
+
+  it('скрытая жалобами запись — 404, как и её страница', async () => {
+    const { service, signedDownload } = serviceWith({
+      ...STORED,
+      status: 'hidden',
+    });
+
+    await expect(service.previewDownload('entry-1')).rejects.toThrow(
+      'entry_not_found',
+    );
+    expect(signedDownload).not.toHaveBeenCalled();
+  });
+
+  it('картинка чужого сайта без копии в бакете — 404, веб откроет её как есть', async () => {
+    const { service } = serviceWith({ ...STORED, previewKey: null });
+
+    await expect(service.previewDownload('entry-1')).rejects.toThrow(
+      'preview_not_stored',
+    );
+  });
+
+  it('без настроенного S3 — тоже 404, а не пустая ссылка', async () => {
+    const { service } = serviceWith(STORED, null);
+
+    await expect(service.previewDownload('entry-1')).rejects.toThrow(
+      'preview_not_stored',
+    );
+  });
+});
+
 describe('LibraryEntriesService.update', () => {
   /**
    * Данные единственного `update` внутри транзакции. У jest-мока они `any`,
