@@ -16,6 +16,7 @@ import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { CategoryBreadcrumbs } from "@/components/library/category-breadcrumbs";
 import { CategoryNavigator } from "@/components/library/category-navigator";
+import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
@@ -120,12 +121,15 @@ export default async function LibraryCategoryPage({
           <h1 className="font-display text-2xl font-bold text-text-0">
             {title}
           </h1>
-          <Link
-            href={`/library/add?category=${encodeURIComponent(category.slug)}`}
-            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
-          >
-            {t(locale, "nav.add")}
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/library/add?category=${encodeURIComponent(category.slug)}`}
+              className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+            >
+              {t(locale, "nav.add")}
+            </Link>
+            <CategoryTitleEdit locale={locale} category={category} />
+          </div>
         </div>
         {/* То же одно число, что и в плитке: раздел — свои подразделы,
             подраздел — свои материалы. Голое «3 материалов» над лентой

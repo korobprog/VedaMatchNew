@@ -253,6 +253,10 @@ const ui = {
     "entry.deleting": "Удаляем…",
     "entry.deleteFailed": "Не удалось удалить ссылку, попробуйте позже",
     "category.edit": "Редактировать категорию",
+    // Кнопка на странице рубрики (VED-394): для «Гуру → …» и «Проповедники →
+    // …» название рубрики — имя исполнителя.
+    "category.editTitle": "Редактировать",
+    "category.editTitleLabel": "Редактировать название рубрики",
     "category.saved": "Категория обновлена",
     "category.delete": "Удалить рубрику",
     "category.deleteConfirm": "Удалить рубрику? Отменить нельзя.",
@@ -538,6 +542,8 @@ const ui = {
     "entry.deleting": "Deleting…",
     "entry.deleteFailed": "Could not delete the link, please try again later",
     "category.edit": "Edit category",
+    "category.editTitle": "Edit",
+    "category.editTitleLabel": "Edit category name",
     "category.saved": "Category updated",
     "category.delete": "Delete category",
     "category.deleteConfirm": "Delete this category? This cannot be undone.",

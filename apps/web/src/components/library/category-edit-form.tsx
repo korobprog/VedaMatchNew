@@ -21,6 +21,7 @@ export function CategoryEditForm({
   onSaved,
   open: openProp,
   onClose,
+  autoFocus = false,
 }: {
   locale: LibraryLocale;
   category: LibraryCategoryDto;
@@ -39,6 +40,12 @@ export function CategoryEditForm({
    */
   open?: boolean;
   onClose?: () => void;
+  /**
+   * Сразу поставить фокус в поле названия. Нужно, когда форму открывает
+   * отдельная кнопка вдали от неё (страница рубрики, VED-394): иначе
+   * клавиатура и экранный диктор остаются на кнопке и формы не замечают.
+   */
+  autoFocus?: boolean;
 }) {
   const router = useRouter();
   const [openState, setOpenState] = useState(false);
@@ -108,6 +115,11 @@ export function CategoryEditForm({
   // невалиден и валит гидратацию, как раньше было с вложенными <button>.
   function handleKeyDown(event: React.KeyboardEvent) {
     event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
     if (event.key === "Enter") {
       event.preventDefault();
       void submit();
@@ -133,7 +145,8 @@ export function CategoryEditForm({
             value={titleRu}
             onChange={(event) => setTitleRu(event.target.value)}
             onKeyDown={handleKeyDown}
-            className="mt-1 w-full rounded-lg border border-glass-brd bg-bg-0 p-1.5 text-text-0"
+            autoFocus={autoFocus}
+            className="mt-1 min-h-11 w-full rounded-lg border border-glass-brd bg-bg-0 px-2 text-text-0"
           />
         </label>
         <label className="text-text-1">
@@ -142,24 +155,28 @@ export function CategoryEditForm({
             value={titleEn}
             onChange={(event) => setTitleEn(event.target.value)}
             onKeyDown={handleKeyDown}
-            className="mt-1 w-full rounded-lg border border-glass-brd bg-bg-0 p-1.5 text-text-0"
+            className="mt-1 min-h-11 w-full rounded-lg border border-glass-brd bg-bg-0 px-2 text-text-0"
           />
         </label>
       </div>
-      {error && <p className="mt-2 text-xs text-magenta">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-text-0">
+          {error}
+        </p>
+      )}
       <div className="mt-3 flex gap-2">
         <button
           type="button"
           disabled={pending}
           onClick={() => void submit()}
-          className="rounded-lg bg-glass-brd/40 px-3 py-1.5 text-xs text-text-0 hover:bg-glass-brd/60 disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-glass-brd/40 px-4 text-sm text-text-0 hover:bg-glass-brd/60 disabled:opacity-50"
         >
           {t(locale, "entry.save")}
         </button>
         <button
           type="button"
           onClick={close}
-          className="rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:text-text-0"
+          className="min-h-11 rounded-lg border border-glass-brd px-4 text-sm text-text-1 hover:text-text-0"
         >
           {t(locale, "entry.cancel")}
         </button>
