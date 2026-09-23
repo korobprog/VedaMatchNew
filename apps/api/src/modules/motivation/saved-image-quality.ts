@@ -24,9 +24,7 @@ export const DEFAULT_SAVED_IMAGE_QUALITY: SavedImageQuality = 'light';
  * Значение из адреса → качество. Пусто — умолчание, чужое значение — `null`
  * (контроллер ответит 400, а не молча отдаст не то).
  */
-export function parseSavedImageQuality(
-  raw: unknown,
-): SavedImageQuality | null {
+export function parseSavedImageQuality(raw: unknown): SavedImageQuality | null {
   if (raw === undefined || raw === null || raw === '')
     return DEFAULT_SAVED_IMAGE_QUALITY;
   if (typeof raw !== 'string') return null;

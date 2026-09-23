@@ -35,9 +35,7 @@ describe('maxWidthFor', () => {
   });
 
   it('крупный исходник — до 1440, но не больше, чем он позволяет', () => {
-    expect(maxWidthFor('story', { width: 3000, height: 4000 })).toBe(
-      MAX_WIDTH,
-    );
+    expect(maxWidthFor('story', { width: 3000, height: 4000 })).toBe(MAX_WIDTH);
     // 1300×2400: по высоте 2400·9/16 = 1350, по ширине 1300 → 1296 (кратно 9).
     expect(maxWidthFor('story', { width: 1300, height: 2400 })).toBe(1296);
   });

@@ -155,7 +155,9 @@ describe('bandLayout', () => {
     const base1080 = bandLayout(1000);
     const wide = bandLayout(1000, 1320 / 1080);
     const ratio = 1320 / 1080;
-    expect(wide.height - 1000).toBe(Math.round((base1080.height - 1000) * ratio));
+    expect(wide.height - 1000).toBe(
+      Math.round((base1080.height - 1000) * ratio),
+    );
     expect(wide.logo.height).toBe(Math.round(base1080.logo.height * ratio));
     expect(wide.textSize).toBe(Math.round(base1080.textSize * ratio));
     expect(wide.textX).toBeGreaterThan(base1080.textX);
