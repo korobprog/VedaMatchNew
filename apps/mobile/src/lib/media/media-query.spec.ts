@@ -1,5 +1,5 @@
 import { DEFAULT_MEDIA_FILTER, MEDIA_SEARCH_MAX_LENGTH, mediaFilterKey, mediaTracksPath, normalizeMediaSearch } from './media-query';
-import { mediaSections, rootSlugOf, styleChips } from './media-sections';
+import { filterBooks, mediaSections, rootSlugOf, styleChips } from './media-sections';
 import type { MediaCategory } from './media-parse';
 
 function query(path: string): Record<string, string> {
@@ -89,5 +89,23 @@ describe('разделы', () => {
 
   it('стили: без корневых, без их тёзок и без пустых', () => {
     expect(styleChips(categories).map((c) => c.slug)).toEqual(['kirtan', 'lecture']);
+  });
+});
+
+describe('filterBooks', () => {
+  const books = [
+    { id: '1', slug: 'gita', title: 'Бхагавад-гита', author: 'Вьясадева', reader: 'Чтец Один', coverUrl: null, chapterCount: 18 },
+    { id: '2', slug: 'bhag', title: 'Шримад-Бхагаватам', author: null, reader: 'Другой', coverUrl: null, chapterCount: 3 },
+  ];
+
+  it('по названию, автору и чтецу без учёта регистра', () => {
+    expect(filterBooks(books, 'ГИТА').map((b) => b.id)).toEqual(['1']);
+    expect(filterBooks(books, 'вьяса').map((b) => b.id)).toEqual(['1']);
+    expect(filterBooks(books, '  другой ').map((b) => b.id)).toEqual(['2']);
+  });
+
+  it('пустой запрос — все книги, не найдено — пусто', () => {
+    expect(filterBooks(books, ' ')).toHaveLength(2);
+    expect(filterBooks(books, 'рамаяна')).toEqual([]);
   });
 });

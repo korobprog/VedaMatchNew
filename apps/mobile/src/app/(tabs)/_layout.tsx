@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MediaTabBar } from '@/components/media/media-tab-bar';
 import { QuickBar } from '@/components/quick-bar/quick-bar';
 import { QuickBarSlot } from '@/components/quick-bar/screen-top-inset';
 import { TabIcon, type TabIconName } from '@/components/tab-icon';
@@ -45,6 +46,8 @@ export default function TabsLayout() {
       <View style={{ flex: 1, backgroundColor: colors.bg0 }}>
         <QuickBar />
         <Tabs
+          // Мини-плеер Медиатеки над вкладками, пока выбрана запись (VED-331).
+          tabBar={(props) => <MediaTabBar {...props} />}
           screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: colors.text0,

@@ -1,4 +1,4 @@
-import type { MediaCategory } from './media-parse';
+import type { MediaAudiobook, MediaCategory } from './media-parse';
 
 /**
  * Разделы Медиатеки как на сайте (VED-331): корневые вкладки
@@ -57,5 +57,18 @@ export function styleChips(categories: readonly MediaCategory[]): MediaCategory[
       category.kind === 'style' &&
       category.trackCount > 0 &&
       !rootTitles.some((title) => sameTitle(title, category.title)),
+  );
+}
+
+/**
+ * Поиск по аудиокнигам — на телефоне: книг немного (редакционный раздел),
+ * а поиск сервера (`/music/tracks?q=`) ищет по записям и главы книг из
+ * выдачи прячет. Ищем по названию, автору и чтецу.
+ */
+export function filterBooks(books: readonly MediaAudiobook[], query: string): MediaAudiobook[] {
+  const needle = query.replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru');
+  if (!needle) return [...books];
+  return books.filter((book) =>
+    [book.title, book.author, book.reader].some((value) => value?.toLocaleLowerCase('ru').includes(needle)),
   );
 }

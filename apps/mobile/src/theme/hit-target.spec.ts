@@ -105,6 +105,9 @@ describe('зона нажатия', () => {
         // `hitSlop` — полоска низкая, растить её значит двигать композер.
         'components/chat/voice/voice-recorder-control.tsx:deniedButton=44',
         'components/chat/voice/voice-recorder-control.tsx:deniedButton=44',
+        // Главная кнопка полноэкранного плеера Медиатеки (VED-331) — круг 72:
+        // «играть/пауза» — то, во что целятся не глядя.
+        'app/music/player.tsx:primary/off=72',
       ].sort(),
     );
   });

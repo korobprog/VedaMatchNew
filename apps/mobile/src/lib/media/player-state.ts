@@ -200,3 +200,9 @@ export function playerReducer(state: PlayerState, event: PlayerEvent): PlayerSta
       return INITIAL_PLAYER_STATE;
   }
 }
+
+/** Как строка списка показывает запись: играет, на паузе или не она. */
+export function playbackOf(state: PlayerState, trackId: string): 'none' | 'playing' | 'paused' {
+  if (currentTrack(state)?.id !== trackId || state.status === 'idle') return 'none';
+  return isActive(state) ? 'playing' : 'paused';
+}

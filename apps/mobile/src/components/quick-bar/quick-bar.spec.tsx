@@ -126,11 +126,11 @@ describe('QuickBar', () => {
   });
 
   it('подсказка говорит, откроется ли раздел в приложении или на сайте', async () => {
-    mockList.mockResolvedValue([card('wellness', 'Здоровье'), card('music', 'Медиатека')]);
-    const tree = await render(await storeWith([pin('wellness', 'Здоровье'), pin('music', 'Медиатека')]));
-    const [wellness, music] = chips(tree);
+    mockList.mockResolvedValue([card('wellness', 'Здоровье'), card('market', 'Рынок')]);
+    const tree = await render(await storeWith([pin('wellness', 'Здоровье'), pin('market', 'Рынок')]));
+    const [wellness, market] = chips(tree);
     expect(wellness.props.accessibilityHint).toBe('Открывает раздел в приложении');
-    expect(music.props.accessibilityHint).toBe('Открывает раздел на сайте в браузере');
+    expect(market.props.accessibilityHint).toBe('Открывает раздел на сайте в браузере');
   });
 
   it('чип открывает сервис тем же путём, что карточка каталога', async () => {

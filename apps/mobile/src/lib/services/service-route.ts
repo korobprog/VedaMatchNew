@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * Куда ведёт карточка каталога (VED-335).
  *
@@ -20,7 +22,18 @@ const IN_APP: Record<string, string> = {
   // экранами. На сайте лента — первое, что видно на главной; отправлять за
   // ней в браузер значило бы повторить то, на что жаловалась карточка.
   blog: '/blog',
+  // Медиатека (VED-331): звук в фоне, с погашенным экраном, с экрана
+  // блокировки и кнопками наушников — ради этого приложение и ставят;
+  // браузер телефона глохнет, стоит погасить экран.
+  music: '/music',
 };
+
+/**
+ * Свои экраны, у которых нет смысла в веб-сборке приложения
+ * (ios.vedamatch.com): Медиатека там — тот же браузер, что и сайт, только
+ * без плеера сайта. Веб-сборка ведёт такие карточки на сайт, как раньше.
+ */
+const NATIVE_ONLY = new Set(['music']);
 
 export type ServiceTarget =
   | { kind: 'in-app'; path: string }
@@ -33,12 +46,19 @@ export type ServiceTarget =
  */
 export function serviceTarget(
   service: { slug: string; url: string },
+  platform: string = Platform.OS,
 ): ServiceTarget {
-  const path = IN_APP[service.slug.trim().toLowerCase()];
+  const path = inAppPath(service.slug, platform);
   return path ? { kind: 'in-app', path } : { kind: 'site', url: service.url };
 }
 
+function inAppPath(slug: string, platform: string): string | null {
+  const key = slug.trim().toLowerCase();
+  if (platform === 'web' && NATIVE_ONLY.has(key)) return null;
+  return IN_APP[key] ?? null;
+}
+
 /** Есть ли у сервиса свой экран в приложении — для подписи на карточке. */
-export function hasInAppScreen(slug: string): boolean {
-  return Boolean(IN_APP[slug.trim().toLowerCase()]);
+export function hasInAppScreen(slug: string, platform: string = Platform.OS): boolean {
+  return inAppPath(slug, platform) !== null;
 }
