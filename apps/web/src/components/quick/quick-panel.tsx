@@ -24,8 +24,13 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { DonationSettingsDto, RewardsMeDto } from "@vedamatch/shared";
+import type { RewardsMeDto } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
+import {
+  donateTileView,
+  loadDonationSettings,
+  useDonationSettings,
+} from "@/lib/donation-settings";
 import { DonateButton } from "@/components/donate-sheet";
 import { BookmarksSheet } from "@/components/bookmarks/bookmarks-sheet";
 import { ServiceIcon } from "@/components/icons/service-icons";
@@ -166,6 +171,14 @@ export function QuickPanel({ admin = false }: { admin?: boolean }) {
     setConfig({ ...stored, ids: pinQuickActions(stored.ids, locked) });
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [locked]);
+
+  /* Спрашиваем реквизиты заранее, а не при открытии панели (VED-380): плитка
+     «Поддержать» ходила за ними сама и появлялась позже остальных на целый
+     сетевой круг. Только тем, у кого эта плитка есть: лишний запрос со
+     страницы, где кнопка выключена, порталу не нужен. */
+  useEffect(() => {
+    if (config.ids.includes("donate")) void loadDonationSettings();
+  }, [config.ids]);
 
   const save = useCallback(
     (next: QuickConfig) => {
@@ -448,44 +461,55 @@ function WindowTile({ onSwitch }: { onSwitch: () => void }) {
   );
 }
 
-const tileClass =
-  "flex h-[72px] w-full flex-col items-center justify-center gap-1 rounded-xl border border-glass-brd bg-white/4 px-1 text-center text-[11px] font-medium leading-tight text-text-1 transition-colors hover:text-text-0";
+/**
+ * Плитка без рамки. Отдельно от `tileClass` ради доната: подсветка
+ * `vm-quick-attention` красит рамку, а у доната рамка уехала на обёртку
+ * (см. `DonateTile`), и вторая рамка внутри читалась бы как кнопка в кнопке.
+ */
+const tileInnerClass =
+  "flex h-[72px] w-full flex-col items-center justify-center gap-1 rounded-xl px-1 text-center text-[11px] font-medium leading-tight text-text-1 transition-colors hover:text-text-0";
+
+const tileClass = `${tileInnerClass} border border-glass-brd bg-white/4`;
 
 /**
  * Донат — та же шторка с реквизитами, что и в остальном портале, а не своя
  * копия: реквизиты меняются в админке, и вторая копия разошлась бы с первой.
- * Настройки читаются при первом открытии панели; выключенные пожертвования
- * не рисуют ничего — так же, как везде.
+ * Выключенные пожертвования не рисуют ничего — так же, как везде.
  *
  * При открытии панели кнопка несколько раз мягко подсвечивается (VED-326):
  * портал живёт на пожертвования, но просить об этом текстом на каждой
  * странице — значит мешать. Движение, а не цвет и не размер: подсветка
- * гаснет сама и ничего не двигает вокруг.
+ * гаснет сама и ничего не двигает вокруг, а под `prefers-reduced-motion`
+ * кадры обезврежены в `globals.css`.
+ *
+ * VED-380: плитка больше не ждёт сервер, чтобы появиться. Реквизиты нужны
+ * шторке, а не самой плитке, и пока ответа нет, плитка ведёт на `/donate` —
+ * ту же страницу с реквизитами. Панель открывается целиком, и ничего в ней
+ * не догоняет остальное. Подсветка висит на обёртке, а не на плитке: обёртка
+ * переживает подмену ссылки кнопкой и не начинает мигать заново.
  */
 function DonateTile() {
-  const [donation, setDonation] = useState<DonationSettingsDto | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    fetch(`${API_URL}/billing/donation`, { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: DonationSettingsDto | null) => {
-        if (alive) setDonation(data);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const donation = useDonationSettings();
+  const view = donateTileView(donation);
+  if (view === "hidden") return null;
 
   return (
-    <DonateButton
-      donation={donation}
-      label="Поддержать"
-      /* Значок рисует сама кнопка доната, и он мельче плиточного: равняем
-         его здесь, а не в общем компоненте, — вне панели размер свой. */
-      className={`${tileClass} vm-quick-attention [&>svg]:size-6`}
-    />
+    <div className="vm-quick-attention h-[72px] rounded-xl border border-glass-brd bg-white/4">
+      {view === "sheet" ? (
+        <DonateButton
+          donation={donation}
+          label="Поддержать"
+          /* Значок рисует сама кнопка доната, и он мельче плиточного: равняем
+             его здесь, а не в общем компоненте, — вне панели размер свой. */
+          className={`${tileInnerClass} [&>svg]:size-6`}
+        />
+      ) : (
+        <Link href="/donate" className={tileInnerClass}>
+          <HeartHandshake className={TILE_ICON} />
+          <span className="w-full truncate">Поддержать</span>
+        </Link>
+      )}
+    </div>
   );
 }
 

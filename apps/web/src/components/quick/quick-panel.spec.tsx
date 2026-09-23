@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 import ru from "../../../messages/ru.json";
 import { QuickPanel } from "./quick-panel";
+import { resetDonationSettings } from "@/lib/donation-settings";
 import { resetPortalWindowsForTests } from "./portal-windows-store";
 
 const push = vi.fn();
@@ -54,6 +55,9 @@ beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
   resetPortalWindowsForTests();
+  // Настройки пожертвований помнятся на весь сеанс страницы (VED-380), а у
+  // теста сеанс свой: иначе ответ одного доезжает до следующего.
+  resetDonationSettings();
   push.mockClear();
   replace.mockClear();
   stubFetch();
@@ -406,7 +410,63 @@ describe("QuickPanel", () => {
 
     // Так же, как везде на портале: реквизитов нет — кнопки нет.
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: /Поддержать/ })).not.toBeInTheDocument(),
+      expect(screen.queryByText("Поддержать")).not.toBeInTheDocument(),
     );
+  });
+
+  /* VED-380. Заказчик заметил, что «Поддержать» появляется с запаздыванием:
+     плитка ходила за реквизитами сама и до ответа не рисовала ничего.
+     Реквизиты нужны шторке, а не плитке, — и пока ответа нет, плитка стоит
+     на месте и ведёт на /donate, ту же страницу с реквизитами. */
+  it("плитка «Поддержать» стоит в панели, не дожидаясь сервера", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    // Сервер молчит навсегда: именно это и было видно как запаздывание.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => new Promise(() => {})),
+    );
+
+    await openPanel({ admin: true });
+
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    expect(
+      within(panel).getByRole("link", { name: /Поддержать/ }),
+    ).toHaveAttribute("href", "/donate");
+  });
+
+  it("ответ сервера помнится на весь сеанс: второе открытие не ждёт", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":4,"ids":["donate"]}');
+    const fetchMock = stubFetch();
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes("/billing/donation")
+        ? Promise.resolve({
+            ok: true,
+            json: async () => ({
+              enabled: true,
+              text: "",
+              requisites: [{ kind: "sbp", label: "СБП", value: "+7" }],
+            }),
+          })
+        : Promise.resolve({ ok: true, json: async () => ({}) }),
+    );
+
+    const user = await openPanel({ admin: true });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Поддержать/ })).toBeInTheDocument(),
+    );
+    const asked = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).includes("/billing/donation"),
+    ).length;
+
+    // Закрыли и открыли снова: кнопка на месте сразу, нового запроса нет.
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+    await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
+
+    expect(screen.getByRole("button", { name: /Поддержать/ })).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("/billing/donation"),
+      ),
+    ).toHaveLength(asked);
   });
 });
