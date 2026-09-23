@@ -61,7 +61,10 @@ export function BlogPostCard({
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const source = post.repostOf;
   const edited = blogEditedLabel(post.editedAt, post.createdAt);
-  const fold = useBlogTextFold(post.text, source ? null : post.title);
+  const { fold, attachBody, attachTitle } = useBlogTextFold(
+    post.text,
+    source ? null : post.title,
+  );
 
   /** Выход из правки возвращает клавиатуру на кнопку, которой её открыли. */
   function closeEditor() {
@@ -169,7 +172,7 @@ export function BlogPostCard({
               {post.title && (
                 <p
                   id={fold.titleId}
-                  ref={fold.titleRef}
+                  ref={attachTitle}
                   className={`px-4 font-display text-base leading-snug text-text-0 ${
                     post.images.length > 0 ? "pt-3" : "pt-0.5"
                   } ${fold.titleClassName}`}
@@ -183,7 +186,7 @@ export function BlogPostCard({
           {/* Свёрнутый текст (VED-371): пост теперь бывает на восемь
               страниц, и целиком развёрнутым он выталкивает из ленты
               соседей. Кнопка «Далее» — первой в ряду действий ниже. */}
-          <BlogPostText fold={fold} className="px-4 pt-1" />
+          <BlogPostText fold={fold} attach={attachBody} className="px-4 pt-1" />
 
           <footer className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-2">
             {/* «Далее» забирает свободную ширину ряда: крупная надпись во всю
@@ -280,7 +283,10 @@ function RepostSource({
 }: {
   source: NonNullable<BlogPostDto["repostOf"]>;
 }) {
-  const fold = useBlogTextFold(source.text, source.title);
+  const { fold, attachBody, attachTitle } = useBlogTextFold(
+    source.text,
+    source.title,
+  );
   return (
     <div className="mx-4 mb-3 rounded-xl border border-glass-brd bg-bg-1 p-3">
       <p className="mb-2 text-[11px] text-text-2">
@@ -295,7 +301,7 @@ function RepostSource({
       {source.title && (
         <p
           id={fold.titleId}
-          ref={fold.titleRef}
+          ref={attachTitle}
           className={`mb-1 font-display text-base text-text-0 ${fold.titleClassName}`}
         >
           {source.title}
@@ -304,7 +310,7 @@ function RepostSource({
       <BlogImages images={source.images} alt={source.title} compact />
       {/* Чужой длинный текст сворачивается так же: репост вдвое длиннее
           оригинала — это не то, что человек пересылал. */}
-      <BlogPostText fold={fold} className="mt-2" />
+      <BlogPostText fold={fold} attach={attachBody} className="mt-2" />
       <BlogMoreButton fold={fold} className="mt-2 w-full" />
     </div>
   );

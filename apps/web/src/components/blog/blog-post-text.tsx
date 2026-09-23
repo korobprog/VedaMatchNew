@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { buildBlogTextPreview, type BlogTextPreview } from "./blog-text-preview";
 
@@ -42,32 +42,37 @@ export interface BlogTextFold {
   canExpand: boolean;
   toggle: () => void;
   bodyId: string;
-  bodyRef: React.RefObject<HTMLParagraphElement | null>;
   /** Есть ли у поста заголовок, который сворачивается вместе с текстом. */
   hasTitle: boolean;
   titleId: string;
-  titleRef: React.RefObject<HTMLParagraphElement | null>;
   /** Классы заголовка: две строки в свёрнутом виде, целиком в развёрнутом. */
   titleClassName: string;
 }
 
+type Attach = (node: HTMLParagraphElement | null) => void;
+
+/**
+ * Свёртка и два колбэк-ref для замера — отдельно от неё. Не внутри объекта
+ * свёртки: React Compiler считает объект, из которого взяли ref, самим ref и
+ * запрещает читать из него при рендере, а `fold` читается при рендере весь.
+ */
 export function useBlogTextFold(
   text: string,
   title: string | null = null,
-): BlogTextFold {
+): { fold: BlogTextFold; attachBody: Attach; attachTitle: Attach } {
   const [expanded, setExpanded] = useState(false);
   const [clipped, setClipped] = useState(false);
   const bodyId = useId();
   const titleId = useId();
-  const bodyRef = useRef<HTMLParagraphElement>(null);
-  const titleRef = useRef<HTMLParagraphElement>(null);
+  const [bodyNode, attachBody] = useState<HTMLParagraphElement | null>(null);
+  const [titleNode, attachTitle] = useState<HTMLParagraphElement | null>(null);
   const preview = useMemo(() => buildBlogTextPreview(text), [text]);
 
   useLayoutEffect(() => {
     // Мерить можно только свёрнутый вид: развёрнутый не обрезан по
     // определению, и последнее измерение остаётся в силе.
     if (expanded) return;
-    const nodes = [bodyRef.current, titleRef.current].filter(
+    const nodes = [bodyNode, titleNode].filter(
       (node): node is HTMLParagraphElement => node !== null,
     );
     if (nodes.length === 0) return;
@@ -80,28 +85,33 @@ export function useBlogTextFold(
     const observer = new ResizeObserver(measure);
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [expanded, text, title]);
+  }, [expanded, text, title, bodyNode, titleNode]);
 
   return {
-    text,
-    preview,
-    expanded,
-    canExpand: preview.truncated || clipped,
-    toggle: () => setExpanded((current) => !current),
-    bodyId,
-    bodyRef,
-    hasTitle: Boolean(title),
-    titleId,
-    titleRef,
-    titleClassName: expanded ? "" : "line-clamp-2",
+    fold: {
+      text,
+      preview,
+      expanded,
+      canExpand: preview.truncated || clipped,
+      toggle: () => setExpanded((current) => !current),
+      bodyId,
+      hasTitle: Boolean(title),
+      titleId,
+      titleClassName: expanded ? "" : "line-clamp-2",
+    },
+    attachBody,
+    attachTitle,
   };
 }
 
 export function BlogPostText({
   fold,
+  attach,
   className,
 }: {
   fold: BlogTextFold;
+  /** `attachBody` из `useBlogTextFold` — для замера обрезки. */
+  attach: Attach;
   /** Отступы задаёт карточка: в репосте текст лежит в своей рамке. */
   className?: string;
 }) {
@@ -112,7 +122,7 @@ export function BlogPostText({
   return (
     <p
       id={fold.bodyId}
-      ref={fold.bodyRef}
+      ref={attach}
       className={`whitespace-pre-line text-sm leading-6 text-text-1 ${
         fold.expanded ? "" : "line-clamp-3"
       } ${className ?? ""}`}

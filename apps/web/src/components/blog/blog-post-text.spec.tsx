@@ -4,15 +4,15 @@ import { describe, expect, it } from "vitest";
 import { BlogMoreButton, BlogPostText, useBlogTextFold } from "./blog-post-text";
 
 function Card({ text, title = null }: { text: string; title?: string | null }) {
-  const fold = useBlogTextFold(text, title);
+  const { fold, attachBody, attachTitle } = useBlogTextFold(text, title);
   return (
     <article>
       {title && (
-        <p id={fold.titleId} ref={fold.titleRef} className={fold.titleClassName}>
+        <p id={fold.titleId} ref={attachTitle} className={fold.titleClassName}>
           {title}
         </p>
       )}
-      <BlogPostText fold={fold} />
+      <BlogPostText fold={fold} attach={attachBody} />
       <BlogMoreButton fold={fold} />
     </article>
   );
