@@ -1149,14 +1149,41 @@ select option {
  * уезжал под полосу целиком.
  */
 body:has([data-music-player]) {
-  --vm-player-space: calc(144px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
+  --vm-player-space: calc(144px + var(--vm-player-pinned-now, 0px) + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
   padding-bottom: var(--vm-player-space);
 }
 
 @media (min-width: 640px) {
   body:has([data-music-player]) {
-    --vm-player-space: calc(64px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
+    --vm-player-space: calc(64px + var(--vm-player-pinned-now, 0px) + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
     padding-bottom: var(--vm-player-space);
+  }
+}
+
+/* Строка вынесенных кнопок плеера (VED-388): полоса вырастает на неё.
+ * `data-pinned="narrow"` — строка только уже `lg` (вынесена одна перемотка,
+ * а шире её кнопки и так стоят в ряду управления); `"all"` — на любой
+ * ширине. Свёрнутая полоса строки не рисует — у неё всегда `"none"`.
+ * Замерено в браузере: телефон +50px (кнопки 44 и зазор строки), `sm`–`lg`
+ * +76px, от `lg` +80px (однострочная полоса h-16 становится двухстрочной). Меняешь строку в mini-player.tsx — перемерь.
+ */
+body:has([data-music-player]:is([data-pinned="narrow"], [data-pinned="all"])) {
+  --vm-player-pinned-now: 50px;
+}
+
+@media (min-width: 640px) {
+  body:has([data-music-player]:is([data-pinned="narrow"], [data-pinned="all"])) {
+    --vm-player-pinned-now: 76px;
+  }
+}
+
+@media (min-width: 1024px) {
+  body:has([data-music-player][data-pinned="narrow"]) {
+    --vm-player-pinned-now: 0px;
+  }
+
+  body:has([data-music-player][data-pinned="all"]) {
+    --vm-player-pinned-now: 80px;
   }
 }
 

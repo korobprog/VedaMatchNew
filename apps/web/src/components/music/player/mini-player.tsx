@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { formatTrackDuration } from "@/lib/music-duration";
@@ -8,7 +8,7 @@ import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
 import { MusicPositionSlider } from "@/components/music/player/position-slider";
 import { MusicPlayingBars } from "./playing-bars";
-import { SEEK_STEP_SECONDS, useMusicPlayer } from "./player-provider";
+import { useMusicPlayer } from "./player-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
@@ -18,9 +18,21 @@ import {
   ArrowDownToLine,
   ArrowRightToLine,
   ArrowUpToLine,
+  BookmarkPlus,
   ChevronsRight,
+  History,
   ListEnd,
+  Settings,
 } from "lucide-react";
+import {
+  MusicPlayerSettingsPanel,
+  type PlayerPanelTab,
+} from "./player-settings-panel";
+import { SeekStepGlyph } from "./seek-step-glyph";
+import { pinnedLayout, seekButtonLabel } from "./player-prefs";
+import { seekHotkeyDirection } from "./seek-hotkeys";
+import { bookmarkSavedText } from "./player-marks";
+import { useTrackBookmarks } from "./use-track-bookmarks";
 import { LIFTED_KEY, liftButtonLabel, parseLifted, serializeLifted } from "./player-lift";
 import {
   DEFAULT_PLAYBACK_MODE,
@@ -67,6 +79,21 @@ export function MiniPlayer() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [lifted, setLifted] = useState(false);
+  /** Открытая вкладка панели «Плеер» (VED-388); `null` — панель закрыта. */
+  const [panelTab, setPanelTab] = useState<PlayerPanelTab | null>(null);
+  /** Кнопка, открывшая панель: туда вернётся фокус после закрытия. */
+  const panelOpenerRef = useRef<HTMLElement | null>(null);
+  /**
+   * Объявление для скринридера: метка поставлена, позиция после перемотки.
+   * Без него быстрая «Метка» и Shift+стрелка срабатывали бы молча — для
+   * незрячего человека неотличимо от «не сработало».
+   */
+  const [announcement, setAnnouncement] = useState("");
+  const announce = useCallback((text: string) => {
+    // Тот же текст второй раз подряд живая область не перечитывает —
+    // неразрывный пробел в конце делает его «новым».
+    setAnnouncement((was) => (was === text ? `${text}\u00a0` : text));
+  }, []);
 
   /* Читаем эффектом, а не ленивым `useState`: на сервере `localStorage` нет,
      инициализатор вернул бы «развёрнута», а на клиенте — «свёрнута», и это
@@ -135,6 +162,77 @@ export function MiniPlayer() {
     disabled: !player?.hasNext,
   });
 
+  const bookmarks = useTrackBookmarks(player?.current?.id ?? null);
+
+  /**
+   * Перемотка на шаг из настроек (VED-388) — кнопками, клавиатурой.
+   * Позицию после сдвига объявляем: кнопка сама говорит только, что
+   * сделает, а куда пришли — нет.
+   */
+  const seekStep = useCallback(
+    (direction: -1 | 1) => {
+      if (!player?.current) return;
+      const { prefs } = player;
+      const step = direction < 0 ? prefs.seekBackSeconds : prefs.seekForwardSeconds;
+      const total = player.durationSeconds || player.current.durationSeconds;
+      const at = Math.max(
+        0,
+        Math.min(total || Number.POSITIVE_INFINITY, player.positionSeconds + direction * step),
+      );
+      player.skip(direction * step);
+      announce(`${seekButtonLabel(direction, step)}: ${formatTrackDuration(at)}`);
+    },
+    [player, announce],
+  );
+
+  /** Быстрая «Метка»: ставит на текущее место без вопросов, подпись — потом. */
+  const quickBookmark = useCallback(() => {
+    if (!player?.current) return;
+    void bookmarks.add(player.positionSeconds).then((created) => {
+      announce(created ? bookmarkSavedText(created) : "Не удалось поставить метку");
+    });
+  }, [player, bookmarks, announce]);
+
+  // Shift+← / Shift+→ (VED-388). Через ref: подписка одна на всё время
+  // жизни полосы, а шаг и позиция — всегда свежие.
+  const seekStepRef = useRef(seekStep);
+  useEffect(() => {
+    seekStepRef.current = seekStep;
+  }, [seekStep]);
+  const hasTrack = Boolean(player?.current);
+  useEffect(() => {
+    if (!hasTrack) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const direction = seekHotkeyDirection(event, {
+        tagName: target?.tagName,
+        isContentEditable: target?.isContentEditable,
+        type: target instanceof HTMLInputElement ? target.type : undefined,
+        role: target?.getAttribute("role"),
+      });
+      if (direction === null) return;
+      event.preventDefault();
+      seekStepRef.current(direction);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasTrack]);
+
+  const openPanel = useCallback((tab: PlayerPanelTab) => {
+    panelOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setQueueOpen(false);
+    setPanelTab((was) => (was === tab ? null : tab));
+  }, []);
+
+  const closePanel = useCallback(() => {
+    setPanelTab(null);
+    // Фокус — туда, откуда открывали: иначе Tab после закрытия улетает в
+    // начало страницы.
+    const opener = panelOpenerRef.current;
+    if (opener?.isConnected) opener.focus();
+  }, []);
+
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
 
@@ -161,7 +259,17 @@ export function MiniPlayer() {
     isFavorite,
     hasNext,
     hasPrev,
+    prefs,
   } = player;
+
+  /* Вынесенные кнопки (VED-388) — отдельной строкой под полосой, одной на
+     все: во второй строке телефона места нет (326 из 327 точек на 375), в
+     полосе `sm` средней колонке достаётся ~120 точек, а однострочная
+     полоса широкого экрана занята до последней точки. Перемотка на
+     широком экране стоит в ряду управления всегда, поэтому одна она строку
+     там не заводит. Строка появляется, только когда что-то вынесено: по
+     умолчанию полоса не выросла ни на точку. */
+  const pinned = pinnedLayout(prefs);
 
   // Ожидание важнее «играет»: пока звука нет, полоса не должна показывать
   // паузу — это единственная кнопка, по которой судят, сработало ли нажатие.
@@ -194,6 +302,9 @@ export function MiniPlayer() {
       // Поднятая полоса (VED-194) стоит выше на `--vm-player-lift`, и отступ
       // страницы растёт вместе с ней — правило там же, в globals.css.
       data-lifted={lifted ? "true" : "false"}
+      // Строка вынесенных кнопок (VED-388) добавляет полосе высоты на узком
+      // экране — отступ страницы растёт вместе с ней, правило в globals.css.
+      data-pinned={collapsed ? "none" : pinned}
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       {collapsed ? (
@@ -283,10 +394,19 @@ export function MiniPlayer() {
         // якорится от всей полосы, а не от узкой кнопки-триггера в середине
         // ряда, иначе на 360-390px уезжает за левый край экрана (VED-248,
         // круг 2).
-        className="player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-3 py-2 sm:h-16 sm:flex-nowrap sm:gap-5 sm:px-[18px] sm:py-0"
+        //
+        // С вынесенными кнопками (VED-388) полоса `sm`–`lg` тоже переносит
+        // строку: кнопки встают второй строкой, а не сжимают середину.
+        className={`player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-1.5 gap-y-1.5 min-[360px]:gap-x-2 min-[400px]:gap-x-3 rounded-2xl px-3 py-2 sm:gap-3 sm:px-[18px] lg:gap-5 ${
+          pinned === "all"
+            ? "sm:gap-y-2 sm:py-2"
+            : pinned === "narrow"
+              ? "sm:gap-y-2 sm:py-2 lg:h-16 lg:flex-nowrap lg:py-0"
+              : "sm:h-16 sm:flex-nowrap sm:py-0"
+        }`}
       >
         {/* Что играет */}
-        <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-56">
+        <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-48">
           <Link
             href={`/music/tracks/${current.id}`}
             aria-label={`Открыть запись: ${current.title}`}
@@ -351,7 +471,7 @@ export function MiniPlayer() {
               отдаёт ему остаток места, но не выталкивает соседей на третью
               строку. На `sm` ширина снова по содержимому — там ряд стоит по
               центру колонки. */}
-          <div className="order-4 flex min-w-0 flex-1 items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none sm:gap-2">
+          <div className="order-4 flex min-w-0 flex-1 items-center gap-0.5 min-[400px]:gap-1.5 sm:order-none sm:w-auto sm:flex-none sm:gap-2">
             {/* С `md` — в ряду управления; на телефоне та же кнопка стоит
                 у дорожки, ниже (VED-133). Раньше обе прятались до `lg`, и с
                 телефона перемешать было нечем. Не с `sm`: на 640 средней
@@ -363,20 +483,18 @@ export function MiniPlayer() {
               className={`${ctrl} hidden h-7 w-7 md:flex`}
             />
 
+            {/* В ряду — только на широком экране. На телефоне место в ряду
+                занимает переход по записям: перемотка там — удержанием и
+                пальцем по дорожке, а кнопки с шагом выносятся отдельной
+                строкой из настроек плеера (VED-388). Шаг — из настроек. */}
             <button
               type="button"
-              aria-label={`Назад на ${SEEK_STEP_SECONDS} секунд`}
-              onClick={() => player.skip(-SEEK_STEP_SECONDS)}
-              // Только на широком экране. На телефоне место в ряду занимает
-              // переход по записям: перемотка там есть и без кнопки — пальцем
-              // по дорожке, — а перейти к соседней записи было нечем, и
-              // единственный способ сменить киртан шёл через список.
-              className={`${ctrl} hidden h-10 w-10 sm:h-8 sm:w-8 lg:flex`}
+              aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
+              title={seekButtonLabel(-1, prefs.seekBackSeconds)}
+              onClick={() => seekStep(-1)}
+              className={`${ctrl} hidden h-8 min-w-8 px-1 lg:flex`}
             >
-              <svg {...icon} className="h-4 w-4">
-                <path d="M11 4L3 12l8 8" />
-                <path d="M21 12H4" />
-              </svg>
+              <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
             </button>
 
             <button
@@ -395,7 +513,7 @@ export function MiniPlayer() {
               {...holdPrev.props}
               // Пара к «Следующей»: без неё промах по «дальше» стоил бы
               // возврата в список, а на телефоне это весь экран.
-              className={`${ctrl} h-10 w-10 touch-none select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
+              className={`${ctrl} h-10 w-10 touch-none max-[359px]:w-9 select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
                 holdPrev.seeking ? "text-violet" : ""
               }`}
             >
@@ -411,7 +529,7 @@ export function MiniPlayer() {
               onClick={player.toggle}
               // 44px на телефоне — и размер из макета, и минимальная цель
               // пальца; на широком экране полоса всего 64px высотой, там 40.
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint sm:h-10 sm:w-10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint max-[359px]:h-10 max-[359px]:w-10 sm:h-10 sm:w-10"
             >
               <MusicPlayGlyph state={playState} />
             </button>
@@ -426,7 +544,7 @@ export function MiniPlayer() {
               title="Нажать — следующая запись, удержать — перемотка вперёд"
               aria-disabled={!hasNext}
               {...holdNext.props}
-              className={`${ctrl} h-10 w-10 touch-none select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
+              className={`${ctrl} h-10 w-10 touch-none max-[359px]:w-9 select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
                 holdNext.seeking ? "text-violet" : ""
               }`}
             >
@@ -438,14 +556,12 @@ export function MiniPlayer() {
 
             <button
               type="button"
-              aria-label={`Вперёд на ${SEEK_STEP_SECONDS} секунд`}
-              onClick={() => player.skip(SEEK_STEP_SECONDS)}
-              className={`${ctrl} hidden h-10 w-10 sm:h-8 sm:w-8 lg:flex`}
+              aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
+              title={seekButtonLabel(1, prefs.seekForwardSeconds)}
+              onClick={() => seekStep(1)}
+              className={`${ctrl} hidden h-8 min-w-8 px-1 lg:flex`}
             >
-              <svg {...icon} className="h-4 w-4">
-                <path d="M13 4l8 8-8 8" />
-                <path d="M3 12h17" />
-              </svg>
+              <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
             </button>
 
             {/* Режим проигрывания вместо «Повтора» (VED-132). */}
@@ -454,7 +570,6 @@ export function MiniPlayer() {
               onChange={player.setPlayMode}
               className={`${ctrl} hidden h-7 w-7 md:flex`}
             />
-
           </div>
 
           {/* Телефон: третья строка — перемешивание, дорожка, режим. Во
@@ -485,6 +600,14 @@ export function MiniPlayer() {
               trackId={current.id}
               className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
             />
+            {/* Настройки плеера на телефоне (VED-388) — в строке дорожки:
+                это единственная строка, где есть чем поделиться, — дорожка
+                тянется. На `sm` и шире та же кнопка стоит справа, у очереди. */}
+            <SettingsButton
+              open={panelTab !== null && panelTab !== "history"}
+              onClick={() => openPanel("settings")}
+              className={`${ctrl} h-9 w-9 sm:hidden`}
+            />
           </div>
           <PlayModeButton
             mode={playMode}
@@ -512,10 +635,10 @@ export function MiniPlayer() {
             `justify-end` выкладывает лишнее влево, за начало коробки: чип
             скорости наезжал на «вперёд» и повтор. Теперь колонка берёт по
             содержимому, а середина ужимается — ей есть чем: дорожка тянется. */}
-        <div className="contents sm:order-none sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end sm:gap-2.5 lg:min-w-56">
+        <div className="contents sm:order-none sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end sm:gap-1 lg:min-w-56 lg:gap-1.5">
           {/* Действия над записью — во второй строке, рядом с управлением:
               они про то, что играет, и стоят там же, где пуск и перемотка. */}
-          <div className="order-5 flex shrink-0 items-center gap-1.5 sm:contents">
+          <div className="order-5 flex shrink-0 items-center gap-0.5 min-[400px]:gap-1.5 sm:contents">
             <button
               type="button"
               aria-label={`Скорость ${rate.toFixed(2).replace(/0$/, "")}×, сменить`}
@@ -524,7 +647,7 @@ export function MiniPlayer() {
               }
               // Видно и на телефоне: лекцию слушают на 1.5×, и это ровно тот
               // случай, когда переключатель нужен под рукой.
-              className="flex h-8 items-center rounded-full border border-glass-brd px-2.5 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7"
+              className="flex h-8 items-center rounded-full border border-glass-brd px-2.5 max-[359px]:px-2 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7"
             >
               {rate.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}×
             </button>
@@ -534,7 +657,7 @@ export function MiniPlayer() {
               aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
               aria-pressed={isFavorite}
               onClick={player.toggleFavorite}
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
+              className={`${ctrl} h-10 w-10 max-[359px]:w-9 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -558,11 +681,14 @@ export function MiniPlayer() {
                 }
                 aria-expanded={queueOpen}
                 aria-haspopup="dialog"
-                onClick={() => setQueueOpen((was) => !was)}
+                onClick={() => {
+                  setPanelTab(null);
+                  setQueueOpen((was) => !was);
+                }}
                 // 40 точек на телефоне — как у соседних кнопок ряда: цель
                 // меньше 24×24 не проходит по WCAG 2.5.8, а 32 из макета
                 // рассчитаны на мышь.
-                className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+                className={`${ctrl} h-10 w-10 max-[359px]:w-9 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
               >
                 <svg {...icon} className="h-4 w-4">
                   <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
@@ -570,6 +696,12 @@ export function MiniPlayer() {
               </button>
               {queueOpen && <MusicQueuePanel onClose={() => setQueueOpen(false)} />}
             </div>
+
+            <SettingsButton
+              open={panelTab !== null && panelTab !== "history"}
+              onClick={() => openPanel("settings")}
+              className={`${ctrl} hidden h-8 w-8 sm:flex`}
+            />
 
             {/* Плейлисты — этап 4. До него это ссылка на карточку записи: тот же
                 портально-безопасный адрес, что у кнопки в ленте друзей. */}
@@ -592,7 +724,7 @@ export function MiniPlayer() {
               }
               aria-pressed={isPrivateSession}
               onClick={player.togglePrivateSession}
-              className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
+              className={`${ctrl} h-10 w-10 max-[359px]:w-9 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
             >
               <svg {...icon} className="h-4 w-4">
                 {isPrivateSession ? (
@@ -687,9 +819,142 @@ export function MiniPlayer() {
             </button>
           </div>
         </div>
+
+        {/* Вынесенные кнопки (VED-388): одна строка под полосой. Цели по 44
+            точки уже `lg` — это пальцы, а не мышь; шире — 36, как у
+            соседних кнопок полосы. */}
+        {pinned !== "none" && (
+          <div
+            role="group"
+            aria-label="Вынесенные кнопки"
+            className={`order-10 flex w-full items-center justify-center gap-2 ${
+              pinned === "narrow" ? "lg:hidden" : ""
+            }`}
+          >
+            {prefs.showSeek && (
+              <span className="contents lg:hidden">
+                <button
+                  type="button"
+                  aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
+                  onClick={() => seekStep(-1)}
+                  className={`${ctrl} h-11 min-w-11 px-2 lg:h-9 lg:min-w-9`}
+                >
+                  <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
+                  onClick={() => seekStep(1)}
+                  className={`${ctrl} h-11 min-w-11 px-2 lg:h-9 lg:min-w-9`}
+                >
+                  <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
+                </button>
+              </span>
+            )}
+            {prefs.showBookmark && (
+              <BookmarkButton
+                onClick={quickBookmark}
+                className={`${ctrl} h-11 w-11 text-text-2 lg:h-9 lg:w-9`}
+              />
+            )}
+            {prefs.showHistory && (
+              <HistoryButton
+                open={panelTab === "history"}
+                onClick={() => openPanel("history")}
+                className={`${ctrl} h-11 w-11 lg:h-9 lg:w-9`}
+              />
+            )}
+          </div>
+        )}
+
+        {panelTab && (
+          <MusicPlayerSettingsPanel
+            tab={panelTab}
+            onTab={setPanelTab}
+            onClose={closePanel}
+            onAnnounce={announce}
+            bookmarks={bookmarks}
+          />
+        )}
       </section>
       )}
+      {/* Объявления полосы (VED-388). Вне свёрнутого/развёрнутого вида:
+          живая область должна существовать до того, как в неё пишут. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
     </div>
+  );
+}
+
+/** Настройки плеера (VED-388). Одна кнопка на два места полосы. */
+function SettingsButton({
+  open,
+  onClick,
+  className,
+}: {
+  open: boolean;
+  onClick: () => void;
+  className: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="Настройки плеера"
+      title="Настройки плеера"
+      aria-expanded={open}
+      aria-haspopup="dialog"
+      onClick={onClick}
+      className={`${className} ${open ? "text-violet" : "text-text-2"}`}
+    >
+      <Settings aria-hidden className="h-4 w-4" />
+    </button>
+  );
+}
+
+/** Быстрая «Метка» (VED-388): ставит метку на текущее место. */
+function BookmarkButton({
+  onClick,
+  className,
+}: {
+  onClick: () => void;
+  className: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="Поставить метку на текущем месте"
+      title="Поставить метку"
+      onClick={onClick}
+      className={className}
+    >
+      <BookmarkPlus aria-hidden className="h-4 w-4" />
+    </button>
+  );
+}
+
+/** «История» (VED-388): открывает панель плеера на вкладке истории. */
+function HistoryButton({
+  open,
+  onClick,
+  className,
+}: {
+  open: boolean;
+  onClick: () => void;
+  className: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label="История прослушанного"
+      title="История прослушанного"
+      aria-expanded={open}
+      aria-haspopup="dialog"
+      onClick={onClick}
+      className={`${className} ${open ? "text-violet" : "text-text-2"}`}
+    >
+      <History aria-hidden className="h-4 w-4" />
+    </button>
   );
 }
 

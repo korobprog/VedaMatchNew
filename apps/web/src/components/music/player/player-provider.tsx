@@ -25,6 +25,7 @@ import {
   getMusicSettings,
   getPlaybackState,
   getTrack,
+  saveMusicSettings,
   savePlaybackPosition,
   savePlaybackQueue,
   sendHeartbeat,
@@ -76,6 +77,15 @@ import {
   type MusicPlaybackMode,
 } from "./play-mode";
 import { planEndOfTrack, upcomingTrackId } from "./end-of-track-plan";
+import {
+  DEFAULT_PLAYER_PREFS,
+  PLAYER_PREFS_KEY,
+  parseStoredPrefs,
+  prefsFromSettings,
+  prefsToSettingsPatch,
+  serializePrefs,
+  type PlayerPrefs,
+} from "./player-prefs";
 
 /**
  * Очередь больше не зацикливается (VED-132): «Повтор» заменили режимы, и
@@ -126,8 +136,13 @@ function rememberClosed(closed: boolean): void {
 /** Тик плеера. Реже — теряется позиция, чаще — лишний шум в базе. */
 const HEARTBEAT_MS = 30_000;
 
-/** Шаг кнопок ±: лекции и киртаны длинные, пальцем по ползунку не попасть. */
-export const SEEK_STEP_SECONDS = 15;
+function rememberPrefs(prefs: PlayerPrefs): void {
+  try {
+    window.localStorage.setItem(PLAYER_PREFS_KEY, serializePrefs(prefs));
+  } catch {
+    // Копия только ради первой отрисовки — без неё плеер работает.
+  }
+}
 
 /**
  * С какой секунды записи спрашивать адрес следующей.
@@ -231,6 +246,14 @@ export interface MusicPlayerApi {
    */
   isMusicEditor: boolean;
   setIsMusicEditor(value: boolean): void;
+  /**
+   * Настройки плеера (VED-388): шаги перемотки и вынесенные на полосу
+   * кнопки. Шаги общие для кнопок, клавиатуры и системной карточки —
+   * поэтому живут здесь, а не в полосе.
+   */
+  prefs: PlayerPrefs;
+  /** Поменять и сохранить на сервере. `false` — не сохранилось, откатили. */
+  setPrefs(patch: Partial<PlayerPrefs>): Promise<boolean>;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerApi | null>(null);
@@ -386,6 +409,17 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * дослушанная до ответа, повела бы себя не так, как обещает форма настроек.
    */
   const [autoplay, setAutoplay] = useState(true);
+  /**
+   * Настройки плеера (VED-388). До ответа сервера — копия из
+   * `localStorage`, до неё — умолчания: шаг 15 с, ничего не вынесено.
+   */
+  const [prefs, setPrefsState] = useState<PlayerPrefs>(DEFAULT_PLAYER_PREFS);
+  const prefsRef = useRef<PlayerPrefs>(DEFAULT_PLAYER_PREFS);
+  /**
+   * Счётчик правок настроек плеера. Ответ сервера на стартовое чтение не
+   * имеет права перебить то, что человек успел переключить, пока он шёл.
+   */
+  const prefsEditsRef = useRef(0);
 
   /**
    * Позиция, с которой надо начать после загрузки записи. Применяется один
@@ -570,6 +604,21 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * читает своё значение `theme-provider`.
    */
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше:
+       ленивый useState здесь даёт расхождение гидратации. */
+    // Настройки плеера — отдельно и до возврата ниже: они нужны и тогда,
+    // когда играть пока нечего.
+    let storedPrefs: PlayerPrefs | null = null;
+    try {
+      storedPrefs = parseStoredPrefs(window.localStorage.getItem(PLAYER_PREFS_KEY));
+    } catch {
+      // см. ниже
+    }
+    if (storedPrefs) {
+      prefsRef.current = storedPrefs;
+      setPrefsState(storedPrefs);
+    }
+
     let stored = null;
     try {
       stored = parsePlayerState(window.localStorage.getItem(STORAGE_KEY));
@@ -578,8 +627,6 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
     }
     if (!stored) return;
 
-    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше:
-       ленивый useState здесь даёт расхождение гидратации. */
     setQueue(stored.queue);
     setIndex(stored.index);
     setPlayModeState(stored.playMode);
@@ -678,9 +725,18 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const load = () => {
+      const edits = prefsEditsRef.current;
       void getMusicSettings().then((settings) => {
         if (cancelled) return;
         setAutoplay(settings?.autoplay ?? true);
+        // Гостю и при сбое сети — остаёмся на том, что есть: копия из
+        // хранилища вернее умолчаний.
+        if (settings && edits === prefsEditsRef.current) {
+          const next = prefsFromSettings(settings);
+          prefsRef.current = next;
+          setPrefsState(next);
+          rememberPrefs(next);
+        }
       });
     };
 
@@ -1419,6 +1475,33 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, [current, isFavorite]);
 
   /**
+   * Поменять настройки плеера: сразу на экране, потом на сервере. Не
+   * сохранилось — откатываем именно изменённые поля: показывать «вынесено»
+   * там, где на сервере не вынесено, значит потерять настройку на другом
+   * устройстве молча.
+   */
+  const setPrefs = useCallback(async (patch: Partial<PlayerPrefs>) => {
+    const was = prefsRef.current;
+    const next = { ...was, ...patch };
+    prefsEditsRef.current += 1;
+    prefsRef.current = next;
+    setPrefsState(next);
+    rememberPrefs(next);
+
+    const saved = await saveMusicSettings(prefsToSettingsPatch(patch));
+    if (saved) return true;
+
+    const reverted = { ...prefsRef.current };
+    for (const key of Object.keys(patch) as (keyof PlayerPrefs)[]) {
+      (reverted as Record<keyof PlayerPrefs, unknown>)[key] = was[key];
+    }
+    prefsRef.current = reverted;
+    setPrefsState(reverted);
+    rememberPrefs(reverted);
+    return false;
+  }, []);
+
+  /**
    * Кнопки системной карточки. Ставятся после объявления команд: система
    * запоминает обработчики и зовёт их, даже когда вкладка усыплена, поэтому
    * они обязаны ссылаться на актуальные функции.
@@ -1440,9 +1523,10 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         seekTo: seek,
         seekBy: skip,
       },
-      SEEK_STEP_SECONDS,
+      // Шаги из настроек плеера (VED-388): те же, что у кнопок на полосе.
+      { back: prefs.seekBackSeconds, forward: prefs.seekForwardSeconds },
     );
-  }, [next, prev, seek, skip]);
+  }, [next, prev, seek, skip, prefs.seekBackSeconds, prefs.seekForwardSeconds]);
 
   const value = useMemo<MusicPlayerApi>(
     () => ({
@@ -1491,6 +1575,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       toggleFavorite,
       isMusicEditor,
       setIsMusicEditor,
+      prefs,
+      setPrefs,
     }),
     [
       current,
@@ -1528,6 +1614,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       sleepTimer,
       isMusicEditor,
       setIsMusicEditor,
+      prefs,
+      setPrefs,
     ],
   );
 
