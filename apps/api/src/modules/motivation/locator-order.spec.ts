@@ -1,5 +1,6 @@
 import {
   compareLocators,
+  effectiveLocator,
   locatorKey,
   orderTieredWithinSlots,
   orderWithinSlots,
@@ -141,6 +142,46 @@ describe('sortByLocator', () => {
     ]);
   });
 
+  // VED-389: лента Гиты открывалась единственным пронумерованным 2.62, а
+  // стихи с номером только в заголовке шли за ним вразнобой.
+  it('берёт номер из источника и заголовка, если поле локатора пустое', () => {
+    const posts = [
+      { id: 'n1', attributionLocator: null, title: 'Мудрость дня' },
+      { id: 'g262', attributionLocator: '2.62' },
+      {
+        id: 'g210',
+        attributionLocator: null,
+        attributionWork: 'Бхагавад-гита 2.10',
+      },
+      { id: 'g29', attributionLocator: null, title: 'Бхагавад-гита 2.9' },
+      { id: 'g11', attributionLocator: ' 1.1 ', title: 'Бхагавад-гита 5.5' },
+      { id: 'g262r', attributionLocator: '2.62-63' },
+      { id: 'n0', attributionLocator: '' },
+    ];
+    expect(sortByLocator(posts).map((post) => post.id)).toEqual([
+      'g11',
+      'g29',
+      'g210',
+      'g262',
+      'g262r',
+      'n0',
+      'n1',
+    ]);
+  });
+
+  it('трёхуровневые номера Бхагаватам — числами на каждом уровне', () => {
+    const posts = ['1.2.12', '1.10.2', '1.2.9', '10.1.1', '1.2'].map(
+      (locator) => ({ id: locator, attributionLocator: locator }),
+    );
+    expect(sortByLocator(posts).map((post) => post.id)).toEqual([
+      '1.2',
+      '1.2.9',
+      '1.2.12',
+      '1.10.2',
+      '10.1.1',
+    ]);
+  });
+
   it('не меняет входной массив', () => {
     const posts = [
       { id: 'a', attributionLocator: '2.14' },
@@ -251,4 +292,42 @@ describe('sortByLocator: номер стиха записан в источни�
       'd',
     ]);
   });
+});
+
+describe('effectiveLocator', () => {
+  it('поле локатора важнее источника и заголовка', () => {
+    expect(
+      effectiveLocator({
+        attributionLocator: '3.1',
+        attributionWork: 'Бхагавад-гита 2.10',
+        title: 'Бхагавад-гита 4.4',
+      }),
+    ).toBe('3.1');
+  });
+
+  it('номер в источнике важнее номера в заголовке', () => {
+    expect(
+      effectiveLocator({
+        attributionLocator: null,
+        attributionWork: 'Бхагавад-гита 2.10',
+        title: 'Бхагавад-гита 4.4',
+      }),
+    ).toBe('2.10');
+  });
+
+  it('номер словами в источнике — тоже номер', () => {
+    expect(
+      effectiveLocator({
+        attributionLocator: null,
+        attributionWork: 'Бхагавад-гита, глава 2, стих 62',
+      }),
+    ).toBe('2.62');
+  });
+
+  it.each(['7 привычек', 'Мудрость дня', '', null])(
+    'заголовок «%s» номером не считается',
+    (title) => {
+      expect(effectiveLocator({ attributionLocator: null, title })).toBeNull();
+    },
+  );
 });

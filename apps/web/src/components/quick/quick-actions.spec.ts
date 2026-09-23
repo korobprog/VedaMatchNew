@@ -29,7 +29,7 @@ describe("parseQuickConfig", () => {
   });
 
   it("возвращает сохранённый порядок как есть", () => {
-    expect(parseQuickConfig('{"v":4,"ids":["donate","aphorism"]}')).toEqual({
+    expect(parseQuickConfig('{"v":5,"ids":["donate","aphorism"]}')).toEqual({
       ids: ["donate", "aphorism"],
       custom: [],
     });
@@ -44,16 +44,16 @@ describe("parseQuickConfig", () => {
   it("молча выбрасывает кнопки, которых больше нет", () => {
     // В хранилище лежит набор с прошлой версии портала.
     expect(
-      parseQuickConfig('{"v":4,"ids":["donate","transits","qr"]}').ids,
+      parseQuickConfig('{"v":5,"ids":["donate","transits","qr"]}').ids,
     ).toEqual(["donate"]);
   });
 
   it("пустой набор — это выбор: панель можно опустошить", () => {
-    expect(parseQuickConfig('{"v":4,"ids":[]}').ids).toEqual([]);
+    expect(parseQuickConfig('{"v":5,"ids":[]}').ids).toEqual([]);
   });
 
   it("убирает дубли: две одинаковые кнопки — сбой, а не выбор", () => {
-    expect(parseQuickConfig('{"v":4,"ids":["donate","donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":5,"ids":["donate","donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -61,7 +61,7 @@ describe("parseQuickConfig", () => {
   it("сервисную кнопку узнаёт по слагу, а не по каталогу с сервера", () => {
     // Каталог приезжает запросом, а набор разбирается сразу при открытии.
     expect(
-      parseQuickConfig('{"v":4,"ids":["service:work","service:выдумка"]}').ids,
+      parseQuickConfig('{"v":5,"ids":["service:work","service:выдумка"]}').ids,
     ).toEqual(["service:work"]);
   });
 
@@ -75,12 +75,14 @@ describe("parseQuickConfig", () => {
       "aphorism",
       // VED-326: «Открытка» приехала ещё позже — она дописывается в конец.
       "postcard",
+      // VED-392: а «История» — позже всех.
+      "history",
     ]);
   });
 
   it("запись второй версии дополняется: своих кнопок тогда не было", () => {
     expect(parseQuickConfig('{"v":2,"ids":["donate"]}')).toEqual({
-      ids: ["donate", "postcard"],
+      ids: ["donate", "postcard", "history"],
       custom: [],
     });
   });
@@ -88,17 +90,37 @@ describe("parseQuickConfig", () => {
   /* VED-326: «Открытку» просили добавить всем, а не только новичкам. Правило
      «выключенная кнопка остаётся выключенной» она не нарушает: выключить её
      до этой версии было нельзя — кнопки не существовало. */
-  it("запись третьей версии получает «Открытку» в конец", () => {
+  it("запись третьей версии получает «Открытку» и «Историю» в конец", () => {
     expect(parseQuickConfig('{"v":3,"ids":["donate","aphorism"]}')).toEqual({
-      ids: ["donate", "aphorism", "postcard"],
+      ids: ["donate", "aphorism", "postcard", "history"],
       custom: [],
     });
   });
 
   it("«Открытка» не задваивается, если человек её уже включил", () => {
     expect(parseQuickConfig('{"v":3,"ids":["postcard","donate"]}').ids).toEqual(
-      ["postcard", "donate"],
+      ["postcard", "donate", "history"],
     );
+  });
+
+  /* VED-392: «Сделай горячую клавишу История» — кнопка обязана доехать и до
+     тех, у кого панель давно настроена, по правилу «Открытки». */
+  it("запись четвёртой версии получает «Историю» в конец, свои кнопки целы", () => {
+    const raw = JSON.stringify({
+      v: 4,
+      ids: ["donate", "custom:/work"],
+      custom: [{ label: "Работа", href: "/work" }],
+    });
+    expect(parseQuickConfig(raw)).toEqual({
+      ids: ["donate", "custom:/work", "history"],
+      custom: [{ label: "Работа", href: "/work" }],
+    });
+  });
+
+  it("выключенная в пятой версии «История» остаётся выключенной", () => {
+    expect(parseQuickConfig('{"v":5,"ids":["donate"]}').ids).toEqual([
+      "donate",
+    ]);
   });
 
   it("переживает круг через сохранение", () => {
@@ -111,7 +133,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка на чужой сайт в панель не попадает", () => {
     const raw = JSON.stringify({
-      v: 4,
+      v: 5,
       ids: ["custom:https://example.com"],
       custom: [{ label: "Не наше", href: "https://example.com" }],
     });
@@ -120,7 +142,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка без подписи — сбой хранилища, а не кнопка", () => {
     const raw = JSON.stringify({
-      v: 4,
+      v: 5,
       ids: ["custom:/work"],
       custom: [{ label: "  ", href: "/work" }],
     });
@@ -286,7 +308,8 @@ describe("каталог кнопок", () => {
 
   it("способы перемещаться по порталу из панели по умолчанию не ушли", () => {
     // VED-163: окно, закладки и поиск — не «что держать под рукой».
-    for (const id of ["window", "bookmarks", "search"])
+    // VED-392: история — тоже способ перемещаться.
+    for (const id of ["window", "bookmarks", "history", "search"])
       expect(DEFAULT_QUICK_ACTIONS).toContain(id);
   });
 

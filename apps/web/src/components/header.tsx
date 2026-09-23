@@ -28,6 +28,7 @@ import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 import { useServiceNames } from "@/components/service-catalog-provider";
 import { SERVICE_CONTENT } from "@/lib/service-content";
 import { useDialogFocus, useDismissable } from "@/lib/use-dismissable";
+import { useEdgeSwipe, type EdgeSide } from "@/lib/use-edge-swipe";
 
 interface NavItem {
   href: string;
@@ -141,14 +142,41 @@ export function Header({ user }: { user: UserProfile }) {
   const t = useTranslations("Header");
   const tCommon = useTranslations("Common");
   const navItems = useNavItems();
-  const [isOpen, setIsOpen] = useState(false);
+  /*
+    Боковое меню на телефоне — одно и то же, но выдвигается с любой стороны
+    (VED-191): кнопкой-бургером и свайпом от правого края влево — справа,
+    свайпом от левого края вправо — слева. Открыто не больше одного.
+  */
+  const [drawer, setDrawer] = useState<EdgeSide | null>(null);
+  const isOpen = drawer !== null;
   const pathname = usePathname();
   const drawerId = useId();
   const drawerRef = useRef<HTMLDivElement>(null);
   const burgerRef = useRef<HTMLButtonElement>(null);
-  const closeDrawer = useCallback(() => setIsOpen(false), []);
-  useDismissable(drawerRef, closeDrawer, isOpen);
-  useDialogFocus(isOpen, drawerRef, burgerRef);
+  /* Куда вернуть фокус при закрытии: на бургер, если открыли им, и туда,
+     где он был, если открыли свайпом, — иначе после жеста фокус прыгал бы в
+     шапку, а клавиатура и скринридер теряли место на странице. */
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const openDrawer = useCallback((side: EdgeSide, from: HTMLElement | null) => {
+    returnFocusRef.current = from;
+    setDrawer(side);
+  }, []);
+  // Бургер — «снаружи» панели, но тап по нему не должен закрывать её
+  // отдельно от своего же клика: иначе клик тут же открыл бы её снова.
+  useDismissable(drawerRef, closeDrawer, isOpen, burgerRef);
+  useDialogFocus(isOpen, drawerRef, returnFocusRef);
+  useEdgeSwipe({
+    open: drawer,
+    onOpen: (side) => {
+      const active = document.activeElement;
+      openDrawer(
+        side,
+        active instanceof HTMLElement && active !== document.body ? active : null,
+      );
+    },
+    onClose: closeDrawer,
+  });
   const currentAttr = (href: string) =>
     isCurrentRoute(pathname, href) ? ("page" as const) : undefined;
 
@@ -250,44 +278,51 @@ export function Header({ user }: { user: UserProfile }) {
             <button
               ref={burgerRef}
               type="button"
-              onClick={() => setIsOpen(!isOpen)}
+              onClick={() =>
+                isOpen ? closeDrawer() : openDrawer("right", burgerRef.current)
+              }
               className="md:hidden p-2 rounded-lg text-text-1 hover:text-text-0 hover:bg-glass transition-colors"
               aria-label={isOpen ? t("closeMenu") : t("openMenu")}
               aria-expanded={isOpen}
               aria-controls={drawerId}
             >
-              <motion.div animate={{ rotate: isOpen ? 90 : 0 }}>
-                {isOpen ? <X size={20} /> : <Menu size={20} />}
-              </motion.div>
+              {/* Без поворота (VED-191): меню появляется мгновенно, и
+                  значок меняется вместе с ним, а не догоняет его. */}
+              {isOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile menu overlay */}
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-bg-0/95 backdrop-blur-xl md:hidden"
-              onClick={closeDrawer}
-            />
-            <motion.div
-              ref={drawerRef}
-              id={drawerId}
-              role="dialog"
-              aria-modal="true"
-              aria-label={t("menu")}
-              tabIndex={-1}
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed top-0 right-0 bottom-0 z-50 w-72 overflow-y-auto border-l border-glass-brd bg-bg-1 outline-none md:hidden"
-            >
+      {/*
+        Боковое меню (VED-191). Появляется и исчезает мгновенно, без
+        выезда и затухания: заказчик просил «убрать анимацию выхода обоих
+        панелей, чтобы появлялись мгновенно». Под `prefers-reduced-motion`
+        анимировать тем более нечего.
+
+        Панель одна и та же с обеих сторон — тот же список, те же кнопки;
+        меняется только край, к которому она прижата, и сторона рамки.
+      */}
+      {drawer && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-bg-0/95 backdrop-blur-xl md:hidden"
+            onClick={closeDrawer}
+          />
+          <div
+            ref={drawerRef}
+            id={drawerId}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("menu")}
+            tabIndex={-1}
+            data-side={drawer}
+            className={`fixed top-0 bottom-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-bg-1 outline-none md:hidden ${
+              drawer === "right"
+                ? "right-0 border-l border-glass-brd"
+                : "left-0 border-r border-glass-brd"
+            }`}
+          >
               {/* Место под шапку не резервируем: панель накрывает её целиком,
                   и полоса в высоту шапки читалась как пустое место (VED-15).
                   Своего ряда у крестика тоже нет — он занимал ту же пустую
@@ -304,12 +339,7 @@ export function Header({ user }: { user: UserProfile }) {
                 </button>
                 <nav aria-label={t("services")} className="flex flex-col gap-1">
                   {navItems.map((item, index) => (
-                    <motion.div
-                      key={item.href}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
+                    <div key={item.href}>
                       <Link
                         href={item.href}
                         aria-current={currentAttr(item.href)}
@@ -321,7 +351,7 @@ export function Header({ user }: { user: UserProfile }) {
                         {item.icon}
                         <span className="font-medium">{item.label}</span>
                       </Link>
-                    </motion.div>
+                    </div>
                   ))}
                 </nav>
                 {/* Админка и «Добавить новость» — под списком сервисов
@@ -332,12 +362,7 @@ export function Header({ user }: { user: UserProfile }) {
                     не ради админки. Обычный участник блока не видит, и
                     для него ничего не меняется. */}
                 {isPortalAdmin(user) && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0 }}
-                    className="mt-4 pt-4 border-t border-glass-brd"
-                  >
+                  <div className="mt-4 pt-4 border-t border-glass-brd">
                     {/* Один вход: разделы админки живут в её собственном
                         сайдбаре, дублировать их список в бургере незачем. */}
                     <Link
@@ -357,7 +382,7 @@ export function Header({ user }: { user: UserProfile }) {
                     >
                       <span className="text-sm font-medium">{t("addNews")}</span>
                     </Link>
-                  </motion.div>
+                  </div>
                 )}
 
                 <div className="mt-auto pt-4 border-t border-glass-brd space-y-1">
@@ -434,10 +459,9 @@ export function Header({ user }: { user: UserProfile }) {
                   <LogoutItem />
                 </div>
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+          </div>
+        </>
+      )}
     </>
   );
 }

@@ -8,7 +8,7 @@ import {
   hideActionLabel,
   hideNoticeText,
   hiddenTabActionLabel,
-  readActionLabel,
+  shareActionLabel,
   searchActionLabel,
   titleOf,
   uploadActionLabel,
@@ -51,8 +51,17 @@ describe("подписи кнопок карточки редакции (VED-251
   it("обратное действие подписано зеркально — отмену ищут там же", () => {
     expect(hideActionLabel(true)).not.toEqual(hideActionLabel(false));
     expect(editActionLabel(true)).not.toEqual(editActionLabel(false));
-    expect(readActionLabel(true)).not.toEqual(readActionLabel(false));
     expect(uploadActionLabel(true)).not.toEqual(uploadActionLabel(false));
+  });
+
+  // VED-343: «Кнопку читать замени на кнопку поделиться».
+  it("«Поделиться» у скрытой карточки объясняет, почему не работает", () => {
+    expect(shareActionLabel(false)).toEqual({
+      label: "Поделиться афоризмом",
+      caption: "Поделиться",
+    });
+    expect(shareActionLabel(true).caption).toBe("Поделиться");
+    expect(shareActionLabel(true).label).toMatch(/после возврата в ленту/);
   });
 
   it("у скрытой карточки «в ленту» объясняет, почему не работает", () => {

@@ -26,6 +26,7 @@ import { SERVICE_CONTENT } from "@/lib/service-content";
 export type BuiltinQuickActionId =
   | "window"
   | "bookmarks"
+  | "history"
   | "search"
   | "assistant"
   | "aphorism"
@@ -74,6 +75,15 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     kind: "builtin",
     label: "Закладки",
     hint: "Отложенные страницы: исполнитель, доска, книга — любой уровень любого сервиса",
+    href: null,
+  },
+  {
+    id: "history",
+    kind: "builtin",
+    // VED-392: где человек уже был — по сервисам и их ступеням. Не
+    // браузерная история: та знает адреса, а эта — места портала.
+    label: "История",
+    hint: "Где вы были: сервисы и их разделы по порядку — ссылкой назад",
     href: null,
   },
   {
@@ -196,10 +206,25 @@ const ADDED_QUICK_ACTIONS: readonly QuickActionId[] = [
 const QUICK_ACTIONS_ADDED_IN_V4: readonly QuickActionId[] = ["postcard"];
 
 /**
- * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
- * четвёртая — «Открытку» (VED-326).
+ * «История» приехала в пятой версии (VED-392) — по тому же правилу, что и
+ * «Открытка»: заказчик просил кнопку, а не пункт в настройках, и выключить
+ * её раньше было нельзя.
  */
-const CONFIG_VERSION = 4;
+const QUICK_ACTIONS_ADDED_IN_V5: readonly QuickActionId[] = ["history"];
+
+/** Всё, что приехало после четвёртой версии, — дописывается к старым записям. */
+const ADDED_SINCE_V4: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V5;
+/** Всё, что приехало после третьей. */
+const ADDED_SINCE_V3: readonly QuickActionId[] = [
+  ...QUICK_ACTIONS_ADDED_IN_V4,
+  ...QUICK_ACTIONS_ADDED_IN_V5,
+];
+
+/**
+ * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
+ * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392).
+ */
+const CONFIG_VERSION = 5;
 
 /**
  * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
@@ -242,7 +267,7 @@ export function pinQuickActions(
 /**
  * Что стоит в панели у человека, который ничего не настраивал.
  *
- * Не все четырнадцать: заполненная до краёв с первого открытия панель не
+ * Не все пятнадцать: заполненная до краёв с первого открытия панель не
  * читается как настраиваемая — её начинают разбирать, а не собирать.
  * Первыми — закреплённые три (VED-326), за ними способы перемещаться по
  * порталу: окно, закладки (VED-163). Человек, который их не включил, просто
@@ -252,6 +277,7 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   ...PINNED_QUICK_ACTIONS,
   "window",
   "bookmarks",
+  "history",
   "assistant",
   "aphorism",
   "postcard",
@@ -373,15 +399,16 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
       const custom = parseCustom(record.custom);
       return { ids: dedupe(record.ids, custom), custom };
     }
-    // Третья версия: всё то же, плюс кнопки, которых тогда не было.
-    if (record.v === 3) {
+    // Четвёртая и третья версии: всё то же, плюс кнопки, которых тогда не было.
+    if (record.v === 4 || record.v === 3) {
       const custom = parseCustom(record.custom);
-      return { ids: withAdded(dedupe(record.ids, custom), QUICK_ACTIONS_ADDED_IN_V4), custom };
+      const added = record.v === 4 ? ADDED_SINCE_V4 : ADDED_SINCE_V3;
+      return { ids: withAdded(dedupe(record.ids, custom), added), custom };
     }
     // Вторая версия: те же идентификаторы, своих кнопок ещё не было.
     if (record.v === 2)
       return {
-        ids: withAdded(dedupe(record.ids, []), QUICK_ACTIONS_ADDED_IN_V4),
+        ids: withAdded(dedupe(record.ids, []), ADDED_SINCE_V3),
         custom: [],
       };
     return fallback();
@@ -392,7 +419,7 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
   const kept = dedupe(parsed, []);
   const missing = ADDED_QUICK_ACTIONS.filter((id) => !kept.includes(id));
   return {
-    ids: withAdded([...missing, ...kept], QUICK_ACTIONS_ADDED_IN_V4),
+    ids: withAdded([...missing, ...kept], ADDED_SINCE_V3),
     custom: [],
   };
 }

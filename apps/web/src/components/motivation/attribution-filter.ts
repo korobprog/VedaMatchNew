@@ -37,9 +37,13 @@ export function sameAttribution(a: string | null | undefined, b: string | null |
 }
 
 /**
- * Адрес ленты с другим фильтром. Вкладка, порядок и папка остаются: фильтр
- * сужает текущую ленту, а не уводит в другую. Из избранного — в «Для вас»:
- * у избранного фильтров нет.
+ * Адрес ленты с другим фильтром. Вкладка и папка остаются: фильтр сужает
+ * текущую ленту, а не уводит в другую. Из избранного — в «Для вас»: у
+ * избранного фильтров нет.
+ *
+ * Порядок остаётся, кроме одного случая: выбран источник. Лента источника
+ * всегда идёт по номерам стихов (VED-389) — сервер «вперемешку» для неё не
+ * слушает, и `order=random` в адресе только врал бы переключателю порядка.
  */
 export function filterHref(
   state: FeedFilterState,
@@ -49,11 +53,28 @@ export function filterHref(
   const work = change.work === undefined ? state.work : change.work ?? undefined;
   return reelsHref({
     tab: state.tab === "saved" ? "forYou" : state.tab,
-    order: state.order,
+    order: work?.trim() ? undefined : state.order,
     category: state.category,
     speaker,
     work,
   });
+}
+
+/**
+ * Подпись кнопки фильтра для скринридера.
+ *
+ * Чипа «📖 Бхагавад-гита ✕» поверх картинки больше нет (VED-389: «надпись
+ * мешает, и так понятно»). Глазами активный фильтр видно по точке на
+ * значке, а голосом — только из этой подписи, поэтому она называет, что
+ * выбрано, и говорит, где его снять.
+ */
+export function filterTriggerLabel(state: Pick<FeedFilterState, "speaker" | "work">): string {
+  const parts = [
+    state.work?.trim() && `источник «${state.work.trim()}»`,
+    state.speaker?.trim() && `автор «${state.speaker.trim()}»`,
+  ].filter(Boolean);
+  if (parts.length === 0) return "Фильтр по автору и источнику";
+  return `Фильтр включён: ${parts.join(", ")}. Изменить или снять`;
 }
 
 /** Запрос списка авторов и источников — с теми же папкой и вкладкой. */

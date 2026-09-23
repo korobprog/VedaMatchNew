@@ -12,6 +12,7 @@ import { apiBase } from "@/lib/api-base";
 import {
   attributionsQuery,
   filterHref,
+  filterTriggerLabel,
   hasAttributionFilter,
   sameAttribution,
   type FeedFilterState,
@@ -41,8 +42,11 @@ async function fetchAttributions(query: string): Promise<MotivationFeedAttributi
  * Два варианта отображения (VED-252, круг 4):
  * - `"inline"` (по умолчанию) — один значок в ряду вкладок (между
  *   «Открытки» и «Избранное», `Tabs()`): текст «Автор и источник» под него
- *   в тесный ряд не помещался, а выбор виден и так — чипами ниже, точкой
- *   на значке при активном фильтре.
+ *   в тесный ряд не помещался. Выбор отмечен только точкой на значке:
+ *   чип «📖 Бхагавад-гита ✕» строкой ниже висел поверх картинки, и его
+ *   попросили убрать (VED-389). Снять фильтр — в самом окне, кнопкой
+ *   «Снять фильтр» или пунктом «Все»; скринридер слышит выбранное из
+ *   подписи значка (`filterTriggerLabel`).
  * - `"chip"` — самостоятельная пилюля с подписью (вид до VED-252): для
  *   мест без ряда вкладок рядом, где значку без подписи не на что
  *   опереться визуально — например, пустое состояние ленты
@@ -135,7 +139,7 @@ export function FeedAttributionFilter({
           onClick={() => setOpen(true)}
           {...triggerHandlers}
           aria-haspopup="dialog"
-          aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
+          aria-label={filterTriggerLabel(state)}
           className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-full border border-white/25 bg-black/40 px-2.5 text-xs font-medium text-white backdrop-blur transition hover:bg-black/60"
         >
           <FilterIcon />
@@ -167,7 +171,7 @@ export function FeedAttributionFilter({
         onClick={() => setOpen(true)}
         {...triggerHandlers}
         aria-haspopup="dialog"
-        aria-label={active ? "Изменить фильтр по автору и источнику" : "Фильтр по автору и источнику"}
+        aria-label={filterTriggerLabel(state)}
         className="relative flex h-10 w-7 shrink-0 items-center justify-center text-white/70 drop-shadow transition before:absolute before:-inset-x-1.5 before:inset-y-0 before:content-[''] hover:text-white"
       >
         <FilterIcon />
@@ -177,17 +181,9 @@ export function FeedAttributionFilter({
           <span aria-hidden="true" className="absolute right-1 top-1.5 size-1.5 rounded-full bg-magenta" />
         )}
       </button>
-      {/* Выбранное — чипами с крестиком строкой ниже: в самом ряду вкладок
-          им места нет, а прежний приём «чип убирает своё» остаётся. `w-full`
-          переносит блок на новую строку в `Tabs()`, чей родитель — `flex
-          flex-wrap`: это единственное место, где рендерится `"inline"`
-          (см. JSDoc выше — вне ряда вкладок используется `"chip"`).
-          `order-last` держит чипы после значка. */}
-      {(state.work || state.speaker) && (
-        <span className="order-last flex w-full flex-wrap items-center justify-center gap-1.5 pt-1">
-          {valueChips}
-        </span>
-      )}
+      {/* Чипов выбранного строкой ниже здесь больше нет (VED-389): они
+          висели поверх картинки и закрывали её, а что лента отфильтрована,
+          и так видно по точке и по самим афоризмам. Снять — в окне. */}
       {/* В портал: значок стоит внутри ряда вкладок со своим `z-index`, и
           окно внутри него оказывалось под нижним рядом кнопок ленты. */}
       {dialog}
@@ -261,11 +257,23 @@ function FilterSheet({ state, onClose }: { state: FeedFilterState; onClose: () =
           <h2 id="feed-filter-title" className="font-display text-sm font-semibold">
             Автор и источник
           </h2>
+          {/* Сброс — первым делом, на виду (VED-389): прежде его давал чип с
+              крестиком над лентой, теперь чипа нет, и искать «Все» в двух
+              списках — не замена одному нажатию. */}
+          {hasAttributionFilter(state) && (
+            <Link
+              href={filterHref(state, { work: null, speaker: null })}
+              onClick={onClose}
+              className="ml-auto mr-2 inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-xs font-semibold text-white underline-offset-4 hover:bg-white/10 hover:underline"
+            >
+              Снять фильтр
+            </Link>
+          )}
           <button
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xs text-white/75 hover:bg-white/10"
+            className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs text-white/75 hover:bg-white/10"
           >
             Закрыть
           </button>

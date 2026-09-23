@@ -60,3 +60,65 @@ export async function toJpeg(blob: Blob): Promise<Blob> {
     return blob;
   }
 }
+
+/** Где сейчас картинка для «Отправить в приложение». */
+export type FilePrepare = "loading" | "ready" | "failed";
+
+/**
+ * Может ли это окно отдать файл системной шторке. Chrome на Android умеет;
+ * встроенные окна приложений (Telegram, ВКонтакте) и десктопный Firefox — нет:
+ * там `navigator.share` либо отсутствует, либо отказывает файлам.
+ */
+export function canShareFiles(
+  nav: Pick<Navigator, "share" | "canShare"> | undefined,
+  file: File | null,
+): boolean {
+  if (!nav || typeof nav.share !== "function") return false;
+  // Без `canShare` проверить заранее нечем — пробуем, ошибку поймает вызов.
+  if (typeof nav.canShare !== "function") return true;
+  if (!file) return true;
+  try {
+    return nav.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Встроенный браузер Telegram: в нём шторки нет, и человеку надо сказать,
+ * как выйти в обычный браузер.
+ */
+export function isTelegramWebView(
+  userAgent: string,
+  win?: { TelegramWebviewProxy?: unknown; Telegram?: unknown },
+): boolean {
+  return (
+    /Telegram/i.test(userAgent) ||
+    Boolean(win?.TelegramWebviewProxy) ||
+    Boolean(win?.Telegram)
+  );
+}
+
+/**
+ * Что показывает кнопка «Отправить в приложение» (VED-156, дописка
+ * заказчика: «сделай какой-нибудь индикатор ожидания, чтобы было понятно что
+ * надо подождать и человек не тыкал в эту кнопку по 10 раз»).
+ *
+ * `busy` — крутится индикатор и повторные нажатия ничего не делают.
+ */
+export function shareButtonState(input: {
+  prepare: FilePrepare;
+  sharing: boolean;
+}): { label: string; busy: boolean } {
+  if (input.sharing) return { label: "Открываем приложения…", busy: true };
+  if (input.prepare === "loading")
+    return { label: "Готовим картинку…", busy: true };
+  return { label: "Отправить в приложение", busy: false };
+}
+
+/** Подсказка, когда отдать файл в приложение из этого окна нельзя. */
+export function unsupportedShareMessage(telegram: boolean): string {
+  return telegram
+    ? "Во встроенном браузере Telegram отправить картинку в приложение нельзя. Сохраните её кнопкой «Сохранить картинку» или откройте страницу в Chrome: ⋮ → «Открыть в браузере»."
+    : "Этот браузер не умеет отдавать картинку в приложения. Сохраните её кнопкой «Сохранить картинку» и выложите из галереи.";
+}

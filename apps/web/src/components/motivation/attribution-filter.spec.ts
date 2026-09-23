@@ -3,6 +3,7 @@ import {
   attributionFields,
   attributionsQuery,
   filterHref,
+  filterTriggerLabel,
   hasAttributionFilter,
   sameAttribution,
 } from "./attribution-filter";
@@ -24,10 +25,16 @@ describe("sameAttribution", () => {
 describe("filterHref", () => {
   const state = { tab: "cards" as const, order: "random" as const, category: "vedy" };
 
-  it("сохраняет вкладку, порядок и папку", () => {
+  it("сохраняет вкладку и папку, а источник снимает «вперемешку» (VED-389)", () => {
     expect(filterHref(state, { work: "Бхагавад-гита" })).toBe(
-      "/motivation?tab=cards&category=vedy&work=%D0%91%D1%85%D0%B0%D0%B3%D0%B0%D0%B2%D0%B0%D0%B4-%D0%B3%D0%B8%D1%82%D0%B0&order=random",
+      "/motivation?tab=cards&category=vedy&work=%D0%91%D1%85%D0%B0%D0%B3%D0%B0%D0%B2%D0%B0%D0%B4-%D0%B3%D0%B8%D1%82%D0%B0",
     );
+  });
+
+  it("автор без источника порядок не трогает", () => {
+    const query = new URL(filterHref(state, { speaker: "Прабхупада" }), "https://x").searchParams;
+    expect(query.get("order")).toBe("random");
+    expect(query.get("speaker")).toBe("Прабхупада");
   });
 
   it("меняет одно измерение и не трогает другое", () => {
@@ -106,5 +113,21 @@ describe("attributionFields", () => {
     expect(
       attributionFields({ attributionSpeaker: null, attributionWork: " ", attributionLocator: "3.1" }),
     ).toEqual([{ kind: "locator", text: "3.1" }]);
+  });
+});
+
+describe("filterTriggerLabel", () => {
+  it("без фильтра — просто имя кнопки", () => {
+    expect(filterTriggerLabel({})).toBe("Фильтр по автору и источнику");
+    expect(filterTriggerLabel({ work: "  " })).toBe("Фильтр по автору и источнику");
+  });
+
+  it("с фильтром называет выбранное и где его снять", () => {
+    expect(filterTriggerLabel({ work: " Бхагавад-гита " })).toBe(
+      "Фильтр включён: источник «Бхагавад-гита». Изменить или снять",
+    );
+    expect(filterTriggerLabel({ work: "Гита", speaker: "Кришна" })).toBe(
+      "Фильтр включён: источник «Гита», автор «Кришна». Изменить или снять",
+    );
   });
 });

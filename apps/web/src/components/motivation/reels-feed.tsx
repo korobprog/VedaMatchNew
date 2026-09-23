@@ -59,9 +59,9 @@ import {
   type FeedFilterState,
 } from "./attribution-filter";
 import { FeedAttributionFilter } from "./feed-attribution-filter";
+import { postShareHref } from "./post-share";
 import { SourceLink } from "./source-link";
 import {
-  attributionLine,
   attributionParts,
   formatCount,
   mediaKindOf,
@@ -133,20 +133,6 @@ export type { ReelsTab } from "./feed-style";
  * Порядок слайдов приходит с сервера («свежее → непросмотренное → повтор»);
  * перед первым повтором лента ставит разделитель, а в конце — финальный слайд.
  */
-/** Цитата без пояснения — то, чем делятся и что уезжает подписью. */
-function quoteOf(post: MotivationPostDto): string {
-  return splitQuoteAndExplanation(post.text).quote;
-}
-
-/**
- * Текст для «Поделиться». У открытки текст на самой картинке, и поле `text`
- * часто пустое — а экран `/share` без текста уводит на главную (VED-205).
- * Заголовок у поста заполнен всегда, им и подменяем.
- */
-function shareQuoteOf(post: MotivationPostDto): string {
-  return quoteOf(post) || post.title;
-}
-
 export function ReelsFeed({
   initial,
   tab,
@@ -507,27 +493,8 @@ export function ReelsFeed({
           <RailLink
         label="Поделиться афоризмом"
         caption="Поделиться"
-        href={{
-          pathname: "/share",
-          query: {
-            kind: "story",
-            title: shareQuoteOf(activePost).slice(0, 200),
-            text: shareQuoteOf(activePost),
-            subtitle: attributionLine(activePost),
-            /* Источник уже стоит заголовком превью ссылки `/m/<slug>` —
-               его собирает `buildShareMeta()` в `posts/[slug]/share-meta.ts`.
-               Поэтому в тело сообщения он не дописывается: иначе «Бхагавад-
-               гита 2.63» стоит и в тексте, и над картинкой превью (VED-357,
-               «Исключи любой дубляж текста»). В карточке для чата и на самом
-               экране «Поделиться» строка остаётся — там превью нет. */
-            subtitleInPreview: "1",
-            link: `/m/${encodeURIComponent(activePost.slug)}`,
-            file: `/m/${encodeURIComponent(activePost.slug)}/story`,
-            previewUrl: activePost.storyImageUrl || activePost.imageUrl,
-            sourceService: "motivation",
-            sourceId: activePost.slug,
-          },
-        }}
+        // Адрес общий с карточкой редакции (VED-343) — см. `post-share.ts`.
+        href={postShareHref(activePost)}
       >
         <ShareIcon />
       </RailLink>

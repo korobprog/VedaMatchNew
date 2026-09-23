@@ -325,9 +325,11 @@ export class MotivationService {
     const personalized = categories.length === 0 && !speakerKey && !workKey;
     const attributionWhere = await this.attributionWhere(speakerKey, workKey);
     /* Источник выбран — лента идёт строго по порядку стихов (VED-125):
-       2.13, 2.14, 3.1. Случайный порядок — явная просьба «вперемешку», её
-       фильтр не отменяет. */
-    const verseOrder = Boolean(workKey) && !query.shuffle;
+       2.13, 2.14, 3.1. И при «вперемешку» тоже (VED-389): порядок стихов
+       просили именно для фильтра по источнику, а «Случайный» из ряда кнопок
+       ведёт на адрес без фильтра — фильтр, выбранный после него, это новая
+       просьба, и перемешанная книга на неё не отвечает. */
+    const verseOrder = Boolean(workKey);
     const where = {
       ...(personalized
         ? {
@@ -443,9 +445,10 @@ export class MotivationService {
        следующие берут готовое. Не от пользователя — иначе «случайный»
        порядок был бы у него всегда один и тот же, и перезапуск ленты ничего
        бы не менял. */
-    const shuffleSeed = query.shuffle
-      ? (cursor.shuffleSeed ?? randomBytes(8).toString('hex'))
-      : undefined;
+    const shuffleSeed =
+      query.shuffle && !verseOrder
+        ? (cursor.shuffleSeed ?? randomBytes(8).toString('hex'))
+        : undefined;
     type Loaded = (typeof posts)[number];
     const sourceOf = (post: Loaded) => sourceKey(post.attributionWork) || null;
     const order = (
@@ -472,7 +475,7 @@ export class MotivationService {
       cursor: ReturnType<typeof feedPage>['cursor'];
     };
     if (verseOrder) {
-      const slice = await this.verseOrderSlice(where, cursor, limit);
+      const slice = await this.verseOrderSlice(where, cursor, limit, language);
       const loaded = slice.ids.length
         ? await this.prisma.motivationPost.findMany({
             where: { id: { in: slice.ids } },
@@ -529,14 +532,31 @@ export class MotivationService {
     where: Prisma.MotivationPostWhereInput,
     cursor: ReturnType<typeof decodeMotivationCursor>,
     limit: number,
+    language: string,
   ) {
     const light = await this.prisma.motivationPost.findMany({
       where,
-      select: { id: true, attributionLocator: true, attributionWork: true },
+      select: {
+        id: true,
+        attributionLocator: true,
+        attributionWork: true,
+        // Заголовок — последний довод о номере стиха (VED-389): у части
+        // постов номер записан только в нём, см. `effectiveLocator`.
+        translations: { where: { language }, select: { title: true } },
+      },
       orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
       take: VERSE_ORDER_LIMIT,
     });
-    const slice = feedPage(sortByLocator(light), cursor, limit);
+    const slice = feedPage(
+      sortByLocator(
+        light.map(({ translations, ...post }) => ({
+          ...post,
+          title: translations[0]?.title ?? null,
+        })),
+      ),
+      cursor,
+      limit,
+    );
     return { ids: slice.items.map((post) => post.id), cursor: slice.cursor };
   }
 

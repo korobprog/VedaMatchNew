@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MotivationAdminCandidateDto } from "@vedamatch/shared";
 import { MotivationPublishedList } from "./published-list";
+import { SCROLL_NAV_GUTTER } from "./scroll-nav-buttons";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -115,14 +116,16 @@ describe("MotivationPublishedList", () => {
       ["Открыть в ленте", "В ленте"],
       ["Править текст", "Править"],
       ["Скрыть из ленты", "Скрыть"],
-      ["Читать полностью", "Читать"],
+      ["Поделиться афоризмом", "Поделиться"],
       ["Заменить картинку", "Заменить"],
       ["Удалить", "Удалить"],
       ["Поиск", "Поиск"],
       ["Скрытые", "Скрытые"],
     ] as const) {
       const control = screen.getByRole(
-        ["Открыть в ленте", "Скрытые"].includes(name) ? "link" : "button",
+        ["Открыть в ленте", "Скрытые", "Поделиться афоризмом"].includes(name)
+          ? "link"
+          : "button",
         { name },
       );
       expect(control).toHaveAttribute("title");
@@ -432,16 +435,107 @@ describe("MotivationPublishedList", () => {
   });
 
   // VED-264: «Показать текст афоризма полностью — быстро, без возвращения
-  // в ленту, из меню читать полностью».
-  describe("«Читать полностью» (VED-264)", () => {
-    it("раскрывает и сворачивает полный текст афоризма прямо в карточке", async () => {
+  // в ленту». Кнопку «Читать» забрала «Поделиться» (VED-343), поэтому
+  // разворачивает нажатие на сам текст.
+  describe("полный текст по нажатию на сам текст (VED-264)", () => {
+    const longPost = () =>
+      post({
+        text: "Душа не умирает\n\nПояснение к стиху",
+        attributionSpeaker: "Прабхупада",
+        attributionWork: "Бхагавад-гита",
+        attributionLocator: "2.13",
+      });
+
+    it("свёрнуто — только афоризм в четыре строки, без пояснения и подписи", () => {
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      const toggle = screen.getByRole("button", { name: /Показать полностью/ });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(within(toggle).getByText("Душа не умирает")).toHaveClass("line-clamp-4");
+      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Прабхупада · Бхагавад-гита/)).not.toBeInTheDocument();
+    });
+
+    it("нажатие на текст раскрывает его целиком и сворачивает обратно", async () => {
       const user = userEvent.setup();
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      await user.click(screen.getByText("Душа не умирает"));
+
+      const toggle = screen.getByRole("button", { name: /Свернуть/ });
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(within(toggle).getByText("Душа не умирает")).not.toHaveClass("line-clamp-4");
+      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
+      expect(screen.getByText("Прабхупада · Бхагавад-гита · 2.13")).toBeInTheDocument();
+      // Развёрнутое содержимое — то, чем кнопка управляет.
+      const region = document.getElementById(toggle.getAttribute("aria-controls")!);
+      expect(region).toContainElement(screen.getByText("Пояснение к стиху"));
+
+      await user.click(toggle);
+
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+    });
+
+    it("работает с клавиатуры: Enter раскрывает, пробел сворачивает", async () => {
+      const user = userEvent.setup();
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      const toggle = screen.getByRole("button", { name: /Показать полностью/ });
+      toggle.focus();
+      await user.keyboard("{Enter}");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await user.keyboard(" ");
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("карточки раскрываются независимо и не открывают правку", async () => {
+      const user = userEvent.setup();
+      render(
+        <MotivationPublishedList
+          posts={[
+            longPost(),
+            post({ id: "post-2", slug: "other", text: "Второй афоризм\n\nВторое пояснение" }),
+          ]}
+        />,
+      );
+
+      await user.click(screen.getByText("Душа не умирает"));
+      await user.click(screen.getByText("Второй афоризм"));
+
+      // Первая не свернулась, когда раскрыли вторую: иначе страница прыгала
+      // бы под пальцем.
+      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
+      expect(screen.getByText("Второе пояснение")).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
+    });
+
+    it("отдельной кнопки «Читать» так и нет — сетка остаётся 4×2", () => {
+      render(<MotivationPublishedList posts={[longPost()]} />);
+
+      expect(screen.queryByRole("button", { name: /Читать/ })).toBeNull();
+      const grid = screen.getByRole("button", { name: "Править текст" }).parentElement!;
+      expect([...grid.children].filter((cell) => cell.tagName !== "INPUT")).toHaveLength(8);
+    });
+  });
+
+  // Плавающие кнопки прокрутки ложились на правый столбец кнопок карточки.
+  it("список на телефоне оставляет справа поле под кнопки прокрутки (VED-264)", () => {
+    render(<MotivationPublishedList posts={[post()]} />);
+
+    const list = screen.getByRole("list");
+    expect(list.className.split(/\s+/)).toContain(SCROLL_NAV_GUTTER);
+  });
+
+  // VED-343: «Сделай 2 ряда клавиш вместо трех. Кнопку читать замени на
+  // кнопку поделиться и уменьши размер кнопок чтобы влезли в 2 ряда по 4».
+  describe("«Поделиться» и сетка 4×2 (VED-343)", () => {
+    it("«Читать» больше нет — на его месте «Поделиться» на экран портала", () => {
       render(
         <MotivationPublishedList
           posts={[
             post({
               text: "Душа не умирает\n\nПояснение к стиху",
-              attributionSpeaker: "Прабхупада",
               attributionWork: "Бхагавад-гита",
               attributionLocator: "2.13",
             }),
@@ -449,25 +543,39 @@ describe("MotivationPublishedList", () => {
         />,
       );
 
-      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: "Читать полностью" }));
-
-      expect(screen.getByText("Пояснение к стиху")).toBeInTheDocument();
-      expect(screen.getByText(/Прабхупада · Бхагавад-гита · 2\.13/)).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: "Свернуть текст" }));
-
-      expect(screen.queryByText("Пояснение к стиху")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Читать полностью" })).toBeNull();
+      const share = screen.getByRole("link", { name: "Поделиться афоризмом" });
+      const url = new URL(share.getAttribute("href")!, "https://x");
+      expect(url.pathname).toBe("/share");
+      // Тот же адрес, что у кнопки ленты: ссылка на пост и картинка Stories.
+      expect(url.searchParams.get("link")).toBe("/m/gita-2-13");
+      expect(url.searchParams.get("file")).toBe("/m/gita-2-13/story");
+      expect(url.searchParams.get("sourceService")).toBe("motivation");
+      // Делятся цитатой, а не пояснением.
+      expect(url.searchParams.get("text")).toBe("Душа не умирает");
     });
 
-    it("не уходит из «Опубликованных» и не открывает форму правки", async () => {
-      const user = userEvent.setup();
+    it("у скрытой карточки «Поделиться» неактивна: страницы поста нет", () => {
+      render(<MotivationPublishedList posts={[post({ status: "hidden" })]} />);
+
+      const share = screen.getByRole("button", {
+        name: "Скрыто — поделиться можно после возврата в ленту",
+      });
+      expect(share).toBeDisabled();
+      expect(share).toHaveTextContent("Поделиться");
+    });
+
+    it("восемь кнопок стоят в четыре колонки на любом экране", () => {
       render(<MotivationPublishedList posts={[post()]} />);
 
-      await user.click(screen.getByRole("button", { name: "Читать полностью" }));
-
-      expect(screen.queryByLabelText(/Полный текст/)).not.toBeInTheDocument();
+      const grid = screen.getByRole("button", { name: "Править текст" }).parentElement!;
+      const classes = grid.className.split(/\s+/);
+      expect(classes).toContain("grid-cols-4");
+      // Ни одной «телефонной» трёхколоночной раскладки не осталось.
+      expect(classes.some((name) => /grid-cols-3/.test(name))).toBe(false);
+      // Восемь клеток: семь кнопок-ссылок и выбор файла у «Заменить».
+      const cells = [...grid.children].filter((cell) => cell.tagName !== "INPUT");
+      expect(cells).toHaveLength(8);
     });
   });
 

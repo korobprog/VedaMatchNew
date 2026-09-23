@@ -5,11 +5,11 @@ import { categoryLink } from "@/components/motivation/feed-style";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 import {
   OG_IMAGE_TYPE,
-  OG_PREVIEW_HEIGHT,
-  OG_PREVIEW_WIDTH,
   ogImagePath,
   ogImageSource,
+  ogPreviewSize,
 } from "@/lib/motivation-og-image";
+import { probeImageSize } from "@/lib/motivation-og-probe";
 import { buildShareMeta } from "./share-meta";
 
 /**
@@ -31,7 +31,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const post = await getPublicMotivationPost(slug);
   if (!post) return { title: "VedaMatch Inspiration" };
   const { title: shareTitle, description } = buildShareMeta(post);
-  const poster = ogImageSource(post) ? ogImagePath(slug) : null;
+  const source = ogImageSource(post);
+  const poster = source ? ogImagePath(slug) : null;
+  // Размер превью (VED-357): картинка повторяет пропорции исходника, поэтому
+  // страница узнаёт его размер по заголовку файла и считает кадр той же
+  // функцией, что и маршрут `/m/[slug]/og`. Не узнали — размеры не
+  // объявляем: бот прочтёт их из самого файла.
+  const sourceSize = source ? await probeImageSize(source) : null;
+  const previewSize = sourceSize ? ogPreviewSize(sourceSize) : null;
   return {
     title: `${post.title} — Inspiration`,
     description,
@@ -39,18 +46,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: post.videoUrl ? "video.other" : "article",
       title: shareTitle,
       description,
-      // Размеры объявлены (VED-357). Раньше их здесь не было: кадр повторял
-      // пропорции картинки и у каждого поста был свой, а врать про размер
-      // хуже, чем молчать. Но молчание стоило дорого — WhatsApp сворачивал
-      // вертикальную карточку в миниатюру сбоку. Теперь кадр у всех один,
-      // альбомный 1200×630 (`motivation-og-image.ts`), и числа честные.
+      // Размеры объявлены, когда известны (VED-357): с ними WhatsApp
+      // показывал превью крупно, во всю ширину пузыря (PR #360). Кадр —
+      // сама иллюстрация в своих пропорциях, без полей и без обрезки.
       images: poster
         ? [
             {
               url: poster,
               type: OG_IMAGE_TYPE,
-              width: OG_PREVIEW_WIDTH,
-              height: OG_PREVIEW_HEIGHT,
+              ...(previewSize ?? {}),
               alt: shareTitle,
             },
           ]
@@ -87,5 +91,5 @@ export default async function PublicMotivationPostPage({ params }: { params: Pro
        экран и кнопки под ней оставались видны. */
     /* eslint-disable-next-line @next/next/no-img-element */
     <img src={post.imageUrl} alt={post.title} className="max-h-[70vh] w-full bg-bg-1 object-contain" />
-  )}<div className="p-6 sm:p-10"><p className="text-sm font-semibold uppercase tracking-widest text-gold">VedaMatch Motivation</p>{category && <Link href={category.href} aria-label={`Категория: ${category.title}`} className="glass mt-3 inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"><span aria-hidden="true">📂</span>{category.title}</Link>}<h1 className="mt-3 text-3xl font-bold">{post.title}</h1><p className="mt-5 whitespace-pre-line text-lg leading-8 text-text-1">{post.text}</p>{post.attributionSpeaker && <p className="mt-6 border-l-2 border-gold pl-4 text-sm text-text-2">{post.attributionSpeaker}{post.attributionWork ? ` · ${post.attributionWork}` : ""}</p>}<div className="mt-8 grid gap-3 sm:grid-cols-2"><a href={post.storyImageUrl} download className="rounded-xl border border-gold px-5 py-3 text-center font-medium text-gold">Скачать для Stories</a><Link href="/login" className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-3 text-center font-medium text-white">Войти или зарегистрироваться в VedaMatch</Link></div></div></article></main>;
+  )}<div className="p-6 sm:p-10"><p className="text-sm font-semibold uppercase tracking-widest text-gold">VedaMatch Motivation</p>{category && <Link href={category.href} aria-label={`Категория: ${category.title}`} className="glass mt-3 inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"><span aria-hidden="true">📂</span>{category.title}</Link>}<h1 className="mt-3 text-3xl font-bold">{post.title}</h1><p className="mt-5 whitespace-pre-line text-lg leading-8 text-text-1">{post.text}</p>{post.attributionSpeaker && <p className="mt-6 border-l-2 border-gold pl-4 text-sm text-text-2">{post.attributionSpeaker}{post.attributionWork ? ` · ${post.attributionWork}` : ""}</p>}<div className="mt-8 grid gap-3 sm:grid-cols-2"><a href={`/m/${encodeURIComponent(post.slug)}/story`} download className="rounded-xl border border-gold px-5 py-3 text-center font-medium text-gold">Скачать для Stories</a><Link href="/login" className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-3 text-center font-medium text-white">Войти или зарегистрироваться в VedaMatch</Link></div></div></article></main>;
 }

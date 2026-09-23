@@ -525,6 +525,79 @@ describe('MotivationService feed tiers', () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  // VED-389: «Случайный» не перемешивает ленту источника, а номер стиха,
+  // записанный только в заголовке, ставит пост на его место в книге.
+  it('keeps verse order for a work even with shuffle, across pages', async () => {
+    const verse = (
+      id: string,
+      locator: string | null,
+      title = '',
+      work = 'Бхагавад-гита',
+    ) => ({
+      ...post(id, day(5), null),
+      attributionWork: work,
+      attributionLocator: locator,
+      translations: title ? [{ title }] : [],
+    });
+    const all = [
+      verse('none', null, 'Без номера'),
+      verse('v262', '2.62'),
+      verse('v210', null, 'Бхагавад-гита 2.10'),
+      verse('v29', '2.9'),
+      verse('v1812', null, '', 'Бхагавад-гита 18.12'),
+      verse('v11', '1.1'),
+      verse('v262r', '2.62-63'),
+    ];
+    const { service, motivationPost } = build(day(10), []);
+    motivationPost.findMany.mockImplementation(
+      (args: {
+        distinct?: string[];
+        select?: unknown;
+        where: { id?: { in: string[] } };
+      }) => {
+        if (args.distinct)
+          return Promise.resolve([
+            { attributionWork: 'Бхагавад-гита' },
+            { attributionWork: 'Бхагавад-гита 18.12' },
+          ]);
+        if (args.select) return Promise.resolve(all);
+        const ids = args.where.id?.in ?? [];
+        return Promise.resolve(all.filter((item) => ids.includes(item.id)));
+      },
+    );
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await service.feed('user-1', {
+        work: 'Бхагавад-гита',
+        shuffle: true,
+        limit: 3,
+        cursor,
+      });
+      seen.push(...page.items.map((item) => item.id));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+
+    expect(seen).toEqual([
+      'v11',
+      'v29',
+      'v210',
+      'v262',
+      'v262r',
+      'v1812',
+      'none',
+    ]);
+    // Заголовок просим на языке читателя — узкой выборкой, не весь пост.
+    const light = findCall(
+      motivationPost.findMany,
+      (args) => Boolean(args.select) && !args.distinct,
+    );
+    expect(light.select).toMatchObject({
+      translations: { where: { language: 'ru' }, select: { title: true } },
+    });
+  });
+
   it('shows an empty feed for an unknown work instead of the whole feed', async () => {
     const { service, motivationPost } = build(day(10), []);
     motivationPost.findMany.mockImplementation(

@@ -31,10 +31,16 @@ import { MotivationReelsService } from './motivation-reels.service';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
+import { MotivationSavedImageService } from './motivation-saved-image.service';
+import { MotivationSavedImageController } from './motivation-saved-image.controller';
 
 @Module({
   imports: [AuthModule, VedabaseModule],
-  controllers: [MotivationController, MotivationAdminController],
+  controllers: [
+    MotivationController,
+    MotivationAdminController,
+    MotivationSavedImageController,
+  ],
   providers: [
     MotivationService,
     MotivationGenerationService,
@@ -54,6 +60,7 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
     MotivationAdminReelsService,
     MotivationPostcardsService,
     MotivationAnalyticsService,
+    MotivationSavedImageService,
     MotivationAuthorSearchService,
     MotivationSourceFetchService,
     FalImageService,

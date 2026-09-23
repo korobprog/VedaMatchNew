@@ -135,7 +135,7 @@ export default async function Home({
     getActivityFeedServer().catch(() => null),
     getMusicPlaybackStateServer().catch(() => null),
     getMyMusicFavorites().catch(() => null),
-    // Цитата в карточке «Вдохновения» — из «Философии» вперемешку (VED-79):
+    // Цитата в карточке «Вдохновения» — из «Мудрости мира» вперемешку (VED-79):
     // главную видят все, и афоризм здесь должен читаться без подготовки. Нет
     // такой папки или она пуста — личная лента, как раньше.
     loadWidgetFeed({

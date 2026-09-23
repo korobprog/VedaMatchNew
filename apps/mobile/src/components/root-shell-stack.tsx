@@ -1,9 +1,11 @@
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ConferenceReturn } from '@/components/chat/conference-return';
 import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
 import { PushBridge } from '@/lib/push/push-bridge';
+import { quickPinsStore } from '@/lib/services/quick-pins-store';
 import { TelegramShell } from '@/lib/telegram/telegram-shell';
 import { useTheme } from '@/theme/theme';
 
@@ -34,6 +36,12 @@ function RootStackInner() {
   const { scheme, colors } = useTheme();
   const { status } = useSession();
   const onboarding = useOnboardingGate();
+  // Закреплённое для панели быстрого доступа (VED-385) читается вместе с
+  // восстановлением сессии, а не когда откроются вкладки: вкладки ждут этого
+  // чтения, чтобы первый кадр сразу встал с панелью (`(tabs)/_layout.tsx`).
+  useEffect(() => {
+    void quickPinsStore.load();
+  }, []);
   if (status === 'loading') return null;
   return (
     <>

@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,6 +17,11 @@ const PREVIEW_WIDTH = 640;
 const PREVIEW_QUALITY = 72;
 const DOWNLOAD_TIMEOUT_MS = 5000;
 const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
+/**
+ * Ссылка «Скачать картинку» живёт десять минут: её берут по нажатию кнопки
+ * и тут же открывают, дольше держать её незачем (VED-138).
+ */
+const COVER_DOWNLOAD_URL_TTL_SECONDS = 10 * 60;
 
 export interface StoredPreview {
   key: string;
@@ -172,6 +179,31 @@ export class LibraryPreviewsService {
     );
 
     return { key, url: `${this.publicUrl.replace(/\/$/, '')}/${key}` };
+  }
+
+  /**
+   * Подписанная ссылка на скачивание копии обложки (VED-138). Сам объект
+   * публичный, но по прямому адресу браузер показывает картинку, а не
+   * сохраняет: имя и «файлом» подставляет хранилище по параметрам подписи.
+   * `null` — S3 не настроен.
+   */
+  async signedDownload(
+    key: string,
+    disposition: string,
+  ): Promise<string | null> {
+    if (!this.s3Client || !this.bucket) return null;
+
+    // Приведение типа — как в LibraryBookStorageService: `client-s3` и
+    // `s3-request-presigner` тянут разные копии @smithy/types.
+    return getSignedUrl(
+      this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseContentDisposition: disposition,
+      }),
+      { expiresIn: COVER_DOWNLOAD_URL_TTL_SECONDS },
+    );
   }
 
   /**
