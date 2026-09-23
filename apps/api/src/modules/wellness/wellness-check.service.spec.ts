@@ -1,6 +1,9 @@
 import { Prisma } from '@prisma/client';
 import type { NotificationEvent } from '@vedamatch/shared';
-import { WellnessCheckService, type CheckFinish } from './wellness-check.service';
+import {
+  WellnessCheckService,
+  type CheckFinish,
+} from './wellness-check.service';
 
 const card = {
   id: 'p-1',
@@ -23,8 +26,10 @@ const input = {
   ingredientsRaw: card.ingredientsRaw,
 };
 
-function setup(options: { configured?: boolean; userChecksToday?: number } = {}) {
-  const prisma = {
+function setup(
+  options: { configured?: boolean; userChecksToday?: number } = {},
+) {
+  const tables = {
     wellnessProduct: {
       findUnique: jest.fn(() => Promise.resolve(null as unknown)),
       updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
@@ -41,7 +46,11 @@ function setup(options: { configured?: boolean; userChecksToday?: number } = {})
       updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
       update: jest.fn(() => Promise.resolve({})),
     },
-    $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
+  };
+  // Транзакция идёт по тем же таблицам: проверяем, что в неё записано.
+  const prisma = {
+    ...tables,
+    $transaction: jest.fn((fn: (tx: typeof tables) => unknown) => fn(tables)),
   };
   const wellness = {
     createProduct: jest.fn(() => Promise.resolve(card)),
@@ -173,9 +182,16 @@ describe('WellnessCheckService.finish — итог и уведомление', (
       where: { id: 'p-1', status: 'draft' },
       data: expect.objectContaining({ status: 'published' }) as unknown,
     });
-    expect(t.wellness.storeComposition).toHaveBeenCalledWith('p-1', 'сахар, фундук');
+    expect(t.wellness.storeComposition).toHaveBeenCalledWith(
+      'p-1',
+      'сахар, фундук',
+    );
     expect(t.events[0]).toEqual(
-      expect.objectContaining({ outcome: 'accepted', decidedBy: 'ai', recipientId: 'u-1' }),
+      expect.objectContaining({
+        outcome: 'accepted',
+        decidedBy: 'ai',
+        recipientId: 'u-1',
+      }),
     );
   });
 
@@ -184,7 +200,11 @@ describe('WellnessCheckService.finish — итог и уведомление', (
     await t.service.finish('c-1', {
       outcome: 'refined',
       reasons: [],
-      apply: { name: 'Nutella паста', brand: 'Ferrero', ingredientsRaw: 'сахар, фундук, какао' },
+      apply: {
+        name: 'Nutella паста',
+        brand: 'Ferrero',
+        ingredientsRaw: 'сахар, фундук, какао',
+      },
       refined: ['name', 'brand', 'ingredients'],
     });
     expect(t.prisma.wellnessProduct.updateMany).toHaveBeenCalledWith({
@@ -196,7 +216,10 @@ describe('WellnessCheckService.finish — итог и уведомление', (
         ingredientsRaw: 'сахар, фундук, какао',
       }) as unknown,
     });
-    expect(t.wellness.storeComposition).toHaveBeenCalledWith('p-1', 'сахар, фундук, какао');
+    expect(t.wellness.storeComposition).toHaveBeenCalledWith(
+      'p-1',
+      'сахар, фундук, какао',
+    );
     expect(t.events[0]).toEqual(
       expect.objectContaining({
         outcome: 'refined',
@@ -208,7 +231,10 @@ describe('WellnessCheckService.finish — итог и уведомление', (
 
   it('к человеку — карточка не трогается, причины уходят в уведомление', async () => {
     const t = setup();
-    await t.service.finish('c-1', { outcome: 'review', reasons: ['not_found'] });
+    await t.service.finish('c-1', {
+      outcome: 'review',
+      reasons: ['not_found'],
+    });
     expect(t.prisma.wellnessProduct.updateMany).not.toHaveBeenCalled();
     expect(t.wellness.storeComposition).not.toHaveBeenCalled();
     expect(t.events[0]).toEqual(
@@ -218,7 +244,10 @@ describe('WellnessCheckService.finish — итог и уведомление', (
 
   it('отклонено — карточка снята с причиной', async () => {
     const t = setup();
-    await t.service.finish('c-1', { outcome: 'rejected', reasons: ['not_food'] });
+    await t.service.finish('c-1', {
+      outcome: 'rejected',
+      reasons: ['not_food'],
+    });
     expect(t.prisma.wellnessProduct.updateMany).toHaveBeenCalledWith({
       where: { id: 'p-1', status: 'draft' },
       data: expect.objectContaining({
@@ -226,7 +255,9 @@ describe('WellnessCheckService.finish — итог и уведомление', (
         rejectReason: 'Автопроверка: не продукт питания',
       }) as unknown,
     });
-    expect(t.events[0]).toEqual(expect.objectContaining({ outcome: 'rejected' }));
+    expect(t.events[0]).toEqual(
+      expect.objectContaining({ outcome: 'rejected' }),
+    );
   });
 
   it('модератор успел решить сам — его решение остаётся, проверка отменена, тишина', async () => {
@@ -243,7 +274,9 @@ describe('WellnessCheckService.finish — итог и уведомление', (
 
   it('проверку уже закрыл кто-то другой — ничего не пишем и не шлём', async () => {
     const t = setup();
-    t.prisma.wellnessProductCheck.updateMany.mockResolvedValueOnce({ count: 0 });
+    t.prisma.wellnessProductCheck.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
     await expect(t.service.finish('c-1', accepted)).resolves.toBe(false);
     expect(t.prisma.wellnessProduct.updateMany).not.toHaveBeenCalled();
     expect(t.events).toEqual([]);
@@ -300,13 +333,21 @@ describe('WellnessCheckService.moderatorDecided', () => {
   it('отменяет незаконченную проверку и сообщает решение словами модератора', async () => {
     const t = setup();
     await t.service.moderatorDecided({
-      product: { id: 'p-1', barcode: card.barcode, name: 'Nutella', addedById: 'u-1' },
+      product: {
+        id: 'p-1',
+        barcode: card.barcode,
+        name: 'Nutella',
+        addedById: 'u-1',
+      },
       approved: false,
       comment: 'Это таблица калорийности',
     });
     expect(t.prisma.wellnessProductCheck.updateMany).toHaveBeenCalledWith({
       where: { id: 'c-1', status: { in: ['queued', 'running'] } },
-      data: expect.objectContaining({ status: 'cancelled', labelImageDataUrl: null }) as unknown,
+      data: expect.objectContaining({
+        status: 'cancelled',
+        labelImageDataUrl: null,
+      }) as unknown,
     });
     expect(t.events[0]).toEqual(
       expect.objectContaining({
@@ -320,7 +361,12 @@ describe('WellnessCheckService.moderatorDecided', () => {
   it('одобрение — «принято», без автора — без уведомления', async () => {
     const t = setup();
     await t.service.moderatorDecided({
-      product: { id: 'p-1', barcode: card.barcode, name: 'Nutella', addedById: null },
+      product: {
+        id: 'p-1',
+        barcode: card.barcode,
+        name: 'Nutella',
+        addedById: null,
+      },
       approved: true,
       comment: null,
     });

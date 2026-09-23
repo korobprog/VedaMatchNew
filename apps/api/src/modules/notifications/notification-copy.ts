@@ -837,7 +837,8 @@ export const WELLNESS_CHECK_REASON_TEXT: Record<WellnessCheckReason, string> = {
   ai_failed: 'автопроверка не смогла завершиться',
   ai_unreadable: 'ответ автопроверки не удалось разобрать',
   daily_budget: 'автопроверки на сегодня закончились',
-  user_daily_limit: 'за сутки от вас много карточек — остальные смотрит человек',
+  user_daily_limit:
+    'за сутки от вас много карточек — остальные смотрит человек',
   not_found: 'товар не нашёлся в открытых источниках',
   sources_conflict: 'источники расходятся между собой',
   too_few_sources: 'товар подтвердил меньше чем два независимых сайта',
@@ -856,16 +857,11 @@ const REFINED_FIELD_TEXT: Record<'name' | 'brand' | 'ingredients', string> = {
   ingredients: 'состав',
 };
 
-function capitalize(text: string): string {
-  return text ? text[0].toUpperCase() + text.slice(1) : text;
-}
-
 function wellnessCheckedNotification(
   event: Extract<NotificationEvent, { name: 'wellness.product.checked' }>,
 ): NotificationContent {
   const product = `«${toExcerpt(event.productName)}»`;
-  const published =
-    event.outcome === 'accepted' || event.outcome === 'refined';
+  const published = event.outcome === 'accepted' || event.outcome === 'refined';
   const base = {
     // Опубликованную карточку видно по штрихкоду; остальные — в проверках.
     url: published

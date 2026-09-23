@@ -922,7 +922,9 @@ describe('buildNotification · решение по карточке «Здоро
       reasons: ['not_food'],
     });
     expect(content.title).toBe('Продукт не добавлен');
-    expect(content.body).toBe('«Nutella паста ореховая»: это не продукт питания.');
+    expect(content.body).toBe(
+      '«Nutella паста ореховая»: это не продукт питания.',
+    );
   });
 
   it('отклонено модератором — его словами', () => {
