@@ -150,8 +150,10 @@ export function CoverViewer({
     setZoomed(true);
   }
 
+  // Отступы — у каждой кнопки свои: у квадратного крестика их нет вовсе,
+  // и общий `px-4` сплющил бы иконку до щели.
   const control =
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-glass-brd bg-bg-1 px-4 text-sm font-semibold text-text-0 hover:bg-bg-2";
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-glass-brd bg-bg-1 text-sm font-semibold text-text-0 hover:bg-bg-2";
 
   return (
     <>
@@ -183,7 +185,7 @@ export function CoverViewer({
                 {...(downloadUrl
                   ? {}
                   : { target: "_blank", rel: "noopener noreferrer" })}
-                className={control}
+                className={`${control} px-4`}
               >
                 <Download aria-hidden className="h-4 w-4" />
                 {t(locale, "cover.download")}
@@ -192,9 +194,9 @@ export function CoverViewer({
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label={t(locale, "cover.close")}
-                className={`${control} w-11 px-0`}
+                className={`${control} w-11 shrink-0`}
               >
-                <X aria-hidden className="h-5 w-5" />
+                <X aria-hidden className="h-6 w-6" />
               </button>
             </div>
             <div
