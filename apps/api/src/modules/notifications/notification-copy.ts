@@ -2,7 +2,7 @@ import type {
   NotificationCategory,
   NotificationEvent,
   NotificationEventName,
-  NotificationMark,
+  TaskStatusMark,
 } from '@vedamatch/shared';
 import { workStatusThreadKey } from './inbox-thread';
 
@@ -189,7 +189,13 @@ export interface NotificationContent {
    * название колонки: подписчик собирает пометку из факта, дочитывать её из
    * таблиц «Работы» он не вправе. Остальные уведомления живут без значка.
    */
-  mark?: NotificationMark | null;
+  mark?: TaskStatusMark | null;
+  /**
+   * Значок на случай, когда у задачи нет состояния (VED-298): у комментария —
+   * «Комментарий». Хранится отдельно от `mark`: переезд карточки переписывает
+   * состояние у всех уведомлений о задаче, а вид новости не меняется.
+   */
+  markFallback?: 'comment';
   /**
    * Ветка новости в ленте (VED-320, `inbox-thread.ts`): есть — у человека
    * лежит одна строка на ключ, и эта новость её обновляет и поднимает; нет —
@@ -544,6 +550,9 @@ export function buildNotification(
         tag: `work-comment:${event.taskKey}`,
         category: 'work',
         mark: event.statusMark,
+        // Карточка вне колонок состояния — значок «Комментарий», а не пусто
+        // (VED-298): комментарий без пометки терялся среди прочих строк.
+        markFallback: 'comment',
       };
     case 'work.task.returned':
       return {

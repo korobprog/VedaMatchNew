@@ -65,3 +65,24 @@ describe("taskStatusMarkLabel", () => {
     );
   });
 });
+
+/**
+ * VED-298: «если уведомление о комментарии не имеет своего статуса, добавь ей
+ * цветной статус Комментарий».
+ */
+describe("значок «Комментарий»", () => {
+  it("подписан словом «Комментарий» и читается скринридером", () => {
+    const view = taskStatusMarkView("comment")!;
+    expect(view.label).toBe("Комментарий");
+    expect(taskStatusMarkLabel(view)).toBe("Статус: Комментарий");
+  });
+
+  it("свой цвет токеном, не совпадающий ни с одним состоянием, без заливки", () => {
+    const { className } = taskStatusMarkView("comment")!;
+    expect(className).toBe("border-mark-comment/60 text-mark-comment");
+    for (const mark of ALL) {
+      expect(taskStatusMarkView(mark)!.className).not.toBe(className);
+    }
+    expect(className).not.toMatch(/\bbg-|#[0-9a-f]{3,8}/i);
+  });
+});

@@ -7,7 +7,7 @@ import type {
   NotificationCategory,
   NotificationInboxResponse,
   NotificationItemDto,
-  NotificationMark,
+  TaskStatusMark,
   NotificationPreferencesDto,
   NotificationDeviceStats,
   NotificationDeliveryStatusDto,
@@ -42,7 +42,7 @@ import {
   threadRefreshData,
   workStatusThreadKey,
 } from './inbox-thread';
-import { parseNotificationMark } from './notification-mark';
+import { inboxMark } from './notification-mark';
 import type { PushFailure } from './push-errors';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 
@@ -79,6 +79,7 @@ interface InboxSelectedRow {
   createdAt: Date;
   readAt: Date | null;
   mark: string | null;
+  markFallback: string | null;
 }
 
 /** Чего просит клиент у ленты: порцию с такого-то места и, может быть, поиск. */
@@ -97,7 +98,12 @@ export interface InboxDraft {
   url: string;
   category: NotificationCategory;
   /** Значок состояния (VED-272); `null`/пусто — уведомление без значка. */
-  mark?: NotificationMark | null;
+  mark?: TaskStatusMark | null;
+  /**
+   * Значок, когда у задачи нет состояния (VED-298): `comment` —
+   * «Комментарий». См. `notification-mark.ts`.
+   */
+  markFallback?: 'comment' | null;
   /**
    * Ветка новости (VED-320): есть — новость обновляет и поднимает уже лежащую
    * у человека строку с тем же ключом, а не кладёт вторую. См. `inbox-thread.ts`.
@@ -543,6 +549,7 @@ export class NotificationsService {
           createdAt: true,
           readAt: true,
           mark: true,
+          markFallback: true,
         },
       });
       rows.push(...chunk);
@@ -558,9 +565,10 @@ export class NotificationsService {
       category: row.category as NotificationCategory,
       createdAt: row.createdAt.toISOString(),
       readAt: row.readAt?.toISOString() ?? null,
-      // Через parse, а не as: в колонке строка, и запись, сделанная сборкой с
-      // другим набором значков, не должна утекать клиенту неизвестным кодом.
-      mark: parseNotificationMark(row.mark),
+      // Состояние задачи, а без него — значок вида новости («Комментарий»,
+      // VED-298). Через parse, а не as: в колонках строки, и запись, сделанная
+      // сборкой с другим набором, не должна утекать клиенту неизвестным кодом.
+      mark: inboxMark(row.mark, row.markFallback),
     }));
     return {
       items,
@@ -601,7 +609,7 @@ export class NotificationsService {
   async refreshWorkTaskMark(
     spaceId: string,
     taskKey: string,
-    mark: NotificationMark | null,
+    mark: TaskStatusMark | null,
     liftRecipientIds: readonly string[] = [],
     now = new Date(),
   ): Promise<number> {

@@ -1,4 +1,4 @@
-import type { NotificationMark } from '@vedamatch/shared';
+import type { TaskStatusMark } from '@vedamatch/shared';
 
 /**
  * Ветки новостей в ленте (VED-320).
@@ -31,7 +31,7 @@ export interface InboxThreadNews {
   body: string;
   url: string;
   category: string;
-  mark: NotificationMark | null;
+  mark: TaskStatusMark | null;
 }
 
 /**

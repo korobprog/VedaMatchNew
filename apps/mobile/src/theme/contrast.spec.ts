@@ -205,6 +205,7 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   { name: 'рамка значка «Тестерование» на стекле', graphic: 'violet', surface: 'glass' },
   { name: 'рамка значка «Выполнено» на стекле', graphic: 'cyan', surface: 'glass' },
   { name: 'рамка значка «На доработку» на стекле', graphic: 'magenta', surface: 'glass' },
+  { name: 'рамка значка «Комментарий» на стекле', graphic: 'gold', surface: 'glass' },
   // Профиль (VED-332): обводка поля, которое не приняли. Цвет — вторая
   // примета, первая — сам текст отказа под формой; текст поля остаётся
   // `text0` на `bg1`. Обводка успеха у плашки «Профиль сохранён» — `cyan`
