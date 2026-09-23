@@ -8,7 +8,6 @@ import { ConfigService } from '@nestjs/config';
 import type {
   CreateMusicAudiobookRequest,
   MusicAdminAudiobookChapterDto,
-  MusicAdminAudiobookDto,
   MusicAdminAudiobooksDto,
   MusicAudiobookCardDto,
   MusicAudiobookPageDto,

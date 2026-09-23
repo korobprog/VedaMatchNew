@@ -15,8 +15,7 @@ function setup(
     parsed?: number | null;
   } = {},
 ) {
-  const stream =
-    over.stream === undefined ? Readable.from(['x']) : over.stream;
+  const stream = over.stream === undefined ? Readable.from(['x']) : over.stream;
   const prisma = {
     musicTrack: {
       findMany: jest.fn().mockResolvedValue(
