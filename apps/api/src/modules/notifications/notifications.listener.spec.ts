@@ -266,6 +266,41 @@ describe('NotificationsListener.deliver', () => {
     expect(inbox[1]).not.toHaveProperty('threadKey');
   });
 
+  it('кладёт комментарию запасной значок «Комментарий», переезду — нет (VED-298)', async () => {
+    const { listener, inbox, sent } = createListener({
+      preferences: { work: true },
+    });
+
+    await listener.deliver({
+      name: 'work.task.commented',
+      recipientId: 'user-1',
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      taskTitle: 'Починить ссылки',
+      excerpt: 'Посмотрите ещё раз',
+      commentCount: 1,
+      columnName: 'ВДОХНОВЕНИЕ.',
+      actorName: 'Санкаршан',
+      statusMark: null,
+    });
+    await listener.deliver({
+      name: 'work.task.status-changed',
+      recipientId: 'user-1',
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      taskTitle: 'Починить ссылки',
+      fromColumnName: 'ВДОХНОВЕНИЕ.',
+      toColumnName: 'Тестерование',
+      actorName: 'Санкаршан',
+      statusMark: 'testing',
+    });
+
+    expect(inbox[0]).toMatchObject({ mark: null, markFallback: 'comment' });
+    expect(inbox[1]).not.toHaveProperty('markFallback');
+    // Как и состояние, в пуш значок не едет.
+    expect(sent[0]?.payload).not.toHaveProperty('markFallback');
+  });
+
   it('наполняет колокольчик даже без пуш-подписок', async () => {
     const { listener, inbox, sent } = createListener({ subscriptions: [] });
 

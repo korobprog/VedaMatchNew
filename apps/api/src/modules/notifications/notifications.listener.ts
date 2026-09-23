@@ -324,6 +324,8 @@ export class NotificationsListener {
         // Значок состояния (VED-272) живёт только в ленте: в пуш он не едет —
         // там одна строка текста, и места под пометку у шторки нет.
         mark: content.mark ?? null,
+        // «Комментарий» на случай, когда у задачи нет состояния (VED-298).
+        ...(content.markFallback ? { markFallback: content.markFallback } : {}),
         // Ветка (VED-320): повторная смена статуса задачи обновляет и
         // поднимает уже лежащую строку, а не кладёт рядом вторую.
         ...(content.threadKey ? { threadKey: content.threadKey } : {}),
