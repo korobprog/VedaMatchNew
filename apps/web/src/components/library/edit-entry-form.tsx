@@ -11,6 +11,7 @@ import type {
   UpdateLibraryEntryRequest,
   LineageId,
 } from "@vedamatch/shared";
+import { BodyBlankLinesTool } from "./body-blank-lines-tool";
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
 import { COVER_IMAGE_ACCEPT } from "./cover-image";
@@ -468,6 +469,14 @@ function EntryFieldsForm({
               : t(locale, "add.hintBody")}{" "}
             · {text.length}/{MAX_BODY_LENGTH}
           </span>
+          {/* VED-372: уже опубликованный разорванный текст чинится правкой:
+              «Редактировать» → «Убрать пустые строки» → сохранить. */}
+          <BodyBlankLinesTool
+            locale={locale}
+            value={text}
+            onChange={setText}
+            disabled={pending}
+          />
         </div>
       )}
 

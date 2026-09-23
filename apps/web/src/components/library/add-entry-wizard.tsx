@@ -12,6 +12,7 @@ import {
   DEFAULT_CONTENT_LINEAGE,
   type LineageId,
 } from "@vedamatch/shared";
+import { BodyBlankLinesTool } from "./body-blank-lines-tool";
 import { CategoryPicker } from "./category-picker";
 import { CoverField } from "./cover-field";
 import { uploadEntryCover } from "./cover-upload";
@@ -440,6 +441,14 @@ export function AddEntryWizard({
                       )}{" "}
                   · {draft.body.length}/{MAX_BODY_LENGTH}
                 </span>
+                {/* VED-372: разорванный вставкой текст чинится здесь же, до
+                    публикации, — как в форме поста блог-ленты. */}
+                <BodyBlankLinesTool
+                  locale={locale}
+                  value={draft.body}
+                  onChange={(body) => patch({ body })}
+                  disabled={pending}
+                />
               </div>
             )}
           </>
