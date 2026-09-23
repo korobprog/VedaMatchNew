@@ -130,7 +130,47 @@ describe("ServiceGrid", () => {
 
     const reorder = screen.getByRole("button", { name: "Изменить порядок" });
     expect(reorder).toHaveTextContent("Порядок");
-    expect(reorder).toHaveAttribute("title", "Изменить порядок");
+    // Подсказка называет и булавку: закрепляют теперь здесь (VED-401).
+    expect(reorder).toHaveAttribute("title", "Изменить порядок и закрепить");
+  });
+
+  // VED-401: булавки на главной нет, закрепляют в режиме «Порядок».
+  it("закрепляет карточку только из режима «Порядок»", async () => {
+    const user = userEvent.setup();
+    render(grid());
+
+    expect(
+      screen.queryByRole("button", { name: /Закрепить сверху/ }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Изменить порядок" }));
+    await user.click(
+      screen.getByRole("button", { name: "Закрепить сверху: Астрология" }),
+    );
+
+    expect(readLayout(USER).pinnedId).toBe("astro");
+    const pinned = screen.getByRole("button", {
+      name: "Закрепить сверху: Астрология",
+      pressed: true,
+    });
+    // Закреплённая встаёт первой.
+    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent(
+      "Астрология",
+    );
+
+    await user.click(pinned);
+    expect(readLayout(USER).pinnedId).toBeNull();
+  });
+
+  it("передаёт кнопки шапки своей карточке", () => {
+    render(
+      <ServiceGrid
+        services={SERVICES}
+        userId={USER}
+        extras={{ astro: { headerExtra: <a href="/astro/today">Сегодня</a> } }}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Сегодня" })).toBeInTheDocument();
   });
 
   it("в компактном режиме описаний нет", () => {

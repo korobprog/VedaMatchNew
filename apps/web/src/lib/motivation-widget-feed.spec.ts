@@ -83,7 +83,9 @@ describe("loadWidgetFeed", () => {
     });
 
     expect(feed).toHaveBeenCalledWith("filosofiya-2");
-    expect(result?.items[0].text).toBe("Познай самого себя.");
+    expect(result.feed?.items[0].text).toBe("Познай самого себя.");
+    // VED-401: нажатие на цитату открывает её внутри этой папки.
+    expect(result.category).toBe("filosofiya-2");
   });
 
   // Пустая карточка хуже, чем не тот афоризм.
@@ -98,7 +100,8 @@ describe("loadWidgetFeed", () => {
     });
 
     expect(feed).toHaveBeenLastCalledWith();
-    expect(result?.items[0].text).toBe("Личное");
+    expect(result.feed?.items[0].text).toBe("Личное");
+    expect(result.category).toBeNull();
   });
 
   it("категории не загрузились — личная лента, как раньше", async () => {
@@ -112,6 +115,7 @@ describe("loadWidgetFeed", () => {
     });
 
     expect(feed).toHaveBeenCalledWith();
-    expect(result?.items[0].text).toBe("Личное");
+    expect(result.feed?.items[0].text).toBe("Личное");
+    expect(result.category).toBeNull();
   });
 });

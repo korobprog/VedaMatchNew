@@ -69,6 +69,17 @@ export interface WidgetFeedSources {
   feed: (category?: string) => Promise<MotivationFeedResponse | null>;
 }
 
+export interface WidgetFeed {
+  feed: MotivationFeedResponse | null;
+  /**
+   * Папка, из которой взят афоризм; `null` — личная лента. Нажатие на
+   * цитату открывает её внутри этой же папки (VED-401: «дальнейшее
+   * перелистывание должно быть в той ленте и в том разделе, к которым этот
+   * афоризм принадлежит»).
+   */
+  category: string | null;
+}
+
 /**
  * Лента для карточки. Если папки нет или в ней не нашлось ни одного
  * афоризма с текстом (одни открытки с цитатой на картинке), откатываемся к
@@ -76,13 +87,14 @@ export interface WidgetFeedSources {
  */
 export async function loadWidgetFeed(
   sources: WidgetFeedSources,
-): Promise<MotivationFeedResponse | null> {
+): Promise<WidgetFeed> {
   const slug = widgetCategorySlug(
     await sources.categories().catch(() => null),
   );
   if (slug) {
     const wisdom = await sources.feed(slug).catch(() => null);
-    if (buildMotivationQuickAccess(wisdom).quote) return wisdom;
+    if (buildMotivationQuickAccess(wisdom).quote)
+      return { feed: wisdom, category: slug };
   }
-  return sources.feed().catch(() => null);
+  return { feed: await sources.feed().catch(() => null), category: null };
 }

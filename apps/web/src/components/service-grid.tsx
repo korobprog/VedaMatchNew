@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { motion } from "framer-motion";
-import { LayoutGrid, Rows3 } from "lucide-react";
+import { LayoutGrid, Pin, Rows3 } from "lucide-react";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceCard } from "@/components/service-card";
 import { ServiceTile } from "@/components/service-tile";
@@ -27,6 +27,8 @@ import {
 interface ServiceExtra {
   badgeCount?: number;
   extra?: ReactNode;
+  /** Кнопки в шапке карточки, справа от названия (VED-401). */
+  headerExtra?: ReactNode;
 }
 
 /** Летящая за курсором копия карточки. */
@@ -79,6 +81,13 @@ export function ServiceGrid({
    * карточкой, а нужны они раз в сто заходов — поэтому они не висят всегда,
    * а включаются кнопкой и рендерятся условно: спрятать их через `hidden`
    * значило бы оставить место занятым.
+   *
+   * Здесь же булавка «Закрепить сверху» (VED-401: «убери насовсем кнопку
+   * прикрепить с главного экрана и перенеси её внутрь окна Порядок»): в
+   * шапке каждой карточки она висела постоянно ради действия, которое
+   * делают раз, и занимала место, где у «Вдохновения» теперь свои кнопки.
+   * Поэтому «Порядок» есть и на широком экране: перетаскивание мышью там
+   * осталось, а закрепить карточку больше негде.
    */
   const [reordering, setReordering] = useState(false);
 
@@ -247,13 +256,11 @@ export function ServiceGrid({
             onClick={() => setReordering((on) => !on)}
             aria-pressed={reordering}
             /* Подпись короткая, имя — полное: тот же приём, что у соседних
-               «Кнопок» (VED-111). Кнопка целиком `sm:hidden`, то есть живёт
-               только на телефоне, и второй подписи для широкого экрана ей не
-               нужно — полная уходит в имя и подсказку. Без этого ряд при
-               спрятанной ленте переносился уже на 375 (VED-383). */
+               «Кнопок» (VED-111). Полная уходит в имя и подсказку; без этого
+               ряд при спрятанной ленте переносился уже на 375 (VED-383). */
             aria-label={reordering ? "Готово" : "Изменить порядок"}
-            title={reordering ? "Готово" : "Изменить порядок"}
-            className={`whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors sm:hidden ${
+            title={reordering ? "Готово" : "Изменить порядок и закрепить"}
+            className={`whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
               reordering
                 ? "border-cyan/40 bg-cyan/10 text-cyan"
                 : "border-glass-brd text-text-2 hover:text-text-0"
@@ -324,13 +331,40 @@ export function ServiceGrid({
               }`}
             >
               {reordering && (
-                <div className="mb-2 flex items-center justify-end gap-1 px-1 sm:hidden">
+                <div className="mb-2 flex items-center justify-end gap-1 px-1">
+                  <button
+                    type="button"
+                    onClick={() => togglePin(service.id)}
+                    /* Переключатель: имя постоянное, состояние — в
+                       `aria-pressed`. Меняющееся имя вместе с `aria-pressed`
+                       читалка объявила бы дважды («Открепить, нажата»), а
+                       видимое слово обязано входить в имя (WCAG 2.5.3). */
+                    aria-pressed={pinnedId === service.id}
+                    aria-label={`Закрепить сверху: ${service.name}`}
+                    title={
+                      pinnedId === service.id
+                        ? "Закреплена сверху — нажмите, чтобы открепить"
+                        : "Закрепить сверху"
+                    }
+                    className={`mr-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors ${
+                      pinnedId === service.id
+                        ? "text-gold"
+                        : "text-text-1 hover:text-text-0"
+                    }`}
+                  >
+                    <Pin
+                      aria-hidden
+                      className="size-4"
+                      fill={pinnedId === service.id ? "currentColor" : "none"}
+                    />
+                    Закрепить
+                  </button>
                   <button
                     type="button"
                     onClick={() => moveByStep(service.id, -1)}
                     disabled={index === 0}
                     aria-label="Переместить выше"
-                    className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
+                    className="inline-flex size-11 items-center justify-center rounded-lg text-text-1 hover:text-text-0 disabled:opacity-30"
                   >
                     ▲
                   </button>
@@ -339,7 +373,7 @@ export function ServiceGrid({
                     onClick={() => moveByStep(service.id, 1)}
                     disabled={index === displayed.length - 1}
                     aria-label="Переместить ниже"
-                    className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-30"
+                    className="inline-flex size-11 items-center justify-center rounded-lg text-text-1 hover:text-text-0 disabled:opacity-30"
                   >
                     ▼
                   </button>
@@ -351,8 +385,8 @@ export function ServiceGrid({
                   service={service}
                   badgeCount={extras?.[service.id]?.badgeCount}
                   extra={extras?.[service.id]?.extra}
+                  headerExtra={extras?.[service.id]?.headerExtra}
                   isPinned={pinnedId === service.id}
-                  onTogglePin={() => togglePin(service.id)}
                   onOpen={openService}
                   dragHandleProps={{
                     onPointerDown: (e) => startDrag(service.id, e),
@@ -378,6 +412,7 @@ export function ServiceGrid({
             service={draggedService}
             badgeCount={extras?.[draggedService.id]?.badgeCount}
             extra={extras?.[draggedService.id]?.extra}
+            headerExtra={extras?.[draggedService.id]?.headerExtra}
             isPinned={pinnedId === draggedService.id}
           />
         </div>

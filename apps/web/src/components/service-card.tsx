@@ -2,22 +2,33 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceIcon } from "@/components/icons/service-icons";
-import { GripVertical, Pin } from "lucide-react";
+import { GripVertical } from "lucide-react";
 
 export function ServiceCard({
   service,
   badgeCount,
   extra,
+  headerExtra,
   isPinned,
-  onTogglePin,
   onOpen,
   dragHandleProps,
 }: {
   service: ServiceCardType;
   badgeCount?: number;
   extra?: ReactNode;
+  /**
+   * Кнопки сервиса в шапке карточки, справа от названия (VED-401: у
+   * «Вдохновения» — две быстрые ленты). Сами поднимаются над накладкой
+   * карточки (`relative z-10`), см. комментарий у ссылки названия.
+   */
+  headerExtra?: ReactNode;
+  /**
+   * Закреплена ли карточка — только вид (золотая рамка). Кнопка
+   * «Закрепить» из шапки убрана (VED-401: «убери насовсем кнопку
+   * прикрепить с главного экрана и перенеси её внутрь окна Порядок») и
+   * живёт в режиме перестановки `ServiceGrid`.
+   */
   isPinned?: boolean;
-  onTogglePin?: () => void;
   onOpen?: () => void;
   dragHandleProps?: {
     onPointerDown: (e: React.PointerEvent<HTMLSpanElement>) => void;
@@ -70,9 +81,14 @@ export function ServiceCard({
               Обёртывать в ссылку всю карточку нельзя: внутри ручка
               перетаскивания и булавка, а интерактивное внутри ссылки
               клавиатура и скринридер разбирают по-разному. Поэтому ссылка
-              одна и на названии — её и объявляет читалка, — а те двое подняты
-              над накладкой через `z-10` и остаются нажимаемыми. */}
-          <h3 className="font-semibold text-text-0">
+              одна и на названии — её и объявляет читалка, — а ручка и кнопки
+              шапки подняты над накладкой через `z-10` и остаются нажимаемыми. */}
+          {/* `hyphens-auto`: у карточки с кнопками в шапке (VED-401) на
+              320px под название остаётся ~90px, и «Вдохновение» целиком не
+              входило — наезжало на кнопки. Перенос по слогам срабатывает
+              только там, где слово не помещается; на 360px и шире строка та
+              же, что была. */}
+          <h3 className="font-semibold text-text-0 [overflow-wrap:anywhere] hyphens-auto">
             {comingSoon ? (
               service.name
             ) : (
@@ -104,20 +120,7 @@ export function ServiceCard({
             {badgeCount}
           </span>
         )}
-        {onTogglePin && (
-          <button
-            type="button"
-            onClick={onTogglePin}
-            aria-pressed={isPinned}
-            aria-label={isPinned ? "Открепить карточку" : "Закрепить карточку сверху"}
-            title={isPinned ? "Открепить" : "Закрепить сверху"}
-            className={`relative z-10 shrink-0 rounded-lg p-1.5 transition-colors ${
-              isPinned ? "text-gold" : "text-text-2/60 hover:text-text-0"
-            }`}
-          >
-            <Pin size={16} fill={isPinned ? "currentColor" : "none"} />
-          </button>
-        )}
+        {headerExtra}
       </div>
       {/* Описание может быть пустым: администратор вправе снять подпись в
           каталоге. Распорка на её месте остаётся — без неё карточка без

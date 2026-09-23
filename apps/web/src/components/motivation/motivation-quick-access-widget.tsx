@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { MotivationQuickAccessData } from "@/lib/motivation-quick-access";
 import { plural } from "@/lib/plural";
+import { reelsHref } from "./feed-style";
 
 /**
  * Цитата дня в карточке «Вдохновения» на главной.
@@ -11,17 +12,22 @@ import { plural } from "@/lib/plural";
  *
  * Ссылка поднята над накладкой карточки (relative z-10), иначе нажатие на
  * цитату вело бы на ленту целиком, а не на этот пост.
+ *
+ * `category` — папка, из которой взят афоризм (VED-401): цитата открывается
+ * первой, а листается дальше та же папка, а не личная лента. Вкладку
+ * («Лента» или «Открытки») страница ленты выбирает сама по посту.
  */
 export function MotivationQuickAccessWidget({
   quote,
   freshMore,
-}: MotivationQuickAccessData) {
+  category,
+}: MotivationQuickAccessData & { category?: string | null }) {
   if (!quote) return null;
 
   return (
     <div className="mb-4 space-y-1.5">
       <Link
-        href={`/motivation?post=${encodeURIComponent(quote.slug)}`}
+        href={reelsHref({ post: quote.slug, category: category ?? undefined })}
         className="relative z-10 block rounded-xl border border-glass-brd bg-glass px-3 py-2 hover:border-gold/50"
       >
         {/* Текстовый шрифт, не заголовочный: Unbounded курсивом вмещал в две

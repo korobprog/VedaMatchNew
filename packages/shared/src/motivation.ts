@@ -765,11 +765,26 @@ export interface MotivationPreferenceDto {
   vaishnavaPercent: number;
   language: MotivationLanguage;
   profileTypes: MotivationProfileType[];
+  /**
+   * Источник кнопки «Лента» в карточке «Вдохновения» на главной (VED-401).
+   * `null` — умолчание: Бхагавад-гита. Старый ответ без поля читается так же.
+   */
+  homeSourceWork?: string | null;
+  /**
+   * Слаг папки кнопки «Открытки» на главной (VED-401). `null` — умолчание:
+   * «Мудрость мира».
+   */
+  homeCategorySlug?: string | null;
 }
 export interface MotivationPreferenceUpdate {
-  vaishnavaPercent: number;
+  /** Больше не спрашивается; старый клиент может прислать. */
+  vaishnavaPercent?: number;
   language?: MotivationLanguage;
   profileTypes?: MotivationProfileType[];
+  /** Не прислали — не меняется; `null` или пустая строка — снова умолчание. */
+  homeSourceWork?: string | null;
+  /** Не прислали — не меняется; `null` или пустая строка — снова умолчание. */
+  homeCategorySlug?: string | null;
 }
 export interface MotivationAdminUpdate {
   hidden?: boolean;

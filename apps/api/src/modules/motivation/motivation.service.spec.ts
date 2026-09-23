@@ -717,6 +717,25 @@ describe('MotivationService feed tiers', () => {
     expect(speakers.where).toMatchObject({ attributionSpeaker: { not: null } });
   });
 
+  // VED-252: список одинаков у всех — второе открытие фильтра не считает
+  // заново, а другое написание того же автора попадает в тот же ответ.
+  it('answers the same attributions query from memory', async () => {
+    const { service, motivationPost } = build(day(10), []);
+    const groupBy = jest.fn().mockResolvedValue([]);
+    Object.assign(motivationPost, { groupBy });
+    motivationPost.findMany.mockResolvedValue([]);
+
+    await service.feedAttributions({ category: 'vedy', speaker: 'Прабхупада' });
+    await service.feedAttributions({
+      category: 'vedy',
+      speaker: ' прабхупада ',
+    });
+    expect(groupBy).toHaveBeenCalledTimes(2);
+
+    await service.feedAttributions({ category: 'praktika' });
+    expect(groupBy).toHaveBeenCalledTimes(4);
+  });
+
   it('does not record the visit from the cards tab', async () => {
     // «Свежее» считается по основной ленте: заглянув в открытки, человек не
     // должен потерять новые афоризмы «Для вас», так их и не увидев.
@@ -1076,10 +1095,16 @@ describe('MotivationService.report', () => {
 });
 
 describe('MotivationService.savePreference', () => {
-  function buildService() {
+  function buildService(existingSlugs: string[] = []) {
     const upsert = jest.fn().mockResolvedValue({});
+    const findUnique = jest.fn(({ where }: { where: { slug: string } }) =>
+      Promise.resolve(existingSlugs.includes(where.slug) ? { id: 'c1' } : null),
+    );
     const service = new MotivationService(
-      { motivationPreference: { upsert } } as never,
+      {
+        motivationPreference: { upsert },
+        motivationCategory: { findUnique },
+      } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1134,6 +1159,70 @@ describe('MotivationService.savePreference', () => {
     await service.savePreference('user-1', { vaishnavaPercent: 40 });
 
     expect(upsert.mock.calls[0][0].update).not.toHaveProperty('profileTypes');
+  });
+
+  // VED-401: кнопки «Вдохновения» на главной.
+  it('stores the home buttons picked by the member', async () => {
+    const { service, upsert } = buildService(['vedy']);
+
+    await service.savePreference('user-1', {
+      homeSourceWork: '  Шримад-Бхагаватам ',
+      homeCategorySlug: 'vedy',
+    });
+
+    expect(upsert.mock.calls[0][0].update).toEqual({
+      homeSourceWork: 'Шримад-Бхагаватам',
+      homeCategorySlug: 'vedy',
+    });
+    expect(upsert.mock.calls[0][0].create).toMatchObject({
+      homeSourceWork: 'Шримад-Бхагаватам',
+      homeCategorySlug: 'vedy',
+    });
+  });
+
+  it('returns a home button to its default on null or empty string', async () => {
+    const { service, upsert } = buildService();
+
+    await service.savePreference('user-1', {
+      homeSourceWork: '',
+      homeCategorySlug: null,
+    });
+
+    expect(upsert.mock.calls[0][0].update).toEqual({
+      homeSourceWork: null,
+      homeCategorySlug: null,
+    });
+  });
+
+  it('leaves the home buttons untouched when the fields are absent', async () => {
+    const { service, upsert } = buildService();
+
+    await service.savePreference('user-1', { language: 'en' });
+
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('homeSourceWork');
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty(
+      'homeCategorySlug',
+    );
+  });
+
+  it('rejects a folder that does not exist', async () => {
+    const { service, upsert } = buildService(['vedy']);
+
+    await expect(
+      service.savePreference('user-1', { homeCategorySlug: 'nety-takoy' }),
+    ).rejects.toThrow('Такого раздела нет');
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed home button value', async () => {
+    const { service } = buildService();
+
+    await expect(
+      service.savePreference('user-1', { homeCategorySlug: 'Мудрость мира' }),
+    ).rejects.toThrow('Некорректные настройки');
+    await expect(
+      service.savePreference('user-1', { homeSourceWork: 5 as never }),
+    ).rejects.toThrow('Некорректные настройки');
   });
 });
 

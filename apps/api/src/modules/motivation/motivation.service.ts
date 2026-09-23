@@ -76,6 +76,12 @@ import { orderTieredWithinSlots, sortByLocator } from './locator-order';
 import { attributionLine } from './postcard-events';
 import { adminAiVerdictOf, adminAppealOf } from './moderation-audit';
 import { MotivationSettingsService } from './motivation-settings.service';
+import {
+  InvalidHomeButtonError,
+  parseHomeCategorySlug,
+  parseHomeSourceWork,
+} from './home-buttons';
+import { TtlMemo } from './ttl-memo';
 
 /** Причины жалоб: список закрытый, свободный текст — только в комментарии. */
 /**
@@ -84,6 +90,14 @@ import { MotivationSettingsService } from './motivation-settings.service';
  */
 const VERSE_ORDER_LIMIT = 5000;
 const REPORT_REASONS = new Set(['spam', 'offensive', 'wrong_source', 'other']);
+/**
+ * Сколько живёт список авторов и источников фильтра (VED-252). Минута: дольше
+ * человек не ждёт, что только что опубликованный стих сразу прибавится к
+ * счётчику, а открывающих фильтр за минуту — много.
+ */
+const ATTRIBUTIONS_TTL_MS = 60_000;
+/** Разных сочетаний папки, вкладки и фильтра — десятки, не тысячи. */
+const ATTRIBUTIONS_MAX_KEYS = 200;
 import { MotivationAuthorSearchService } from './motivation-author-search.service';
 import {
   FalAudioService,
@@ -140,6 +154,13 @@ export class MotivationService {
     @Optional() private readonly bus?: EventEmitter2,
   ) {}
 
+  /** Списки фильтра ленты: одинаковы у всех читателей (VED-252). */
+  private readonly attributionsMemo =
+    new TtlMemo<MotivationFeedAttributionsDto>(
+      ATTRIBUTIONS_TTL_MS,
+      ATTRIBUTIONS_MAX_KEYS,
+    );
+
   async preference(userId: string) {
     return (
       (await this.prisma.motivationPreference.findUnique({
@@ -149,6 +170,8 @@ export class MotivationService {
         language: 'ru',
         profileTypes: [],
         lastSeenAt: null,
+        homeSourceWork: null,
+        homeCategorySlug: null,
       }
     );
   }
@@ -167,6 +190,7 @@ export class MotivationService {
     )
       throw new BadRequestException('Некорректные настройки');
     const profileTypes = this.parseProfileTypes(input.profileTypes);
+    const home = await this.parseHomeButtons(input);
     return this.prisma.motivationPreference.upsert({
       where: { userId },
       create: {
@@ -174,13 +198,47 @@ export class MotivationService {
         vaishnavaPercent: percent ?? 50,
         language: input.language ?? 'ru',
         profileTypes: profileTypes ?? [],
+        ...home,
       },
       update: {
         ...(percent !== undefined ? { vaishnavaPercent: percent } : {}),
         ...(input.language ? { language: input.language } : {}),
         ...(profileTypes ? { profileTypes } : {}),
+        ...home,
       },
     });
+  }
+
+  /**
+   * Кнопки «Вдохновения» на главной (VED-401). Не присланное поле в ответ не
+   * попадает и настройку не трогает; `null` возвращает умолчание. Папку
+   * сверяем с базой: слаг несуществующей папки дал бы кнопку в пустую ленту.
+   */
+  private async parseHomeButtons(input: MotivationPreferenceUpdate): Promise<{
+    homeSourceWork?: string | null;
+    homeCategorySlug?: string | null;
+  }> {
+    let work: string | null | undefined;
+    let slug: string | null | undefined;
+    try {
+      work = parseHomeSourceWork(input.homeSourceWork);
+      slug = parseHomeCategorySlug(input.homeCategorySlug);
+    } catch (error) {
+      if (error instanceof InvalidHomeButtonError)
+        throw new BadRequestException('Некорректные настройки');
+      throw error;
+    }
+    if (slug) {
+      const exists = await this.prisma.motivationCategory.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      if (!exists) throw new BadRequestException('Такого раздела нет');
+    }
+    return {
+      ...(work !== undefined ? { homeSourceWork: work } : {}),
+      ...(slug !== undefined ? { homeCategorySlug: slug } : {}),
+    };
   }
 
   /**
@@ -611,6 +669,24 @@ export class MotivationService {
    * пункт «Упанишады · 12» при выбранном Прабхупаде вёл бы в пустую ленту.
    */
   async feedAttributions(query: {
+    category?: string;
+    style?: 'art' | 'cards';
+    speaker?: string;
+    work?: string;
+  }): Promise<MotivationFeedAttributionsDto> {
+    // Ключ — уже нормализованные значения: «Гита» и «гита » — один список.
+    const key = JSON.stringify([
+      query.category ?? '',
+      query.style ?? '',
+      attributionFilter(query.speaker) ?? '',
+      attributionFilter(query.work, sourceKey) ?? '',
+    ]);
+    return this.attributionsMemo.get(key, () =>
+      this.computeFeedAttributions(query),
+    );
+  }
+
+  private async computeFeedAttributions(query: {
     category?: string;
     style?: 'art' | 'cards';
     speaker?: string;
