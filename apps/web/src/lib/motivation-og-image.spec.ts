@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   OG_IMAGE_ATTEMPTS,
   OG_IMAGE_MAX_BYTES,
+  OG_LAYOUT_VERSION,
   OG_PREVIEW_MAX_HEIGHT,
   OG_PREVIEW_WIDTH,
   encodeWithinLimit,
@@ -72,12 +73,20 @@ describe("encodeWithinLimit", () => {
 describe("ogImagePath", () => {
   it("живёт под открытым гостю префиксом /m/", () => {
     expect(ogImagePath("reel-33e14d6e-mu28cb8x")).toBe(
-      "/m/reel-33e14d6e-mu28cb8x/og",
+      `/m/reel-33e14d6e-mu28cb8x/og?v=${OG_LAYOUT_VERSION}`,
     );
   });
 
   it("экранирует slug", () => {
-    expect(ogImagePath("a/b?c")).toBe("/m/a%2Fb%3Fc/og");
+    expect(ogImagePath("a/b?c")).toBe(
+      `/m/a%2Fb%3Fc/og?v=${OG_LAYOUT_VERSION}`,
+    );
+  });
+
+  it("несёт версию раскладки, чтобы мессенджер не показывал старый кадр из кэша", () => {
+    expect(new URL(ogImagePath("x"), "https://vedamatch.ru").searchParams.get("v")).toBe(
+      OG_LAYOUT_VERSION,
+    );
   });
 });
 
