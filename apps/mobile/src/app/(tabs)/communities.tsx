@@ -15,6 +15,7 @@ import { sortMemberships } from '@/lib/communities/communities-list-state';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
 
 function openCommunity(community: CommunityBadgeDto) {
   router.push({
@@ -38,6 +39,8 @@ function openCommunity(community: CommunityBadgeDto) {
 export default function CommunitiesScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  // Под панелью быстрого доступа вырез уже занят ею (VED-385).
+  const topInset = useScreenTopInset();
   const { api } = useSession();
   const { webOrigin } = appVariant();
   const communitiesApi = useMemo(() => createCommunitiesApi(api), [api]);
@@ -89,7 +92,7 @@ export default function CommunitiesScreen() {
   // `body` (список) — заголовок прыгал при появлении данных (раунд оценки
   // 006, дефект 2). Теперь он всегда одна и та же строка вне `body`.
   const header = (
-    <View style={[styles.titleRow, { paddingTop: insets.top + 16 }]}>
+    <View style={[styles.titleRow, { paddingTop: topInset + 16 }]}>
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
         Общины
       </Text>
@@ -154,7 +157,7 @@ export default function CommunitiesScreen() {
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} progressViewOffset={insets.top} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.magenta]} progressViewOffset={topInset} />
         }
       >
         {error ? (
