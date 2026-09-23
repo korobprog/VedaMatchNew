@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { audiobookMeta, audiobookResumeLabel } from "./audiobook-labels";
+import {
+  audiobookMeta,
+  audiobookResumeLabel,
+  pausedPosition,
+} from "./audiobook-labels";
 
 describe("audiobookMeta", () => {
   it("главы и длительность через точку", () => {
@@ -28,5 +32,19 @@ describe("audiobookResumeLabel", () => {
     expect(
       audiobookResumeLabel({ trackId: "t", chapterNumber: 4, positionSeconds: 0 }),
     ).toBe("Продолжить: глава 4");
+  });
+});
+
+describe("pausedPosition", () => {
+  it("плеер ещё не загрузил файл — берём серверную позицию, а не ноль", () => {
+    expect(pausedPosition(0, 754)).toBe(754);
+  });
+
+  it("плеер ушёл дальше — его позиция свежее", () => {
+    expect(pausedPosition(812.6, 754)).toBe(812);
+  });
+
+  it("нигде ничего — с начала главы", () => {
+    expect(pausedPosition(0, 0)).toBe(0);
   });
 });

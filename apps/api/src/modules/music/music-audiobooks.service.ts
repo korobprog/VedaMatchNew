@@ -72,7 +72,12 @@ interface CardRow {
   title: string;
   author: string | null;
   coverKey: string | null;
-  reader: { id: string; slug: string; name: string; coverKey: string | null } | null;
+  reader: {
+    id: string;
+    slug: string;
+    name: string;
+    coverKey: string | null;
+  } | null;
   chapters: { track: { durationSeconds: number } }[];
 }
 
@@ -498,7 +503,9 @@ export class MusicAudiobooksService {
       }),
     ]);
     if (found !== ids.length) {
-      throw new BadRequestException('Часть записей не найдена — обновите страницу');
+      throw new BadRequestException(
+        'Часть записей не найдена — обновите страницу',
+      );
     }
 
     const conflict = findChapterConflict(

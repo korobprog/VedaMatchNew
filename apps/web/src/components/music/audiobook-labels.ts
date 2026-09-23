@@ -34,3 +34,19 @@ export function audiobookResumeLabel(resume: MusicAudiobookResumeDto): string {
     ? `Продолжить: ${chapter}, с ${formatTrackDuration(resume.positionSeconds)}`
     : `Продолжить: ${chapter}`;
 }
+
+/**
+ * С какой секунды продолжать главу, которая уже стоит в плеере на паузе.
+ *
+ * Плеер, поднятый из сохранённого состояния, знает позицию, но показывает
+ * ноль, пока файл не начал грузиться. Взять этот ноль — значит начать главу
+ * заново и потерять место. Поэтому ноль плеера уступает серверной позиции
+ * той же главы; ненулевая позиция плеера свежее серверной и побеждает.
+ */
+export function pausedPosition(
+  playerSeconds: number,
+  serverSeconds: number,
+): number {
+  const player = Math.max(0, Math.floor(playerSeconds || 0));
+  return player > 0 ? player : Math.max(0, Math.floor(serverSeconds || 0));
+}

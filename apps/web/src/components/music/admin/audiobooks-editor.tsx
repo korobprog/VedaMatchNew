@@ -227,7 +227,20 @@ function AudiobookCard({
   artists: MusicArtistDto[];
 }) {
   const router = useRouter();
-  const [chapters, setChapters] = useState(book.chapters);
+  /**
+   * Состав, показанный до ответа сервера, — вместе с тем списком из
+   * пропсов, поверх которого он собран. Пришли свежие пропсы (после
+   * `router.refresh()` или правки из списка «вне книг») — прежний черновик
+   * сам перестаёт действовать, и экран показывает то, что в базе. Копия
+   * пропсов в `useState` здесь застревала: глава, добавленная соседним
+   * блоком, не появлялась, пока страницу не перезагрузят.
+   */
+  const [draft, setDraft] = useState<{
+    base: MusicAdminAudiobookChapterDto[];
+    list: MusicAdminAudiobookChapterDto[];
+  } | null>(null);
+  const chapters =
+    draft && draft.base === book.chapters ? draft.list : book.chapters;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -238,8 +251,7 @@ function AudiobookCard({
    * которого в базе нет.
    */
   async function save(next: MusicAdminAudiobookChapterDto[], done: string) {
-    const before = chapters;
-    setChapters(next);
+    setDraft({ base: book.chapters, list: next });
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -251,7 +263,7 @@ function AudiobookCard({
       setNotice(done);
       router.refresh();
     } catch (cause) {
-      setChapters(before);
+      setDraft(null);
       setError(message(cause, "Не удалось сохранить главы"));
     } finally {
       setBusy(false);
@@ -767,6 +779,9 @@ function UnassignedTracks({
                 {[
                   track.artistName,
                   formatTrackDuration(track.durationSeconds),
+                  track.status === "published"
+                    ? null
+                    : STATUS_LABEL[track.status],
                 ]
                   .filter(Boolean)
                   .join(" · ")}

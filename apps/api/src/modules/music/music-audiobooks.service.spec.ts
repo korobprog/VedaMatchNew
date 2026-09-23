@@ -30,9 +30,7 @@ function prismaMock() {
 }
 
 const covers = {
-  resolveKey: jest.fn(
-    ({ next }: { next: string | null | undefined }) => next,
-  ),
+  resolveKey: jest.fn(({ next }: { next: string | null | undefined }) => next),
 };
 const config = { get: jest.fn(() => undefined) };
 
