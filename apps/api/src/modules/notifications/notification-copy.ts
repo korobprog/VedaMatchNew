@@ -3,6 +3,7 @@ import type {
   NotificationEvent,
   NotificationEventName,
   TaskStatusMark,
+  WellnessCheckReason,
 } from '@vedamatch/shared';
 import { workStatusThreadKey } from './inbox-thread';
 
@@ -61,6 +62,7 @@ export const notificationEventNames = {
   vacancyOfferClosed: 'vacancies.offer.closed',
   travelBookingCreated: 'travel.booking.created',
   travelBookingStatusChanged: 'travel.booking.status-changed',
+  wellnessProductChecked: 'wellness.product.checked',
 } as const satisfies Record<string, NotificationEventName>;
 
 /** Подпись вида предложения в «Вакансиях» — событие несёт код. */
@@ -643,6 +645,8 @@ export function buildNotification(
         tag: `music-track:${event.trackId}`,
         category: 'music',
       };
+    case 'wellness.product.checked':
+      return wellnessCheckedNotification(event);
     case 'music.track.rejected':
       return {
         title: 'Запись не пошла в каталог',
@@ -821,5 +825,99 @@ function orderStatusPhrase(
     case 'new_request':
     default:
       return 'заявка обновлена';
+  }
+}
+
+/**
+ * Почему карточка «Здоровья» не принята сама — словами для человека,
+ * приславшего снимок (VED-384). Событие несёт коды, тексты живут здесь.
+ */
+export const WELLNESS_CHECK_REASON_TEXT: Record<WellnessCheckReason, string> = {
+  ai_unavailable: 'автопроверка сейчас не работает',
+  ai_failed: 'автопроверка не смогла завершиться',
+  ai_unreadable: 'ответ автопроверки не удалось разобрать',
+  daily_budget: 'автопроверки на сегодня закончились',
+  user_daily_limit: 'за сутки от вас много карточек — остальные смотрит человек',
+  not_found: 'товар не нашёлся в открытых источниках',
+  sources_conflict: 'источники расходятся между собой',
+  too_few_sources: 'товар подтвердил меньше чем два независимых сайта',
+  sources_unverified: 'страницы с товаром не удалось открыть для сверки',
+  name_mismatch: 'по этому штрихкоду в источниках другой товар',
+  composition_unconfirmed: 'состав не удалось подтвердить по источникам',
+  composition_mismatch: 'состав в источниках отличается от снимка',
+  catalog_matches_differ: 'уточнённый состав меняет ответ по ингредиентам',
+  not_food_unconfirmed: 'похоже, это не продукт питания',
+  not_food: 'это не продукт питания',
+};
+
+const REFINED_FIELD_TEXT: Record<'name' | 'brand' | 'ingredients', string> = {
+  name: 'название',
+  brand: 'производителя',
+  ingredients: 'состав',
+};
+
+function capitalize(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
+function wellnessCheckedNotification(
+  event: Extract<NotificationEvent, { name: 'wellness.product.checked' }>,
+): NotificationContent {
+  const product = `«${toExcerpt(event.productName)}»`;
+  const published =
+    event.outcome === 'accepted' || event.outcome === 'refined';
+  const base = {
+    // Опубликованную карточку видно по штрихкоду; остальные — в проверках.
+    url: published
+      ? `/wellness/products/${encodeURIComponent(event.barcode)}`
+      : '/wellness/history',
+    // Один тег на карточку: «на проверке у модератора» заменяется решением.
+    tag: `wellness-product:${event.productId}`,
+    // Своей категории у «Здоровья» нет, а новая — это новый тумблер в
+    // настройках. Решение по присланному, как и заявка в Библиотеке, ближе
+    // всего к поддержке.
+    category: 'support' as const,
+  };
+  const reason = event.reasons[0]
+    ? WELLNESS_CHECK_REASON_TEXT[event.reasons[0]]
+    : null;
+
+  switch (event.outcome) {
+    case 'accepted':
+      return {
+        ...base,
+        title: 'Продукт добавлен в базу',
+        body:
+          event.decidedBy === 'ai'
+            ? `${product}: нашли в открытых источниках, состав совпал со снимком. Теперь его найдут все по штрихкоду.`
+            : `${product} проверил модератор. Теперь его найдут все по штрихкоду.`,
+      };
+    case 'refined': {
+      const fields = event.refined.map((field) => REFINED_FIELD_TEXT[field]);
+      return {
+        ...base,
+        title: 'Продукт добавлен с уточнениями',
+        body: fields.length
+          ? `${product}: сверили с открытыми источниками и уточнили ${fields.join(', ')}. Теперь его найдут все по штрихкоду.`
+          : `${product}: сверили с открытыми источниками. Теперь его найдут все по штрихкоду.`,
+      };
+    }
+    case 'review':
+      return {
+        ...base,
+        title: 'Продукт на проверке у модератора',
+        body: reason
+          ? `${product}: ${reason}. Модератор посмотрит сам — ответ придёт сюда же.`
+          : `${product}: модератор посмотрит сам — ответ придёт сюда же.`,
+      };
+    case 'rejected':
+      return {
+        ...base,
+        title: 'Продукт не добавлен',
+        body:
+          event.decidedBy === 'moderator' && event.comment
+            ? `${product}: ${toExcerpt(event.comment)}`
+            : `${product}: ${reason ?? 'карточку отклонили'}.`,
+      };
   }
 }

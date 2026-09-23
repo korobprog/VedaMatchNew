@@ -150,6 +150,102 @@ export interface WellnessCreateProductRequest {
   ingredientsRaw: string;
   imageUrl?: string;
   labelImageUrl?: string;
+  /**
+   * Снимок упаковки data-URL — тот же, что уходил на распознавание. Нужен
+   * только автопроверке (VED-384): по нему ИИ узнаёт товар, пока ищет его в
+   * открытых источниках. После проверки стирается.
+   */
+  labelImageDataUrl?: string;
+}
+
+/**
+ * Автопроверка карточки, присланной человеком (VED-384). `queued`/`running` —
+ * рабочие состояния, остальные окончательные: `accepted` — принята как есть,
+ * `refined` — ИИ уточнил название, производителя или состав и карточка
+ * принята, `review` — решать модератору, `rejected` — отклонена,
+ * `cancelled` — модератор решил раньше очереди.
+ */
+export type WellnessCheckStatus =
+  | 'queued'
+  | 'running'
+  | 'accepted'
+  | 'refined'
+  | 'review'
+  | 'rejected'
+  | 'cancelled';
+
+/**
+ * Почему карточка не принята сама. Коды, а не тексты: формулировку для
+ * человека собирает тот, кто показывает (админка, уведомление).
+ */
+export type WellnessCheckReason =
+  /** Автопроверка выключена или ИИ не настроен. */
+  | 'ai_unavailable'
+  /** Три попытки подряд провайдер не ответил. */
+  | 'ai_failed'
+  /** Ответ ИИ пришёл, но разобрать его не удалось. */
+  | 'ai_unreadable'
+  /** Дневной бюджет автопроверок исчерпан. */
+  | 'daily_budget'
+  /** Слишком много карточек от одного человека за сутки. */
+  | 'user_daily_limit'
+  /** ИИ не нашёл товар в открытых источниках. */
+  | 'not_found'
+  /** Источники разошлись между собой или с упаковкой. */
+  | 'sources_conflict'
+  /** Меньше двух независимых сайтов подтверждают товар. */
+  | 'too_few_sources'
+  /** Ни одну страницу сервер не открыл со штрихкодом на ней. */
+  | 'sources_unverified'
+  /** Название на упаковке и в источниках — разные товары. */
+  | 'name_mismatch'
+  /** Состав не нашёлся ни на одной проверенной странице. */
+  | 'composition_unconfirmed'
+  /** Состав в источниках заметно другой, чем на снимке. */
+  | 'composition_mismatch'
+  /** Уточнённый состав меняет то, что нашёл справочник. */
+  | 'catalog_matches_differ'
+  /** ИИ считает, что это не еда, но подтвердить нечем. */
+  | 'not_food_unconfirmed'
+  /** Не продукт питания — подтверждено источниками. */
+  | 'not_food';
+
+/**
+ * Насколько источнику можно верить. `verified` — страницу открыл наш сервер
+ * и нашёл на ней штрихкод; `opened` — по журналу провайдера страницу открыл
+ * поиск, но сами мы её не видели; `claimed` — адрес есть только в словах ИИ.
+ */
+export type WellnessCheckSourceLevel = 'verified' | 'opened' | 'claimed';
+
+export interface WellnessCheckSource {
+  url: string;
+  title: string;
+  /** Страница называет этот товар (по словам ИИ). */
+  confirmsProduct: boolean;
+  /** Страница приводит состав (по словам ИИ). */
+  confirmsIngredients: boolean;
+  level: WellnessCheckSourceLevel;
+  /** Сервер нашёл на странице большую часть слов состава. */
+  ingredientsOnPage: boolean;
+}
+
+/** Автопроверка в админке: что прислал человек, что предложил ИИ и почему. */
+export interface WellnessCheckDto {
+  status: WellnessCheckStatus;
+  reasons: WellnessCheckReason[];
+  submitted: { name: string; brand: string | null; ingredientsRaw: string };
+  proposal: {
+    found: boolean | null;
+    notFood: boolean | null;
+    name: string | null;
+    brand: string | null;
+    ingredientsRaw: string | null;
+    conflicts: string[];
+  };
+  sources: WellnessCheckSource[];
+  attemptCount: number;
+  costUsd: number;
+  finishedAt: string | null;
 }
 
 export interface WellnessHistoryItem {
