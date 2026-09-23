@@ -32,7 +32,7 @@ import {
   useServiceCatalog,
   useServiceNames,
 } from "@/components/service-catalog-provider";
-import { portalLocationLabel } from "@/lib/portal-location";
+import { portalLocationLabel, portalLocationTitle } from "@/lib/portal-location";
 import {
   nextPortalWindow,
   portalWindowButtonHint,
@@ -367,13 +367,17 @@ function ActionIcon({ meta }: { meta: QuickActionMeta }) {
 }
 
 /**
- * Второе окно портала (VED-118, VED-163, VED-326).
+ * Второе окно портала (VED-118, VED-163, VED-326, VED-374).
  *
  * Одна и та же кнопка уводит туда и возвращает обратно, а на самой кнопке
- * стоит НАЗВАНИЕ МЕСТА, где второе окно стоит сейчас: «Работа», «Музыка»,
- * «Новое окно». Номер окна отвечал только на вопрос «какое из двух», а
- * спрашивают «что там осталось». Куда именно вести, решает модель: окно
- * помнит свой последний адрес и положение прокрутки.
+ * стоит НАЗВАНИЕ МЕСТА, где второе окно стоит сейчас: «Работа», «Блог ·
+ * Авторы», «Новое окно». Номер окна отвечал только на вопрос «какое из
+ * двух», а спрашивают «что там осталось». Куда именно вести, решает модель:
+ * окно помнит свой последний адрес и положение прокрутки.
+ *
+ * На кнопке подпись короткая, в подсказке и у скринридера — полная: короткая
+ * обязана держаться в одну строку, иначе вторая строка поднимает значок
+ * окна (VED-374), а в подсказке места сколько угодно.
  */
 function WindowTile({ onSwitch }: { onSwitch: () => void }) {
   const router = useRouter();
@@ -383,12 +387,16 @@ function WindowTile({ onSwitch }: { onSwitch: () => void }) {
     (url: string | null) => portalLocationLabel(url, names),
     [names],
   );
+  const title = useCallback(
+    (url: string | null) => portalLocationTitle(url, names),
+    [names],
+  );
 
   return (
     <button
       type="button"
-      title={portalWindowButtonHint(state, label)}
-      aria-label={portalWindowButtonHint(state, label)}
+      title={portalWindowButtonHint(state, title)}
+      aria-label={portalWindowButtonHint(state, title)}
       onClick={() => {
         const target = switchPortalWindows(
           nextPortalWindow(state, state.windows.length),
@@ -405,7 +413,13 @@ function WindowTile({ onSwitch }: { onSwitch: () => void }) {
       className={tileClass}
     >
       <Columns2 className={TILE_ICON} />
-      <span className="line-clamp-2">
+      {/* Одна строка, а не `line-clamp-2` (VED-374): плитка центрирует
+          содержимое по вертикали, и вторая строка подписи поднимает значок
+          окна — ровно то смещение, которое заказчик назвал критерием.
+          Название уже укорочено по смыслу (`portalLocationLabel`), а
+          `truncate` здесь — страховка на случай длинного имени из каталога:
+          режет CSS, но значок остаётся на месте. */}
+      <span className="w-full truncate">
         {portalWindowButtonLabel(state, label)}
       </span>
     </button>
