@@ -102,8 +102,6 @@ export function useDonationSettings(): DonationSettingsState {
     if (donation !== undefined) return;
     let alive = true;
     void loadDonationSettings().then((next) => {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect -- ответ
-         приходит из сети, синхронно его знать неоткуда. */
       if (alive && next !== undefined) setDonation(next);
     });
     return () => {
