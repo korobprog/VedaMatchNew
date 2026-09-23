@@ -16,6 +16,10 @@ import {
   WORK_TASK_MARK_REFRESHED_EVENT,
   resolveDisplayName,
 } from '@vedamatch/shared';
+import {
+  WORK_TASK_CLOSED_EVENT,
+  type WorkTaskClosedEvent,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { androidChannelFor } from './android-channel';
 import { decideDelivery, describeDeliverySkip } from './delivery-rule';
@@ -496,6 +500,25 @@ export class NotificationsListener {
       .catch((error) =>
         this.logger.warn(
           `Пометка состояния ${event.taskKey} не обновлена: ${String(error)}`,
+        ),
+      );
+  }
+
+  /**
+   * Задачу закрыли (VED-406) — у закрывшего и у того, от чьего имени
+   * действовал агент, непрочитанное о ней гаснет и уходит в историю.
+   * Поправка, а не новость: мимо `deliver()`, осечка — только в лог.
+   */
+  @OnEvent(WORK_TASK_CLOSED_EVENT)
+  onWorkTaskClosed(event: WorkTaskClosedEvent): void {
+    void this.notifications
+      .readClosedWorkTask(event.spaceId, event.taskKey, [
+        event.actorId,
+        event.onBehalfOfId,
+      ])
+      .catch((error) =>
+        this.logger.warn(
+          `Уведомления о закрытой ${event.taskKey} не погашены: ${String(error)}`,
         ),
       );
   }

@@ -7,6 +7,10 @@ import {
   CHAT_CALL_ENDED_EVENT,
   WORK_TASK_MARK_REFRESHED_EVENT,
 } from '@vedamatch/shared';
+import {
+  WORK_TASK_CLOSED_EVENT,
+  type WorkTaskClosedEvent,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NativePushService } from './native-push.service';
 import { NotificationsListener } from './notifications.listener';
@@ -877,6 +881,46 @@ describe('NotificationsListener wiring', () => {
       'done',
       [],
       { ownerIds: undefined },
+    );
+
+    await app.close();
+  });
+
+  it('has a live @OnEvent handler for work.task.closed (VED-406)', async () => {
+    // Без обработчика уведомления о задаче, которую человек сам принял, так и
+    // висят у него в «Новом» с пометкой «Выполнено».
+    const notifications = {
+      readClosedWorkTask: jest.fn(() => Promise.resolve(1)),
+    };
+    const moduleRef = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
+      providers: [
+        NotificationsListener,
+        { provide: NotificationsService, useValue: notifications },
+        { provide: PushSenderService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+        { provide: NativePushService, useValue: {} },
+        { provide: TelegramNotificationsService, useValue: {} },
+        { provide: TelegramSenderService, useValue: {} },
+      ],
+    }).compile();
+
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    const emitter = moduleRef.get(EventEmitter2);
+
+    emitter.emit(WORK_TASK_CLOSED_EVENT, {
+      name: WORK_TASK_CLOSED_EVENT,
+      spaceId: 'space-1',
+      taskKey: 'VED-380',
+      actorId: 'agent',
+      onBehalfOfId: 'stas',
+    } satisfies WorkTaskClosedEvent);
+
+    expect(notifications.readClosedWorkTask).toHaveBeenCalledWith(
+      'space-1',
+      'VED-380',
+      ['agent', 'stas'],
     );
 
     await app.close();

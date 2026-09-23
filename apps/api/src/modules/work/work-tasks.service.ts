@@ -27,6 +27,10 @@ import {
   type WorkTaskViewedResponse,
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
+import {
+  WORK_TASK_CLOSED_EVENT,
+  type WorkTaskClosedEvent,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   WORK_EVENTS,
@@ -50,7 +54,7 @@ import {
   resolveMovePosition,
 } from './work-position';
 import { assertWorkAccess } from './work-roles';
-import { resolveTaskStatusMark } from './work-task-status';
+import { closesTask, resolveTaskStatusMark } from './work-task-status';
 import {
   loadCreatedOnBehalf,
   loadWorkViewerState,
@@ -603,6 +607,21 @@ export class WorkTasksService {
           ),
           ownerIds: await this.markOwners(task),
         } satisfies WorkTaskMarkRefreshedEvent);
+
+        // Задачу закрыли (VED-406): у закрывшего уведомления о ней больше не
+        // новость — он сам принял работу. Без этого они оставались в «Новом»
+        // и через поправку выше перекрашивались в «Выполнено». Остальным —
+        // исполнителю и автору — новость о закрытии придёт через окно
+        // дозревания обычным порядком: для них это как раз новость.
+        if (closesTask(column)) {
+          this.events.emit(WORK_TASK_CLOSED_EVENT, {
+            name: WORK_TASK_CLOSED_EVENT,
+            spaceId: context.spaceId,
+            taskKey: workTaskKey(task.space.prefix, task.number),
+            actorId: userId,
+            onBehalfOfId,
+          } satisfies WorkTaskClosedEvent);
+        }
       }
     }
 

@@ -75,6 +75,30 @@ describe('resolveWorkNotice — только перенос', () => {
     });
   });
 
+  it('выезд из тематической колонки с флагом «завершающая» — не возврат (VED-406)', () => {
+    // «РАЗНОЕ.» на доске портала отмечена завершающей, новые карточки
+    // заказчик заводит в ней. Агент берёт карточку в тест — это смена
+    // статуса, а не «Задачу вернули».
+    const misc: WorkNoticeColumn = { id: 'c5', name: 'РАЗНОЕ.', isDone: true };
+    expect(resolveWorkNotice(moved(misc, testing))).toMatchObject({
+      kind: 'status',
+      fromColumnName: 'РАЗНОЕ.',
+      toColumnName: 'Тестирование',
+    });
+  });
+
+  it('выезд из «Выполнено» — возврат, как и из «Готово»', () => {
+    const accepted: WorkNoticeColumn = {
+      id: 'c6',
+      name: 'Выполнено',
+      isDone: true,
+    };
+    expect(resolveWorkNotice(moved(accepted, todo))).toMatchObject({
+      kind: 'returned',
+      columnName: 'Надо',
+    });
+  });
+
   it('несколько переносов подряд — одна новость с итоговой колонкой', () => {
     // Очередь хранит колонку первого движения, «куда» читается на отправке:
     // промежуточные остановки в новость не попадают вовсе.
