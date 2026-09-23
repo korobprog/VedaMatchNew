@@ -83,27 +83,57 @@ describe("FeedAttributionFilter", () => {
       <FeedAttributionFilter state={{ tab: "forYou", work: "Бхагавад-гита" }} variant="chip" />,
     );
 
-    const trigger = screen.getByRole("button", { name: "Изменить фильтр по автору и источнику" });
+    const trigger = screen.getByRole("button", {
+      name: "Фильтр включён: источник «Бхагавад-гита». Изменить или снять",
+    });
     expect(trigger).toHaveTextContent("");
     expect(
       screen.getByRole("link", { name: "Убрать фильтр по источнику: Бхагавад-гита" }),
     ).toBeInTheDocument();
   });
 
-  it("выбранное видно чипами, крестик убирает только своё", () => {
+  // VED-389: чип «📖 Бхагавад-гита ✕» висел поверх картинки — его убрали.
+  // Выбранное видно точкой, слышно из подписи значка, снимается в окне.
+  it("в ряду вкладок выбранное не висит чипами: точка на значке и подпись для скринридера", () => {
     render(
       <FeedAttributionFilter
         state={{ tab: "cards", category: "vedy", work: "Бхагавад-гита", speaker: "Кришна" }}
       />,
     );
-    const work = screen.getByRole("link", { name: "Убрать фильтр по источнику: Бхагавад-гита" });
-    const query = new URL(work.getAttribute("href")!, "https://x").searchParams;
-    expect(Object.fromEntries(query)).toEqual({ tab: "cards", category: "vedy", speaker: "Кришна" });
-    const trigger = screen.getByRole("button", { name: "Изменить фильтр по автору и источнику" });
-    expect(trigger).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Убрать фильтр/ })).toBeNull();
+    expect(screen.queryByText("Бхагавад-гита")).toBeNull();
+    const trigger = screen.getByRole("button", {
+      name: "Фильтр включён: источник «Бхагавад-гита», автор «Кришна». Изменить или снять",
+    });
     // Активный фильтр отмечен точкой на значке (VED-252) — тем же приёмом,
     // что активная вкладка отмечена цветом, а не подписью на кнопке.
     expect(trigger.querySelector(".bg-magenta")).toBeInTheDocument();
+  });
+
+  it("снять фильтр можно из окна одним нажатием — вкладка и папка остаются", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse()));
+    const user = userEvent.setup();
+    render(
+      <FeedAttributionFilter
+        state={{ tab: "cards", category: "vedy", work: "Бхагавад-гита", speaker: "Кришна" }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Фильтр включён/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Автор и источник" });
+    const reset = within(dialog).getByRole("link", { name: "Снять фильтр" });
+    const query = new URL(reset.getAttribute("href")!, "https://x").searchParams;
+    expect(Object.fromEntries(query)).toEqual({ tab: "cards", category: "vedy" });
+  });
+
+  it("без фильтра кнопки «Снять фильтр» в окне нет", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(listResponse()));
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+
+    await user.click(screen.getByRole("button", { name: "Фильтр по автору и источнику" }));
+    const dialog = await screen.findByRole("dialog", { name: "Автор и источник" });
+    expect(within(dialog).queryByRole("link", { name: "Снять фильтр" })).toBeNull();
   });
 
   it("открывает список со счётчиками и отмечает выбранное", async () => {
@@ -119,7 +149,7 @@ describe("FeedAttributionFilter", () => {
     const user = userEvent.setup();
     render(<FeedAttributionFilter state={{ tab: "forYou", work: "бхагавад-гита" }} />);
 
-    await user.click(screen.getByRole("button", { name: "Изменить фильтр по автору и источнику" }));
+    await user.click(screen.getByRole("button", { name: /Фильтр включён: источник «бхагавад-гита»/ }));
     const dialog = await screen.findByRole("dialog", { name: "Автор и источник" });
     const gita = await within(dialog).findByRole("link", { name: /Бхагавад-гита/ });
     expect(gita.getAttribute("aria-current")).toBe("true");

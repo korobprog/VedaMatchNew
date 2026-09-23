@@ -89,17 +89,35 @@ export function compareLocators(
   return compareKeys(locatorKey(a), locatorKey(b));
 }
 
-/**
- * Номер стиха поста: поле локатора, а если оно пустое — номер, записанный в
- * конец источника («Бхагавад-гита 2.11»).
- */
-export function effectiveLocator(post: {
+/** Что нужно от поста, чтобы поставить его в ряд стихов. */
+export interface LocatedPost {
+  id: string;
   attributionLocator: string | null;
   attributionWork?: string | null;
-}): string | null {
+  /**
+   * Заголовок поста. У афоризма участника это и есть «Бхагавад-гита 2.62»,
+   * а поле локатора бывает пустым — см. `effectiveLocator`.
+   */
+  title?: string | null;
+}
+
+/**
+ * Номер стиха поста: поле локатора; если оно пустое — номер, записанный в
+ * конец источника («Бхагавад-гита 2.11»); если и там нет — номер в конце
+ * заголовка (VED-389).
+ *
+ * Заголовок — последний довод, а не первый: его пишет редакция свободно, и
+ * «7 привычек» номером стиха не станет только потому, что `splitWorkLocator`
+ * берёт лишь номер с точкой в самом конце. Без этого довода стих, у которого
+ * номер остался только в заголовке, считался «без номера» и уезжал в хвост:
+ * лента Гиты открывалась единственным пронумерованным 2.62, а дальше шло
+ * вразнобой — ровно то, что прислали в VED-389.
+ */
+export function effectiveLocator(post: Omit<LocatedPost, 'id'>): string | null {
   return (
     post.attributionLocator?.trim() ||
-    splitWorkLocator(post.attributionWork).locator
+    splitWorkLocator(post.attributionWork).locator ||
+    splitWorkLocator(post.title).locator
   );
 }
 
@@ -108,13 +126,7 @@ export function effectiveLocator(post: {
  * исходном порядке (сортировка стабильная), дальше решает `id` — порядок
  * обязан совпадать между страницами.
  */
-export function sortByLocator<
-  T extends {
-    id: string;
-    attributionLocator: string | null;
-    attributionWork?: string | null;
-  },
->(posts: readonly T[]): T[] {
+export function sortByLocator<T extends LocatedPost>(posts: readonly T[]): T[] {
   const keyed = posts.map((post) => ({
     post,
     key: locatorKey(effectiveLocator(post)),
@@ -139,13 +151,10 @@ export function sortByLocator<
  * Ключ источника даёт вызывающий (обычно нормализованное название): посты
  * без источника не трогаются.
  */
-export function orderWithinSlots<
-  T extends {
-    id: string;
-    attributionLocator: string | null;
-    attributionWork?: string | null;
-  },
->(items: readonly T[], sourceOf: (item: T) => string | null): T[] {
+export function orderWithinSlots<T extends LocatedPost>(
+  items: readonly T[],
+  sourceOf: (item: T) => string | null,
+): T[] {
   const groups = new Map<string, number[]>();
   items.forEach((item, index) => {
     const source = sourceOf(item);
@@ -168,14 +177,7 @@ export function orderWithinSlots<
  * яруса. Иначе ранний стих, уже виденный человеком, уехал бы вперёд, в
  * «свежее», и подпись яруса на слайде соврала бы.
  */
-export function orderTieredWithinSlots<
-  T extends {
-    id: string;
-    attributionLocator: string | null;
-    attributionWork?: string | null;
-  },
-  Tier,
->(
+export function orderTieredWithinSlots<T extends LocatedPost, Tier>(
   items: readonly { post: T; tier?: Tier }[],
   sourceOf: (post: T) => string | null,
 ): { post: T; tier?: Tier }[] {

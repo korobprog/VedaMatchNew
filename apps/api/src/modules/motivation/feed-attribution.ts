@@ -30,12 +30,19 @@ export function attributionKey(value: string | null | undefined): string {
 }
 
 /**
- * Номер стиха в конце названия книги: «2.11», «1.2.12», «2.42-43», можно с
- * пометкой «БГ», «ШБ», «гл.», «текст». Без точки число номером не считается:
- * «Псалом 23» — это название, а не стих.
+ * Номер стиха в конце названия книги: «2.11», «1.2.12», «2.42-43», «2:62»,
+ * можно с пометкой «БГ», «ШБ», «гл.», «текст». Без точки или двоеточия
+ * число номером не считается: «Псалом 23» — это название, а не стих.
  */
 const TRAILING_LOCATOR =
-  /^(.*?\S)[\s,]+(?:(?:бг|шб|чч|гл\.?|глава|стих|текст)\.?\s*)?(\d+(?:\.\d+)+(?:\s*[-‐‑‒–—]\s*\d+)?)\s*\.?$/iu;
+  /^(.*?\S)[\s,]+(?:(?:бг|шб|чч|гл\.?|глава|стих|текст)\.?\s*)?(\d+(?:[.:]\d+)+(?:\s*[-‐‑‒–—]\s*\d+)?)\s*\.?$/iu;
+
+/**
+ * Номер словами: «Бхагавад-гита, глава 2, стих 62» (VED-389). Такую запись
+ * оставляют руками, и без разбора стих уходил в конец ленты источника.
+ */
+const TRAILING_WORDED_LOCATOR =
+  /^(.*?\S)[\s,]+(?:глава|гл\.)\s*(\d+)[\s,.]+(?:стих|текст|шлока|шл\.)\s*(\d+(?:\s*[-‐‑‒–—]\s*\d+)?)\s*\.?$/iu;
 
 /**
  * Книга и номер стиха из строки источника.
@@ -50,11 +57,17 @@ export function splitWorkLocator(value: string | null | undefined): {
   locator: string | null;
 } {
   const text = (value ?? '').replace(/\s+/g, ' ').trim();
+  const worded = TRAILING_WORDED_LOCATOR.exec(text);
+  if (worded)
+    return {
+      work: worded[1].replace(/[\s,]+$/, ''),
+      locator: `${worded[2]}.${worded[3].replace(/\s+/g, '')}`,
+    };
   const match = TRAILING_LOCATOR.exec(text);
   if (!match) return { work: text, locator: null };
   return {
     work: match[1].replace(/[\s,]+$/, ''),
-    locator: match[2].replace(/\s+/g, ''),
+    locator: match[2].replace(/\s+/g, '').replace(/:/g, '.'),
   };
 }
 

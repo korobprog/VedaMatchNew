@@ -29,11 +29,12 @@ export type ActionLabel = {
 /**
  * Предел длины видимой подписи.
  *
- * Клетка сетки на телефоне (375px, три колонки во всю ширину карточки) —
- * около 92px. При 12px это примерно дюжина знаков в строку. Что длиннее —
- * рвёт сетку или обрезается многоточием, то есть снова становится загадкой.
+ * Сетка — четыре колонки и на телефоне (VED-343: «2 ряда по 4»). Клетка на
+ * 360px — около 65px, при 11px в неё входит «Поделиться» и «Загружаем…»
+ * (10 знаков), замерено в браузере. Что длиннее — рвёт сетку или
+ * обрезается многоточием, то есть снова становится загадкой.
  */
-export const CAPTION_MAX = 12;
+export const CAPTION_MAX = 10;
 
 /**
  * «Открыть в ленте» — посмотреть афоризм глазами читателя. Та самая вторая
@@ -78,10 +79,16 @@ export function editActionLabel(editing: boolean): ActionLabel {
     : { label: "Править текст", caption: "Править" };
 }
 
-export function readActionLabel(reading: boolean): ActionLabel {
-  return reading
-    ? { label: "Свернуть текст", caption: "Свернуть" }
-    : { label: "Читать полностью", caption: "Читать" };
+/**
+ * «Поделиться» на месте «Читать» (VED-343): тот же портальный экран, что у
+ * кнопки ленты, — см. `post-share.ts`. У скрытой карточки ссылки на пост
+ * нет (страница `/m/<slug>` показывает только опубликованное), поэтому
+ * кнопка неактивна и говорит, что сделать сначала, — как «В ленту».
+ */
+export function shareActionLabel(hidden: boolean): ActionLabel {
+  return hidden
+    ? { label: "Скрыто — поделиться можно после возврата в ленту", caption: "Поделиться" }
+    : { label: "Поделиться афоризмом", caption: "Поделиться" };
 }
 
 export function uploadActionLabel(pending: boolean): ActionLabel {
@@ -139,8 +146,7 @@ export function allActionLabels(
     hideActionLabel(hidden),
     editActionLabel(false),
     editActionLabel(true),
-    readActionLabel(false),
-    readActionLabel(true),
+    shareActionLabel(hidden),
     uploadActionLabel(false),
     uploadActionLabel(true),
     deleteActionLabel,
