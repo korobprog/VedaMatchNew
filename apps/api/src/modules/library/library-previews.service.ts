@@ -182,6 +182,47 @@ export class LibraryPreviewsService {
   }
 
   /**
+   * Картинка шлоки (VED-386): тот же путь, что у обложки, — сжатие в webp и
+   * публичный неизменный объект, — но крупнее: её рассматривают во весь
+   * экран, а не в карточке ленты. Ключ даёт вызывающий. `null` — S3 не
+   * настроен.
+   */
+  async storeImage(
+    key: string,
+    source: Buffer,
+    width: number,
+  ): Promise<(StoredPreview & { width: number; height: number }) | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+
+    const { data, info } = await sharp(source, {
+      failOn: 'error',
+      limitInputPixels: true,
+    })
+      .rotate()
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer({ resolveWithObject: true });
+
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: data,
+        ContentType: 'image/webp',
+        CacheControl: 'public, max-age=31536000, immutable',
+        ACL: 'public-read',
+      }),
+    );
+
+    return {
+      key,
+      url: `${this.publicUrl.replace(/\/$/, '')}/${key}`,
+      width: info.width,
+      height: info.height,
+    };
+  }
+
+  /**
    * Подписанная ссылка на скачивание копии обложки (VED-138). Сам объект
    * публичный, но по прямому адресу браузер показывает картинку, а не
    * сохраняет: имя и «файлом» подставляет хранилище по параметрам подписи.

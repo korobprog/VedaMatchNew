@@ -35,6 +35,7 @@ const TYPE_LABEL: Record<string, string> = {
   vk_group: 'группа ВК',
   community: 'сообщество',
   other: 'материал',
+  shloka: 'шлока',
 };
 
 @Injectable()

@@ -1125,8 +1125,24 @@ describe('LibraryEntriesService.update', () => {
     prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(
       entryRecord({
         categories: [
-          { category: { id: 'category-1', slug: 'a', titleRu: 'A', titleEn: null, section: { slug: 's' } } },
-          { category: { id: 'category-2', slug: 'b', titleRu: 'B', titleEn: null, section: { slug: 's' } } },
+          {
+            category: {
+              id: 'category-1',
+              slug: 'a',
+              titleRu: 'A',
+              titleEn: null,
+              section: { slug: 's' },
+            },
+          },
+          {
+            category: {
+              id: 'category-2',
+              slug: 'b',
+              titleRu: 'B',
+              titleEn: null,
+              section: { slug: 's' },
+            },
+          },
         ],
       }),
     );
@@ -1150,7 +1166,9 @@ describe('LibraryEntriesService.update', () => {
       where: { entryId: 'entry-1', categoryId: { in: ['category-2'] } },
     });
     expect(tx.libraryEntryCategory.createMany).toHaveBeenCalledWith({
-      data: [{ entryId: 'entry-1', categoryId: 'category-3', addedById: 'user-1' }],
+      data: [
+        { entryId: 'entry-1', categoryId: 'category-3', addedById: 'user-1' },
+      ],
     });
   });
 });
@@ -1296,7 +1314,9 @@ describe('LibraryEntriesService.remove', () => {
   function txMock() {
     return {
       libraryEntry: { delete: jest.fn().mockResolvedValue(undefined) },
-      libraryCategory: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      libraryCategory: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
   }
 
@@ -1431,10 +1451,7 @@ describe('LibraryEntriesService — организационная принад�
   it('пишет общину, когда право на это есть', async () => {
     const { service, prisma, communities } = build();
 
-    await service.create(
-      'user-1',
-      validBody({ communityId: 'community-1' }) as never,
-    );
+    await service.create('user-1', validBody({ communityId: 'community-1' }));
 
     expect(communities.canPostAs).toHaveBeenCalledWith('user-1', 'community-1');
     const create = prisma.libraryEntry.create.mock.calls[0][0] as {
@@ -1458,22 +1475,20 @@ describe('LibraryEntriesService — организационная принад�
   it('без общины справочник не спрашивается вовсе', async () => {
     const { service, communities } = build();
 
-    await service.create('user-1', validBody() as never);
+    await service.create('user-1', validBody());
 
     expect(communities.canPostAs).not.toHaveBeenCalled();
   });
 
   it('перепроверяет право на правке: роль в общине могли снять', async () => {
     const prisma = prismaMock();
-    prisma.libraryEntry.findUnique = jest
-      .fn()
-      .mockResolvedValue(entryRecord());
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(entryRecord());
     const { service } = build(false, prisma);
 
     await expect(
       service.update('user-1', false, 'entry-1', {
         communityId: 'community-1',
-      } as never),
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.libraryEntry.update).not.toHaveBeenCalled();
   });
@@ -1495,7 +1510,7 @@ describe('LibraryEntriesService — организационная принад�
     await service.update('user-1', false, 'entry-1', {
       communityId: 'community-1',
       titleRu: 'Другой заголовок',
-    } as never);
+    });
 
     expect(communities.canPostAs).not.toHaveBeenCalled();
   });
@@ -1514,7 +1529,7 @@ describe('LibraryEntriesService — организационная принад�
     await expect(
       service.update('admin-1', true, 'entry-1', {
         communityId: 'community-1',
-      } as never),
+      }),
     ).resolves.toBeDefined();
   });
 
@@ -1599,9 +1614,11 @@ describe('LibraryEntriesService — духовная линия', () => {
   }
 
   const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
-    (prisma.libraryEntry.findMany.mock.calls[0][0] as {
-      where: Record<string, unknown>;
-    }).where;
+    (
+      prisma.libraryEntry.findMany.mock.calls[0][0] as {
+        where: Record<string, unknown>;
+      }
+    ).where;
 
   it('без зрителя лента не фильтруется по линии', async () => {
     const { service, prisma } = build();
@@ -1698,7 +1715,9 @@ describe('LibraryEntriesService — духовная линия', () => {
 
     const where = whereOf(prisma);
     expect(where.OR).toBeDefined();
-    expect(where.AND).toEqual([{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }]);
+    expect(where.AND).toEqual([
+      { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
+    ]);
   });
 
   it('новый материал без линии получает линию автора-преданного', async () => {
@@ -1709,7 +1728,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     });
     const { service } = build(prisma);
 
-    await service.create('user-1', validBody() as never);
+    await service.create('user-1', validBody());
 
     const create = prisma.libraryEntry.create.mock.calls[0][0] as {
       data: { lineage: string | null };
@@ -1720,7 +1739,7 @@ describe('LibraryEntriesService — духовная линия', () => {
   it('у автора без линии материал подписывается ISKCON', async () => {
     const { service, prisma } = build();
 
-    await service.create('user-1', validBody() as never);
+    await service.create('user-1', validBody());
 
     const create = prisma.libraryEntry.create.mock.calls[0][0] as {
       data: { lineage: string | null };
@@ -1731,7 +1750,7 @@ describe('LibraryEntriesService — духовная линия', () => {
   it('явный null — «для всех линий» — сохраняется как есть', async () => {
     const { service, prisma } = build();
 
-    await service.create('user-1', validBody({ lineage: null }) as never);
+    await service.create('user-1', validBody({ lineage: null }));
 
     const create = prisma.libraryEntry.create.mock.calls[0][0] as {
       data: { lineage: string | null };

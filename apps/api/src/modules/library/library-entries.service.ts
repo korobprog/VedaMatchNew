@@ -71,6 +71,14 @@ const ENTRY_TYPES: LibraryEntryType[] = [
   'community',
   'other',
 ];
+/**
+ * Шлока (VED-386) в ленте фильтруется наравне с остальными, но общей
+ * формой не создаётся и в другой тип не превращается: её поля живут в
+ * `LibraryShloka`, и заводит их `LibraryShlokasService`.
+ */
+const FEED_TYPES: LibraryEntryType[] = [...ENTRY_TYPES, 'shloka'];
+/** Стих в карточке ленты — только начало: хватает на две-три строки. */
+const FEED_SHLOKA_TEXT_LENGTH = 400;
 
 export interface UploadedPreviewFile {
   buffer: Buffer;
@@ -83,6 +91,12 @@ export interface LibraryFeedFilters {
   /** `'false'` — только сама рубрика, без вложенных. */
   withDescendants?: string;
   type?: string;
+  /**
+   * Тип, который из ленты убрать. Нужен окну источника шлок: сами шлоки
+   * там стоят списком по порядку стихов, а ниже — остальные материалы
+   * раздела. Принимается только `shloka`.
+   */
+  excludeType?: string;
   language?: string;
   sort?: string;
   q?: string;
@@ -137,6 +151,7 @@ const ENTRY_SELECT = {
       },
     },
   },
+  shloka: { select: { verse: true, text: true } },
 } satisfies Prisma.LibraryEntrySelect;
 
 /**
@@ -170,7 +185,10 @@ export class LibraryEntriesService {
       select: { spiritualStage: true, lineage: true },
     });
     return user
-      ? { spiritualStage: user.spiritualStage, lineage: toLineageId(user.lineage) }
+      ? {
+          spiritualStage: user.spiritualStage,
+          lineage: toLineageId(user.lineage),
+        }
       : null;
   }
 
@@ -194,7 +212,10 @@ export class LibraryEntriesService {
       }),
       this.lineageViewer(viewerId),
     ]);
-    return resolveContentLineage(viewer, toLineagePreference(preference?.lineage));
+    return resolveContentLineage(
+      viewer,
+      toLineagePreference(preference?.lineage),
+    );
   }
 
   /**
@@ -318,7 +339,9 @@ export class LibraryEntriesService {
 
     const language = normalizeLanguage(body.contentLanguage);
     // Обложку тянуть неоткуда, когда нет адреса.
-    const previewUrl = normalized ? await resolvePreviewUrl(normalized.url) : null;
+    const previewUrl = normalized
+      ? await resolvePreviewUrl(normalized.url)
+      : null;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.libraryEntry.create({
@@ -481,7 +504,12 @@ export class LibraryEntriesService {
       }
     }
 
-    if (body.type !== undefined) {
+    if (body.type !== undefined && body.type !== existing.type) {
+      // Шлока в другой тип не превращается и из другого не получается:
+      // её поля живут отдельно и заводятся своей формой (VED-386).
+      if (existing.type === 'shloka') {
+        throw new BadRequestException('shloka_type_locked');
+      }
       if (!ENTRY_TYPES.includes(body.type)) {
         throw new BadRequestException('unsupported_type');
       }
@@ -522,9 +550,13 @@ export class LibraryEntriesService {
 
     if (body.titleRu !== undefined || body.titleEn !== undefined) {
       const titleRu =
-        body.titleRu !== undefined ? trimOrNull(body.titleRu) : existing.titleRu;
+        body.titleRu !== undefined
+          ? trimOrNull(body.titleRu)
+          : existing.titleRu;
       const titleEn =
-        body.titleEn !== undefined ? trimOrNull(body.titleEn) : existing.titleEn;
+        body.titleEn !== undefined
+          ? trimOrNull(body.titleEn)
+          : existing.titleEn;
       if (!titleRu && !titleEn) throw new BadRequestException('title_required');
       for (const title of [titleRu, titleEn]) {
         if (title && title.length > MAX_TITLE_LENGTH) {
@@ -599,7 +631,7 @@ export class LibraryEntriesService {
 
       if (categoryIds) {
         const currentIds = existing.categories.map((link) => link.category.id);
-        const toRemove = currentIds.filter((cid) => !categoryIds!.includes(cid));
+        const toRemove = currentIds.filter((cid) => !categoryIds.includes(cid));
         const toAdd = categoryIds.filter((cid) => !currentIds.includes(cid));
 
         if (toRemove.length > 0) {
@@ -775,7 +807,9 @@ export class LibraryEntriesService {
       select: { id: true, slug: true, name: true },
       orderBy: { name: 'asc' },
     });
-    const byId = new Map(counts.map((row) => [row.communityId, row._count._all]));
+    const byId = new Map(
+      counts.map((row) => [row.communityId, row._count._all]),
+    );
 
     return communities.map((community) => ({
       id: community.id,
@@ -794,11 +828,10 @@ export class LibraryEntriesService {
     const cursor = decodeCursor(filters.cursor);
     const where: Prisma.LibraryEntryWhereInput = { status: 'published' };
 
-    if (
-      filters.type &&
-      ENTRY_TYPES.includes(filters.type as LibraryEntryType)
-    ) {
+    if (filters.type && FEED_TYPES.includes(filters.type as LibraryEntryType)) {
       where.type = filters.type as LibraryEntryType;
+    } else if (filters.excludeType === 'shloka') {
+      where.type = { not: 'shloka' };
     }
     if (filters.language) {
       where.contentLanguage = normalizeLanguage(filters.language);
@@ -1034,5 +1067,14 @@ function toEntryDto(
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
     hasCustomPreview: entry.previewIsCustom,
+    // Только у шлоки: у остальных ключа нет вовсе, а не `null`.
+    ...(entry.shloka
+      ? {
+          shloka: {
+            verse: entry.shloka.verse,
+            text: entry.shloka.text.slice(0, FEED_SHLOKA_TEXT_LENGTH),
+          },
+        }
+      : {}),
   };
 }

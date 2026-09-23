@@ -1810,6 +1810,9 @@ enum LibraryEntryType {
   vk_group
   community
   other
+  /// Шлока (VED-386): стих с пословным переводом, переводом и
+  /// комментарием. Свои поля — в `LibraryShloka`, источник — рубрика.
+  shloka
 }
 
 enum LibraryEntryStatus {
@@ -1965,6 +1968,8 @@ model LibraryEntry {
   bookmarks  LibraryBookmark[]
   comments   LibraryComment[]
   files      LibraryEntryFile[]
+  /// Есть только у материала типа `shloka`.
+  shloka     LibraryShloka?
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([status, rankScore(sort: Desc)])
@@ -2103,6 +2108,71 @@ model LibrarySectionRequest {
 
   @@index([status, createdAt])
   @@index([requestedById])
+}
+
+/// Шлока (VED-386) — материал Образования типа `shloka`, один к одному с
+/// `LibraryEntry`. Всё общее для материалов — рубрика-источник, автор,
+/// избранное, комментарии, жалобы, линия — живёт у записи; здесь только то,
+/// чего у других материалов нет. Источник — рубрика, в которую шлока
+/// добавлена (раздел «Бхагавад-гита» внутри рубрики «Шлоки»), и строка
+/// `LibraryEntry.source`, которую форма проставляет по этой рубрике сама.
+model LibraryShloka {
+  entryId     String       @id
+  entry       LibraryEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  /// Номер стиха так, как его записали: «2.13», «1.2.12», «2.62-63».
+  /// Порядок в источнике — числовой, по этому полю (shloka-order.ts);
+  /// без номера — в конце.
+  verse       String?      @db.VarChar(40)
+  /// Сам стих: деванагари, транслитерация или оба — строками.
+  text        String
+  wordByWord  String?
+  translation String?
+  commentary  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  acharyas LibraryShlokaAcharya[]
+  images   LibraryShlokaImage[]
+}
+
+/// «Другие ачарьи»: тот же стих в прочтении другого учителя — свой текст,
+/// пословный перевод, перевод, комментарий и картинки.
+model LibraryShlokaAcharya {
+  id          String        @id @default(uuid())
+  shlokaId    String
+  shloka      LibraryShloka @relation(fields: [shlokaId], references: [entryId], onDelete: Cascade)
+  acharya     String        @db.VarChar(120)
+  text        String?
+  wordByWord  String?
+  translation String?
+  commentary  String?
+  /// Порядок блоков на странице — как их расставил автор.
+  position    Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  images LibraryShlokaImage[]
+
+  @@index([shlokaId, position])
+}
+
+/// Картинка шлоки или блока ачарьи (`acharyaId`). Файл — webp в своём S3;
+/// ключ уникален и новый на каждую загрузку, объект отдаётся как неизменный.
+model LibraryShlokaImage {
+  id         String                @id @default(uuid())
+  shlokaId   String
+  shloka     LibraryShloka         @relation(fields: [shlokaId], references: [entryId], onDelete: Cascade)
+  acharyaId  String?
+  acharya    LibraryShlokaAcharya? @relation(fields: [acharyaId], references: [id], onDelete: Cascade)
+  storageKey String                @unique
+  url        String
+  width      Int?
+  height     Int?
+  position   Int                   @default(0)
+  createdAt  DateTime              @default(now())
+
+  @@index([shlokaId, position])
+  @@index([acharyaId])
 }
 
 // ===== Notifications (портальная инфраструктура) =====

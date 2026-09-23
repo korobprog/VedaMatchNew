@@ -13,7 +13,13 @@ export type LibraryEntryType =
   | 'telegram_channel'
   | 'vk_group'
   | 'community'
-  | 'other';
+  | 'other'
+  /**
+   * Шлока (VED-386): стих с пословным переводом, переводом, комментарием,
+   * картинками и прочтениями других ачарьев. Создаётся и правится своими
+   * маршрутами `library/shlokas`, а не общей формой материала.
+   */
+  | 'shloka';
 
 export type LibraryEntryStatus =
   | 'published'
@@ -162,6 +168,11 @@ export interface LibraryEntryDto {
    * материала; в ленте поля нет.
    */
   files?: LibraryEntryFileDto[];
+  /**
+   * Номер и сам стих — только у шлоки: карточка в ленте показывает его
+   * шрифтом для санскрита. У остальных типов поля нет.
+   */
+  shloka?: { verse: string | null; text: string } | null;
 }
 
 /**
@@ -513,4 +524,170 @@ export interface LibraryAdminStats {
   categories: { total: number; active: number; merged: number; duplicates: number };
   /** Рубрик верхнего уровня — бывший счётчик разделов. */
   roots: number;
+}
+
+// ===== Шлоки (VED-386) =====
+
+/**
+ * Пределы полей шлоки. Одни на сервер и форму: форма гасит лишнее до
+ * отправки, сервер — если форма старая.
+ */
+export const LIBRARY_SHLOKA_LIMITS = {
+  verse: 40,
+  text: 5_000,
+  wordByWord: 10_000,
+  translation: 5_000,
+  /** Комментарий бывает страницами — как у Прабхупады к Гите. */
+  commentary: 100_000,
+  acharyaName: 120,
+  acharyas: 20,
+  /** На шлоку вместе с блоками ачарьев. */
+  images: 12,
+  /** Размер одной картинки до сжатия. */
+  imageBytes: 8 * 1024 * 1024,
+} as const;
+
+export interface LibraryShlokaImageDto {
+  id: string;
+  url: string;
+  width: number | null;
+  height: number | null;
+  /** `null` — картинка самой шлоки, иначе блока «другого ачарьи». */
+  acharyaId: string | null;
+}
+
+/** Прочтение стиха другим ачарьей: всё то же, что у шлоки, плюс имя. */
+export interface LibraryShlokaAcharyaDto {
+  id: string;
+  acharya: string;
+  text: string | null;
+  wordByWord: string | null;
+  translation: string | null;
+  commentary: string | null;
+  images: LibraryShlokaImageDto[];
+}
+
+/** Сосед по источнику — для стрелок «назад» и «вперёд». */
+export interface LibraryShlokaNeighbor {
+  id: string;
+  verse: string | null;
+}
+
+/** Окно шлоки: сам стих, его источник и соседи по порядку стихов. */
+export interface LibraryShlokaDto {
+  id: string;
+  titleRu: string | null;
+  /** Строка источника: «Бхагавад-гита». Проставляется по рубрике. */
+  source: string;
+  verse: string | null;
+  text: string;
+  wordByWord: string | null;
+  translation: string | null;
+  commentary: string | null;
+  contentLanguage: string;
+  images: LibraryShlokaImageDto[];
+  acharyas: LibraryShlokaAcharyaDto[];
+  /** Рубрика-источник: по ней листаются стрелки. */
+  category: LibraryCategoryAncestor | null;
+  prev: LibraryShlokaNeighbor | null;
+  next: LibraryShlokaNeighbor | null;
+  /** Место в источнике с единицы; 0 — шлока вне рубрики. */
+  position: number;
+  total: number;
+  canEdit: boolean;
+  bookmarked: boolean;
+  bookmarkCount: number;
+  commentsCount: number;
+  addedBy: { id: string; name: string } | null;
+  publishedAt: string;
+}
+
+/** Строка в окне источника. */
+export interface LibraryShlokaListItem {
+  id: string;
+  verse: string | null;
+  text: string;
+  /** Начало перевода — до 240 знаков. */
+  translation: string | null;
+  imagesCount: number;
+  acharyasCount: number;
+}
+
+export interface LibraryShlokaListResponse {
+  category: LibraryCategoryAncestor;
+  /** Что подставить в поле «Источник» новой шлоки этого раздела. */
+  sourceLabel: string;
+  items: LibraryShlokaListItem[];
+  /** Сколько шлок подходит под запрос (без поиска — всего в источнике). */
+  total: number;
+  /** Смещение следующей страницы; `null` — страница последняя. */
+  nextOffset: number | null;
+}
+
+/** Блок «другого ачарьи» в запросе. С `id` — правка существующего. */
+export interface LibraryShlokaAcharyaInput {
+  id?: string;
+  acharya: string;
+  text?: string | null;
+  wordByWord?: string | null;
+  translation?: string | null;
+  commentary?: string | null;
+}
+
+export interface CreateLibraryShlokaRequest {
+  /** Рубрика-источник. Из неё же берётся строка источника, если не задана. */
+  categoryId: string;
+  source?: string | null;
+  verse?: string | null;
+  text: string;
+  wordByWord?: string | null;
+  translation?: string | null;
+  commentary?: string | null;
+  contentLanguage?: string;
+  acharyas?: LibraryShlokaAcharyaInput[];
+}
+
+/**
+ * Правка: меняются только переданные поля. `acharyas` — весь список
+ * целиком: блоки без `id` добавляются, пропавшие из списка удаляются.
+ */
+export type UpdateLibraryShlokaRequest = Partial<
+  Omit<CreateLibraryShlokaRequest, 'categoryId'>
+>;
+
+/**
+ * Рубрика про шлоки — по названию: «Шлоки», «Шлока», «Shlokas», «Ślokas».
+ *
+ * По названию, а не флагом, потому что раздел «Шлоки» на проде уже заведён
+ * руками как обычная рубрика: флаг пришлось бы ещё кому-то поставить, а
+ * название уже есть. Один на сервер и веб, чтобы оба узнавали одинаково.
+ */
+export function isLibraryShlokaTitle(title: string | null | undefined): boolean {
+  if (!title) return false;
+  return /(шлок|shlok|ślok|slok)/iu.test(title.normalize('NFC'));
+}
+
+/**
+ * Строка источника для шлоки из раздела: названия рубрик от раздела «Шлоки»
+ * (не включая его) до самой рубрики — «Шримад-Бхагаватам, Песнь 1». Если
+ * раздела «Шлоки» среди предков нет, — название самой рубрики.
+ */
+export function libraryShlokaSourceLabel(
+  ancestors: ReadonlyArray<{ titleRu: string | null; titleEn: string | null }>,
+  category: { titleRu: string | null; titleEn: string | null },
+): string {
+  const title = (row: { titleRu: string | null; titleEn: string | null }) =>
+    row.titleRu?.trim() || row.titleEn?.trim() || '';
+  const chain = [...ancestors, category];
+  let rootIndex = -1;
+  chain.forEach((row, index) => {
+    if (index < chain.length - 1 && isLibraryShlokaTitle(title(row)))
+      rootIndex = index;
+  });
+  if (rootIndex < 0) return title(category);
+  return chain
+    .slice(rootIndex + 1)
+    .map(title)
+    .filter(Boolean)
+    .join(', ');
 }
