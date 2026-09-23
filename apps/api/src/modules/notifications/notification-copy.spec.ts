@@ -4,6 +4,7 @@ import {
   nightsWord,
   toExcerpt,
   travelDecisionTitle,
+  WELLNESS_CHECK_REASON_TEXT,
 } from './notification-copy';
 
 describe('buildNotification · уведомления «Работ» ведут в саму задачу', () => {
@@ -864,5 +865,90 @@ describe('buildNotification · значок «Комментарий»', () => {
     expect(moved.markFallback).toBeUndefined();
     expect(returned.markFallback).toBeUndefined();
     expect(assigned.markFallback).toBeUndefined();
+  });
+});
+
+describe('buildNotification · решение по карточке «Здоровья» (VED-384)', () => {
+  const base = {
+    name: 'wellness.product.checked' as const,
+    recipientId: 'u-1',
+    productId: 'p-1',
+    barcode: '3017620422003',
+    productName: 'Nutella паста ореховая',
+    decidedBy: 'ai' as const,
+    refined: [] as Array<'name' | 'brand' | 'ingredients'>,
+    reasons: [] as never[],
+    comment: null,
+  };
+
+  it('принято ИИ — ведёт на карточку по штрихкоду', () => {
+    const content = buildNotification({ ...base, outcome: 'accepted' });
+    expect(content.title).toBe('Продукт добавлен в базу');
+    expect(content.body).toContain('«Nutella паста ореховая»');
+    expect(content.body).toContain('нашли в открытых источниках');
+    expect(content.url).toBe('/wellness/products/3017620422003');
+    expect(content.category).toBe('support');
+    expect(content.tag).toBe('wellness-product:p-1');
+  });
+
+  it('уточнено — перечисляет, что поправили', () => {
+    const content = buildNotification({
+      ...base,
+      outcome: 'refined',
+      refined: ['name', 'ingredients'],
+    });
+    expect(content.title).toBe('Продукт добавлен с уточнениями');
+    expect(content.body).toContain('уточнили название, состав');
+  });
+
+  it('передано человеку — называет причину словами, не кодом', () => {
+    const content = buildNotification({
+      ...base,
+      outcome: 'review',
+      reasons: ['not_found'],
+    });
+    expect(content.title).toBe('Продукт на проверке у модератора');
+    expect(content.body).toBe(
+      '«Nutella паста ореховая»: товар не нашёлся в открытых источниках. Модератор посмотрит сам — ответ придёт сюда же.',
+    );
+    expect(content.body).not.toContain('not_found');
+    expect(content.url).toBe('/wellness/history');
+  });
+
+  it('отклонено ИИ — с причиной', () => {
+    const content = buildNotification({
+      ...base,
+      outcome: 'rejected',
+      reasons: ['not_food'],
+    });
+    expect(content.title).toBe('Продукт не добавлен');
+    expect(content.body).toBe('«Nutella паста ореховая»: это не продукт питания.');
+  });
+
+  it('отклонено модератором — его словами', () => {
+    const content = buildNotification({
+      ...base,
+      outcome: 'rejected',
+      decidedBy: 'moderator',
+      comment: 'На снимке таблица калорийности, а не состав',
+    });
+    expect(content.body).toBe(
+      '«Nutella паста ореховая»: На снимке таблица калорийности, а не состав',
+    );
+  });
+
+  it('принято модератором — говорит, кто проверил', () => {
+    const content = buildNotification({
+      ...base,
+      outcome: 'accepted',
+      decidedBy: 'moderator',
+    });
+    expect(content.body).toContain('проверил модератор');
+  });
+
+  it('у каждой причины есть формулировка', () => {
+    for (const text of Object.values(WELLNESS_CHECK_REASON_TEXT)) {
+      expect(text.length).toBeGreaterThan(5);
+    }
   });
 });
