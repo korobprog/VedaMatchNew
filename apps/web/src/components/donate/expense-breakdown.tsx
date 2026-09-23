@@ -14,7 +14,9 @@ export function ExpenseBreakdown() {
       {DONATE_EXPENSES.map((expense) => (
         <li key={expense.id}>
           <span className="text-sm font-medium text-text-0">{expense.title}</span>
-          <p className="mt-0.5 text-xs text-text-1">{expense.note}</p>
+          {expense.note && (
+            <p className="mt-0.5 text-xs text-text-1">{expense.note}</p>
+          )}
         </li>
       ))}
     </ul>

@@ -9,6 +9,7 @@ import type {
   AdminUpdateDonationRequest,
   AdminUpdateSubscriptionRequest,
   BillingMode,
+  DonationRecipientDto,
   DonationSettingsDto,
   PricingPlan,
   Role,
@@ -32,6 +33,11 @@ import {
   toPublicDonation,
   validateRequisites,
 } from './donation';
+import { DonationAvatarService } from './donation-avatar.service';
+import {
+  DONATION_RECIPIENT_IDS,
+  toDonationRecipients,
+} from './donation-recipients';
 
 const DONATION_FIELDS = {
   donationEnabled: true,
@@ -54,6 +60,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly avatars: DonationAvatarService,
   ) {}
 
   /** Текущий режим биллинга; при отсутствии строки настроек — обычная бизнес-логика. */
@@ -68,6 +75,20 @@ export class BillingService {
         where: { id: SETTINGS_ID },
         select: DONATION_FIELDS,
       }),
+    );
+  }
+
+  /**
+   * Фото получателей для кнопок «написать в личку» на странице «Поддержать».
+   * `User` — портальная модель, чтение разрешено контрактом; берём только фото.
+   */
+  async donationRecipients(): Promise<DonationRecipientDto[]> {
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...DONATION_RECIPIENT_IDS] } },
+      select: { id: true, avatarKey: true, avatarUrl: true },
+    });
+    return toDonationRecipients(DONATION_RECIPIENT_IDS, users, (user) =>
+      this.avatars.resolveAvatarUrl(user),
     );
   }
 

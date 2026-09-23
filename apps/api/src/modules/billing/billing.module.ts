@@ -7,6 +7,7 @@ import {
   BillingController,
 } from './billing.controller';
 import { BillingService } from './billing.service';
+import { DonationAvatarService } from './donation-avatar.service';
 import { PlatformSettingsService } from './platform-settings.service';
 
 @Module({
@@ -14,10 +15,10 @@ import { PlatformSettingsService } from './platform-settings.service';
   controllers: [
     BillingController,
     AdminBillingController,
-      AdminDonationController,
+    AdminDonationController,
     AdminPlatformSettingsController,
   ],
-  providers: [BillingService, PlatformSettingsService],
+  providers: [BillingService, PlatformSettingsService, DonationAvatarService],
   exports: [BillingService],
 })
 export class BillingModule {}

@@ -38,6 +38,12 @@ export class BillingController {
   donation() {
     return this.billing.donation();
   }
+
+  /** Фото получателей у кнопок «написать» на странице «Поддержать»; публичное, как и она. */
+  @Get('donation/recipients')
+  donationRecipients() {
+    return this.billing.donationRecipients();
+  }
 }
 
 @Controller('admin/billing/donation')
