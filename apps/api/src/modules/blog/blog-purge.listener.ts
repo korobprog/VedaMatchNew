@@ -22,11 +22,16 @@ export class BlogPurgeListener {
   async collectStorageKeys(event: UserPurgeRequested) {
     const posts = await this.prisma.blogPost.findMany({
       where: { authorId: event.userId },
-      select: { images: { select: { storageKey: true } } },
+      select: { images: { select: { storageKey: true, posterKey: true } } },
     });
 
+    // У ролика два объекта: сам файл и обложка (VED-116).
     const storageKeys = posts.flatMap((post) =>
-      post.images.map((image) => image.storageKey),
+      post.images.flatMap((image) =>
+        image.posterKey
+          ? [image.storageKey, image.posterKey]
+          : [image.storageKey],
+      ),
     );
     if (posts.length > 0) {
       this.logger.log(

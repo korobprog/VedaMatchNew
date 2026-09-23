@@ -8,10 +8,10 @@ import { Prisma } from '@prisma/client';
 import {
   BLOG_HOME_PREVIEW_SIZE,
   BLOG_MAX_POSTS_PER_DAY,
-  BLOG_POST_MAX_IMAGES,
   resolveDisplayName,
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
+  type BlogFavoriteResponse,
   type BlogFeedResponse,
   type BlogHomeFeedResponse,
   type BlogImageRejection,
@@ -34,9 +34,14 @@ import {
 } from './blog-feed-query';
 import {
   BlogImagesService,
-  type StoredImage,
   type UploadedImageFile,
 } from './blog-images.service';
+import {
+  blogVideoDurationDenial,
+  blogVideoExtension,
+  planBlogMedia,
+} from './blog-media-rules';
+import { BlogVideoService } from './blog-video.service';
 import {
   clampFeedLifetimeHours,
   feedUntilFrom,
@@ -58,12 +63,15 @@ const AUTHOR_SELECT = {
 
 const IMAGE_SELECT = {
   id: true,
+  kind: true,
   url: true,
   width: true,
   height: true,
+  posterUrl: true,
+  durationSec: true,
 } satisfies Prisma.BlogPostImageSelect;
 
-const POST_SELECT = {
+const POST_SELECT_BASE = {
   id: true,
   authorId: true,
   title: true,
@@ -89,7 +97,26 @@ const POST_SELECT = {
   },
 } satisfies Prisma.BlogPostSelect;
 
-type PostRow = Prisma.BlogPostGetPayload<{ select: typeof POST_SELECT }>;
+/**
+ * Выборка поста для конкретного зрителя: «в избранном ли» у каждого своё
+ * (VED-238), поэтому связь фильтруется по нему и берётся не больше одной
+ * строки — по первичному ключу (userId, postId) другой и не бывает.
+ */
+function postSelect(viewerId: string) {
+  return {
+    ...POST_SELECT_BASE,
+    favorites: {
+      where: { userId: viewerId },
+      select: { userId: true },
+      take: 1,
+    },
+  } satisfies Prisma.BlogPostSelect;
+}
+
+type PostRow = Prisma.BlogPostGetPayload<{
+  select: ReturnType<typeof postSelect>;
+}>;
+type MediaRow = PostRow['images'][number];
 type AuthorRow = Prisma.UserGetPayload<{ select: typeof AUTHOR_SELECT }>;
 
 /** Кто смотрит ленту: id, права и список скрытых от него людей. */
@@ -105,6 +132,7 @@ export class BlogService {
     private readonly prisma: PrismaService,
     private readonly moderation: ModerationService,
     private readonly images: BlogImagesService,
+    private readonly video: BlogVideoService,
   ) {}
 
   /**
@@ -125,7 +153,7 @@ export class BlogService {
     const [rows, total] = await Promise.all([
       this.prisma.blogPost.findMany({
         where,
-        select: POST_SELECT,
+        select: postSelect(viewer.userId),
         orderBy: blogOrderBy(),
         take: BLOG_HOME_PREVIEW_SIZE,
       }),
@@ -157,7 +185,7 @@ export class BlogService {
 
     const rows = await this.prisma.blogPost.findMany({
       where,
-      select: POST_SELECT,
+      select: postSelect(viewer.userId),
       orderBy: blogOrderBy(),
       take: BLOG_PAGE_SIZE + 1,
     });
@@ -203,7 +231,7 @@ export class BlogService {
     const [rows, total] = await Promise.all([
       this.prisma.blogPost.findMany({
         where,
-        select: POST_SELECT,
+        select: postSelect(viewer.userId),
         orderBy: blogOrderBy(),
         take: BLOG_PAGE_SIZE + 1,
       }),
@@ -227,7 +255,7 @@ export class BlogService {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const row = await this.prisma.blogPost.findUnique({
       where: { id },
-      select: POST_SELECT,
+      select: postSelect(viewer.userId),
     });
     if (!row) throw new NotFoundException('post_not_found');
     if (viewer.hiddenUserIds.has(row.authorId) && row.authorId !== userId) {
@@ -277,7 +305,7 @@ export class BlogService {
       select: { id: true },
     });
 
-    const failed = await this.storeImages(created.id, files);
+    const failed = await this.storeMedia(created.id, files);
 
     // Все картинки отвалились, а слов в посте нет — в ленту уехала бы пустая
     // карточка. Убираем черновик и честно говорим, почему не вышло.
@@ -288,7 +316,7 @@ export class BlogService {
 
     const row = await this.prisma.blogPost.findUniqueOrThrow({
       where: { id: created.id },
-      select: POST_SELECT,
+      select: postSelect(userId),
     });
     const viewer: Viewer = {
       userId,
@@ -321,7 +349,13 @@ export class BlogService {
         authorId: true,
         repostOfId: true,
         images: {
-          select: { id: true, storageKey: true, position: true },
+          select: {
+            id: true,
+            kind: true,
+            storageKey: true,
+            posterKey: true,
+            position: true,
+          },
           orderBy: { position: 'asc' },
         },
       },
@@ -353,7 +387,10 @@ export class BlogService {
     // Файлы кладём до записи в пост: если ни один не доехал, а слов и старых
     // картинок не осталось, правка оставила бы в ленте пустую карточку —
     // здесь её ещё можно не применять вовсе, а не удалять пост следом.
-    const failed = await this.storeImages(id, files, plan.nextPosition);
+    const failed = await this.storeMedia(id, files, {
+      total: plan.kept.length,
+      videos: plan.kept.filter((item) => item.kind === 'video').length,
+    });
     const arrived = files.length - failed.length;
     if (
       title === null &&
@@ -386,11 +423,11 @@ export class BlogService {
       });
     });
 
-    await this.images.removeMany(plan.removed.map((image) => image.storageKey));
+    await this.images.removeMany(mediaKeys(plan.removed));
 
     const updated = await this.prisma.blogPost.findUniqueOrThrow({
       where: { id },
-      select: POST_SELECT,
+      select: postSelect(userId),
     });
     const viewer = await this.viewer(userId, viewerIsAdmin);
     return { post: toPostDto(updated, viewer, now), failed };
@@ -441,7 +478,7 @@ export class BlogService {
           repostOfId: rootId,
           feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
         },
-        select: POST_SELECT,
+        select: postSelect(viewer.userId),
       }),
       this.prisma.blogPost.update({
         where: { id: rootId },
@@ -463,7 +500,7 @@ export class BlogService {
       select: {
         authorId: true,
         repostOfId: true,
-        images: { select: { storageKey: true } },
+        images: { select: { storageKey: true, posterKey: true } },
       },
     });
     if (!row) throw new NotFoundException('post_not_found');
@@ -482,60 +519,176 @@ export class BlogService {
       }
     });
 
-    await this.images.removeMany(row.images.map((image) => image.storageKey));
+    await this.images.removeMany(mediaKeys(row.images));
   }
 
   /**
-   * Кладёт файлы в хранилище и заводит строки картинок. Один плохой файл не
-   * должен терять уже загруженные хорошие: копим отказы, а не бросаем на
-   * первом.
+   * Кладёт файлы в хранилище и заводит строки вложений — фото и роликов
+   * (VED-116). Один плохой файл не должен терять уже загруженные хорошие:
+   * копим отказы, а не бросаем на первом.
+   *
+   * `existing` — что уже лежит в посте при правке: предел вложений считается
+   * по всему посту, а не по добавке, и нумерация продолжает оставленные.
    */
-  private async storeImages(
+  private async storeMedia(
     postId: string,
     files: UploadedImageFile[],
-    startPosition = 0,
+    existing: { total: number; videos: number } = { total: 0, videos: 0 },
   ): Promise<BlogImageRejection[]> {
     const failed: BlogImageRejection[] = [];
-    // При правке нумерация продолжает оставленные картинки, а предел
-    // `BLOG_POST_MAX_IMAGES` считается по всему посту, а не по добавке.
-    let position = startPosition;
+    let position = existing.total;
 
-    for (const file of files) {
-      const name = file.originalname ?? 'файл';
-      if (position >= BLOG_POST_MAX_IMAGES) {
-        failed.push({ name, reason: 'too_many_images' });
+    for (const decision of planBlogMedia(files, existing)) {
+      const name = decision.file.originalname ?? 'файл';
+      if ('denial' in decision) {
+        failed.push({ name, reason: decision.denial });
         continue;
       }
-      const invalid = this.images.validate(file);
-      if (invalid) {
-        failed.push({ name, reason: invalid });
+      const reason =
+        decision.kind === 'video'
+          ? await this.storeVideo(postId, decision.file, position)
+          : await this.storePhoto(postId, decision.file, position);
+      if (reason) {
+        failed.push({ name, reason });
         continue;
       }
-      let stored: StoredImage | null;
-      try {
-        stored = await this.images.storePostImage(postId, file);
-      } catch {
-        stored = null;
-      }
-      if (!stored) {
-        failed.push({ name, reason: 'processing_failed' });
-        continue;
-      }
-      await this.prisma.blogPostImage.create({
-        data: {
-          postId,
-          storageKey: stored.key,
-          url: stored.url,
-          width: stored.width,
-          height: stored.height,
-          sizeBytes: stored.sizeBytes,
-          position,
-        },
-      });
       position += 1;
     }
 
     return failed;
+  }
+
+  /** `null` — фото легло в пост; иначе код отказа. */
+  private async storePhoto(
+    postId: string,
+    file: UploadedImageFile,
+    position: number,
+  ): Promise<string | null> {
+    const stored = await this.images
+      .storePostImage(postId, file)
+      .catch(() => null);
+    if (!stored) return 'processing_failed';
+    await this.prisma.blogPostImage.create({
+      data: {
+        postId,
+        kind: 'photo',
+        storageKey: stored.key,
+        url: stored.url,
+        width: stored.width,
+        height: stored.height,
+        sizeBytes: stored.sizeBytes,
+        position,
+      },
+    });
+    return null;
+  }
+
+  /**
+   * Ролик: сначала разбор (обложка и длительность), потом бакет. Порядок
+   * важен — ролик длиннее предела не должен успеть занять место в хранилище.
+   */
+  private async storeVideo(
+    postId: string,
+    file: UploadedImageFile,
+    position: number,
+  ): Promise<string | null> {
+    const extension = blogVideoExtension(file.mimetype);
+    const inspected = await this.video.inspect(file.buffer, extension);
+    if (!inspected) return 'video_unreadable';
+    const tooLong = blogVideoDurationDenial(inspected.info.durationSec);
+    if (tooLong) return tooLong;
+
+    const stored = await this.images
+      .storePostVideo(postId, file, inspected.poster, extension)
+      .catch(() => null);
+    if (!stored) return 'processing_failed';
+    await this.prisma.blogPostImage.create({
+      data: {
+        postId,
+        kind: 'video',
+        storageKey: stored.key,
+        url: stored.url,
+        posterKey: stored.posterKey,
+        posterUrl: stored.posterUrl,
+        durationSec: inspected.info.durationSec,
+        width: inspected.info.width,
+        height: inspected.info.height,
+        sizeBytes: stored.sizeBytes,
+        position,
+      },
+    });
+    return null;
+  }
+
+  // ---- избранное (VED-238) ---------------------------------------------
+
+  /**
+   * Отметить пост звёздочкой или снять её. Идемпотентно в обе стороны:
+   * двойное нажатие на медленной сети не должно отвечать ошибкой.
+   */
+  async setFavorite(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    favorited: boolean,
+  ): Promise<BlogFavoriteResponse> {
+    if (!favorited) {
+      await this.prisma.blogFavorite.deleteMany({
+        where: { userId, postId: id },
+      });
+      return { favorited: false };
+    }
+
+    const post = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true },
+    });
+    if (!post) throw new NotFoundException('post_not_found');
+    const viewer = await this.viewer(userId, viewerIsAdmin);
+    if (viewer.hiddenUserIds.has(post.authorId) && post.authorId !== userId) {
+      throw new NotFoundException('post_not_found');
+    }
+
+    await this.prisma.blogFavorite.upsert({
+      where: { userId_postId: { userId, postId: id } },
+      update: {},
+      create: { userId, postId: id },
+    });
+    return { favorited: true };
+  }
+
+  /**
+   * «Избранное» зрителя — те же посты и тот же порядок, что в ленте, только
+   * отмеченные им. Срок в ленте здесь не действует: пост, ушедший с главной,
+   * человек отметил как раз затем, чтобы к нему вернуться.
+   */
+  async favorites(
+    userId: string,
+    viewerIsAdmin: boolean,
+    cursor?: string,
+  ): Promise<BlogFeedResponse> {
+    const viewer = await this.viewer(userId, viewerIsAdmin);
+    const now = new Date();
+    const base: Prisma.BlogPostWhereInput = {
+      ...this.feedWhere(viewer, now, false),
+      favorites: { some: { userId } },
+    };
+    const decoded = decodeBlogCursor(cursor);
+    const where: Prisma.BlogPostWhereInput = decoded
+      ? { AND: [base, blogCursorFilter(decoded)] }
+      : base;
+
+    const rows = await this.prisma.blogPost.findMany({
+      where,
+      select: postSelect(viewer.userId),
+      orderBy: blogOrderBy(),
+      take: BLOG_PAGE_SIZE + 1,
+    });
+    const page = takeBlogPage(rows);
+    return {
+      posts: page.items.map((row) => toPostDto(row, viewer, now)),
+      nextCursor: page.nextCursor,
+    };
   }
 
   // ---- администрирование (VED-238) --------------------------------------
@@ -576,7 +729,7 @@ export class BlogService {
     const updated = await this.prisma.blogPost.update({
       where: { id },
       data: { feedUntil },
-      select: POST_SELECT,
+      select: postSelect(userId),
     });
     const viewer: Viewer = {
       userId,
@@ -600,7 +753,7 @@ export class BlogService {
     const updated = await this.prisma.blogPost.update({
       where: { id },
       data: { pinned: Boolean(pinned) },
-      select: POST_SELECT,
+      select: postSelect(userId),
     });
     const viewer: Viewer = { userId, isAdmin: true, hiddenUserIds: new Set() };
     return toPostDto(updated, viewer, new Date());
@@ -658,11 +811,41 @@ export class BlogService {
   }
 }
 
+/** Все объекты вложений в бакете: у ролика их два — файл и обложка. */
+function mediaKeys(
+  rows: Array<{ storageKey: string; posterKey: string | null }>,
+): string[] {
+  return rows.flatMap((row) =>
+    row.posterKey ? [row.storageKey, row.posterKey] : [row.storageKey],
+  );
+}
+
 function toAuthorDto(author: AuthorRow): BlogAuthorDto {
   return {
     id: author.id,
     name: resolveDisplayName(author),
     avatarUrl: author.avatarUrl,
+  };
+}
+
+/**
+ * `images` — только фото, для приложения, которое о роликах ещё не знает;
+ * `media` — всё в порядке карусели (VED-116).
+ */
+function toMedia(rows: MediaRow[]): Pick<BlogPostDto, 'images' | 'media'> {
+  return {
+    images: rows
+      .filter((item) => item.kind === 'photo')
+      .map(({ id, url, width, height }) => ({ id, url, width, height })),
+    media: rows.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      url: item.url,
+      width: item.width,
+      height: item.height,
+      posterUrl: item.posterUrl,
+      durationSec: item.durationSec,
+    })),
   };
 }
 
@@ -672,7 +855,7 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
     author: toAuthorDto(row.author),
     title: row.title,
     text: row.text,
-    images: row.images,
+    ...toMedia(row.images),
     createdAt: row.createdAt.toISOString(),
     editedAt: row.editedAt ? row.editedAt.toISOString() : null,
     feedUntil: row.feedUntil ? row.feedUntil.toISOString() : null,
@@ -685,7 +868,7 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
           author: toAuthorDto(row.repostOf.author),
           title: row.repostOf.title,
           text: row.repostOf.text,
-          images: row.repostOf.images,
+          ...toMedia(row.repostOf.images),
           createdAt: row.repostOf.createdAt.toISOString(),
         }
       : null,
@@ -698,5 +881,6 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
       }) === null,
     canManage: row.authorId === viewer.userId || viewer.isAdmin,
     canModerate: viewer.isAdmin,
+    favorited: row.favorites.length > 0,
   };
 }

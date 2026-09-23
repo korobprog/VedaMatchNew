@@ -39,8 +39,13 @@ export const BLOG_MIN_FEED_LIFETIME_HOURS = 1;
 /** Год — верхняя граница; «совсем без срока» задаётся отдельным значением. */
 export const BLOG_MAX_FEED_LIFETIME_HOURS = 24 * 365;
 
-/** Сколько постов показывает виджет главной. Больше — и он съедает экран. */
-export const BLOG_HOME_PREVIEW_SIZE = 4;
+/**
+ * Сколько постов листает виджет главной. Виджет — карусель по одному посту
+ * на экран телефона (VED-238, «как в Instagram»), поэтому высота главной от
+ * этого числа не растёт; десять — чтобы листать было что, но ответ главной
+ * не тяжелел.
+ */
+export const BLOG_HOME_PREVIEW_SIZE = 10;
 /** Размер страницы полной ленты. */
 export const BLOG_FEED_PAGE_SIZE = 12;
 
@@ -51,6 +56,28 @@ export const BLOG_IMAGE_MIME_TYPES = [
   'image/png',
   'image/webp',
 ] as const;
+
+/**
+ * Ролики в постах (VED-116). Только два контейнера: `video/quicktime` не
+ * принимаем осознанно — .mov с айфона обычно HEVC и в браузере даёт чёрный
+ * экран без единой ошибки. Перекодировать на сервере не беремся: это минуты
+ * процессора на каждый ролик.
+ */
+export const BLOG_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm'] as const;
+/** Ролик в посте — байтами, а не секундами: длину сервер узнаёт после приёма. */
+export const BLOG_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+/** Пять минут: «короткое видео» заказчика с запасом, но не фильм. */
+export const BLOG_VIDEO_MAX_SECONDS = 300;
+/** Роликов в одном посте. Остальные места карусели — фотографии. */
+export const BLOG_POST_MAX_VIDEOS = 1;
+/**
+ * Сколько байт всех файлов принимает один запрос публикации или правки.
+ * Файлы держатся в памяти процесса до разбора, и без общего потолка десять
+ * вложений по пределу ролика — это полгигабайта на один запрос.
+ */
+export const BLOG_UPLOAD_MAX_TOTAL_BYTES = 80 * 1024 * 1024;
+
+export type BlogMediaKind = 'photo' | 'video';
 
 export interface BlogAuthorDto {
   id: string;
@@ -66,6 +93,22 @@ export interface BlogImageDto {
   height: number | null;
 }
 
+/**
+ * Вложение поста — фото или ролик, в порядке карусели (VED-116).
+ *
+ * Отдельным полем `media`, а не новыми строками в `images`: приложение, уже
+ * стоящее на телефонах, рисует каждый элемент `images` картинкой, и ролик
+ * там стал бы битым изображением. Поэтому `images` — по-прежнему только
+ * фотографии, а `media` — всё вместе, и его читают новые клиенты.
+ */
+export interface BlogMediaDto extends BlogImageDto {
+  kind: BlogMediaKind;
+  /** Обложка ролика; у фото null. */
+  posterUrl: string | null;
+  /** Длительность ролика в секундах, замеренная сервером; у фото null. */
+  durationSec: number | null;
+}
+
 /** Исходный пост под репостом: снимка не делаем, читаем оригинал. */
 export interface BlogRepostSourceDto {
   id: string;
@@ -73,6 +116,7 @@ export interface BlogRepostSourceDto {
   title: string | null;
   text: string;
   images: BlogImageDto[];
+  media: BlogMediaDto[];
   createdAt: string;
 }
 
@@ -81,7 +125,10 @@ export interface BlogPostDto {
   author: BlogAuthorDto;
   title: string | null;
   text: string;
+  /** Только фотографии — для клиентов, которые не знают о роликах. */
   images: BlogImageDto[];
+  /** Фото и ролики в порядке карусели. */
+  media: BlogMediaDto[];
   createdAt: string;
   /**
    * Когда пост правили (VED-321); null — не правили ни разу. Отдельно от
@@ -106,6 +153,8 @@ export interface BlogPostDto {
   canManage: boolean;
   /** Может менять срок и закрепление: только администратор. */
   canModerate: boolean;
+  /** Пост в «Избранном» у того, кто смотрит (VED-238). */
+  favorited: boolean;
 }
 
 export interface BlogFeedResponse {
@@ -125,6 +174,11 @@ export interface BlogAuthorFeedResponse extends BlogFeedResponse {
   author: BlogAuthorDto;
   /** Сколько всего постов у автора. */
   total: number;
+}
+
+/** Ответ на «в избранное» / «из избранного». */
+export interface BlogFavoriteResponse {
+  favorited: boolean;
 }
 
 export interface BlogSettingsDto {

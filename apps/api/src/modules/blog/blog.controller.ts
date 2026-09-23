@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFiles,
   UseGuards,
@@ -16,6 +17,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
   BLOG_POST_MAX_IMAGES,
+  BLOG_VIDEO_MAX_BYTES,
   type AccessTokenPayload,
   type CreateBlogPostRequest,
   type UpdateBlogPostRequest,
@@ -23,10 +25,19 @@ import {
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { BlogService } from './blog.service';
 import { isAdmin } from './is-admin';
-import {
-  MAX_UPLOAD_BYTES,
-  type UploadedImageFile,
-} from './blog-images.service';
+import { type UploadedImageFile } from './blog-images.service';
+import { BlogUploadStorage } from './blog-upload-storage';
+
+/**
+ * Приём файлов поста: до десяти вложений, каждое не больше ролика (самого
+ * крупного из допустимых), и общий потолок на запрос — его держит
+ * `BlogUploadStorage`. Какой файл чем является и влезает ли фото в свои
+ * 10 МБ, решает сервис: multer видит только байты.
+ */
+const UPLOAD_OPTIONS = {
+  storage: new BlogUploadStorage(),
+  limits: { fileSize: BLOG_VIDEO_MAX_BYTES, files: BLOG_POST_MAX_IMAGES },
+};
 
 /**
  * Блог-лента портала (VED-238) и личный блог участника (VED-116).
@@ -55,6 +66,15 @@ export class BlogController {
     return this.blog.feed(user.sub, isAdmin(user), { scope, cursor });
   }
 
+  /** «Избранное» того, кто смотрит (VED-238). */
+  @Get('favorites')
+  favorites(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.blog.favorites(user.sub, isAdmin(user), cursor);
+  }
+
   @Get('authors/:authorId')
   authorFeed(
     @CurrentUser() user: AccessTokenPayload,
@@ -79,9 +99,7 @@ export class BlogController {
   // одной и той же формы, а не от количества постов за день.
   @Throttle({ default: { ttl: 3_600_000, limit: 60 } })
   @UseInterceptors(
-    FilesInterceptor('files', BLOG_POST_MAX_IMAGES, {
-      limits: { fileSize: MAX_UPLOAD_BYTES },
-    }),
+    FilesInterceptor('files', BLOG_POST_MAX_IMAGES, UPLOAD_OPTIONS),
   )
   create(
     @CurrentUser() user: AccessTokenPayload,
@@ -100,9 +118,7 @@ export class BlogController {
   @Patch('posts/:id')
   @Throttle({ default: { ttl: 3_600_000, limit: 120 } })
   @UseInterceptors(
-    FilesInterceptor('files', BLOG_POST_MAX_IMAGES, {
-      limits: { fileSize: MAX_UPLOAD_BYTES },
-    }),
+    FilesInterceptor('files', BLOG_POST_MAX_IMAGES, UPLOAD_OPTIONS),
   )
   update(
     @CurrentUser() user: AccessTokenPayload,
@@ -121,6 +137,18 @@ export class BlogController {
     @Body() body?: CreateBlogPostRequest,
   ) {
     return this.blog.repost(user.sub, isAdmin(user), id, body);
+  }
+
+  @Put('posts/:id/favorite')
+  @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
+  favorite(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.blog.setFavorite(user.sub, isAdmin(user), id, true);
+  }
+
+  @Delete('posts/:id/favorite')
+  @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
+  unfavorite(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.blog.setFavorite(user.sub, isAdmin(user), id, false);
   }
 
   @Delete('posts/:id')
