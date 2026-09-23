@@ -35,6 +35,13 @@ import {
 } from './inbox-page';
 import { buildInboxSearchClauses, parseInboxSearch } from './inbox-search';
 import { workTaskUrl } from './notification-copy';
+import {
+  isUniqueViolation,
+  liftRecipients,
+  threadLiftData,
+  threadRefreshData,
+  workStatusThreadKey,
+} from './inbox-thread';
 import { parseNotificationMark } from './notification-mark';
 import type { PushFailure } from './push-errors';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
@@ -91,6 +98,11 @@ export interface InboxDraft {
   category: NotificationCategory;
   /** Значок состояния (VED-272); `null`/пусто — уведомление без значка. */
   mark?: NotificationMark | null;
+  /**
+   * Ветка новости (VED-320): есть — новость обновляет и поднимает уже лежащую
+   * у человека строку с тем же ключом, а не кладёт вторую. См. `inbox-thread.ts`.
+   */
+  threadKey?: string | null;
 }
 
 export interface StoredSubscription extends DeliveryPointHealth {
@@ -416,10 +428,44 @@ export class NotificationsService {
 
   // ===== Колокольчик =====
 
-  async addToInbox(userId: string, draft: InboxDraft): Promise<void> {
-    await this.prisma.notificationItem.create({
-      data: { userId, ...draft },
-    });
+  async addToInbox(
+    userId: string,
+    draft: InboxDraft,
+    now = new Date(),
+  ): Promise<void> {
+    const { threadKey, ...news } = draft;
+    if (!threadKey) {
+      await this.prisma.notificationItem.create({
+        data: { userId, ...news },
+      });
+      return;
+    }
+
+    // Ветка (VED-320): строка на человека и ключ одна. Есть — переписываем и
+    // поднимаем, нет — заводим. Upsert по уникальной паре, а не «найти, потом
+    // решить»: между чтением и записью могла вклиниться вторая доставка.
+    const where = { userId_threadKey: { userId, threadKey } };
+    const refresh = threadRefreshData(
+      {
+        title: news.title,
+        body: news.body,
+        url: news.url,
+        category: news.category,
+        mark: news.mark ?? null,
+      },
+      now,
+    );
+    try {
+      await this.prisma.notificationItem.upsert({
+        where,
+        create: { userId, threadKey, ...news, createdAt: now },
+        update: refresh,
+      });
+    } catch (error) {
+      // Проиграли гонку вставки — строка уже есть, остаётся её обновить.
+      if (!isUniqueViolation(error)) throw error;
+      await this.prisma.notificationItem.update({ where, data: refresh });
+    }
   }
 
   /**
@@ -556,11 +602,34 @@ export class NotificationsService {
     spaceId: string,
     taskKey: string,
     mark: NotificationMark | null,
+    liftRecipientIds: readonly string[] = [],
+    now = new Date(),
   ): Promise<number> {
+    const url = workTaskUrl(spaceId, taskKey);
     const { count } = await this.prisma.notificationItem.updateMany({
-      where: { url: workTaskUrl(spaceId, taskKey), category: 'work' },
+      where: { url, category: 'work' },
       data: { mark },
     });
+
+    // Подъём строки о смене статуса (VED-320): «задача поднимается вверх по
+    // ленте для всех остальных админов, но не для него». Кому — сказала
+    // «Работа», актора в списке нет. Сразу, а не через окно дозревания, по
+    // той же причине, что и пометка: значок уже сменился, и строка, оставшаяся
+    // внизу с новым значком, читалась бы как «изменилось, но не для вас».
+    //
+    // Поднимается только ветка статуса — у кого её ещё нет, тому через окно
+    // придёт новая новость и ляжет наверх сама. Комментарии и поручения не
+    // трогаем: их порядок — порядок разговора.
+    const recipients = liftRecipients(liftRecipientIds);
+    if (recipients.length > 0) {
+      await this.prisma.notificationItem.updateMany({
+        where: {
+          userId: { in: recipients },
+          threadKey: workStatusThreadKey(url),
+        },
+        data: threadLiftData(now),
+      });
+    }
     return count;
   }
 

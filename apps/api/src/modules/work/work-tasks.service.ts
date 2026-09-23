@@ -27,7 +27,12 @@ import {
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WORK_EVENTS, type WorkTaskAssignedEvent } from './work-events';
+import {
+  WORK_EVENTS,
+  type WorkTaskAssignedEvent,
+  workTaskLiftRecipients,
+  workTaskRecipients,
+} from './work-events';
 import { WorkNoticesService } from './work-notices.service';
 import { newTaskColumnQuery } from './work-task-column';
 import {
@@ -478,6 +483,14 @@ export class WorkTasksService {
       });
       if (task) {
         await this.notices.enqueueMove(task, userId, wasDone.columnId);
+        const candidates = workTaskRecipients(task, userId);
+        const members =
+          candidates.length > 0
+            ? await this.prisma.workSpaceMember.findMany({
+                where: { spaceId: context.spaceId, userId: { in: candidates } },
+                select: { userId: true },
+              })
+            : [];
         // Уже лежащие уведомления об этой карточке получают её нынешнее
         // состояние (VED-320). Сразу, а не через окно дозревания: окно решает,
         // слать ли НОВОСТЬ, а здесь поправка к старым — «где карточка сейчас».
@@ -487,11 +500,21 @@ export class WorkTasksService {
         // Всем получателям сразу, включая того, кто двигал: его собственное
         // уведомление о прошлом переезде тоже не должно врать. Новости он о
         // своём действии по-прежнему не получает — это решает `enqueueMove`.
+        //
+        // Тем же событием задача поднимается в ленте у остальных (VED-320):
+        // «отображается у всех остальных админов как через смену значка
+        // статуса, так и через поднятие задачи по ленте». Кому — решаем мы, по
+        // тем же правилам, что и новость; двигавшего в списке нет.
         this.events.emit(WORK_TASK_MARK_REFRESHED_EVENT, {
           name: WORK_TASK_MARK_REFRESHED_EVENT,
           spaceId: context.spaceId,
           taskKey: workTaskKey(task.space.prefix, task.number),
           statusMark: resolveTaskStatusMark(column.name),
+          liftRecipientIds: workTaskLiftRecipients(
+            task,
+            userId,
+            members.map((member) => member.userId),
+          ),
         } satisfies WorkTaskMarkRefreshedEvent);
       }
     }

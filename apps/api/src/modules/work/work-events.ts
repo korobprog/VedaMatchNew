@@ -47,3 +47,21 @@ export function workTaskRecipients(
     (id): id is string => Boolean(id) && id !== actorId,
   );
 }
+
+/**
+ * У кого поднять задачу в ленте на смене статуса (VED-320): у тех же, кому о
+ * задаче сообщаем, — кроме двигавшего, — и только у участников среды.
+ *
+ * Членство проверяем здесь, а не в очереди дозревания, потому что подъём
+ * уходит сразу. Воркер проверяет его на отправке по той же причине: человека
+ * могли исключить из среды, а поднятая строка — это сигнал «в чужой теперь
+ * задаче что-то изменилось», которого ему знать не положено.
+ */
+export function workTaskLiftRecipients(
+  task: { assigneeId: string | null; createdById: string | null },
+  actorId: string,
+  memberIds: readonly string[],
+): string[] {
+  const members = new Set(memberIds);
+  return workTaskRecipients(task, actorId).filter((id) => members.has(id));
+}

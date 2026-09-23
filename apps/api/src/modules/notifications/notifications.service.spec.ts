@@ -12,12 +12,17 @@ interface InboxRow {
   category: string;
   createdAt: Date;
   readAt: Date | null;
+  mark?: string | null;
+  threadKey?: string | null;
 }
 
 type InboxDraftRow = Omit<InboxRow, 'id' | 'createdAt' | 'readAt'>;
 
 interface InboxWhere {
-  userId?: string;
+  userId?: string | { in: string[] };
+  url?: string;
+  category?: string;
+  threadKey?: string;
   readAt?: null | { lt: Date } | { not: null };
   createdAt?: Date | { lt: Date };
   id?: string | { in: string[] } | { lt: string };
@@ -29,7 +34,18 @@ interface InboxWhere {
 
 /** Минимальная замена условиям Prisma, достаточная для запросов сервиса. */
 function matchesInbox(row: InboxRow, where: InboxWhere): boolean {
-  if (where.userId !== undefined && row.userId !== where.userId) return false;
+  if (typeof where.userId === 'string' && row.userId !== where.userId)
+    return false;
+  if (typeof where.userId === 'object' && !where.userId.in.includes(row.userId))
+    return false;
+  if (where.url !== undefined && row.url !== where.url) return false;
+  if (where.category !== undefined && row.category !== where.category)
+    return false;
+  if (
+    where.threadKey !== undefined &&
+    (row.threadKey ?? null) !== where.threadKey
+  )
+    return false;
   if (where.readAt === null && row.readAt !== null) return false;
   if (where.readAt && 'not' in where.readAt && row.readAt === null)
     return false;
@@ -75,6 +91,9 @@ function matchesInbox(row: InboxRow, where: InboxWhere): boolean {
   return true;
 }
 
+type InboxUniqueWhere =
+  { id: string } | { userId_threadKey: { userId: string; threadKey: string } };
+
 /** Порядок выборки Prisma: свежее сверху, совпавшая дата — по `id` вниз. */
 function compareInboxFixtures(a: InboxRow, b: InboxRow): number {
   const byDate = b.createdAt.getTime() - a.createdAt.getTime();
@@ -107,6 +126,14 @@ function createService() {
     deviceDeleted: [] as string[],
   };
   let nextId = 1;
+  const findUnique = (where: InboxUniqueWhere): InboxRow | undefined =>
+    'id' in where
+      ? store.inbox.find((item) => item.id === where.id)
+      : store.inbox.find(
+          (item) =>
+            item.userId === where.userId_threadKey.userId &&
+            item.threadKey === where.userId_threadKey.threadKey,
+        );
   const prisma = {
     notificationItem: {
       create: jest.fn(({ data }: { data: InboxDraftRow }) => {
@@ -143,22 +170,50 @@ function createService() {
           where,
           data,
         }: {
-          where: { id: string };
-          data: { readAt: Date | null };
+          where: InboxUniqueWhere;
+          data: Partial<InboxRow>;
         }) => {
-          const row = store.inbox.find((item) => item.id === where.id);
-          if (!row) throw new Error(`нет записи ${where.id}`);
-          row.readAt = data.readAt;
+          const row = findUnique(where);
+          if (!row) throw new Error(`нет записи ${JSON.stringify(where)}`);
+          Object.assign(row, data);
           store.inboxUpdates += 1;
           return Promise.resolve(row);
         },
       ),
+      // Уникальность `[userId, threadKey]` (VED-320): как у Postgres, строка
+      // без ключа с другими не сравнивается.
+      upsert: jest.fn(
+        ({
+          where,
+          create,
+          update,
+        }: {
+          where: InboxUniqueWhere;
+          create: InboxDraftRow & { createdAt?: Date };
+          update: Partial<InboxRow>;
+        }) => {
+          const row = findUnique(where);
+          if (row) {
+            Object.assign(row, update);
+            store.inboxUpdates += 1;
+            return Promise.resolve(row);
+          }
+          const created: InboxRow = {
+            id: `n${nextId++}`,
+            createdAt: new Date(),
+            readAt: null,
+            ...create,
+          };
+          store.inbox.push(created);
+          return Promise.resolve(created);
+        },
+      ),
       updateMany: jest.fn(
-        ({ where, data }: { where: InboxWhere; data: { readAt: Date } }) => {
+        ({ where, data }: { where: InboxWhere; data: Partial<InboxRow> }) => {
           let count = 0;
           for (const row of store.inbox) {
             if (!matchesInbox(row, where)) continue;
-            row.readAt = data.readAt;
+            Object.assign(row, data);
             count += 1;
           }
           return Promise.resolve({ count });
@@ -466,6 +521,261 @@ describe('NotificationsService: колокольчик', () => {
  * VED-143: своя отметка у каждого уведомления. Оптом было только «отметить
  * все», а человеку нужно разобрать ленту по одному — и передумать.
  */
+/**
+ * VED-320: смена статуса задачи — одна строка в ленте, которая поднимается.
+ *
+ * «Задача поднимается вверх по ленте уведомлений для всех остальных админов,
+ * но не для него», и так на каждой смене статуса. Проверяем связку целиком:
+ * запись ветки, подъём на переносе и порядок ленты VED-153 поверх них.
+ */
+describe('NotificationsService: ветка смены статуса (VED-320)', () => {
+  const url = '/work/planner/space-1?task=VED-42';
+  const threadKey = `work-status:${url}`;
+  const statusNews = (body: string, mark: 'testing' | 'done' | 'rework') => ({
+    title: 'VED-42: сменился статус',
+    body,
+    url,
+    category: 'work' as const,
+    mark,
+    threadKey,
+  });
+  const minutes = (n: number) => new Date(Date.UTC(2026, 8, 23, 12, n));
+
+  it('повторная смена статуса переписывает строку, а не кладёт вторую', async () => {
+    const { service, store } = createService();
+    await service.addToInbox(
+      'user-2',
+      statusNews('Маму: из «В работе»', 'testing'),
+      minutes(3),
+    );
+    await service.addToInbox(
+      'user-2',
+      statusNews('Маму: из «Тестирование»', 'done'),
+      minutes(10),
+    );
+
+    expect(store.inbox).toHaveLength(1);
+    expect(store.inbox[0]).toMatchObject({
+      body: 'Маму: из «Тестирование»',
+      mark: 'done',
+      createdAt: minutes(10),
+    });
+  });
+
+  it('новость в ветке поднимает строку наверх и снова делает её непрочитанной', async () => {
+    const { service, store } = createService();
+    await service.addToInbox(
+      'user-2',
+      statusNews('первая', 'testing'),
+      minutes(3),
+    );
+    await service.markRead('user-2');
+    // Пока строка лежала прочитанной, пришло другое — оно свежее её.
+    await service.addToInbox('user-2', draft, minutes(5));
+    store.inbox[1].createdAt = minutes(5);
+
+    await service.addToInbox(
+      'user-2',
+      statusNews('вторая', 'rework'),
+      minutes(9),
+    );
+
+    const inbox = await service.listInbox('user-2');
+    expect(inbox.items.map((item) => item.title)).toEqual([
+      'VED-42: сменился статус',
+      'Вринда',
+    ]);
+    expect(inbox.items[0].readAt).toBeNull();
+    expect(inbox.unreadCount).toBe(2);
+  });
+
+  it('у каждого человека и у каждой задачи своя строка', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-2', statusNews('а', 'testing'), minutes(1));
+    await service.addToInbox('user-3', statusNews('б', 'testing'), minutes(1));
+    await service.addToInbox(
+      'user-2',
+      {
+        ...statusNews('в', 'testing'),
+        url: '/work/planner/space-1?task=VED-43',
+        threadKey: 'work-status:/work/planner/space-1?task=VED-43',
+      },
+      minutes(1),
+    );
+
+    expect(store.inbox).toHaveLength(3);
+  });
+
+  it('уведомление без ветки — каждое своей строкой, как раньше', async () => {
+    const { service, store } = createService();
+    await service.addToInbox('user-2', { ...draft, url, category: 'work' });
+    await service.addToInbox('user-2', { ...draft, url, category: 'work' });
+
+    expect(store.inbox).toHaveLength(2);
+    expect(store.inbox.every((row) => row.threadKey === undefined)).toBe(true);
+  });
+
+  it('проигравшая гонку вставка обновляет строку, а не падает', async () => {
+    const { service, prisma, store } = createService();
+    await service.addToInbox(
+      'user-2',
+      statusNews('первая', 'testing'),
+      minutes(1),
+    );
+    (prisma.notificationItem.upsert as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+    );
+
+    await service.addToInbox(
+      'user-2',
+      statusNews('вторая', 'done'),
+      minutes(4),
+    );
+
+    expect(store.inbox).toHaveLength(1);
+    expect(store.inbox[0]).toMatchObject({ body: 'вторая', mark: 'done' });
+  });
+
+  it('чужую ошибку базы не глотает', async () => {
+    const { service, prisma } = createService();
+    (prisma.notificationItem.upsert as jest.Mock).mockRejectedValueOnce(
+      new Error('connection lost'),
+    );
+
+    await expect(
+      service.addToInbox('user-2', statusNews('а', 'testing')),
+    ).rejects.toThrow('connection lost');
+  });
+
+  describe('перенос карточки: refreshWorkTaskMark', () => {
+    /** Лента двоих: user-2 получает новости, user-1 двигает карточку. */
+    async function seeded() {
+      const created = createService();
+      const { service, store } = created;
+      await service.addToInbox(
+        'user-2',
+        statusNews('из «В работе»', 'testing'),
+        minutes(3),
+      );
+      // Своя строка о задаче есть и у двигающего: её завёл прошлый переезд,
+      // сделанный вторым человеком.
+      await service.addToInbox(
+        'user-1',
+        statusNews('из «В работе»', 'testing'),
+        minutes(3),
+      );
+      // Комментарий — не ветка статуса, его порядок не трогаем.
+      await service.addToInbox(
+        'user-2',
+        {
+          title: 'VED-42: новый комментарий',
+          body: 'Проверь, пожалуйста',
+          url,
+          category: 'work',
+          mark: 'testing',
+        },
+        minutes(4),
+      );
+      store.inbox[2].createdAt = minutes(4);
+      // Свежая новость о другом — выше строки задачи.
+      await service.addToInbox('user-2', draft, minutes(6));
+      store.inbox[3].createdAt = minutes(6);
+      await service.markRead('user-2');
+      await service.markRead('user-1');
+      return created;
+    }
+
+    it('поднимает строку у получателя сразу, пометку меняет у всех', async () => {
+      const { service, store } = await seeded();
+
+      await service.refreshWorkTaskMark(
+        'space-1',
+        'VED-42',
+        'done',
+        ['user-2'],
+        minutes(7),
+      );
+
+      const inbox = await service.listInbox('user-2');
+      expect(inbox.items[0]).toMatchObject({
+        title: 'VED-42: сменился статус',
+        mark: 'done',
+        readAt: null,
+        createdAt: minutes(7).toISOString(),
+      });
+      expect(inbox.unreadCount).toBe(1);
+      // Комментарий остался на своём месте и прочитанным, но с новой пометкой.
+      const comment = store.inbox[2];
+      expect(comment).toMatchObject({ createdAt: minutes(4), mark: 'done' });
+      expect(comment.readAt).not.toBeNull();
+    });
+
+    it('у того, кто двигал, ничего не поднимается — только пометка', async () => {
+      const { service, store } = await seeded();
+
+      await service.refreshWorkTaskMark(
+        'space-1',
+        'VED-42',
+        'done',
+        ['user-2'],
+        minutes(7),
+      );
+
+      const own = store.inbox.find((row) => row.userId === 'user-1');
+      expect(own).toMatchObject({ createdAt: minutes(3), mark: 'done' });
+      expect(own?.readAt).not.toBeNull();
+      await expect(service.countUnread('user-1')).resolves.toBe(0);
+    });
+
+    it('туда-обратно: строка поднимается на каждом переносе, значок возвращается', async () => {
+      const { service } = await seeded();
+
+      await service.refreshWorkTaskMark(
+        'space-1',
+        'VED-42',
+        'done',
+        ['user-2'],
+        minutes(7),
+      );
+      await service.markRead('user-2');
+      await service.refreshWorkTaskMark(
+        'space-1',
+        'VED-42',
+        'testing',
+        ['user-2'],
+        minutes(8),
+      );
+
+      const inbox = await service.listInbox('user-2');
+      expect(inbox.items[0]).toMatchObject({
+        title: 'VED-42: сменился статус',
+        mark: 'testing',
+        readAt: null,
+        createdAt: minutes(8).toISOString(),
+      });
+      expect(
+        inbox.items.filter((item) => item.title === 'VED-42: сменился статус'),
+      ).toHaveLength(1);
+    });
+
+    it('без получателей не поднимает никого', async () => {
+      const { service, store } = await seeded();
+      const before = store.inbox.map((row) => row.createdAt.getTime());
+
+      await service.refreshWorkTaskMark(
+        'space-1',
+        'VED-42',
+        'done',
+        [],
+        minutes(7),
+      );
+
+      expect(store.inbox.map((row) => row.createdAt.getTime())).toEqual(before);
+      await expect(service.countUnread('user-2')).resolves.toBe(0);
+    });
+  });
+});
+
 describe('NotificationsService.setReadState (VED-143)', () => {
   const draft = {
     title: 'Ямуна ответила',

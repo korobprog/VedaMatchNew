@@ -231,6 +231,41 @@ describe('NotificationsListener.deliver', () => {
     expect(sent[0]?.payload).not.toHaveProperty('mark');
   });
 
+  it('кладёт смену статуса в ветку задачи, а комментарий — своей строкой (VED-320)', async () => {
+    const { listener, inbox } = createListener({ preferences: { work: true } });
+
+    await listener.deliver({
+      name: 'work.task.status-changed',
+      recipientId: 'user-1',
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      taskTitle: 'Починить ссылки',
+      fromColumnName: 'В работе',
+      toColumnName: 'Тестирование',
+      actorName: 'Санкаршан',
+      statusMark: 'testing',
+    });
+    await listener.deliver({
+      name: 'work.task.commented',
+      recipientId: 'user-1',
+      spaceId: 'space-1',
+      taskKey: 'VED-42',
+      taskTitle: 'Починить ссылки',
+      excerpt: 'Проверь, пожалуйста',
+      commentCount: 1,
+      columnName: 'Тестирование',
+      actorName: 'Санкаршан',
+      statusMark: 'testing',
+    });
+
+    // Ветка — ключ по адресу карточки: повторная смена статуса ляжет в ту же
+    // строку. Комментарию ключа нет — вопрос не должен пропадать из ленты.
+    expect(inbox[0]).toMatchObject({
+      threadKey: 'work-status:/work/planner/space-1?task=VED-42',
+    });
+    expect(inbox[1]).not.toHaveProperty('threadKey');
+  });
+
   it('наполняет колокольчик даже без пуш-подписок', async () => {
     const { listener, inbox, sent } = createListener({ subscriptions: [] });
 
@@ -784,12 +819,27 @@ describe('NotificationsListener wiring', () => {
       spaceId: 'space-1',
       taskKey: 'VED-42',
       statusMark: 'testing',
+      liftRecipientIds: ['user-2'],
+    });
+    // Издатель старой сборки поля не знает — подъёма нет, пометка обновляется.
+    emitter.emit(WORK_TASK_MARK_REFRESHED_EVENT, {
+      name: WORK_TASK_MARK_REFRESHED_EVENT,
+      spaceId: 'space-1',
+      taskKey: 'VED-43',
+      statusMark: 'done',
     });
 
     expect(notifications.refreshWorkTaskMark).toHaveBeenCalledWith(
       'space-1',
       'VED-42',
       'testing',
+      ['user-2'],
+    );
+    expect(notifications.refreshWorkTaskMark).toHaveBeenCalledWith(
+      'space-1',
+      'VED-43',
+      'done',
+      [],
     );
 
     await app.close();
