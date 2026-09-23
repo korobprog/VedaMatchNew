@@ -1,9 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PicturePublishForm } from "./picture-publish-form";
 import { ReelWizard } from "./reel-wizard";
-import { fieldLabelClass } from "./field-label";
+import {
+  ATTRIBUTION_GROUP_CLASS,
+  ATTRIBUTION_TITLE_CLASS,
+  fieldLabelClass,
+} from "./field-label";
 import { tapButtonClass, tapFieldClass } from "./tap-target";
 
 const categories = [
@@ -94,13 +98,25 @@ describe("PicturePublishForm (VED-97)", () => {
     for (const text of [
       "Картинка с цитатой (JPEG, PNG или WebP)",
       "Категория",
-      "Автор (необязательно)",
-      "Источник (необязательно)",
       "Текст с картинки (необязательно)",
     ])
       // Жирность и самый контрастный текстовый токен — иначе подпись
       // сливается с фоном страницы, на котором лежит форма.
       expect(screen.getByText(text).className).toContain(fieldLabelClass());
+  });
+
+  // VED-203, второй круг: «сделай оставшиеся графы автор и источник жирным
+  // шрифтом или как-то ещё выдели, чтобы они сразу бросались в глаза».
+  it("«Автор» и «Источник» выделены сильнее остальных подписей (VED-203)", () => {
+    render(<PicturePublishForm categories={categories} />);
+
+    const group = screen.getByRole("group", { name: "Источник и автор" });
+    expect(group.className).toBe(ATTRIBUTION_GROUP_CLASS);
+    for (const word of ["Автор", "Источник"])
+      expect(within(group).getByText(word).className).toBe(ATTRIBUTION_TITLE_CLASS);
+    // Имя поля для скринридера не изменилось.
+    expect(screen.getByLabelText("Автор (необязательно)")).toHaveProperty("tagName", "INPUT");
+    expect(screen.getByLabelText("Источник (необязательно)")).toHaveProperty("tagName", "INPUT");
   });
 
   it("кнопки и поля открытки дотягивают до тап-цели", () => {
