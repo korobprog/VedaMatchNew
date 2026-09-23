@@ -41,11 +41,17 @@ describe('savedImagePlan', () => {
 
   it('загруженное фото: отметка происхождения без ИИ-метки — было бы неправдой', () => {
     const plan = savedImagePlan({ ...base, imageSource: 'uploaded' });
-    expect(plan).toMatchObject({ kind: 'story', disclosure: SAVED_MARK, aiGenerated: false });
+    expect(plan).toMatchObject({
+      kind: 'story',
+      disclosure: SAVED_MARK,
+      aiGenerated: false,
+    });
   });
 
   it('готовая картинка с надписью: полоса снизу, поверх ничего не кладём', () => {
-    expect(savedImagePlan({ ...base, captionInImage: true, storyCaption: false })).toEqual({
+    expect(
+      savedImagePlan({ ...base, captionInImage: true, storyCaption: false }),
+    ).toEqual({
       kind: 'band',
       background: base.imageUrl,
       disclosure: SAVED_MARK,
@@ -54,8 +60,12 @@ describe('savedImagePlan', () => {
   });
 
   it('текст берётся как у воркера: перевод для сторис, иначе исходная цитата', () => {
-    expect(savedImagePlan({ ...base, storyText: '  ' })).toMatchObject({ text: 'Исходный текст' });
-    expect(savedImagePlan({ ...base, storyText: null, quoteText: null })).toMatchObject({
+    expect(savedImagePlan({ ...base, storyText: '  ' })).toMatchObject({
+      text: 'Исходный текст',
+    });
+    expect(
+      savedImagePlan({ ...base, storyText: null, quoteText: null }),
+    ).toMatchObject({
       text: '',
       attribution: '',
     });
@@ -82,16 +92,24 @@ describe('savedImageKey', () => {
     const key = savedImageKey('post-1', plan);
     expect(key).toBe(savedImageKey('post-1', { ...plan }));
     expect(key).toMatch(
-      new RegExp(`^motivation/saved/post-1/${SAVED_IMAGE_VERSION}-[0-9a-f]{16}\\.jpg$`),
+      new RegExp(
+        `^motivation/saved/post-1/${SAVED_IMAGE_VERSION}-[0-9a-f]{16}\\.jpg$`,
+      ),
     );
   });
 
   it('меняется, когда меняется то, что на пикселях', () => {
     const key = savedImageKey('post-1', plan);
-    const edited: SavedImagePlan = { ...plan, text: 'Другая цитата' } as SavedImagePlan;
+    const edited: SavedImagePlan = {
+      ...plan,
+      text: 'Другая цитата',
+    } as SavedImagePlan;
     expect(savedImageKey('post-1', edited)).not.toBe(key);
     expect(
-      savedImageKey('post-1', { ...plan, background: 'https://s3.example/other.png' }),
+      savedImageKey('post-1', {
+        ...plan,
+        background: 'https://s3.example/other.png',
+      }),
     ).not.toBe(key);
   });
 });
@@ -126,7 +144,10 @@ describe('сборка файла', () => {
       .toBuffer();
 
   it('сторис — JPEG 1080×1920, заметно легче PNG-кадра (VED-156)', async () => {
-    const plan = savedImagePlan(base) as Extract<SavedImagePlan, { kind: 'story' }>;
+    const plan = savedImagePlan(base) as Extract<
+      SavedImagePlan,
+      { kind: 'story' }
+    >;
     const jpeg = await composeSavedStory(await noisy(1024, 1536), plan);
     const meta = await sharp(jpeg).metadata();
     expect(meta.format).toBe('jpeg');
@@ -149,7 +170,12 @@ describe('сборка файла', () => {
     // В полосе знак белый на тёмном — светлые точки есть только от него.
     const { logo } = bandLayout(1350);
     const { data, info } = await sharp(jpeg)
-      .extract({ left: logo.left, top: logo.top, width: logo.width, height: logo.height })
+      .extract({
+        left: logo.left,
+        top: logo.top,
+        width: logo.width,
+        height: logo.height,
+      })
       .raw()
       .toBuffer({ resolveWithObject: true });
     let bright = 0;

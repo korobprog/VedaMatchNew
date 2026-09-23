@@ -26,7 +26,10 @@ function build(overrides: { found?: string | null; upload?: jest.Mock } = {}) {
       jest.fn().mockResolvedValue('https://s3.example/saved.jpg'),
   };
   return {
-    service: new MotivationSavedImageService(prisma as never, generation as never),
+    service: new MotivationSavedImageService(
+      prisma as never,
+      generation as never,
+    ),
     prisma,
     generation,
   };
@@ -49,7 +52,9 @@ describe('MotivationSavedImageService', () => {
   afterEach(() => compose.mockRestore());
 
   it('готовый файл из хранилища не собирается заново', async () => {
-    const { service, generation } = build({ found: 'https://s3.example/cached.jpg' });
+    const { service, generation } = build({
+      found: 'https://s3.example/cached.jpg',
+    });
     await expect(service.forSlug('slug')).resolves.toEqual({
       kind: 'stored',
       url: 'https://s3.example/cached.jpg',
@@ -64,15 +69,22 @@ describe('MotivationSavedImageService', () => {
       kind: 'stored',
       url: 'https://s3.example/saved.jpg',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://s3.example/bg.png', expect.anything());
-    const [, plan] = compose.mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://s3.example/bg.png',
+      expect.anything(),
+    );
+    const [, plan] = compose.mock.calls[0] as [Buffer, unknown];
     expect(plan).toMatchObject({
       kind: 'story',
       text: 'Цитата',
       attribution: 'Участник VedaMatch · Бхагавад-гита · 2.27',
       disclosure: savedImage.SAVED_MARK_AI,
     });
-    const [key, , type] = generation.uploadStory.mock.calls[0];
+    const [key, , type] = generation.uploadStory.mock.calls[0] as [
+      string,
+      Buffer,
+      string,
+    ];
     expect(key).toMatch(/^motivation\/saved\/post-1\/.+\.jpg$/);
     expect(type).toBe('image/jpeg');
   });
@@ -96,6 +108,8 @@ describe('MotivationSavedImageService', () => {
   it('неопубликованный или чужой слаг — 404', async () => {
     const { service, prisma } = build();
     prisma.motivationPost.findFirst.mockResolvedValue(null);
-    await expect(service.forSlug('nope')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.forSlug('nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });
