@@ -1,11 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import {
   BLOG_IMAGE_MIME_TYPES,
   BLOG_POST_MAX_IMAGES,
-  BLOG_POST_TEXT_MAX_LENGTH,
   BLOG_POST_TITLE_MAX_LENGTH,
   type BlogPostDto,
 } from "@vedamatch/shared";
@@ -14,6 +13,9 @@ import {
   blogErrorText,
   createBlogPost,
 } from "@/lib/blog-client-api";
+import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
+import { BlogTextCounter } from "./blog-text-counter";
+import { blogTextLimitState } from "./blog-text-limit";
 
 /**
  * Форма нового поста (VED-238, VED-116).
@@ -34,6 +36,8 @@ export function BlogComposer({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const counterId = useId();
+  const limit = blogTextLimitState(text);
 
   function pick(list: FileList | null) {
     if (!list) return;
@@ -49,6 +53,12 @@ export function BlogComposer({
     setNote(null);
     if (!title.trim() && !text.trim() && files.length === 0) {
       setError(blogErrorText("post_empty"));
+      return;
+    }
+    // Отправить длиннее предела нельзя, но и обрезать за человека нельзя:
+    // счётчик уже сказал, сколько убрать, — ждём, пока уберёт.
+    if (limit.over) {
+      setError(limit.label);
       return;
     }
 
@@ -96,15 +106,22 @@ export function BlogComposer({
       <label htmlFor="blog-text" className="sr-only">
         Текст поста
       </label>
+      {/* `maxLength` здесь больше нет (VED-371): браузер с ним молча
+          перестаёт принимать знаки, а вставленный длинный текст так же
+          молча обрезает с конца — человек не узнавал ни о пределе, ни о
+          потере хвоста. Вместо него счётчик и отказ отправить форму. */}
       <textarea
         id="blog-text"
         value={text}
         onChange={(event) => setText(event.target.value)}
-        maxLength={BLOG_POST_TEXT_MAX_LENGTH}
         rows={3}
         placeholder="Что происходит?"
+        aria-describedby={counterId}
+        aria-invalid={limit.over || undefined}
         className="mt-2 w-full rounded-lg border border-glass-brd bg-bg-1 px-3 py-2 text-sm leading-6 text-text-0 placeholder:text-text-2"
       />
+      <BlogTextCounter id={counterId} state={limit} />
+      <BlogBlankLinesTool value={text} onChange={setText} disabled={pending} />
 
       {files.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-2">

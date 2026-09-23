@@ -1,4 +1,8 @@
 // Браузерный клиент сервиса «Блог-лента» поверх общего apiFetch.
+import {
+  BLOG_POST_TEXT_MAX_LENGTH,
+  BLOG_POST_TITLE_MAX_LENGTH,
+} from "@vedamatch/shared";
 import type {
   BlogAuthorFeedResponse,
   BlogFeedResponse,
@@ -28,8 +32,11 @@ export class BlogApiError extends Error {
  */
 const MESSAGES: Record<string, string> = {
   post_empty: "Напишите что-нибудь или добавьте фотографию.",
-  title_too_long: "Заголовок слишком длинный.",
-  text_too_long: "Текст слишком длинный.",
+  title_too_long: `Заголовок длиннее ${BLOG_POST_TITLE_MAX_LENGTH} знаков.`,
+  // С числом, а не «слишком длинный»: до сервера этот отказ теперь доезжает
+  // разве что в обход формы — под полем стоит счётчик, который не даёт
+  // отправить перебор. А раз доехал, пусть скажет, во что упёрлись (VED-371).
+  text_too_long: `Текст длиннее ${BLOG_POST_TEXT_MAX_LENGTH} знаков — столько в пост не помещается.`,
   too_many_images: "Больше фотографий в один пост не поместится.",
   daily_limit_reached: "На сегодня постов достаточно — продолжите завтра.",
   image_upload_unavailable: "Загрузка фотографий сейчас недоступна.",

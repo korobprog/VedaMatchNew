@@ -15,6 +15,7 @@ import {
 import { BlogImages } from "./blog-images";
 import { BlogLifetimeControl } from "./blog-lifetime-control";
 import { BlogPostEditor } from "./blog-post-editor";
+import { BlogPostText } from "./blog-post-text";
 import { blogEditedLabel, blogPostDate } from "./blog-format";
 
 /**
@@ -156,11 +157,10 @@ export function BlogPostCard({
             </>
           )}
 
-          {post.text && (
-            <p className="whitespace-pre-line px-4 pt-2 text-sm leading-6 text-text-1">
-              {post.text}
-            </p>
-          )}
+          {/* Свёрнутый текст и кнопка «Далее» (VED-371): пост теперь бывает
+              на восемь страниц, и целиком развёрнутым он выталкивает из
+              ленты соседей. */}
+          <BlogPostText text={post.text} className="px-4 pt-2" />
 
           <footer className="flex flex-wrap items-center gap-2 px-4 py-3">
             <button
@@ -267,11 +267,9 @@ function RepostSource({
         </p>
       )}
       <BlogImages images={source.images} alt={source.title} compact />
-      {source.text && (
-        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-text-1">
-          {source.text}
-        </p>
-      )}
+      {/* Чужой длинный текст сворачивается так же: репост вдвое длиннее
+          оригинала — это не то, что человек пересылал. */}
+      <BlogPostText text={source.text} className="mt-2" />
     </div>
   );
 }

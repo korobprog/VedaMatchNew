@@ -121,6 +121,18 @@ describe('normalizeText', () => {
     expect(normalizeText('первый\n\n\n\n\nвторой')).toBe('первый\n\nвторой');
   });
 
+  // VED-372: вставка из мессенджера приносит строки из пробелов, и до этой
+  // правки схлопывание их не замечало — в ленте оставалась дыра.
+  it('sees a line of spaces and tabs as blank', () => {
+    expect(normalizeText('первый\n \n\t\n  \nвторой')).toBe('первый\n\nвторой');
+    expect(normalizeText('первый\n   \nвторой')).toBe('первый\n\nвторой');
+  });
+
+  // Отступ в начале строки со словами — часть текста, а не пустота.
+  it('keeps the indentation of a line that has words', () => {
+    expect(normalizeText('первый\n    второй')).toBe('первый\n    второй');
+  });
+
   it('trims the edges and survives garbage', () => {
     expect(normalizeText('  текст  ')).toBe('текст');
     expect(normalizeText(null)).toBe('');
