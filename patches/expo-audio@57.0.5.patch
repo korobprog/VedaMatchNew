@@ -24,7 +24,7 @@ index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..3ed659b67deb39d057251345fd81bd18
            }
            playlists[playlist.id] = playlist
 diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
-index c76a9fd2a53743a691782e0f67d0d71401df58f6..d72550a2e4f15d14dce34b4dea948b53b5c355ab 100644
+index c76a9fd2a53743a691782e0f67d0d71401df58f6..8e15f101ae603613c3a43a7631fcd5e9a8a2305f 100644
 --- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
 @@ -37,6 +37,11 @@ class AudioPlayer(
@@ -39,3 +39,47 @@ index c76a9fd2a53743a691782e0f67d0d71401df58f6..d72550a2e4f15d14dce34b4dea948b53
      .setSeekForwardIncrementMs(SEEK_JUMP_INTERVAL_MS)
      .setSeekBackIncrementMs(SEEK_JUMP_INTERVAL_MS)
      .apply {
+@@ -83,11 +88,35 @@ class AudioPlayer(
+       ?: throw Exceptions.ReactContextLost()
+   }
+ 
++  // VedaMatch (VED-331): a player that is not on the lock screen (voice
++  // messages, ringtone) keeps its basic MediaSession only while it plays.
++  // Otherwise the last voice message stays Android's "media button session"
++  // and a headset button replays it instead of resuming the media player.
++  private var basicSessionReleased = false
++
+   init {
+     installPlayerListeners()
+     source?.let {
+       setMediaSource(source)
+     }
++    ref.addListener(object : Player.Listener {
++      override fun onIsPlayingChanged(isPlaying: Boolean) {
++        updateBasicSession(isPlaying)
++      }
++    })
++    // Not playing yet: a mounted voice bubble must not register a session.
++    updateBasicSession(false)
++  }
++
++  private fun updateBasicSession(isPlaying: Boolean) {
++    if (isActiveForLockScreen) return
++    if (!isPlaying && !basicSessionReleased) {
++      mediaSession.release()
++      basicSessionReleased = true
++    } else if (isPlaying && basicSessionReleased) {
++      mediaSession = buildBasicMediaSession(context, ref)
++      basicSessionReleased = false
++    }
+   }
+ 
+   fun setMediaSource(source: MediaSource) {
+@@ -222,6 +251,7 @@ class AudioPlayer(
+   internal fun assignBasicMediaSession() {
+     mediaSession.release()
+     mediaSession = buildBasicMediaSession(context, ref)
++    basicSessionReleased = false
+   }
+ 
+   private fun sendAudioSampleUpdate(sample: List<Float>) {
