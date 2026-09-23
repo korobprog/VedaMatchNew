@@ -421,6 +421,7 @@ model User {
   musicPlaybackQueue                 MusicPlaybackQueue?           @relation("MusicPlaybackQueue")
   musicNowPlaying                    MusicNowPlaying?              @relation("MusicNowPlaying")
   musicListens                       MusicListen[]                 @relation("MusicListens")
+  musicBookmarks                     MusicBookmark[]               @relation("MusicBookmarks")
   musicUploads                       MusicUpload[]                 @relation("MusicUploads")
   musicReportsMade                   MusicReport[]                 @relation("MusicReportsMade")
   musicReportsDecided                MusicReport[]                 @relation("MusicReportsDecided")
@@ -4931,6 +4932,7 @@ model MusicTrack {
   playStates       MusicPlayState[]
   nowPlaying       MusicNowPlaying[]
   listens          MusicListen[]
+  bookmarks        MusicBookmark[]
   reports          MusicReport[]
   ingestItem       MusicIngestItem?       @relation("MusicIngestDraft")
   ingestDuplicates MusicIngestItem[]      @relation("MusicIngestDuplicate")
@@ -5120,6 +5122,27 @@ model MusicListen {
   @@index([listenedAt])
 }
 
+/// Метка-закладка в записи (VED-388): место, к которому человек хочет
+/// вернуться, — строка лекции, начало киртана. Своя у каждого человека и
+/// каждой записи; живёт, пока живы оба. Позиция хранится целыми секундами —
+/// точнее переход по метке всё равно не попадёт, а в дробях плеер не
+/// показывает время нигде.
+model MusicBookmark {
+  id              String     @id @default(uuid())
+  userId          String
+  user            User       @relation("MusicBookmarks", fields: [userId], references: [id], onDelete: Cascade)
+  trackId         String
+  track           MusicTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  positionSeconds Int
+  /// Необязательная подпись, не длиннее `MUSIC_BOOKMARK_LABEL_MAX`.
+  label           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([userId, trackId, positionSeconds])
+  @@index([trackId])
+}
+
 /// Загрузка файла. Строка заводится при выдаче подписанного PUT, до того
 /// как файл появился в бакете; `POST music/uploads/:id/complete` дочитывает
 /// метаданные и создаёт `MusicTrack`.
@@ -5180,6 +5203,16 @@ model MusicSettings {
   /// Какую линию слушать: идентификатор из `LINEAGES`, `all` — весь каталог,
   /// `null` — как в портальном профиле (`User.lineage`).
   lineage              String?
+  /// Шаги кнопок перемотки плеера, секунды (VED-388). Умолчание — прежние
+  /// 15 секунд, чтобы у тех, кто настроек не трогал, ничего не сдвинулось.
+  /// Допустимые значения — `MUSIC_SEEK_STEPS`, проверяет сервис.
+  seekBackSeconds      Int                       @default(15)
+  seekForwardSeconds   Int                       @default(15)
+  /// Какие кнопки вынесены на полосу плеера (VED-388). На сервере, а не в
+  /// `localStorage`: настроил на телефоне — та же полоса и на ноутбуке.
+  playerShowSeek       Boolean                   @default(false)
+  playerShowBookmark   Boolean                   @default(false)
+  playerShowHistory    Boolean                   @default(false)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 }

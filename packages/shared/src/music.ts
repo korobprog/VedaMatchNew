@@ -905,9 +905,72 @@ export interface MusicSettingsDto {
    * каталог. См. `LineagePreference`.
    */
   lineage: LineagePreference;
+  /** Шаг кнопки «назад» в плеере, секунды — одно из `MUSIC_SEEK_STEPS` (VED-388). */
+  seekBackSeconds: number;
+  /** Шаг кнопки «вперёд» в плеере, секунды — одно из `MUSIC_SEEK_STEPS`. */
+  seekForwardSeconds: number;
+  /**
+   * Кнопки перемотки вынесены на полосу плеера. На широком экране (от
+   * `lg`) они стоят там всегда, как и до VED-388: выключатель решает за
+   * телефон и планшет, где места на полосе им по умолчанию нет.
+   */
+  playerShowSeek: boolean;
+  /** Кнопка «Метка» вынесена на полосу плеера. */
+  playerShowBookmark: boolean;
+  /** Кнопка «История» вынесена на полосу плеера. */
+  playerShowHistory: boolean;
 }
 
 export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;
+
+/**
+ * Шаги перемотки, из которых выбирают в настройках плеера (VED-388).
+ *
+ * Список, а не произвольное число: ползунок от 1 до 600 секунд даёт
+ * «перемотку на 37 секунд», которую никто не выбирал нарочно.
+ */
+export const MUSIC_SEEK_STEPS = [5, 10, 15, 30, 60] as const;
+export type MusicSeekStep = (typeof MUSIC_SEEK_STEPS)[number];
+
+/** Шаг до VED-388 — он же умолчание, чтобы ни у кого ничего не сдвинулось. */
+export const MUSIC_DEFAULT_SEEK_STEP: MusicSeekStep = 15;
+
+export function isMusicSeekStep(value: unknown): value is MusicSeekStep {
+  return (
+    typeof value === 'number' &&
+    (MUSIC_SEEK_STEPS as readonly number[]).includes(value)
+  );
+}
+
+/**
+ * Метка-закладка в записи (VED-388): место, к которому человек хочет
+ * вернуться, — строка лекции, начало киртана. Принадлежит человеку и записи.
+ */
+export interface MusicBookmarkDto {
+  id: string;
+  trackId: string;
+  positionSeconds: number;
+  /** Необязательная подпись. `null` — показываем только время. */
+  label: string | null;
+  createdAt: string;
+}
+
+export interface MusicBookmarksDto {
+  items: MusicBookmarkDto[];
+}
+
+export interface CreateMusicBookmarkRequest {
+  trackId: string;
+  positionSeconds: number;
+  label?: string | null;
+}
+
+export interface UpdateMusicBookmarkRequest {
+  label: string | null;
+}
+
+/** Самая длинная подпись метки. Дальше это уже заметка, а не подпись. */
+export const MUSIC_BOOKMARK_LABEL_MAX = 120;
 
 /**
  * Сколько человек наслушал за неделю.
@@ -929,6 +992,12 @@ export interface MusicListenDto {
   track: MusicTrackDto;
   seconds: number;
   listenedAt: string;
+  /**
+   * Где человек остановился в этой записи (`MusicPlayState`), если не
+   * дослушал: история в плеере (VED-388) ведёт туда, а не в начало.
+   * `null` — позиции нет или запись дослушана.
+   */
+  positionSeconds?: number | null;
 }
 
 export interface MusicHistoryDto {

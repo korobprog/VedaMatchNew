@@ -31,6 +31,8 @@ import {
 } from './music-playback.controller';
 import { MusicPlaybackService } from './music-playback.service';
 import { MusicFavoritesService } from './music-favorites.service';
+import { MusicBookmarksController } from './music-bookmarks.controller';
+import { MusicBookmarksService } from './music-bookmarks.service';
 import { MusicOfflineController } from './music-offline.controller';
 import { MusicPlaylistsController } from './music-playlists.controller';
 import { MusicPlaylistsService } from './music-playlists.service';
@@ -72,6 +74,7 @@ import { MusicDurationRecountService } from './music-duration-recount.service';
     MusicPlaybackController,
     MusicSettingsController,
     MusicHistoryController,
+    MusicBookmarksController,
     MusicFavoritesController,
     MusicPlaylistsController,
     MusicOfflineController,
@@ -92,6 +95,7 @@ import { MusicDurationRecountService } from './music-duration-recount.service';
     MusicReportsService,
     MusicPlaybackService,
     MusicFavoritesService,
+    MusicBookmarksService,
     MusicPlaylistsService,
     MusicIngestService,
     MusicIngestFetchService,

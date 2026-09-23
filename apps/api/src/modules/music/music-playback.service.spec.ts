@@ -31,6 +31,7 @@ function prismaMock() {
     },
     musicPlayState: {
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
       upsert: jest.fn().mockResolvedValue({}),
     },
@@ -56,6 +57,15 @@ function prismaMock() {
 }
 
 const config = { get: jest.fn(() => undefined) } as unknown as ConfigService;
+
+/** Настройки плеера по умолчанию (VED-388): шаг 15 с, ничего не вынесено. */
+const PLAYER = {
+  seekBackSeconds: 15,
+  seekForwardSeconds: 15,
+  playerShowSeek: false,
+  playerShowBookmark: false,
+  playerShowHistory: false,
+};
 
 function busMock() {
   return { emit: jest.fn() };
@@ -251,6 +261,7 @@ describe('MusicPlaybackService.settings', () => {
       nowPlayingVisibility: 'friends',
       autoplay: true,
       lineage: null,
+      ...PLAYER,
     });
   });
 
@@ -260,12 +271,18 @@ describe('MusicPlaybackService.settings', () => {
       nowPlayingVisibility: 'nobody',
       autoplay: false,
       lineage: 'ipbys',
+      ...PLAYER,
+      seekBackSeconds: 5,
+      playerShowBookmark: true,
     });
 
     expect(await service(prisma).getSettings('u1')).toEqual({
       nowPlayingVisibility: 'nobody',
       autoplay: false,
       lineage: 'ipbys',
+      ...PLAYER,
+      seekBackSeconds: 5,
+      playerShowBookmark: true,
     });
   });
 
@@ -275,6 +292,7 @@ describe('MusicPlaybackService.settings', () => {
       nowPlayingVisibility: 'friends',
       autoplay: true,
       lineage: 'unknown-math',
+      ...PLAYER,
     });
 
     expect((await service(prisma).getSettings('u1')).lineage).toBeNull();
@@ -286,6 +304,7 @@ describe('MusicPlaybackService.settings', () => {
       nowPlayingVisibility: 'friends',
       autoplay: true,
       lineage: 'all',
+      ...PLAYER,
     });
 
     const result = await service(prisma).updateSettings('u1', {
@@ -308,6 +327,50 @@ describe('MusicPlaybackService.settings', () => {
 
     const call = prisma.musicSettings.upsert.mock.calls[0][0];
     expect(call.update).toEqual({ autoplay: false });
+  });
+
+  it('шаги перемотки и кнопки плеера сохраняет (VED-388)', async () => {
+    const prisma = prismaMock();
+
+    const result = await service(prisma).updateSettings('u1', {
+      seekBackSeconds: 5,
+      seekForwardSeconds: 60,
+      playerShowHistory: true,
+    });
+
+    expect(prisma.musicSettings.upsert.mock.calls[0][0].update).toEqual({
+      seekBackSeconds: 5,
+      seekForwardSeconds: 60,
+      playerShowHistory: true,
+    });
+    expect(result).toMatchObject({
+      seekBackSeconds: 5,
+      seekForwardSeconds: 60,
+      playerShowHistory: true,
+      playerShowSeek: false,
+    });
+  });
+
+  it('шаг вне списка отвергает и в базу ничего не пишет', async () => {
+    const prisma = prismaMock();
+
+    await expect(
+      service(prisma).updateSettings('u1', { seekForwardSeconds: 37 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.musicSettings.upsert).not.toHaveBeenCalled();
+  });
+
+  it('шаг, которого больше нет в списке, читает как умолчание', async () => {
+    const prisma = prismaMock();
+    prisma.musicSettings.findUnique.mockResolvedValue({
+      nowPlayingVisibility: 'friends',
+      autoplay: true,
+      lineage: null,
+      ...PLAYER,
+      seekBackSeconds: 45,
+    });
+
+    expect((await service(prisma).getSettings('u1')).seekBackSeconds).toBe(15);
   });
 });
 
@@ -631,5 +694,70 @@ describe('MusicPlaybackService.getStats', () => {
     const prisma = prismaMock();
 
     expect(await service(prisma).getStats('u1')).toEqual({ weekSeconds: 0 });
+  });
+});
+
+describe('MusicPlaybackService.history', () => {
+  const row = (trackId: string, over: Record<string, unknown> = {}) => ({
+    trackId,
+    seconds: 120,
+    listenedAt: new Date('2026-09-23T10:00:00.000Z'),
+    track: {
+      id: trackId,
+      title: `Запись ${trackId}`,
+      durationSeconds: 600,
+      language: null,
+      isLiveRecording: false,
+      lineage: null,
+      playCount: 1,
+      publishedAt: null,
+      coverKey: null,
+      status: 'published',
+      artist: null,
+      album: null,
+      categories: [],
+      ...over,
+    },
+  });
+
+  it('рядом со строкой отдаёт, где остановился (VED-388)', async () => {
+    const prisma = prismaMock();
+    prisma.musicListen.findMany.mockResolvedValue([
+      row('t1'),
+      row('t2'),
+      row('t1'),
+      row('t3'),
+    ]);
+    prisma.musicPlayState.findMany.mockResolvedValue([
+      { trackId: 't1', positionSeconds: 312 },
+      // Дослушанная: продолжать нечего.
+      { trackId: 't2', positionSeconds: 595 },
+    ]);
+
+    const { items } = await service(prisma).history('u1');
+
+    expect(items.map((item) => item.positionSeconds)).toEqual([
+      312,
+      null,
+      312,
+      null,
+    ]);
+    // Одним запросом на всю страницу, без повторов.
+    expect(prisma.musicPlayState.findMany).toHaveBeenCalledTimes(1);
+    expect(
+      prisma.musicPlayState.findMany.mock.calls[0][0].where.trackId.in,
+    ).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('снятые с витрины записи пропускает', async () => {
+    const prisma = prismaMock();
+    prisma.musicListen.findMany.mockResolvedValue([
+      row('t1', { status: 'rejected' }),
+    ]);
+
+    const { items } = await service(prisma).history('u1');
+
+    expect(items).toEqual([]);
+    expect(prisma.musicPlayState.findMany).not.toHaveBeenCalled();
   });
 });
