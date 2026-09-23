@@ -2227,6 +2227,14 @@ model NotificationDevice {
   /// такому устройству входящий звонок шлётся data-only, а не обычным
   /// пушем с уведомлением — иначе звонок звонил бы дважды.
   nativeCalls Boolean  @default(false)
+  /// versionCode установленной сборки: приложение присылает его при каждой
+  /// регистрации токена. `null` — сборка старше этого поля (или не Android).
+  /// По нему сервер решает, звать ли телефон обновиться (сборки `*-site`).
+  appVersionCode     Int?
+  /// versionCode выпуска, о котором этому телефону уже напомнили пушем
+  /// «Доступна новая версия». Один пуш на выпуск: отметка ставится до
+  /// отправки условным `updateMany`, поэтому два воркера одно не пришлют.
+  updatePromptedCode Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   /// Те же отметки живости, что у веб-подписки (VED-314): служба доставки
@@ -4358,6 +4366,9 @@ model ChatMessage {
   reports     ChatReport[]
   views       ChatMessageView[]
   pinnedIn    ChatConversation[]    @relation("ChatPinnedMessage")
+  /// Пост официального канала, из которого сообщение вышло (новость,
+  /// выпуск приложения): по нему правка новости правит сообщение.
+  officialPosts ChatOfficialPost[] @relation("ChatOfficialPostMessage")
 
   @@index([conversationId, createdAt])
   @@index([authorId])
@@ -7204,4 +7215,81 @@ model WellnessProductCheck {
 
   @@index([status, updatedAt])
   @@index([createdAt])
+}
+
+// ===== Уведомления: выпуски приложения с сайта =====
+
+/// Выпуск Android-приложения, раздаваемого с сайта (канал `site`), каким его
+/// увидел сервер в манифесте `mobile/android/<вариант>/latest.json`.
+/// Строку заводит AppReleaseWorkerService; уникальность пары «вариант +
+/// versionCode» и есть защита от повторного объявления.
+///
+/// status: `baseline` — версия, которую сервер застал при первом чтении
+/// манифеста или при откате: она не новость, о ней не объявляют и не пушат;
+/// `pending` — новая, ждёт объявления; `announcing` — объявление взято
+/// воркером; `announced` — событие ушло на шину; `failed` — три попытки не
+/// удались (пуши всё равно идут: от объявления они не зависят).
+model NotificationAppRelease {
+  id           String    @id @default(uuid())
+  variant      String
+  versionCode  Int
+  versionName  String
+  /// «Что нового» из манифеста (поле `notes`, вход release_notes воркфлоу).
+  notes        String?
+  builtAt      DateTime?
+  status       String    @default("pending")
+  attemptCount Int       @default(0)
+  errorMessage String?
+  announcedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([variant, versionCode])
+  @@index([status, updatedAt])
+}
+
+// ===== Общение: публикации в официальный канал =====
+
+/// Очередь постов официального канала VedaMatch от других сервисов:
+/// новости из админки («Что нового») и выход новой версии приложения.
+/// Приходят событиями шины, публикует ChatOfficialPostWorkerService.
+///
+/// `source` + `sourceId` уникальны — одно и то же не уходит в канал дважды,
+/// сколько бы раз ни пришло событие. Текст хранится полями, а не готовым
+/// сообщением: формулировку собирает `official-post-text.ts` в момент
+/// публикации и при правке новости.
+///
+/// status: `pending` — ждёт `publishAt`; `posting` — взят воркером;
+/// `posted` — в канале (`messageId`); `cancelled` — новость сняли;
+/// `skipped` — срок показа кончился раньше публикации; `failed` — три
+/// попытки не удались.
+model ChatOfficialPost {
+  id           String       @id @default(uuid())
+  /// `changelog.announcement` | `app.release`
+  source       String
+  sourceId     String
+  title        String
+  body         String
+  /// Ссылка «подробнее» — путь портала (`/updates/news`, `/app`).
+  path         String
+  /// Картинки источника `[{ url, width, height }]`: при публикации
+  /// копируются в папку канала, в пост идёт копия, а не чужой объект.
+  images       Json         @default("[]")
+  /// Кого просили указать автором (админ, опубликовавший новость). Пишет
+  /// он, если он администратор канала, иначе — первый администратор.
+  authorHintId String?
+  publishAt    DateTime
+  /// Срок показа новости: истёк до публикации — пост не нужен.
+  expiresAt    DateTime?
+  status       String       @default("pending")
+  attemptCount Int          @default(0)
+  errorMessage String?
+  messageId    String?
+  message      ChatMessage? @relation("ChatOfficialPostMessage", fields: [messageId], references: [id], onDelete: SetNull)
+  postedAt     DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([source, sourceId])
+  @@index([status, publishAt])
 }
