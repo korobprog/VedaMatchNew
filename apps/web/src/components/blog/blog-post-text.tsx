@@ -26,6 +26,12 @@ import { buildBlogTextPreview, type BlogTextPreview } from "./blog-text-preview"
  * строки. Если после этого текст не влез, это видно по `scrollHeight`, и
  * «Далее» появляется и тогда, — иначе обрезанный CSS хвост было бы не
  * достать.
+ *
+ * Заголовок в свёрнутом виде — не длиннее двух строк (`line-clamp-2`), и
+ * по той же причине: заголовок до 120 знаков шрифтом Unbounded на телефоне
+ * ложится в пять строк, и тогда третий пост на экран уже не помещается.
+ * Обрезанный заголовок тоже разворачивается «Далее», а скринридер читает
+ * его целиком и в свёрнутом виде — обрезка здесь только визуальная.
  */
 
 export interface BlogTextFold {
@@ -37,28 +43,44 @@ export interface BlogTextFold {
   toggle: () => void;
   bodyId: string;
   bodyRef: React.RefObject<HTMLParagraphElement | null>;
+  /** Есть ли у поста заголовок, который сворачивается вместе с текстом. */
+  hasTitle: boolean;
+  titleId: string;
+  titleRef: React.RefObject<HTMLParagraphElement | null>;
+  /** Классы заголовка: две строки в свёрнутом виде, целиком в развёрнутом. */
+  titleClassName: string;
 }
 
-export function useBlogTextFold(text: string): BlogTextFold {
+export function useBlogTextFold(
+  text: string,
+  title: string | null = null,
+): BlogTextFold {
   const [expanded, setExpanded] = useState(false);
   const [clipped, setClipped] = useState(false);
   const bodyId = useId();
+  const titleId = useId();
   const bodyRef = useRef<HTMLParagraphElement>(null);
+  const titleRef = useRef<HTMLParagraphElement>(null);
   const preview = useMemo(() => buildBlogTextPreview(text), [text]);
 
   useLayoutEffect(() => {
     // Мерить можно только свёрнутый вид: развёрнутый не обрезан по
     // определению, и последнее измерение остаётся в силе.
-    if (expanded || preview.truncated) return;
-    const node = bodyRef.current;
-    if (!node) return;
-    const measure = () => setClipped(node.scrollHeight > node.clientHeight + 1);
+    if (expanded) return;
+    const nodes = [bodyRef.current, titleRef.current].filter(
+      (node): node is HTMLParagraphElement => node !== null,
+    );
+    if (nodes.length === 0) return;
+    const measure = () =>
+      setClipped(
+        nodes.some((node) => node.scrollHeight > node.clientHeight + 1),
+      );
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
-    observer.observe(node);
+    nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [expanded, preview.truncated, text]);
+  }, [expanded, text, title]);
 
   return {
     text,
@@ -68,6 +90,10 @@ export function useBlogTextFold(text: string): BlogTextFold {
     toggle: () => setExpanded((current) => !current),
     bodyId,
     bodyRef,
+    hasTitle: Boolean(title),
+    titleId,
+    titleRef,
+    titleClassName: expanded ? "" : "line-clamp-2",
   };
 }
 
@@ -109,12 +135,17 @@ export function BlogMoreButton({
   className?: string;
 }) {
   if (!fold.canExpand) return null;
+  // Ссылаться можно только на то, что есть в разметке: у поста бывает
+  // заголовок без текста и текст без заголовка.
+  const controls = [fold.hasTitle && fold.titleId, fold.text && fold.bodyId]
+    .filter(Boolean)
+    .join(" ");
   return (
     <button
       type="button"
       onClick={fold.toggle}
       aria-expanded={fold.expanded}
-      aria-controls={fold.bodyId}
+      aria-controls={controls || undefined}
       className={`inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-glass-brd bg-bg-1 px-4 text-base font-semibold text-text-0 hover:border-cyan/60 ${
         className ?? ""
       }`}

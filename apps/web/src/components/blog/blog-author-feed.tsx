@@ -65,7 +65,7 @@ export function BlogAuthorFeed({
             : "Участник пока ничего не написал."}
         </p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {posts.map((post) => (
             <BlogPostCard
               key={post.id}

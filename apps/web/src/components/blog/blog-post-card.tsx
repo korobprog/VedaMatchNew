@@ -61,7 +61,7 @@ export function BlogPostCard({
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const source = post.repostOf;
   const edited = blogEditedLabel(post.editedAt, post.createdAt);
-  const fold = useBlogTextFold(post.text);
+  const fold = useBlogTextFold(post.text, source ? null : post.title);
 
   /** Выход из правки возвращает клавиатуру на кнопку, которой её открыли. */
   function closeEditor() {
@@ -168,9 +168,11 @@ export function BlogPostCard({
                   заголовком уже стоит шапка со своим отступом. */}
               {post.title && (
                 <p
+                  id={fold.titleId}
+                  ref={fold.titleRef}
                   className={`px-4 font-display text-base leading-snug text-text-0 ${
                     post.images.length > 0 ? "pt-3" : "pt-0.5"
-                  }`}
+                  } ${fold.titleClassName}`}
                 >
                   {post.title}
                 </p>
@@ -183,7 +185,7 @@ export function BlogPostCard({
               соседей. Кнопка «Далее» — первой в ряду действий ниже. */}
           <BlogPostText fold={fold} className="px-4 pt-1" />
 
-          <footer className="flex flex-wrap items-center gap-1.5 px-4 pb-2.5 pt-2">
+          <footer className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-2">
             {/* «Далее» забирает свободную ширину ряда: крупная надпись во всю
                 оставшуюся ширину, а не ещё одна маленькая кнопка. */}
             <BlogMoreButton fold={fold} className="grow" />
@@ -278,7 +280,7 @@ function RepostSource({
 }: {
   source: NonNullable<BlogPostDto["repostOf"]>;
 }) {
-  const fold = useBlogTextFold(source.text);
+  const fold = useBlogTextFold(source.text, source.title);
   return (
     <div className="mx-4 mb-3 rounded-xl border border-glass-brd bg-bg-1 p-3">
       <p className="mb-2 text-[11px] text-text-2">
@@ -291,7 +293,11 @@ function RepostSource({
         </Link>
       </p>
       {source.title && (
-        <p className="mb-1 font-display text-base text-text-0">
+        <p
+          id={fold.titleId}
+          ref={fold.titleRef}
+          className={`mb-1 font-display text-base text-text-0 ${fold.titleClassName}`}
+        >
           {source.title}
         </p>
       )}
