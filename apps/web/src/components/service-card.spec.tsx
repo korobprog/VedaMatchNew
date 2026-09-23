@@ -40,6 +40,20 @@ describe("ServiceCard", () => {
     expect(screen.getByTestId("quick-access")).toBeInTheDocument();
   });
 
+  // VED-401: булавка ушла в режим «Порядок», на её месте — кнопки сервиса.
+  it("has no pin button and renders header buttons next to the title", () => {
+    render(
+      <ServiceCard
+        service={service}
+        isPinned
+        headerExtra={<a href="/union/new">Новые</a>}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Закрепить|Открепить/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Новые" })).toBeInTheDocument();
+  });
+
   it("renders no extra content when the prop is omitted", () => {
     render(<ServiceCard service={service} />);
 

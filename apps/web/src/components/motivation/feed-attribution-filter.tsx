@@ -33,6 +33,30 @@ async function fetchAttributions(query: string): Promise<MotivationFeedAttributi
 }
 
 /**
+ * Пауза перед предзагрузкой списка: первые секунды ленты — её видео и
+ * картинки, список фильтра им не конкурент.
+ */
+const IDLE_PREFETCH_DELAY_MS = 1500;
+
+/**
+ * Вызвать `task`, когда браузер свободен, но не раньше паузы. Возвращает
+ * отмену — для `useEffect`. Safari `requestIdleCallback` не знает: там
+ * просто таймер.
+ */
+function whenIdle(task: () => void): () => void {
+  let idle: number | undefined;
+  const timer = window.setTimeout(() => {
+    if (typeof window.requestIdleCallback === "function") {
+      idle = window.requestIdleCallback(task, { timeout: 3000 });
+    } else task();
+  }, IDLE_PREFETCH_DELAY_MS);
+  return () => {
+    window.clearTimeout(timer);
+    if (idle !== undefined) window.cancelIdleCallback?.(idle);
+  };
+}
+
+/**
  * Фильтр ленты по автору и источнику (VED-206): «покажи только Гиту».
  *
  * Отдельный компонент, а не ещё одна строка в меню категорий: категории —
@@ -57,11 +81,18 @@ async function fetchAttributions(query: string): Promise<MotivationFeedAttributi
  *   а второй проход оценщика по коду.
  *
  * Список не грузится вместе с лентой: он нужен одному из многих, а лента
- * открывается у всех. Но и ждать открытия окна незачем — запрос уходит на
- * полшага раньше, по наведению, фокусу и касанию кнопки, а ответ живёт в
- * `attribution-options-cache` и переживает закрытие окна. Это и есть
- * лечение «кнопка открывается с затормаживанием» (VED-252, доработка):
- * тормозило не окно, а «Загружаем…» внутри него.
+ * открывается у всех. Но и ждать открытия окна незачем — запрос уходит
+ * заранее, а ответ живёт в `attribution-options-cache` и переживает
+ * закрытие окна. Это и есть лечение «кнопка открывается с затормаживанием»
+ * (VED-252): тормозило не окно, а «Загружаем…» внутри него.
+ *
+ * Заранее — дважды. Касание кнопки (`pointerdown`) опережает `click` на
+ * время подъёма пальца, и на телефоне этого не хватало: запрос по мобильной
+ * сети дольше касания, и первое открытие всё равно показывало «Загружаем…».
+ * Поэтому ещё и в простое браузера после показа ленты (`requestIdleCallback`,
+ * не раньше `IDLE_PREFETCH_DELAY_MS`): видео и первые картинки ленты уже
+ * загружены, а сервер отвечает списком из памяти (`TtlMemo` в модуле
+ * мотивации), не пересчитывая его на каждого читателя.
  */
 export function FeedAttributionFilter({
   state,
@@ -92,8 +123,16 @@ export function FeedAttributionFilter({
     onPointerDown: prefetch,
   };
   const active = hasAttributionFilter(state);
+  const query = attributionsQuery(state);
+  const saved = state.tab === "saved";
+  useEffect(() => {
+    if (saved) return;
+    return whenIdle(() => {
+      void loadAttributions(query, fetchAttributions);
+    });
+  }, [query, saved]);
   // Избранное — одно на всех, фильтров у него нет, как и папок.
-  if (state.tab === "saved") return null;
+  if (saved) return null;
 
   const valueChip =
     "inline-flex min-h-8 max-w-[9rem] items-center gap-1 rounded-full border border-white bg-white px-2.5 text-xs font-medium text-[#0A0614] backdrop-blur sm:max-w-[12rem]";

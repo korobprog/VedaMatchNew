@@ -6,6 +6,7 @@ import type {
   MotivationSettingsDto,
   MotivationTrackDto,
   MotivationFeedResponse,
+  MotivationFeedAttributionsDto,
   MotivationAdminCandidateDto,
   MotivationAdminHealth,
   MotivationPostDto,
@@ -104,6 +105,16 @@ export const getMyMotivationReels = () =>
 
 export const getMotivationPreferences = () =>
   motivationGet<MotivationPreferenceDto>("/motivation/preferences");
+
+/**
+ * Авторы и источники ленты со счётчиками (VED-206). `style` — одной ленты:
+ * настройка кнопки «Лента» на главной (VED-401) предлагает только то, что
+ * есть в «Ленте», а не в «Открытках».
+ */
+export const getMotivationFeedAttributions = (style?: "art" | "cards") =>
+  motivationGet<MotivationFeedAttributionsDto>(
+    `/motivation/feed/attributions${style ? `?style=${style}` : ""}`,
+  );
 
 export const getPublicMotivationPost = (slug: string) =>
   motivationGetPublic<MotivationPostDto>(

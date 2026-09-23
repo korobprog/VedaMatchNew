@@ -24,11 +24,11 @@ const HIDDEN: ScrollButtonsVisibility = {
  * Раньше кнопки висели в 12px от края и ложились ровно на правый столбец
  * кнопок карточки редакции («Поделиться», «Скрытые»): у края экрана на
  * телефоне свободного места нет, карточка идёт почти во всю ширину. Теперь
- * на телефоне кнопки прижаты к самому краю (50px шириной: клетка 44px, поля
- * по 2px и рамка `glass`), а список отодвигается от них на 24px. Вместе с
- * отступом страницы (16px) и полем карточки (16px) это даёт 56px от края
- * до последней кнопки карточки — на 6px больше, чем занимает колонка
- * прокрутки. Замерено на 320, 360 и 412px.
+ * на телефоне кнопки стоят в 4px от края (колонка 48px: отступ и клетка
+ * 44px, без подложки — VED-251), а список отодвигается от них на 24px.
+ * Вместе с отступом страницы (16px) и полем карточки (16px) это даёт 56px
+ * от края до последней кнопки карточки — на 8px больше, чем занимает
+ * колонка прокрутки. Замерено на 320, 360 и 412px.
  *
  * С `sm` и шире кнопки уходят в поля страницы (`sm:right-6`), а у списка
  * справа снова ничего не отнимается. Класс один на все списки, где стоят
@@ -141,10 +141,16 @@ export function ScrollNavButtons() {
 
   return (
     <div
-      // На телефоне — вплотную к краю, без скругления справа: так
-      // колонка занимает меньше всего ширины, а список освобождает под неё
-      // поле `SCROLL_NAV_GUTTER`. С `sm` — прежний плавающий вид в полях.
-      className="glass pointer-events-auto fixed right-0 z-30 flex flex-col gap-1 rounded-l-2xl p-0.5 sm:right-6 sm:rounded-2xl sm:p-1"
+      // Полоска прозрачная, видны только стрелки (VED-251: «сделай полоску
+      // со стрелками перемотки полностью прозрачной, чтобы были видны
+      // только стрелки»). Прижата вправо с небольшим отступом (там же:
+      // «прижми максимально вправо, но чтобы отступ всё равно был
+      // небольшой») — 4px на телефоне. Стрелки при этом стоят над полем
+      // страницы и `SCROLL_NAV_GUTTER`, а не над карточками: значок 20px в
+      // клетке 44px занимает от 16 до 36px от края, поле свободно до 40px.
+      // Поэтому подложка им не нужна — контраст считается по фону страницы.
+      // С `sm` — в полях страницы, как было.
+      className="pointer-events-auto fixed right-1 z-30 flex flex-col gap-1 sm:right-6"
       // `--vm-player-space` — тот же токен, которым портал резервирует
       // место под полосу плеера снизу страницы (`globals.css`): он уже
       // учитывает свёрнутый/развёрнутый вид (`data-collapsed`), подъём
@@ -158,7 +164,7 @@ export function ScrollNavButtons() {
     >
       {visible.toTop && (
         <NavButton label="Промотать наверх до конца" onClick={() => go("top")}>
-          <ChevronsUp aria-hidden className="size-5" />
+          <ChevronsUp aria-hidden className="size-5" strokeWidth={2.5} />
         </NavButton>
       )}
       {visible.upTenth && (
@@ -166,7 +172,7 @@ export function ScrollNavButtons() {
           label="Промотать на одну десятую вверх"
           onClick={() => go("up-tenth")}
         >
-          <ChevronUp aria-hidden className="size-5" />
+          <ChevronUp aria-hidden className="size-5" strokeWidth={2.5} />
         </NavButton>
       )}
       {visible.downTenth && (
@@ -174,12 +180,12 @@ export function ScrollNavButtons() {
           label="Промотать на одну десятую вниз"
           onClick={() => go("down-tenth")}
         >
-          <ChevronDown aria-hidden className="size-5" />
+          <ChevronDown aria-hidden className="size-5" strokeWidth={2.5} />
         </NavButton>
       )}
       {visible.toBottom && (
         <NavButton label="Промотать вниз до конца" onClick={() => go("bottom")}>
-          <ChevronsDown aria-hidden className="size-5" />
+          <ChevronsDown aria-hidden className="size-5" strokeWidth={2.5} />
         </NavButton>
       )}
     </div>
@@ -202,9 +208,11 @@ function NavButton({
       aria-label={label}
       title={label}
       // 44px — тот же минимум тап-цели, что и у остальных кнопок-значков
-      // редакции (`ui.ts`, `iconButton`), только без своей рамки: рамку и
-      // фон уже даёт общий `glass`-контейнер.
-      className="inline-flex size-11 items-center justify-center rounded-xl text-text-1 transition-colors hover:bg-glass-brd/30 hover:text-text-0"
+      // редакции (`ui.ts`, `iconButton`). Ни рамки, ни фона (VED-251):
+      // видна только стрелка, `text-text-0` — самый контрастный текст темы,
+      // потому что тонкой линии значка без подложки нужен запас. Подсветка
+      // при наведении мышью остаётся: это отклик на указатель, а не полоска.
+      className="inline-flex size-11 items-center justify-center rounded-xl text-text-0 transition-colors hover:bg-glass-brd/30"
     >
       {children}
     </button>

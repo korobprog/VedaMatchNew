@@ -28,6 +28,22 @@ describe("MotivationQuickAccessWidget", () => {
     expect(screen.getByText(/и ещё 2 новых с прошлого визита/)).toBeInTheDocument();
   });
 
+  // VED-401: листать дальше — в той же папке, откуда афоризм.
+  it("цитата из папки открывается внутри этой папки", () => {
+    render(
+      <MotivationQuickAccessWidget
+        quote={{ slug: "seneka-1", text: "Пока мы откладываем, жизнь проходит.", attribution: "Сенека" }}
+        freshMore={0}
+        category="filosofiya-2"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /откладываем/ })).toHaveAttribute(
+      "href",
+      "/motivation?category=filosofiya-2&post=seneka-1",
+    );
+  });
+
   it("без свежих строки про новые нет", () => {
     render(
       <MotivationQuickAccessWidget

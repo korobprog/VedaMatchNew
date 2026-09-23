@@ -56,9 +56,12 @@ import { LibraryQuickAccessWidget } from "@/components/library/library-quick-acc
 import {
   getMotivationCategories,
   getMotivationFeed,
+  getMotivationPreferences,
 } from "@/lib/motivation-api";
 import { loadWidgetFeed } from "@/lib/motivation-widget-feed";
 import { MotivationQuickAccessWidget } from "@/components/motivation/motivation-quick-access-widget";
+import { MotivationHomeButtons } from "@/components/motivation/motivation-home-buttons";
+import { resolveHomeButtons } from "@/components/motivation/home-buttons";
 import { MusicFriendsBridge } from "@/components/activity/music-friends-bridge";
 import { getAstroState, getAstroToday } from "@/lib/astro-api";
 import { getChatUnread } from "@/lib/chat-api";
@@ -92,6 +95,9 @@ export default async function Home({
 }) {
   const { returnTo: rawReturnTo } = await searchParams;
   const returnTo = Array.isArray(rawReturnTo) ? rawReturnTo[0] : rawReturnTo;
+  // Папки «Вдохновения» нужны дважды — цитате и кнопкам в шапке карточки
+  // (VED-401), — а запрос один.
+  const motivationCategoriesRequest = getMotivationCategories().catch(() => null);
   const [
     user,
     services,
@@ -113,8 +119,10 @@ export default async function Home({
     activityFeed,
     musicPlayback,
     musicFavorites,
-    motivationFeed,
+    motivationWidget,
     libraryFeed,
+    motivationCategories,
+    motivationPreferences,
   ] = await Promise.all([
     getProfile(),
     getServices(),
@@ -139,7 +147,7 @@ export default async function Home({
     // главную видят все, и афоризм здесь должен читаться без подготовки. Нет
     // такой папки или она пуста — личная лента, как раньше.
     loadWidgetFeed({
-      categories: () => getMotivationCategories(),
+      categories: () => motivationCategoriesRequest,
       feed: (category) =>
         category
           ? getMotivationFeed("all", undefined, "random", category)
@@ -148,6 +156,10 @@ export default async function Home({
     // Свежий материал в карточке «Образования». Лента уже персональная:
     // линия и язык применяются на сервере.
     getLibraryFeed({ sort: "new" }).catch(() => null),
+    motivationCategoriesRequest,
+    // Две кнопки в шапке карточки «Вдохновения» (VED-401) — что они
+    // открывают, участник выбирает в настройках ленты.
+    getMotivationPreferences().catch(() => null),
   ]);
   if (!user || !services) {
     // Маркер сессии без access-cookie: человек уже входил, refresh скорее всего
@@ -241,7 +253,13 @@ export default async function Home({
   const blogFeed = blogVisible ? await getBlogHomeFeed().catch(() => null) : null;
   const unionService = services.find((s) => s.url === "/union");
   const motivationService = services.find((s) => s.url === "/motivation");
-  const motivationQuickAccess = buildMotivationQuickAccess(motivationFeed);
+  const motivationQuickAccess = buildMotivationQuickAccess(
+    motivationWidget?.feed ?? null,
+  );
+  const motivationHomeButtons = resolveHomeButtons(
+    motivationPreferences,
+    motivationCategories,
+  );
   const libraryService = services.find((s) => s.url === "/library");
   const libraryQuickAccess = buildLibraryQuickAccess(libraryFeed, now);
   // Ответ «сегодня» главная уже получает для советника; карточка берёт из
@@ -266,10 +284,22 @@ export default async function Home({
           },
         }
       : {}),
-    ...(motivationService && motivationQuickAccess.quote
+    // Кнопки в шапке — всегда, цитата — когда есть: пустая папка не повод
+    // прятать быстрый вход в Гиту.
+    ...(motivationService
       ? {
           [motivationService.id]: {
-            extra: <MotivationQuickAccessWidget {...motivationQuickAccess} />,
+            headerExtra: <MotivationHomeButtons buttons={motivationHomeButtons} />,
+            ...(motivationQuickAccess.quote
+              ? {
+                  extra: (
+                    <MotivationQuickAccessWidget
+                      {...motivationQuickAccess}
+                      category={motivationWidget?.category}
+                    />
+                  ),
+                }
+              : {}),
           },
         }
       : {}),
