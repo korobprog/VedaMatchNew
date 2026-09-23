@@ -108,10 +108,10 @@ export default function ServicesScreen() {
       <Text accessibilityRole="header" style={[styles.title, { color: colors.text0 }]}>
         Сервисы
       </Text>
-      {/* «Здоровье» с VED-335 открывается своим экраном, остальные — на
-          сайте: обещать «все в браузере» больше нельзя. */}
+      {/* «Здоровье» с VED-335 и «Блог-лента» с VED-334 открываются своими
+          экранами, остальные — на сайте: обещать «все в браузере» нельзя. */}
       <Text style={[styles.subtitle, { color: colors.text1 }]}>
-        Сканер состава работает прямо здесь, остальные — на сайте VedaMatch.
+        Блог-лента и сканер состава работают прямо здесь, остальные — на сайте VedaMatch.
       </Text>
     </View>
   );
