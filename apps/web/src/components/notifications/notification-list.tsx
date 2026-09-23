@@ -389,6 +389,9 @@ export function NotificationList() {
               <li key={item.id}>
                 <NotificationCard
                   item={item}
+                  // Открытие прочитанного — тоже контакт (VED-404): оно
+                  // поднимается в истории уведомлений.
+                  onOpen={() => markOne(item.id)}
                   onToggleRead={(next) => toggleRead(item.id, next)}
                 />
               </li>
@@ -482,15 +485,21 @@ function SearchBox({
  * Поэтому рамка и стекло переехали на обёртку, а ссылкой осталась содержимая
  * часть — то, по чему человек и целится, когда хочет открыть уведомление.
  */
-function NotificationCard({
+export function NotificationCard({
   item,
   onOpen,
   onToggleRead,
+  when,
 }: {
   item: NotificationItemDto;
   onOpen?: () => void;
   /** Нажали кнопку отметки; `read` — в какую сторону. */
   onToggleRead?: (read: boolean) => void;
+  /**
+   * Подпись времени вместо «когда пришло». История уведомлений (VED-404)
+   * показывает время контакта: день уже назван заголовком её группы.
+   */
+  when?: string;
 }) {
   /* Прочитанное приглушено по своему же `readAt`, а не по тому, в какой группе
      оно показано: нажатую карточку мы держим на месте (VED-143), и узнать, что
@@ -522,7 +531,7 @@ function NotificationCard({
               {item.title}
             </span>
             <span className="shrink-0 text-xs text-text-2">
-              {formatWhen(item.createdAt)}
+              {when ?? formatWhen(item.createdAt)}
             </span>
           </span>
           {/* Ярлык «От администрации»: у остальных категорий отправитель ясен

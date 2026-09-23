@@ -62,6 +62,20 @@ describe("NotificationList", () => {
     expect(setUnreadCount).toHaveBeenCalledWith(2);
   });
 
+  it("открытие прочитанного сообщает серверу о контакте (VED-404)", async () => {
+    // Иначе в истории уведомлений оно так и осталось бы на дне прочтения.
+    fetchInbox.mockResolvedValue({
+      items: [item({ readAt: new Date().toISOString() })],
+      unreadCount: 0,
+    });
+    const user = userEvent.setup();
+    render(<NotificationList />);
+
+    await user.click(await screen.findByText("Кадр готов"));
+
+    expect(markInboxRead).toHaveBeenCalledWith(["n1"]);
+  });
+
   it("по клику помечает прочитанным только открытое уведомление", async () => {
     fetchInbox.mockResolvedValue({
       items: [item(), item({ id: "n2", title: "Ответ поддержки" })],
