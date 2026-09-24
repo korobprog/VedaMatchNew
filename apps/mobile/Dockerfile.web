@@ -12,6 +12,9 @@ ENV APP_CONTOUR=$APP_CONTOUR \
     EXPO_NO_TELEMETRY=1 \
     CI=1
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+# Заплатки зависимостей (`patchedDependencies` в pnpm-workspace.yaml): здесь
+# ставится сам expo-audio, и без файла заплатки pnpm install падает с ENOENT.
+COPY patches patches
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile --filter @vedamatch/mobile... --filter vedamatch
