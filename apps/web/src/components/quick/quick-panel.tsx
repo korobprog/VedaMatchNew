@@ -31,6 +31,7 @@ import {
   Search,
   Settings2,
   Share2,
+  Smartphone,
   Sparkles,
   Users,
   X,
@@ -125,6 +126,7 @@ const ICONS: Record<
   history: History,
   // VED-416: кружок «пуск», а не нота — нота уже у Медиатеки в сервисах.
   player: CirclePlay,
+  app: Smartphone,
   search: Search,
   assistant: Bot,
   aphorism: Quote,
