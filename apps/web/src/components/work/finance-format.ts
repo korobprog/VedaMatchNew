@@ -91,6 +91,8 @@ export interface CommercialDraft {
   payoutPeriod: WorkPayoutPeriodKind;
   /** День недели 1…7 или число месяца 1…28 — строкой, как в списке. */
   payoutDay: string;
+  /** Через сколько дней неоплаты напомнить; «0» — не напоминать. */
+  reminderDays: string;
 }
 
 export const EMPTY_COMMERCIAL_DRAFT: CommercialDraft = {
@@ -104,6 +106,7 @@ export const EMPTY_COMMERCIAL_DRAFT: CommercialDraft = {
   budget: "",
   payoutPeriod: "weekly",
   payoutDay: "5",
+  reminderDays: "3",
 };
 
 /**
@@ -139,6 +142,7 @@ export function commercialDraftToInput(
       timezone,
       payoutPeriod: draft.payoutPeriod,
       payoutDay: payoutDayFor(draft.payoutPeriod, Number(draft.payoutDay)),
+      paymentReminderDays: Number(draft.reminderDays) || 0,
     },
   };
 }

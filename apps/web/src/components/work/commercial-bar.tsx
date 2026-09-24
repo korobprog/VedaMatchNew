@@ -48,6 +48,7 @@ function draftFrom(commercial: WorkBoardCommercialDto | null): CommercialDraft {
     budget: moneyToInput(commercial.rates?.budgetMinor ?? 0),
     payoutPeriod: commercial.payoutPeriod,
     payoutDay: String(commercial.payoutDay),
+    reminderDays: String(commercial.paymentReminderDays),
   };
 }
 

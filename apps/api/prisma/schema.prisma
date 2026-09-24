@@ -5703,30 +5703,33 @@ model WorkBoard {
 
   /// Коммерческая доска (VED-458): часы, ставки и сметы. Смена на обычную
   /// только прячет деньги — поля ниже не стираются.
-  kind              WorkBoardKind        @default(regular)
+  kind                WorkBoardKind        @default(regular)
   /// Ведущий доски: видит все деньги, одобряет часы сверх нормы.
-  leadId            String?
-  lead              User?                @relation("WorkBoardsLed", fields: [leadId], references: [id], onDelete: SetNull)
-  clientName        String               @default("")
-  currency          String               @default("RUB")
-  pricingModel      WorkPricingModel     @default(hourly)
+  leadId              String?
+  lead                User?                @relation("WorkBoardsLed", fields: [leadId], references: [id], onDelete: SetNull)
+  clientName          String               @default("")
+  currency            String               @default("RUB")
+  pricingModel        WorkPricingModel     @default(hourly)
   /// Деньги — в минимальных единицах валюты (копейках): Float теряет копейки.
-  rateMinor         Int                  @default(0)
+  rateMinor           Int                  @default(0)
   /// Дневная норма на исполнителя в минутах; 0 — нормы нет.
-  dailyNormMinutes  Int                  @default(0)
-  overtimeRateMinor Int                  @default(0)
-  overtimeMode      WorkOvertimeMode     @default(on_request)
-  budgetMinor       Int                  @default(0)
+  dailyNormMinutes    Int                  @default(0)
+  overtimeRateMinor   Int                  @default(0)
+  overtimeMode        WorkOvertimeMode     @default(on_request)
+  budgetMinor         Int                  @default(0)
   /// IANA-пояс, по которому режутся сутки для нормы.
-  timezone          String               @default("Europe/Moscow")
+  timezone            String               @default("Europe/Moscow")
   /// Календарь выплат (VED-460): как часто подбивать и в какой день —
   /// день недели ISO 1…7 или число месяца 1…28.
-  payoutPeriod      WorkPayoutPeriodKind @default(weekly)
-  payoutDay         Int                  @default(5)
+  payoutPeriod        WorkPayoutPeriodKind @default(weekly)
+  payoutDay           Int                  @default(5)
   /// Две недели: один из дней подбития, от него считается чётность недель.
-  payoutAnchorDay   String               @default("")
+  payoutAnchorDay     String               @default("")
   /// С какого момента доска коммерческая — начало первого периода.
-  commercialSince   DateTime             @default(now())
+  commercialSince     DateTime             @default(now())
+  /// Через сколько суток неоплаченного периода напомнить ведущему (VED-461);
+  /// 0 — не напоминать.
+  paymentReminderDays Int                  @default(3)
 
   columns          WorkColumn[]
   tasks            WorkTask[]
@@ -7544,6 +7547,11 @@ model WorkPayoutPeriod {
   sentAt     DateTime?
   paidAt     DateTime?
   paidNote   String           @default("")
+  /// Секрет ссылки на акт для клиента (VED-461): клиент открывает акт без
+  /// входа. `null` — ссылкой ещё не делились.
+  actToken   String?          @unique
+  /// Когда последний раз напоминали ведущему об оплате.
+  remindedAt DateTime?
 
   entries    WorkTimeEntry[]    @relation("WorkPayoutEntries")
   lines      WorkTaskLineItem[] @relation("WorkPayoutLines")

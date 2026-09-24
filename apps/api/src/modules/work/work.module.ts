@@ -15,6 +15,7 @@ import { WorkUploadsService } from './work-uploads.service';
 import { WorkTravelListener } from './work-travel.listener';
 import { WorkVacanciesListener } from './work-vacancies.listener';
 import {
+  WorkActController,
   WorkBoardsController,
   WorkController,
   WorkFinanceController,
@@ -33,6 +34,7 @@ import {
   imports: [AuthModule],
   controllers: [
     WorkInvitesController,
+    WorkActController,
     WorkController,
     WorkBoardsController,
     WorkTasksController,

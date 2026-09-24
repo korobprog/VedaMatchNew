@@ -86,6 +86,7 @@ describe("черновик настроек оплаты", () => {
         timezone: "Europe/Moscow",
         payoutPeriod: "weekly",
         payoutDay: 5,
+        paymentReminderDays: 3,
       },
     });
   });

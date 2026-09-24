@@ -632,6 +632,8 @@ export interface WorkCommercialSettingsInput {
   payoutPeriod?: WorkPayoutPeriodKind;
   /** День подбития: день недели ISO 1…7 или число месяца 1…28. */
   payoutDay?: number;
+  /** Через сколько дней неоплаченного периода напомнить ведущему; 0 — не напоминать. */
+  paymentReminderDays?: number;
 }
 
 export interface WorkBoardCommercialDto {
@@ -645,6 +647,7 @@ export interface WorkBoardCommercialDto {
   lead: WorkPersonRefDto | null;
   payoutPeriod: WorkPayoutPeriodKind;
   payoutDay: number;
+  paymentReminderDays: number;
   /** Ставки и бюджет — только тем, кто видит деньги доски; остальным `null`. */
   rates: {
     rateMinor: number;
@@ -897,6 +900,8 @@ export interface WorkPayoutPeriodDto {
   sentAt: string | null;
   paidAt: string | null;
   paidNote: string;
+  /** Ссылка на акт для клиента создана (VED-461); `null` — не делилась. */
+  actToken: string | null;
 }
 
 export interface WorkPayoutsDto {
@@ -913,5 +918,51 @@ export interface WorkPayoutsDto {
 export interface MarkWorkPayoutRequest {
   status: 'sent' | 'paid';
   note?: string;
+}
+
+// ===== Акт для клиента (VED-461) =====
+
+export const WORK_PAYMENT_REMINDER_MAX_DAYS = 60;
+
+/**
+ * Акт за период — то, что видит клиент по ссылке без входа. Ставок и сумм
+ * отдельных исполнителей тут нет: клиенту — что сделано и сколько стоит.
+ */
+export interface WorkPayoutActDto {
+  spaceName: string;
+  boardName: string;
+  clientName: string;
+  /** Кто ведёт доску — от чьего имени акт. */
+  issuer: string | null;
+  currency: WorkCurrency;
+  pricingModel: WorkPricingModel;
+  fromDay: string;
+  toDay: string;
+  closedAt: string;
+  status: Exclude<WorkPayoutStatus, 'open'>;
+  paidAt: string | null;
+  lines: Array<{
+    key: string;
+    title: string;
+    done: boolean;
+    minutes: number;
+    workMinor: number;
+    expensesMinor: number;
+    discountMinor: number;
+    totalMinor: number;
+  }>;
+  /** Доплата за сверх нормы, одобренное после прошлого подбития. */
+  correctionsMinor: number;
+  totals: {
+    minutes: number;
+    workMinor: number;
+    expensesMinor: number;
+    discountMinor: number;
+    totalMinor: number;
+  };
+}
+
+export interface WorkPayoutShareDto {
+  token: string;
 }
 

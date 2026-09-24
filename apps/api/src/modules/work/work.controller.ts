@@ -634,11 +634,45 @@ export class WorkFinanceController {
     return this.payoutsService.mark(id, user.sub, body ?? ({} as never));
   }
 
+  /** Ссылка на акт для клиента (VED-461). */
+  @Post('payouts/:id/share')
+  @HttpCode(200)
+  sharePayout(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.payoutsService.share(id, user.sub);
+  }
+
+  @Delete('payouts/:id/share')
+  unsharePayout(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.payoutsService.unshare(id, user.sub);
+  }
+
   @Delete('line-items/:id')
   removeLineItem(
     @Param('id') id: string,
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.finance.removeLineItem(id, user.sub);
+  }
+}
+
+/**
+ * Акт для клиента по ссылке (VED-461) — без входа: клиенту заводить аккаунт
+ * ради акта незачем. Секрет в пути длинный и случайный; частоту режем, чтобы
+ * перебор не имел смысла.
+ */
+@Controller('work')
+export class WorkActController {
+  constructor(private readonly payoutsService: WorkPayoutsService) {}
+
+  @Get('act/:token')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  act(@Param('token') token: string) {
+    return this.payoutsService.publicAct(token);
   }
 }

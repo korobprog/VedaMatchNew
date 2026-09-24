@@ -553,6 +553,11 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.workPayoutReminder)
+  onWorkPayoutReminder(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.vacancyResponseCreated)
   onVacancyResponseCreated(event: NotificationEvent): void {
     void this.deliver(event);

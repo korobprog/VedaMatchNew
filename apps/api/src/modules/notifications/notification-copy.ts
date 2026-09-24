@@ -61,6 +61,7 @@ export const notificationEventNames = {
   workOvertimeDecided: 'work.overtime.decided',
   workPayoutClosed: 'work.payout.closed',
   workPayoutPaid: 'work.payout.paid',
+  workPayoutReminder: 'work.payout.reminder',
   vacancyResponseCreated: 'vacancies.response.created',
   vacancyResponseStatusChanged: 'vacancies.response.status-changed',
   vacancyOfferClosed: 'vacancies.offer.closed',
@@ -140,6 +141,19 @@ export function formatMoneyMinor(minor: number, currency: string): string {
     maximumFractionDigits: 2,
   }).format(minor / 100);
   return `${text} ${CURRENCY_SIGNS[currency] ?? currency}`;
+}
+
+/** «3 дня», «5 дней», «21 день» — окончание по числу. */
+function daysWord(days: number): string {
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'день'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'дня'
+        : 'дней';
+  return `${days} ${word}`;
 }
 
 /** Период выплат: «19–25 сентября» или «28 сентября — 2 октября». */
@@ -701,6 +715,14 @@ export function buildNotification(
             tag: `work-payout:${event.periodId}`,
             category: 'work',
           };
+    case 'work.payout.reminder':
+      return {
+        title: 'Период не оплачен',
+        body: `«${event.spaceName}», ${payoutRange(event.fromDay, event.toDay)}: ${formatMoneyMinor(event.amountMinor, event.currency)} ждут оплаты ${daysWord(event.daysSinceClose)}`,
+        url: `/work/planner/${event.spaceId}?payouts=1`,
+        tag: `work-payout-reminder:${event.periodId}`,
+        category: 'work',
+      };
     case 'work.payout.paid':
       return {
         title: 'Выплата отмечена оплаченной',
