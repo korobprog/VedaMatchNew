@@ -17,6 +17,7 @@ import {
   Bell,
   Gift,
   MoreHorizontal,
+  PanelTop,
 } from "lucide-react";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import { LogoutButton } from "@/components/logout-button";
@@ -242,8 +243,15 @@ export function Header({ user }: { user: UserProfile }) {
               С подписями девять пунктов занимают 1222px, а контейнер шапки
               ограничен 1152px: ряд выталкивал колокольчик, переключатели и
               аватар за край экрана, и страница ехала вбок. Название сервиса
-              остаётся в title и aria-label. */}
-          <nav aria-label={t("services")} className="hidden xl:flex items-center gap-1">
+              остаётся в title и aria-label.
+              `min-w-0` и своя прокрутка (VED-412): верхнюю панель теперь
+              собирают сами, и у админа с четырьмя кнопками на экране 1280
+              правая группа не помещалась — ряд толкал страницу вбок на 65px.
+              Теперь уступает ряд сервисов: он листается, страница — нет. */}
+          <nav
+            aria-label={t("services")}
+            className="scroll-slim hidden min-w-0 items-center gap-1 overflow-x-auto xl:flex"
+          >
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -273,53 +281,56 @@ export function Header({ user }: { user: UserProfile }) {
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
-            {/* Виден и на мобильном: это основной вход в уведомления,
-                прятать его в бургер — значит прятать и значок. Сама
-                CartBadge решает, показываться ли — рендерится только
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Сама CartBadge решает, показываться ли — рендерится только
                 когда в корзине что-то лежит, независимо от раздела. */}
             <CartBadge />
-            {/* Горячие кнопки — рядом с колокольчиком и корзиной, а не
-                плавающей кнопкой поверх страницы: снизу уже стоит полоса
-                плеера, а на Знакомствах ещё и своя нижняя панель.
-                Админу три закреплённые кнопки не закрепляются (VED-326):
-                панель у него рабочая, и «Поддержать» ему показывать незачем.
-                Слева от звёздочки — «История» (VED-402): её рисует сама
-                панель, см. комментарий у `QuickPanel`. */}
+            {/* Верхняя панель (VED-412): звёздочка горячих кнопок,
+                колокольчик, аватар и «Меню» — или то, что человек поставил
+                вместо них в настройке. Ряд рисует панель горячих кнопок: она
+                же хранит, что в нём и в каком порядке, и она же открывает
+                шторки его кнопок. Колокольчик и аватар закреплены: это вход
+                в уведомления и в профиль, их не убрать.
+                Админу три закреплённые кнопки панели не закрепляются
+                (VED-326): панель у него рабочая. */}
             <QuickPanel
               ref={quickRef}
               admin={isPortalAdmin(user)}
               onOpenMenu={(trigger) => openDrawer("right", trigger)}
+              menuOpen={isOpen}
+              bell={<NotificationBell />}
+              beforeAvatar={
+                <>
+                  <LocaleToggle className="hidden sm:flex" />
+                  <ThemeToggle className="hidden sm:flex" />
+                  {isPortalAdmin(user) && (
+                    <Link
+                      href="/admin"
+                      className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-1 hover:text-magenta border border-glass-brd hover:border-magenta/30 transition-colors"
+                    >
+                      {t("admin")}
+                    </Link>
+                  )}
+                </>
+              }
+              avatar={
+                <Link href="/profile" className="flex shrink-0 items-center gap-2">
+                  {user.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.displayName}
+                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
+                      {user.displayName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </Link>
+              }
             />
-            <NotificationBell />
-            <LocaleToggle className="hidden sm:flex" />
-            <ThemeToggle className="hidden sm:flex" />
-
-            {isPortalAdmin(user) && (
-              <Link
-                href="/admin"
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-1 hover:text-magenta border border-glass-brd hover:border-magenta/30 transition-colors"
-              >
-                {t("admin")}
-              </Link>
-            )}
-            
-            <Link href="/profile" className="flex items-center gap-2">
-              {user.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.avatarUrl}
-                  alt={user.displayName}
-                  className="h-8 w-8 shrink-0 rounded-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
-                  {user.displayName.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </Link>
-            
           </div>
         </div>
       </header>
@@ -378,8 +389,14 @@ export function Header({ user }: { user: UserProfile }) {
                   «Главной», а список начинается от самого верха панели.
                   Слева от крестика — настройка меню (VED-408): заказчик
                   отметил это место на скриншоте. */}
+              {/* `min-h-full`, а не `h-full` (VED-428): при высоте ровно в
+                  экран длинный список (настройка меню с дюжиной горячих
+                  кнопок) вылезал из блока, и нижнее поле оставалось на
+                  границе экрана, а не под последней строкой — её подпись
+                  уходила за край. Теперь блок растёт вместе со списком, а
+                  поле снизу — ещё и на системную полосу телефона. */}
               <div
-                className={`relative flex h-full flex-col pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] ${
+                className={`relative flex min-h-full flex-col pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] ${
                   tuning ? "px-3" : "px-6"
                 }`}
               >
@@ -409,6 +426,10 @@ export function Header({ user }: { user: UserProfile }) {
                   currentAttr={currentAttr}
                   onClose={closeDrawer}
                   onOpenSheet={(sheet) => quickRef.current?.openSheet(sheet)}
+                  onOpenHeaderSettings={() => {
+                    closeDrawer();
+                    quickRef.current?.openHeaderSettings();
+                  }}
                 />
                 {!tuning && (
                 <>
@@ -539,12 +560,14 @@ function DrawerNav({
   currentAttr,
   onClose,
   onOpenSheet,
+  onOpenHeaderSettings,
 }: {
   tuning: boolean;
   homeLabel: string;
   currentAttr: (href: string) => "page" | undefined;
   onClose: () => void;
   onOpenSheet: (sheet: QuickSheetId) => void;
+  onOpenHeaderSettings: () => void;
 }) {
   const t = useTranslations("Header");
   const menu = useSideMenu();
@@ -557,6 +580,20 @@ function DrawerNav({
           {t("customizeMenu")}
         </p>
         <SideMenuSettings menu={menu} />
+        {/* Вход в настройку верхней панели (VED-412) и отсюда: звёздочку
+            можно убрать из шапки, и тогда панель горячих кнопок с её
+            настройкой шапки становится не найти — а меню остаётся. */}
+        <div className="mt-4 border-t border-glass-brd pt-3">
+          <button
+            type="button"
+            onClick={onOpenHeaderSettings}
+            aria-haspopup="dialog"
+            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+          >
+            <PanelTop size={20} aria-hidden="true" />
+            <span>{t("customizeHeader")}</span>
+          </button>
+        </div>
       </>
     );
 

@@ -126,8 +126,18 @@ export function resolveSideMenu(
 }
 
 /**
- * Показать или спрятать строку. Сервис прячется в `hidden` и возвращается
- * в конец списка; горячая кнопка просто добавляется в конец или убирается —
+ * Показать или спрятать строку.
+ *
+ * Куда встаёт показанная строка (VED-429):
+ *
+ * - сервис — в самый верх, сразу под «Главную»: его возвращают, чтобы
+ *   пользоваться, а в конце длинного списка, за горячими кнопками, его
+ *   приходилось искать;
+ * - горячая кнопка — в свою группу под сервисами, первой в ней, сразу за
+ *   последним сервисом. Сервисы и кнопки остаются двумя группами, пока
+ *   человек сам не перемешает их стрелками.
+ *
+ * Спрятанный сервис уходит в `hidden`; горячая кнопка просто убирается —
  * прятать её незачем, её в меню и не было, пока не добавили.
  *
  * `visible` — то, что сейчас нарисовано (`resolveSideMenu`): запись
@@ -146,14 +156,28 @@ export function toggleSideMenuItem(
           hidden: [...config.hidden.filter((item) => item !== id), id],
         }
       : {
-          ids: [...visible, id],
+          ids: [id, ...visible],
           hidden: config.hidden.filter((item) => item !== id),
         };
   }
-  return {
-    ids: shown ? visible.filter((item) => item !== id) : [...visible, id],
-    hidden: [...config.hidden],
-  };
+  if (shown)
+    return {
+      ids: visible.filter((item) => item !== id),
+      hidden: [...config.hidden],
+    };
+  return { ids: insertAfterServices(visible, id), hidden: [...config.hidden] };
+}
+
+/** Вставить горячую кнопку сразу за последним сервисом списка. */
+function insertAfterServices(
+  visible: readonly QuickActionId[],
+  id: QuickActionId,
+): QuickActionId[] {
+  let at = 0;
+  visible.forEach((item, index) => {
+    if (isSideMenuService(item)) at = index + 1;
+  });
+  return [...visible.slice(0, at), id, ...visible.slice(at)];
 }
 
 /**

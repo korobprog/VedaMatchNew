@@ -28,6 +28,7 @@ export type BuiltinQuickActionId =
   | "window"
   | "bookmarks"
   | "history"
+  | "player"
   | "search"
   | "assistant"
   | "aphorism"
@@ -95,6 +96,15 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     // браузерная история: та знает адреса, а эта — места портала.
     label: "История",
     hint: "Где вы были: сервисы и их разделы по порядку — ссылкой назад",
+    href: null,
+  },
+  {
+    id: "player",
+    kind: "builtin",
+    // VED-416: плеер Музыки одной кнопкой — выкатывается свёрнутой полосой
+    // и играет с того места, где остановились.
+    label: "Плеер",
+    hint: "Выкатывает плеер свёрнутым и включает звук с того места, где остановились",
     href: null,
   },
   {
@@ -223,19 +233,31 @@ const QUICK_ACTIONS_ADDED_IN_V4: readonly QuickActionId[] = ["postcard"];
  */
 const QUICK_ACTIONS_ADDED_IN_V5: readonly QuickActionId[] = ["history"];
 
-/** Всё, что приехало после четвёртой версии, — дописывается к старым записям. */
-const ADDED_SINCE_V4: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V5;
+/**
+ * «Плеер» приехал в шестой версии (VED-416) — по тому же правилу: заказчик
+ * просил добавить кнопку в панель, а выключить её раньше было нельзя.
+ */
+const QUICK_ACTIONS_ADDED_IN_V6: readonly QuickActionId[] = ["player"];
+
+/** Всё, что приехало после пятой версии, — дописывается к старым записям. */
+const ADDED_SINCE_V5: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V6;
+/** Всё, что приехало после четвёртой. */
+const ADDED_SINCE_V4: readonly QuickActionId[] = [
+  ...QUICK_ACTIONS_ADDED_IN_V5,
+  ...ADDED_SINCE_V5,
+];
 /** Всё, что приехало после третьей. */
 const ADDED_SINCE_V3: readonly QuickActionId[] = [
   ...QUICK_ACTIONS_ADDED_IN_V4,
-  ...QUICK_ACTIONS_ADDED_IN_V5,
+  ...ADDED_SINCE_V4,
 ];
 
 /**
  * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
- * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392).
+ * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392), шестая —
+ * «Плеер» (VED-416).
  */
-const CONFIG_VERSION = 5;
+const CONFIG_VERSION = 6;
 
 /**
  * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
@@ -322,6 +344,7 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   "window",
   "bookmarks",
   "history",
+  "player",
   "assistant",
   "aphorism",
   "postcard",
@@ -443,10 +466,16 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
       const custom = parseCustom(record.custom);
       return { ids: dedupe(record.ids, custom), custom };
     }
-    // Четвёртая и третья версии: всё то же, плюс кнопки, которых тогда не было.
-    if (record.v === 4 || record.v === 3) {
+    // Пятая, четвёртая и третья версии: всё то же, плюс кнопки, которых
+    // тогда не было.
+    if (record.v === 5 || record.v === 4 || record.v === 3) {
       const custom = parseCustom(record.custom);
-      const added = record.v === 4 ? ADDED_SINCE_V4 : ADDED_SINCE_V3;
+      const added =
+        record.v === 5
+          ? ADDED_SINCE_V5
+          : record.v === 4
+            ? ADDED_SINCE_V4
+            : ADDED_SINCE_V3;
       return { ids: withAdded(dedupe(record.ids, custom), added), custom };
     }
     // Вторая версия: те же идентификаторы, своих кнопок ещё не было.

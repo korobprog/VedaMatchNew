@@ -34,6 +34,7 @@ import { seekHotkeyDirection } from "./seek-hotkeys";
 import { bookmarkSavedText } from "./player-marks";
 import { useTrackBookmarks } from "./use-track-bookmarks";
 import { LIFTED_KEY, liftButtonLabel, parseLifted, serializeLifted } from "./player-lift";
+import { MUSIC_PLAYER_REVEAL_EVENT } from "./player-reveal";
 import {
   DEFAULT_PLAYBACK_MODE,
   nextPlaybackMode,
@@ -128,6 +129,21 @@ export function MiniPlayer() {
       return next;
     });
   };
+
+  /* Горячая кнопка «Плеер» (VED-416) просит показать полосу свёрнутой —
+     см. `player-reveal.ts`. Сворачиваем с запоминанием, как своей кнопкой. */
+  useEffect(() => {
+    const onReveal = () => {
+      setCollapsed(true);
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, "1");
+      } catch {
+        // см. выше
+      }
+    };
+    window.addEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
+  }, []);
 
   const toggleLifted = () => {
     setLifted((was) => {
