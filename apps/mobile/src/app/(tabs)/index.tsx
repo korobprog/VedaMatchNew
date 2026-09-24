@@ -1,16 +1,20 @@
-import type { ChatConversationSummary } from '@vedamatch/shared';
+import type { ChatConversationSummary, ChatStatusRing } from '@vedamatch/shared';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { BlogHomeStrip } from '@/components/blog/blog-home-strip';
 import { ConversationRow } from '@/components/chat/conversation-row';
 import { QuickConferenceRow } from '@/components/chat/quick-conference-row';
+import { StatusStrip } from '@/components/chat/statuses/status-strip';
+import { useStatusViewer } from '@/components/chat/statuses/use-status-viewer';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { ChatListSkeleton } from '@/components/skeleton';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
 import { applyListEvent, sortConversations } from '@/lib/chat/chat-list-state';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import { createStatusApi } from '@/lib/chat/status-api';
+import { directCompanionKey } from '@/lib/chat/statuses/status-playback';
 import { createInboxApi } from '@/lib/notifications/inbox-api';
 import { setUnreadCount } from '@/lib/notifications/unread-store';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -32,6 +36,7 @@ export default function ChatsScreen() {
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
   const inboxApi = useMemo(() => createInboxApi(api), [api]);
+  const statusApi = useMemo(() => createStatusApi(api), [api]);
   const [conversations, setConversations] = useState<ChatConversationSummary[] | null>(null);
   const [requestsCount, setRequestsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -81,15 +86,58 @@ export default function ChatsScreen() {
     };
   }, [stream, user?.id, load]);
 
+  /* Статусы (VED-129). Счётчик поднимается, когда что-то посмотрели,
+     опубликовали или удалили, и при «потянуть вниз»: по нему полоса
+     перечитывает ленту, а список — кружки собеседников. */
+  const [statusEpoch, setStatusEpoch] = useState(0);
+  const bumpStatuses = useCallback(() => setStatusEpoch((value) => value + 1), []);
+  const [rings, setRings] = useState<Record<string, ChatStatusRing>>({});
+  const companionKey = conversations ? directCompanionKey(conversations) : '';
+  const loadRings = useCallback(() => {
+    if (!companionKey) return;
+    statusApi
+      .rings(companionKey.split(','))
+      .then(setRings)
+      // Без кружков список остаётся рабочим — ошибку не показываем.
+      .catch(() => undefined);
+  }, [companionKey, statusApi]);
+  useEffect(() => {
+    loadRings();
+  }, [loadRings, statusEpoch]);
+  useFocusEffect(
+    useCallback(() => {
+      loadRings();
+    }, [loadRings]),
+  );
+  const statusViewer = useStatusViewer({ statusApi, viewerId: user?.id ?? '', onChanged: bumpStatuses });
+  const openUserStatuses = statusViewer.openUser;
+  const onStatusesPress = useCallback(
+    (userId: string) => {
+      void openUserStatuses(userId).then((opened) => {
+        // Статусы успели истечь — кружок устарел, перечитать.
+        if (!opened) bumpStatuses();
+      });
+    },
+    [openUserStatuses, bumpStatuses],
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    bumpStatuses();
     await load();
     setRefreshing(false);
-  }, [load]);
+  }, [load, bumpStatuses]);
 
   const renderItem = useCallback<ListRenderItem<ChatConversationSummary>>(
-    ({ item }) => <ConversationRow conversation={item} onPress={openConversation} />,
-    [],
+    ({ item }) => (
+      <ConversationRow
+        conversation={item}
+        onPress={openConversation}
+        ring={item.kind === 'direct' && item.companion ? rings[item.companion.id] : null}
+        onStatusesPress={onStatusesPress}
+      />
+    ),
+    [rings, onStatusesPress],
   );
 
   const retryButton = (
@@ -134,6 +182,16 @@ export default function ChatsScreen() {
           значком в ряду: у неё есть что сказать словами, включая потолок
           в четыре человека, а значок этого не скажет. */}
       <QuickConferenceRow />
+      {/* Полоса статусов (VED-129) — как на сайте, над беседами: первым
+          «Мой статус», дальше люди, непросмотренные впереди. */}
+      {user ? (
+        <StatusStrip
+          statusApi={statusApi}
+          me={{ id: user.id, name: user.displayName, avatarUrl: user.avatarUrl }}
+          reloadKey={statusEpoch}
+          onChanged={bumpStatuses}
+        />
+      ) : null}
       {/* Блог-лента (VED-334): первое, что видно на главной сайта, — здесь
           начало ленты полосой над беседами. Почему в «Чатах», а не шестой
           вкладкой, — у компонента. Скрытая полоса не оставляет ничего. */}
@@ -196,6 +254,7 @@ export default function ChatsScreen() {
         }
         contentContainerStyle={{ paddingBottom: 24 }}
       />
+      {statusViewer.viewer}
     </View>
   );
 }

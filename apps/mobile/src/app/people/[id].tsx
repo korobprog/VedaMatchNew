@@ -1,9 +1,17 @@
-import type { ContactsAshram, ContactsCardDto, ContactsFormat, ContactsRequestDto, SpiritualStage } from '@vedamatch/shared';
+import type {
+  ChatStatusAuthorDto,
+  ContactsAshram,
+  ContactsCardDto,
+  ContactsFormat,
+  ContactsRequestDto,
+  SpiritualStage,
+} from '@vedamatch/shared';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { useStatusViewer } from '@/components/chat/statuses/use-status-viewer';
 import { InlineError } from '@/components/inline-error';
 import { PersonKeyboardAwareScroll as KeyboardAwareScrollView } from '@/components/keyboard-controller-web';
 import type { ContactsDetailsValue } from '@/components/people/people-details';
@@ -13,6 +21,8 @@ import { PersonCardSkeleton } from '@/components/skeleton';
 import { PhotoVerifiedBadge, VerifiedBadge } from '@/components/verified-badge';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
+import { createStatusApi } from '@/lib/chat/status-api';
+import { authorWithStatuses, ringOf, statusA11yLabel } from '@/lib/chat/statuses/status-playback';
 import { confirmTap } from '@/lib/feedback';
 import { createPeopleApi } from '@/lib/people/people-api';
 import { CONTACTS_REQUEST_STATUS_LABELS, showRemainingToday } from '@/lib/people/people-requests-state';
@@ -76,6 +86,32 @@ export default function PersonScreen() {
   const { api, user } = useSession();
   const peopleApi = useMemo(() => createPeopleApi(api), [api]);
   const chatApi = useMemo(() => createChatApi(api), [api]);
+  const statusApi = useMemo(() => createStatusApi(api), [api]);
+
+  /* Кружок статусов (VED-129): есть живые статусы — аватарка в карточке
+     становится кнопкой и открывает их, как на сайте
+     (`user-status-avatar.tsx`); нет — остаётся картинкой. */
+  const [statuses, setStatuses] = useState<ChatStatusAuthorDto | null>(null);
+  const [statusesEpoch, setStatusesEpoch] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    statusApi
+      .ofUser(userId)
+      .then((author) => {
+        if (alive) setStatuses(authorWithStatuses(author));
+      })
+      .catch(() => {
+        if (alive) setStatuses(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [statusApi, userId, statusesEpoch]);
+  const statusViewer = useStatusViewer({
+    statusApi,
+    viewerId: user?.id ?? '',
+    onChanged: () => setStatusesEpoch((value) => value + 1),
+  });
 
   const [card, setCard] = useState<ContactsCardDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -199,7 +235,24 @@ export default function PersonScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-              <ChatAvatar id={card.userId} name={card.name} uri={card.avatarUrl} size={72} />
+              {statuses ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={statusA11yLabel(card.name, statuses.unseen)}
+                  onPress={() => statusViewer.open([statuses])}
+                  style={styles.avatarButton}
+                >
+                  <ChatAvatar
+                    id={card.userId}
+                    name={card.name}
+                    uri={card.avatarUrl}
+                    size={72}
+                    ring={ringOf(statuses, statuses.user.id === user?.id)}
+                  />
+                </Pressable>
+              ) : (
+                <ChatAvatar id={card.userId} name={card.name} uri={card.avatarUrl} size={72} />
+              )}
               <View style={styles.headerText}>
                 <Text style={[styles.name, { color: colors.text0 }]}>{card.name}</Text>
                 {card.headline ?? card.statusLine ? (
@@ -367,6 +420,7 @@ export default function PersonScreen() {
             )}
         </KeyboardAwareScrollView>
       )}
+      {statusViewer.viewer}
     </View>
   );
 }
@@ -377,6 +431,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   centerText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  avatarButton: { width: 72, height: 72, borderRadius: 36 },
   headerText: { flex: 1, minWidth: 0, gap: 2 },
   name: { fontFamily: fonts.displayBold, fontSize: 20 },
   headline: { fontFamily: fonts.body, fontSize: 14 },
