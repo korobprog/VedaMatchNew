@@ -12,6 +12,8 @@ describe('WORK_EVENTS', () => {
       'work.task.returned',
       'work.task.status-changed',
       'work.invite.received',
+      'work.overtime.requested',
+      'work.overtime.decided',
     ]);
   });
 });

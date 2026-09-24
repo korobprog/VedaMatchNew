@@ -1,6 +1,9 @@
 import {
   type WorkFinanceRules,
+  workAllowanceFrom,
   workClassifySpans,
+  workDaysInclusive,
+  workOvertimeRequestMaxCost,
   workEstimateCost,
   workLocalDay,
   workMinutesCost,
@@ -79,6 +82,7 @@ describe('норма и сверх нормы', () => {
       minutes: 300,
       normalMinutes: 180,
       overtimeMinutes: 120,
+      approvedOvertimeMinutes: 0,
     });
   });
 
@@ -126,6 +130,7 @@ describe('норма и сверх нормы', () => {
       minutes: 360,
       normalMinutes: 300,
       overtimeMinutes: 60,
+      approvedOvertimeMinutes: 0,
     });
   });
 
@@ -159,7 +164,14 @@ describe('деньги', () => {
     expect(workMinutesCost(1, 100_000)).toBe(1667);
   });
 
-  const splits = [{ minutes: 300, normalMinutes: 180, overtimeMinutes: 120 }];
+  const splits = [
+    {
+      minutes: 300,
+      normalMinutes: 180,
+      overtimeMinutes: 120,
+      approvedOvertimeMinutes: 0,
+    },
+  ];
 
   it('почасовая, сверх нормы автоматически', () => {
     const totals = workTaskTotals(splits, [], hourly, null);
@@ -214,5 +226,105 @@ describe('деньги', () => {
     expect(
       workEstimateCost(480, 99_900, { ...hourly, pricingModel: 'fixed' }),
     ).toBe(99_900);
+  });
+});
+
+describe('одобренное сверх нормы (VED-459)', () => {
+  const onRequest = { ...hourly, overtimeMode: 'on_request' as const };
+
+  it('разрешение складывается по запросам и действует только в свои дни', () => {
+    const allowance = workAllowanceFrom([
+      {
+        userId: 'u1',
+        fromDay: '2026-09-22',
+        toDay: '2026-09-26',
+        minutesPerDay: 60,
+      },
+      {
+        userId: 'u1',
+        fromDay: '2026-09-24',
+        toDay: '2026-09-24',
+        minutesPerDay: 30,
+      },
+      {
+        userId: 'u2',
+        fromDay: '2026-09-24',
+        toDay: '2026-09-24',
+        minutesPerDay: 600,
+      },
+    ]);
+    expect(allowance('u1', '2026-09-24')).toBe(90);
+    expect(allowance('u1', '2026-09-26')).toBe(60);
+    expect(allowance('u1', '2026-09-27')).toBe(0);
+    expect(allowance(null, '2026-09-24')).toBe(0);
+  });
+
+  it('одобренный час из двух сверх нормы — в счёт идёт час', () => {
+    const splits = workClassifySpans(
+      [span('a', 'u1', '2026-09-24T10:00:00', '2026-09-24T15:00:00')],
+      180,
+      MSK,
+      workAllowanceFrom([
+        {
+          userId: 'u1',
+          fromDay: '2026-09-24',
+          toDay: '2026-09-24',
+          minutesPerDay: 60,
+        },
+      ]),
+    );
+    const split = splits.get('a');
+    expect(split).toEqual({
+      minutes: 300,
+      normalMinutes: 180,
+      overtimeMinutes: 120,
+      approvedOvertimeMinutes: 60,
+    });
+    const totals = workTaskTotals([split!], [], onRequest, null);
+    // 3 ч × 1500 + 1 ч × 2250; второй час сверх нормы ждёт одобрения.
+    expect(totals.workMinor).toBe(450_000 + 225_000);
+    expect(totals.pendingOvertimeMinutes).toBe(60);
+  });
+
+  it('одобренное тратится по времени начала на всю доску за день', () => {
+    const splits = workClassifySpans(
+      [
+        span('a', 'u1', '2026-09-24T09:00:00', '2026-09-24T13:00:00'),
+        span('b', 'u1', '2026-09-24T14:00:00', '2026-09-24T15:00:00'),
+      ],
+      180,
+      MSK,
+      workAllowanceFrom([
+        {
+          userId: 'u1',
+          fromDay: '2026-09-24',
+          toDay: '2026-09-24',
+          minutesPerDay: 90,
+        },
+      ]),
+    );
+    // Час сверх нормы в «a» одобрен целиком, из часа в «b» — половина.
+    expect(splits.get('a')?.approvedOvertimeMinutes).toBe(60);
+    expect(splits.get('b')?.approvedOvertimeMinutes).toBe(30);
+  });
+
+  it('в режиме «автоматически» одобрение не нужно', () => {
+    const [split] = workClassifySpans(
+      [span('a', 'u1', '2026-09-24T10:00:00', '2026-09-24T15:00:00')],
+      180,
+      MSK,
+    ).values();
+    const totals = workTaskTotals([split], [], hourly, null);
+    expect(totals.workMinor).toBe(450_000 + 450_000);
+    expect(totals.pendingOvertimeMinutes).toBe(0);
+  });
+
+  it('потолок запроса — все дни целиком по ставке сверх нормы', () => {
+    expect(workDaysInclusive('2026-09-24', '2026-09-24')).toBe(1);
+    expect(workDaysInclusive('2026-09-28', '2026-10-02')).toBe(5);
+    // 2 ч в день × 5 дней × 2250
+    expect(
+      workOvertimeRequestMaxCost(120, '2026-09-28', '2026-10-02', 225_000),
+    ).toBe(2_250_000);
   });
 });

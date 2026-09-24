@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
-import { Loader2, Play, Plus, Square, Trash2 } from "lucide-react";
+import { Clock, Loader2, Play, Plus, Square, Trash2 } from "lucide-react";
 import type {
   WorkLineItemKind,
   WorkTaskFinanceDto,
@@ -10,9 +10,12 @@ import type {
 import {
   addWorkLineItem,
   addWorkTime,
+  cancelWorkOvertime,
+  decideWorkOvertime,
   getWorkTaskFinance,
   removeWorkLineItem,
   removeWorkTime,
+  requestWorkOvertime,
   startWorkTimer,
   stopWorkTimer,
   updateWorkTaskFinance,
@@ -25,8 +28,10 @@ import {
   moneyToInput,
   parseHoursInput,
   parseMoneyInput,
+  shiftDay,
   toDateTimeLocal,
 } from "./finance-format";
+import { OvertimeRequestList } from "./overtime-requests";
 
 const INPUT =
   "rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0";
@@ -60,6 +65,11 @@ export function WorkTaskFinance({
   const [itemKind, setItemKind] = useState<WorkLineItemKind>("expense");
   const [itemTitle, setItemTitle] = useState("");
   const [itemAmount, setItemAmount] = useState("");
+  const [overtimeOpen, setOvertimeOpen] = useState(false);
+  const [overtimeFrom, setOvertimeFrom] = useState("");
+  const [overtimeTo, setOvertimeTo] = useState("");
+  const [overtimeHours, setOvertimeHours] = useState("");
+  const [overtimeReason, setOvertimeReason] = useState("");
 
   const accept = useCallback((next: WorkTaskFinanceDto) => {
     setFinance(next);
@@ -199,7 +209,37 @@ export function WorkTaskFinance({
     }
   }
 
+  function openOvertime() {
+    if (!finance) return;
+    setOvertimeFrom(finance.today);
+    setOvertimeTo(finance.today);
+    setOvertimeHours("1");
+    setOvertimeReason("");
+    setOvertimeOpen(true);
+  }
+
+  async function submitOvertime(event: React.FormEvent) {
+    event.preventDefault();
+    const minutes = parseHoursInput(overtimeHours);
+    if (minutes === null || Number.isNaN(minutes) || minutes < 15) {
+      setError("Сверх нормы в день: часы, например 1 или 1:30");
+      return;
+    }
+    const done = await run(() =>
+      requestWorkOvertime(taskId, {
+        fromDay: overtimeFrom,
+        toDay: overtimeTo,
+        minutesPerDay: minutes,
+        reason: overtimeReason,
+      }),
+    );
+    if (done) setOvertimeOpen(false);
+  }
+
   const totals = finance.totals;
+  const showOvertime =
+    finance.canRequestOvertime &&
+    (canEdit || finance.overtimeRequests.length > 0);
 
   return (
     <section className="mt-5" aria-labelledby={`${id}-title`}>
@@ -359,6 +399,120 @@ export function WorkTaskFinance({
             />
           ))}
         </ul>
+      )}
+
+      {showOvertime && (
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-text-1">
+              Норма {formatMinutes(finance.dailyNormMinutes)} в день; сверх
+              нормы в счёт идёт после одобрения ведущим.
+            </span>
+            {canEdit && !overtimeOpen && (
+              <button
+                type="button"
+                onClick={openOvertime}
+                className="flex min-h-11 items-center gap-2 rounded-xl bg-glass px-3 py-2 text-sm text-text-0"
+              >
+                <Clock aria-hidden className="size-4" />
+                Попросить сверх нормы
+              </button>
+            )}
+          </div>
+          {overtimeOpen && (
+            <form
+              onSubmit={submitOvertime}
+              aria-label="Запрос часов сверх нормы"
+              className="flex flex-wrap items-end gap-2 rounded-xl border border-glass-brd p-3"
+            >
+              <label className="flex flex-col gap-1" htmlFor={`${id}-ot-from`}>
+                <span className="text-xs text-text-1">С какого дня</span>
+                <input
+                  id={`${id}-ot-from`}
+                  type="date"
+                  value={overtimeFrom}
+                  min={shiftDay(finance.today, -31)}
+                  onChange={(event) => {
+                    setOvertimeFrom(event.target.value);
+                    if (overtimeTo < event.target.value) {
+                      setOvertimeTo(event.target.value);
+                    }
+                  }}
+                  className={INPUT}
+                />
+              </label>
+              <label className="flex flex-col gap-1" htmlFor={`${id}-ot-to`}>
+                <span className="text-xs text-text-1">По какой</span>
+                <input
+                  id={`${id}-ot-to`}
+                  type="date"
+                  value={overtimeTo}
+                  min={overtimeFrom}
+                  max={shiftDay(overtimeFrom || finance.today, 30)}
+                  onChange={(event) => setOvertimeTo(event.target.value)}
+                  className={INPUT}
+                />
+              </label>
+              <label className="flex flex-col gap-1" htmlFor={`${id}-ot-hours`}>
+                <span className="text-xs text-text-1">В день, ч</span>
+                <input
+                  id={`${id}-ot-hours`}
+                  value={overtimeHours}
+                  onChange={(event) => setOvertimeHours(event.target.value)}
+                  inputMode="decimal"
+                  className={`${INPUT} w-24`}
+                />
+              </label>
+              <label
+                className="flex min-w-40 flex-1 flex-col gap-1"
+                htmlFor={`${id}-ot-reason`}
+              >
+                <span className="text-xs text-text-1">Зачем</span>
+                <input
+                  id={`${id}-ot-reason`}
+                  value={overtimeReason}
+                  onChange={(event) => setOvertimeReason(event.target.value)}
+                  maxLength={300}
+                  placeholder="Срочный запуск к празднику"
+                  className={INPUT}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={busy}
+                className="min-h-11 rounded-xl bg-magenta px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Отправить ведущему
+              </button>
+              <button
+                type="button"
+                onClick={() => setOvertimeOpen(false)}
+                className="min-h-11 rounded-xl px-3 py-2 text-sm text-text-1"
+              >
+                Отмена
+              </button>
+            </form>
+          )}
+          <OvertimeRequestList
+            items={finance.overtimeRequests}
+            currency={finance.currency}
+            canDecide={finance.canSeeFinance}
+            showTask={false}
+            busy={busy}
+            onDecide={(requestId, decision, note) =>
+              void run(async () => {
+                await decideWorkOvertime(requestId, { decision, note });
+                return getWorkTaskFinance(taskId);
+              })
+            }
+            onCancel={(requestId) =>
+              void run(async () => {
+                await cancelWorkOvertime(requestId);
+                return getWorkTaskFinance(taskId);
+              })
+            }
+          />
+        </div>
       )}
 
       {finance.canSeeFinance && (
@@ -529,7 +683,7 @@ function TimeEntryRow({
       {entry.overtimeMinutes > 0 && (
         <span className="rounded-full border border-glass-brd px-2 py-0.5 text-xs text-text-1">
           сверх нормы {formatMinutes(entry.overtimeMinutes)}
-          {onRequest && " · ждёт одобрения"}
+          {onRequest && overtimeTail(entry)}
         </span>
       )}
       {entry.note && (
@@ -558,3 +712,15 @@ function TimeEntryRow({
     </li>
   );
 }
+
+/** Хвост ярлыка «сверх нормы»: сколько из этого одобрено. */
+function overtimeTail(entry: WorkTimeEntryDto): string {
+  if (entry.approvedOvertimeMinutes >= entry.overtimeMinutes) {
+    return " · одобрено";
+  }
+  if (entry.approvedOvertimeMinutes > 0) {
+    return ` · одобрено ${formatMinutes(entry.approvedOvertimeMinutes)}`;
+  }
+  return " · ждёт одобрения";
+}
+

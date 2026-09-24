@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_COMMERCIAL_DRAFT,
   commercialDraftToInput,
+  formatDayRange,
   formatElapsed,
   formatMinutes,
   formatMoney,
@@ -9,6 +10,7 @@ import {
   moneyToInput,
   parseHoursInput,
   parseMoneyInput,
+  shiftDay,
   toDateTimeLocal,
 } from "./finance-format";
 
@@ -110,5 +112,20 @@ describe("таймер и поле времени", () => {
     expect(toDateTimeLocal(new Date(2026, 8, 4, 7, 5, 30))).toBe(
       "2026-09-04T07:05",
     );
+  });
+});
+
+describe("дни запроса сверх нормы", () => {
+  it("один день и период через месяц", () => {
+    expect(formatDayRange("2026-09-24", "2026-09-24")).toBe("24 сентября");
+    expect(formatDayRange("2026-09-28", "2026-10-02")).toBe(
+      "28 сентября — 2 октября",
+    );
+  });
+
+  it("сдвиг дня через конец месяца и года", () => {
+    expect(shiftDay("2026-09-30", 1)).toBe("2026-10-01");
+    expect(shiftDay("2026-12-31", 1)).toBe("2027-01-01");
+    expect(shiftDay("2026-03-01", -1)).toBe("2026-02-28");
   });
 });

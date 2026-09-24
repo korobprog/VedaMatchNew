@@ -954,3 +954,60 @@ describe('buildNotification · решение по карточке «Здоро
     }
   });
 });
+
+describe('buildNotification · часы сверх нормы (VED-459)', () => {
+  const base = {
+    recipientId: 'lead',
+    requestId: 'r1',
+    spaceId: 's1',
+    spaceName: 'Сайт ашрама',
+    taskKey: 'SA-1',
+    taskTitle: 'Вёрстка',
+    minutesPerDay: 90,
+    fromDay: '2026-09-28',
+    toDay: '2026-10-02',
+  };
+
+  it('ведущему — кто, сколько в день, за какие дни и по какой задаче', () => {
+    const copy = buildNotification({
+      ...base,
+      name: 'work.overtime.requested',
+      actorName: 'Радха',
+    });
+    expect(copy.title).toBe('Просят часы сверх нормы');
+    expect(copy.body).toBe(
+      'Радха: 1 ч 30 мин в день, с 28 сентября по 2 октября · SA-1 «Вёрстка»',
+    );
+    expect(copy.url).toBe('/work/planner/s1?task=SA-1');
+    expect(copy.category).toBe('work');
+  });
+
+  it('решение — одобрено или нет, с пояснением ведущего', () => {
+    const approved = buildNotification({
+      ...base,
+      name: 'work.overtime.decided',
+      recipientId: 'radha',
+      actorName: 'Маму',
+      decision: 'approved',
+      fromDay: '2026-09-28',
+      toDay: '2026-09-28',
+      note: '',
+    });
+    expect(approved.title).toBe('Часы сверх нормы одобрены');
+    expect(approved.body).toBe('Маму: 1 ч 30 мин в день, 28 сентября');
+
+    const rejected = buildNotification({
+      ...base,
+      name: 'work.overtime.decided',
+      recipientId: 'radha',
+      actorName: 'Маму',
+      decision: 'rejected',
+      note: 'бюджет кончился',
+      taskKey: null,
+      taskTitle: null,
+    });
+    expect(rejected.title).toBe('Часы сверх нормы не одобрены');
+    expect(rejected.body).toContain('— бюджет кончился');
+    expect(rejected.url).toBe('/work/planner/s1');
+  });
+});

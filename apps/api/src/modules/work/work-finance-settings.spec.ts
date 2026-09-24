@@ -3,6 +3,7 @@ import {
   canManageWorkFinance,
   parseWorkCommercialSettings,
   parseWorkLineItem,
+  parseWorkOvertimeRequest,
   parseWorkTimeEntry,
 } from './work-finance-settings';
 
@@ -101,5 +102,52 @@ describe('строка сметы', () => {
     expect(() =>
       parseWorkLineItem({ kind: 'discount', title: 'Скидка', amountMinor: 0 }),
     ).toThrow(BadRequestException);
+  });
+});
+
+describe('запрос сверх нормы (VED-459)', () => {
+  const today = '2026-09-24';
+
+  it('период, минуты в день и причина', () => {
+    expect(
+      parseWorkOvertimeRequest(
+        {
+          fromDay: '2026-09-24',
+          toDay: '2026-09-26',
+          minutesPerDay: 120,
+          reason: ' срочный запуск ',
+        },
+        today,
+      ),
+    ).toEqual({
+      fromDay: '2026-09-24',
+      toDay: '2026-09-26',
+      minutesPerDay: 120,
+      reason: 'срочный запуск',
+    });
+  });
+
+  it('вчерашний вечер задним числом — можно', () => {
+    expect(
+      parseWorkOvertimeRequest(
+        { fromDay: '2026-09-23', toDay: '2026-09-23', minutesPerDay: 60 },
+        today,
+      ).fromDay,
+    ).toBe('2026-09-23');
+  });
+
+  it.each([
+    [{ fromDay: '2026-09-26', toDay: '2026-09-24', minutesPerDay: 60 }],
+    [{ fromDay: '2026-02-30', toDay: '2026-03-01', minutesPerDay: 60 }],
+    [{ fromDay: '24.09.2026', toDay: '2026-09-24', minutesPerDay: 60 }],
+    [{ fromDay: '2026-09-01', toDay: '2026-10-15', minutesPerDay: 60 }],
+    [{ fromDay: '2026-07-01', toDay: '2026-07-02', minutesPerDay: 60 }],
+    [{ fromDay: '2026-09-24', toDay: '2026-09-24', minutesPerDay: 5 }],
+    [{ fromDay: '2026-09-24', toDay: '2026-09-24', minutesPerDay: 13 * 60 }],
+    [{ fromDay: '2026-09-24', toDay: '2026-09-24', minutesPerDay: 90.5 }],
+  ])('мусор — отказ: %j', (input) => {
+    expect(() => parseWorkOvertimeRequest(input, today)).toThrow(
+      BadRequestException,
+    );
   });
 });

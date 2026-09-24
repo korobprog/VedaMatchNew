@@ -57,6 +57,8 @@ export const notificationEventNames = {
   workTaskReturned: 'work.task.returned',
   workTaskStatusChanged: 'work.task.status-changed',
   workInviteReceived: 'work.invite.received',
+  workOvertimeRequested: 'work.overtime.requested',
+  workOvertimeDecided: 'work.overtime.decided',
   vacancyResponseCreated: 'vacancies.response.created',
   vacancyResponseStatusChanged: 'vacancies.response.status-changed',
   vacancyOfferClosed: 'vacancies.offer.closed',
@@ -115,6 +117,53 @@ export function toExcerpt(body: string): string {
  */
 export function workTaskUrl(spaceId: string, taskKey: string): string {
   return `/work/planner/${spaceId}?task=${encodeURIComponent(taskKey)}`;
+}
+
+/** Запрос сверх нормы ведёт в задачу, а без задачи — на доску. */
+function overtimeUrl(spaceId: string, taskKey: string | null): string {
+  return taskKey ? workTaskUrl(spaceId, taskKey) : `/work/planner/${spaceId}`;
+}
+
+/** 90 → «1 ч 30 мин», 120 → «2 ч». */
+function overtimeAmount(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} мин`;
+  return rest === 0 ? `${hours} ч` : `${hours} ч ${rest} мин`;
+}
+
+const MONTHS_GENITIVE = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+/** «24 сентября» или «с 24 сентября по 2 октября» — дни приходят строкой. */
+function overtimePeriod(fromDay: string, toDay: string): string {
+  const day = (value: string) => {
+    const [, month, date] = value.split('-').map(Number);
+    return `${date} ${MONTHS_GENITIVE[month - 1] ?? ''}`.trim();
+  };
+  return fromDay === toDay
+    ? day(fromDay)
+    : `с ${day(fromDay)} по ${day(toDay)}`;
+}
+
+function overtimeTaskTail(
+  taskKey: string | null,
+  taskTitle: string | null,
+): string {
+  if (!taskKey) return '';
+  return ` · ${taskKey}${taskTitle ? ` «${toExcerpt(taskTitle)}»` : ''}`;
 }
 
 /**
@@ -606,6 +655,27 @@ export function buildNotification(
         threadKey: workStatusThreadKey(
           workTaskUrl(event.spaceId, event.taskKey),
         ),
+      };
+    case 'work.overtime.requested':
+      return {
+        title: 'Просят часы сверх нормы',
+        body: `${event.actorName}: ${overtimeAmount(event.minutesPerDay)} в день, ${overtimePeriod(event.fromDay, event.toDay)}${overtimeTaskTail(event.taskKey, event.taskTitle)}`,
+        url: overtimeUrl(event.spaceId, event.taskKey),
+        tag: `work-overtime:${event.requestId}`,
+        category: 'work',
+      };
+    case 'work.overtime.decided':
+      return {
+        title:
+          event.decision === 'approved'
+            ? 'Часы сверх нормы одобрены'
+            : 'Часы сверх нормы не одобрены',
+        body:
+          `${event.actorName}: ${overtimeAmount(event.minutesPerDay)} в день, ${overtimePeriod(event.fromDay, event.toDay)}` +
+          (event.note ? ` — ${toExcerpt(event.note)}` : ''),
+        url: overtimeUrl(event.spaceId, event.taskKey),
+        tag: `work-overtime:${event.requestId}`,
+        category: 'work',
       };
     case 'work.invite.received':
       return {

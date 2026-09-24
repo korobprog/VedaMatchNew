@@ -447,6 +447,8 @@ model User {
   workTaskViews                      WorkTaskView[]                @relation("WorkTaskViews")
   workBoardsLed                      WorkBoard[]                   @relation("WorkBoardsLed")
   workTimeEntries                    WorkTimeEntry[]               @relation("WorkTimeEntries")
+  workOvertimeRequested              WorkOvertimeRequest[]         @relation("WorkOvertimeRequester")
+  workOvertimeDecided                WorkOvertimeRequest[]         @relation("WorkOvertimeDecider")
   workVacancyResponses               WorkVacancyResponse[]         @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                  @relation("UserApiKeys")
   agentApiKeys                       UserApiKey[]                  @relation("AgentApiKeys")
@@ -5718,9 +5720,10 @@ model WorkBoard {
   /// IANA-пояс, по которому режутся сутки для нормы.
   timezone          String           @default("Europe/Moscow")
 
-  columns     WorkColumn[]
-  tasks       WorkTask[]
-  timeEntries WorkTimeEntry[]
+  columns          WorkColumn[]
+  tasks            WorkTask[]
+  timeEntries      WorkTimeEntry[]
+  overtimeRequests WorkOvertimeRequest[]
 
   @@index([spaceId, position])
 }
@@ -5786,19 +5789,20 @@ model WorkTask {
   /// `null` у задач до VED-421 без истории — тогда считается `createdAt`.
   editedAt        DateTime?
 
-  labels          WorkTaskLabel[]
-  checklist       WorkChecklistItem[]
-  comments        WorkComment[]
-  attachments     WorkAttachment[]
+  labels           WorkTaskLabel[]
+  checklist        WorkChecklistItem[]
+  comments         WorkComment[]
+  attachments      WorkAttachment[]
   /// Оценка задачи в минутах (VED-458).
-  estimateMinutes Int?
+  estimateMinutes  Int?
   /// Фиксированная цена задачи в копейках — при модели «фикс за задачу».
-  priceMinor      Int?
-  timeEntries     WorkTimeEntry[]
-  lineItems       WorkTaskLineItem[]
-  activity        WorkActivity[]
-  notices         WorkTaskNotice[]
-  views           WorkTaskView[]
+  priceMinor       Int?
+  timeEntries      WorkTimeEntry[]
+  lineItems        WorkTaskLineItem[]
+  overtimeRequests WorkOvertimeRequest[]
+  activity         WorkActivity[]
+  notices          WorkTaskNotice[]
+  views            WorkTaskView[]
 
   @@unique([spaceId, number])
   @@index([columnId, position])
@@ -7448,4 +7452,41 @@ model WorkTaskLineItem {
   createdAt   DateTime         @default(now())
 
   @@index([taskId, position])
+}
+
+enum WorkOvertimeRequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+/// Запрос часов сверх нормы (VED-459): исполнитель просит «до N минут в день
+/// с такого-то по такое-то», ведущий одобряет или отклоняет. Одобренное
+/// разрешение действует на всю доску за эти дни, а не на одну задачу: норма
+/// тоже общая на день. Задача — повод и контекст, по ней ведут уведомление.
+model WorkOvertimeRequest {
+  id            String                    @id @default(uuid())
+  boardId       String
+  board         WorkBoard                 @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  taskId        String?
+  task          WorkTask?                 @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  /// Кто просит. Аккаунт удалили — одобренные часы остаются: по ним платили.
+  userId        String?
+  user          User?                     @relation("WorkOvertimeRequester", fields: [userId], references: [id], onDelete: SetNull)
+  /// Дни пояса доски включительно, строкой `2026-09-24`: сравнение строк —
+  /// сравнение дат, и нет вопроса, в каком поясе полночь.
+  fromDay       String
+  toDay         String
+  minutesPerDay Int
+  reason        String                    @default("")
+  status        WorkOvertimeRequestStatus @default(pending)
+  decidedById   String?
+  decidedBy     User?                     @relation("WorkOvertimeDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt     DateTime?
+  decisionNote  String                    @default("")
+  createdAt     DateTime                  @default(now())
+
+  @@index([boardId, status])
+  @@index([boardId, userId, fromDay])
 }

@@ -4,6 +4,10 @@ import {
   WORK_CURRENCIES,
   WORK_LINE_ITEM_TITLE_MAX,
   WORK_MONEY_MAX_MINOR,
+  WORK_OVERTIME_MAX_DAYS,
+  WORK_OVERTIME_MAX_MINUTES,
+  WORK_OVERTIME_MIN_MINUTES,
+  WORK_OVERTIME_REASON_MAX,
   WORK_TIME_ENTRY_MAX_MINUTES,
   type WorkCommercialSettingsInput,
   type WorkCurrency,
@@ -204,4 +208,78 @@ export function parseWorkLineItem(input: {
   const amountMinor = parseWorkMoney(input.amountMinor, 'Сумма');
   if (amountMinor === 0) throw new BadRequestException('Сумма: больше нуля');
   return { kind, title, amountMinor };
+}
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** День пояса доски строкой; `2026-02-30` — отказ, а не 2 марта. */
+function parseDay(value: unknown, field: string): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  const date = DAY_RE.test(text) ? new Date(`${text}T00:00:00Z`) : null;
+  if (
+    !date ||
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== text
+  ) {
+    throw new BadRequestException(`${field}: нужна дата`);
+  }
+  return text;
+}
+
+function shiftDay(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Запрос сверх нормы (VED-459). Задним числом — не дальше периода запроса:
+ * просить одобрения вчерашнего вечера нормально, прошлогоднего — нет.
+ */
+export function parseWorkOvertimeRequest(
+  input: {
+    fromDay?: unknown;
+    toDay?: unknown;
+    minutesPerDay?: unknown;
+    reason?: unknown;
+  },
+  today: string,
+): { fromDay: string; toDay: string; minutesPerDay: number; reason: string } {
+  const fromDay = parseDay(input.fromDay, 'С какого дня');
+  const toDay = parseDay(input.toDay, 'По какой день');
+  if (toDay < fromDay) {
+    throw new BadRequestException('Период: конец раньше начала');
+  }
+  const span =
+    (Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) /
+      86_400_000 +
+    1;
+  if (span > WORK_OVERTIME_MAX_DAYS) {
+    throw new BadRequestException(
+      `Период: не длиннее ${WORK_OVERTIME_MAX_DAYS} дней`,
+    );
+  }
+  if (fromDay < shiftDay(today, -WORK_OVERTIME_MAX_DAYS)) {
+    throw new BadRequestException(
+      `Период: задним числом не дальше ${WORK_OVERTIME_MAX_DAYS} дней`,
+    );
+  }
+  const minutesPerDay =
+    typeof input.minutesPerDay === 'number' ? input.minutesPerDay : Number.NaN;
+  if (
+    !Number.isInteger(minutesPerDay) ||
+    minutesPerDay < WORK_OVERTIME_MIN_MINUTES ||
+    minutesPerDay > WORK_OVERTIME_MAX_MINUTES
+  ) {
+    throw new BadRequestException(
+      'Сверх нормы в день: от 15 минут до 12 часов',
+    );
+  }
+  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+  if (reason.length > WORK_OVERTIME_REASON_MAX) {
+    throw new BadRequestException(
+      `Причина: не длиннее ${WORK_OVERTIME_REASON_MAX} знаков`,
+    );
+  }
+  return { fromDay, toDay, minutesPerDay, reason };
 }

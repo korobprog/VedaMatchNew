@@ -533,6 +533,16 @@ export class NotificationsListener {
     void this.deliver(event);
   }
 
+  @OnEvent(notificationEventNames.workOvertimeRequested)
+  onWorkOvertimeRequested(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
+  @OnEvent(notificationEventNames.workOvertimeDecided)
+  onWorkOvertimeDecided(event: NotificationEvent): void {
+    void this.deliver(event);
+  }
+
   @OnEvent(notificationEventNames.vacancyResponseCreated)
   onVacancyResponseCreated(event: NotificationEvent): void {
     void this.deliver(event);
