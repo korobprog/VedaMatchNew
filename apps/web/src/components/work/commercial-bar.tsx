@@ -155,12 +155,17 @@ export function WorkCommercialBar({
         <span className="text-text-1">Фикс за задачу</span>
       )}
       {shown && (
-        <span className="flex items-center gap-2">
-          <span className="font-mono text-text-0">
+        // На телефоне строка переносится целыми кусками: сумма со знаком
+        // валюты и «не одобрено 3 ч» не рвутся посередине.
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-mono whitespace-nowrap text-text-0">
             {formatMoney(shown.spentMinor, shown.currency)}
-            {shown.budgetMinor > 0 &&
-              ` из ${formatMoney(shown.budgetMinor, shown.currency)}`}
           </span>
+          {shown.budgetMinor > 0 && (
+            <span className="font-mono whitespace-nowrap text-text-0">
+              из {formatMoney(shown.budgetMinor, shown.currency)}
+            </span>
+          )}
           {spentShare !== null && (
             <span
               className={
@@ -173,7 +178,7 @@ export function WorkCommercialBar({
             </span>
           )}
           {shown.pendingOvertimeMinutes > 0 && (
-            <span className="text-text-1">
+            <span className="whitespace-nowrap text-text-1">
               · не одобрено {formatMinutes(shown.pendingOvertimeMinutes)}
             </span>
           )}

@@ -261,15 +261,19 @@ function PeriodCard({
         <span className="text-text-2">
           {formatMinutes(snapshot.totals.minutes)}
         </span>
-        <span
-          className={`ml-auto rounded-full border px-2 py-0.5 text-xs ${STATUS_CLASS[period.status]}`}
-        >
-          {PAYOUT_STATUS_LABEL[period.status]}
+        {/* Ярлык и стрелка — одним куском: на телефоне стрелка иначе
+            уезжала на вторую строку одна. */}
+        <span className="ml-auto flex items-center gap-2">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_CLASS[period.status]}`}
+          >
+            {PAYOUT_STATUS_LABEL[period.status]}
+          </span>
+          <ChevronDown
+            aria-hidden
+            className={`size-4 text-text-2 transition-transform ${open ? "rotate-180" : ""}`}
+          />
         </span>
-        <ChevronDown
-          aria-hidden
-          className={`size-4 text-text-2 transition-transform ${open ? "rotate-180" : ""}`}
-        />
       </button>
 
       {open && (
