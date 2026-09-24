@@ -38,6 +38,7 @@ import {
   workTaskLiftRecipients,
   workTaskRecipients,
 } from './work-events';
+import { resolveWorkAssignee } from './work-task-assignee';
 import { WorkNoticesService } from './work-notices.service';
 import { newTaskColumnQuery } from './work-task-column';
 import {
@@ -182,7 +183,13 @@ export class WorkTasksService {
   private async taskContext(taskId: string) {
     const task = await this.prisma.workTask.findUnique({
       where: { id: taskId },
-      select: { id: true, spaceId: true, boardId: true, columnId: true },
+      select: {
+        id: true,
+        spaceId: true,
+        boardId: true,
+        columnId: true,
+        createdById: true,
+      },
     });
     if (!task) throw new NotFoundException('Задача не найдена');
     return task;
@@ -376,7 +383,7 @@ export class WorkTasksService {
           position: positionBetween(null, first?.position ?? null),
           priority: normalizeWorkPriority(request.priority),
           dueAt,
-          assigneeId: request.assigneeId ?? null,
+          assigneeId: resolveWorkAssignee(request.assigneeId, userId),
           createdById: userId,
           completedAt: column.isDone ? new Date() : null,
           // Раздел отдельно от статуса (VED-430): заведённая в «РАБОТЕ»
@@ -437,8 +444,14 @@ export class WorkTasksService {
     if (request.dueAt !== undefined) data.dueAt = parseWorkDueAt(request.dueAt);
     if (request.assigneeId !== undefined) {
       await this.assertAssigneeIsMember(context.spaceId, request.assigneeId);
-      data.assignee = request.assigneeId
-        ? { connect: { id: request.assigneeId } }
+      // Снятый исполнитель — это снова составивший (VED-320): графа не
+      // пустует.
+      const assigneeId = resolveWorkAssignee(
+        request.assigneeId,
+        context.createdById,
+      );
+      data.assignee = assigneeId
+        ? { connect: { id: assigneeId } }
         : { disconnect: true };
     }
     if (request.sectionColumnId !== undefined) {
