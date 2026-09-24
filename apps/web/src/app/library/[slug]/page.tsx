@@ -16,9 +16,11 @@ import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { CategoryBreadcrumbs } from "@/components/library/category-breadcrumbs";
 import { CategoryNavigator } from "@/components/library/category-navigator";
+import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryList } from "@/components/library/entry-list";
+import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
 import { ShlokaRootPanel } from "@/components/library/shloka/shloka-root-panel";
 import { ShlokaSourcePanel } from "@/components/library/shloka/shloka-source-panel";
@@ -90,6 +92,14 @@ export default async function LibraryCategoryPage({
   const appliedLineage = explicitLineage
     ? resolveContentLineage(null, explicitLineage)
     : resolveContentLineage(user, preferences?.lineage ?? null);
+  // Кнопки линий — те же, что на главной Образования (VED-395): выбор
+  // сохраняется в настройке и действует во всех рубриках.
+  const lineageViewer = user
+    ? { spiritualStage: user.spiritualStage, lineage: user.lineage }
+    : null;
+  // Линия — в ключе ленты: кнопка меняет настройку, а не адрес, и без неё
+  // лента после router.refresh() держала бы прежнюю выдачу.
+  const lineageKey = appliedLineage ?? "all";
   const { category, ancestors, children } = page;
   const title = pickLocalized(locale, {
     ru: category.titleRu,
@@ -111,12 +121,15 @@ export default async function LibraryCategoryPage({
           <h1 className="font-display text-2xl font-bold text-text-0">
             {title}
           </h1>
-          <Link
-            href={`/library/add?category=${encodeURIComponent(category.slug)}`}
-            className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
-          >
-            {t(locale, "nav.add")}
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/library/add?category=${encodeURIComponent(category.slug)}`}
+              className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+            >
+              {t(locale, "nav.add")}
+            </Link>
+            <CategoryTitleEdit locale={locale} category={category} />
+          </div>
         </div>
         {/* То же одно число, что и в плитке: раздел — свои подразделы,
             подраздел — свои материалы. Голое «3 материалов» над лентой
@@ -126,12 +139,24 @@ export default async function LibraryCategoryPage({
           {categoryPageSummary(locale, category)}
         </p>
 
+        {/* Ряд линий заменил блок «Для вашей линии здесь пока ничего нет»
+            под лентой (VED-396): выбранная линия видна сразу, а не когда
+            лента уже опустела. */}
+        <div id="lineage-switch" className="scroll-mt-24">
+          <LibraryLineageFilter
+            locale={locale}
+            applied={appliedLineage}
+            preference={preferences?.lineage ?? null}
+            viewer={lineageViewer}
+          />
+        </div>
+
         {user && (
           <LineagePrompt
             user={user}
             serviceName="Образования"
-            settingsHref="/library#lineage-switch"
-            settingsLabel="в списке линий на главной Образования"
+            settingsHref="#lineage-switch"
+            settingsLabel="в ряду линий над рубриками"
           />
         )}
 
@@ -172,7 +197,7 @@ export default async function LibraryCategoryPage({
                 {st(locale, "section.otherMaterials")}
               </h2>
               <EntryList
-                key={JSON.stringify(feedQuery)}
+                key={`${JSON.stringify(feedQuery)}|${lineageKey}`}
                 initialFeed={feed}
                 locale={locale}
                 query={feedQuery}
@@ -194,7 +219,7 @@ export default async function LibraryCategoryPage({
 
             {feed && (
               <EntryList
-                key={JSON.stringify({ ...query, categorySlug: slug })}
+                key={`${JSON.stringify({ ...query, categorySlug: slug })}|${lineageKey}`}
                 initialFeed={feed}
                 locale={locale}
                 query={{ ...query, categorySlug: slug }}

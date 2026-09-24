@@ -224,9 +224,6 @@ const ui = {
     "lineage.filter": "Духовная линия материалов",
     "lineage.filterFailed": "Не удалось переключить линию, попробуйте ещё раз",
     "lineage.badgeAll": "Для всех линий",
-    "feed.emptyLineage":
-      "Для вашей линии здесь пока ничего нет. Материалы других линий скрыты",
-    "feed.showAllLineages": "Показать материалы всех линий",
     "category.empty": "В этом разделе ещё нет категорий",
     "category.entries": "материалов",
     // Подпись у числа рядом с рубрикой. Без неё «4» одинаково читается и как
@@ -256,6 +253,10 @@ const ui = {
     "entry.deleting": "Удаляем…",
     "entry.deleteFailed": "Не удалось удалить ссылку, попробуйте позже",
     "category.edit": "Редактировать категорию",
+    // Кнопка на странице рубрики (VED-394): для «Гуру → …» и «Проповедники →
+    // …» название рубрики — имя исполнителя.
+    "category.editTitle": "Редактировать",
+    "category.editTitleLabel": "Редактировать название рубрики",
     "category.saved": "Категория обновлена",
     "category.delete": "Удалить рубрику",
     "category.deleteConfirm": "Удалить рубрику? Отменить нельзя.",
@@ -514,9 +515,6 @@ const ui = {
     "lineage.filter": "Spiritual lineage of materials",
     "lineage.filterFailed": "Could not switch the lineage, please try again",
     "lineage.badgeAll": "For all lineages",
-    "feed.emptyLineage":
-      "Nothing here for your lineage yet. Materials of other lineages are hidden",
-    "feed.showAllLineages": "Show materials of all lineages",
     "category.empty": "This section has no categories yet",
     "category.entries": "materials",
     "count.children": "Subcategories inside",
@@ -544,6 +542,8 @@ const ui = {
     "entry.deleting": "Deleting…",
     "entry.deleteFailed": "Could not delete the link, please try again later",
     "category.edit": "Edit category",
+    "category.editTitle": "Edit",
+    "category.editTitleLabel": "Edit category name",
     "category.saved": "Category updated",
     "category.delete": "Delete category",
     "category.deleteConfirm": "Delete this category? This cannot be undone.",
