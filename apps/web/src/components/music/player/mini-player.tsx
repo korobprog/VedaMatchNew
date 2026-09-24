@@ -31,7 +31,7 @@ import {
   type PlayerPanelTab,
 } from "./player-settings-panel";
 import { SeekStepGlyph } from "./seek-step-glyph";
-import { pinnedLayout, seekButtonLabel } from "./player-prefs";
+import { pinnedEqualizer, pinnedLayout, seekButtonLabel } from "./player-prefs";
 import { seekHotkeyDirection } from "./seek-hotkeys";
 import { bookmarkSavedText } from "./player-marks";
 import { useTrackBookmarks } from "./use-track-bookmarks";
@@ -366,6 +366,7 @@ export function MiniPlayer() {
      там не заводит. Строка появляется, только когда что-то вынесено: по
      умолчанию полоса не выросла ни на точку. */
   const pinned = pinnedLayout(prefs);
+  const equalizer = pinnedEqualizer(prefs);
 
   // Ожидание важнее «играет»: пока звука нет, полоса не должна показывать
   // паузу — это единственная кнопка, по которой судят, сработало ли нажатие.
@@ -1000,13 +1001,23 @@ export function MiniPlayer() {
         {/* Вынесенные кнопки (VED-388). На телефоне — во второй строке,
             справа от пуска (VED-410): строка там есть всегда, и полоса от
             вынесенных кнопок не растёт. От `sm` — своей строкой под полосой:
-            в однострочной раскладке для них нет места. */}
-        {pinned !== "none" && (
+            в однострочной раскладке для них нет места.
+
+            На телефоне ряд занимает всё место между управлением и кнопками
+            полосы, и кнопки в нём стоят на равном расстоянии (VED-450), а не
+            кучкой у пуска. Свободное место отдано эквалайзеру: пока ничего
+            не вынесено — во весь рост, при одной-двух кнопках — меньше, при
+            трёх-четырёх его нет (`pinnedEqualizer`). */}
+        {(pinned !== "none" || equalizer !== "none") && (
           <div
-            role="group"
-            aria-label="Вынесенные кнопки"
-            className={`order-5 ml-1 flex shrink-0 items-center gap-0 min-[400px]:ml-2 min-[400px]:gap-0.5 sm:order-10 sm:ml-0 sm:w-full sm:justify-center sm:gap-2 ${
-              pinned === "narrow" ? "lg:hidden" : ""
+            role={pinned !== "none" ? "group" : undefined}
+            aria-label={pinned !== "none" ? "Вынесенные кнопки" : undefined}
+            className={`order-5 ml-1 flex min-w-0 flex-1 items-center justify-evenly gap-0 min-[400px]:ml-2 min-[400px]:gap-0.5 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
+              pinned === "none"
+                ? "sm:hidden"
+                : pinned === "narrow"
+                  ? "lg:hidden"
+                  : ""
             }`}
           >
             {prefs.showSeek && (
@@ -1040,6 +1051,16 @@ export function MiniPlayer() {
                 open={panelTab === "history"}
                 onClick={() => openPanel("history")}
                 className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
+              />
+            )}
+            {equalizer !== "none" && (
+              <MusicPlayingBars
+                playing={isPlaying}
+                className={`shrink-0 sm:hidden ${
+                  equalizer === "large"
+                    ? "h-5 w-20 max-[359px]:w-12"
+                    : "h-3.5 w-11 max-[359px]:hidden"
+                }`}
               />
             )}
           </div>
