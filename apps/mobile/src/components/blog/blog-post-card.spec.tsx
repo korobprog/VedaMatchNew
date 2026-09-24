@@ -107,6 +107,7 @@ describe('карточка поста в ленте', () => {
         title: 'Оригинал',
         text: 'Слова оригинала',
         images: [],
+        media: [],
         createdAt: new Date(2026, 8, 20, 8, 0).toISOString(),
       },
     });

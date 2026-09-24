@@ -35,9 +35,35 @@ describe('isForeignWorkTask (VED-320)', () => {
     ).toBe(false);
   });
 
-  it('без исполнителя — не чужая: её может взять любой', () => {
+  // VED-418: VED-296 и соседей завёл Маму без исполнителя, у Станислава они
+  // стояли среди своих.
+  it('без исполнителя — чужая для всех, кроме автора', () => {
     expect(
       isForeignWorkTask({ createdById: 'mamu', assigneeId: null }, 'stas'),
+    ).toBe(true);
+    expect(
+      isForeignWorkTask({ createdById: 'mamu', assigneeId: null }, 'mamu'),
+    ).toBe(false);
+  });
+
+  it('без исполнителя, заведена агентом от моего имени — моя', () => {
+    expect(
+      isForeignWorkTask(
+        { createdById: 'sevak', createdOnBehalfOfId: 'mamu', assigneeId: null },
+        'mamu',
+      ),
+    ).toBe(false);
+    expect(
+      isForeignWorkTask(
+        { createdById: 'sevak', createdOnBehalfOfId: 'mamu', assigneeId: null },
+        'stas',
+      ),
+    ).toBe(true);
+  });
+
+  it('ни автора, ни исполнителя — не чужая никому', () => {
+    expect(
+      isForeignWorkTask({ createdById: null, assigneeId: null }, 'stas'),
     ).toBe(false);
   });
 
@@ -75,8 +101,11 @@ describe('workTaskOwnerIds и markOwnerIds', () => {
     ).toEqual(['mamu']);
   });
 
-  it('для ленты: без исполнителя хозяев не называем — чужих нет', () => {
-    expect(markOwnerIds({ createdById: 'mamu', assigneeId: null })).toBe(
+  it('для ленты: без исполнителя хозяин — автор', () => {
+    expect(markOwnerIds({ createdById: 'mamu', assigneeId: null })).toEqual([
+      'mamu',
+    ]);
+    expect(markOwnerIds({ createdById: null, assigneeId: null })).toBe(
       undefined,
     );
     expect(

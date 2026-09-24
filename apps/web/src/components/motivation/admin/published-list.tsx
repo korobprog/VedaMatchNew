@@ -37,6 +37,13 @@ import {
   titleOf,
 } from "./post-action-labels";
 import { postShareHref } from "../post-share";
+import { reelsHref } from "../feed-style";
+import {
+  POST_KIND_LABELS,
+  filterByKind,
+  kindHref,
+  type PostKind,
+} from "./post-kind";
 import { cardText, expandHint } from "./card-text";
 import { SCROLL_NAV_GUTTER, ScrollNavButtons } from "@/components/ui/scroll-nav-buttons";
 import { UploadCardImage } from "./upload-card-image";
@@ -79,12 +86,18 @@ import {
  * списка: подсказка при пустом списке и строка-счётчик над ним.
  */
 export function MotivationPublishedList({
-  posts,
+  posts: allPosts,
   categories = [],
   openSlug,
   variant = "published",
+  kind,
 }: {
   posts: MotivationAdminCandidateDto[] | null;
+  /**
+   * Какая из двух редакций открыта (VED-299): нейро-афоризмы или открытки.
+   * «Править» в ленте передаёт вид своей карточки. Без вида — все, как было.
+   */
+  kind?: PostKind;
   /** Справочник для выбора категории в правке. */
   categories?: MotivationCategoryDto[];
   /**
@@ -99,6 +112,20 @@ export function MotivationPublishedList({
    */
   variant?: "published" | "hidden";
 }) {
+  const posts = useMemo(
+    () => (allPosts ? filterByKind(allPosts, kind) : null),
+    [allPosts, kind],
+  );
+  const kindCounts = useMemo(
+    () => ({
+      art: allPosts ? filterByKind(allPosts, "art").length : 0,
+      cards: allPosts ? filterByKind(allPosts, "cards").length : 0,
+      all: allPosts?.length ?? 0,
+    }),
+    [allPosts],
+  );
+  const basePath =
+    variant === "hidden" ? "/admin/motivation/hidden" : "/admin/motivation/published";
   const { pending, errors, run } = useAdminCommand();
   const [query, setQuery] = useState("");
   /** Ref на поле поиска — кнопка «Поиск» в карточке (VED-264) ведёт сюда,
@@ -176,24 +203,62 @@ export function MotivationPublishedList({
 
   if (!posts) return <LoadFailure what="опубликованные вдохновения" />;
 
+  /* Переключатель двух редакций (VED-299). Ссылками: вид живёт в адресе,
+     и «Править» из ленты открывает сразу нужную редакцию. */
+  const kindNav = (
+    <nav aria-label="Какую редакцию показать" className="mb-4 flex flex-wrap gap-2">
+      {(["art", "cards", undefined] as const).map((value) => {
+        const current = kind === value;
+        return (
+          <Link
+            key={value ?? "all"}
+            href={kindHref(basePath, value)}
+            aria-current={current ? "page" : undefined}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors ${
+              current
+                ? "border-cyan/40 bg-cyan/10 text-text-0"
+                : "border-glass-brd text-text-1 hover:text-text-0"
+            }`}
+          >
+            {POST_KIND_LABELS[value ?? "all"]}
+            <span className="font-mono text-xs font-normal text-text-1">
+              {kindCounts[value ?? "all"]}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
   if (posts.length === 0)
     return (
-      <p className={`${cardClass} text-center text-text-2`}>
-        {variant === "hidden"
-          ? "Скрытых нет. Всё, что видно в ленте, лежит во вкладке «Опубликованные»."
-          : "Пока ничего не опубликовано. Всё, что ждёт проверки, — во вкладке «Заготовки»."}
-      </p>
+      <>
+        {kind && kindNav}
+        <p className={`${cardClass} text-center text-text-2`}>
+          {kind
+            ? kind === "cards"
+              ? "Открыток в этом списке нет."
+              : "Нейро-афоризмов в этом списке нет."
+            : variant === "hidden"
+              ? "Скрытых нет. Всё, что видно в ленте, лежит во вкладке «Опубликованные»."
+              : "Пока ничего не опубликовано. Всё, что ждёт проверки, — во вкладке «Заготовки»."}
+        </p>
+      </>
     );
 
   return (
     <>
+      {kindNav}
       {/* Дорога обратно. Из ленты сюда приходят с одним вопросом — поправить
           то, на что смотрели, — и уходить должны туда же, а не искать ленту
           заново через меню. Ссылки нет, когда во вкладку зашли сами: тогда
           «назад» вело бы в ленту, из которой не приходили. */}
       {openSlug && (
         <Link
-          href={`/motivation?post=${encodeURIComponent(openSlug)}`}
+          href={reelsHref({
+            tab: kind === "cards" ? "cards" : "forYou",
+            post: openSlug,
+          })}
           className="mb-4 inline-flex items-center gap-1 text-sm text-text-1 hover:text-text-0"
         >
           <ArrowLeft aria-hidden className="size-4" />

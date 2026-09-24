@@ -1,10 +1,15 @@
 // Браузерный клиент сервиса «Блог-лента» поверх общего apiFetch.
 import {
+  BLOG_IMAGE_MAX_BYTES,
   BLOG_POST_TEXT_MAX_LENGTH,
   BLOG_POST_TITLE_MAX_LENGTH,
+  BLOG_UPLOAD_MAX_TOTAL_BYTES,
+  BLOG_VIDEO_MAX_BYTES,
+  BLOG_VIDEO_MAX_SECONDS,
 } from "@vedamatch/shared";
 import type {
   BlogAuthorFeedResponse,
+  BlogFavoriteResponse,
   BlogFeedResponse,
   BlogPostCreatedResponse,
   BlogPostDto,
@@ -37,11 +42,16 @@ const MESSAGES: Record<string, string> = {
   // разве что в обход формы — под полем стоит счётчик, который не даёт
   // отправить перебор. А раз доехал, пусть скажет, во что упёрлись (VED-371).
   text_too_long: `Текст длиннее ${BLOG_POST_TEXT_MAX_LENGTH} знаков — столько в пост не помещается.`,
-  too_many_images: "Больше фотографий в один пост не поместится.",
+  too_many_images: "Больше вложений в один пост не поместится.",
+  too_many_videos: "В пост помещается один ролик — остальные места для фотографий.",
+  video_unreadable: "Не удалось прочитать ролик — попробуйте другой файл.",
+  video_too_long: `Ролик длиннее ${Math.round(BLOG_VIDEO_MAX_SECONDS / 60)} минут.`,
+  upload_too_large: `Все файлы вместе больше ${mb(BLOG_UPLOAD_MAX_TOTAL_BYTES)} МБ — уберите часть или опубликуйте двумя постами.`,
   daily_limit_reached: "На сегодня постов достаточно — продолжите завтра.",
   image_upload_unavailable: "Загрузка фотографий сейчас недоступна.",
-  unsupported_type: "Такой файл не подходит: нужен JPEG, PNG или WebP.",
-  file_too_large: "Файл слишком большой.",
+  unsupported_type:
+    "Такой файл не подходит: нужна фотография JPEG, PNG или WebP либо ролик MP4 или WebM.",
+  file_too_large: `Файл слишком большой: фото — до ${mb(BLOG_IMAGE_MAX_BYTES)} МБ, ролик — до ${mb(BLOG_VIDEO_MAX_BYTES)} МБ.`,
   processing_failed: "Не удалось обработать фотографию.",
   post_not_found: "Пост не найден — возможно, его уже удалили.",
   author_not_found: "Участник не найден.",
@@ -51,7 +61,14 @@ const MESSAGES: Record<string, string> = {
   admin_only: "Доступно только администратору.",
 };
 
+function mb(bytes: number): number {
+  return Math.round(bytes / (1024 * 1024));
+}
+
 export function blogErrorText(code: string): string {
+  // Файл больше предела ролика multer обрывает сам, своим текстом, — до
+  // сервиса с его кодами такой запрос не доходит.
+  if (code === "File too large") return MESSAGES.file_too_large;
   return MESSAGES[code] ?? "Не получилось. Попробуйте ещё раз.";
 }
 
@@ -91,6 +108,22 @@ export function fetchBlogFeed(
   const query = new URLSearchParams({ scope });
   if (cursor) query.set("cursor", cursor);
   return request<BlogFeedResponse>(`/blog/feed?${query.toString()}`);
+}
+
+/** «Избранное» того, кто смотрит (VED-238). */
+export function fetchBlogFavorites(cursor?: string): Promise<BlogFeedResponse> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<BlogFeedResponse>(`/blog/favorites${query}`);
+}
+
+export function setBlogFavorite(
+  id: string,
+  favorited: boolean,
+): Promise<BlogFavoriteResponse> {
+  return request<BlogFavoriteResponse>(
+    `/blog/posts/${encodeURIComponent(id)}/favorite`,
+    { method: favorited ? "PUT" : "DELETE" },
+  );
 }
 
 export function fetchBlogAuthorFeed(

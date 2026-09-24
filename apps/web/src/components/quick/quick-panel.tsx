@@ -1,12 +1,14 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type Ref,
 } from "react";
 import Link from "next/link";
@@ -16,6 +18,7 @@ import {
   Calculator,
   CalendarDays,
   Check,
+  CirclePlay,
   Columns2,
   HeartHandshake,
   History,
@@ -23,6 +26,7 @@ import {
   Info,
   Mail,
   Menu,
+  PanelTop,
   Quote,
   Search,
   Settings2,
@@ -49,8 +53,26 @@ import { FittedLabel } from "./fitted-label";
 import {
   inviteCopyLabel,
   useInviteCopy,
+  usePlayerHotkey,
   usePortalWindowSwitch,
 } from "./quick-action-hooks";
+import {
+  DEFAULT_HEADER_ITEMS,
+  HEADER_AVATAR_ID,
+  HEADER_BELL_ID,
+  HEADER_HOTKEYS_ID,
+  HEADER_TOOLBAR_STORAGE_KEY,
+  MAX_HEADER_BUTTONS,
+  headerCatalog,
+  headerToggleBlock,
+  headerToggleNote,
+  isHeaderFixed,
+  moveHeaderItem,
+  parseHeaderToolbar,
+  resolveHeaderToolbar,
+  serializeHeaderToolbar,
+  toggleHeaderItem,
+} from "./header-toolbar";
 import { TuneRow } from "./tune-row";
 import {
   BUILTIN_QUICK_ACTIONS,
@@ -101,6 +123,8 @@ const ICONS: Record<
   window: Columns2,
   bookmarks: Bookmark,
   history: History,
+  // VED-416: кружок «пуск», а не нота — нота уже у Медиатеки в сервисах.
+  player: CirclePlay,
   search: Search,
   assistant: Bot,
   aphorism: Quote,
@@ -159,7 +183,21 @@ type PanelView = "tiles" | QuickSheetId;
 /** Чем панель управляют снаружи: шапка и боковое меню. */
 export interface QuickPanelHandle {
   openSheet: (sheet: QuickSheetId) => void;
+  /** Настройка верхней панели (VED-434) — из настройки бокового меню. */
+  openHeaderSettings: () => void;
 }
+
+/** Что настраивают: саму панель или верхнюю панель шапки (VED-434). */
+type Tuning = "panel" | "header";
+
+/**
+ * Кнопка шапки. Поле нажатия 44×44, а место в ряду — 36, как у кнопок до
+ * VED-402 (`-mx-1`): заказчик просил вернуть прежнее расстояние между
+ * кнопками (VED-412), а палец по-прежнему попадает с первого раза. Соседние
+ * поля нажатия при промежутке ряда 8px сходятся встык, не перекрываясь.
+ */
+const headerButtonClass =
+  "-mx-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0";
 
 /**
  * Панель горячих кнопок: короткий путь к тому, за чем возвращаются каждый
@@ -172,40 +210,56 @@ export interface QuickPanelHandle {
  * Настраивается прямо здесь же: набор кнопок у человека, который заходит за
  * цитатой, и у того, кто ведёт общину, разный, и угадать за них нельзя.
  *
+ * Она же рисует весь ряд кнопок шапки справа — верхнюю панель (VED-412):
+ * звёздочку, колокольчик, аватар, «Меню» и любые горячие кнопки, в том
+ * порядке, какой выбрал человек (`header-toolbar.ts`). Кнопки, открывающие
+ * шторку панели, помечены `data-quick-trigger`: тап по ним при открытой
+ * шторке — не «тап мимо панели», иначе он закрывал бы её, а клик следом
+ * открывал бы снова.
+ *
  * `admin` — у администрации портала панель полностью своя (VED-326): три
  * закреплённые кнопки у неё не закрепляются.
  *
- * `onOpenMenu` — плитка «Меню» (VED-402): боковое меню живёт в шапке, панель
- * только просит его открыть.
- *
- * Кнопка «История» (VED-402) стоит в шапке слева от звёздочки, но живёт
- * здесь, внутри той же обёртки: иначе тап по ней при открытой истории был бы
- * «тапом мимо панели», закрывал бы её, а клик следом открывал бы снова.
+ * `onOpenMenu` — «Меню» (VED-402, VED-412): боковое меню живёт в шапке,
+ * панель только просит его открыть. `bell`, `avatar` и `beforeAvatar` тоже
+ * рисует шапка — панель лишь ставит их на место в ряду.
  */
 export function QuickPanel({
   admin = false,
   onOpenMenu,
+  menuOpen = false,
+  bell,
+  avatar,
+  beforeAvatar,
   ref,
 }: {
   admin?: boolean;
-  /** `trigger` — звёздочка: на неё вернуть фокус, когда меню закроют. */
+  /** `trigger` — кнопка, на которую вернуть фокус, когда меню закроют. */
   onOpenMenu?: (trigger: HTMLElement | null) => void;
+  menuOpen?: boolean;
+  bell?: ReactNode;
+  avatar?: ReactNode;
+  /** Язык, тема и вход в админку на широком экране — перед аватаром. */
+  beforeAvatar?: ReactNode;
   ref?: Ref<QuickPanelHandle>;
 }) {
   const [view, setView] = useState<PanelView | null>(null);
   const open = view !== null;
-  const [tuning, setTuning] = useState(false);
+  const [tuning, setTuning] = useState<Tuning | null>(null);
   const [config, setConfig] = useState<QuickConfig>({ ids: [], custom: [] });
-  const panelRef = useRef<HTMLDivElement>(null);
+  const [headerIds, setHeaderIds] = useState<QuickActionId[]>([
+    ...DEFAULT_HEADER_ITEMS,
+  ]);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const starRef = useRef<HTMLButtonElement>(null);
   const locked = lockedQuickActions(admin);
 
   const close = useCallback(() => {
     setView(null);
-    setTuning(false);
+    setTuning(null);
   }, []);
   const show = useCallback((next: PanelView) => {
-    setTuning(false);
+    setTuning(null);
     setView((current) => (current === next ? null : next));
   }, []);
 
@@ -213,8 +267,12 @@ export function QuickPanel({
     ref,
     () => ({
       openSheet: (sheet) => {
-        setTuning(false);
+        setTuning(null);
         setView(sheet);
+      },
+      openHeaderSettings: () => {
+        setView("tiles");
+        setTuning("header");
       },
     }),
     [],
@@ -235,21 +293,31 @@ export function QuickPanel({
       ),
     [catalogMap, config.custom, names],
   );
+  const toolbarCatalog = useMemo(() => headerCatalog(catalog), [catalog]);
+  const toolbar = useMemo(
+    () =>
+      resolveHeaderToolbar(
+        headerIds,
+        new Set(catalog.map((meta) => meta.id)),
+      ),
+    [headerIds, catalog],
+  );
 
   /* Читаем эффектом: на сервере `localStorage` нет, и ленивый `useState` дал
      бы расхождение гидратации. Тем же способом читают своё `theme-provider`
      и полоса плеера. */
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
-    const read = () => {
+    const read = (key: string) => {
       try {
-        return parseQuickConfig(window.localStorage.getItem(STORAGE_KEY));
+        return window.localStorage.getItem(key);
       } catch {
-        return parseQuickConfig(null);
+        return null;
       }
     };
-    const stored = read();
+    const stored = parseQuickConfig(read(STORAGE_KEY));
     setConfig({ ...stored, ids: arrangeQuickActions(stored.ids, locked) });
+    setHeaderIds(parseHeaderToolbar(read(HEADER_TOOLBAR_STORAGE_KEY)));
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [locked]);
 
@@ -276,6 +344,18 @@ export function QuickPanel({
     [locked],
   );
 
+  const saveHeader = useCallback((next: QuickActionId[]) => {
+    setHeaderIds(next);
+    try {
+      window.localStorage.setItem(
+        HEADER_TOOLBAR_STORAGE_KEY,
+        serializeHeaderToolbar(next),
+      );
+    } catch {
+      // Приватный режим: выбор работает до конца сессии.
+    }
+  }, []);
+
   // Escape закрывает, как у любой шторки; клик мимо — тоже.
   useEffect(() => {
     if (!open) return;
@@ -283,7 +363,10 @@ export function QuickPanel({
       if (event.key === "Escape") close();
     };
     const onClick = (event: MouseEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) close();
+      const target = event.target as Element | null;
+      if (dialogRef.current?.contains(target)) return;
+      if (target?.closest?.("[data-quick-trigger]")) return;
+      close();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onClick);
@@ -293,40 +376,71 @@ export function QuickPanel({
     };
   }, [open, close]);
 
-  const title = tuning
-    ? "Настроить панель"
-    : view === null || view === "tiles"
-      ? "Горячие кнопки"
-      : SHEET_TITLES[view];
+  const title =
+    tuning === "panel"
+      ? "Настроить панель"
+      : tuning === "header"
+        ? "Верхняя панель"
+        : view === null || view === "tiles"
+          ? "Горячие кнопки"
+          : SHEET_TITLES[view];
 
-  /* Кнопки в шапке 44×44 — палец по ним попадает с первого раза; значок
-     прежний, 20px. Промежуток меньше соседского: поле нажатия у каждой и
-     так шире значка, и ряд на экране 320 не расползается. */
+  const openMenu = onOpenMenu
+    ? (trigger: HTMLElement | null) => {
+        close();
+        onOpenMenu(trigger);
+      }
+    : undefined;
+
   return (
-    <div className="relative flex items-center gap-0.5" ref={panelRef}>
-      <button
-        type="button"
-        onClick={() => show("history")}
-        aria-expanded={view === "history"}
-        aria-label="История"
-        title="История"
-        className="flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
-      >
-        <History className="size-5" />
-      </button>
-      <button
-        ref={starRef}
-        type="button"
-        onClick={() => show("tiles")}
-        aria-expanded={view === "tiles"}
-        aria-label="Горячие кнопки"
-        className="flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
-      >
-        <Sparkles className="size-5" />
-      </button>
+    <div className="relative flex items-center gap-2">
+      {toolbar.map((id) => {
+        switch (id) {
+          case HEADER_HOTKEYS_ID:
+            return (
+              <button
+                key={id}
+                ref={starRef}
+                type="button"
+                data-quick-trigger=""
+                onClick={() => show("tiles")}
+                aria-expanded={view === "tiles"}
+                aria-label="Горячие кнопки"
+                className={headerButtonClass}
+              >
+                <Sparkles className="size-5" />
+              </button>
+            );
+          case HEADER_BELL_ID:
+            return bell ? <Fragment key={id}>{bell}</Fragment> : null;
+          case HEADER_AVATAR_ID:
+            return (
+              <Fragment key={id}>
+                {beforeAvatar}
+                {avatar}
+              </Fragment>
+            );
+          default: {
+            const meta = quickActionMeta(id, catalog);
+            if (!meta) return null;
+            return (
+              <HeaderAction
+                key={id}
+                meta={meta}
+                view={view}
+                menuOpen={menuOpen}
+                onShow={show}
+                onClose={close}
+                onOpenMenu={openMenu}
+              />
+            );
+          }
+        }
+      })}
 
       {view && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-label={title}
           /*
@@ -375,21 +489,48 @@ export function QuickPanel({
             <h2 className="min-w-0 truncate font-display text-sm font-bold text-text-0">
               {title}
             </h2>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               {view === "tiles" && (
-                <button
-                  type="button"
-                  onClick={() => setTuning((value) => !value)}
-                  aria-pressed={tuning}
-                  aria-label={tuning ? "Готово" : "Настроить панель"}
-                  className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
-                >
-                  {tuning ? (
-                    <Check className="size-5" />
-                  ) : (
-                    <Settings2 className="size-5" />
-                  )}
-                </button>
+                <>
+                  {/* Настройка верхней панели (VED-434) — там, где заказчик
+                      поставил галочки: слева от настройки самой панели. */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTuning((value) => (value === "header" ? null : "header"))
+                    }
+                    aria-pressed={tuning === "header"}
+                    aria-label={
+                      tuning === "header" ? "Готово" : "Настроить верхнюю панель"
+                    }
+                    title={
+                      tuning === "header" ? "Готово" : "Настроить верхнюю панель"
+                    }
+                    className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                  >
+                    {tuning === "header" ? (
+                      <Check className="size-5" />
+                    ) : (
+                      <PanelTop className="size-5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTuning((value) => (value === "panel" ? null : "panel"))
+                    }
+                    aria-pressed={tuning === "panel"}
+                    aria-label={tuning === "panel" ? "Готово" : "Настроить панель"}
+                    title={tuning === "panel" ? "Готово" : "Настроить панель"}
+                    className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                  >
+                    {tuning === "panel" ? (
+                      <Check className="size-5" />
+                    ) : (
+                      <Settings2 className="size-5" />
+                    )}
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -410,12 +551,18 @@ export function QuickPanel({
               onClose={close}
               onNavigate={close}
             />
-          ) : tuning ? (
+          ) : tuning === "panel" ? (
             <QuickSettings
               config={config}
               catalog={catalog}
               locked={locked}
               onChange={save}
+            />
+          ) : tuning === "header" ? (
+            <HeaderSettings
+              ids={toolbar}
+              catalog={toolbarCatalog}
+              onChange={saveHeader}
             />
           ) : (
             <QuickTiles
@@ -424,17 +571,252 @@ export function QuickPanel({
               onChange={save}
               onClose={close}
               onOpenMenu={
-                onOpenMenu
-                  ? () => {
-                      close();
-                      onOpenMenu(starRef.current);
-                    }
+                openMenu
+                  ? () =>
+                      openMenu(
+                        starRef.current?.isConnected ? starRef.current : null,
+                      )
                   : undefined
               }
             />
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Горячая кнопка в шапке (VED-412): та же кнопка, что плитка панели, только
+ * значком. Подпись — в `aria-label` и подсказке.
+ */
+function HeaderAction({
+  meta,
+  view,
+  menuOpen,
+  onShow,
+  onClose,
+  onOpenMenu,
+}: {
+  meta: QuickActionMeta;
+  view: PanelView | null;
+  menuOpen: boolean;
+  onShow: (next: PanelView) => void;
+  onClose: () => void;
+  onOpenMenu?: (trigger: HTMLElement | null) => void;
+}) {
+  const icon = <QuickActionIcon meta={meta} className="size-5" />;
+  switch (meta.id) {
+    case "menu":
+      // Без шапки (в тестах панели) меню открыть некому — кнопки нет.
+      if (!onOpenMenu) return null;
+      return (
+        <button
+          type="button"
+          onClick={(event) => onOpenMenu(event.currentTarget)}
+          aria-label={meta.label}
+          title={meta.label}
+          aria-haspopup="dialog"
+          aria-expanded={menuOpen}
+          className={headerButtonClass}
+        >
+          {icon}
+        </button>
+      );
+    case "player":
+      return <HeaderPlayerButton meta={meta} icon={icon} />;
+    case "window":
+      return <HeaderWindowButton icon={icon} onSwitch={onClose} />;
+    case "invite":
+      return <HeaderInviteButton icon={icon} />;
+    case "donate":
+      return (
+        <Link
+          href="/donate"
+          aria-label={meta.label}
+          title={meta.label}
+          className={headerButtonClass}
+        >
+          {icon}
+        </Link>
+      );
+  }
+  if (meta.href)
+    return (
+      <Link
+        href={meta.href}
+        aria-label={meta.label}
+        title={meta.label}
+        className={headerButtonClass}
+      >
+        {icon}
+      </Link>
+    );
+  const sheet = meta.id;
+  if (!isQuickSheetId(sheet)) return null;
+  return (
+    <button
+      type="button"
+      data-quick-trigger=""
+      onClick={() => onShow(sheet)}
+      aria-expanded={view === sheet}
+      aria-label={meta.label}
+      title={meta.label}
+      className={headerButtonClass}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function HeaderPlayerButton({
+  meta,
+  icon,
+}: {
+  meta: QuickActionMeta;
+  icon: ReactNode;
+}) {
+  const player = usePlayerHotkey();
+  return (
+    <button
+      type="button"
+      onClick={() => void player.run()}
+      aria-label={meta.label}
+      title={meta.hint}
+      className={headerButtonClass}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function HeaderWindowButton({
+  icon,
+  onSwitch,
+}: {
+  icon: ReactNode;
+  onSwitch: () => void;
+}) {
+  const windowSwitch = usePortalWindowSwitch();
+  return (
+    <button
+      type="button"
+      onClick={() => windowSwitch.go(onSwitch)}
+      aria-label={windowSwitch.hint}
+      title={windowSwitch.hint}
+      className={headerButtonClass}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function HeaderInviteButton({ icon }: { icon: ReactNode }) {
+  const invite = useInviteCopy();
+  const label = inviteCopyLabel(invite.state);
+  return (
+    <button
+      type="button"
+      onClick={() => void invite.copy()}
+      aria-label={label}
+      title={label}
+      className={headerButtonClass}
+    >
+      {icon}
+      {/* Значок не говорит «скопировано» — говорит живая область. */}
+      <span aria-live="polite" className="sr-only">
+        {invite.state === "idle" ? "" : label}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Настройка верхней панели (VED-412, VED-434): те же строки, что у панели и
+ * меню (`TuneRow`). Сначала то, что стоит в шапке, в своём порядке — вместе
+ * с закреплёнными колокольчиком и аватаром, чтобы было видно, по какую
+ * сторону от них встанет кнопка, — потом остальное по разделам.
+ */
+function HeaderSettings({
+  ids,
+  catalog,
+  onChange,
+}: {
+  ids: readonly QuickActionId[];
+  catalog: readonly QuickActionMeta[];
+  onChange: (next: QuickActionId[]) => void;
+}) {
+  const chosen = ids
+    .map((id) => quickActionMeta(id, catalog))
+    .filter((meta): meta is QuickActionMeta => meta !== null);
+  const rest = catalog.filter(
+    (meta) => !ids.includes(meta.id) && !isHeaderFixed(meta.id),
+  );
+  const groups: { key: string; label: string; items: QuickActionMeta[] }[] = [
+    { key: "on", label: "В шапке", items: chosen },
+    {
+      key: "builtin",
+      label: "Портал",
+      items: rest.filter((meta) => meta.kind === "builtin"),
+    },
+    {
+      key: "service",
+      label: "Сервисы",
+      items: rest.filter((meta) => meta.kind === "service"),
+    },
+    {
+      key: "custom",
+      label: "Из закладок",
+      items: rest.filter((meta) => meta.kind === "custom"),
+    },
+  ].filter((group) => group.items.length > 0);
+
+  return (
+    <div>
+      <p className="px-1 pb-2 text-[11px] text-text-1">
+        Кнопки справа в шапке, слева направо. Колокольчик и аватар на месте
+        всегда, остальных — до {MAX_HEADER_BUTTONS}.
+      </p>
+      {groups.map((group) => (
+        <section key={group.key} className="mb-2 last:mb-0">
+          {/* Не заголовок разметкой — см. такую же подпись в `QuickSettings`. */}
+          <p
+            aria-hidden="true"
+            className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-1"
+          >
+            {group.label}
+          </p>
+          <ul className="space-y-1">
+            {group.items.map((meta) => {
+              const on = ids.includes(meta.id);
+              const block = headerToggleBlock(ids, meta.id);
+              const movable = on && !isHeaderFixed(meta.id);
+              return (
+                <TuneRow
+                  key={meta.id}
+                  label={meta.label}
+                  hint={headerToggleNote(block) ?? meta.hint}
+                  on={on}
+                  fixed={block !== null}
+                  onToggle={() => onChange(toggleHeaderItem(ids, meta.id))}
+                  onUp={
+                    movable
+                      ? () => onChange(moveHeaderItem(ids, meta.id, -1))
+                      : undefined
+                  }
+                  onDown={
+                    movable
+                      ? () => onChange(moveHeaderItem(ids, meta.id, 1))
+                      : undefined
+                  }
+                  upLabel="Левее"
+                  downLabel="Правее"
+                />
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }
@@ -538,6 +920,8 @@ function QuickTiles({
                 <WindowTile onSwitch={onClose} />
               ) : id === "invite" ? (
                 <InviteTile />
+              ) : id === "player" ? (
+                <PlayerTile meta={meta} onRun={onClose} />
               ) : id === "menu" ? (
                 <button
                   type="button"
@@ -704,6 +1088,34 @@ function DonateTile() {
         </Link>
       )}
     </div>
+  );
+}
+
+/**
+ * «Плеер» (VED-416): панель закрывается, полоса плеера выкатывается
+ * свёрнутой и играет — см. `usePlayerHotkey`.
+ */
+function PlayerTile({
+  meta,
+  onRun,
+}: {
+  meta: QuickActionMeta;
+  onRun: () => void;
+}) {
+  const player = usePlayerHotkey();
+  return (
+    <button
+      type="button"
+      title={meta.hint}
+      onClick={() => {
+        onRun();
+        void player.run();
+      }}
+      className={tileClass}
+    >
+      <QuickActionIcon meta={meta} />
+      <span className="line-clamp-2">{meta.label}</span>
+    </button>
   );
 }
 

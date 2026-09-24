@@ -63,28 +63,30 @@ function bucketOf(createdAt: string, todayStart: Date): CreatedBucket {
 }
 
 /**
- * Разложить карточки по дате создания. Группы идут от самой свежей к самой
- * старой, и внутри группы — по убыванию `createdAt`: самая новая задача
- * первой.
+ * Разложить карточки по дате, которую достаёт `dateOf`. Группы идут от самой
+ * свежей к самой старой, и внутри группы — по убыванию даты: самая новая
+ * задача первой.
  *
  * Пустые группы не возвращаются: то же правило, что у важности и было у
  * группировки по сроку.
  */
-export function groupTasksByCreatedDate<
-  T extends Pick<WorkTaskCardDto, "createdAt">,
->(tasks: readonly T[], now: Date): CreatedGroup<T>[] {
+function groupTasksByDate<T>(
+  tasks: readonly T[],
+  now: Date,
+  dateOf: (task: T) => string,
+): CreatedGroup<T>[] {
   const todayStart = startOfLocalDay(now);
   const byBucket = new Map<CreatedBucket, T[]>(
     BUCKET_ORDER.map((bucket) => [bucket, []]),
   );
   for (const task of tasks) {
-    byBucket.get(bucketOf(task.createdAt, todayStart))!.push(task);
+    byBucket.get(bucketOf(dateOf(task), todayStart))!.push(task);
   }
   for (const bucket of BUCKET_ORDER) {
     byBucket
       .get(bucket)!
       .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        (a, b) => new Date(dateOf(b)).getTime() - new Date(dateOf(a)).getTime(),
       );
   }
   return BUCKET_ORDER.map((bucket) => ({
@@ -92,4 +94,26 @@ export function groupTasksByCreatedDate<
     title: BUCKET_TITLE[bucket],
     tasks: byBucket.get(bucket)!,
   })).filter((group) => group.tasks.length > 0);
+}
+
+/** «По дате» (VED-160): по дате создания, свежие сверху. */
+export function groupTasksByCreatedDate<
+  T extends Pick<WorkTaskCardDto, "createdAt">,
+>(tasks: readonly T[], now: Date): CreatedGroup<T>[] {
+  return groupTasksByDate(tasks, now, (task) => task.createdAt);
+}
+
+/**
+ * «По правке» (VED-421): заказчик просил, «чтобы в этом окне были видны
+ * задачи согласно времени их открытия и правки». Открытие — создание задачи,
+ * правка — любое действие человека с ней: поля, перенос, комментарий,
+ * чек-лист, вложения (`WorkTaskCardDto.editedAt`, считает сервер; раньше
+ * создания не бывает). Группы те же, что у «По дате», — день правки, а не
+ * день создания: вчерашняя задача, которую сегодня поправили, стоит в
+ * «Сегодня».
+ */
+export function groupTasksByEditedDate<
+  T extends Pick<WorkTaskCardDto, "editedAt">,
+>(tasks: readonly T[], now: Date): CreatedGroup<T>[] {
+  return groupTasksByDate(tasks, now, (task) => task.editedAt);
 }

@@ -12,6 +12,7 @@ export function blogPost(id: string, overrides: Partial<BlogPostDto> = {}): Blog
     title: `Заголовок ${id}`,
     text: `Текст ${id}`,
     images: [],
+    media: [],
     createdAt: new Date(2026, 8, 21, 9, 5).toISOString(),
     editedAt: null,
     feedUntil: null,
@@ -22,6 +23,7 @@ export function blogPost(id: string, overrides: Partial<BlogPostDto> = {}): Blog
     canEdit: false,
     canManage: false,
     canModerate: false,
+    favorited: false,
     ...overrides,
   };
 }

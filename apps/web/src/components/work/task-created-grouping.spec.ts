@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { groupTasksByCreatedDate } from "./task-created-grouping";
+import {
+  groupTasksByCreatedDate,
+  groupTasksByEditedDate,
+} from "./task-created-grouping";
 
 /** «Сегодня» зафиксировано, чтобы границы суток не зависели от часа запуска
  *  теста. Полдень — намеренно: не задевает полночь ни в одну сторону. */
@@ -125,5 +128,24 @@ describe("groupTasksByCreatedDate", () => {
     expect(byId.day2).toBe("week");
     expect(byId.day6).toBe("week");
     expect(byId.day7).toBe("earlier");
+  });
+});
+
+describe("groupTasksByEditedDate (VED-421, «По правке»)", () => {
+  it("раскладывает по дню правки, а не создания", () => {
+    const groups = groupTasksByEditedDate(
+      [
+        { id: "old-touched", createdAt: isoAt(-10), editedAt: isoAt(0, 9) },
+        { id: "fresh", createdAt: isoAt(0, 8), editedAt: isoAt(0, 8) },
+        { id: "untouched", createdAt: isoAt(-3), editedAt: isoAt(-3) },
+      ],
+      NOW,
+    );
+    expect(
+      groups.map((group) => [group.title, group.tasks.map((t) => t.id)]),
+    ).toEqual([
+      ["Сегодня", ["old-touched", "fresh"]],
+      ["На этой неделе", ["untouched"]],
+    ]);
   });
 });

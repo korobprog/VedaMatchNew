@@ -14,6 +14,6 @@ export function newTaskColumnQuery(boardId: string, columnId: unknown) {
   return {
     where: id ? { id, boardId } : { boardId },
     orderBy: { position: 'asc' as const },
-    select: { id: true, isDone: true },
+    select: { id: true, name: true, isDone: true },
   };
 }

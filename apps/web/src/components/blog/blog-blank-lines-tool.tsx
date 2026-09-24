@@ -33,7 +33,6 @@ import {
 const KEEP_LABELS: Record<number, string> = {
   0: "ни одной",
   1: "одну",
-  2: "две",
 };
 
 export function BlogBlankLinesTool({

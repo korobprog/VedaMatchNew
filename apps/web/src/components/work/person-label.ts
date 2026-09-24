@@ -33,3 +33,17 @@ export function workActorLabel(
   if (!label || !onBehalfOf) return label;
   return `${label}, по поручению: ${onBehalfOf.name}`;
 }
+
+/**
+ * Короткая подпись исполнителя на карточке доски (VED-431): первое слово
+ * имени. Полное имя занимало на телефоне отдельную строку карточки —
+ * «Станислав Санкаршан» справа под номером, — а карточку просили сделать
+ * компактнее. Полное имя остаётся в подсказке и для скринридера.
+ */
+export function workPersonShortLabel(
+  person: Pick<WorkPersonRefDto, "name" | "isAgent"> | null | undefined,
+): string {
+  if (!person) return "";
+  const first = person.name.trim().split(/\s+/)[0] ?? "";
+  return person.isAgent ? `${first} · ${WORK_AGENT_MARK}` : first;
+}

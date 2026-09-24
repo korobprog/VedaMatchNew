@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AnimationEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { formatTrackDuration } from "@/lib/music-duration";
@@ -22,6 +23,7 @@ import {
   ChevronsRight,
   History,
   ListEnd,
+  PictureInPicture2,
   Settings,
 } from "lucide-react";
 import {
@@ -34,6 +36,14 @@ import { seekHotkeyDirection } from "./seek-hotkeys";
 import { bookmarkSavedText } from "./player-marks";
 import { useTrackBookmarks } from "./use-track-bookmarks";
 import { LIFTED_KEY, liftButtonLabel, parseLifted, serializeLifted } from "./player-lift";
+import {
+  PLAYER_VIEW_KEY,
+  parsePlayerView,
+  reservedPlayerSpace,
+  serializePlayerView,
+  type PlayerView,
+} from "./player-view";
+import { MUSIC_PLAYER_REVEAL_EVENT } from "./player-reveal";
 import {
   DEFAULT_PLAYBACK_MODE,
   nextPlaybackMode,
@@ -66,18 +76,32 @@ const icon = {
   "aria-hidden": true,
 };
 
-/**
- * Свёрнута ли полоса. Помним между переходами и перезагрузками: иначе
- * человек сворачивает её на каждой странице заново, и сворачивание теряет
- * весь смысл.
- */
-const COLLAPSED_KEY = "vedamatch:music-player-collapsed";
-
 export function MiniPlayer() {
   const player = useMusicPlayer();
   const pathname = usePathname();
   const [queueOpen, setQueueOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  /**
+   * Вид полосы: развёрнута, свёрнута, пузырь (VED-366). Помним между
+   * переходами и перезагрузками: иначе человек сворачивает её на каждой
+   * странице заново, и сворачивание теряет весь смысл.
+   */
+  const [view, setViewState] = useState<PlayerView>("expanded");
+  const collapsed = view === "collapsed";
+  /**
+   * Выкат полосы (из пузыря или по вызову снаружи). Счётчик — ключ полосы,
+   * чтобы анимация шла заново на каждый вызов; он только растёт: сброс
+   * ключа пересоздал бы полосу и выбил из неё фокус. Класс анимации снимает
+   * `entering`.
+   */
+  const [enterSeq, setEnterSeq] = useState(0);
+  const [entering, setEntering] = useState(false);
+  /** Обёртка и видимая полоса — для замера места под ней. */
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLElement | null>(null);
+  /** Пузырь и кнопка «в пузырь»: между ними переходит фокус. */
+  const bubbleRef = useRef<HTMLButtonElement | null>(null);
+  const toBubbleRef = useRef<HTMLButtonElement | null>(null);
+  const focusAfterViewRef = useRef<"bubble" | "toBubble" | null>(null);
   const [lifted, setLifted] = useState(false);
   /** Открытая вкладка панели «Плеер» (VED-388); `null` — панель закрыта. */
   const [panelTab, setPanelTab] = useState<PlayerPanelTab | null>(null);
@@ -105,9 +129,7 @@ export function MiniPlayer() {
        приём и та же причина, что в `player-provider.tsx` и
        `theme-provider.tsx`. */
     try {
-      if (window.localStorage.getItem(COLLAPSED_KEY) === "1") {
-        setCollapsed(true);
-      }
+      setViewState(parsePlayerView(window.localStorage.getItem(PLAYER_VIEW_KEY)));
       if (parseLifted(window.localStorage.getItem(LIFTED_KEY))) {
         setLifted(true);
       }
@@ -117,17 +139,59 @@ export function MiniPlayer() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
-  const toggleCollapsed = () => {
-    setCollapsed((was) => {
-      const next = !was;
+  const setView = useCallback((next: PlayerView | ((was: PlayerView) => PlayerView)) => {
+    setViewState((was) => {
+      const value = typeof next === "function" ? next(was) : next;
       try {
-        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+        window.localStorage.setItem(PLAYER_VIEW_KEY, serializePlayerView(value));
       } catch {
         // см. выше
       }
-      return next;
+      return value;
     });
+  }, []);
+
+  const toggleCollapsed = () =>
+    setView((was) => (was === "collapsed" ? "expanded" : "collapsed"));
+
+  /** Свернуть в плавающий пузырь (VED-366). */
+  const toBubble = () => {
+    setQueueOpen(false);
+    setPanelTab(null);
+    focusAfterViewRef.current = "bubble";
+    setView("bubble");
   };
+
+  /** Из пузыря — обратно в развёрнутую полосу, с выкатом. */
+  const fromBubble = () => {
+    focusAfterViewRef.current = "toBubble";
+    setEnterSeq((n) => n + 1);
+    setEntering(true);
+    setView("expanded");
+  };
+
+  /* Фокус следует за видом: нажатая кнопка исчезает вместе с полосой или
+     пузырём, и без переноса фокус падал бы в начало страницы. */
+  useEffect(() => {
+    const target = focusAfterViewRef.current;
+    if (!target) return;
+    focusAfterViewRef.current = null;
+    (target === "bubble" ? bubbleRef : toBubbleRef).current?.focus();
+  }, [view]);
+
+  /* Горячая кнопка «Плеер» (VED-416) просит показать полосу свёрнутой —
+     см. `player-reveal.ts`. Сворачиваем с запоминанием, как своей кнопкой,
+     в том числе из пузыря (VED-366), и выкатываем снизу. Звук здесь не
+     трогаем: играть или нет, решает тот, кто просит. */
+  useEffect(() => {
+    const onReveal = () => {
+      setEnterSeq((n) => n + 1);
+      setEntering(true);
+      setView("collapsed");
+    };
+    window.addEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
+  }, [setView]);
 
   const toggleLifted = () => {
     setLifted((was) => {
@@ -233,6 +297,38 @@ export function MiniPlayer() {
     if (opener?.isConnected) opener.focus();
   }, []);
 
+  /* Место под полосой — замером (замечание к PR #500): числа в globals.css
+     остаются запасом на первую отрисовку, а дальше страница резервирует
+     ровно столько, сколько полоса занимает от своего верха до низа окна.
+     Верх берём от обёртки, а не от самой полосы: полосу двигает анимация
+     выката, и замер посреди неё дал бы лишнее. */
+  const onHome = pathname === "/";
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap || !hasTrack || onHome) return;
+    const root = document.documentElement;
+    const measure = () => {
+      const bar = barRef.current;
+      const top = bar
+        ? wrap.getBoundingClientRect().top + bar.offsetTop
+        : window.innerHeight;
+      const space = reservedPlayerSpace(view, top, window.innerHeight);
+      root.style.setProperty("--vm-player-measured", `${space}px`);
+      wrap.dataset.measured = "true";
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrap);
+    if (barRef.current) observer.observe(barRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      root.style.removeProperty("--vm-player-measured");
+      delete wrap.dataset.measured;
+    };
+  }, [view, lifted, hasTrack, onHome]);
+
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
 
@@ -241,7 +337,7 @@ export function MiniPlayer() {
   // другом. Прячем по пути, а не пропсом из layout: полоса монтируется в
   // корневом layout один раз на всё приложение, и там про страницы ничего
   // не известно.
-  if (pathname === "/") return null;
+  if (onHome) return null;
 
   const {
     current,
@@ -286,8 +382,25 @@ export function MiniPlayer() {
   const ctrl =
     "flex shrink-0 items-center justify-center rounded-full text-text-1 transition-colors hover:text-text-0 disabled:opacity-40";
 
+  /* На телефоне полоса стоит на самом нижнем крае окна, стык в стык с
+     системной панелью (VED-411, VED-282): без полей по бокам и снизу, со
+     скруглением только сверху. Отступ от полосы жестов — внутри полосы
+     (`env(safe-area-inset-bottom)`): фон уходит под неё, а кнопки — нет.
+     Поднятая полоса (VED-194) висит над нижним рядом раздела и остаётся
+     плавающей карточкой с полями — прилипать ей не к чему. */
+  const docked = !lifted;
+  const dockBar = docked
+    ? "max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0"
+    : "";
+  const enterClass = entering ? "player-enter" : "";
+  // Только своя анимация: `animationend` всплывает и от титров названия.
+  const endEnter = (event: AnimationEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) setEntering(false);
+  };
+
   return (
     <div
+      ref={wrapRef}
       // `pointer-events-none` на обёртке, чтобы прозрачные поля по краям не
       // перехватывали клики по странице под полосой.
       //
@@ -299,26 +412,76 @@ export function MiniPlayer() {
       // следовать за ней: иначе под полоской в 48 точек остаётся дыра в 150.
       // Правило — в globals.css рядом с основным.
       data-collapsed={collapsed ? "true" : "false"}
+      data-view={view}
       // Поднятая полоса (VED-194) стоит выше на `--vm-player-lift`, и отступ
       // страницы растёт вместе с ней — правило там же, в globals.css.
       data-lifted={lifted ? "true" : "false"}
-      // Строка вынесенных кнопок (VED-388) добавляет полосе высоты на узком
-      // экране — отступ страницы растёт вместе с ней, правило в globals.css.
-      data-pinned={collapsed ? "none" : pinned}
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      // Строка вынесенных кнопок (VED-388) добавляет полосе высоты от `sm`
+      // (на телефоне кнопки встают в ряд управления, VED-410) — отступ
+      // страницы растёт вместе с ней, правило в globals.css.
+      data-pinned={view === "expanded" ? pinned : "none"}
+      className={`pointer-events-none fixed inset-x-0 bottom-0 z-40 ${
+        docked
+          ? "sm:px-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          : "px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      }`}
     >
-      {collapsed ? (
-        /* Свёрнутая полоска: обложка, название и пуск. Всё остальное — в
-           развёрнутом виде и на странице записи. Смысл ровно один: «не
-           мешай, но играй», поэтому здесь нет ни дорожки, ни перемотки. */
+      {view === "bubble" ? (
+        /* Плавающий пузырь (VED-366): полупрозрачный кружок с обложкой у
+           левого края, ближе к низу. Места у страницы не занимает. Высота —
+           над нижним рядом разделов (поле ввода чата, кнопки ленты
+           «Вдохновения»), чтобы не закрывать их левую кнопку. Нажатие
+           разворачивает полосу обратно. */
+        <button
+          ref={bubbleRef}
+          type="button"
+          aria-label={`Развернуть плеер: ${current.title}${isPlaying ? ", играет" : ", на паузе"}`}
+          title="Развернуть плеер"
+          onClick={fromBubble}
+          className="player-bubble pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] left-3 flex size-14 items-center justify-center overflow-hidden rounded-full"
+        >
+          <span aria-hidden="true" className="absolute inset-1 overflow-hidden rounded-full opacity-70">
+            <MusicCover url={current.coverUrl} seed={current.id} alt="" rounded="rounded-full" />
+          </span>
+          {/* Три столбика эквалайзера: играет — пляшут, пауза — стоят.
+              Полосу `MusicPlayingBars` не взяли: в ней 14 столбиков, в
+              кружок 32 точки она не входит. */}
+          <span
+            aria-hidden="true"
+            className={`relative flex size-8 items-center justify-center gap-[3px] rounded-full bg-bg-0/85 ${
+              isPlaying ? "" : "music-eq-paused"
+            }`}
+          >
+            {[9, 15, 11].map((height, at) => (
+              <span
+                key={at}
+                className="music-eq-bar w-[3px] rounded-full bg-violet"
+                style={{ height, animationDuration: `${[780, 1080, 900][at]}ms` }}
+              />
+            ))}
+          </span>
+        </button>
+      ) : collapsed ? (
+        /* Свёрнутая полоска: обложка, название, переход по записям и пуск
+           (VED-368). Всё остальное — в развёрнутом виде и на странице записи.
+           Смысл ровно один: «не мешай, но играй», поэтому здесь нет ни
+           дорожки, ни перемотки кнопками. Зазоры ужаты, чтобы «назад» и
+           «вперёд» встали без потери названия. */
         <section
+          ref={barRef}
+          key={`collapsed-${enterSeq}`}
           aria-label="Плеер, свёрнут"
-          className="player-bar pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-2.5 rounded-2xl px-2.5"
+          onAnimationEnd={endEnter}
+          className={`player-bar pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-1 rounded-2xl px-2 min-[400px]:gap-1.5 min-[400px]:px-2.5 ${
+            docked
+              ? "max-sm:h-[calc(3rem+env(safe-area-inset-bottom))] max-sm:pb-[env(safe-area-inset-bottom)]"
+              : ""
+          } ${dockBar} ${enterClass}`}
         >
           <Link
             href={`/music/tracks/${current.id}`}
             aria-label={`Открыть запись: ${current.title}`}
-            className="size-8 shrink-0 overflow-hidden rounded-lg"
+            className="size-8 shrink-0 overflow-hidden rounded-lg max-[339px]:hidden"
           >
             {/* `contain` (VED-248): даже в свёрнутой полоске широкая
                 обложка должна быть видна целиком, не урезанной до
@@ -335,12 +498,18 @@ export function MiniPlayer() {
           <MusicMarqueeText
             key={current.id}
             text={current.title}
-            className="min-w-0 flex-1 text-[13px] font-semibold text-text-0"
+            className="ml-1 min-w-0 flex-1 text-[13px] font-semibold text-text-0"
           />
 
           <MusicPlayingBars
             playing={isPlaying}
-            className="h-3.5 w-14 shrink-0 max-[380px]:hidden"
+            className="h-3.5 w-12 shrink-0 max-[419px]:hidden"
+          />
+
+          <PrevButton
+            hasPrev={hasPrev}
+            hold={holdPrev}
+            className={`${ctrl} h-10 w-9`}
           />
 
           <button
@@ -352,12 +521,18 @@ export function MiniPlayer() {
             <MusicPlayGlyph state={playState} className="size-3" />
           </button>
 
+          <NextButton
+            hasNext={hasNext}
+            hold={holdNext}
+            className={`${ctrl} h-10 w-9`}
+          />
+
           <button
             type="button"
             aria-label="Развернуть плеер"
             aria-expanded={false}
             onClick={toggleCollapsed}
-            className={`${ctrl} size-8`}
+            className={`${ctrl} h-10 w-8`}
           >
             <svg {...icon} className="size-4">
               <path d="M18 15l-6-6-6 6" />
@@ -367,14 +542,14 @@ export function MiniPlayer() {
           <LiftButton
             lifted={lifted}
             onToggle={toggleLifted}
-            className={`${ctrl} size-8`}
+            className={`${ctrl} h-10 w-8`}
           />
 
           <button
             type="button"
             aria-label="Закрыть плеер"
             onClick={player.close}
-            className={`${ctrl} size-8`}
+            className={`${ctrl} h-10 w-8`}
           >
             <svg {...icon} className="size-4">
               <path d="M6 6l12 12M18 6L6 18" />
@@ -383,21 +558,30 @@ export function MiniPlayer() {
         </section>
       ) : (
       <section
+        ref={barRef}
+        key={`expanded-${enterSeq}`}
         aria-label="Плеер"
-        // На телефоне полоса в две строки, как в макете Main.dc.html: в одну
-        // строку 390px не помещаются ни девять кнопок, ни дорожка — название
-        // записи сжималось в ноль. Поэтому здесь `flex-wrap` и порядок
-        // элементов задан явно, а с `sm` возвращается однострочная раскладка
-        // из PortalWide.dc.html.
+        onAnimationEnd={endEnter}
+        // На телефоне полоса в три строки (VED-410): название с кнопками
+        // записи и полосы; управление с вынесенными кнопками; дорожка. Все
+        // кнопки встают в эти три строки, и вынесенные в настройках кнопки
+        // полосу не растят. Поэтому здесь `flex-wrap` и порядок элементов
+        // задан явно, а с `sm` возвращается однострочная раскладка из
+        // PortalWide.dc.html.
+        //
+        // Зазоры между элементами на телефоне — внутри групп, а не у полосы:
+        // общий `gap-x` в ряду из девяти кнопок съедал 64 точки из 336.
         //
         // `relative` — контекст позиционирования для MusicLyricsPanel: она
         // якорится от всей полосы, а не от узкой кнопки-триггера в середине
         // ряда, иначе на 360-390px уезжает за левый край экрана (VED-248,
         // круг 2).
         //
-        // С вынесенными кнопками (VED-388) полоса `sm`–`lg` тоже переносит
+        // С вынесенными кнопками (VED-388) полоса `sm`–`lg` переносит
         // строку: кнопки встают второй строкой, а не сжимают середину.
-        className={`player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-1.5 gap-y-1.5 min-[360px]:gap-x-2 min-[400px]:gap-x-3 rounded-2xl px-3 py-2 sm:gap-3 sm:px-[18px] lg:gap-5 ${
+        className={`player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-0 gap-y-1 rounded-2xl px-3 py-2 sm:gap-3 sm:px-[18px] lg:gap-5 ${
+          docked ? "max-sm:pb-[calc(0.5rem+env(safe-area-inset-bottom))]" : ""
+        } ${dockBar} ${enterClass} ${
           pinned === "all"
             ? "sm:gap-y-2 sm:py-2"
             : pinned === "narrow"
@@ -405,13 +589,16 @@ export function MiniPlayer() {
               : "sm:h-16 sm:flex-nowrap sm:py-0"
         }`}
       >
-        {/* Что играет */}
-        <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-48">
-          <Link
-            href={`/music/tracks/${current.id}`}
-            aria-label={`Открыть запись: ${current.title}`}
-            className="h-10 w-10 shrink-0 overflow-hidden rounded-[10px]"
-          >
+        {/* Что играет. Обложка и название — одна ссылка на запись: две
+            ссылки на одно и то же — лишний шаг в обходе клавиатурой. На
+            телефоне уже 400 точек обложка уступает место названию: первая
+            строка делит ширину с шестью кнопками (VED-410). */}
+        <Link
+          href={`/music/tracks/${current.id}`}
+          aria-label={`Открыть запись: ${current.title}`}
+          className="order-1 flex min-w-0 flex-1 items-center gap-2 rounded-[10px] min-[400px]:gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-48"
+        >
+          <span className="h-10 w-10 shrink-0 overflow-hidden rounded-[10px] max-[399px]:hidden sm:block">
             {/* `contain` (VED-248): развёрнутая полоса — тоже витрина
                 записи, а не плитка каталога; обрезать широкую обложку до
                 квадрата здесь так же неверно, как на странице записи. */}
@@ -422,8 +609,8 @@ export function MiniPlayer() {
               rounded="rounded-[10px]"
               fit="contain"
             />
-          </Link>
-          <div className="flex min-w-0 flex-col">
+          </span>
+          <span className="flex min-w-0 flex-col">
             {/* Название едет титрами, когда не помещается: полоса узкая, а
                 «Мир Прокисший (Prod. by…» не даёт узнать запись. Ключ по
                 названию — чтобы при смене записи строка начинала сначала, а
@@ -435,15 +622,9 @@ export function MiniPlayer() {
             />
             {/* Причина отказа вытесняет исполнителя, а не приписывается
                 рядом: место под ней одно, и в ту секунду, когда запись не
-                играет, имя исполнителя человеку не нужно. `role="status"` —
-                чтобы отказ прочитал и скринридер: для него молчащая кнопка
-                вообще ничем не отличается от работающей. */}
+                играет, имя исполнителя человеку не нужно. */}
             {loadError ? (
-              <span
-                role="status"
-                className="truncate text-[11px] text-magenta"
-                title={loadError}
-              >
+              <span className="truncate text-[11px] text-magenta" title={loadError}>
                 {loadError}
               </span>
             ) : (
@@ -451,8 +632,16 @@ export function MiniPlayer() {
                 {current.artist?.name ?? "Исполнитель не указан"}
               </span>
             )}
-          </div>
-        </div>
+          </span>
+        </Link>
+        {/* Отказ — живой областью вне ссылки: у ссылки своё имя
+            («Открыть запись: …»), и текст внутри неё скринридер не читает.
+            Для него молчащая кнопка ничем не отличается от работающей. */}
+        {loadError && (
+          <span role="status" className="sr-only">
+            {loadError}
+          </span>
+        )}
 
         {/* Разрыв строки на телефоне. `flex-wrap` переносит только то, что не
             влезло, а здесь строку надо кончить раньше: иначе управление
@@ -467,11 +656,10 @@ export function MiniPlayer() {
             может уехать на свою строку во всю ширину. С `sm` обёртка снова
             коробка, и колонка «кнопки над дорожкой» из макета возвращается. */}
         <div className="contents sm:flex sm:min-w-0 sm:flex-1 sm:flex-col sm:items-center sm:gap-1.5">
-          {/* На телефоне ряд делит вторую строку с кнопками записи: `flex-1`
-              отдаёт ему остаток места, но не выталкивает соседей на третью
-              строку. На `sm` ширина снова по содержимому — там ряд стоит по
-              центру колонки. */}
-          <div className="order-4 flex min-w-0 flex-1 items-center gap-0.5 min-[400px]:gap-1.5 sm:order-none sm:w-auto sm:flex-none sm:gap-2">
+          {/* На телефоне ряд по содержимому: справа от него встают
+              вынесенные кнопки и кнопки положения полосы (VED-410). На `sm`
+              ряд стоит по центру колонки. */}
+          <div className="order-4 flex shrink-0 items-center gap-0.5 min-[400px]:gap-1.5 sm:order-none sm:gap-2">
             {/* С `md` — в ряду управления; на телефоне та же кнопка стоит
                 у дорожки, ниже (VED-133). Раньше обе прятались до `lg`, и с
                 телефона перемешать было нечем. Не с `sm`: на 640 средней
@@ -483,10 +671,9 @@ export function MiniPlayer() {
               className={`${ctrl} hidden h-7 w-7 md:flex`}
             />
 
-            {/* В ряду — только на широком экране. На телефоне место в ряду
-                занимает переход по записям: перемотка там — удержанием и
-                пальцем по дорожке, а кнопки с шагом выносятся отдельной
-                строкой из настроек плеера (VED-388). Шаг — из настроек. */}
+            {/* В ряду — только на широком экране. На телефоне перемотка —
+                удержанием и пальцем по дорожке, а кнопки с шагом выносятся
+                из настроек плеера (VED-388) в этот же ряд справа. */}
             <button
               type="button"
               aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
@@ -497,31 +684,13 @@ export function MiniPlayer() {
               <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
             </button>
 
-            <button
-              type="button"
-              aria-label={
-                hasPrev
-                  ? "Предыдущая запись, удержание — перемотка назад"
-                  : "Перемотка назад удержанием"
-              }
-              title="Нажать — предыдущая запись, удержать — перемотка назад"
-              // `aria-disabled`, а не `disabled`: перемотка относится к
-              // играющей записи, а не к очереди, и на единственной записи
-              // настоящий `disabled` отнял бы вместе с переходом и её —
-              // отключённая кнопка не получает событий указателя вовсе.
-              aria-disabled={!hasPrev}
-              {...holdPrev.props}
-              // Пара к «Следующей»: без неё промах по «дальше» стоил бы
-              // возврата в список, а на телефоне это весь экран.
-              className={`${ctrl} h-10 w-10 touch-none max-[359px]:w-9 select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
-                holdPrev.seeking ? "text-violet" : ""
-              }`}
-            >
-              <svg {...icon} className="h-4 w-4">
-                <path d="M19 4L9 12l10 8z" />
-                <path d="M5 5v14" />
-              </svg>
-            </button>
+            {/* Пара к «Следующей»: без неё промах по «дальше» стоил бы
+                возврата в список, а на телефоне это весь экран. */}
+            <PrevButton
+              hasPrev={hasPrev}
+              hold={holdPrev}
+              className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:h-8 sm:w-8`}
+            />
 
             <button
               type="button"
@@ -529,30 +698,16 @@ export function MiniPlayer() {
               onClick={player.toggle}
               // 44px на телефоне — и размер из макета, и минимальная цель
               // пальца; на широком экране полоса всего 64px высотой, там 40.
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint max-[359px]:h-10 max-[359px]:w-10 sm:h-10 sm:w-10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-mint-edge bg-mint text-on-mint sm:h-10 sm:w-10"
             >
               <MusicPlayGlyph state={playState} />
             </button>
 
-            <button
-              type="button"
-              aria-label={
-                hasNext
-                  ? "Следующая запись, удержание — перемотка вперёд"
-                  : "Перемотка вперёд удержанием"
-              }
-              title="Нажать — следующая запись, удержать — перемотка вперёд"
-              aria-disabled={!hasNext}
-              {...holdNext.props}
-              className={`${ctrl} h-10 w-10 touch-none max-[359px]:w-9 select-none aria-disabled:opacity-40 sm:h-8 sm:w-8 ${
-                holdNext.seeking ? "text-violet" : ""
-              }`}
-            >
-              <svg {...icon} className="h-4 w-4">
-                <path d="M5 4l10 8-10 8z" />
-                <path d="M19 5v14" />
-              </svg>
-            </button>
+            <NextButton
+              hasNext={hasNext}
+              hold={holdNext}
+              className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:h-8 sm:w-8`}
+            />
 
             <button
               type="button"
@@ -572,24 +727,18 @@ export function MiniPlayer() {
             />
           </div>
 
-          {/* Телефон: третья строка — перемешивание, дорожка, режим. Во
-              второй места нет: пуск с переходами и четыре кнопки записи
-              занимают её до точки (326 из 327 на экране 375). Разрыв —
-              тот же приём, что после названия: на широком телефоне кнопки
-              иначе вскочили бы во вторую строку. */}
-          <span aria-hidden="true" className="order-6 h-0 w-full sm:hidden" />
+          {/* Телефон: третья строка — перемешивание, дорожка, режим.
+              Разрыв — тот же приём, что после названия: на широком телефоне
+              кнопки иначе вскочили бы во вторую строку. */}
+          <span aria-hidden="true" className="order-7 h-0 w-full sm:hidden" />
           <ShuffleButton
             on={shuffle}
             onToggle={player.toggleShuffle}
-            className={`${ctrl} order-7 h-9 w-9 sm:hidden`}
+            className={`${ctrl} order-8 h-10 w-9 sm:hidden`}
           />
-          {/* Дорожка и «Текст» — один ряд: третья строка мобильной раскладки
-              свободнее второй (там уже 326 из 327px на экране 375, см.
-              комментарий выше про перемешивание/дорожку/режим) — дорожка
-              достаточно тянется, чтобы отдать кнопке ~48px без переноса.
-              Рядом с дорожкой, а не у очереди (как в плане VED-248): очередь
-              стоит во второй строке, где места нет вовсе. */}
-          <div className="order-8 flex min-w-0 flex-1 items-center gap-1.5 sm:order-none sm:w-full sm:max-w-[380px] sm:flex-none">
+          {/* Дорожка и «Текст» — один ряд: дорожка тянется и отдаёт кнопке
+              ~48px без переноса. */}
+          <div className="order-9 flex min-w-0 flex-1 items-center gap-1 px-1 sm:order-none sm:w-full sm:max-w-[380px] sm:flex-none sm:gap-1.5 sm:px-0">
             <MusicPositionSlider
               className="flex min-w-0 flex-1 items-center gap-2"
               position={positionSeconds}
@@ -601,34 +750,30 @@ export function MiniPlayer() {
               className={`${ctrl} h-10 w-10 sm:h-8 sm:w-8`}
             />
             {/* Настройки плеера на телефоне (VED-388) — в строке дорожки:
-                это единственная строка, где есть чем поделиться, — дорожка
-                тянется. На `sm` и шире та же кнопка стоит справа, у очереди. */}
+                дорожка тянется, и ей есть чем поделиться. На `sm` и шире та
+                же кнопка стоит справа, у очереди. */}
             <SettingsButton
               open={panelTab !== null && panelTab !== "history"}
               onClick={() => openPanel("settings")}
-              className={`${ctrl} h-9 w-9 sm:hidden`}
+              className={`${ctrl} h-10 w-9 sm:hidden`}
             />
           </div>
           <PlayModeButton
             mode={playMode}
             onChange={player.setPlayMode}
-            className={`${ctrl} order-9 h-9 w-9 sm:hidden`}
+            className={`${ctrl} order-10 h-10 w-9 sm:hidden`}
           />
         </div>
 
         {/* Скорость, сердце, очередь, невидимый сеанс, громкость.
-            На телефоне остаются скорость, сердце, очередь и невидимый сеанс:
-            первые две — из макета, очередь — потому что список того, что
-            играет дальше, спрашивают именно с телефона, а на широкий экран и
-            на главную портала за ним не уйти, третья — потому что «сейчас
-            меня не видно» надо уметь нажать там же, где слушаешь. Не влезает
-            только громкость: на телефоне она системная.
+            На телефоне — в первой строке, у названия (VED-410: «перемести
+            кнопки, чтобы размер плеера не увеличивался, когда их
+            добавляешь»): ряд управления освобождается под вынесенные
+            кнопки. Громкость на телефоне системная и не рисуется.
 
-            `contents` на телефоне — тот же приём, что у управления с
-            дорожкой: коробка перестаёт быть коробкой, и две её половины
-            встают в разные строки полосы. Иначе шесть кнопок занимали первую
-            строку целиком и название записи сжималось в ноль. На `sm`
-            коробка снова коробка — правая колонка макета. */}
+            `contents` на телефоне у внешней коробки: её половины встают в
+            разные строки полосы. На `sm` коробка снова коробка — правая
+            колонка макета. */}
         {/* Ширина здесь только нижняя (`min-w`), хотя слева у названия она
             жёсткая. Жёсткая была и тут — ради симметрии макета, — но пять
             кнопок с ползунком громкости в 224px не помещаются, а
@@ -636,9 +781,8 @@ export function MiniPlayer() {
             скорости наезжал на «вперёд» и повтор. Теперь колонка берёт по
             содержимому, а середина ужимается — ей есть чем: дорожка тянется. */}
         <div className="contents sm:order-none sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:justify-end sm:gap-1 lg:min-w-56 lg:gap-1.5">
-          {/* Действия над записью — во второй строке, рядом с управлением:
-              они про то, что играет, и стоят там же, где пуск и перемотка. */}
-          <div className="order-5 flex shrink-0 items-center gap-0.5 min-[400px]:gap-1.5 sm:contents">
+          {/* Действия над записью. */}
+          <div className="order-2 ml-2 flex shrink-0 items-center gap-0 min-[400px]:gap-0.5 sm:ml-0 sm:contents">
             <button
               type="button"
               aria-label={`Скорость ${rate.toFixed(2).replace(/0$/, "")}×, сменить`}
@@ -646,10 +790,13 @@ export function MiniPlayer() {
                 player.setRate(RATES[(RATES.indexOf(rate as 1) + 1) % RATES.length])
               }
               // Видно и на телефоне: лекцию слушают на 1.5×, и это ровно тот
-              // случай, когда переключатель нужен под рукой.
-              className="flex h-8 items-center rounded-full border border-glass-brd px-2.5 max-[359px]:px-2 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7"
+              // случай, когда переключатель нужен под рукой. Высота цели —
+              // 40, как у соседей; рамка чипа рисуется внутри неё.
+              className="group flex h-10 shrink-0 items-center px-0.5 text-[11px] font-semibold text-text-1 hover:text-text-0 sm:h-7 sm:px-0"
             >
-              {rate.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}×
+              <span className="flex h-7 items-center rounded-full border border-glass-brd px-2 max-[359px]:px-1.5 sm:px-2.5">
+                {rate.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}×
+              </span>
             </button>
 
             <button
@@ -657,7 +804,7 @@ export function MiniPlayer() {
               aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
               aria-pressed={isFavorite}
               onClick={player.toggleFavorite}
-              className={`${ctrl} h-10 w-10 max-[359px]:w-9 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
+              className={`${ctrl} h-10 w-8 min-[360px]:w-9 sm:h-8 sm:w-8 ${isFavorite ? "text-magenta" : "text-text-2"}`}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -673,7 +820,11 @@ export function MiniPlayer() {
               </svg>
             </button>
 
-            <div className="relative">
+            {/* Очередь. Панель на телефоне якорится от всей полосы
+                (`static` у обёртки, `relative` у полосы), а не от кнопки:
+                кнопка теперь в первой строке, и панель шириной в экран от её
+                правого края уезжала бы за левый край. */}
+            <div className="max-sm:static sm:relative">
               <button
                 type="button"
                 aria-label={
@@ -685,16 +836,21 @@ export function MiniPlayer() {
                   setPanelTab(null);
                   setQueueOpen((was) => !was);
                 }}
-                // 40 точек на телефоне — как у соседних кнопок ряда: цель
-                // меньше 24×24 не проходит по WCAG 2.5.8, а 32 из макета
-                // рассчитаны на мышь.
-                className={`${ctrl} h-10 w-10 max-[359px]:w-9 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
+                className={`${ctrl} h-10 w-8 min-[360px]:w-9 sm:h-8 sm:w-8 ${queueOpen ? "text-violet" : "text-text-2"}`}
               >
                 <svg {...icon} className="h-4 w-4">
                   <path d="M3 6h11M3 12h8M3 18h8M17 12v8M13 16h8" />
                 </svg>
               </button>
-              {queueOpen && <MusicQueuePanel onClose={() => setQueueOpen(false)} />}
+              {/* На телефоне — нулевая по высоте опора над полосой с полями
+                  по 12 точек: полоса там во всю ширину, и панель у её
+                  правого края прилипала к краю экрана. С `sm` опоры нет
+                  (`contents`), панель якорится от обёртки кнопки. */}
+              {queueOpen && (
+                <div className="pointer-events-none absolute inset-x-3 bottom-full sm:contents">
+                  <MusicQueuePanel onClose={() => setQueueOpen(false)} />
+                </div>
+              )}
             </div>
 
             <SettingsButton
@@ -724,7 +880,7 @@ export function MiniPlayer() {
               }
               aria-pressed={isPrivateSession}
               onClick={player.togglePrivateSession}
-              className={`${ctrl} h-10 w-10 max-[359px]:w-9 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
+              className={`${ctrl} h-10 w-8 min-[360px]:w-9 sm:h-8 sm:w-8 ${isPrivateSession ? "text-gold" : "text-text-2"}`}
             >
               <svg {...icon} className="h-4 w-4">
                 {isPrivateSession ? (
@@ -774,44 +930,65 @@ export function MiniPlayer() {
             </label>
 
             {/* Отсчёт сон-таймера: не кнопка, а состояние. Появляется, только
-                когда таймер заведён, поэтому места в обычной полосе не
-                занимает и наложения не возвращает. Ставят таймер на карточке
-                записи. */}
-            <MusicSleepCountdown />
+                когда таймер заведён. На телефоне он во второй строке, у
+                кнопок положения полосы: первая занята до точки. */}
+            <span className="hidden sm:contents">
+              <MusicSleepCountdown />
+            </span>
           </div>
 
-          {/* Свернуть и закрыть — последними в группе, у самого края: это
-              действия над самой полосой, а не над записью, и ставить их
-              вперемешку с сердцем и скоростью значит путать два разных
-              предмета. На телефоне они по той же причине остаются в первой
-              строке — у названия записи, а не у кнопок управления. */}
-          <div className="order-2 flex shrink-0 items-center gap-1 sm:contents">
+          {/* Действия над самой полосой. На телефоне «свернуть» и «закрыть»
+              — в первой строке, у края, а «в пузырь» и «поднять» — в конце
+              второй: первой строке не хватает ширины на все шесть кнопок
+              записи и четыре полосы. С `sm` — все четыре последними в
+              правой колонке. */}
+          <div className="contents">
             <button
               type="button"
               aria-label="Свернуть плеер"
               aria-expanded={true}
               onClick={toggleCollapsed}
-              className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
+              className={`${ctrl} order-2 h-10 w-8 text-text-2 min-[360px]:w-9 sm:order-none sm:h-8 sm:w-8`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M6 9l6 6 6-6" />
               </svg>
             </button>
 
-            {/* Между «свернуть» и «закрыть» — так в карточке VED-194, и так
-                же в свёрнутом виде: кнопка про положение полосы, а не про
-                запись, и стоит с другими такими же. */}
-            <LiftButton
-              lifted={lifted}
-              onToggle={toggleLifted}
-              className={`${ctrl} h-9 w-9 sm:h-8 sm:w-8`}
-            />
+            <span className="order-6 ml-auto flex shrink-0 items-center sm:contents">
+              <span className="contents sm:hidden">
+                <MusicSleepCountdown />
+              </span>
+              {/* «Свернуть в плавающую кнопку» (VED-366). */}
+              <button
+                ref={toBubbleRef}
+                type="button"
+                aria-label="Свернуть плеер в плавающую кнопку"
+                title="Свернуть в плавающую кнопку"
+                onClick={toBubble}
+                // На `sm`–`xl` в однострочной полосе ей нет места: правая
+                // колонка наезжала на ряд управления. Пузырь — про телефон
+                // («в левую часть экрана смартфона»), на планшете полосу
+                // сворачивают кнопкой «Свернуть».
+                className={`${ctrl} h-11 w-8 text-text-2 min-[400px]:w-9 sm:hidden xl:flex xl:h-8 xl:w-8`}
+              >
+                <PictureInPicture2 aria-hidden className="h-4 w-4" />
+              </button>
+
+              {/* «Поднять/опустить» (VED-194) — кнопка про положение
+                  полосы, стоит с другими такими же. */}
+              <LiftButton
+                lifted={lifted}
+                onToggle={toggleLifted}
+                className={`${ctrl} h-11 w-8 min-[400px]:w-9 sm:h-8 sm:w-8`}
+              />
+            </span>
 
             <button
               type="button"
               aria-label="Закрыть плеер"
               onClick={player.close}
-              className={`${ctrl} h-9 w-9 text-text-2 sm:h-8 sm:w-8`}
+              className={`${ctrl} order-2 h-10 w-8 text-text-2 min-[360px]:w-9 sm:order-none sm:h-8 sm:w-8`}
             >
               <svg {...icon} className="h-4 w-4">
                 <path d="M6 6l12 12M18 6L6 18" />
@@ -820,14 +997,15 @@ export function MiniPlayer() {
           </div>
         </div>
 
-        {/* Вынесенные кнопки (VED-388): одна строка под полосой. Цели по 44
-            точки уже `lg` — это пальцы, а не мышь; шире — 36, как у
-            соседних кнопок полосы. */}
+        {/* Вынесенные кнопки (VED-388). На телефоне — во второй строке,
+            справа от пуска (VED-410): строка там есть всегда, и полоса от
+            вынесенных кнопок не растёт. От `sm` — своей строкой под полосой:
+            в однострочной раскладке для них нет места. */}
         {pinned !== "none" && (
           <div
             role="group"
             aria-label="Вынесенные кнопки"
-            className={`order-10 flex w-full items-center justify-center gap-2 ${
+            className={`order-5 ml-1 flex shrink-0 items-center gap-0 min-[400px]:ml-2 min-[400px]:gap-0.5 sm:order-10 sm:ml-0 sm:w-full sm:justify-center sm:gap-2 ${
               pinned === "narrow" ? "lg:hidden" : ""
             }`}
           >
@@ -837,7 +1015,7 @@ export function MiniPlayer() {
                   type="button"
                   aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
                   onClick={() => seekStep(-1)}
-                  className={`${ctrl} h-11 min-w-11 px-2 lg:h-9 lg:min-w-9`}
+                  className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
                 >
                   <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
                 </button>
@@ -845,7 +1023,7 @@ export function MiniPlayer() {
                   type="button"
                   aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
                   onClick={() => seekStep(1)}
-                  className={`${ctrl} h-11 min-w-11 px-2 lg:h-9 lg:min-w-9`}
+                  className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
                 >
                   <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
                 </button>
@@ -854,14 +1032,14 @@ export function MiniPlayer() {
             {prefs.showBookmark && (
               <BookmarkButton
                 onClick={quickBookmark}
-                className={`${ctrl} h-11 w-11 text-text-2 lg:h-9 lg:w-9`}
+                className={`${ctrl} h-11 w-9 text-text-2 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
               />
             )}
             {prefs.showHistory && (
               <HistoryButton
                 open={panelTab === "history"}
                 onClick={() => openPanel("history")}
-                className={`${ctrl} h-11 w-11 lg:h-9 lg:w-9`}
+                className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
               />
             )}
           </div>
@@ -884,6 +1062,82 @@ export function MiniPlayer() {
         {announcement}
       </p>
     </div>
+  );
+}
+
+type HoldSeek = ReturnType<typeof useHoldSeek>;
+
+/**
+ * «Предыдущая запись» с перемоткой удержанием. Одна кнопка на оба вида
+ * полосы: в свёрнутом она появилась по VED-368.
+ *
+ * `aria-disabled`, а не `disabled`: перемотка относится к играющей записи,
+ * а не к очереди, и на единственной записи настоящий `disabled` отнял бы
+ * вместе с переходом и её — отключённая кнопка не получает событий
+ * указателя вовсе.
+ */
+function PrevButton({
+  hasPrev,
+  hold,
+  className,
+}: {
+  hasPrev: boolean;
+  hold: HoldSeek;
+  className: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={
+        hasPrev
+          ? "Предыдущая запись, удержание — перемотка назад"
+          : "Перемотка назад удержанием"
+      }
+      title="Нажать — предыдущая запись, удержать — перемотка назад"
+      aria-disabled={!hasPrev}
+      {...hold.props}
+      className={`${className} touch-none select-none aria-disabled:opacity-40 ${
+        hold.seeking ? "text-violet" : ""
+      }`}
+    >
+      <svg {...icon} className="h-4 w-4">
+        <path d="M19 4L9 12l10 8z" />
+        <path d="M5 5v14" />
+      </svg>
+    </button>
+  );
+}
+
+/** «Следующая запись» с перемоткой удержанием. Пара к `PrevButton`. */
+function NextButton({
+  hasNext,
+  hold,
+  className,
+}: {
+  hasNext: boolean;
+  hold: HoldSeek;
+  className: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={
+        hasNext
+          ? "Следующая запись, удержание — перемотка вперёд"
+          : "Перемотка вперёд удержанием"
+      }
+      title="Нажать — следующая запись, удержать — перемотка вперёд"
+      aria-disabled={!hasNext}
+      {...hold.props}
+      className={`${className} touch-none select-none aria-disabled:opacity-40 ${
+        hold.seeking ? "text-violet" : ""
+      }`}
+    >
+      <svg {...icon} className="h-4 w-4">
+        <path d="M5 4l10 8-10 8z" />
+        <path d="M19 5v14" />
+      </svg>
+    </button>
   );
 }
 

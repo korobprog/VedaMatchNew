@@ -333,6 +333,7 @@ model User {
   gitabaseAnnotations                GitabaseAnnotation[]
   gitabaseSyncMutations              GitabaseSyncMutation[]
   motivationPreference               MotivationPreference?
+  motivationFeedPositions            MotivationFeedPosition[]
   motivationFavorites                MotivationFavorite[]
   motivationViews                    MotivationView[]
   motivationLikes                    MotivationLike[]
@@ -461,6 +462,7 @@ model User {
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
+  blogFavorites                      BlogFavorite[]
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -679,6 +681,7 @@ model MotivationPost {
   views            MotivationView[]
   likes            MotivationLike[]
   reports          MotivationReport[]
+  feedPositions    MotivationFeedPosition[]
   moderationAudits MotivationModerationAudit[]
 
   @@index([profileType, audienceTrack, status, publishedAt])
@@ -901,6 +904,22 @@ model MotivationPreference {
   homeCategorySlug String?                 @db.VarChar(120)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
+}
+
+/// Где человек остановился в ленте раздела или источника (VED-432): кнопки
+/// «Вдохновения» на главной открывают такую ленту с этого поста, а новичка —
+/// с начала. Одна строка на пару «человек — лента»; личная лента, избранное и
+/// «Вперемешку» позиции не помнят. Ключ собирает `feedPositionKey`.
+model MotivationFeedPosition {
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedKey   String         @db.VarChar(400)
+  postId    String
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  updatedAt DateTime       @updatedAt
+
+  @@id([userId, feedKey])
+  @@index([postId])
 }
 
 /// Жалоба на рилс участника. Одна на пару «человек — пост»: повторные нажатия
@@ -2180,14 +2199,14 @@ model LibraryShlokaImage {
 /// Подписка браузера на веб-пуши. У одного пользователя их несколько:
 /// телефон, ноутбук, планшет. Ключ подписки — endpoint, его выдаёт браузер.
 model PushSubscription {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userAgent String?
-  createdAt DateTime @default(now())
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
   /// Когда служба доставки браузера последний раз ПРИНЯЛА пуш (VED-314).
   /// «Приняла» — не «человек увидел»: браузер, который не открывали месяц,
   /// принимает пуш так же, как живой. Но пустая отметка при накопленных
@@ -2213,20 +2232,20 @@ model PushSubscription {
 /// доставки (FCM, позже RuStore) и сам меняет при переустановке, поэтому
 /// ключ — токен, а не пара «пользователь и устройство».
 model NotificationDevice {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(uuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Служба доставки: `fcm` или `rustore`.
-  provider    String
+  provider           String
   /// `android` или `ios`.
-  platform    String
-  token       String   @unique
+  platform           String
+  token              String    @unique
   /// Сборка приложения, например `ru-site`: по ней видно, откуда люди ставят.
-  appVariant  String?
+  appVariant         String?
   /// Приложение умеет нативный экран звонка по data-пушу FCM (VED-220):
   /// такому устройству входящий звонок шлётся data-only, а не обычным
   /// пушем с уведомлением — иначе звонок звонил бы дважды.
-  nativeCalls Boolean  @default(false)
+  nativeCalls        Boolean   @default(false)
   /// versionCode установленной сборки: приложение присылает его при каждой
   /// регистрации токена. `null` — сборка старше этого поля (или не Android).
   /// По нему сервер решает, звать ли телефон обновиться (сборки `*-site`).
@@ -2235,16 +2254,16 @@ model NotificationDevice {
   /// «Доступна новая версия». Один пуш на выпуск: отметка ставится до
   /// отправки условным `updateMany`, поэтому два воркера одно не пришлют.
   updatePromptedCode Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   /// Те же отметки живости, что у веб-подписки (VED-314): служба доставки
   /// приняла пуш, отказала, сколько отказов подряд, когда приложение
   /// подтвердило токен и когда правило сочло устройство мёртвым.
-  lastSuccessAt DateTime?
-  lastFailureAt DateTime?
-  failureCount  Int       @default(0)
-  lastSeenAt    DateTime?
-  deadSince     DateTime?
+  lastSuccessAt      DateTime?
+  lastFailureAt      DateTime?
+  failureCount       Int       @default(0)
+  lastSeenAt         DateTime?
+  deadSince          DateTime?
 
   @@index([userId])
 }
@@ -2302,20 +2321,20 @@ model NotificationPreference {
 /// удаляется при следующем открытии списка, см. NotificationsService.listInbox.
 /// Живёт отдельно от веб-пуша: колокольчик работает и без разрешения браузера.
 model NotificationItem {
-  id        String    @id @default(uuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  body      String
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  body         String
   /// Куда ведёт клик по уведомлению — тот же путь, что и у пуша.
-  url       String
+  url          String
   /// Категория из NotificationPreference: chat | calls | connections | support | transits.
-  category  String
+  category     String
   /// Значок состояния в ленте (VED-272): in_progress | testing | done | rework.
   /// null — состояния нет или колонка доски названа не одним из этих четырёх
   /// слов. Строкой, а не энумом: набор живёт в @vedamatch/shared и меняется
   /// вместе с клиентами, а старые строки в базе гасит parseNotificationMark().
-  mark      String?
+  mark         String?
   /// Значок на случай, когда у задачи нет состояния (VED-298): `comment` у
   /// уведомления о комментарии — «Комментарий». Переезд карточки переписывает
   /// `mark`, а эту колонку не трогает: комментарий остаётся комментарием.
@@ -2327,19 +2346,19 @@ model NotificationItem {
   /// Пока ключ ставит только смена статуса задачи «Работы»; `null` — обычное
   /// уведомление, каждое своей строкой. Уникальность по паре с `userId`:
   /// Postgres не сравнивает `NULL`, так что обычным уведомлениям она не мешает.
-  threadKey String?
+  threadKey    String?
   /// Дата новости. У ветки — дата последнего обновления: подъём строки в
   /// ленте переставляет её, и порядок VED-153 (`inbox-order.ts`) работает как
   /// есть, без отдельного поля сортировки.
-  createdAt DateTime  @default(now())
-  readAt    DateTime?
+  createdAt    DateTime  @default(now())
+  readAt       DateTime?
   /// Последний контакт человека с уведомлением (VED-404): открыл, отметил
   /// прочитанным или обратно, закрыл задачу, о которой оно. По нему
   /// упорядочена «История уведомлений» — прочитанное в порядке «с чем я имел
   /// дело последним», а не в порядке прихода. Прочитанное без контакта не
   /// бывает: каждая запись `readAt` пишет и эту колонку (`inbox-history.ts`).
   /// Подъём строки ветки (VED-320) её не трогает — это событие, а не контакт.
-  contactAt DateTime?
+  contactAt    DateTime?
 
   @@unique([userId, threadKey])
   @@index([userId, readAt])
@@ -4290,17 +4309,17 @@ model ChatConversation {
   /// Официальный канал VedaMatch: один на портал, в нём подписаны все участники,
   /// пишут администраторы портала. Единственность держит частичный уникальный
   /// индекс из миграции chat_official_channel (см. docs/prisma-raw-sql-objects.md).
-  official  Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  calls      ChatCall[]
-  groupCalls ChatGroupCall[]
+  official       Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  calls          ChatCall[]
+  groupCalls     ChatGroupCall[]
   /// Ссылка быстрой конференции, если беседу завели ею. Одна на беседу:
   /// комната и её дверь — одно и то же.
   conferenceLink ChatConferenceLink?
-  members   ChatMember[]
-  messages  ChatMessage[]
-  reports   ChatReport[]
+  members        ChatMember[]
+  messages       ChatMessage[]
+  reports        ChatReport[]
 
   @@index([contextService, contextId])
   @@index([kind, lastMessageAt])
@@ -4361,14 +4380,14 @@ model ChatMessage {
   /// именем он всё равно не сможет, а подпись «переслано от кого» нужна.
   forwardedFrom String?
 
-  attachments ChatAttachment[]
-  reactions   ChatMessageReaction[]
-  reports     ChatReport[]
-  views       ChatMessageView[]
-  pinnedIn    ChatConversation[]    @relation("ChatPinnedMessage")
+  attachments   ChatAttachment[]
+  reactions     ChatMessageReaction[]
+  reports       ChatReport[]
+  views         ChatMessageView[]
+  pinnedIn      ChatConversation[]    @relation("ChatPinnedMessage")
   /// Пост официального канала, из которого сообщение вышло (новость,
   /// выпуск приложения): по нему правка новости правит сообщение.
-  officialPosts ChatOfficialPost[] @relation("ChatOfficialPostMessage")
+  officialPosts ChatOfficialPost[]    @relation("ChatOfficialPostMessage")
 
   @@index([conversationId, createdAt])
   @@index([authorId])
@@ -5696,37 +5715,54 @@ model WorkColumn {
   /// Попадание сюда закрывает задачу: проставляется completedAt.
   isDone   Boolean   @default(false)
 
-  tasks WorkTask[]
+  tasks        WorkTask[] @relation("WorkTaskColumn")
+  /// Задачи, для которых эта колонка — тематический раздел (VED-430), пока
+  /// сами они стоят в колонке статуса («Тестерование», «Выполнено»).
+  sectionTasks WorkTask[] @relation("WorkTaskSection")
 
   @@index([boardId, position])
 }
 
 model WorkTask {
-  id          String           @id @default(uuid())
+  id              String           @id @default(uuid())
   /// Продублирован намеренно: счётчик номеров и выборка «все мои задачи по
   /// всем доскам среды» иначе требуют join через доску на каждый запрос.
-  spaceId     String
-  space       WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  boardId     String
-  board       WorkBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  columnId    String
-  column      WorkColumn       @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  number      Int
-  title       String
-  description String           @default("")
+  spaceId         String
+  space           WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  boardId         String
+  board           WorkBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  columnId        String
+  column          WorkColumn       @relation("WorkTaskColumn", fields: [columnId], references: [id], onDelete: Cascade)
+  /// Тематический раздел задачи (VED-430): «РАБОТА», «МУЗЫКА». Раздел и статус
+  /// — разные вещи: колонка статуса («Тестерование», «Выполнено») говорит,
+  /// в каком состоянии задача, а раздел — о чём она. Пока задача стоит в
+  /// колонке раздела, здесь та же колонка; уехала в статус — здесь остаётся
+  /// раздел, откуда уехала. `null` — раздел неизвестен (задачу завели прямо в
+  /// колонке статуса).
+  sectionColumnId String?
+  sectionColumn   WorkColumn?      @relation("WorkTaskSection", fields: [sectionColumnId], references: [id], onDelete: SetNull)
+  number          Int
+  title           String
+  description     String           @default("")
   /// Дробный индекс порядка внутри колонки: перенос меняет одну строку, а не
   /// всю колонку. См. work-position.ts.
-  position    Float            @default(0)
-  priority    WorkTaskPriority @default(normal)
-  dueAt       DateTime?
-  assigneeId  String?
-  assignee    User?            @relation("WorkTasksAssigned", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdById String?
-  createdBy   User?            @relation("WorkTasksCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  completedAt DateTime?
-  archivedAt  DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  position        Float            @default(0)
+  priority        WorkTaskPriority @default(normal)
+  dueAt           DateTime?
+  assigneeId      String?
+  assignee        User?            @relation("WorkTasksAssigned", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?            @relation("WorkTasksCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  completedAt     DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  /// Последняя правка человеком (VED-421, вид «По правке»): поля карточки,
+  /// перенос, комментарий, чек-лист, вложения. Не `updatedAt`: тот двигают и
+  /// служебные записи — перенумерация колонки, флаг «завершающая» на всю
+  /// колонку, — и «По правке» всплывали бы задачи, которых никто не трогал.
+  /// `null` у задач до VED-421 без истории — тогда считается `createdAt`.
+  editedAt        DateTime?
 
   labels      WorkTaskLabel[]
   checklist   WorkChecklistItem[]
@@ -5738,6 +5774,7 @@ model WorkTask {
 
   @@unique([spaceId, number])
   @@index([columnId, position])
+  @@index([sectionColumnId])
   @@index([boardId, archivedAt])
   @@index([assigneeId, dueAt])
 }
@@ -5814,23 +5851,23 @@ model WorkAttachment {
 /// История: «кто перенёс в Готово и когда». Первый вопрос второй недели, и
 /// задним числом он не восстанавливается — поэтому пишется с первого дня.
 model WorkActivity {
-  id        String           @id @default(uuid())
-  spaceId   String
-  space     WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  taskId    String?
-  task      WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  actorId   String?
-  actor     User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  id           String           @id @default(uuid())
+  spaceId      String
+  space        WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  taskId       String?
+  task         WorkTask?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId      String?
+  actor        User?            @relation("WorkActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
   /// Человек, чьим ключом действовал агент. Заполнено только у записей
   /// ИИ-агента: аккаунт у него один на всех, и без этого поля при двух
   /// подключённых помощниках нельзя ответить, чья сессия это сделала.
   onBehalfOfId String?
-  onBehalfOf   User?          @relation("WorkActivityOnBehalf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
-  kind      WorkActivityKind
+  onBehalfOf   User?            @relation("WorkActivityOnBehalf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
+  kind         WorkActivityKind
   /// Подробности события: старая и новая колонка, имя назначенного, срок.
   /// Формулировку собирает читатель, здесь — факты.
-  payload   Json             @default("{}")
-  createdAt DateTime         @default(now())
+  payload      Json             @default("{}")
+  createdAt    DateTime         @default(now())
 
   @@index([taskId, createdAt])
   @@index([spaceId, createdAt])
@@ -6939,7 +6976,6 @@ model BookmarksEntry {
   @@index([userId, createdAt(sort: Desc)])
 }
 
-
 // ===== Blog service («Блог-лента», VED-238, VED-116) =====
 
 /// Пост блог-ленты портала: крупная картинка, короткий заголовок и текст.
@@ -6977,15 +7013,16 @@ model BlogPost {
   /// каждый пост ленты — нет.
   repostCount Int        @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   /// Когда пост правили (VED-321). Отдельное поле, а не `updatedAt`: тот
   /// меняется от любой записи в строку — закрепления, срока в ленте,
   /// счётчика репостов, — и отметка «изменено» появлялась бы у поста,
   /// которого автор не трогал.
   editedAt  DateTime?
 
-  images BlogPostImage[]
+  images    BlogPostImage[]
+  favorites BlogFavorite[]
 
   @@index([pinned, createdAt(sort: Desc)])
   @@index([feedUntil])
@@ -6996,24 +7033,55 @@ model BlogPost {
 /// Картинка поста. Лежит в публичном бакете — карточки ленты уходят в SSR и
 /// обязаны кэшироваться, как у объявлений и Рынка. Порядок отдельным полем:
 /// перестановка не должна переписывать объекты в хранилище.
+///
+/// Ролики (VED-116) живут в той же таблице, а не в отдельной: у поста одна
+/// карусель, в которой фото и ролики стоят вперемешку, и порядок, правка
+/// (`keepImageIds`) и предел «десять вложений» у них общие.
 model BlogPostImage {
-  id         String   @id @default(uuid())
-  postId     String
-  post       BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  storageKey String
-  url        String
-  width      Int?
-  height     Int?
-  sizeBytes  Int?
-  position   Int      @default(0)
-  createdAt  DateTime @default(now())
+  id          String        @id @default(uuid())
+  postId      String
+  post        BlogPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  kind        BlogMediaKind @default(photo)
+  storageKey  String
+  url         String
+  width       Int?
+  height      Int?
+  sizeBytes   Int?
+  /// Только у ролика: кадр-обложка, снятый сервером (ffmpeg → sharp).
+  posterKey   String?
+  posterUrl   String?
+  /// Только у ролика: длительность, замеренная сервером, — браузеру не верим.
+  durationSec Int?
+  position    Int           @default(0)
+  createdAt   DateTime      @default(now())
 
   @@index([postId, position])
 }
 
+/// Вид вложения поста. Всё, что было до роликов, — фото, отсюда умолчание.
+enum BlogMediaKind {
+  photo
+  video
+}
+
+/// «Избранное» участника (VED-238): пост, отмеченный звёздочкой, виден в
+/// ленте по кнопке «Избранное». Своё у каждого, поэтому отдельная таблица, а
+/// не флаг поста. Cascade в обе стороны: удалённый пост уходит из избранного
+/// у всех, а удалённый аккаунт — со своим избранным.
+model BlogFavorite {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+  @@index([postId])
+}
+
 /// Единственная строка настроек сервиса (id всегда "global").
 model BlogSettings {
-  id String @id @default("global")
+  id                String   @id @default("global")
   /// Срок нахождения поста в ленте по умолчанию, в часах. 0 — без срока.
   feedLifetimeHours Int      @default(72)
   updatedAt         DateTime @updatedAt
@@ -7201,13 +7269,13 @@ model WellnessProductCheck {
   /// отклонена. У принятой — пусто.
   reasons String[]
 
-  model        String?
-  inputTokens  Int     @default(0)
-  outputTokens Int     @default(0)
-  searchCalls  Int     @default(0)
+  model         String?
+  inputTokens   Int     @default(0)
+  outputTokens  Int     @default(0)
+  searchCalls   Int     @default(0)
   /// Оценка расходов в миллионных долях доллара: у одной проверки она меньше
   /// цента, и в целых центах дневной бюджет не складывался бы.
-  costUsdMicros Int @default(0)
+  costUsdMicros Int     @default(0)
 
   finishedAt DateTime?
   createdAt  DateTime  @default(now())

@@ -290,6 +290,8 @@ export default async function Home({
       ? {
           [motivationService.id]: {
             headerExtra: <MotivationHomeButtons buttons={motivationHomeButtons} />,
+            // Сама карточка — лента «Мудрости мира» с места остановки (VED-432).
+            ...(motivationHomeButtons.card ? { href: motivationHomeButtons.card } : {}),
             ...(motivationQuickAccess.quote
               ? {
                   extra: (

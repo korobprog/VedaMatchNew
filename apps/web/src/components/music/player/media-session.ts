@@ -16,7 +16,7 @@ export interface MediaSessionMetadata {
   title: string;
   artist: string;
   album: string;
-  artwork: { src: string; sizes: string; type: string }[];
+  artwork: { src: string; sizes: string; type?: string }[];
 }
 
 /**
@@ -33,12 +33,47 @@ export function buildMediaMetadata(track: MusicTrackDto): MediaSessionMetadata {
     // честная строка, чем пустая полоса под названием.
     artist: track.artist?.name ?? "Исполнитель не указан",
     album: track.album?.title ?? "VedaMatch",
-    // Без обложки массив пустой: система нарисует свою заглушку, а ссылка в
-    // никуда дала бы битую картинку на экране блокировки.
-    artwork: track.coverUrl
-      ? [{ src: track.coverUrl, sizes: "512x512", type: "image/jpeg" }]
-      : [],
+    artwork: buildArtwork(track.coverUrl),
   };
+}
+
+/**
+ * Значок портала — обложка записи без своей (VED-393). Раньше массив был
+ * пустым, и Android рисовал на экране блокировки серую ноту: карточку не
+ * отличить от чужого приложения. Файл из манифеста PWA: он публичный
+ * (`proxy.ts` пропускает `.png`) и уже лежит в кэше установленного
+ * приложения.
+ */
+export const FALLBACK_ARTWORK = "/icons/icon-512.png";
+
+/**
+ * Тип картинки по расширению. Жёсткий `image/jpeg` на обложке в WebP или
+ * PNG — повод для системы отбросить картинку как несоответствующую; не
+ * знаем тип — не пишем его вовсе, система определит сама.
+ */
+export function artworkType(src: string): string | undefined {
+  const path = src.split(/[?#]/, 1)[0].toLowerCase();
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".avif")) return "image/avif";
+  return undefined;
+}
+
+/**
+ * Обложка для системной карточки. Размеров несколько, одна и та же ссылка:
+ * Android выбирает картинку по `sizes` под свой экран — уведомление 96–128,
+ * экран блокировки 512, — и при единственном «512x512» на части прошивок
+ * уведомление оставалось без картинки.
+ */
+export function buildArtwork(
+  coverUrl: string | null | undefined,
+): MediaSessionMetadata["artwork"] {
+  const src = coverUrl || FALLBACK_ARTWORK;
+  const type = artworkType(src);
+  return ["96x96", "192x192", "512x512"].map((sizes) =>
+    type ? { src, sizes, type } : { src, sizes },
+  );
 }
 
 export interface MediaSessionHandlers {
@@ -112,6 +147,10 @@ export function applyMediaHandlers(
 
   set("play", () => handlers.play());
   set("pause", () => handlers.pause());
+  // «Стоп» из шторки уведомлений Android: без обработчика кнопка там не
+  // появлялась или ничего не делала. Останавливаем паузой, а не закрытием
+  // плеера: запись и место в ней остаются, как после паузы на полосе.
+  set("stop", () => handlers.pause());
   set("nexttrack", () => handlers.nextTrack());
   set("previoustrack", () => handlers.previousTrack());
   set("seekbackward", (details) =>

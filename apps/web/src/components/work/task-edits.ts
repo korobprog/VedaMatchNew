@@ -27,8 +27,14 @@ import { normalizeTaskTitle, titleToSave } from "./task-title";
 export interface TaskDraft {
   title: string;
   description: string;
-  /** Раздел доски: перенос из окна — та же правка, что и остальные. */
+  /** Колонка доски — раздел или статус: перенос из окна — та же правка. */
   columnId: string;
+  /**
+   * Раздел задачи (VED-430). У задачи в разделе совпадает с `columnId`, у
+   * задачи в статусе — раздел, откуда она пришла. Меняется своим списком,
+   * отдельно от статуса.
+   */
+  sectionId: string | null;
   assigneeId: string | null;
   priority: WorkTaskPriority;
   /**
@@ -44,13 +50,20 @@ export interface TaskDraft {
 export function draftFromTask(
   task: Pick<
     WorkTaskDto,
-    "title" | "description" | "columnId" | "assignee" | "priority" | "dueAt"
+    | "title"
+    | "description"
+    | "columnId"
+    | "sectionId"
+    | "assignee"
+    | "priority"
+    | "dueAt"
   >,
 ): TaskDraft {
   return {
     title: task.title,
     description: task.description,
     columnId: task.columnId,
+    sectionId: task.sectionId ?? null,
     assigneeId: task.assignee?.userId ?? null,
     priority: task.priority,
     due: dueToInput(task.dueAt),
@@ -63,6 +76,7 @@ export function hasTaskEdits(saved: TaskDraft, draft: TaskDraft): boolean {
     normalizeTaskTitle(draft.title) !== saved.title ||
     draft.description !== saved.description ||
     draft.columnId !== saved.columnId ||
+    draft.sectionId !== saved.sectionId ||
     draft.assigneeId !== saved.assigneeId ||
     draft.priority !== saved.priority ||
     draft.due !== saved.due
@@ -86,8 +100,13 @@ export function taskEditsProblem(
 export interface PendingTaskEdits {
   /** Поля карточки одним запросом; `null` — менять нечего. */
   update: UpdateWorkTaskRequest | null;
-  /** Новый раздел; `null` — карточка остаётся, где была. */
+  /** Новая колонка; `null` — карточка остаётся, где была. */
   columnId: string | null;
+  /**
+   * Раздел, выбранный вместе с переносом (VED-430); `undefined` — раздел не
+   * меняли, сервер решит сам по колонке отъезда.
+   */
+  moveSectionId?: string | null;
 }
 
 /**
@@ -116,7 +135,15 @@ export function pendingTaskEdits(
     if (dueAt !== undefined) update.dueAt = dueAt;
   }
   const columnId = draft.columnId !== saved.columnId ? draft.columnId : null;
+  const sectionChanged = draft.sectionId !== saved.sectionId;
+  // Раздел без переезда — правка поля; вместе с переездом — часть переноса:
+  // иначе перенос в статус перезаписал бы раздел колонкой отъезда.
+  if (sectionChanged && !columnId) update.sectionColumnId = draft.sectionId;
   const hasUpdate = Object.keys(update).length > 0;
   if (!hasUpdate && !columnId) return null;
-  return { update: hasUpdate ? update : null, columnId };
+  return {
+    update: hasUpdate ? update : null,
+    columnId,
+    ...(columnId && sectionChanged ? { moveSectionId: draft.sectionId } : {}),
+  };
 }

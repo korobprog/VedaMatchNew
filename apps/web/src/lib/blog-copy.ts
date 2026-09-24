@@ -49,7 +49,7 @@ export function postLink(
 ): string | null {
   const trimmed = origin?.trim();
   if (!trimmed) return null;
-  return `${trimmed.replace(/\/$/, "")}/blog?post=${encodeURIComponent(post.id)}`;
+  return `${trimmed.replace(/\/$/, "")}/blog/posts/${encodeURIComponent(post.id)}`;
 }
 
 function block(

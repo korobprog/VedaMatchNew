@@ -60,7 +60,7 @@ export function ReelsChrome({
           id="reels-sections"
           className="absolute right-2 top-14 z-50 w-60 rounded-2xl border border-white/15 bg-black/80 p-3 backdrop-blur-lg"
         >
-          <MotivationNav active="feed" isAdmin={isAdmin} compact />
+          <MotivationNav active="feed" isAdmin={isAdmin} compact reelsMenu />
 
           {/* Полноэкранная лента шапки не показывает, а число «а много ли тут
               вообще» спрашивают именно здесь — в единственном месте, где

@@ -42,7 +42,12 @@ export const WORK_COLUMN_NAME_MAX = 40;
 export const WORK_TASK_TITLE_MAX = 200;
 export const WORK_TASK_DESCRIPTION_MAX = 10_000;
 export const WORK_COMMENT_MAX = 4000;
-export const WORK_CHECKLIST_TEXT_MAX = 200;
+/**
+ * Пункт чек-листа (VED-375): 2000, а не 200. Заказчику не хватало места, и он
+ * заводил следующий пункт со словом «ПРОДОЛЖЕНИЕ». Длинный пункт в карточке
+ * свёрнут до нескольких строк и раскрывается кнопкой «Далее».
+ */
+export const WORK_CHECKLIST_TEXT_MAX = 2000;
 export const WORK_LABEL_NAME_MAX = 24;
 
 /** Сколько колонок и досок терпит одна среда. Предел от абсурда, не от жадности. */
@@ -178,7 +183,9 @@ export interface WorkTaskCardDto {
    * составил другой и ведёт другой: у смотрящего она не «Тестерование» и не
    * «На доработку», это не его работа. Такие карточки доска прячет в раздел
    * «Чужие». Автор и исполнитель той же карточки видят `false` и настоящий
-   * статус; задача без исполнителя чужой не бывает — её может взять любой.
+   * статус. Задача без исполнителя — чужая для всех, кроме автора (VED-418):
+   * иначе задачи, которые завёл другой участник и никому не поручил, стояли
+   * у смотрящего среди его собственных.
    */
   foreign: boolean;
   /**
@@ -187,6 +194,18 @@ export interface WorkTaskCardDto {
    * гасит отметку — смотреть надо снова.
    */
   viewed: boolean;
+  /**
+   * Тематический раздел (VED-430) — колонка вроде «РАБОТА» или «МУЗЫКА». У
+   * задачи в колонке раздела совпадает с `columnId`; у задачи в колонке
+   * статуса («Тестерование», «Выполнено») — раздел, откуда она туда пришла.
+   * `null` — раздел неизвестен.
+   */
+  sectionId: string | null;
+  /**
+   * Последняя правка человеком (VED-421, вид «По правке»): поля, перенос,
+   * комментарий, чек-лист, вложения. Не бывает раньше `createdAt`.
+   */
+  editedAt: string;
 }
 
 /** Отметить задачу просмотренной или снять отметку (VED-365). */
@@ -309,6 +328,12 @@ export interface WorkSpaceSummaryDto {
 }
 
 export interface WorkSpaceDto extends WorkSpaceSummaryDto {
+  /**
+   * Основной владелец — тот, на ком среда числится (VED-422). Владельцев по
+   * роли может быть несколько (совладельцы), а удалить среду, передать
+   * владение и не быть пониженным может только он.
+   */
+  ownerId: string;
   members: WorkMemberDto[];
   labels: WorkLabelDto[];
   boards: WorkBoardSummaryDto[];
@@ -443,6 +468,12 @@ export interface UpdateWorkTaskRequest {
   dueAt?: string | null;
   assigneeId?: string | null;
   labelIds?: string[];
+  /**
+   * Сменить раздел задачи, не трогая статус (VED-430): задача в
+   * «Тестеровании» остаётся там, но числится уже в другом разделе. Только
+   * колонка раздела этой доски; колонку статуса сервер не примет.
+   */
+  sectionColumnId?: string | null;
 }
 
 /**
@@ -454,6 +485,11 @@ export interface MoveWorkTaskRequest {
   columnId: string;
   afterTaskId?: string | null;
   beforeTaskId?: string | null;
+  /**
+   * Раздел, выбранный в окне задачи вместе со статусом (VED-430). Без него
+   * при переезде в колонку статуса раздел — колонка, откуда уехали.
+   */
+  sectionColumnId?: string | null;
 }
 
 export interface CreateWorkCommentRequest {

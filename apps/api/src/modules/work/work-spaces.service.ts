@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,7 +18,11 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WORK_POSITION_STEP } from './work-position';
-import { assertWorkAccess, canAssignRole } from './work-roles';
+import {
+  assertWorkAccess,
+  canAssignRole,
+  memberChangeProblem,
+} from './work-roles';
 import { toWorkLabel, toWorkMember, toWorkPersonRef } from './work-dto';
 import {
   normalizeWorkColor,
@@ -132,6 +137,7 @@ export class WorkSpacesService {
       boardCount: space._count.boards,
       openTaskCount,
       createdAt: space.createdAt.toISOString(),
+      ownerId: space.ownerId,
       members: space.members.map(toWorkMember),
       labels: space.labels.map(toWorkLabel),
       boards: space.boards.map((board) => ({
@@ -238,8 +244,27 @@ export class WorkSpacesService {
     return this.get(spaceId, userId);
   }
 
+  /** Основной владелец среды — тот, на ком она числится (`ownerId`). */
+  private async primaryOwnerId(spaceId: string): Promise<string | null> {
+    const space = await this.prisma.workSpace.findUnique({
+      where: { id: spaceId },
+      select: { ownerId: true },
+    });
+    return space?.ownerId ?? null;
+  }
+
+  /**
+   * Удалить среду — только основной владелец (VED-422). Совладелец — владелец
+   * по подписи и по правам на состав, но стереть проект со всеми задачами
+   * одним нажатием за спиной того, на ком он числится, не может.
+   */
   async remove(spaceId: string, userId: string): Promise<void> {
     assertWorkAccess(await this.roleOf(spaceId, userId), 'deleteSpace');
+    if ((await this.primaryOwnerId(spaceId)) !== userId) {
+      throw new ForbiddenException(
+        'Удалить среду может только основной владелец',
+      );
+    }
     await this.prisma.workSpace.delete({ where: { id: spaceId } });
   }
 
@@ -259,11 +284,13 @@ export class WorkSpacesService {
       select: { role: true },
     });
     if (!target) throw new NotFoundException('Участник не найден');
-    if (target.role === 'owner') {
-      throw new BadRequestException(
-        'Владельца нельзя понизить: сначала передайте владение',
-      );
-    }
+    const problem = memberChangeProblem({
+      actor: actorRole,
+      target: target.role,
+      targetIsPrimaryOwner:
+        (await this.primaryOwnerId(spaceId)) === targetUserId,
+    });
+    if (problem) throw new BadRequestException(problem);
     await this.prisma.workSpaceMember.update({
       where: { spaceId_userId: { spaceId, userId: targetUserId } },
       data: { role },
@@ -354,10 +381,20 @@ export class WorkSpacesService {
       select: { role: true },
     });
     if (!target) throw new NotFoundException('Участник не найден');
-    if (target.role === 'owner') {
+    const targetIsPrimaryOwner =
+      (await this.primaryOwnerId(spaceId)) === targetUserId;
+    if (leaving && targetIsPrimaryOwner) {
       throw new BadRequestException(
         'Владелец не может выйти: сначала передайте владение',
       );
+    }
+    if (!leaving) {
+      const problem = memberChangeProblem({
+        actor: actorRole,
+        target: target.role,
+        targetIsPrimaryOwner,
+      });
+      if (problem) throw new BadRequestException(problem);
     }
     if (!leaving && !canAssignRole(actorRole, target.role)) {
       throw new BadRequestException('Этого участника исключить нельзя');
@@ -367,13 +404,22 @@ export class WorkSpacesService {
     });
   }
 
-  /** Передача владения: единственный законный способ сменить владельца. */
+  /**
+   * Передача владения: единственный законный способ сменить основного
+   * владельца. Передаёт только сам основной (VED-422): совладелец, передав
+   * «своё» владение, переписал бы `ownerId` мимо того, на ком среда числится.
+   */
   async transferOwnership(
     spaceId: string,
     actorId: string,
     targetUserId: string,
   ): Promise<void> {
     assertWorkAccess(await this.roleOf(spaceId, actorId), 'deleteSpace');
+    if ((await this.primaryOwnerId(spaceId)) !== actorId) {
+      throw new ForbiddenException(
+        'Передать владение может только основной владелец',
+      );
+    }
     const target = await this.prisma.workSpaceMember.findUnique({
       where: { spaceId_userId: { spaceId, userId: targetUserId } },
       select: { role: true },

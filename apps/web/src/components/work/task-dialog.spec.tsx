@@ -32,6 +32,7 @@ const task = {
   key: "VED-56",
   number: 56,
   columnId: "c1",
+  sectionId: "c1",
   title: "Кнопка сохранить",
   position: 0,
   priority: "normal",
@@ -61,8 +62,9 @@ const board = {
   id: "b1",
   role: "owner",
   columns: [
-    { id: "c1", name: "Работа", tasks: [] },
-    { id: "c2", name: "Тестерование", tasks: [] },
+    { id: "c1", name: "РАЗНОЕ", statusMark: null, tasks: [] },
+    { id: "c2", name: "Тестерование", statusMark: "testing", tasks: [] },
+    { id: "c3", name: "МУЗЫКА", statusMark: null, tasks: [] },
   ],
   members: [{ userId: "u2", name: "Радха" }],
 } as unknown as WorkBoardDto;
@@ -205,12 +207,12 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
   });
 
-  it("появляется после смены раздела; перенос уходит своим запросом", async () => {
+  it("появляется после смены статуса; перенос уходит своим запросом", async () => {
     const user = userEvent.setup();
     const props = open();
     await screen.findByDisplayValue("Кнопка сохранить");
 
-    await user.selectOptions(screen.getByLabelText("Раздел"), "c2");
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
 
     expect(moveWorkTask).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
@@ -242,7 +244,7 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     const title = await screen.findByLabelText("Название задачи");
 
     await user.type(title, "!");
-    await user.selectOptions(screen.getByLabelText("Раздел"), "c2");
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     expect(updateWorkTask).toHaveBeenCalledWith("t1", {
@@ -269,7 +271,7 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     await screen.findByDisplayValue("Кнопка сохранить");
 
     await user.selectOptions(screen.getByLabelText("Исполнитель"), "u2");
-    await user.selectOptions(screen.getByLabelText("Раздел"), "c2");
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
     await user.keyboard("{Escape}");
 
     expect(props.onClose).toHaveBeenCalledTimes(1);
@@ -412,5 +414,128 @@ describe("WorkTaskDialog — «Удалить насовсем» (VED-6)", () =>
     expect(
       screen.queryByRole("button", { name: "Удалить насовсем" }),
     ).toBeNull();
+  });
+});
+
+describe("WorkTaskDialog — раздел отдельно от статуса (VED-430)", () => {
+  it("два поля: раздел — темы доски, статус — колонки статуса", async () => {
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+    const section = screen.getByLabelText("Раздел");
+    const status = screen.getByLabelText("Статус");
+    expect(
+      Array.from((section as HTMLSelectElement).options).map((o) => o.text),
+    ).toEqual(["РАЗНОЕ", "МУЗЫКА"]);
+    expect(
+      Array.from((status as HTMLSelectElement).options).map((o) => o.text),
+    ).toEqual(["Без статуса", "Тестерование"]);
+    expect(section).toHaveValue("c1");
+    expect(status).toHaveValue("");
+  });
+
+  it("новый раздел у задачи без статуса — переезд в него", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Раздел"), "c3");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(moveWorkTask).toHaveBeenCalledWith("t1", {
+      columnId: "c3",
+      sectionColumnId: "c3",
+    });
+  });
+
+  it("новый раздел у задачи в статусе — статус остаётся, меняется поле", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      columnId: "c2",
+      sectionId: "c1",
+    } as WorkTaskDto);
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+    expect(screen.getByLabelText("Статус")).toHaveValue("c2");
+
+    await user.selectOptions(screen.getByLabelText("Раздел"), "c3");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", { sectionColumnId: "c3" });
+    expect(moveWorkTask).not.toHaveBeenCalled();
+  });
+
+  it("«Без статуса» возвращает задачу в её раздел", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      columnId: "c2",
+      sectionId: "c3",
+    } as WorkTaskDto);
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Статус"), "");
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c3" });
+  });
+});
+
+describe("WorkTaskDialog — длинный пункт чек-листа (VED-375)", () => {
+  it("свёрнут и раскрывается кнопкой «Далее»", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      checklist: [
+        { id: "i1", text: "Очень длинный пункт. ".repeat(12), done: false, position: 0 },
+        { id: "i2", text: "Короткий", done: false, position: 1 },
+      ],
+      checklistTotal: 2,
+    } as unknown as WorkTaskDto);
+    open();
+    const more = await screen.findByRole("button", { name: "Далее" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    // У короткого пункта кнопки нет.
+    expect(screen.getAllByRole("button", { name: "Далее" })).toHaveLength(1);
+
+    await user.click(more);
+    expect(screen.getByRole("button", { name: "Свернуть" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("поле пункта принимает до 2000 знаков", async () => {
+    open();
+    expect(await screen.findByLabelText("Новый пункт чек-листа")).toHaveAttribute(
+      "maxLength",
+      "2000",
+    );
+  });
+});
+
+describe("WorkTaskDialog — индикатор вложений (VED-431)", () => {
+  it("скрепка с числом у номера ведёт к вложениям", async () => {
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      attachments: [
+        {
+          id: "a1",
+          name: "shot.png",
+          mime: "image/png",
+          sizeBytes: 1,
+          width: null,
+          height: null,
+          url: "",
+          createdAt: "2026-09-09T00:00:00.000Z",
+        },
+      ],
+    } as unknown as WorkTaskDto);
+    open();
+    const link = await screen.findByRole("link", {
+      name: "Вложения: 1. Перейти к ним",
+    });
+    expect(link).toHaveAttribute("href", "#work-task-attachments");
   });
 });

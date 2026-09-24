@@ -7,6 +7,7 @@ import type {
   BlogAuthorFeedResponse,
   BlogFeedResponse,
   BlogHomeFeedResponse,
+  BlogPostDto,
   BlogSettingsDto,
 } from "@vedamatch/shared";
 
@@ -32,7 +33,9 @@ async function blogGet<T>(path: string): Promise<T | null> {
 }
 
 export function getBlogHomeFeed(): Promise<BlogHomeFeedResponse | null> {
-  return blogGet<BlogHomeFeedResponse>("/blog/home");
+  // Карусель на главной листает больше постов, чем полоса в приложении,
+  // которой эндпоинт по умолчанию отдаёт четыре (VED-238).
+  return blogGet<BlogHomeFeedResponse>("/blog/home?view=carousel");
 }
 
 export function getBlogFeed(
@@ -47,6 +50,14 @@ export function getBlogAuthorFeed(
   return blogGet<BlogAuthorFeedResponse>(
     `/blog/authors/${encodeURIComponent(authorId)}`,
   );
+}
+
+export function getBlogPost(id: string): Promise<BlogPostDto | null> {
+  return blogGet<BlogPostDto>(`/blog/posts/${encodeURIComponent(id)}`);
+}
+
+export function getBlogFavorites(): Promise<BlogFeedResponse | null> {
+  return blogGet<BlogFeedResponse>("/blog/favorites");
 }
 
 /** null и для не-администратора: эндпоинт отвечает ему 403. */

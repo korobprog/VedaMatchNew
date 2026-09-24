@@ -652,3 +652,56 @@ describe("MotivationPublishedList", () => {
     });
   });
 });
+
+describe("MotivationPublishedList: две редакции (VED-299)", () => {
+  const art = post({ id: "a", slug: "a", title: "Нейро-афоризм", text: "Нейро-афоризм" });
+  const card = post({
+    id: "c",
+    slug: "c",
+    title: "Открытка",
+    text: "Открытка",
+    captionInImage: true,
+  });
+
+  it("из ленты с афоризма — только нейро-афоризмы, переключатель на месте", () => {
+    render(<MotivationPublishedList posts={[art, card]} kind="art" openSlug="a" />);
+
+    expect(screen.getAllByText("Нейро-афоризм").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Открытка")).toHaveLength(0);
+    const nav = screen.getByRole("navigation", { name: "Какую редакцию показать" });
+    expect(within(nav).getByRole("link", { name: /Нейро-афоризмы/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(nav).getByRole("link", { name: /Открытки/ })).toHaveAttribute(
+      "href",
+      "/admin/motivation/published?kind=cards",
+    );
+    expect(screen.getByRole("link", { name: /Назад к афоризму/ })).toHaveAttribute(
+      "href",
+      "/motivation?post=a",
+    );
+  });
+
+  it("с открытки — только открытки, «назад» ведёт во вкладку открыток", () => {
+    render(<MotivationPublishedList posts={[art, card]} kind="cards" openSlug="c" />);
+
+    expect(screen.queryAllByText("Нейро-афоризм")).toHaveLength(0);
+    expect(screen.getByRole("link", { name: /Назад к афоризму/ })).toHaveAttribute(
+      "href",
+      "/motivation?tab=cards&post=c",
+    );
+  });
+
+  it("пустой вид не прячет переключатель", () => {
+    render(<MotivationPublishedList posts={[art]} kind="cards" variant="hidden" />);
+
+    expect(screen.getByText("Открыток в этом списке нет.")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("navigation", { name: "Какую редакцию показать" })).getByRole(
+        "link",
+        { name: /Все/ },
+      ),
+    ).toHaveAttribute("href", "/admin/motivation/hidden");
+  });
+});

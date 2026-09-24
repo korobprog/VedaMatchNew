@@ -1,6 +1,7 @@
 import {
   BLOG_PAGE_SIZE,
   blogCursorFilter,
+  blogHomeTake,
   blogOrderBy,
   decodeBlogCursor,
   encodeBlogCursor,
@@ -115,5 +116,19 @@ describe('takeBlogPage', () => {
 
   it('survives an empty page', () => {
     expect(takeBlogPage([], 5)).toEqual({ items: [], nextCursor: null });
+  });
+});
+
+describe('blogHomeTake', () => {
+  // Сборки приложения на телефонах зовут /blog/home без параметров и ждут
+  // не больше четырёх постов в полосе.
+  it('keeps four posts for callers that send nothing', () => {
+    expect(blogHomeTake(undefined)).toBe(4);
+    expect(blogHomeTake('')).toBe(4);
+    expect(blogHomeTake('whatever')).toBe(4);
+  });
+
+  it('gives the web carousel ten', () => {
+    expect(blogHomeTake('carousel')).toBe(10);
   });
 });
