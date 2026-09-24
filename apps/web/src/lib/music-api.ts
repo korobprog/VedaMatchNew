@@ -10,6 +10,7 @@ import type {
   MusicAlbumPageDto,
   MusicArtistPageDto,
   MusicAudiobookPageDto,
+  MusicAudiobookKind,
   MusicAudiobooksDto,
   MusicCatalogDto,
   MusicCategoryDto,
@@ -76,8 +77,13 @@ export function getMusicCategories(): Promise<MusicCategoryDto[] | null> {
  * единицы. В общем каталоге их глав нет: «отображение всех аудиокниг
  * находится внутри этой кнопки».
  */
-export function getMusicAudiobooks(): Promise<MusicAudiobooksDto | null> {
-  return musicGet<MusicAudiobooksDto>("/music/audiobooks");
+export function getMusicAudiobooks(
+  kind: MusicAudiobookKind = "audiobook",
+): Promise<MusicAudiobooksDto | null> {
+  // «Лекции» (VED-437) — тот же список с отметкой раздела.
+  return musicGet<MusicAudiobooksDto>(
+    kind === "audiobook" ? "/music/audiobooks" : `/music/audiobooks?kind=${kind}`,
+  );
 }
 
 /**

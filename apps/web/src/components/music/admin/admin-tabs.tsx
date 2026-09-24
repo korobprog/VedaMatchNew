@@ -18,6 +18,7 @@ export function MusicAdminTabs({
     | "catalog"
     | "playlists"
     | "audiobooks"
+    | "lectures"
     | "radio"
     | "reports";
   pendingCount?: number;
@@ -47,6 +48,11 @@ export function MusicAdminTabs({
       key: "audiobooks" as const,
       href: "/admin/music/audiobooks",
       label: "Аудиокниги",
+    },
+    {
+      key: "lectures" as const,
+      href: "/admin/music/lectures",
+      label: "Лекции",
     },
     { key: "radio" as const, href: "/admin/music/radio", label: "Радио" },
   ];

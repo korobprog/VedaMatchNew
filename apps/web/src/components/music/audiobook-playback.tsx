@@ -15,10 +15,13 @@ import { audiobookResumeLabel, pausedPosition } from "./audiobook-labels";
 export function MusicAudiobookPlayback({
   queue,
   resume,
+  part = "глава",
 }: {
   /** Главы по порядку книги. Пустой список кнопок не рисует. */
   queue: string[];
   resume: MusicAudiobookResumeDto | null;
+  /** Как зовётся часть в подписи «Продолжить: глава 3». */
+  part?: string;
 }) {
   const player = useMusicPlayer();
   if (queue.length === 0) return null;
@@ -54,7 +57,7 @@ export function MusicAudiobookPlayback({
   const primaryLabel = isPlaying
     ? "Пауза"
     : target
-      ? audiobookResumeLabel(target)
+      ? audiobookResumeLabel(target, part)
       : "Слушать";
 
   return (

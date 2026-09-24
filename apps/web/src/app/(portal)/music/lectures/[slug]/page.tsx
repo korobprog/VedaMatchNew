@@ -9,15 +9,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const page = await getMusicAudiobook(slug);
-  return { title: page ? page.book.title : "Книга не найдена" };
+  return { title: page ? page.book.title : "Цикл не найден" };
 }
 
-/** Страница аудиокниги (VED-297). */
-export default async function MusicAudiobookPage({
+/** Страница цикла лекций (VED-437). */
+export default async function MusicLecturePage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <MusicAudiobookBookPage kind="audiobook" slug={slug} />;
+  return <MusicAudiobookBookPage kind="lecture" slug={slug} />;
 }

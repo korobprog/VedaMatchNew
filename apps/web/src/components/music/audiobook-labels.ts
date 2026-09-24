@@ -13,10 +13,12 @@ import { plural } from "@/lib/plural";
 export function audiobookMeta(
   chapterCount: number,
   totalSeconds: number,
+  /** Как зовётся часть: главы у книг, лекции у циклов (VED-437). */
+  part: [one: string, few: string, many: string] = ["глава", "главы", "глав"],
 ): string {
   return [
     chapterCount > 0
-      ? `${chapterCount} ${plural(chapterCount, "глава", "главы", "глав")}`
+      ? `${chapterCount} ${plural(chapterCount, ...part)}`
       : null,
     totalSeconds > 0 ? formatTotalDuration(totalSeconds) : null,
   ]
@@ -28,8 +30,11 @@ export function audiobookMeta(
  * Подпись кнопки продолжения: «Продолжить: глава 3, с 12:34». С начала
  * главы — без времени: «с 0:00» читается как «с начала книги».
  */
-export function audiobookResumeLabel(resume: MusicAudiobookResumeDto): string {
-  const chapter = `глава ${resume.chapterNumber}`;
+export function audiobookResumeLabel(
+  resume: MusicAudiobookResumeDto,
+  part = "глава",
+): string {
+  const chapter = `${part} ${resume.chapterNumber}`;
   return resume.positionSeconds > 0
     ? `Продолжить: ${chapter}, с ${formatTrackDuration(resume.positionSeconds)}`
     : `Продолжить: ${chapter}`;

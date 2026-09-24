@@ -168,6 +168,7 @@ const PORTAL_STEPS: Readonly<Record<string, Readonly<Record<string, string>>>> =
     favorites: "Избранное",
     friends: "Друзья",
     history: "История",
+    lectures: "Лекции",
     offline: "Офлайн",
     playlists: "Плейлисты",
     settings: "Настройки",

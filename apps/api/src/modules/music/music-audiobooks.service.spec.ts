@@ -50,6 +50,7 @@ const firstArg = (fn: { mock: { calls: unknown[][] } }): unknown =>
 
 const bookRow = (over: Record<string, unknown> = {}) => ({
   id: 'b1',
+  kind: 'audiobook',
   slug: 'gita',
   title: 'Бхагавад-гита',
   author: 'Вьясадева',
@@ -68,13 +69,24 @@ describe('MusicAudiobooksService — раздел', () => {
   it('показывает только опубликованные книги с опубликованными главами', async () => {
     const { service, prisma } = setup();
 
-    await service.list();
+    await service.list('audiobook');
 
     expect(firstArg(prisma.musicAudiobook.findMany)).toMatchObject({
       where: {
+        kind: 'audiobook',
         isPublished: true,
         chapters: { some: { track: { status: 'published' } } },
       },
+    });
+  });
+
+  it('раздел «Лекции» отбирает только лекции (VED-437)', async () => {
+    const { service, prisma } = setup();
+
+    await service.list('lecture');
+
+    expect(firstArg(prisma.musicAudiobook.findMany)).toMatchObject({
+      where: { kind: 'lecture' },
     });
   });
 
@@ -83,7 +95,7 @@ describe('MusicAudiobooksService — раздел', () => {
     prisma.musicAudiobook.findMany.mockResolvedValue([bookRow()]);
     const { service } = setup(prisma);
 
-    const { books } = await service.list();
+    const { books } = await service.list('audiobook');
 
     expect(books).toEqual([
       expect.objectContaining({
@@ -158,8 +170,25 @@ describe('MusicAudiobooksService — редактор', () => {
     await service.create(true, { title: '  Бхагавад-гита  ' });
 
     expect(firstArg(prisma.musicAudiobook.create)).toMatchObject({
-      data: { title: 'Бхагавад-гита', isPublished: false },
+      data: { title: 'Бхагавад-гита', isPublished: false, kind: 'audiobook' },
     });
+  });
+
+  it('цикл лекций заводится в своём разделе (VED-437)', async () => {
+    const { service, prisma } = setup();
+
+    await service.create(true, { title: 'Лекции по Гите', kind: 'lecture' });
+
+    expect(firstArg(prisma.musicAudiobook.create)).toMatchObject({
+      data: { kind: 'lecture' },
+    });
+  });
+
+  it('неизвестный раздел — отказ', async () => {
+    const { service } = setup();
+    await expect(
+      service.create(true, { title: 'Гита', kind: 'podcast' as never }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('несуществующий чтец — отказ, а не книга без подписи', async () => {

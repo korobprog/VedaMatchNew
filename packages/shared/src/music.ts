@@ -467,6 +467,17 @@ export interface MusicBulkArtistAudiobookResult {
 }
 
 /**
+ * Разделы, устроенные как «Аудиокниги» (VED-437): цикл с частями по
+ * порядку и продолжением с места. `lecture` — раздел «Лекции».
+ */
+export type MusicAudiobookKind = "audiobook" | "lecture";
+
+export const MUSIC_AUDIOBOOK_KINDS: readonly MusicAudiobookKind[] = [
+  "audiobook",
+  "lecture",
+];
+
+/**
  * Карточка аудиокниги (VED-297) — плитка раздела «Аудиокниги» и шапка
  * страницы книги.
  *
@@ -476,6 +487,8 @@ export interface MusicBulkArtistAudiobookResult {
  */
 export interface MusicAudiobookCardDto {
   id: string;
+  /** Раздел: «Аудиокниги» или «Лекции» (VED-437). */
+  kind: MusicAudiobookKind;
   slug: string;
   title: string;
   /** Автор текста строкой; `null` — не указан. */
@@ -532,6 +545,7 @@ export interface MusicAdminAudiobookChapterDto {
 
 export interface MusicAdminAudiobookDto {
   id: string;
+  kind: MusicAudiobookKind;
   slug: string;
   title: string;
   author: string | null;
@@ -557,6 +571,8 @@ export interface MusicAdminAudiobooksDto {
 
 export interface CreateMusicAudiobookRequest {
   title: string;
+  /** Раздел; по умолчанию — «Аудиокниги». */
+  kind?: MusicAudiobookKind;
   author?: string | null;
   description?: string | null;
   readerId?: string | null;
