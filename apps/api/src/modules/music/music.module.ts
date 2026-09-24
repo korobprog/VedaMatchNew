@@ -46,6 +46,11 @@ import {
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 import { MusicWorkerService } from './music-worker.service';
+import {
+  MusicAdminRadioController,
+  MusicRadioController,
+} from './music-radio.controller';
+import { MusicRadioService } from './music-radio.service';
 import { MusicDurationRecountService } from './music-duration-recount.service';
 
 /**
@@ -81,6 +86,8 @@ import { MusicDurationRecountService } from './music-duration-recount.service';
     MusicAdminCatalogController,
     MusicAdminQueueController,
     MusicIngestController,
+    MusicRadioController,
+    MusicAdminRadioController,
   ],
   providers: [
     MusicCatalogService,
@@ -104,6 +111,7 @@ import { MusicDurationRecountService } from './music-duration-recount.service';
     MusicDurationRecountService,
     MusicPurgeListener,
     MusicAssistantListener,
+    MusicRadioService,
   ],
 })
 export class MusicModule {}

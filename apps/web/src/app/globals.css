@@ -1231,6 +1231,19 @@ body:has([data-music-player][data-collapsed="true"]) {
   }
 }
 
+/* Полоса эфира «Радио VM» (VED-437) стоит на месте полосы плеера, пока
+ * играет радио: одна строка, 66px вместе с полями. */
+body:has([data-music-radio]) {
+  --vm-player-space: calc(66px + env(safe-area-inset-bottom));
+  padding-bottom: var(--vm-player-space);
+}
+
+@media (min-width: 640px) {
+  body:has([data-music-radio]) {
+    --vm-player-space: calc(66px + max(0.75rem, env(safe-area-inset-bottom)));
+  }
+}
+
 /* Поднятая полоса (VED-194).
  *
  * Поднимается ровно на высоту нижнего ряда кнопок ленты «Вдохновения»

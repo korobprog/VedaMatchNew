@@ -4,6 +4,7 @@
 // модуль, который импортируют клиентские компоненты, — сборка падает.
 import { cookies } from "next/headers";
 import type {
+  MusicRadioInsertsDto,
   MusicAdminAlbumsDto,
   MusicAdminAudiobooksDto,
   MusicAdminArtistsDto,
@@ -58,6 +59,10 @@ export const getMusicAdminCategories = () =>
 /** Книги со всеми главами и записи чтецов «не в книге» (VED-297). */
 export const getMusicAdminAudiobooks = () =>
   adminGet<MusicAdminAudiobooksDto>("/music/admin/audiobooks");
+
+/** Голосовые вставки в эфир «Радио VM» (VED-437). */
+export const getMusicAdminRadioInserts = () =>
+  adminGet<MusicRadioInsertsDto>("/music/admin/radio/inserts");
 
 /** Весь каталог любого статуса — список для правки и удаления. */
 export const getMusicAdminTracks = () =>

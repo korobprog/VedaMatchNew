@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MusicRadioButton } from "@/components/music/radio/radio-button";
 import { getLocale } from "next-intl/server";
 import {
   isLineagePreference,
@@ -361,6 +362,9 @@ export default async function MusicPage({
             </svg>
             Аудиокниги
           </Link>
+          {/* «Радио» (VED-437) — у правого края ряда, как на скриншоте
+              карточки: эфир — не раздел каталога, а отдельный режим. */}
+          <MusicRadioButton className="ml-auto" />
         </div>
       </div>
 
