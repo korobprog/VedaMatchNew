@@ -40,6 +40,13 @@ export type NotificationTarget =
   | { kind: 'wellness-product'; barcode: string }
   | { kind: 'wellness-history' }
   /**
+   * Вышла новая версия приложения: пуш «Доступна новая версия» с путём
+   * `/app` (на сайте это страница загрузки). В приложении — вкладка
+   * «Сервисы»: там раздел обновления, который при открытии вкладки сам
+   * проверяет версию и показывает, что есть новая.
+   */
+  | { kind: 'app-update' }
+  /**
    * Раздел, которого в приложении нет: Рынок, Объявления, «Работа»,
    * «Мотивация», «Музыка», Библиотека, админка. Путь сохранён
    * целиком вместе с `?query`: `/motivation/create?reel=<id>` без запроса
@@ -138,6 +145,8 @@ export function resolveNotificationTarget(url: unknown): NotificationTarget {
     if (second === 'history') return { kind: 'wellness-history' };
   }
 
+  if (first === 'app' && !second) return { kind: 'app-update' };
+
   if (first === 'communities') {
     const communityId = idOf(second);
     if (communityId) return { kind: 'community', communityId };
@@ -178,6 +187,8 @@ export function routeOfTarget(target: NotificationTarget): NotificationDestinati
       };
     case 'wellness-history':
       return { kind: 'route', pathname: '/wellness/history' };
+    case 'app-update':
+      return { kind: 'route', pathname: '/services' };
     case 'site':
       return null;
   }

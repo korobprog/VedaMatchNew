@@ -83,6 +83,12 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      # Раздача APK с сайта: отсюда воркер выпусков (notifications/
+      # app-release-worker.service.ts) раз в минуту читает
+      # mobile/android/ru-site/latest.json — новая версия уходит постом в
+      # канал VedaMatch и пушем «обновите» отставшим телефонам. По умолчанию
+      # тот же S3_PUBLIC_URL, что у web (APP_DOWNLOAD_BASE_URL ниже).
+      APP_DOWNLOAD_BASE_URL: ${APP_DOWNLOAD_BASE_URL:-${S3_PUBLIC_URL:-}}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_DB: ${REDIS_DB}

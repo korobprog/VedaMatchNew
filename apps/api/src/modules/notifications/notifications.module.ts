@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AppReleaseWorkerService } from './app-release-worker.service';
 import { NotificationBroadcastController } from './notification-broadcast.controller';
 import { NotificationBroadcastWorkerService } from './notification-broadcast-worker.service';
 import { NotificationBroadcastService } from './notification-broadcast.service';
@@ -36,6 +37,7 @@ import { TelegramSenderService } from './telegram-sender.service';
     NotificationBroadcastService,
     NotificationBroadcastWorkerService,
     NotificationPurgeWorkerService,
+    AppReleaseWorkerService,
     TelegramNotificationsService,
     TelegramSenderService,
   ],

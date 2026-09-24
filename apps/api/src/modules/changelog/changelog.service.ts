@@ -35,6 +35,7 @@ import {
   AnnouncementImagesService,
   type UploadedAnnouncementImage,
 } from './announcement-images.service';
+import { announcementEventsAfterSave, ANNOUNCEMENT_WITHDRAWN } from './announcement-events';
 import {
   announcementSortDate,
   isAnnouncementVisible,
@@ -335,6 +336,8 @@ export class ChangelogService {
   async adminCreateAnnouncement(
     role: Role,
     body: CreateAnnouncementRequest,
+    /** Кто публикует: официальный канал пишет от его имени, если может. */
+    actorId: string | null = null,
   ): Promise<AdminAnnouncementDto> {
     this.ensureAdmin(role);
     const status = this.normalizeAnnouncementStatus(body.status);
@@ -359,6 +362,7 @@ export class ChangelogService {
         include: { images: ANNOUNCEMENT_IMAGES },
       });
     });
+    this.emitAnnouncementEvents(null, item, actorId);
     return this.toAdminAnnouncement(item);
   }
 
@@ -366,6 +370,7 @@ export class ChangelogService {
     role: Role,
     id: string,
     body: UpdateAnnouncementRequest,
+    actorId: string | null = null,
   ): Promise<AdminAnnouncementDto> {
     this.ensureAdmin(role);
     const existing = await this.prisma.announcement.findUnique({
@@ -430,7 +435,22 @@ export class ChangelogService {
     // Файлы убираем после записи в базу: откатись транзакция — картинки
     // новости остались бы без объектов в хранилище.
     await this.images.removeMany(removedKeys);
+    this.emitAnnouncementEvents(existing, item, actorId);
     return this.toAdminAnnouncement(item);
+  }
+
+  /**
+   * Сообщить шине о сохранённой новости: официальный канал публикует,
+   * правит или снимает пост. Уже после записи в базу — откатись транзакция,
+   * в канале оказалась бы новость, которой нет.
+   */
+  private emitAnnouncementEvents(
+    before: { status: string } | null,
+    after: Parameters<typeof announcementEventsAfterSave>[1],
+    actorId: string | null,
+  ): void {
+    for (const event of announcementEventsAfterSave(before, after, actorId))
+      this.events.emit(event.name, event.payload);
   }
 
   /** Картинки из формы в строки базы; `undefined` — набор не передан. */
@@ -531,6 +551,9 @@ export class ChangelogService {
     });
     if (!existing) throw new NotFoundException('Новость не найдена');
     await this.prisma.announcement.delete({ where: { id } });
+    // Удалённую не видит никто: пост в канале по ней снимается. Черновику
+    // снимать нечего — подписчик это знает сам, и лишнее событие безвредно.
+    this.events.emit(ANNOUNCEMENT_WITHDRAWN, { announcementId: id });
     await this.images.removeMany(
       existing.images.map((image) => image.storageKey),
     );

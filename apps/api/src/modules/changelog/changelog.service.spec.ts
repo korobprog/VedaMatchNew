@@ -618,3 +618,144 @@ describe('ChangelogService: картинки новостей (VED-137)', () => 
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
+
+describe('ChangelogService — новости на шину для официального канала', () => {
+  const base = {
+    id: 'a1',
+    titleRu: 'Новость',
+    titleEn: 'News',
+    bodyRu: 'Текст',
+    bodyEn: 'Body',
+    status: 'draft',
+    pinned: false,
+    publishAt: null,
+    expiresAt: null,
+    publishedAt: null,
+    broadcastAt: null,
+    broadcastCount: 0,
+    createdAt: new Date('2026-09-20T00:00:00Z'),
+    images: [] as {
+      storageKey: string;
+      url: string;
+      width: number;
+      height: number;
+    }[],
+  };
+
+  function build() {
+    const tx = {
+      announcement: {
+        updateMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      announcementImage: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      announcement: { findUnique: jest.fn(), delete: jest.fn() },
+      $transaction: jest.fn((fn: (client: typeof tx) => unknown) => fn(tx)),
+    };
+    const events = { emit: jest.fn() };
+    const images = { urlFor: (key: string) => key, removeMany: jest.fn() };
+    const service = new ChangelogService(
+      prisma as unknown as PrismaService,
+      events as never,
+      images as never,
+    );
+    return { service, prisma, tx, events };
+  }
+
+  it('созданная опубликованной — событие первой публикации с автором', async () => {
+    const { service, tx, events } = build();
+    tx.announcement.create.mockResolvedValue({ ...base, status: 'published' });
+
+    await service.adminCreateAnnouncement(
+      'admin',
+      { titleRu: 'Новость', titleEn: 'News', bodyRu: 'Текст', bodyEn: 'Body', status: 'published' },
+      'admin-1',
+    );
+
+    expect(events.emit).toHaveBeenCalledTimes(1);
+    expect(events.emit).toHaveBeenCalledWith(
+      'changelog.announcement.published',
+      expect.objectContaining({
+        announcementId: 'a1',
+        firstPublication: true,
+        title: 'Новость',
+        path: '/updates/news',
+        actorId: 'admin-1',
+      }),
+    );
+  });
+
+  it('созданный черновик шине не интересен', async () => {
+    const { service, tx, events } = build();
+    tx.announcement.create.mockResolvedValue(base);
+
+    await service.adminCreateAnnouncement('admin', {
+      titleRu: 'Новость',
+      titleEn: 'News',
+      bodyRu: 'Текст',
+      bodyEn: 'Body',
+    });
+
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
+  it('правка опубликованной — событие правки, не первой публикации', async () => {
+    const { service, prisma, tx, events } = build();
+    prisma.announcement.findUnique.mockResolvedValue({ ...base, status: 'published' });
+    tx.announcement.update.mockResolvedValue({ ...base, status: 'published', titleRu: 'Иначе' });
+
+    await service.adminUpdateAnnouncement('admin', 'a1', { titleRu: 'Иначе' });
+
+    expect(events.emit).toHaveBeenCalledWith(
+      'changelog.announcement.published',
+      expect.objectContaining({ firstPublication: false, title: 'Иначе' }),
+    );
+  });
+
+  it('опубликованную вернули в черновик — снятие', async () => {
+    const { service, prisma, tx, events } = build();
+    prisma.announcement.findUnique.mockResolvedValue({ ...base, status: 'published' });
+    tx.announcement.update.mockResolvedValue(base);
+
+    await service.adminUpdateAnnouncement('admin', 'a1', { status: 'draft' });
+
+    expect(events.emit).toHaveBeenCalledWith('changelog.announcement.withdrawn', {
+      announcementId: 'a1',
+    });
+  });
+
+  it('удаление — снятие, после удаления из базы', async () => {
+    const { service, prisma, events } = build();
+    prisma.announcement.findUnique.mockResolvedValue({ id: 'a1', images: [] });
+
+    await service.adminDeleteAnnouncement('admin', 'a1');
+
+    expect(prisma.announcement.delete).toHaveBeenCalled();
+    expect(events.emit).toHaveBeenCalledWith('changelog.announcement.withdrawn', {
+      announcementId: 'a1',
+    });
+  });
+
+  it('упавшая запись в базу ничего на шину не отправляет', async () => {
+    const { service, tx, events } = build();
+    tx.announcement.create.mockRejectedValue(new Error('db down'));
+
+    await expect(
+      service.adminCreateAnnouncement('admin', {
+        titleRu: 'Новость',
+        titleEn: 'News',
+        bodyRu: 'Текст',
+        bodyEn: 'Body',
+        status: 'published',
+      }),
+    ).rejects.toThrow('db down');
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+});

@@ -46,6 +46,11 @@ jest.mock('@/lib/calls/native-call-bridge', () => ({
   ensureCallNotificationChannel: () => mockEnsureCallChannel(),
 }));
 
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { android: { versionCode: 1031 } } },
+}));
+
 jest.mock('@/config/app-variant', () => ({
   appVariant: jest.fn(() => ({ contour: 'ru', channel: 'site' })),
 }));
@@ -115,6 +120,8 @@ describe('registerThisDevice', () => {
       platform: 'android',
       appVariant: 'ru-site',
       nativeCalls: true,
+      // По номеру сборки сервер решает, звать ли обновиться.
+      appVersionCode: 1031,
     });
     expect(pushRegistration()).toBe('registered');
   });

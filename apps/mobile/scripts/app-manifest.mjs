@@ -17,6 +17,29 @@ import { dirname } from 'node:path';
 /** Версия Android, ниже которой приложение уже не ставится (см. README). */
 export const DEFAULT_MIN_ANDROID = '7.0';
 
+/** Заметка «что нового» длиннее этого — ошибка ввода, а не заметка. */
+export const MAX_NOTES_LENGTH = 1000;
+
+/**
+ * Заметка к выпуску из входа воркфлоу `release_notes`. Поле ввода GitHub
+ * однострочное, поэтому `\n` в тексте — перенос строки. Пусто — заметки нет,
+ * и поле в манифест не пишется: сервер тогда пишет в канал общую строку.
+ */
+export function normalizeReleaseNotes(raw) {
+  if (typeof raw !== 'string') return null;
+  const text = raw
+    .replace(/\\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+  if (!text) return null;
+  if (text.length > MAX_NOTES_LENGTH) {
+    throw new Error(`Заметка к выпуску длиннее ${MAX_NOTES_LENGTH} символов`);
+  }
+  return text;
+}
+
 /** Общий префикс объектов раздачи одного контура и канала. */
 export function objectKeyPrefix(contour, channel) {
   return `mobile/android/${contour}-${channel}`;
@@ -46,6 +69,7 @@ export function buildAppManifest({
   commit,
   builtAt,
   minAndroid = DEFAULT_MIN_ANDROID,
+  notes,
 }) {
   if (!versionName || typeof versionName !== 'string') {
     throw new Error('versionName обязателен и должен быть строкой');
@@ -69,6 +93,7 @@ export function buildAppManifest({
     throw new Error('builtAt обязателен и должен быть датой ISO-8601');
   }
 
+  const releaseNotes = normalizeReleaseNotes(notes);
   return {
     versionName,
     versionCode,
@@ -78,6 +103,9 @@ export function buildAppManifest({
     commit,
     builtAt,
     minAndroid,
+    // «Что нового» для поста в официальном канале. Необязательное поле:
+    // разборщики приложения и сайта лишние поля пропускают.
+    ...(releaseNotes ? { notes: releaseNotes } : {}),
   };
 }
 
@@ -127,6 +155,7 @@ async function main() {
     commit: args.commit,
     builtAt: new Date().toISOString(),
     minAndroid: args['min-android'] ?? DEFAULT_MIN_ANDROID,
+    notes: args.notes,
   });
 
   await mkdir(dirname(args.out), { recursive: true });

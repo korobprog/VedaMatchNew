@@ -1,8 +1,10 @@
 import { getMessaging, getToken } from '@react-native-firebase/messaging';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { appVariant } from '@/config/app-variant';
 import { ensureCallNotificationChannel } from '@/lib/calls/native-call-bridge';
 import type { ApiClient } from '@/lib/api/client';
+import { installedVersionCode } from './app-version-code';
 import { registerDevice } from './push-api';
 import { setPushRegistration, type PushRegistration } from './push-registration';
 
@@ -134,6 +136,9 @@ async function sendToken(api: ApiClient, token: string): Promise<PushRegistratio
       // Устройство умеет нативный экран звонка по data-пушу (VED-220/221):
       // сервер перестаёт слать этому телефону обычный пуш «вам звонят».
       nativeCalls: true,
+      // Номер установленной сборки: по нему сервер зовёт обновиться
+      // телефоны со сборкой с сайта, отставшие от вышедшей версии.
+      appVersionCode: installedVersionCode(Constants.expoConfig?.android?.versionCode),
     });
     return 'registered';
   } catch {

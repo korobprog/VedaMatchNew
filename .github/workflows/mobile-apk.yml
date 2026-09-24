@@ -31,6 +31,10 @@ on:
         description: База versionCode (versionCode = база + номер запуска)
         type: string
         default: '1000'
+      release_notes:
+        description: Что нового (для поста в канале VedaMatch; перенос строки — \n)
+        type: string
+        default: ''
 
 concurrency:
   # test_folder в группе: тестовый прогон с той же ветки не должен отменять
@@ -177,6 +181,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+          # Текст из поля ввода — только через окружение: подставленный прямо
+          # в run: он исполнялся бы шеллом (инъекция в скрипт шага).
+          RELEASE_NOTES: ${{ inputs.release_notes }}
           # Свой набор корней AWS CLI не знает GlobalSign Root R6, которым
           # подписан сертификат нашего хранилища («self-signed certificate in
           # certificate chain»). Системный набор Ubuntu его знает — проверка
@@ -204,6 +211,7 @@ jobs:
             --version-code "$APP_VERSION_CODE" \
             --url "$PUBLIC_APK_URL" \
             --commit "$GITHUB_SHA" \
+            --notes "$RELEASE_NOTES" \
             --out dist/latest.json
 
           aws s3 cp "$APK_PATH" "s3://$S3_BUCKET_NAME/$APK_KEY" \

@@ -159,7 +159,7 @@ export class AdminChangelogController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: CreateAnnouncementRequest,
   ) {
-    return this.changelog.adminCreateAnnouncement(user.role, body);
+    return this.changelog.adminCreateAnnouncement(user.role, body, user.sub);
   }
 
   @Patch('announcements/:id')
@@ -168,7 +168,7 @@ export class AdminChangelogController {
     @Param('id') id: string,
     @Body() body: UpdateAnnouncementRequest,
   ) {
-    return this.changelog.adminUpdateAnnouncement(user.role, id, body);
+    return this.changelog.adminUpdateAnnouncement(user.role, id, body, user.sub);
   }
 
   /** Рассылка новости: отдельным действием после публикации. */
