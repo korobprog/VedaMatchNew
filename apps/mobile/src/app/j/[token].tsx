@@ -117,7 +117,9 @@ export default function ConferenceLinkScreen() {
             </Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.replace('/(tabs)')}
+              // Гостю вкладки закрыты охраной стека: `replace('/(tabs)')` у
+              // него молча ничего не делал, и человек застревал на ошибке.
+              onPress={() => router.replace(status === 'signed' ? '/(tabs)' : '/login')}
               android_ripple={ripple(colors.glassBorder)}
               style={({ pressed }) => [
                 styles.secondary,
