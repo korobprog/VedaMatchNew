@@ -8,6 +8,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 /** Ссылка на заливку живёт час: сотня мегабайт по плохой связи льётся долго. */
 export const BOOK_UPLOAD_URL_TTL_SECONDS = 60 * 60;
@@ -82,6 +83,12 @@ export class LibraryBookStorageService {
         ContentLength: sizeBytes,
       }),
       { expiresIn: BOOK_UPLOAD_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 
@@ -119,6 +126,12 @@ export class LibraryBookStorageService {
         ResponseContentType: contentType,
       }),
       { expiresIn: BOOK_DOWNLOAD_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 /** Аватар кэшируется как immutable, поэтому подписываем надолго — до недели, максимум для SigV4. */
 const AVATAR_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -44,6 +45,12 @@ export class ActivityAvatarService {
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({ Bucket: bucket, Key: user.avatarKey }),
       { expiresIn: AVATAR_SIGNED_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 }

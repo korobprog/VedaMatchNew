@@ -214,6 +214,32 @@ services:
     expose:
       - "80"
 
+  # Раздача файлов хранилища со своего домена — media.vedamatch.ru → 80.
+  # Сертификат firsts3.ru выдан от корня, которого нет у старых Android, и
+  # картинки/аудио там не открывались; см. portal/media-proxy. Публичный
+  # адрес бакета для клиентов — S3_PUBLIC_URL=https://media.vedamatch.ru/<бакет>,
+  # а api по-прежнему ходит в хранилище напрямую через S3_ENDPOINT.
+  # S3_UPSTREAM отдельный, а не из S3_ENDPOINT: направь кто-нибудь
+  # S3_ENDPOINT на этот же прокси — получилась бы петля.
+  media:
+    build:
+      context: ..
+      dockerfile: portal/media-proxy/Dockerfile
+    restart: unless-stopped
+    environment:
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      S3_UPSTREAM: ${S3_UPSTREAM:-https://firsts3.ru}
+      S3_UPSTREAM_HOST: ${S3_UPSTREAM_HOST:-firsts3.ru}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - dokploy-network
+    expose:
+      - "80"
+
 networks:
   dokploy-network:
     external: true
