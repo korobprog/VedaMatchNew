@@ -50,6 +50,9 @@ function board(columns: Array<{ id: string; tasks: WorkTaskCardDto[] }>) {
     members: [],
     role: "admin",
     viewerId: "stas",
+    kind: "regular",
+    commercial: null,
+    canSeeFinance: false,
     columns: columns.map((column, index) => ({
       id: column.id,
       name: column.id,

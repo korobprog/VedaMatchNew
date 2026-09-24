@@ -311,6 +311,14 @@ export interface WorkBoardDto {
    * список участников одинаков для всех, и вычислить в нём себя неоткуда.
    */
   viewerId: string;
+  kind: WorkBoardKind;
+  /** Настройки оплаты; `null` у обычной доски. */
+  commercial: WorkBoardCommercialDto | null;
+  /**
+   * Смотрящий видит деньги доски целиком: ставки, бюджет, чужие суммы. Это
+   * ведущий доски и администрация среды; остальные видят свои часы и суммы.
+   */
+  canSeeFinance: boolean;
 }
 
 export interface WorkSpaceSummaryDto {
@@ -371,6 +379,12 @@ export interface CreateWorkSpaceRequest {
   name: string;
   description?: string;
   color?: WorkColor;
+  /**
+   * Доска среды коммерческая (VED-458): на сайте доска появляется вместе со
+   * средой, поэтому вопрос «коммерческая или нет» задаётся здесь. Без поля —
+   * обычная доска.
+   */
+  commercial?: WorkCommercialSettingsInput | null;
 }
 
 export interface UpdateWorkSpaceRequest {
@@ -428,10 +442,20 @@ export interface UpdateWorkMemberRequest {
 
 export interface CreateWorkBoardRequest {
   name: string;
+  /** Коммерческая доска (VED-458); без поля — обычная. */
+  commercial?: WorkCommercialSettingsInput | null;
 }
 
 export interface UpdateWorkBoardRequest {
   name?: string;
+  /**
+   * Настройки оплаты (VED-458). Объект — доска коммерческая с этими
+   * настройками (недостающие поля не меняются); `null` — доска становится
+   * обычной, а цены, часы и сметы прячутся, но не стираются.
+   */
+  commercial?: WorkCommercialSettingsInput | null;
+  /** Ведущий доски — участник среды. */
+  leadId?: string;
 }
 
 export interface CreateWorkColumnRequest {
@@ -561,3 +585,157 @@ export type WorkStreamEvent =
     }
   | { type: 'task.removed'; boardId: string; taskId: string }
   | { type: 'board.changed'; boardId: string };
+
+// ===== Коммерческая доска (VED-458) =====
+
+export type WorkBoardKind = 'regular' | 'commercial';
+/** Почасовая оплата или фиксированная цена задачи. */
+export type WorkPricingModel = 'hourly' | 'fixed';
+/**
+ * Часы сверх дневной нормы: `on_request` — в счёт идут только одобренные
+ * ведущим, `auto` — всё сверх нормы сразу по повышенной ставке.
+ */
+export type WorkOvertimeMode = 'on_request' | 'auto';
+
+export const WORK_CURRENCIES = ['RUB', 'USD', 'EUR', 'INR'] as const;
+export type WorkCurrency = (typeof WORK_CURRENCIES)[number];
+
+export const WORK_DEFAULT_TIMEZONE = 'Europe/Moscow';
+export const WORK_CLIENT_NAME_MAX = 80;
+export const WORK_TIME_NOTE_MAX = 200;
+export const WORK_LINE_ITEM_TITLE_MAX = 120;
+/** Одна запись времени — не больше суток: больше значит «забыл остановить». */
+export const WORK_TIME_ENTRY_MAX_MINUTES = 24 * 60;
+/** Потолок любой суммы в копейках (центах): 20 млн единиц валюты — влезает в Int базы. */
+export const WORK_MONEY_MAX_MINOR = 2_000_000_000;
+
+/**
+ * Настройки оплаты доски. Деньги — в минимальных единицах валюты (копейки,
+ * центы, пайсы): дробные рубли в `Float` теряют копейки на сложении.
+ */
+export interface WorkCommercialSettingsInput {
+  clientName?: string;
+  currency?: WorkCurrency;
+  pricingModel?: WorkPricingModel;
+  /** Ставка за час в пределах дневной нормы. */
+  rateMinor?: number;
+  /** Дневная норма на исполнителя; 0 — нормы нет, всё по обычной ставке. */
+  dailyNormMinutes?: number;
+  /** Ставка за час сверх нормы. */
+  overtimeRateMinor?: number;
+  overtimeMode?: WorkOvertimeMode;
+  /** Бюджет доски; 0 — без бюджета. */
+  budgetMinor?: number;
+  /** IANA-пояс, по которому считается «день» для нормы. */
+  timezone?: string;
+}
+
+export interface WorkBoardCommercialDto {
+  clientName: string;
+  currency: WorkCurrency;
+  pricingModel: WorkPricingModel;
+  dailyNormMinutes: number;
+  overtimeMode: WorkOvertimeMode;
+  timezone: string;
+  /** Ведущий: одобряет, закрывает периоды, видит все деньги. */
+  lead: WorkPersonRefDto | null;
+  /** Ставки и бюджет — только тем, кто видит деньги доски; остальным `null`. */
+  rates: {
+    rateMinor: number;
+    overtimeRateMinor: number;
+    budgetMinor: number;
+  } | null;
+}
+
+export interface WorkTimeEntryDto {
+  id: string;
+  person: WorkPersonRefDto | null;
+  startedAt: string;
+  /** `null` — таймер идёт. */
+  endedAt: string | null;
+  minutes: number;
+  /** Из них в пределах дневной нормы исполнителя. */
+  normalMinutes: number;
+  /** Из них сверх нормы. */
+  overtimeMinutes: number;
+  note: string;
+  /** Сумма за запись; `null` — смотрящему не положено её видеть. */
+  amountMinor: number | null;
+  /** Запись смотрящего: её можно удалить. */
+  mine: boolean;
+}
+
+export type WorkLineItemKind = 'expense' | 'discount';
+
+export interface WorkLineItemDto {
+  id: string;
+  kind: WorkLineItemKind;
+  title: string;
+  /** Всегда положительная; скидка вычитается по `kind`. */
+  amountMinor: number;
+}
+
+export interface WorkFinanceTotalsDto {
+  minutes: number;
+  normalMinutes: number;
+  overtimeMinutes: number;
+  /** Сверх нормы, но без одобрения: видно, в счёт не идёт. */
+  pendingOvertimeMinutes: number;
+  /** Суммы — `null` у тех, кто не видит деньги доски. */
+  workMinor: number | null;
+  expensesMinor: number | null;
+  discountMinor: number | null;
+  totalMinor: number | null;
+}
+
+/** Время и стоимость карточки коммерческой доски. */
+export interface WorkTaskFinanceDto {
+  taskId: string;
+  currency: WorkCurrency;
+  pricingModel: WorkPricingModel;
+  overtimeMode: WorkOvertimeMode;
+  dailyNormMinutes: number;
+  estimateMinutes: number | null;
+  /** Оценка деньгами: по ставке или фиксированная цена. */
+  estimateMinor: number | null;
+  /** Фиксированная цена задачи; `null` — не задана или не положено видеть. */
+  priceMinor: number | null;
+  entries: WorkTimeEntryDto[];
+  lineItems: WorkLineItemDto[];
+  totals: WorkFinanceTotalsDto;
+  /** Своё: сколько часов и на какую сумму у смотрящего в этой задаче. */
+  mine: { minutes: number; amountMinor: number };
+  /** Идущий таймер смотрящего в этой задаче. */
+  running: WorkTimeEntryDto | null;
+  canSeeFinance: boolean;
+}
+
+/** Шапка коммерческой доски: бюджет и сколько израсходовано. */
+export interface WorkBoardFinanceDto {
+  boardId: string;
+  currency: WorkCurrency;
+  budgetMinor: number;
+  spentMinor: number;
+  minutes: number;
+  overtimeMinutes: number;
+  pendingOvertimeMinutes: number;
+}
+
+/** Время задним числом. */
+export interface CreateWorkTimeEntryRequest {
+  /** ISO-время начала. */
+  startedAt: string;
+  minutes: number;
+  note?: string;
+}
+
+export interface UpdateWorkTaskFinanceRequest {
+  estimateMinutes?: number | null;
+  priceMinor?: number | null;
+}
+
+export interface CreateWorkLineItemRequest {
+  kind: WorkLineItemKind;
+  title: string;
+  amountMinor: number;
+}

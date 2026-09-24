@@ -43,6 +43,9 @@ function board(): WorkBoardDto {
     name: "Доска",
     role: "member",
     viewerId: "u1",
+    kind: "regular",
+    commercial: null,
+    canSeeFinance: false,
     labels: [],
     members: [],
     columns: [

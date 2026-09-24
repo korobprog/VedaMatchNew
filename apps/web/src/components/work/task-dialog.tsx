@@ -39,6 +39,7 @@ import {
   taskEditsProblem,
   type TaskDraft,
 } from "./task-edits";
+import { WorkTaskFinance } from "./task-finance";
 
 /** Поле карточки: одинаковое у всех списков и у срока. */
 const FIELD_CLASS =
@@ -531,6 +532,11 @@ export function WorkTaskDialog({
                   </p>
                 )}
               </div>
+            )}
+
+            {/* Время и стоимость (VED-458) — только на коммерческой доске. */}
+            {board.kind === "commercial" && (
+              <WorkTaskFinance taskId={task.id} canEdit={Boolean(canEdit)} />
             )}
 
             <h3 className="mt-5 text-sm font-semibold text-text-0">

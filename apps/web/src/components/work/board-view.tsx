@@ -66,6 +66,7 @@ import {
   writeCollapsedColumns,
 } from "./column-collapse";
 import { WorkArchivePanel } from "./archive-panel";
+import { WorkCommercialBar } from "./commercial-bar";
 import { WorkInvitePanel } from "./invite-panel";
 import { workPersonLabel, workPersonShortLabel } from "./person-label";
 import { workToolbarButtonClass } from "./toolbar-button";
@@ -825,6 +826,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             пикселей, на 320 — на 18). Прижимать вправо и одновременно ровнять
             по левому краю нельзя, поэтому ряд прижат влево на всех ширинах:
             одно правило вместо разъезжающихся по брейкпоинтам. */}
+        {/* Коммерческая доска (VED-458): клиент, норма, бюджет; у обычной —
+            кнопка «Оплата» для администрации. */}
+        <WorkCommercialBar
+          board={board}
+          canManageBoard={Boolean(canManage)}
+          personal={space.isPersonal}
+          onChanged={setBoard}
+        />
         <div className="flex w-full flex-wrap items-center justify-start gap-1">
           {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
               стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
