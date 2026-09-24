@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { ChatAttachmentInput, ChatUploadResult } from '@vedamatch/shared';
 import { attachmentKindFor } from './chat-upload-rules';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 /**
  * Файлы переписки в S3. Копия приёма из объявлений и Рынка: контракт
@@ -97,6 +98,12 @@ export class ChatUploadsService {
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       { expiresIn: ATTACHMENT_SIGNED_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 
@@ -158,7 +165,8 @@ export class ChatUploadsService {
     image: { url: string; width: number; height: number },
   ): Promise<ChatAttachmentInput | null> {
     const prefix = this.storagePrefix;
-    if (!this.s3Client || !this.bucket || !this.publicUrl || !prefix) return null;
+    if (!this.s3Client || !this.bucket || !this.publicUrl || !prefix)
+      return null;
     const sourceKey = storageKeyOf(image.url, prefix);
     if (!sourceKey) return null;
     const extension = sourceKey.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? '.webp';

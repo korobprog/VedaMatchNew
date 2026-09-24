@@ -10,6 +10,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { workUploadKindFor } from './work-upload-rules';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 /**
  * Файлы задач в S3. Копия приёма из переписки: контракт сервисного модуля
@@ -136,6 +137,12 @@ export class WorkUploadsService {
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }),
       { expiresIn: ATTACHMENT_SIGNED_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 

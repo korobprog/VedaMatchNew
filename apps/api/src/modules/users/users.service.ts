@@ -45,6 +45,7 @@ import {
   toPhotoVerificationState,
 } from './photo-verification';
 import { deletionEligibleAt } from './account-status';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 const GENDERS: Gender[] = ['male', 'female'];
 
@@ -124,6 +125,12 @@ export class UsersService {
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({ Bucket: bucket, Key: user.avatarKey }),
       { expiresIn: AVATAR_SIGNED_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 
