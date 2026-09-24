@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
 import type {
@@ -70,8 +77,6 @@ export function WorkTaskDialog({
   const [task, setTask] = useState<WorkTaskDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [comment, setComment] = useState("");
-  const [checklistDraft, setChecklistDraft] = useState("");
   /* Черновик всех полей карточки (VED-56): название, описание, раздел,
      исполнитель, важность и срок. Сохраняет кнопка «Сохранить» или закрытие
      окна — ни потеря фокуса, ни выбор в списке на сервер сами не уходят,
@@ -85,6 +90,17 @@ export function WorkTaskDialog({
     priority: "normal",
     due: "",
   });
+  /*
+    Название и описание держат текст сами (VED-453): набранная буква
+    перерисовывает только своё поле, а не всё окно с чек-листом, вложениями
+    и обсуждением. На телефоне полная перерисовка на каждое нажатие
+    отставала от пальцев, и клавиатура склеивала слова. Черновик догоняет
+    поле переходом (startTransition) — его можно прервать следующей буквой,
+    — а свежий текст для сохранения и закрытия лежит здесь, без задержки.
+  */
+  const latestText = useRef({ title: "", description: "" });
+  /** Смена ключа заново заводит поля текста — после загрузки, сохранения и отмены. */
+  const [textKey, setTextKey] = useState(0);
   /** Какие длинные пункты чек-листа раскрыты кнопкой «Далее» (VED-375). */
   const [expandedItems, setExpandedItems] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -114,7 +130,7 @@ export function WorkTaskDialog({
       .then((loaded) => {
         if (!alive) return;
         setTask(loaded);
-        setDraft(draftFromTask(loaded));
+        resetDraft(draftFromTask(loaded));
       })
       .catch((cause: unknown) => {
         if (alive) {
@@ -132,7 +148,7 @@ export function WorkTaskDialog({
   // осталось бы в одну строку.
   useEffect(() => {
     if (titleRef.current) growToText(titleRef.current);
-  }, [draft.title]);
+  }, [textKey]);
 
   const saved = task ? draftFromTask(task) : draft;
   const dirty = Boolean(task) && hasTaskEdits(saved, draft);
@@ -174,8 +190,9 @@ export function WorkTaskDialog({
    * правка пропадала.
    */
   const requestClose = useCallback(() => {
-    if (task && canEdit && pendingTaskEdits(draftFromTask(task), draft)) {
-      void commit(task, draft)
+    const next = { ...draft, ...latestText.current };
+    if (task && canEdit && pendingTaskEdits(draftFromTask(task), next)) {
+      void commit(task, next)
         .then(() => onChanged())
         .catch(() => undefined);
     }
@@ -248,12 +265,30 @@ export function WorkTaskDialog({
     setJustSaved(false);
   }
 
+  function editText(field: "title" | "description", value: string) {
+    latestText.current = { ...latestText.current, [field]: value };
+    startTransition(() => edit({ [field]: value }));
+  }
+
+  /** Подставить черновик извне: поля текста заводятся заново, только если текст в них другой. */
+  function resetDraft(next: TaskDraft) {
+    const changed =
+      next.title !== latestText.current.title ||
+      next.description !== latestText.current.description;
+    latestText.current = { title: next.title, description: next.description };
+    setDraft(next);
+    if (changed) setTextKey((key) => key + 1);
+  }
+
   /** «Сохранить»: все правки черновика разом. */
   function save() {
-    if (!task || problem || !pendingTaskEdits(saved, draft)) return;
+    const next = { ...draft, ...latestText.current };
+    if (!task || taskEditsProblem(next) || !pendingTaskEdits(saved, next)) {
+      return;
+    }
     void run(async () => {
-      const updated = await commit(task, draft);
-      if (updated) setDraft(draftFromTask(updated));
+      const updated = await commit(task, next);
+      if (updated) resetDraft(draftFromTask(updated));
       return updated ?? undefined;
     });
   }
@@ -264,7 +299,7 @@ export function WorkTaskDialog({
   /** Отменить правки: вернуть в поля то, что лежит на доске. */
   function discard() {
     if (!task) return;
-    setDraft(draftFromTask(task));
+    resetDraft(draftFromTask(task));
     setJustSaved(false);
   }
 
@@ -308,14 +343,15 @@ export function WorkTaskDialog({
                   длинное название обрывалось на середине слова, и карточка
                   открывалась так, будто текста в ней нет. Поле растёт под текст
                   и обведено — иначе заголовок не читается как правимый. */}
-              <textarea
+              <DraftTextarea
+                key={`title-${textKey}`}
                 ref={titleRef}
-                value={draft.title}
+                initialValue={latestText.current.title}
+                onValueChange={(value) => editText("title", value)}
                 readOnly={!canEdit}
                 rows={1}
                 maxLength={200}
                 aria-label="Название задачи"
-                onChange={(event) => edit({ title: event.target.value })}
                 onInput={(event) => growToText(event.currentTarget)}
                 onKeyDown={(event) => {
                   // Enter в заголовке — это «готово»: сохранить, а не новая
@@ -468,13 +504,14 @@ export function WorkTaskDialog({
 
             <label className="mt-2 block text-xs text-text-1">
               Описание
-              <textarea
-                value={draft.description}
+              <DraftTextarea
+                key={`description-${textKey}`}
+                initialValue={latestText.current.description}
+                onValueChange={(value) => editText("description", value)}
                 readOnly={!canEdit}
                 rows={4}
                 maxLength={10000}
                 placeholder="Что именно нужно сделать и что считать готовым"
-                onChange={(event) => edit({ description: event.target.value })}
                 onKeyDown={(event) => {
                   // Ctrl+Enter (⌘+Enter) — сохранить, не отрывая рук от
                   // клавиатуры: простой Enter в описании — новая строка.
@@ -619,46 +656,16 @@ export function WorkTaskDialog({
               ))}
             </ul>
             {canEdit && (
-              <form
-                className="mt-2 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const text = checklistDraft.trim();
-                  if (!text) return;
+              <ChecklistAddForm
+                busy={busy}
+                onAdd={(text, clear) =>
                   void run(async () => {
                     const next = await addWorkChecklistItem(task.id, { text });
-                    setChecklistDraft("");
+                    clear();
                     return next;
-                  });
-                }}
-              >
-                {/* Поле растёт под текст (VED-375): пункт теперь до 2000
-                    знаков. Enter — добавить, как было; Shift+Enter — новая
-                    строка внутри пункта. */}
-                <textarea
-                  value={checklistDraft}
-                  rows={1}
-                  onChange={(event) => setChecklistDraft(event.target.value)}
-                  onInput={(event) => growToText(event.currentTarget)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      event.currentTarget.form?.requestSubmit();
-                    }
-                  }}
-                  maxLength={WORK_CHECKLIST_TEXT_MAX}
-                  placeholder="Добавить пункт"
-                  aria-label="Новый пункт чек-листа"
-                  className="min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !checklistDraft.trim()}
-                  className="rounded-xl bg-glass px-3 py-2 text-sm text-text-0 disabled:opacity-50"
-                >
-                  Добавить
-                </button>
-              </form>
+                  })
+                }
+              />
             )}
 
             <h3
@@ -800,35 +807,16 @@ export function WorkTaskDialog({
               ))}
             </ul>
             {canEdit && (
-              <form
-                className="mt-3 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const body = comment.trim();
-                  if (!body) return;
+              <CommentForm
+                busy={busy}
+                onSend={(body, clear) =>
                   void run(async () => {
                     const next = await commentWorkTask(task.id, { body });
-                    setComment("");
+                    clear();
                     return next;
-                  });
-                }}
-              >
-                <input
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  maxLength={4000}
-                  placeholder="Написать"
-                  aria-label="Новый комментарий"
-                  className="min-w-0 flex-1 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
-                />
-                <button
-                  type="submit"
-                  disabled={busy || !comment.trim()}
-                  className="rounded-xl bg-magenta px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  Отправить
-                </button>
-              </form>
+                  })
+                }
+              />
             )}
 
             {/* Карточка из архива доски (VED-61): вместо «убрать» — «вернуть».
@@ -895,5 +883,122 @@ export function WorkTaskDialog({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Поле текста со своим состоянием (VED-453): нажатие перерисовывает только
+ * его. Значение снаружи берётся один раз, при заведении; подставить новое —
+ * сменить `key`.
+ */
+function DraftTextarea({
+  initialValue,
+  onValueChange,
+  ...props
+}: Omit<ComponentProps<"textarea">, "value" | "defaultValue" | "onChange"> & {
+  initialValue: string;
+  onValueChange: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <textarea
+      {...props}
+      value={value}
+      onChange={(event) => {
+        setValue(event.target.value);
+        onValueChange(event.target.value);
+      }}
+    />
+  );
+}
+
+/**
+ * Новый пункт чек-листа. Текст живёт здесь, а не в окне: иначе каждая буква
+ * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
+ * дошёл до сервера.
+ */
+function ChecklistAddForm({
+  busy,
+  onAdd,
+}: {
+  busy: boolean;
+  onAdd: (text: string, clear: () => void) => void;
+}) {
+  const [text, setText] = useState("");
+  return (
+    <form
+      className="mt-2 flex gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        onAdd(trimmed, () => setText(""));
+      }}
+    >
+      {/* Поле растёт под текст (VED-375): пункт теперь до 2000
+          знаков. Enter — добавить, как было; Shift+Enter — новая
+          строка внутри пункта. */}
+      <textarea
+        value={text}
+        rows={1}
+        onChange={(event) => setText(event.target.value)}
+        onInput={(event) => growToText(event.currentTarget)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }
+        }}
+        maxLength={WORK_CHECKLIST_TEXT_MAX}
+        placeholder="Добавить пункт"
+        aria-label="Новый пункт чек-листа"
+        className="min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+      />
+      <button
+        type="submit"
+        disabled={busy || !text.trim()}
+        className="rounded-xl bg-glass px-3 py-2 text-sm text-text-0 disabled:opacity-50"
+      >
+        Добавить
+      </button>
+    </form>
+  );
+}
+
+/** Новый комментарий — со своим текстом, по той же причине, что и чек-лист. */
+function CommentForm({
+  busy,
+  onSend,
+}: {
+  busy: boolean;
+  onSend: (body: string, clear: () => void) => void;
+}) {
+  const [body, setBody] = useState("");
+  return (
+    <form
+      className="mt-3 flex gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const trimmed = body.trim();
+        if (!trimmed) return;
+        onSend(trimmed, () => setBody(""));
+      }}
+    >
+      <input
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        maxLength={4000}
+        placeholder="Написать"
+        aria-label="Новый комментарий"
+        className="min-w-0 flex-1 rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+      />
+      <button
+        type="submit"
+        disabled={busy || !body.trim()}
+        className="rounded-xl bg-magenta px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Отправить
+      </button>
+    </form>
   );
 }

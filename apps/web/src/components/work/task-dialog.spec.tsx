@@ -140,8 +140,25 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     await user.type(title, " лишнее");
     await user.click(screen.getByRole("button", { name: "Отменить правки" }));
 
-    expect(title).toHaveValue("Кнопка сохранить");
+    // Поле заводится заново с сохранённым текстом — ищем его снова.
+    expect(screen.getByLabelText("Название задачи")).toHaveValue(
+      "Кнопка сохранить",
+    );
     expect(updateWorkTask).not.toHaveBeenCalled();
+  });
+
+  it("saves the description typed right before Ctrl+Enter (VED-453)", async () => {
+    const user = userEvent.setup();
+    open();
+    const description = await screen.findByPlaceholderText(
+      "Что именно нужно сделать и что считать готовым",
+    );
+
+    await user.type(description, " и новое{Control>}{Enter}{/Control}");
+
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", {
+      description: "Старое описание и новое",
+    });
   });
 
   it("refuses to save an empty title", async () => {
