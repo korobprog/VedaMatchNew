@@ -2,7 +2,12 @@
 
 import { useId } from "react";
 import { WORK_CURRENCIES, type WorkCurrency } from "@vedamatch/shared";
-import { type CommercialDraft, currencySymbol } from "./finance-format";
+import {
+  type CommercialDraft,
+  WEEKDAYS,
+  currencySymbol,
+  payoutDayFor,
+} from "./finance-format";
 
 const INPUT =
   "w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0";
@@ -135,6 +140,47 @@ export function CommercialSettingsFields({
           </p>
         </>
       )}
+
+      <label className="flex flex-col gap-1" htmlFor={`${id}-payout`}>
+        <span className={LABEL}>Подбивать</span>
+        <select
+          id={`${id}-payout`}
+          value={draft.payoutPeriod}
+          onChange={(event) => {
+            const period = event.target.value as CommercialDraft["payoutPeriod"];
+            set({
+              payoutPeriod: period,
+              payoutDay: String(payoutDayFor(period, Number(draft.payoutDay))),
+            });
+          }}
+          className={INPUT}
+        >
+          <option value="weekly">Раз в неделю</option>
+          <option value="biweekly">Раз в две недели</option>
+          <option value="monthly">Раз в месяц</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1" htmlFor={`${id}-payout-day`}>
+        <span className={LABEL}>День подбития</span>
+        <select
+          id={`${id}-payout-day`}
+          value={draft.payoutDay}
+          onChange={(event) => set({ payoutDay: event.target.value })}
+          className={INPUT}
+        >
+          {draft.payoutPeriod === "monthly"
+            ? Array.from({ length: 28 }, (_, index) => (
+                <option key={index + 1} value={String(index + 1)}>
+                  {index + 1}-го числа
+                </option>
+              ))
+            : WEEKDAYS.map((name, index) => (
+                <option key={name} value={String(index + 1)}>
+                  {name[0].toUpperCase() + name.slice(1)}
+                </option>
+              ))}
+        </select>
+      </label>
 
       <label className="col-span-2 flex flex-col gap-1" htmlFor={`${id}-budget`}>
         <span className={LABEL}>Бюджет доски, {symbol}</span>

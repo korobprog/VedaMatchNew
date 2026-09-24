@@ -367,6 +367,35 @@ export type NotificationEvent =
     }
   | {
       /**
+       * Период коммерческой доски подбит (VED-460). Ведущему — итог по доске,
+       * исполнителю — его сумма к выплате. Сумма в копейках, валюта кодом:
+       * число и знак собирает подписчик.
+       */
+      name: "work.payout.closed";
+      recipientId: string;
+      periodId: string;
+      spaceId: string;
+      spaceName: string;
+      fromDay: string;
+      toDay: string;
+      amountMinor: number;
+      currency: string;
+      role: "lead" | "executor";
+    }
+  | {
+      /** Ведущий отметил период оплаченным; исполнителю — его сумма. */
+      name: "work.payout.paid";
+      recipientId: string;
+      periodId: string;
+      spaceId: string;
+      spaceName: string;
+      fromDay: string;
+      toDay: string;
+      amountMinor: number;
+      currency: string;
+    }
+  | {
+      /**
        * Исполнитель коммерческой доски просит часы сверх нормы (VED-459).
        * Получатель — ведущий доски. Задача — повод запроса, её может не быть.
        */

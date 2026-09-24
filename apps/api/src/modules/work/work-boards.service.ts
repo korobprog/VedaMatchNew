@@ -33,6 +33,7 @@ import {
   canManageWorkFinance,
   parseWorkCommercialSettings,
 } from './work-finance-settings';
+import { workPayoutScheduleData } from './work-payout';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { resolveTaskStatusMark } from './work-task-status';
@@ -271,7 +272,20 @@ export class WorkBoardsService {
         name: requireText(request.name, 'Название доски', WORK_BOARD_NAME_MAX),
         position: (last?.position ?? 0) + WORK_POSITION_STEP,
         ...(commercial
-          ? { ...commercial, kind: 'commercial', leadId: userId }
+          ? {
+              ...commercial,
+              ...workPayoutScheduleData(
+                commercial,
+                {
+                  payoutPeriod: 'weekly',
+                  payoutDay: 5,
+                  timezone: commercial.timezone ?? 'Europe/Moscow',
+                },
+                new Date(),
+              ),
+              kind: 'commercial',
+              leadId: userId,
+            }
           : {}),
       },
     });
@@ -285,7 +299,14 @@ export class WorkBoardsService {
   ): Promise<WorkBoardDto> {
     const current = await this.prisma.workBoard.findUnique({
       where: { id: boardId },
-      select: { spaceId: true, leadId: true, kind: true },
+      select: {
+        spaceId: true,
+        leadId: true,
+        kind: true,
+        payoutPeriod: true,
+        payoutDay: true,
+        timezone: true,
+      },
     });
     if (!current) throw new NotFoundException('Доска не найдена');
     const role = await this.spaces.roleOf(current.spaceId, userId);
@@ -327,7 +348,14 @@ export class WorkBoardsService {
    */
   private async applyCommercial(
     boardId: string,
-    current: { spaceId: string; leadId: string | null; kind: string },
+    current: {
+      spaceId: string;
+      leadId: string | null;
+      kind: string;
+      payoutPeriod: 'weekly' | 'biweekly' | 'monthly';
+      payoutDay: number;
+      timezone: string;
+    },
     userId: string,
     request: UpdateWorkBoardRequest,
   ): Promise<void> {
@@ -335,8 +363,25 @@ export class WorkBoardsService {
     if (request.commercial === null) {
       data.kind = 'regular';
     } else if (request.commercial !== undefined) {
-      Object.assign(data, parseWorkCommercialSettings(request.commercial));
+      const settings = parseWorkCommercialSettings(request.commercial);
+      Object.assign(
+        data,
+        settings,
+        workPayoutScheduleData(
+          settings,
+          { ...current, timezone: settings.timezone ?? current.timezone },
+          new Date(),
+        ),
+      );
       data.kind = 'commercial';
+      // Обычная доска стала коммерческой — выплаты считаются с этого часа,
+      // если по ней ещё никто не записывал время.
+      if (current.kind !== 'commercial') {
+        const tracked = await this.prisma.workTimeEntry.count({
+          where: { boardId },
+        });
+        if (tracked === 0) data.commercialSince = new Date();
+      }
       if (!current.leadId && request.leadId === undefined) {
         data.lead = { connect: { id: userId } };
       }
@@ -567,6 +612,8 @@ function toCommercialDto(
     rateMinor: number;
     overtimeRateMinor: number;
     budgetMinor: number;
+    payoutPeriod: WorkBoardCommercialDto['payoutPeriod'];
+    payoutDay: number;
     lead: Parameters<typeof toWorkPersonRef>[0] | null;
   },
   canSeeFinance: boolean,
@@ -579,6 +626,8 @@ function toCommercialDto(
     overtimeMode: board.overtimeMode,
     timezone: board.timezone,
     lead: board.lead ? toWorkPersonRef(board.lead) : null,
+    payoutPeriod: board.payoutPeriod,
+    payoutDay: board.payoutDay,
     rates: canSeeFinance
       ? {
           rateMinor: board.rateMinor,

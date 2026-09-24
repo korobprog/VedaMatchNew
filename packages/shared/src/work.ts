@@ -628,6 +628,10 @@ export interface WorkCommercialSettingsInput {
   budgetMinor?: number;
   /** IANA-пояс, по которому считается «день» для нормы. */
   timezone?: string;
+  /** Как часто подбивать (VED-460). */
+  payoutPeriod?: WorkPayoutPeriodKind;
+  /** День подбития: день недели ISO 1…7 или число месяца 1…28. */
+  payoutDay?: number;
 }
 
 export interface WorkBoardCommercialDto {
@@ -639,6 +643,8 @@ export interface WorkBoardCommercialDto {
   timezone: string;
   /** Ведущий: одобряет, закрывает периоды, видит все деньги. */
   lead: WorkPersonRefDto | null;
+  payoutPeriod: WorkPayoutPeriodKind;
+  payoutDay: number;
   /** Ставки и бюджет — только тем, кто видит деньги доски; остальным `null`. */
   rates: {
     rateMinor: number;
@@ -665,6 +671,8 @@ export interface WorkTimeEntryDto {
   amountMinor: number | null;
   /** Запись смотрящего: её можно удалить. */
   mine: boolean;
+  /** Вошла в подбитый период выплат (VED-460): удалить уже нельзя. */
+  locked: boolean;
 }
 
 export type WorkLineItemKind = 'expense' | 'discount';
@@ -675,6 +683,8 @@ export interface WorkLineItemDto {
   title: string;
   /** Всегда положительная; скидка вычитается по `kind`. */
   amountMinor: number;
+  /** Вошла в подбитый период выплат: удалить уже нельзя. */
+  locked: boolean;
 }
 
 export interface WorkFinanceTotalsDto {
@@ -807,3 +817,101 @@ export interface DecideWorkOvertimeRequest {
   decision: 'approved' | 'rejected';
   note?: string;
 }
+
+// ===== Календарь выплат и подбитие (VED-460) =====
+
+export type WorkPayoutPeriodKind = 'weekly' | 'biweekly' | 'monthly';
+/**
+ * `open` — период идёт, в базе его нет; `closed` — подбит, итог заморожен;
+ * `sent` — итог отправлен клиенту; `paid` — оплачен.
+ */
+export type WorkPayoutStatus = 'open' | 'closed' | 'sent' | 'paid';
+
+export const WORK_PAYOUT_NOTE_MAX = 300;
+
+export interface WorkPayoutCorrection {
+  /**
+   * `late_time` — время внесено задним числом в уже подбитые дни: оно уже
+   * в суммах этого периода, строка — пояснение. `late_approval` — сверх нормы
+   * одобрили после подбития: доплата сверху.
+   */
+  kind: 'late_time' | 'late_approval';
+  userId: string | null;
+  name: string;
+  taskKey: string;
+  day: string;
+  minutes: number;
+  amountMinor: number;
+}
+
+/** Замороженный итог периода. */
+export interface WorkPayoutSnapshot {
+  people: Array<{
+    userId: string | null;
+    name: string;
+    minutes: number;
+    normalMinutes: number;
+    /** Сверх нормы, пошедшее в счёт. */
+    overtimeMinutes: number;
+    /** Сверх нормы без одобрения на момент подбития. */
+    pendingOvertimeMinutes: number;
+    workMinor: number;
+  }>;
+  tasks: Array<{
+    taskId: string;
+    key: string;
+    title: string;
+    /** Задачу закрыли в этом периоде. */
+    done: boolean;
+    minutes: number;
+    workMinor: number;
+    expensesMinor: number;
+    discountMinor: number;
+  }>;
+  corrections: WorkPayoutCorrection[];
+  totals: {
+    minutes: number;
+    normalMinutes: number;
+    overtimeMinutes: number;
+    pendingOvertimeMinutes: number;
+    workMinor: number;
+    expensesMinor: number;
+    discountMinor: number;
+    correctionsMinor: number;
+    totalMinor: number;
+  };
+}
+
+export interface WorkPayoutPeriodDto {
+  /** `null` у идущего периода — в базе его ещё нет. */
+  id: string | null;
+  fromDay: string;
+  toDay: string;
+  status: WorkPayoutStatus;
+  /**
+   * Итог: у идущего — на сейчас, у подбитого — замороженный. Смотрящему без
+   * доступа к деньгам доски — только его строка в `people`, задачи без сумм.
+   */
+  snapshot: WorkPayoutSnapshot;
+  closedAt: string | null;
+  sentAt: string | null;
+  paidAt: string | null;
+  paidNote: string;
+}
+
+export interface WorkPayoutsDto {
+  currency: WorkCurrency;
+  period: WorkPayoutPeriodKind;
+  payoutDay: number;
+  /** Ведущий или администрация: подбивают, отмечают отправку и оплату. */
+  canManage: boolean;
+  current: WorkPayoutPeriodDto;
+  /** Подбитые, свежие первыми. */
+  closed: WorkPayoutPeriodDto[];
+}
+
+export interface MarkWorkPayoutRequest {
+  status: 'sent' | 'paid';
+  note?: string;
+}
+

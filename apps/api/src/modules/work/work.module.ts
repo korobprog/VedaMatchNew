@@ -3,6 +3,8 @@ import { AuthModule } from '../auth/auth.module';
 import { WorkBoardsService } from './work-boards.service';
 import { WorkContactsService } from './work-contacts.service';
 import { WorkFinanceService } from './work-finance.service';
+import { WorkPayoutWorkerService } from './work-payout-worker.service';
+import { WorkPayoutsService } from './work-payouts.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkNoticeWorkerService } from './work-notice-worker.service';
 import { WorkNoticesService } from './work-notices.service';
@@ -41,6 +43,8 @@ import {
     WorkBoardsService,
     WorkTasksService,
     WorkFinanceService,
+    WorkPayoutsService,
+    WorkPayoutWorkerService,
     WorkInvitesService,
     WorkContactsService,
     WorkUploadsService,

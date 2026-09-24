@@ -5703,27 +5703,36 @@ model WorkBoard {
 
   /// Коммерческая доска (VED-458): часы, ставки и сметы. Смена на обычную
   /// только прячет деньги — поля ниже не стираются.
-  kind              WorkBoardKind    @default(regular)
+  kind              WorkBoardKind        @default(regular)
   /// Ведущий доски: видит все деньги, одобряет часы сверх нормы.
   leadId            String?
-  lead              User?            @relation("WorkBoardsLed", fields: [leadId], references: [id], onDelete: SetNull)
-  clientName        String           @default("")
-  currency          String           @default("RUB")
-  pricingModel      WorkPricingModel @default(hourly)
+  lead              User?                @relation("WorkBoardsLed", fields: [leadId], references: [id], onDelete: SetNull)
+  clientName        String               @default("")
+  currency          String               @default("RUB")
+  pricingModel      WorkPricingModel     @default(hourly)
   /// Деньги — в минимальных единицах валюты (копейках): Float теряет копейки.
-  rateMinor         Int              @default(0)
+  rateMinor         Int                  @default(0)
   /// Дневная норма на исполнителя в минутах; 0 — нормы нет.
-  dailyNormMinutes  Int              @default(0)
-  overtimeRateMinor Int              @default(0)
-  overtimeMode      WorkOvertimeMode @default(on_request)
-  budgetMinor       Int              @default(0)
+  dailyNormMinutes  Int                  @default(0)
+  overtimeRateMinor Int                  @default(0)
+  overtimeMode      WorkOvertimeMode     @default(on_request)
+  budgetMinor       Int                  @default(0)
   /// IANA-пояс, по которому режутся сутки для нормы.
-  timezone          String           @default("Europe/Moscow")
+  timezone          String               @default("Europe/Moscow")
+  /// Календарь выплат (VED-460): как часто подбивать и в какой день —
+  /// день недели ISO 1…7 или число месяца 1…28.
+  payoutPeriod      WorkPayoutPeriodKind @default(weekly)
+  payoutDay         Int                  @default(5)
+  /// Две недели: один из дней подбития, от него считается чётность недель.
+  payoutAnchorDay   String               @default("")
+  /// С какого момента доска коммерческая — начало первого периода.
+  commercialSince   DateTime             @default(now())
 
   columns          WorkColumn[]
   tasks            WorkTask[]
   timeEntries      WorkTimeEntry[]
   overtimeRequests WorkOvertimeRequest[]
+  payoutPeriods    WorkPayoutPeriod[]
 
   @@index([spaceId, position])
 }
@@ -5789,20 +5798,23 @@ model WorkTask {
   /// `null` у задач до VED-421 без истории — тогда считается `createdAt`.
   editedAt        DateTime?
 
-  labels           WorkTaskLabel[]
-  checklist        WorkChecklistItem[]
-  comments         WorkComment[]
-  attachments      WorkAttachment[]
+  labels              WorkTaskLabel[]
+  checklist           WorkChecklistItem[]
+  comments            WorkComment[]
+  attachments         WorkAttachment[]
   /// Оценка задачи в минутах (VED-458).
-  estimateMinutes  Int?
+  estimateMinutes     Int?
   /// Фиксированная цена задачи в копейках — при модели «фикс за задачу».
-  priceMinor       Int?
-  timeEntries      WorkTimeEntry[]
-  lineItems        WorkTaskLineItem[]
-  overtimeRequests WorkOvertimeRequest[]
-  activity         WorkActivity[]
-  notices          WorkTaskNotice[]
-  views            WorkTaskView[]
+  priceMinor          Int?
+  /// Период выплат, в который вошла цена закрытой задачи (VED-460).
+  pricePayoutPeriodId String?
+  pricePayoutPeriod   WorkPayoutPeriod?     @relation("WorkPayoutPrices", fields: [pricePayoutPeriodId], references: [id], onDelete: SetNull)
+  timeEntries         WorkTimeEntry[]
+  lineItems           WorkTaskLineItem[]
+  overtimeRequests    WorkOvertimeRequest[]
+  activity            WorkActivity[]
+  notices             WorkTaskNotice[]
+  views               WorkTaskView[]
 
   @@unique([spaceId, number])
   @@index([columnId, position])
@@ -7420,36 +7432,46 @@ enum WorkLineItemKind {
 /// «сверх нормы» не хранятся — считаются по дням исполнителя в work-finance.ts,
 /// иначе правка одной записи задним числом требовала бы пересчёта соседних.
 model WorkTimeEntry {
-  id        String    @id @default(uuid())
+  id                    String            @id @default(uuid())
   /// Продублирован ради нормы: она считается по всей доске, а не по задаче.
-  boardId   String
-  board     WorkBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  taskId    String
-  task      WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  boardId               String
+  board                 WorkBoard         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  taskId                String
+  task                  WorkTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
   /// Исполнитель обнуляется вместе с аккаунтом, часы остаются: по ним платили.
-  userId    String?
-  user      User?     @relation("WorkTimeEntries", fields: [userId], references: [id], onDelete: SetNull)
-  startedAt DateTime
+  userId                String?
+  user                  User?             @relation("WorkTimeEntries", fields: [userId], references: [id], onDelete: SetNull)
+  startedAt             DateTime
   /// `null` — таймер идёт.
-  endedAt   DateTime?
-  note      String    @default("")
-  createdAt DateTime  @default(now())
+  endedAt               DateTime?
+  note                  String            @default("")
+  createdAt             DateTime          @default(now())
+  /// Период выплат, куда вошла запись (VED-460); `null` — ещё не подбита.
+  payoutPeriodId        String?
+  payoutPeriod          WorkPayoutPeriod? @relation("WorkPayoutEntries", fields: [payoutPeriodId], references: [id], onDelete: SetNull)
+  /// Сколько сверх нормы пошло в счёт при подбитии: одобрили позже —
+  /// разница уйдёт доплатой в следующий период.
+  billedOvertimeMinutes Int?
 
   @@index([boardId, startedAt])
+  @@index([boardId, payoutPeriodId])
   @@index([taskId, startedAt])
   @@index([userId, endedAt])
 }
 
 /// Строка сметы задачи сверх времени: расход или скидка.
 model WorkTaskLineItem {
-  id          String           @id @default(uuid())
-  taskId      String
-  task        WorkTask         @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  kind        WorkLineItemKind
-  title       String
-  amountMinor Int
-  position    Float            @default(0)
-  createdAt   DateTime         @default(now())
+  id             String            @id @default(uuid())
+  taskId         String
+  task           WorkTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kind           WorkLineItemKind
+  title          String
+  amountMinor    Int
+  position       Float             @default(0)
+  createdAt      DateTime          @default(now())
+  /// Период выплат, куда вошла строка (VED-460).
+  payoutPeriodId String?
+  payoutPeriod   WorkPayoutPeriod? @relation("WorkPayoutLines", fields: [payoutPeriodId], references: [id], onDelete: SetNull)
 
   @@index([taskId, position])
 }
@@ -7489,4 +7511,44 @@ model WorkOvertimeRequest {
 
   @@index([boardId, status])
   @@index([boardId, userId, fromDay])
+}
+
+enum WorkPayoutPeriodKind {
+  weekly
+  biweekly
+  monthly
+}
+
+enum WorkPayoutStatus {
+  closed
+  sent
+  paid
+}
+
+/// Подбитый период выплат коммерческой доски (VED-460). Идущий период не
+/// хранится — он считается на лету. Итог замораживается снимком: смена
+/// ставки или правка задним числом его не трогают, поздние часы уходят
+/// корректировкой в следующий период.
+model WorkPayoutPeriod {
+  id         String           @id @default(uuid())
+  boardId    String
+  board      WorkBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  /// Дни пояса доски включительно.
+  fromDay    String
+  toDay      String
+  status     WorkPayoutStatus @default(closed)
+  /// WorkPayoutSnapshot из @vedamatch/shared.
+  snapshot   Json
+  totalMinor Int
+  closedAt   DateTime         @default(now())
+  sentAt     DateTime?
+  paidAt     DateTime?
+  paidNote   String           @default("")
+
+  entries    WorkTimeEntry[]    @relation("WorkPayoutEntries")
+  lines      WorkTaskLineItem[] @relation("WorkPayoutLines")
+  priceTasks WorkTask[]         @relation("WorkPayoutPrices")
+
+  @@unique([boardId, fromDay])
+  @@index([boardId, toDay])
 }

@@ -17,6 +17,7 @@ import {
   type WorkSpaceSummaryDto,
 } from '@vedamatch/shared';
 import { parseWorkCommercialSettings } from './work-finance-settings';
+import { workPayoutScheduleData } from './work-payout';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WORK_POSITION_STEP } from './work-position';
 import {
@@ -190,7 +191,20 @@ export class WorkSpacesService {
           position: 0,
           // Коммерческая доска (VED-458): ведущий — тот, кто завёл среду.
           ...(commercial
-            ? { ...commercial, kind: 'commercial', leadId: userId }
+            ? {
+                ...commercial,
+                ...workPayoutScheduleData(
+                  commercial,
+                  {
+                    payoutPeriod: 'weekly',
+                    payoutDay: 5,
+                    timezone: commercial.timezone ?? 'Europe/Moscow',
+                  },
+                  new Date(),
+                ),
+                kind: 'commercial',
+                leadId: userId,
+              }
             : {}),
         },
       });

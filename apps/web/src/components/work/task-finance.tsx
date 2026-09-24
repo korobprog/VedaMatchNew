@@ -393,7 +393,11 @@ export function WorkTaskFinance({
               entry={entry}
               money={money}
               onRequest={onRequest}
-              canRemove={canEdit && (entry.mine || finance.canSeeFinance)}
+              canRemove={
+                canEdit &&
+                !entry.locked &&
+                (entry.mine || finance.canSeeFinance)
+              }
               busy={busy}
               onRemove={() => void run(() => removeWorkTime(entry.id))}
             />
@@ -531,6 +535,7 @@ export function WorkTaskFinance({
                     {item.kind === "discount" ? "−" : ""}
                     {money(item.amountMinor)}
                   </span>
+                  {!item.locked && (
                   <button
                     type="button"
                     onClick={() =>
@@ -542,6 +547,7 @@ export function WorkTaskFinance({
                   >
                     <Trash2 aria-hidden className="size-4" />
                   </button>
+                  )}
                 </li>
               ))}
             </ul>

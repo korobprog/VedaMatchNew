@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_COMMERCIAL_DRAFT,
   commercialDraftToInput,
+  describePayoutSchedule,
+  formatPayoutRange,
+  payoutDayFor,
   formatDayRange,
   formatElapsed,
   formatMinutes,
@@ -81,6 +84,8 @@ describe("черновик настроек оплаты", () => {
         overtimeMode: "on_request",
         budgetMinor: 0,
         timezone: "Europe/Moscow",
+        payoutPeriod: "weekly",
+        payoutDay: 5,
       },
     });
   });
@@ -127,5 +132,33 @@ describe("дни запроса сверх нормы", () => {
     expect(shiftDay("2026-09-30", 1)).toBe("2026-10-01");
     expect(shiftDay("2026-12-31", 1)).toBe("2027-01-01");
     expect(shiftDay("2026-03-01", -1)).toBe("2026-02-28");
+  });
+});
+
+describe("календарь выплат", () => {
+  it("день подбития подгоняется под период", () => {
+    expect(payoutDayFor("weekly", 20)).toBe(5);
+    expect(payoutDayFor("monthly", 31)).toBe(28);
+    expect(payoutDayFor("biweekly", 1)).toBe(1);
+    expect(payoutDayFor("monthly", Number.NaN)).toBe(1);
+  });
+
+  it("расписание словами", () => {
+    expect(describePayoutSchedule("weekly", 5)).toBe(
+      "раз в неделю, в пятницу",
+    );
+    expect(describePayoutSchedule("biweekly", 2)).toBe(
+      "раз в две недели, во вторник",
+    );
+    expect(describePayoutSchedule("monthly", 10)).toBe("раз в месяц, 10-го");
+  });
+
+  it("период словами", () => {
+    expect(formatPayoutRange("2026-09-19", "2026-09-25")).toBe(
+      "19–25 сентября",
+    );
+    expect(formatPayoutRange("2026-09-28", "2026-10-02")).toBe(
+      "28 сентября — 2 октября",
+    );
   });
 });

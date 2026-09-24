@@ -85,6 +85,14 @@ export function workLocalDay(at: Date, timezone: string): string {
   return local.toISOString().slice(0, 10);
 }
 
+/** Полночь в поясе доски, с которой начинается день `2026-09-24`. */
+export function workLocalDayStart(day: string, timezone: string): Date {
+  const [year, month, date] = day.split('-').map(Number);
+  const midnightAsUtc = Date.UTC(year, month - 1, date);
+  const guess = midnightAsUtc - zoneOffsetMs(midnightAsUtc, timezone);
+  return new Date(midnightAsUtc - zoneOffsetMs(guess, timezone));
+}
+
 /** Ближайшая полночь в поясе доски строго после `at`. */
 export function workNextLocalMidnight(at: Date, timezone: string): Date {
   const [year, month, day] = workLocalDay(at, timezone).split('-').map(Number);

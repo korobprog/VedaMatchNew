@@ -6,6 +6,7 @@ import {
   workOvertimeRequestMaxCost,
   workEstimateCost,
   workLocalDay,
+  workLocalDayStart,
   workMinutesCost,
   workNextLocalMidnight,
   workSplitByLocalDay,
@@ -55,6 +56,15 @@ describe('сутки в поясе доски', () => {
         'Europe/Berlin',
       ).toISOString(),
     ).toBe('2026-03-29T22:00:00.000Z');
+  });
+
+  it('начало дня в поясе доски', () => {
+    expect(workLocalDayStart('2026-09-24', MSK).toISOString()).toBe(
+      '2026-09-23T21:00:00.000Z',
+    );
+    expect(workLocalDayStart('2026-03-30', 'Europe/Berlin').toISOString()).toBe(
+      '2026-03-29T22:00:00.000Z',
+    );
   });
 
   it('запись через полночь делится на два дня', () => {

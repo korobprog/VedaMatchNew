@@ -59,6 +59,8 @@ export const notificationEventNames = {
   workInviteReceived: 'work.invite.received',
   workOvertimeRequested: 'work.overtime.requested',
   workOvertimeDecided: 'work.overtime.decided',
+  workPayoutClosed: 'work.payout.closed',
+  workPayoutPaid: 'work.payout.paid',
   vacancyResponseCreated: 'vacancies.response.created',
   vacancyResponseStatusChanged: 'vacancies.response.status-changed',
   vacancyOfferClosed: 'vacancies.offer.closed',
@@ -122,6 +124,33 @@ export function workTaskUrl(spaceId: string, taskKey: string): string {
 /** Запрос сверх нормы ведёт в задачу, а без задачи — на доску. */
 function overtimeUrl(spaceId: string, taskKey: string | null): string {
   return taskKey ? workTaskUrl(spaceId, taskKey) : `/work/planner/${spaceId}`;
+}
+
+const CURRENCY_SIGNS: Record<string, string> = {
+  RUB: '₽',
+  USD: '$',
+  EUR: '€',
+  INR: '₹',
+};
+
+/** 2475000 копеек → «24 750 ₽»; копейки — только когда есть. */
+export function formatMoneyMinor(minor: number, currency: string): string {
+  const text = new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: minor % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(minor / 100);
+  return `${text} ${CURRENCY_SIGNS[currency] ?? currency}`;
+}
+
+/** Период выплат: «19–25 сентября» или «28 сентября — 2 октября». */
+function payoutRange(fromDay: string, toDay: string): string {
+  const [, fromMonth, fromDate] = fromDay.split('-').map(Number);
+  const [, toMonth, toDate] = toDay.split('-').map(Number);
+  const month = (value: number) => MONTHS_GENITIVE[value - 1] ?? '';
+  if (fromDay === toDay) return `${toDate} ${month(toMonth)}`;
+  return fromMonth === toMonth
+    ? `${fromDate}–${toDate} ${month(toMonth)}`
+    : `${fromDate} ${month(fromMonth)} — ${toDate} ${month(toMonth)}`;
 }
 
 /** 90 → «1 ч 30 мин», 120 → «2 ч». */
@@ -655,6 +684,30 @@ export function buildNotification(
         threadKey: workStatusThreadKey(
           workTaskUrl(event.spaceId, event.taskKey),
         ),
+      };
+    case 'work.payout.closed':
+      return event.role === 'lead'
+        ? {
+            title: 'Период подбит',
+            body: `«${event.spaceName}», ${payoutRange(event.fromDay, event.toDay)}: к оплате ${formatMoneyMinor(event.amountMinor, event.currency)}`,
+            url: `/work/planner/${event.spaceId}?payouts=1`,
+            tag: `work-payout:${event.periodId}`,
+            category: 'work',
+          }
+        : {
+            title: 'Вам к выплате',
+            body: `${formatMoneyMinor(event.amountMinor, event.currency)} за ${payoutRange(event.fromDay, event.toDay)} — «${event.spaceName}»`,
+            url: `/work/planner/${event.spaceId}?payouts=1`,
+            tag: `work-payout:${event.periodId}`,
+            category: 'work',
+          };
+    case 'work.payout.paid':
+      return {
+        title: 'Выплата отмечена оплаченной',
+        body: `${formatMoneyMinor(event.amountMinor, event.currency)} за ${payoutRange(event.fromDay, event.toDay)} — «${event.spaceName}»`,
+        url: `/work/planner/${event.spaceId}?payouts=1`,
+        tag: `work-payout-paid:${event.periodId}`,
+        category: 'work',
       };
     case 'work.overtime.requested':
       return {

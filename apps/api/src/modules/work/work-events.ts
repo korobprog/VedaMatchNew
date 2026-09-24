@@ -20,6 +20,8 @@ export const WORK_EVENTS = {
   inviteReceived: 'work.invite.received',
   overtimeRequested: 'work.overtime.requested',
   overtimeDecided: 'work.overtime.decided',
+  payoutClosed: 'work.payout.closed',
+  payoutPaid: 'work.payout.paid',
 } as const satisfies Record<string, NotificationEvent['name']>;
 
 type WorkEvent<TName extends NotificationEvent['name']> = Extract<

@@ -3,6 +3,8 @@ import type {
   WorkOvertimeRequestStatus,
   WorkCurrency,
   WorkOvertimeMode,
+  WorkPayoutPeriodKind,
+  WorkPayoutStatus,
   WorkPricingModel,
 } from "@vedamatch/shared";
 
@@ -86,6 +88,9 @@ export interface CommercialDraft {
   overtimeRate: string;
   overtimeMode: WorkOvertimeMode;
   budget: string;
+  payoutPeriod: WorkPayoutPeriodKind;
+  /** День недели 1…7 или число месяца 1…28 — строкой, как в списке. */
+  payoutDay: string;
 }
 
 export const EMPTY_COMMERCIAL_DRAFT: CommercialDraft = {
@@ -97,6 +102,8 @@ export const EMPTY_COMMERCIAL_DRAFT: CommercialDraft = {
   overtimeRate: "",
   overtimeMode: "on_request",
   budget: "",
+  payoutPeriod: "weekly",
+  payoutDay: "5",
 };
 
 /**
@@ -130,6 +137,8 @@ export function commercialDraftToInput(
       overtimeMode: draft.overtimeMode,
       budgetMinor: budget ?? 0,
       timezone,
+      payoutPeriod: draft.payoutPeriod,
+      payoutDay: payoutDayFor(draft.payoutPeriod, Number(draft.payoutDay)),
     },
   };
 }
@@ -199,5 +208,57 @@ export function shiftDay(day: string, days: number): string {
   const date = new Date(`${day}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+export const WEEKDAYS = [
+  "понедельник",
+  "вторник",
+  "среда",
+  "четверг",
+  "пятница",
+  "суббота",
+  "воскресенье",
+];
+
+/**
+ * День подбития под период: сменили месяц на неделю — число 20 не день
+ * недели, берём пятницу, а не отправляем сервер угадывать.
+ */
+export function payoutDayFor(
+  period: WorkPayoutPeriodKind,
+  day: number,
+): number {
+  if (!Number.isInteger(day) || day < 1) return period === "monthly" ? 1 : 5;
+  if (period === "monthly") return Math.min(day, 28);
+  return day > 7 ? 5 : day;
+}
+
+/** «раз в неделю, в пятницу», «раз в месяц, 10-го». */
+export function describePayoutSchedule(
+  period: WorkPayoutPeriodKind,
+  day: number,
+): string {
+  if (period === "monthly") return `раз в месяц, ${day}-го`;
+  const weekday = WEEKDAYS[day - 1] ?? "";
+  const on = day === 2 ? "во" : "в";
+  const accusative = weekday.replace(/а$/, "у");
+  return `${period === "weekly" ? "раз в неделю" : "раз в две недели"}, ${on} ${accusative}`;
+}
+
+export const PAYOUT_STATUS_LABEL: Record<WorkPayoutStatus, string> = {
+  open: "идёт",
+  closed: "подбит",
+  sent: "отправлен",
+  paid: "оплачен",
+};
+
+/** «19–25 сентября» или «28 сентября — 2 октября». */
+export function formatPayoutRange(fromDay: string, toDay: string): string {
+  const [, fromMonth, fromDate] = fromDay.split("-").map(Number);
+  const [, toMonth, toDate] = toDay.split("-").map(Number);
+  if (fromDay === toDay) return `${toDate} ${MONTHS[toMonth - 1]}`;
+  return fromMonth === toMonth
+    ? `${fromDate}–${toDate} ${MONTHS[toMonth - 1]}`
+    : `${fromDate} ${MONTHS[fromMonth - 1]} — ${toDate} ${MONTHS[toMonth - 1]}`;
 }
 

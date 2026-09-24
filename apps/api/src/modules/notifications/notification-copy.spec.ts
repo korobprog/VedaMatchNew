@@ -1,6 +1,7 @@
 import {
   buildNotification,
   commentsWord,
+  formatMoneyMinor,
   nightsWord,
   toExcerpt,
   travelDecisionTitle,
@@ -1009,5 +1010,69 @@ describe('buildNotification · часы сверх нормы (VED-459)', () => 
     expect(rejected.title).toBe('Часы сверх нормы не одобрены');
     expect(rejected.body).toContain('— бюджет кончился');
     expect(rejected.url).toBe('/work/planner/s1');
+  });
+});
+
+describe('buildNotification · выплаты (VED-460)', () => {
+  const base = {
+    periodId: 'p1',
+    spaceId: 's1',
+    spaceName: 'Сайт ашрама',
+    fromDay: '2026-09-19',
+    toDay: '2026-09-25',
+    currency: 'RUB',
+  };
+
+  it('сумма словами до копейки и знак валюты', () => {
+    expect(formatMoneyMinor(2_475_000, 'RUB').replace(/\s/g, ' ')).toBe(
+      '24 750 ₽',
+    );
+    expect(formatMoneyMinor(1_050, 'USD').replace(/\s/g, ' ')).toBe('10,50 $');
+  });
+
+  it('ведущему — итог доски, исполнителю — его сумма', () => {
+    const lead = buildNotification({
+      ...base,
+      name: 'work.payout.closed',
+      recipientId: 'lead',
+      amountMinor: 2_475_000,
+      role: 'lead',
+    });
+    expect(lead.title).toBe('Период подбит');
+    expect(lead.body.replace(/\s/g, ' ')).toBe(
+      '«Сайт ашрама», 19–25 сентября: к оплате 24 750 ₽',
+    );
+    expect(lead.url).toBe('/work/planner/s1?payouts=1');
+
+    const executor = buildNotification({
+      ...base,
+      name: 'work.payout.closed',
+      recipientId: 'g',
+      amountMinor: 705_000,
+      role: 'executor',
+    });
+    expect(executor.title).toBe('Вам к выплате');
+    expect(executor.body.replace(/\s/g, ' ')).toBe(
+      '7 050 ₽ за 19–25 сентября — «Сайт ашрама»',
+    );
+    const acrossMonths = buildNotification({
+      ...base,
+      toDay: '2026-10-02',
+      fromDay: '2026-09-28',
+      name: 'work.payout.paid',
+      recipientId: 'g',
+      amountMinor: 100,
+    });
+    expect(acrossMonths.body).toContain('28 сентября — 2 октября');
+  });
+
+  it('оплата отмечена', () => {
+    const paid = buildNotification({
+      ...base,
+      name: 'work.payout.paid',
+      recipientId: 'g',
+      amountMinor: 705_000,
+    });
+    expect(paid.title).toBe('Выплата отмечена оплаченной');
   });
 });

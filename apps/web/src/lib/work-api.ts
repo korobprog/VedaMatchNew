@@ -14,6 +14,7 @@ import type {
   CreateWorkTaskRequest,
   CreateWorkTimeEntryRequest,
   DecideWorkOvertimeRequest,
+  MarkWorkPayoutRequest,
   MoveWorkTaskRequest,
   SetWorkTaskViewedRequest,
   UpdateWorkBoardRequest,
@@ -32,6 +33,7 @@ import type {
   WorkInvitePreviewDto,
   WorkLabelDto,
   WorkOvertimeRequestsDto,
+  WorkPayoutsDto,
   WorkPersonRefDto,
   WorkSpaceDto,
   WorkSpaceSummaryDto,
@@ -321,4 +323,15 @@ export const decideWorkOvertime = (
 
 export const cancelWorkOvertime = (requestId: string) =>
   send<WorkOvertimeRequestsDto>(`/work/overtime/${requestId}/cancel`, "POST");
+
+// ===== Календарь выплат (VED-460) =====
+
+export const getWorkPayouts = (boardId: string) =>
+  request<WorkPayoutsDto>(`/work/boards/${boardId}/payouts`);
+
+export const closeWorkPayout = (boardId: string) =>
+  send<WorkPayoutsDto>(`/work/boards/${boardId}/payouts/close`, "POST");
+
+export const markWorkPayout = (periodId: string, body: MarkWorkPayoutRequest) =>
+  send<WorkPayoutsDto>(`/work/payouts/${periodId}/mark`, "POST", body);
 
