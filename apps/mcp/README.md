@@ -48,9 +48,16 @@
 pnpm --filter @vedamatch/mcp build
 ```
 
+`pnpm install` собирает его сам (`postinstall`), так что после установки
+зависимостей шаг обычно уже сделан.
+
 ### 3. Прописать в клиенте
 
-Claude Code — `.mcp.json` в проекте или `claude mcp add`:
+Claude Code — `.mcp.json` в проекте или `claude mcp add`. В `.mcp.json` репозитория
+путь относительный (`apps/mcp/dist/index.js`, от корня, где запущен Claude Code),
+а ключ берётся из переменной окружения `VEDAMATCH_API_KEY` — абсолютный путь своей
+машины туда не коммитить, у остальных он сломает подключение. Для другого клиента
+путь абсолютный:
 
 ```json
 {
