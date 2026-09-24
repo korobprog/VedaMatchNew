@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatRetentionService } from './chat-retention.service';
 import type { ChatUploadsService } from './chat-uploads.service';
+import type { ChatStatusesService } from './statuses/chat-statuses.service';
 
 /**
  * Заглушка Prisma без заранее навязанного типа результата: строгий
@@ -28,11 +29,14 @@ describe('ChatRetentionService', () => {
   // Без REDIS_HOST лиз не берётся: один инстанс чистит сам, как и воркер
   // Мотивации в локальной разработке.
   const config = { get: fn(() => undefined) };
+  // Истёкшие статусы (VED-129) чистятся на том же тике.
+  const statuses = { purgeExpired: fn(() => Promise.resolve(0)) };
 
   const service = new ChatRetentionService(
     prisma as unknown as PrismaService,
     uploads as unknown as ChatUploadsService,
     config as unknown as ConfigService,
+    statuses as unknown as ChatStatusesService,
   );
 
   const now = new Date('2026-08-30T12:00:00.000Z');

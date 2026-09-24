@@ -49,6 +49,10 @@ import { PeopleService } from './people/people.service';
  * человека» перестало работать в остальном портале. Аватары и возраст —
  * свои копии внутри модуля, а не импорт из `users/`.
  */
+import { ChatStatusesController } from './statuses/chat-statuses.controller';
+import { ChatStatusesService } from './statuses/chat-statuses.service';
+import { ChatStatusVideoService } from './statuses/chat-status-video.service';
+
 @Module({
   imports: [AuthModule, ModerationModule],
   controllers: [
@@ -61,6 +65,7 @@ import { PeopleService } from './people/people.service';
     ChatConferenceController,
     PeopleController,
     PeopleAdminController,
+    ChatStatusesController,
   ],
   providers: [
     ChatConversationsService,
@@ -90,6 +95,8 @@ import { PeopleService } from './people/people.service';
     PeopleRequestsService,
     PeopleAdminService,
     PeopleAvatarService,
+    ChatStatusesService,
+    ChatStatusVideoService,
   ],
 })
 export class ChatModule {}

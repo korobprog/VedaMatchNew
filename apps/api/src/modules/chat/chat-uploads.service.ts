@@ -185,6 +185,55 @@ export class ChatUploadsService {
     };
   }
 
+  /**
+   * Фото статуса (VED-129): то же пережатие, что у картинок переписки, в
+   * папке автора. Закрыто, как вся переписка, — ссылки подписывает
+   * `ChatSignedUrlsInterceptor`.
+   */
+  async storeStatusImage(
+    authorId: string,
+    buffer: Buffer,
+  ): Promise<{ key: string; url: string; width: number; height: number } | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+    const key = `chat-status/${authorId}/${randomUUID()}.webp`;
+    const { data, info } = await sharp(buffer, {
+      failOn: 'error',
+      limitInputPixels: true,
+    })
+      .rotate()
+      .resize({ width: IMAGE_WIDTH, withoutEnlargement: true })
+      .webp({ quality: IMAGE_QUALITY })
+      .toBuffer({ resolveWithObject: true });
+    await this.put(key, data, 'image/webp');
+    return { key, url: this.urlFor(key), width: info.width, height: info.height };
+  }
+
+  /** Ролик статуса как есть и его обложка (VED-129). */
+  async storeStatusVideo(
+    authorId: string,
+    video: { buffer: Buffer; mimetype: string },
+    extension: string,
+    poster: Buffer,
+  ): Promise<{
+    key: string;
+    url: string;
+    posterKey: string;
+    posterUrl: string;
+  } | null> {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) return null;
+    const base = `chat-status/${authorId}/${randomUUID()}`;
+    const key = `${base}${extension}`;
+    const posterKey = `${base}.webp`;
+    await this.put(key, video.buffer, video.mimetype);
+    await this.put(posterKey, poster, 'image/webp');
+    return {
+      key,
+      url: this.urlFor(key),
+      posterKey,
+      posterUrl: this.urlFor(posterKey),
+    };
+  }
+
   private async storeImage(
     conversationId: string,
     file: UploadedChatFile,

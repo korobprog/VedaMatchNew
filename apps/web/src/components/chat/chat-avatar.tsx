@@ -1,4 +1,9 @@
-import type { ChatConversationKind, ChatUserSummary } from "@vedamatch/shared";
+import type {
+  ChatConversationKind,
+  ChatStatusRing,
+  ChatUserSummary,
+} from "@vedamatch/shared";
+import { StatusRing } from "./statuses/status-ring";
 import { authorPalette } from "./chat-author-color";
 
 /**
@@ -17,6 +22,7 @@ export function ChatAvatar({
   size = 50,
   online,
   imageUrl,
+  ring,
 }: {
   kind: ChatConversationKind;
   user?: ChatUserSummary | null;
@@ -25,6 +31,8 @@ export function ChatAvatar({
   online?: boolean;
   /** Картинка группы или канала, если её загрузили. */
   imageUrl?: string | null;
+  /** Кружок статусов человека (VED-129); только у личной беседы. */
+  ring?: ChatStatusRing | null;
 }) {
   const box = { width: size, height: size };
 
@@ -59,7 +67,10 @@ export function ChatAvatar({
   const { avatar } = authorPalette(user?.id ?? title);
 
   return (
-    <span className="relative shrink-0" style={box}>
+    // inline-block: внутри кнопки строчный span не держит ширину, и кольцо
+    // статусов (VED-129) отсчитывалось бы не от аватарки.
+    <span className="relative inline-block shrink-0 align-middle" style={box}>
+      <StatusRing ring={ring} size={size} />
       {user?.avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

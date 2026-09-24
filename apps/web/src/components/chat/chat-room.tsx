@@ -8,10 +8,12 @@ import type {
   ChatColorTemplateDto,
   ChatConversationDetail,
   ChatMessageDto,
+  ChatStatusRing,
 } from "@vedamatch/shared";
 import {
   deleteChatMessage,
   editChatMessage,
+  fetchUserChatStatuses,
   loadOlderChatMessages,
   markChatRead,
   markChatViewed,
@@ -69,6 +71,28 @@ export function ChatRoom({
   const [messages, setMessages] = useState(initial.messages);
   const [theme, setTheme] = useState(initialTheme);
   const [typing, setTyping] = useState<string | null>(null);
+  /* Кружок статусов собеседника в шапке (VED-129) — только для вида:
+     аватарка по-прежнему ведёт в карточку, а статусы смотрят из полосы над
+     списком бесед и из карточки. */
+  const companionId = conversation.companion?.id ?? null;
+  const [statusRing, setStatusRing] = useState<ChatStatusRing | null>(null);
+  useEffect(() => {
+    if (!companionId) return;
+    let alive = true;
+    fetchUserChatStatuses(companionId)
+      .then((author) => {
+        if (alive)
+          setStatusRing(
+            author && Array.isArray(author.statuses) && author.statuses.length > 0
+              ? { total: author.statuses.length, unseen: author.unseen }
+              : null,
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [companionId]);
   const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
   const [editing, setEditing] = useState<ChatMessageDto | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -509,6 +533,7 @@ export function ChatRoom({
               size={42}
               imageUrl={conversation.avatarUrl}
               online={isOnline(conversation.companion.lastSeenAt)}
+              ring={statusRing}
             />
           </Link>
         ) : (

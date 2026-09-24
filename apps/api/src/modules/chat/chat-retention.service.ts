@@ -11,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { orphanStorageKeys } from './chat-purge';
 import { retentionCutoff, retentionDays } from './chat-retention';
 import { ChatUploadsService } from './chat-uploads.service';
+import { ChatStatusesService } from './statuses/chat-statuses.service';
 
 /**
  * Чистка удалённых сообщений: тело, вложения, реакции и файлы в S3.
@@ -46,6 +47,7 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly uploads: ChatUploadsService,
     config: ConfigService,
+    private readonly statuses: ChatStatusesService,
   ) {
     this.days = retentionDays(
       config.get<string>('CHAT_DELETED_RETENTION_DAYS'),
@@ -95,6 +97,10 @@ export class ChatRetentionService implements OnModuleInit, OnModuleDestroy {
       }
     }
     try {
+      // Истёкшие статусы (VED-129) — на том же тике и под тем же лизом.
+      const statuses = await this.statuses.purgeExpired(now);
+      if (statuses > 0)
+        this.logger.log(`Убрано истёкших статусов: ${statuses}`);
       return await this.purge(retentionCutoff(now, this.days));
     } catch (error) {
       this.logger.error(

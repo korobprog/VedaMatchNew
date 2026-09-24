@@ -7,6 +7,10 @@ import type {
   ChatMessageDto,
   ChatReactionSummary,
   ChatSearchState,
+  ChatStatusAuthorDto,
+  ChatStatusDto,
+  ChatStatusFeedResponse,
+  ChatStatusRing,
   ChatThreadState,
   ChatUploadResult,
   CreateChatConversationRequest,
@@ -303,5 +307,48 @@ export function reportChat(body: {
   return send<{ id: string }>("/chat/reports", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+/* ─── Статусы (VED-129) ──────────────────────────────────────────────── */
+
+export function fetchChatStatusFeed() {
+  return send<ChatStatusFeedResponse>(
+    "/chat/statuses",
+  );
+}
+
+export function fetchChatStatusRings(userIds: string[]) {
+  return send<Record<string, ChatStatusRing>>(
+    `/chat/statuses/rings?ids=${encodeURIComponent(userIds.join(","))}`,
+  );
+}
+
+export function fetchUserChatStatuses(userId: string) {
+  return send<ChatStatusAuthorDto | null>(
+    `/chat/statuses/users/${encodeURIComponent(userId)}`,
+  );
+}
+
+export function createChatStatus(input: { text: string; file: File | null }) {
+  const form = new FormData();
+  if (input.text.trim()) form.append("text", input.text.trim());
+  if (input.file) form.append("file", input.file);
+  return send<ChatStatusDto>("/chat/statuses", {
+    method: "POST",
+    body: form,
+  });
+}
+
+export function viewChatStatus(statusId: string) {
+  return send<{ ok: true }>(
+    `/chat/statuses/${encodeURIComponent(statusId)}/view`,
+    { method: "POST" },
+  );
+}
+
+export function deleteChatStatus(statusId: string) {
+  return send<{ ok: true }>(`/chat/statuses/${encodeURIComponent(statusId)}`, {
+    method: "DELETE",
   });
 }

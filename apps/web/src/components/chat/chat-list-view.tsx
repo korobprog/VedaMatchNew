@@ -8,8 +8,9 @@ import type {
   ChatConversationSummary,
   ChatListState,
   ChatSearchHit,
+  ChatStatusRing,
 } from "@vedamatch/shared";
-import { searchChat } from "@/lib/chat-client";
+import { fetchChatStatusRings, searchChat } from "@/lib/chat-client";
 import { subscribeToChat } from "@/lib/chat-stream";
 import { ChatAvatar } from "./chat-avatar";
 import { chatListPreview } from "./chat-list-preview";
@@ -55,6 +56,28 @@ export function ChatListView({
     router.refresh();
   }, [router]);
   const [tab, setTab] = useState<Tab>("all");
+
+  /* Кружки статусов (VED-129) у собеседников личных бесед. Один запрос на
+     весь список; перечитываются, когда меняется состав собеседников. */
+  const companionKey = state.conversations
+    .map((conversation) =>
+      conversation.kind === "direct" ? conversation.companion?.id : null,
+    )
+    .filter((id): id is string => Boolean(id))
+    .join(",");
+  const [rings, setRings] = useState<Record<string, ChatStatusRing>>({});
+  useEffect(() => {
+    if (!companionKey) return;
+    let alive = true;
+    fetchChatStatusRings(companionKey.split(","))
+      .then((next) => {
+        if (alive) setRings(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [companionKey]);
   const [query, setQuery] = useState("");
 
   /* Обновление сервером приезжает новым `initial`; без этого состояние
@@ -294,6 +317,7 @@ export function ChatListView({
                 <ConversationRow
                   key={conversation.id}
                   conversation={conversation}
+                  ring={rings[conversation.companion?.id ?? ""]}
                   highlighted
                 />
               ))}
@@ -301,7 +325,11 @@ export function ChatListView({
             </>
           )}
           {rest.map((conversation) => (
-            <ConversationRow key={conversation.id} conversation={conversation} />
+            <ConversationRow
+              key={conversation.id}
+              conversation={conversation}
+              ring={rings[conversation.companion?.id ?? ""]}
+            />
           ))}
         </div>
       )}
@@ -312,9 +340,11 @@ export function ChatListView({
 function ConversationRow({
   conversation,
   highlighted,
+  ring,
 }: {
   conversation: ChatConversationSummary;
   highlighted?: boolean;
+  ring?: ChatStatusRing;
 }) {
   const preview = chatListPreview(conversation);
   return (
@@ -330,6 +360,7 @@ function ConversationRow({
         title={conversation.title}
         imageUrl={conversation.avatarUrl}
         online={isOnline(conversation.companion?.lastSeenAt)}
+        ring={conversation.kind === "direct" ? ring : null}
       />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">

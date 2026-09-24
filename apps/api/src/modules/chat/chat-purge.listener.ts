@@ -50,10 +50,20 @@ export class ChatPurgeListener {
         })
       : [];
 
-    const storageKeys = orphanStorageKeys(
-      keys,
-      survivors.map((attachment) => attachment.key),
-    );
+    // Файлы статусов (VED-129) — только автора: их не пересылают.
+    const statuses = await this.prisma.chatStatus.findMany({
+      where: { authorId: event.userId },
+      select: { mediaKey: true, posterKey: true },
+    });
+    const storageKeys = [
+      ...orphanStorageKeys(
+        keys,
+        survivors.map((attachment) => attachment.key),
+      ),
+      ...statuses
+        .flatMap((status) => [status.mediaKey, status.posterKey])
+        .filter((key): key is string => Boolean(key)),
+    ];
     const messages = await this.prisma.chatMessage.count({
       where: { authorId: event.userId },
     });

@@ -1050,3 +1050,75 @@ export interface CreateChatConferenceRequest {
    */
   title?: string;
 }
+
+/*
+ * Статусы (VED-129) — как в WhatsApp и Telegram: короткий пост текстом,
+ * картинкой, тем и другим или коротким видео. Живёт сутки, виден всем
+ * участникам портала, кроме заблокированных в обе стороны. Вокруг аватарки
+ * автора — зелёный кружок, разделённый на столько секций, сколько у него
+ * живых статусов; просмотренные секции гаснут.
+ */
+
+/** Сколько живёт статус. */
+export const CHAT_STATUS_TTL_HOURS = 24;
+/** Сколько живых статусов может быть у одного человека сразу. */
+export const CHAT_STATUS_MAX_ACTIVE = 30;
+export const CHAT_STATUS_TEXT_MAX = 700;
+export const CHAT_STATUS_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const CHAT_STATUS_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+/** «Короткое видео»: минута — предел WhatsApp. */
+export const CHAT_STATUS_VIDEO_MAX_SECONDS = 60;
+export const CHAT_STATUS_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+export const CHAT_STATUS_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm'] as const;
+
+export type ChatStatusMediaKind = 'photo' | 'video';
+
+export interface ChatStatusMediaDto {
+  kind: ChatStatusMediaKind;
+  url: string;
+  /** Обложка ролика; у фото — `null`. */
+  posterUrl: string | null;
+  width: number | null;
+  height: number | null;
+  durationSec: number | null;
+}
+
+export interface ChatStatusDto {
+  id: string;
+  text: string | null;
+  media: ChatStatusMediaDto | null;
+  createdAt: string;
+  expiresAt: string;
+  /** Смотрящий уже открывал этот статус. У своих — всегда `true`. */
+  viewed: boolean;
+  /** Сколько человек посмотрели. Только автору; остальным — `null`. */
+  viewCount: number | null;
+}
+
+/** Статусы одного человека по порядку публикации. */
+export interface ChatStatusAuthorDto {
+  user: ChatUserSummary;
+  statuses: ChatStatusDto[];
+  /** Сколько непросмотренных — столько зелёных секций в кружке. */
+  unseen: number;
+}
+
+/**
+ * `GET /chat/statuses` — лента статусов. Свои — отдельно и первыми: полоса
+ * начинается с «Мой статус». Чужие — сначала с непросмотренными, свежие
+ * выше.
+ */
+export interface ChatStatusFeedResponse {
+  mine: ChatStatusAuthorDto | null;
+  others: ChatStatusAuthorDto[];
+}
+
+/** Кружок вокруг аватарки: сколько секций и сколько из них зелёные. */
+export interface ChatStatusRing {
+  total: number;
+  unseen: number;
+}
