@@ -1137,11 +1137,13 @@ select option {
  * когда полоса есть: `[data-music-player]` рисуется, лишь когда есть что
  * играть, и `:has()` снимает отступ вместе с ней.
  *
- * Числа привязаны к самой полосе: телефон — три строки (название записи со
- * свернуть и закрыть; управление с кнопками записи; дорожка), широкий экран —
- * одна строка h-16. Замерено в браузере на 375 точках: 144. Меняешь состав
- * или размеры кнопок в mini-player.tsx — перемеряй и поправь здесь, иначе
- * последняя строка раздела уедет под полосу.
+ * Числа ниже — только запас на первую отрисовку: как только полоса
+ * измерила себя, место задаёт замер (правило `data-measured` в конце
+ * раздела). Телефон — три строки (название с кнопками записи; управление с
+ * вынесенными кнопками; дорожка), полоса стоит на самом краю окна без
+ * полей, отступ от полосы жестов — внутри неё (VED-410, VED-411). Замерено
+ * в браузере на 320–412 точках: 158. Широкий экран — одна строка h-16 и
+ * поле 12 снизу.
  *
  * Размер объявлен переменной, а не только отступом: раскладка, которая
  * считает высоту от окна, а не от потока (`h-[calc(100dvh-…)]` в комнате
@@ -1149,7 +1151,7 @@ select option {
  * уезжал под полосу целиком.
  */
 body:has([data-music-player]) {
-  --vm-player-space: calc(144px + var(--vm-player-pinned-now, 0px) + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
+  --vm-player-space: calc(158px + var(--vm-player-pinned-now, 0px) + var(--vm-player-lift-now, 0px) + env(safe-area-inset-bottom));
   padding-bottom: var(--vm-player-space);
 }
 
@@ -1164,13 +1166,10 @@ body:has([data-music-player]) {
  * `data-pinned="narrow"` — строка только уже `lg` (вынесена одна перемотка,
  * а шире её кнопки и так стоят в ряду управления); `"all"` — на любой
  * ширине. Свёрнутая полоса строки не рисует — у неё всегда `"none"`.
- * Замерено в браузере: телефон +50px (кнопки 44 и зазор строки), `sm`–`lg`
- * +76px, от `lg` +80px (однострочная полоса h-16 становится двухстрочной). Меняешь строку в mini-player.tsx — перемерь.
+ * На телефоне строки нет: кнопки встают в ряд управления (VED-410).
+ * Замерено в браузере: `sm`–`lg` +76px, от `lg` +80px (однострочная полоса
+ * h-16 становится двухстрочной).
  */
-body:has([data-music-player]:is([data-pinned="narrow"], [data-pinned="all"])) {
-  --vm-player-pinned-now: 50px;
-}
-
 @media (min-width: 640px) {
   body:has([data-music-player]:is([data-pinned="narrow"], [data-pinned="all"])) {
     --vm-player-pinned-now: 76px;
@@ -1195,8 +1194,14 @@ body:has([data-music-player]:is([data-pinned="narrow"], [data-pinned="all"])) {
  * куда-нибудь выше безопасно.
  */
 body:has([data-music-player][data-collapsed="true"]) {
-  --vm-player-space: calc(48px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
+  --vm-player-space: calc(48px + var(--vm-player-lift-now, 0px) + env(safe-area-inset-bottom));
   padding-bottom: var(--vm-player-space);
+}
+
+@media (min-width: 640px) {
+  body:has([data-music-player][data-collapsed="true"]) {
+    --vm-player-space: calc(48px + var(--vm-player-lift-now, 0px) + max(0.75rem, env(safe-area-inset-bottom)));
+  }
 }
 
 /* Поднятая полоса (VED-194).
@@ -1222,6 +1227,52 @@ body:has([data-music-player][data-collapsed="true"]) {
 
 body:has([data-music-player][data-lifted="true"]) {
   --vm-player-lift-now: var(--vm-player-lift);
+}
+
+/* Место под полосой по замеру (замечание к PR #500).
+ *
+ * Числа выше — запас на первую отрисовку, до того как полоса измерила себя.
+ * Дальше `mini-player.tsx` пишет в `--vm-player-measured` расстояние от
+ * верха полосы до низа окна (ResizeObserver) и ставит обёртке
+ * `data-measured`: состав полосы зависит от ширины, вынесенных кнопок и
+ * подъёма, и каждое число здесь рано или поздно расходилось с полосой —
+ * на телефоне отступ был 144, а полоса 162, и последние ~18 точек страницы
+ * уходили под неё. Правило стоит последним и по специфичности равно
+ * правилу свёрнутой полосы — поэтому и побеждает. Пузырь (VED-366) места не
+ * занимает: замер для него — 0.
+ */
+body:has([data-music-player][data-measured="true"]) {
+  --vm-player-space: var(--vm-player-measured, 0px);
+  padding-bottom: var(--vm-player-space);
+}
+
+/* Плавающий пузырь плеера (VED-366): «прозрачный пузырь» из карточки.
+ * Фон — тот же, что у полосы, но реже: сквозь него видна страница. Рамка
+ * фиолетовая, а не `--vm-player-brd`: та на фоне страницы даёт 1.5:1 в
+ * светлой теме и 1.36:1 в тёмной, а граница цели по WCAG 1.4.11 — от 3:1;
+ * `--vm-violet` поверх `--vm-bg-0` — 6.1:1 и 8.1:1. */
+.player-bubble {
+  background: color-mix(in srgb, var(--vm-player-bg) 62%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  border: 1.5px solid var(--vm-violet);
+  box-shadow: 0 4px 18px var(--vm-player-shadow);
+}
+
+/* Выкат полосы снизу: из пузыря и по вызову плитки «Плеер» (VED-416). */
+@keyframes vm-player-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.player-enter {
+  animation: vm-player-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-enter {
+    animation: none;
+  }
 }
 
 /* Safe area padding for iOS */
