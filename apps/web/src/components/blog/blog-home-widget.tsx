@@ -190,8 +190,9 @@ export function BlogHomeWidget({
  *
  * Заголовок под картинкой, а не поверх неё: картинку «должно быть видно
  * полностью». Рамка — по пропорции самого снимка (VED-443): в рамке первого
- * поста горизонтальный снимок соседа сжимался и обрастал полями. Высота
- * заголовка постоянная, на две строки.
+ * поста горизонтальный снимок соседа сжимался и обрастал полями. Строка
+ * заголовка — только когда он есть (VED-441): пустая полоса под картинкой
+ * «сжирала место на главном экране».
  */
 function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
   return (
@@ -225,25 +226,25 @@ function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
           </span>
         )}
       </BlogFrame>
-      <span className="flex h-14 items-center px-3">
-        {slide.title && (
+      {slide.title && (
+        <span className="flex min-h-14 items-center px-3 py-2">
           <span className="line-clamp-2 font-display text-sm font-semibold leading-snug text-text-0 group-hover:underline">
             {slide.title}
           </span>
-        )}
-        {/* У ссылки обязано быть имя: пост из одной фотографии без слов
-            иначе читается скринридером как пустая ссылка. */}
-        <span className="sr-only">
-          {slide.title
-            ? slide.isVideo
-              ? ", ролик"
-              : ""
-            : slide.coverUrl
-              ? slide.isVideo
-                ? "Пост с роликом"
-                : "Пост с фотографией"
-              : ""}
         </span>
+      )}
+      {/* У ссылки обязано быть имя: пост из одной фотографии без слов
+          иначе читается скринридером как пустая ссылка. */}
+      <span className="sr-only">
+        {slide.title
+          ? slide.isVideo
+            ? ", ролик"
+            : ""
+          : slide.coverUrl
+            ? slide.isVideo
+              ? "Пост с роликом"
+              : "Пост с фотографией"
+            : ""}
       </span>
     </Link>
   );
