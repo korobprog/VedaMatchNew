@@ -586,6 +586,15 @@ export interface AdminBlockUserRequest {
   blockedUntil?: string | null;
 }
 
+/**
+ * Администрация убирает фото профиля (VED-471): снимок, который нельзя
+ * показывать, а сам человек его не убирает. Пояснение уходит человеку в
+ * уведомлении и в журнал действий.
+ */
+export interface AdminRemoveAvatarRequest {
+  reason?: string;
+}
+
 export interface AdminDeleteUserRequest {
   reason: string;
   confirmSelfDelete?: boolean;

@@ -19,6 +19,7 @@ const ACTION_SERVICE: Record<AdminAuditAction, AdminServiceSlug | null> = {
   "user.profile-edited": null,
   "user.photo-verified": null,
   "user.photo-unverified": null,
+  "user.avatar-removed": null,
   "user.subscription-changed": null,
   "billing.mode-changed": null,
   "catalog.service-created": null,

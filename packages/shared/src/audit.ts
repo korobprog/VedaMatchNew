@@ -19,6 +19,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   'user.profile-edited',
   'user.photo-verified',
   'user.photo-unverified',
+  'user.avatar-removed',
   'user.subscription-changed',
   'billing.mode-changed',
   'catalog.service-created',

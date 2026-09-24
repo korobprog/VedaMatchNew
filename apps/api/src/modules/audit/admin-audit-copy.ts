@@ -17,6 +17,7 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'user.profile-edited': 'Изменён профиль',
   'user.photo-verified': 'Фото подтверждены',
   'user.photo-unverified': 'Подтверждение фото снято',
+  'user.avatar-removed': 'Фото профиля удалено',
   'user.subscription-changed': 'Изменена подписка',
   'billing.mode-changed': 'Изменён режим биллинга',
   'catalog.service-created': 'Добавлен сервис в каталог',

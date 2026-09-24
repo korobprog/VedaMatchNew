@@ -15,6 +15,7 @@ import type {
   AdminManualStageUpdateRequest,
   AdminProfileUpdateRequest,
   AdminPurgeUserRequest,
+  AdminRemoveAvatarRequest,
   AdminRoleUpdateRequest,
   AdminServiceScopeUpdateRequest,
 } from '@vedamatch/shared';
@@ -64,6 +65,16 @@ export class AdminUsersController {
     @Body() body: { verified?: boolean },
   ) {
     return this.users.setPhotoVerification(user, id, body?.verified === true);
+  }
+
+  /** Убрать фото профиля (VED-471): файл удаляется, человеку — уведомление. */
+  @Post(':id/avatar/remove')
+  removeAvatar(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: AdminRemoveAvatarRequest,
+  ) {
+    return this.adminUsers.removeAvatar(user, id, body);
   }
 
   /** Портальные поля профиля: имя, пол, дата рождения, город, о себе, языки. */
