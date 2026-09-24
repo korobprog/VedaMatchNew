@@ -6,6 +6,11 @@ FROM base AS build
 ARG MOTIVATION_BUILD_VERSION=dev
 RUN echo "Motivation build: ${MOTIVATION_BUILD_VERSION}"
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+# Заплатки зависимостей (`patchedDependencies` в pnpm-workspace.yaml). pnpm
+# проверяет наличие каждого файла заплатки при любой установке, даже если сам
+# пакет этому образу не нужен (expo-audio — только приложение), и без папки
+# падает с ENOENT на `pnpm install`.
+COPY patches patches
 COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile

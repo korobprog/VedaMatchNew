@@ -1,5 +1,6 @@
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
+import { announceAudioStart } from '@/lib/audio/audio-arbiter';
 import { startRingingVibration, stopRingingVibration } from '@/lib/feedback';
 
 /**
@@ -56,6 +57,9 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 /** Возвращает функцию остановки — вызывается один раз при выходе из фазы гудков. */
 export function startRingtone(kind: RingtoneKind): () => void {
   let player: AudioPlayer | null = null;
+  // Рингтон играет тем же модулем `expo-audio`, что и Медиатека, и
+  // системный фокус у них общий — замолчать музыку просит арбитр (VED-331).
+  announceAudioStart('ringtone');
   try {
     player = createAudioPlayer(SOURCES[kind], { updateInterval: 1000 });
     player.loop = true;

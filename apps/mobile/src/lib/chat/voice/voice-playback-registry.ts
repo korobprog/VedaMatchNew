@@ -1,3 +1,4 @@
+import { announceAudioStart, onYield } from '@/lib/audio/audio-arbiter';
 import { pickNextUnheardVoiceId, type VoiceOrderEntry } from './voice-playback-order';
 
 /**
@@ -31,6 +32,8 @@ export function requestVoicePlayback(id: string, stop: StopFn): void {
   if (activeId !== null && activeId !== id) activeStop?.();
   activeId = id;
   activeStop = stop;
+  // Медиатека уступает голосовому (VED-331, `lib/audio/audio-arbiter.ts`).
+  announceAudioStart('voice');
 }
 
 /** Плеер вызывает на паузе/остановке/размонтировании — только если он ещё активен. */
@@ -47,6 +50,12 @@ export function stopActiveVoicePlayback(): void {
   activeStop = null;
   stop?.();
 }
+
+/**
+ * Включили Медиатеку, запись или зазвонил звонок — голосовое замолкает
+ * (VED-331). Подписка на весь процесс: реестр — синглтон, как и арбитр.
+ */
+onYield('voice', () => stopActiveVoicePlayback());
 
 export function getActiveVoicePlaybackId(): string | null {
   return activeId;

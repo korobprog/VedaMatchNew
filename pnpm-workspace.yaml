@@ -30,3 +30,6 @@ overrides:
   'fast-uri@3': '>=3.1.7'
   'sanitize-html': '>=2.17.7'
   'baseline-browser-mapping': '>=2.11.0'
+
+patchedDependencies:
+  expo-audio@57.0.5: patches/expo-audio@57.0.5.patch

@@ -6,6 +6,7 @@ import { SessionProvider } from '@/lib/auth/session';
 import { CallProvider } from '@/lib/calls/call-provider';
 import { GroupCallProvider } from '@/lib/group-calls/group-call-provider';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
+import { MediaPlayerProvider } from '@/lib/media/media-player-provider';
 import { ThemeProvider } from '@/theme/theme';
 import { RootStack } from './root-shell-stack';
 
@@ -31,7 +32,11 @@ export function RootProviders({ children }: { children: ReactNode }) {
             <SessionProvider>
               <ChatStreamProvider>
                 <CallProvider>
-                  <GroupCallProvider>{children}</GroupCallProvider>
+                  <GroupCallProvider>
+                    {/* Плеер Медиатеки (VED-331) — под звонками: звонок
+                        обязан его останавливать, где бы человек ни был. */}
+                    <MediaPlayerProvider>{children}</MediaPlayerProvider>
+                  </GroupCallProvider>
                 </CallProvider>
               </ChatStreamProvider>
             </SessionProvider>

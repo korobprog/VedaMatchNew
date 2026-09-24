@@ -1,3 +1,4 @@
+import { announceAudioStart, onYield } from '@/lib/audio/audio-arbiter';
 import {
   getActiveVoicePlaybackId,
   isVoiceHeard,
@@ -104,5 +105,24 @@ describe('markVoiceFinished + registerVoiceOrder — автопереход (VED
     expect(isVoiceHeard('a')).toBe(true);
     resetVoicePlaybackOrderForTests();
     expect(isVoiceHeard('a')).toBe(false);
+  });
+});
+
+describe('договорённость с Медиатекой (VED-331)', () => {
+  it('голосовое, начавшее играть, просит Медиатеку замолчать', () => {
+    const media = jest.fn();
+    const off = onYield('media', media);
+    requestVoicePlayback('v-media-1', jest.fn());
+    expect(media).toHaveBeenCalledWith('voice');
+    off();
+    releaseVoicePlayback('v-media-1');
+  });
+
+  it('включили Медиатеку — играющее голосовое останавливается', () => {
+    const stop = jest.fn();
+    requestVoicePlayback('v-media-2', stop);
+    announceAudioStart('media');
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(getActiveVoicePlaybackId()).toBeNull();
   });
 });
