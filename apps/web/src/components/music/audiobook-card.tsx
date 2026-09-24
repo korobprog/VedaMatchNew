@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { MusicAudiobookCardDto } from "@vedamatch/shared";
 import { MusicCover } from "./music-cover";
 import { audiobookMeta } from "./audiobook-labels";
+import { AUDIOBOOK_KIND_COPY, audiobookHref } from "./audiobook-kind";
 
 /**
  * Плитка книги (VED-297): обложка, название, автор и чтец, сколько глав и
@@ -12,11 +13,15 @@ export function MusicAudiobookCard({ book }: { book: MusicAudiobookCardDto }) {
   const people = [book.author, book.reader ? `читает ${book.reader.name}` : null]
     .filter(Boolean)
     .join(" · ");
-  const meta = audiobookMeta(book.chapterCount, book.totalSeconds);
+  const meta = audiobookMeta(
+    book.chapterCount,
+    book.totalSeconds,
+    AUDIOBOOK_KIND_COPY[book.kind].part,
+  );
 
   return (
     <Link
-      href={`/music/audiobooks/${book.slug}`}
+      href={audiobookHref(book.kind, book.slug)}
       className="glass flex h-full flex-col gap-2.5 rounded-2xl p-2.5 transition-colors hover:border-cyan/40"
     >
       <span className="aspect-square w-full overflow-hidden rounded-xl">

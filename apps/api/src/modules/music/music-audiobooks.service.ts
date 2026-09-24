@@ -10,6 +10,7 @@ import type {
   MusicAdminAudiobookChapterDto,
   MusicAdminAudiobooksDto,
   MusicAudiobookCardDto,
+  MusicAudiobookKind,
   MusicAudiobookPageDto,
   MusicAudiobooksDto,
   MusicTrackStatus,
@@ -22,6 +23,7 @@ import {
   findChapterConflict,
   normalizeChapterIds,
 } from './music-audiobook-chapters';
+import { readAudiobookKindField } from './music-audiobook-kind';
 import { resolveAudiobookResume } from './music-audiobook-resume';
 import { musicCoverBaseUrl } from './music-cover-file';
 import { MusicCoversService } from './music-covers.service';
@@ -67,6 +69,7 @@ const ADMIN_CHAPTER_TRACK_SELECT = {
 
 interface CardRow {
   id: string;
+  kind: MusicAudiobookKind;
   slug: string;
   title: string;
   author: string | null;
@@ -120,9 +123,10 @@ export class MusicAudiobooksService {
    * которого нет (та же причина, по которой витрина прячет исполнителей без
    * записей).
    */
-  async list(): Promise<MusicAudiobooksDto> {
+  async list(kind: MusicAudiobookKind): Promise<MusicAudiobooksDto> {
     const rows = await this.prisma.musicAudiobook.findMany({
       where: {
+        kind,
         isPublished: true,
         chapters: { some: { track: { status: 'published' } } },
       },
@@ -203,6 +207,7 @@ export class MusicAudiobooksService {
   private toCard(row: CardRow): MusicAudiobookCardDto {
     return {
       id: row.id,
+      kind: row.kind,
       slug: row.slug,
       title: row.title,
       author: row.author,
@@ -250,6 +255,13 @@ export class MusicAudiobooksService {
       throw new BadRequestException(`${field}: длиннее ${max} знаков`);
     }
     return trimmed === '' ? null : trimmed;
+  }
+
+  /** Раздел из тела запроса: `undefined` — не менять. */
+  private kind(value: unknown): MusicAudiobookKind | undefined {
+    const kind = readAudiobookKindField(value);
+    if (kind === null) throw new BadRequestException('Неизвестный раздел');
+    return kind;
   }
 
   private async assertReader(readerId: string | null | undefined) {
@@ -311,6 +323,7 @@ export class MusicAudiobooksService {
     return {
       books: books.map((row) => ({
         id: row.id,
+        kind: row.kind,
         slug: row.slug,
         title: row.title,
         author: row.author,
@@ -380,6 +393,7 @@ export class MusicAudiobooksService {
   async create(viewerIsAdmin: boolean, body: CreateMusicAudiobookRequest) {
     this.assertAdmin(viewerIsAdmin);
     const title = this.text(body.title, 'Название', MAX_TITLE_LENGTH, true)!;
+    const kind = this.kind(body.kind) ?? 'audiobook';
     await this.assertReader(body.readerId);
     const coverKey = this.covers.resolveKey({
       next: body.coverKey,
@@ -390,6 +404,7 @@ export class MusicAudiobooksService {
     const created = await this.prisma.musicAudiobook.create({
       data: {
         slug: await this.freeSlug(title),
+        kind,
         title,
         author: this.text(body.author, 'Автор', MAX_AUTHOR_LENGTH, false),
         description: this.text(
@@ -414,6 +429,7 @@ export class MusicAudiobooksService {
   ) {
     this.assertAdmin(viewerIsAdmin);
     const existing = await this.book(id);
+    const kind = this.kind(body.kind);
     if (body.readerId !== undefined) await this.assertReader(body.readerId);
     const coverKey = this.covers.resolveKey({
       next: body.coverKey,
@@ -446,6 +462,7 @@ export class MusicAudiobooksService {
                 false,
               ),
             }),
+        ...(kind === undefined ? {} : { kind }),
         ...(body.readerId === undefined ? {} : { readerId: body.readerId }),
         ...(coverKey === undefined ? {} : { coverKey }),
         ...(typeof body.isPublished === 'boolean'

@@ -7,6 +7,7 @@ import type {
   MusicAdminAudiobookChapterDto,
   MusicAdminAudiobookDto,
   MusicArtistDto,
+  MusicAudiobookKind,
   MusicTrackStatus,
 } from "@vedamatch/shared";
 import {
@@ -21,6 +22,10 @@ import { Alert } from "@/components/ui/alert";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { plural } from "@/lib/plural";
 import { moveChapter } from "./audiobook-order";
+import {
+  AUDIOBOOK_KIND_COPY,
+  audiobookHref,
+} from "@/components/music/audiobook-kind";
 
 const field =
   "min-h-11 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0";
@@ -49,17 +54,22 @@ const message = (cause: unknown, fallback: string) =>
  * теряется, если закрыть вкладку посреди работы.
  */
 export function MusicAudiobooksEditor({
-  books,
+  kind = "audiobook",
+  books: allBooks,
   unassigned,
   artists,
 }: {
+  /** Раздел, который правит вкладка: «Аудиокниги» или «Лекции» (VED-437). */
+  kind?: MusicAudiobookKind;
   books: MusicAdminAudiobookDto[];
   unassigned: MusicAdminAudiobookChapterDto[];
   artists: MusicArtistDto[];
 }) {
+  const books = allBooks.filter((book) => book.kind === kind);
+  const section = AUDIOBOOK_KIND_COPY[kind].section;
   return (
     <div className="flex flex-col gap-6">
-      <NewAudiobookForm artists={artists} />
+      <NewAudiobookForm artists={artists} kind={kind} />
 
       {unassigned.length > 0 && (
         <UnassignedTracks tracks={unassigned} books={books} />
@@ -67,9 +77,9 @@ export function MusicAudiobooksEditor({
 
       {books.length === 0 ? (
         <p className="text-sm text-text-1">
-          Книг пока нет. Создайте первую — она появится в разделе
-          «Аудиокниги», когда вы отметите её опубликованной и в ней будет хотя
-          бы одна опубликованная глава.
+          {kind === "lecture" ? "Циклов" : "Книг"} пока нет. Создайте первый —
+          он появится в разделе «{section}», когда вы отметите его
+          опубликованным и в нём будет хотя бы одна опубликованная часть.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -124,7 +134,13 @@ function ReaderSelect({
   );
 }
 
-function NewAudiobookForm({ artists }: { artists: MusicArtistDto[] }) {
+function NewAudiobookForm({
+  artists,
+  kind,
+}: {
+  artists: MusicArtistDto[];
+  kind: MusicAudiobookKind;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -139,6 +155,7 @@ function NewAudiobookForm({ artists }: { artists: MusicArtistDto[] }) {
     setError(null);
     try {
       await createMusicAudiobook({
+        kind,
         title: title.trim(),
         author: author.trim() || null,
         readerId: readerId || null,
@@ -161,7 +178,7 @@ function NewAudiobookForm({ artists }: { artists: MusicArtistDto[] }) {
   return (
     <section className="glass flex flex-col gap-3 rounded-2xl border border-glass-brd p-4">
       <h2 className="font-display text-base font-bold text-text-0">
-        Новая книга
+        {kind === "lecture" ? "Новый цикл лекций" : "Новая книга"}
       </h2>
       <p className="text-xs text-text-2">
         Книга создаётся черновиком: соберите главы, проверьте страницу и
@@ -303,7 +320,7 @@ function AudiobookCard({
       <div className="flex flex-col gap-5 border-t border-glass-brd p-4">
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/music/audiobooks/${book.slug}`}
+            href={audiobookHref(book.kind, book.slug)}
             className="inline-flex min-h-11 items-center rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:text-text-0"
           >
             Открыть страницу книги
@@ -433,6 +450,7 @@ function BookFields({
   const [description, setDescription] = useState(book.description ?? "");
   const [coverKey, setCoverKey] = useState<string | null>(book.coverKey);
   const [isPublished, setIsPublished] = useState(book.isPublished);
+  const [kind, setKind] = useState<MusicAudiobookKind>(book.kind);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -449,6 +467,7 @@ function BookFields({
         description: description.trim() || null,
         coverKey,
         isPublished,
+        kind,
       });
       setSaved(true);
       router.refresh();
@@ -488,6 +507,19 @@ function BookFields({
             value={readerId}
             onChange={setReaderId}
           />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs text-text-2">Раздел</span>
+          <select
+            value={kind}
+            onChange={(event) =>
+              setKind(event.target.value as MusicAudiobookKind)
+            }
+            className={field}
+          >
+            <option value="audiobook">Аудиокниги</option>
+            <option value="lecture">Лекции</option>
+          </select>
         </label>
         <label className="flex min-h-11 items-center gap-2.5 self-end">
           <input
