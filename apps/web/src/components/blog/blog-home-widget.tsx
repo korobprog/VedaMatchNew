@@ -12,11 +12,7 @@ import {
 } from "@/lib/blog-home-visibility";
 import { BlogApiError, fetchBlogFavorites } from "@/lib/blog-client-api";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
-import {
-  blogHomeAspect,
-  blogHomeSlide,
-  type BlogHomeSlide,
-} from "./blog-media-list";
+import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
 
 /**
  * Блог-лента на главной (VED-238) — на месте, где раньше стояли карточка
@@ -89,7 +85,6 @@ export function BlogHomeWidget({
     () => (showFavorites ? (favorites ?? []) : data.posts).map(blogHomeSlide),
     [showFavorites, favorites, data.posts],
   );
-  const aspect = blogHomeAspect(slides);
 
   /* 44px — размер пальца: четыре кнопки панели стоят вплотную, и мелкие
      промахивались бы на соседнюю — а соседняя здесь «убрать ленту». */
@@ -181,9 +176,8 @@ export function BlogHomeWidget({
           count={slides.length}
           label={showFavorites ? "Избранные посты" : "Посты блог-ленты"}
           perView="responsive"
-          renderSlide={(index) => (
-            <HomeSlide slide={slides[index]} aspect={aspect} />
-          )}
+          fitHeight
+          renderSlide={(index) => <HomeSlide slide={slides[index]} />}
         />
       )}
     </section>
@@ -195,12 +189,12 @@ export function BlogHomeWidget({
  * слайд, и нажатие куда угодно по нему открывает тот же разворот.
  *
  * Заголовок под картинкой, а не поверх неё: картинку «должно быть видно
- * полностью». Высота заголовка постоянная, на две строки, — у слайдов с
- * коротким и длинным заголовком одна высота, и карусель не прыгает. Строки
- * без заголовка нет вовсе (VED-441): пустая полоса под картинкой «сжирала
- * место на главном экране».
+ * полностью». Рамка — по пропорции самого снимка (VED-443): в рамке первого
+ * поста горизонтальный снимок соседа сжимался и обрастал полями. Строка
+ * заголовка — только когда он есть (VED-441): пустая полоса под картинкой
+ * «сжирала место на главном экране».
  */
-function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) {
+function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
   return (
     <Link
       href={`/blog/posts/${encodeURIComponent(slide.id)}`}
@@ -210,7 +204,7 @@ function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) 
          обводка та же, что у глобального `*:focus-visible`. */
       className="group relative block focus-visible:outline-none after:pointer-events-none after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-[-4px] focus-visible:after:outline-magenta focus-visible:after:outline-solid"
     >
-      <BlogFrame aspect={aspect}>
+      <BlogFrame aspect={slide.coverUrl ? slide.aspect : 1}>
         {slide.coverUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -233,7 +227,7 @@ function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) 
         )}
       </BlogFrame>
       {slide.title && (
-        <span className="flex h-14 items-center px-3">
+        <span className="flex min-h-14 items-center px-3 py-2">
           <span className="line-clamp-2 font-display text-sm font-semibold leading-snug text-text-0 group-hover:underline">
             {slide.title}
           </span>
