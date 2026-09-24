@@ -12,11 +12,19 @@ export function MotivationNav({
   active,
   isAdmin,
   compact = false,
+  reelsMenu = false,
 }: {
   active: MotivationSection;
   isAdmin?: boolean;
   /** Узкая строка для свёрнутой шапки: без нижнего отступа и мельче. */
   compact?: boolean;
+  /**
+   * Меню ☰ полноэкранной ленты (VED-387): сюда из ряда вкладок переехали
+   * «Избранное» и «Мои». «Избранное» ведёт туда же, куда вела вкладка, —
+   * в ленту избранного, а «Студия» подписана «Мои · Студия», чтобы кнопку
+   * узнали под прежним именем.
+   */
+  reelsMenu?: boolean;
 }) {
   const links = [
     ["feed", "/motivation", "Лента"],
@@ -25,12 +33,12 @@ export function MotivationNav({
     // «подборок»: адрес раздела остался прежним, менять его ради надписи
     // значит ломать чужие ссылки.
     ["collections", "/motivation/collections", "Категории"],
-    ["favorites", "/motivation/favorites", "Избранное"],
+    ["favorites", reelsMenu ? "/motivation?tab=saved" : "/motivation/favorites", "Избранное"],
     // «Студия» — место, где живут свои рилсы: там их создают, там же ждут
     // готовый кадр и оживляют его в видео. Раньше раздел назывался «Мои
     // рилсы» и в меню его не было вовсе — попасть можно было только по
     // ссылке из мастера.
-    ["studio", "/motivation/my", "Студия"],
+    ["studio", "/motivation/my", reelsMenu ? "Мои · Студия" : "Студия"],
     ["settings", "/motivation/settings", "Настройки"],
     ...(isAdmin ? ([["admin", "/admin/motivation", "Админ"]] as const) : []),
   ] as const;

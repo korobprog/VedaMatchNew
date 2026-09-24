@@ -1373,11 +1373,25 @@ function ReelStatus({
           </>
         )}
         {/* Лента — главный выход отсюда: рилс сделан, смотреть его идут туда.
-            Поэтому она крупнее и заметнее остальных ссылок. */}
+            Поэтому она заметнее остальных ссылок — цветом, а размер у трёх
+            кнопок один (VED-342: «Студию» и новую кнопку — такого же
+            размера, что «К ленте»). */}
         <Link href="/motivation" className="btn-mint rounded-xl px-6 py-3 text-base font-semibold">
           К ленте
         </Link>
-        <Link href="/motivation/my" className="rounded-xl border border-glass-brd px-4 py-2 text-sm font-medium text-text-1">
+        {/* Следующий рилс (VED-342). Обычной ссылкой, а не `Link`: мастер уже
+            открыт по этому адресу, и переход внутри приложения оставил бы
+            на экране прежний рилс — нужен чистый мастер. */}
+        <a
+          href="/motivation/create"
+          className="btn-mint-outline rounded-xl px-6 py-3 text-base font-semibold"
+        >
+          Добавить рилс
+        </a>
+        <Link
+          href="/motivation/my"
+          className="rounded-xl border border-glass-brd px-6 py-3 text-base font-semibold text-text-1 hover:text-text-0"
+        >
           Студия
         </Link>
         <DonateButton donation={donation} />

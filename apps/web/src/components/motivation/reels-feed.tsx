@@ -20,6 +20,7 @@ import type {
   MotivationPostDto,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
+import { QuickPanel } from "@/components/quick/quick-panel";
 import { DonateButton } from "@/components/donate-sheet";
 import {
   isLongQuote,
@@ -813,7 +814,7 @@ function Tabs({
   /** Значок фильтра встаёт между «Открытки» и «Избранное» (VED-252). */
   filterState?: FeedFilterState;
 }) {
-  const link = (key: ReelsTab | "mine", href: string, label: string) => (
+  const link = (key: ReelsTab | "collections", href: string, label: string) => (
     <Link
       key={key}
       href={href}
@@ -860,9 +861,32 @@ function Tabs({
       {link("forYou", reelsHref({ order, category }), "Лента")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
       {filterState && <FeedAttributionFilter state={filterState} />}
-      {link("saved", "/motivation?tab=saved", "Избранное")}
-      {link("mine", "/motivation/my", "Мои")}
+      {/* VED-387: «Избранное» и «Мои» ушли в меню ☰ (там «Избранное» и
+          «Мои · Студия»), на их местах — «Категории» той ленты, что открыта,
+          и звёздочка панели горячих кнопок: у полноэкранной ленты нет шапки
+          портала, и без неё до панели отсюда было не дотянуться. */}
+      {link("collections", collectionsHref(tab), "Категории")}
+      <ReelsQuickPanel />
     </nav>
+  );
+}
+
+/**
+ * Звёздочка панели горячих кнопок в ряду вкладок (VED-387).
+ *
+ * Сама панель портальная и не меняется: здесь только её кнопка, перекрашенная
+ * под ряд поверх кадра. Кнопку «История», которую панель рисует рядом со
+ * звёздочкой, в ленте прячем — просили одну кнопку. В раскладке звёздочка
+ * занимает 28px (`-mx-2` от её 44px): столько же, сколько значок фильтра,
+ * чтобы ряд влез в 264px между ← и ☰ на 360px (см. расчёт у `Tabs`). Сама
+ * область нажатия остаётся 44×44 и заходит в промежутки соседей, а не в их
+ * подписи. `-my-0.5` держит высоту ряда 40px, как у значка фильтра.
+ */
+function ReelsQuickPanel() {
+  return (
+    <div className="-mx-2 -my-0.5 [&>div>button:first-child]:hidden [&>div>button]:text-white [&>div>button]:drop-shadow [&>div>button:hover]:bg-white/10">
+      <QuickPanel />
+    </div>
   );
 }
 

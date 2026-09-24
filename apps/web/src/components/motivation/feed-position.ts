@@ -98,7 +98,7 @@ export function feedEnding(
   };
 }
 
-/** Несколько папок через запятую — названием первой, как её знает человек. */
+/** Несколько папок через запятую — их названиями через запятую. */
 function categoryTitle(
   category: string,
   categories: readonly Pick<MotivationCategoryDto, "slug" | "title">[],

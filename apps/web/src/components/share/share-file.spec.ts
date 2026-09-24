@@ -90,6 +90,7 @@ describe("shareButtonState (VED-156: индикатор ожидания)", () =
     expect(shareButtonState({ prepare: "loading", sharing: false })).toEqual({
       label: "Готовим картинку…",
       busy: true,
+      ready: false,
     });
   });
 
@@ -97,12 +98,23 @@ describe("shareButtonState (VED-156: индикатор ожидания)", () =
     expect(shareButtonState({ prepare: "ready", sharing: true })).toEqual({
       label: "Открываем приложения…",
       busy: true,
+      ready: false,
     });
   });
 
   it("готово или не вышло заранее — обычная кнопка", () => {
     expect(shareButtonState({ prepare: "ready", sharing: false }).busy).toBe(false);
     expect(shareButtonState({ prepare: "failed", sharing: false }).busy).toBe(false);
+  });
+
+  // VED-414: готовая картинка выделяет кнопку цветной рамкой.
+  it("картинка готова — кнопка отмечена готовой, но не там, где файл не отдать", () => {
+    expect(shareButtonState({ prepare: "ready", sharing: false }).ready).toBe(true);
+    expect(
+      shareButtonState({ prepare: "ready", sharing: false, supported: false }).ready,
+    ).toBe(false);
+    expect(shareButtonState({ prepare: "failed", sharing: false }).ready).toBe(false);
+    expect(shareButtonState({ prepare: "loading", sharing: false }).ready).toBe(false);
   });
 });
 
