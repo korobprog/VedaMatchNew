@@ -44,6 +44,17 @@ describe('app.config', () => {
     expect(audio?.recordAudioAndroid).not.toBe(false);
   });
 
+  // VED-331: Медиатека играет в фоне и на экране блокировки — служба
+  // переднего плана `mediaPlayback` объявляется плагином `expo-audio`.
+  it('плагин expo-audio включает фоновое воспроизведение', () => {
+    const audio = pluginOptions(config, 'expo-audio');
+    expect(audio?.enableBackgroundPlayback).toBe(true);
+  });
+
+  it('плеер держит сеть, пока играет с погашенным экраном', () => {
+    expect(config.android?.permissions ?? []).toEqual(expect.arrayContaining(['android.permission.WAKE_LOCK']));
+  });
+
   // VED-221: входящий звонок при свёрнутом/закрытом приложении.
   it('просит разрешения self-managed ConnectionService и полноэкранного intent', () => {
     expect(config.android?.permissions ?? []).toEqual(

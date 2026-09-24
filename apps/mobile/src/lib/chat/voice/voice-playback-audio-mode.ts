@@ -1,4 +1,5 @@
-import { setAudioModeAsync, type AudioMode } from 'expo-audio';
+import type { AudioMode } from 'expo-audio';
+import { APP_PLAYBACK_AUDIO_MODE, ensurePlaybackAudioMode as ensureAppPlaybackAudioMode } from '@/lib/audio/app-audio-mode';
 
 /**
  * Полный набор полей режима, пригодного для воспроизведения — НЕ частичный
@@ -32,27 +33,21 @@ import { setAudioModeAsync, type AudioMode } from 'expo-audio';
  * голосового в приложении до перезапуска процесса, который возвращает
  * Kotlin-дефолт `true`, потому что поле инициализируется при создании
  * самого класса `AudioModule`, а не через `Record`-конвертацию.
+ *
+ * С Медиатекой (VED-331) режим стал общим на всё приложение и переехал в
+ * `lib/audio/app-audio-mode.ts`: голосовые теперь берут аудиофокус
+ * (`doNotMix` вместо `mixWithOthers`) и не выключают фон — иначе первое же
+ * голосовое глушило бы Медиатеку при сворачивании. Здесь остались прежние
+ * имена, чтобы плеер и рекордер голосовых не менялись.
  */
-export const PLAYBACK_AUDIO_MODE: Partial<AudioMode> = {
-  allowsRecording: false,
-  playsInSilentMode: true,
-  shouldRouteThroughEarpiece: false,
-  interruptionMode: 'mixWithOthers',
-};
+export const PLAYBACK_AUDIO_MODE: AudioMode = APP_PLAYBACK_AUDIO_MODE;
 
 /**
  * Плеер (`voice-message-player.tsx`) вызывает сам, перед стартом
  * воспроизведения — не полагаясь на то, что рекордер (`voice-recorder-
  * control.tsx: restoreAudioMode()`) успел и не забыл вернуть режим в
- * пригодное для игры состояние. Обе стороны используют один и тот же
- * набор полей намеренно: несогласованный частичный объект с любой стороны
- * воспроизвёл бы тот же дефект снова.
+ * пригодное для игры состояние.
  */
 export async function ensurePlaybackAudioMode(): Promise<void> {
-  try {
-    await setAudioModeAsync(PLAYBACK_AUDIO_MODE);
-  } catch {
-    // Не мешаем самому воспроизведению — `player.play()` всё равно попробует,
-    // а провал переключения режима не должен блокировать тап целиком.
-  }
+  await ensureAppPlaybackAudioMode();
 }

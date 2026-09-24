@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { useReducedMotion } from 'react-native-reanimated';
 import { ConferenceReturn } from '@/components/chat/conference-return';
 import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
@@ -36,6 +37,9 @@ function RootStackInner() {
   const { scheme, colors } = useTheme();
   const { status } = useSession();
   const onboarding = useOnboardingGate();
+  // Полноэкранный плеер Медиатеки выезжает снизу из мини-плеера; при
+  // «уменьшить движение» — проявляется на месте (VED-331).
+  const reducedMotion = useReducedMotion();
   // Закреплённое для панели быстрого доступа (VED-385) читается вместе с
   // восстановлением сессии, а не когда откроются вкладки: вкладки ждут этого
   // чтения, чтобы первый кадр сразу встал с панелью (`(tabs)/_layout.tsx`).
@@ -130,6 +134,23 @@ function RootStackInner() {
           <Stack.Screen name="blog/new" />
           <Stack.Screen name="blog/post/[id]" />
           <Stack.Screen name="blog/authors/[id]" />
+          {/* Медиатека (VED-331) — маршруты корневого стека, а не шестая
+              вкладка: вход — карточкой «Медиатека» в «Сервисах» и чипом
+              панели быстрого доступа. Сам звук живёт не в экране, а в
+              провайдере (`lib/media/media-player-provider.tsx`) и не
+              прерывается при уходе отсюда; мини-плеер — над вкладками. */}
+          <Stack.Screen name="music/index" />
+          <Stack.Screen name="music/audiobooks/[slug]" />
+          {/* Полноэкранный плеер — модалью снизу вверх, как раскрытый
+              мини-плеер. Свернуть — стрелкой или системным «назад». */}
+          <Stack.Screen
+            name="music/player"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+              animation: reducedMotion ? 'fade' : 'slide_from_bottom',
+            }}
+          />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />

@@ -111,6 +111,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'android.permission.FOREGROUND_SERVICE_CAMERA',
         'android.permission.ACCESS_WIFI_STATE',
         'android.permission.CHANGE_NETWORK_STATE',
+        // Медиатека (VED-331): плеер держит процессор и Wi-Fi, пока играет
+        // поток с погашенным экраном (`WAKE_MODE_NETWORK`, заплатка
+        // `patches/expo-audio@57.0.5.patch`) — иначе в Doze докачка встаёт
+        // и звук обрывается, когда кончится буфер. «Обычное» разрешение,
+        // выдаётся без диалога; держится только во время игры.
+        'android.permission.WAKE_LOCK',
         // Самообновление с сайта (VED-176): открыть системный установщик по
         // `content://` требует REQUEST_INSTALL_PACKAGES с Android 8+, иначе
         // `startActivityAsync(ACTION_INSTALL_PACKAGE)` откроет системный
@@ -221,15 +227,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // управляет ещё и тем, войдёт ли `MODIFY_AUDIO_SETTINGS` в манифест
       // (`node_modules/expo-audio/plugin/src/withAudio.ts`) — без него
       // Android может не дать `AudioRecorder` выставить формат записи.
-      // Без фоновой службы воспроизведения — рингтон и голосовое играют,
-      // только пока приложение на экране (осознанно, «Звук из фона не
-      // нужен» для голосовых); звонок в свёрнутом приложении — отдельный
-      // механизм этапа 2 (VED-221), с записью и плеером сообщений не связан.
+      // Медиатека (VED-331): `enableBackgroundPlayback: true` объявляет службу
+      // `expo.modules.audio.service.AudioControlsService` с
+      // `foregroundServiceType="mediaPlayback"` и разрешения
+      // FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PLAYBACK (Android 14
+      // иначе бросит `SecurityException` на `startForeground`). Служба
+      // поднимается, только когда плеер Медиатеки включает экран блокировки
+      // (`setActiveForLockScreen`), — голосовые и рингтон её не трогают и,
+      // как раньше, в фоне не доигрывают (свой `AppState` у плеера голосовых).
+      // Без службы Android глушит фоновый звук примерно через три минуты.
       [
         'expo-audio',
         {
           recordAudioAndroid: true,
-          enableBackgroundPlayback: false,
+          enableBackgroundPlayback: true,
         },
       ],
       // Входящий звонок в свёрнутом/закрытом приложении (этап 2, VED-221,

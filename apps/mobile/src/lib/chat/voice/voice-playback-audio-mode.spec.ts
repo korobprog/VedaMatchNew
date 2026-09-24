@@ -24,11 +24,15 @@ describe('PLAYBACK_AUDIO_MODE', () => {
   });
 
   it('перечисляет все поля, которые трогает запись, — ни одно не должно остаться "как получится"', () => {
+    // С VED-331 режим общий с Медиатекой: фокус берётся (`doNotMix`), фон
+    // не выключается — иначе голосовое глушило бы музыку при сворачивании.
     expect(PLAYBACK_AUDIO_MODE).toEqual({
       allowsRecording: false,
+      allowsBackgroundRecording: false,
       playsInSilentMode: true,
+      shouldPlayInBackground: true,
       shouldRouteThroughEarpiece: false,
-      interruptionMode: 'mixWithOthers',
+      interruptionMode: 'doNotMix',
     });
   });
 });

@@ -87,5 +87,14 @@
       "<rootDir>/src/**/*.spec.ts",
       "<rootDir>/src/**/*.spec.tsx"
     ]
+  },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-audio"
+        ]
+      }
+    }
   }
 }

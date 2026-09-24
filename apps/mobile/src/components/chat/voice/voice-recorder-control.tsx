@@ -1,7 +1,6 @@
 import type { ChatAttachmentInput } from '@vedamatch/shared';
 import {
   requestRecordingPermissionsAsync,
-  setAudioModeAsync,
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
@@ -16,6 +15,8 @@ import { useChatCalls } from '@/lib/calls/chat-calls-context';
 import { canRecordVoice, shouldInterruptForIncomingCall } from '@/lib/chat/voice/voice-call-guard';
 import { shouldCancelRecordingForAppState } from '@/lib/chat/voice/voice-app-state-guard';
 import { registerLocalVoiceFile } from '@/lib/chat/voice/voice-local-file-cache';
+import { applyRecordingAudioMode as applyRecordingMode } from '@/lib/audio/app-audio-mode';
+import { announceAudioStart } from '@/lib/audio/audio-arbiter';
 import { ensurePlaybackAudioMode } from '@/lib/chat/voice/voice-playback-audio-mode';
 import { stopActiveVoicePlayback } from '@/lib/chat/voice/voice-playback-registry';
 import { setRecordingActive } from '@/lib/chat/voice/voice-recording-guard';
@@ -223,28 +224,22 @@ export function VoiceRecorderControl({ conversationId, chatApi, onSent, onRecord
             // Мусор в кэше не критичен.
           }
         }
-        try {
-          await setAudioModeAsync({ allowsRecording: false });
-        } catch {
-          // См. restoreAudioMode — не мешаем остальному.
-        }
+        // Полный объект режима, а не `{ allowsRecording: false }`: частичный
+        // обнулял бы фон и фокус, и Медиатека замолкала бы при сворачивании
+        // (VED-331). Сама функция ошибок не бросает.
+        await ensurePlaybackAudioMode();
       })();
     };
   }, [recorder]);
 
+  /**
+   * Режим записи — полным объектом из общего модуля (`lib/audio/app-audio-
+   * mode.ts`), и сразу объявление «пишется голосовое»: Медиатека и чужое
+   * голосовое замолкают до того, как пошёл микрофон (VED-331).
+   */
   async function applyRecordingAudioMode() {
-    try {
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-        // Запись должна слушать обычный микрофон, не разговорный — тот же
-        // резон, что у плеера: это не звонок.
-        shouldRouteThroughEarpiece: false,
-        interruptionMode: 'doNotMix',
-      });
-    } catch {
-      // Аудиосессия не поднялась — `recorder.record()` следом сам откажет понятной ошибкой.
-    }
+    announceAudioStart('recording');
+    await applyRecordingMode();
   }
 
   /**
