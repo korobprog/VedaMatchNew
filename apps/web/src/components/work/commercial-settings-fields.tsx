@@ -129,13 +129,12 @@ export function CommercialSettingsFields({
               }
               className={INPUT}
             >
-              <option value="on_request">Только по запросу</option>
+              <option value="on_request">По запросу</option>
               <option value="auto">Автоматически</option>
             </select>
           </label>
           <p id={`${id}-norm-hint`} className="col-span-2 text-xs text-text-2">
-            Норма считается на исполнителя за день по всей доске. «Только по
-            запросу» — часы сверх нормы видны, но в счёт идут после одобрения
+            Норма считается на исполнителя за день по всей доске. «По запросу» — часы сверх нормы видны, но в счёт идут после одобрения
             ведущим.
           </p>
         </>
