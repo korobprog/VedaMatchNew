@@ -1835,8 +1835,9 @@ export class MotivationService {
       ),
       // Название раздела в автоматическом заголовке — нынешнее (VED-301).
       title: freshPictureTitle(
-        t?.title ?? '',
-        post.categoryTitle ?? post.category,
+        (t as { title?: string } | undefined)?.title ?? '',
+        (post as { categoryTitle?: string; category: string }).categoryTitle ??
+          (post as { category: string }).category,
       ),
       text: post.explanationHiddenAt ? quoteOf(t?.text ?? '') : (t?.text ?? ''),
       storyText: t?.storyText ?? '',
