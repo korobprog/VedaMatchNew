@@ -196,7 +196,9 @@ export function BlogHomeWidget({
  *
  * Заголовок под картинкой, а не поверх неё: картинку «должно быть видно
  * полностью». Высота заголовка постоянная, на две строки, — у слайдов с
- * коротким и длинным заголовком одна высота, и карусель не прыгает.
+ * коротким и длинным заголовком одна высота, и карусель не прыгает. Строки
+ * без заголовка нет вовсе (VED-441): пустая полоса под картинкой «сжирала
+ * место на главном экране».
  */
 function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) {
   return (
@@ -230,25 +232,25 @@ function HomeSlide({ slide, aspect }: { slide: BlogHomeSlide; aspect: number }) 
           </span>
         )}
       </BlogFrame>
-      <span className="flex h-14 items-center px-3">
-        {slide.title && (
+      {slide.title && (
+        <span className="flex h-14 items-center px-3">
           <span className="line-clamp-2 font-display text-sm font-semibold leading-snug text-text-0 group-hover:underline">
             {slide.title}
           </span>
-        )}
-        {/* У ссылки обязано быть имя: пост из одной фотографии без слов
-            иначе читается скринридером как пустая ссылка. */}
-        <span className="sr-only">
-          {slide.title
-            ? slide.isVideo
-              ? ", ролик"
-              : ""
-            : slide.coverUrl
-              ? slide.isVideo
-                ? "Пост с роликом"
-                : "Пост с фотографией"
-              : ""}
         </span>
+      )}
+      {/* У ссылки обязано быть имя: пост из одной фотографии без слов
+          иначе читается скринридером как пустая ссылка. */}
+      <span className="sr-only">
+        {slide.title
+          ? slide.isVideo
+            ? ", ролик"
+            : ""
+          : slide.coverUrl
+            ? slide.isVideo
+              ? "Пост с роликом"
+              : "Пост с фотографией"
+            : ""}
       </span>
     </Link>
   );
