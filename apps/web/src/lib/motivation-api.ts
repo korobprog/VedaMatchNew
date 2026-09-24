@@ -21,6 +21,7 @@ import type {
   MotivationAudioDto,} from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -30,7 +31,7 @@ async function motivationGet<T>(path: string): Promise<T | null> {
   if (!token) return null;
 
   const response = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   // 403 приходит, когда роль в базе уже поднята до админской, а в выданном
@@ -44,7 +45,10 @@ async function motivationGet<T>(path: string): Promise<T | null> {
 }
 
 async function motivationGetPublic<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: await clientIpHeaders(),
+    cache: "no-store",
+  });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
   return parseJsonBody<T>(await response.text());

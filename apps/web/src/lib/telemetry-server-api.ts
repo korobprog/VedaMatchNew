@@ -2,6 +2,7 @@
 // нельзя тянуть в модуль, который импортируют клиентские компоненты.
 import { cookies } from "next/headers";
 import type { InstallEnvironmentSummary } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -12,7 +13,7 @@ export async function getInstallEnvironmentSummary(): Promise<InstallEnvironment
   if (!token) return null;
 
   const res = await fetch(`${API_URL}/telemetry/install-environment`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401 || res.status === 403) return null;

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -26,6 +27,7 @@ export default async function ChatWithUserPage({
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      ...(await clientIpHeaders()),
     },
     body: JSON.stringify({ kind: "direct", userId }),
     cache: "no-store",

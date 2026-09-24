@@ -18,6 +18,7 @@ import type {
   LibraryShlokaListResponse,
 } from "@vedamatch/shared";
 import { buildLibraryQuery } from "./library-query";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -28,7 +29,7 @@ async function libraryGet<T>(path: string): Promise<T | null> {
   if (!token) return null;
 
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (res.status === 401) return null;
