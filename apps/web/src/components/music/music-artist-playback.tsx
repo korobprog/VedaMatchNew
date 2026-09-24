@@ -5,8 +5,11 @@ import Link from "next/link";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { MusicPlayAllButton } from "./player/play-all-button";
 import { MusicPlayModeButtons } from "./player/play-mode-buttons";
+import { MusicTrackCard } from "./music-track-card";
 import { MusicTrackRow } from "./music-track-row";
 import { sortTracks, type TrackSortMode } from "./sort-tracks";
+import { ARTIST_VIEW_KEY } from "./track-view";
+import { useTrackView } from "./use-track-view";
 
 /**
  * Верхние кнопки «Слушать»/«Перемешать» и секция «Записи» на странице
@@ -46,6 +49,10 @@ export function MusicArtistPlayback({
   // ниже, и это выбор уважается до следующего захода на страницу.
   const [mode, setMode] = useState<TrackSortMode>("alpha");
   const [reverse, setReverse] = useState(false);
+  // Вид плиткой (VED-390). В отличие от сортировки — привычка, помним на
+  // устройстве; по умолчанию строки, как было.
+  const [view, setView] = useTrackView(ARTIST_VIEW_KEY, "list");
+  const grid = view === "grid";
 
   const sorted = useMemo(
     () => sortTracks(tracks, mode, reverse),
@@ -90,12 +97,33 @@ export function MusicArtistPlayback({
       {children}
 
       <section className="mt-8" aria-labelledby="artist-tracks">
-        <h2
-          id="artist-tracks"
-          className="font-display text-base font-bold text-text-0"
-        >
-          Записи
-        </h2>
+        {/* Переключатель вида — в строке заголовка, а не в ряду сортировки:
+            тот на 360 точках занят до края, и четвёртая кнопка уводила бы
+            его на вторую строку. */}
+        <div className="flex items-center justify-between gap-3">
+          <h2
+            id="artist-tracks"
+            className="font-display text-base font-bold text-text-0"
+          >
+            Записи
+          </h2>
+          {tracks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setView(grid ? "list" : "grid")}
+              aria-pressed={grid}
+              title={grid ? "Показать списком" : "Показать плиткой"}
+              className={`flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition-colors ${
+                grid
+                  ? "border-cyan bg-cyan/10 text-text-0"
+                  : "border-glass-brd text-text-1 hover:text-text-0"
+              }`}
+            >
+              <GridIcon />
+              Плиткой
+            </button>
+          )}
+        </div>
         {tracks.length === 0 ? (
           <p className="mt-3 text-sm text-text-1">
             Опубликованных записей пока нет.
@@ -145,13 +173,23 @@ export function MusicArtistPlayback({
               </button>
             </div>
 
-            <ul className="mt-2 flex flex-col">
-              {sorted.map((track) => (
-                <li key={track.id}>
-                  <MusicTrackRow track={track} queue={queue} />
-                </li>
-              ))}
-            </ul>
+            {grid ? (
+              <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+                {sorted.map((track) => (
+                  <li key={track.id}>
+                    <MusicTrackCard track={track} queue={queue} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="mt-2 flex flex-col">
+                {sorted.map((track) => (
+                  <li key={track.id}>
+                    <MusicTrackRow track={track} queue={queue} />
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
       </section>
@@ -172,6 +210,26 @@ function ReverseIcon({ flipped }: { flipped: boolean }) {
       aria-hidden="true"
     >
       <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </svg>
   );
 }

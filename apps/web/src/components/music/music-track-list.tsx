@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { MusicTrackCard } from "./music-track-card";
 import { MusicTrackRow } from "./music-track-row";
-
-const VIEW_KEY = "vm.music.view";
+import { CATALOG_VIEW_KEY } from "./track-view";
+import { useTrackView } from "./use-track-view";
 
 /**
  * Записи каталога сеткой или списком, с переключателем.
@@ -20,38 +19,13 @@ const VIEW_KEY = "vm.music.view";
  *
  * Выбор живёт в `localStorage`, а не в адресе: это не то, что пересылают
  * вместе со ссылкой, а привычка человека — и она обязана пережить переход на
- * страницу записи и обратно. Списки на других страницах Музыки строчные
- * всегда, так что переключателю там нечего переключать.
+ * страницу записи и обратно. Свой переключатель есть и у страницы
+ * исполнителя (VED-390), со своим ключом — см. `track-view.ts`.
  */
 export function MusicTrackList({ tracks }: { tracks: MusicTrackDto[] }) {
-  const [list, setList] = useState(false);
-
-  /* Читаем эффектом, а не ленивым `useState`: на сервере `localStorage` нет,
-     инициализатор вернул бы «сетка», а на клиенте — «список», и это
-     расхождение гидратации. Тем же способом читает своё значение
-     `mini-player.tsx`. */
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий
-       выше: ленивый useState здесь даёт расхождение гидратации. */
-    try {
-      if (window.localStorage.getItem(VIEW_KEY) === "list") setList(true);
-    } catch {
-      // Приватный режим и запрет хранилища — не повод не работать.
-    }
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
-
-  const toggle = () => {
-    setList((was) => {
-      const next = !was;
-      try {
-        window.localStorage.setItem(VIEW_KEY, next ? "list" : "grid");
-      } catch {
-        // см. выше
-      }
-      return next;
-    });
-  };
+  const [view, setView] = useTrackView(CATALOG_VIEW_KEY, "grid");
+  const list = view === "list";
+  const toggle = () => setView(list ? "grid" : "list");
 
   const queue = tracks.map((item) => item.id);
 

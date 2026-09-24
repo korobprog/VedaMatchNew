@@ -55,6 +55,7 @@ function rowTitles() {
 }
 
 beforeEach(() => {
+  window.localStorage.clear();
   player.value.play.mockClear();
   player.value.setPlayMode.mockClear();
   player.value.toggleShuffle.mockClear();
@@ -210,5 +211,63 @@ describe("MusicArtistPlayback", () => {
     expect(
       screen.getByRole("link", { name: /Загрузить треки/ }),
     ).toHaveAttribute("href", "/music/uploads?artist=shanti");
+  });
+
+  // VED-390: «Добавь сюда вид плиткой» — на странице исполнителя.
+  describe("вид плиткой (VED-390)", () => {
+    it("по умолчанию строки, переключатель не нажат", () => {
+      render(
+        <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
+      );
+      expect(screen.getByRole("button", { name: "Плиткой" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+      expect(screen.queryAllByRole("article")).toHaveLength(0);
+    });
+
+    it("плитки идут в том же порядке, что и строки, и выбор запоминается", async () => {
+      const user = userEvent.setup();
+      render(
+        <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Плиткой" }));
+
+      expect(screen.getByRole("button", { name: "Плиткой" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      const cards = screen.getAllByRole("article");
+      expect(cards.map((card) => within(card).getByRole("link").textContent)).toEqual([
+        "Арати",
+        "Бхаджан",
+        "Ямуна",
+      ]);
+      expect(window.localStorage.getItem("vm.music.artist-view")).toBe("grid");
+    });
+
+    it("запуск из плитки ставит очередь в видимом порядке", async () => {
+      const user = userEvent.setup();
+      render(
+        <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
+      );
+      await user.click(screen.getByRole("button", { name: "Плиткой" }));
+      await user.click(screen.getByRole("button", { name: "По дате добавления" }));
+      const bhajan = screen
+        .getAllByRole("article")
+        .find((card) => card.textContent?.includes("Бхаджан"));
+      await user.click(within(bhajan!).getByRole("button", { name: /Бхаджан/ }));
+
+      expect(player.value.play).toHaveBeenCalledWith("b", ["y", "b", "a"]);
+    });
+
+    it("сохранённый выбор поднимается при заходе", async () => {
+      window.localStorage.setItem("vm.music.artist-view", "grid");
+      render(
+        <MusicArtistPlayback tracks={tracks} isMusicEditor={false} uploadHref="/x" />,
+      );
+      expect(await screen.findAllByRole("article")).toHaveLength(3);
+    });
   });
 });
