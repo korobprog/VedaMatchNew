@@ -646,7 +646,9 @@ export function ReelsFeed({
           главной (VED-432). Листать можно только вперёд, поэтому на первой
           картинке — дорога к началу ленты. Дальше не мешает кадру. */}
       {initial.resumed && ending.restartHref && activeIndex === 0 && onPost && (
-        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center">
+        /* На экране уже 360px ряд вкладок переносится на две строки
+           (звёздочка уходит вниз, до 96px) — плашка встаёт под ним. */
+        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center max-[359px]:top-24">
           <Link
             href={ending.restartHref}
             aria-label="Лента открыта с места, где вы остановились. Открыть с начала"
