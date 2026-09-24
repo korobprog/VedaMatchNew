@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Check, ChevronDown, Loader2, X } from "lucide-react";
+import { Check, ChevronDown, FileText, Link2, Loader2, X } from "lucide-react";
 import type {
   WorkCurrency,
   WorkPayoutPeriodDto,
@@ -11,6 +11,8 @@ import {
   closeWorkPayout,
   getWorkPayouts,
   markWorkPayout,
+  shareWorkPayout,
+  unshareWorkPayout,
 } from "@/lib/work-api";
 import {
   PAYOUT_STATUS_LABEL,
@@ -193,7 +195,22 @@ export function WorkPayoutsDialog({
                     markWorkPayout(period.id as string, { status, note }),
                   )
                 }
-              />
+              >
+                {data.canManage && (
+                  <ActLink
+                    periodId={period.id as string}
+                    token={period.actToken}
+                    busy={busy}
+                    onShared={() =>
+                      void run(() => getWorkPayouts(boardId))
+                    }
+                    onUnshare={() =>
+                      void run(() => unshareWorkPayout(period.id as string))
+                    }
+                    onError={setError}
+                  />
+                )}
+              </PeriodCard>
             ))}
           </>
         )}
@@ -415,3 +432,101 @@ function PeriodCard({
     </section>
   );
 }
+
+/** Адрес акта для клиента: ссылку ведущий пересылает в мессенджер. */
+function actUrl(token: string): string {
+  return `${window.location.origin}/work/act/${token}`;
+}
+
+/**
+ * Акт для клиента (VED-461): открыть (оттуда — «Сохранить PDF»),
+ * скопировать ссылку, закрыть её. Ссылка создаётся при первом открытии.
+ */
+function ActLink({
+  periodId,
+  token,
+  busy,
+  onShared,
+  onUnshare,
+  onError,
+}: {
+  periodId: string;
+  token: string | null;
+  busy: boolean;
+  onShared: () => void;
+  onUnshare: () => void;
+  onError: (message: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function ensureToken(): Promise<string | null> {
+    if (token) return token;
+    try {
+      const shared = await shareWorkPayout(periodId);
+      onShared();
+      return shared.token;
+    } catch (cause) {
+      onError(cause instanceof Error ? cause.message : "Не получилось");
+      return null;
+    }
+  }
+
+  async function open() {
+    // Окно открываем сразу, до запроса: иначе браузер сочтёт его всплывающим.
+    const tab = window.open("", "_blank");
+    const next = await ensureToken();
+    if (!next) {
+      tab?.close();
+      return;
+    }
+    if (tab) tab.location.href = actUrl(next);
+  }
+
+  async function copy() {
+    const next = await ensureToken();
+    if (!next) return;
+    try {
+      await navigator.clipboard.writeText(actUrl(next));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      onError("Не удалось скопировать — откройте акт и скопируйте адрес");
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void open()}
+        className="flex min-h-11 items-center gap-2 rounded-xl bg-glass px-3 py-2 text-sm text-text-0 disabled:opacity-50"
+      >
+        <FileText aria-hidden className="size-4" />
+        Акт для клиента
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void copy()}
+        className="flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
+      >
+        <Link2 aria-hidden className="size-4" />
+        <span aria-live="polite">
+          {copied ? "Ссылка скопирована" : "Скопировать ссылку"}
+        </span>
+      </button>
+      {token && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onUnshare}
+          className="min-h-11 rounded-xl px-3 py-2 text-xs text-text-2 underline hover:text-text-0 disabled:opacity-50"
+        >
+          Закрыть ссылку
+        </button>
+      )}
+    </div>
+  );
+}
+

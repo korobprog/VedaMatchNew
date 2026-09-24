@@ -67,12 +67,15 @@ export class WorkPayoutWorkerService implements OnModuleInit, OnModuleDestroy {
   async tick(now = new Date()): Promise<void> {
     if (this.running) return;
     this.running = true;
+    const token = crypto.randomUUID();
+    let leased = false;
     try {
       if (this.redis?.status === 'ready') {
         const acquired = await this.redis
-          .set(LEASE_KEY, crypto.randomUUID(), 'PX', LEASE_MS, 'NX')
+          .set(LEASE_KEY, token, 'PX', LEASE_MS, 'NX')
           .catch(() => null);
         if (!acquired) return;
+        leased = true;
       }
       const closed = await this.payouts.closeDue(now);
       if (closed > 0) this.logger.log(`Подбито периодов выплат: ${closed}`);
@@ -82,6 +85,12 @@ export class WorkPayoutWorkerService implements OnModuleInit, OnModuleDestroy {
         error instanceof Error ? error.stack : String(error),
       );
     } finally {
+      // Отпускаем лиз, только если он ещё наш: после выкладки новый инстанс
+      // не должен ждать, пока истечёт лиз ушедшего.
+      if (leased) {
+        const holder = await this.redis?.get(LEASE_KEY).catch(() => null);
+        if (holder === token) await this.redis?.del(LEASE_KEY).catch(() => 0);
+      }
       this.running = false;
     }
   }

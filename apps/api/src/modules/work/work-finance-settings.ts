@@ -8,6 +8,7 @@ import {
   WORK_OVERTIME_MAX_MINUTES,
   WORK_OVERTIME_MIN_MINUTES,
   WORK_OVERTIME_REASON_MAX,
+  WORK_PAYMENT_REMINDER_MAX_DAYS,
   WORK_TIME_ENTRY_MAX_MINUTES,
   type WorkCommercialSettingsInput,
   type WorkCurrency,
@@ -36,6 +37,7 @@ export interface WorkCommercialSettingsData {
   timezone?: string;
   payoutPeriod?: WorkPayoutPeriodKind;
   payoutDay?: number;
+  paymentReminderDays?: number;
 }
 
 /** Сумма в копейках: целое от 0 до потолка. */
@@ -158,6 +160,22 @@ export function parseWorkCommercialSettings(
       throw new BadRequestException('День подбития: от 1 до 28');
     }
     data.payoutDay = day;
+  }
+  if (input.paymentReminderDays !== undefined) {
+    const days =
+      typeof input.paymentReminderDays === 'number'
+        ? input.paymentReminderDays
+        : NaN;
+    if (
+      !Number.isInteger(days) ||
+      days < 0 ||
+      days > WORK_PAYMENT_REMINDER_MAX_DAYS
+    ) {
+      throw new BadRequestException(
+        `Напоминание об оплате: от 0 до ${WORK_PAYMENT_REMINDER_MAX_DAYS} дней`,
+      );
+    }
+    data.paymentReminderDays = days;
   }
   if (input.timezone !== undefined) {
     const zone =

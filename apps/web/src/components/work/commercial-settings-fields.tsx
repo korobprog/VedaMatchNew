@@ -182,6 +182,22 @@ export function CommercialSettingsFields({
         </select>
       </label>
 
+      <label className="col-span-2 flex flex-col gap-1" htmlFor={`${id}-reminder`}>
+        <span className={LABEL}>Напомнить ведущему, если период не оплачен</span>
+        <select
+          id={`${id}-reminder`}
+          value={draft.reminderDays}
+          onChange={(event) => set({ reminderDays: event.target.value })}
+          className={INPUT}
+        >
+          <option value="0">Не напоминать</option>
+          <option value="1">Через день</option>
+          <option value="3">Через 3 дня</option>
+          <option value="7">Через неделю</option>
+          <option value="14">Через 2 недели</option>
+        </select>
+      </label>
+
       <label className="col-span-2 flex flex-col gap-1" htmlFor={`${id}-budget`}>
         <span className={LABEL}>Бюджет доски, {symbol}</span>
         <input

@@ -383,6 +383,23 @@ export type NotificationEvent =
       role: "lead" | "executor";
     }
   | {
+      /**
+       * Подбитый период долго не оплачен (VED-461). Ведущему; повторяется
+       * раз в тот же срок, пока период не отметят оплаченным.
+       */
+      name: "work.payout.reminder";
+      recipientId: string;
+      periodId: string;
+      spaceId: string;
+      spaceName: string;
+      fromDay: string;
+      toDay: string;
+      amountMinor: number;
+      currency: string;
+      /** Сколько полных дней прошло с подбития. */
+      daysSinceClose: number;
+    }
+  | {
       /** Ведущий отметил период оплаченным; исполнителю — его сумма. */
       name: "work.payout.paid";
       recipientId: string;

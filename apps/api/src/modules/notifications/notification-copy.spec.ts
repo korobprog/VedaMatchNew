@@ -1076,3 +1076,24 @@ describe('buildNotification · выплаты (VED-460)', () => {
     expect(paid.title).toBe('Выплата отмечена оплаченной');
   });
 });
+
+describe('buildNotification · напоминание об оплате (VED-461)', () => {
+  it('сколько и сколько дней ждёт', () => {
+    const copy = buildNotification({
+      name: 'work.payout.reminder',
+      recipientId: 'lead',
+      periodId: 'p1',
+      spaceId: 's1',
+      spaceName: 'Сайт ашрама',
+      fromDay: '2026-09-19',
+      toDay: '2026-09-25',
+      amountMinor: 2_475_000,
+      currency: 'RUB',
+      daysSinceClose: 21,
+    });
+    expect(copy.title).toBe('Период не оплачен');
+    expect(copy.body.replace(/\s/g, ' ')).toBe(
+      '«Сайт ашрама», 19–25 сентября: 24 750 ₽ ждут оплаты 21 день',
+    );
+  });
+});

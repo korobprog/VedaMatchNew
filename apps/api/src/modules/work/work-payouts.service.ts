@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import {
@@ -11,11 +12,18 @@ import {
   resolveDisplayName,
   type MarkWorkPayoutRequest,
   type WorkCurrency,
+  type WorkPayoutActDto,
+  type WorkPayoutShareDto,
   type WorkPayoutPeriodDto,
   type WorkPayoutSnapshot,
   type WorkPayoutsDto,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  workActFromSnapshot,
+  workDaysSince,
+  workReminderDue,
+} from './work-act';
 import { WORK_EVENTS } from './work-events';
 import {
   workBilledOvertime,
@@ -50,6 +58,7 @@ const payoutBoardSelect = {
   payoutDay: true,
   payoutAnchorDay: true,
   commercialSince: true,
+  paymentReminderDays: true,
   space: { select: { id: true, name: true, prefix: true } },
 } satisfies Prisma.WorkBoardSelect;
 
@@ -315,6 +324,7 @@ export class WorkPayoutsService {
       sentAt: Date | null;
       paidAt: Date | null;
       paidNote: string;
+      actToken: string | null;
     },
     viewerId: string,
     finance: boolean,
@@ -330,6 +340,8 @@ export class WorkPayoutsService {
       sentAt: row.sentAt?.toISOString() ?? null,
       paidAt: row.paidAt?.toISOString() ?? null,
       paidNote: row.paidNote,
+      // Ссылка на акт — ключ без входа: исполнителю её не отдаём.
+      actToken: finance ? row.actToken : null,
     };
   }
 
@@ -369,6 +381,7 @@ export class WorkPayoutsService {
         sentAt: null,
         paidAt: null,
         paidNote: '',
+        actToken: null,
       },
       closed: closed.map((row) => this.toDto(row, userId, context.finance)),
     };
@@ -577,8 +590,155 @@ export class WorkPayoutsService {
       select: payoutBoardSelect,
     });
     let closed = 0;
-    for (const board of boards) closed += await this.closeDueBoard(board, now);
+    for (const board of boards) {
+      closed += await this.closeDueBoard(board, now);
+      await this.remindBoard(board, now);
+    }
     return closed;
+  }
+
+  /**
+   * Напомнить ведущему о подбитых, но не оплаченных периодах (VED-461).
+   * Отметка `remindedAt` ставится через `updateMany` с проверкой прежнего
+   * значения — два инстанса не напомнят дважды.
+   */
+  private async remindBoard(board: PayoutBoardRow, now: Date): Promise<void> {
+    if (board.paymentReminderDays <= 0 || !board.leadId) return;
+    const unpaid = await this.prisma.workPayoutPeriod.findMany({
+      where: { boardId: board.id, status: { in: ['closed', 'sent'] } },
+      select: {
+        id: true,
+        fromDay: true,
+        toDay: true,
+        closedAt: true,
+        remindedAt: true,
+        totalMinor: true,
+      },
+    });
+    for (const period of unpaid) {
+      if (
+        !workReminderDue({
+          days: board.paymentReminderDays,
+          closedAt: period.closedAt,
+          remindedAt: period.remindedAt,
+          totalMinor: period.totalMinor,
+          now,
+        })
+      ) {
+        continue;
+      }
+      const claimed = await this.prisma.workPayoutPeriod.updateMany({
+        where: { id: period.id, remindedAt: period.remindedAt },
+        data: { remindedAt: now },
+      });
+      if (claimed.count === 0) continue;
+      this.events.emit(WORK_EVENTS.payoutReminder, {
+        name: WORK_EVENTS.payoutReminder,
+        recipientId: board.leadId,
+        periodId: period.id,
+        spaceId: board.space.id,
+        spaceName: board.space.name,
+        fromDay: period.fromDay,
+        toDay: period.toDay,
+        amountMinor: period.totalMinor,
+        currency: board.currency,
+        daysSinceClose: workDaysSince(period.closedAt, now),
+      });
+    }
+  }
+
+  /**
+   * Ссылка на акт для клиента: секрет, по которому акт открывается без
+   * входа. Повторный запрос возвращает ту же ссылку — уже отправленная
+   * клиенту не должна переставать работать.
+   */
+  async share(periodId: string, userId: string): Promise<WorkPayoutShareDto> {
+    const period = await this.prisma.workPayoutPeriod.findUnique({
+      where: { id: periodId },
+      select: { boardId: true, actToken: true },
+    });
+    if (!period) throw new NotFoundException('Период не найден');
+    const board = await this.loadBoard(period.boardId);
+    const context = await this.finance.contextOfBoard(board, userId);
+    if (!context.finance) {
+      throw new ForbiddenException(
+        'Акт отправляет ведущий доски или администрация среды',
+      );
+    }
+    if (period.actToken) return { token: period.actToken };
+    const token = randomBytes(24).toString('base64url');
+    await this.prisma.workPayoutPeriod.update({
+      where: { id: periodId },
+      data: { actToken: token },
+    });
+    return { token };
+  }
+
+  /** Закрыть ссылку на акт: старая перестаёт открываться. */
+  async unshare(periodId: string, userId: string): Promise<WorkPayoutsDto> {
+    const period = await this.prisma.workPayoutPeriod.findUnique({
+      where: { id: periodId },
+      select: { boardId: true },
+    });
+    if (!period) throw new NotFoundException('Период не найден');
+    const board = await this.loadBoard(period.boardId);
+    const context = await this.finance.contextOfBoard(board, userId);
+    if (!context.finance) {
+      throw new ForbiddenException(
+        'Ссылку закрывает ведущий доски или администрация среды',
+      );
+    }
+    await this.prisma.workPayoutPeriod.update({
+      where: { id: periodId },
+      data: { actToken: null },
+    });
+    return this.payouts(board.id, userId);
+  }
+
+  /** Акт по ссылке — без входа. Неизвестная ссылка неотличима от закрытой. */
+  async publicAct(token: string): Promise<WorkPayoutActDto> {
+    if (typeof token !== 'string' || token.length < 16) {
+      throw new NotFoundException('Акт не найден');
+    }
+    const period = await this.prisma.workPayoutPeriod.findUnique({
+      where: { actToken: token },
+      select: {
+        fromDay: true,
+        toDay: true,
+        status: true,
+        closedAt: true,
+        paidAt: true,
+        snapshot: true,
+        board: {
+          select: {
+            name: true,
+            clientName: true,
+            currency: true,
+            pricingModel: true,
+            kind: true,
+            lead: { select: nameSelect },
+            space: { select: { name: true } },
+          },
+        },
+      },
+    });
+    if (!period || period.board.kind !== 'commercial') {
+      throw new NotFoundException('Акт не найден');
+    }
+    return {
+      spaceName: period.board.space.name,
+      boardName: period.board.name,
+      clientName: period.board.clientName,
+      issuer: period.board.lead ? resolveDisplayName(period.board.lead) : null,
+      currency: period.board.currency as WorkCurrency,
+      pricingModel: period.board.pricingModel,
+      fromDay: period.fromDay,
+      toDay: period.toDay,
+      closedAt: period.closedAt.toISOString(),
+      status: period.status,
+      paidAt: period.paidAt?.toISOString() ?? null,
+      ...workActFromSnapshot(period.snapshot as unknown as WorkPayoutSnapshot),
+    };
   }
 
   /** Подбить у доски все периоды, чей день подбития прошёл. */

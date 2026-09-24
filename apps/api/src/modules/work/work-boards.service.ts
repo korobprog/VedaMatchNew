@@ -614,6 +614,7 @@ function toCommercialDto(
     budgetMinor: number;
     payoutPeriod: WorkBoardCommercialDto['payoutPeriod'];
     payoutDay: number;
+    paymentReminderDays: number;
     lead: Parameters<typeof toWorkPersonRef>[0] | null;
   },
   canSeeFinance: boolean,
@@ -628,6 +629,7 @@ function toCommercialDto(
     lead: board.lead ? toWorkPersonRef(board.lead) : null,
     payoutPeriod: board.payoutPeriod,
     payoutDay: board.payoutDay,
+    paymentReminderDays: board.paymentReminderDays,
     rates: canSeeFinance
       ? {
           rateMinor: board.rateMinor,

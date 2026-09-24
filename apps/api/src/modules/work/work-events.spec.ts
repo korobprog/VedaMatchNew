@@ -16,6 +16,7 @@ describe('WORK_EVENTS', () => {
       'work.overtime.decided',
       'work.payout.closed',
       'work.payout.paid',
+      'work.payout.reminder',
     ]);
   });
 });

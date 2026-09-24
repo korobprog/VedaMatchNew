@@ -33,6 +33,8 @@ import type {
   WorkInvitePreviewDto,
   WorkLabelDto,
   WorkOvertimeRequestsDto,
+  WorkPayoutActDto,
+  WorkPayoutShareDto,
   WorkPayoutsDto,
   WorkPersonRefDto,
   WorkSpaceDto,
@@ -334,4 +336,16 @@ export const closeWorkPayout = (boardId: string) =>
 
 export const markWorkPayout = (periodId: string, body: MarkWorkPayoutRequest) =>
   send<WorkPayoutsDto>(`/work/payouts/${periodId}/mark`, "POST", body);
+
+// ===== Акт для клиента (VED-461) =====
+
+/** Акт по ссылке — открывается и без входа. */
+export const getWorkPayoutAct = (token: string) =>
+  request<WorkPayoutActDto>(`/work/act/${encodeURIComponent(token)}`);
+
+export const shareWorkPayout = (periodId: string) =>
+  send<WorkPayoutShareDto>(`/work/payouts/${periodId}/share`, "POST");
+
+export const unshareWorkPayout = (periodId: string) =>
+  send<WorkPayoutsDto>(`/work/payouts/${periodId}/share`, "DELETE");
 
