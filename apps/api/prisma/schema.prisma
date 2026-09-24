@@ -5704,37 +5704,54 @@ model WorkColumn {
   /// Попадание сюда закрывает задачу: проставляется completedAt.
   isDone   Boolean   @default(false)
 
-  tasks WorkTask[]
+  tasks        WorkTask[] @relation("WorkTaskColumn")
+  /// Задачи, для которых эта колонка — тематический раздел (VED-430), пока
+  /// сами они стоят в колонке статуса («Тестерование», «Выполнено»).
+  sectionTasks WorkTask[] @relation("WorkTaskSection")
 
   @@index([boardId, position])
 }
 
 model WorkTask {
-  id          String           @id @default(uuid())
+  id              String           @id @default(uuid())
   /// Продублирован намеренно: счётчик номеров и выборка «все мои задачи по
   /// всем доскам среды» иначе требуют join через доску на каждый запрос.
-  spaceId     String
-  space       WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  boardId     String
-  board       WorkBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  columnId    String
-  column      WorkColumn       @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  number      Int
-  title       String
-  description String           @default("")
+  spaceId         String
+  space           WorkSpace        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  boardId         String
+  board           WorkBoard        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  columnId        String
+  column          WorkColumn       @relation("WorkTaskColumn", fields: [columnId], references: [id], onDelete: Cascade)
+  /// Тематический раздел задачи (VED-430): «РАБОТА», «МУЗЫКА». Раздел и статус
+  /// — разные вещи: колонка статуса («Тестерование», «Выполнено») говорит,
+  /// в каком состоянии задача, а раздел — о чём она. Пока задача стоит в
+  /// колонке раздела, здесь та же колонка; уехала в статус — здесь остаётся
+  /// раздел, откуда уехала. `null` — раздел неизвестен (задачу завели прямо в
+  /// колонке статуса).
+  sectionColumnId String?
+  sectionColumn   WorkColumn?      @relation("WorkTaskSection", fields: [sectionColumnId], references: [id], onDelete: SetNull)
+  number          Int
+  title           String
+  description     String           @default("")
   /// Дробный индекс порядка внутри колонки: перенос меняет одну строку, а не
   /// всю колонку. См. work-position.ts.
-  position    Float            @default(0)
-  priority    WorkTaskPriority @default(normal)
-  dueAt       DateTime?
-  assigneeId  String?
-  assignee    User?            @relation("WorkTasksAssigned", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdById String?
-  createdBy   User?            @relation("WorkTasksCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  completedAt DateTime?
-  archivedAt  DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  position        Float            @default(0)
+  priority        WorkTaskPriority @default(normal)
+  dueAt           DateTime?
+  assigneeId      String?
+  assignee        User?            @relation("WorkTasksAssigned", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?            @relation("WorkTasksCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  completedAt     DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  /// Последняя правка человеком (VED-421, вид «По правке»): поля карточки,
+  /// перенос, комментарий, чек-лист, вложения. Не `updatedAt`: тот двигают и
+  /// служебные записи — перенумерация колонки, флаг «завершающая» на всю
+  /// колонку, — и «По правке» всплывали бы задачи, которых никто не трогал.
+  /// `null` у задач до VED-421 без истории — тогда считается `createdAt`.
+  editedAt        DateTime?
 
   labels      WorkTaskLabel[]
   checklist   WorkChecklistItem[]
@@ -5746,6 +5763,7 @@ model WorkTask {
 
   @@unique([spaceId, number])
   @@index([columnId, position])
+  @@index([sectionColumnId])
   @@index([boardId, archivedAt])
   @@index([assigneeId, dueAt])
 }

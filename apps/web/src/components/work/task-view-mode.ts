@@ -16,7 +16,8 @@
  * выбор — новый код о старом ключе не знал бы ничего.
  */
 
-export type WorkGroupMode = "none" | "priority" | "date";
+/** «По правке» (VED-421) — третий вид того же выбора, ключ хранения прежний. */
+export type WorkGroupMode = "none" | "priority" | "date" | "edited";
 
 const STORAGE_PREFIX = "vedamatch:work-view:";
 const LEGACY_STORAGE_PREFIX = "vedamatch:work-grouped:";
@@ -33,7 +34,9 @@ function legacyGroupedKey(boardId: string): string {
 export function readWorkGroupMode(boardId: string): WorkGroupMode {
   try {
     const stored = window.localStorage.getItem(viewModeKey(boardId));
-    if (stored === "priority" || stored === "date") return stored;
+    if (stored === "priority" || stored === "date" || stored === "edited") {
+      return stored;
+    }
 
     // Новый ключ пуст — проверяем старый, оставшийся с VED-51, и переносим
     // его значение один раз: следующее чтение пойдёт уже по новому ключу.

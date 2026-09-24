@@ -89,10 +89,16 @@ export function isColumnFolded(params: {
   return !(params.searchActive && params.hasMatches);
 }
 
-/** Подпись кнопки-переключателя под полем поиска. */
-export function searchToggleLabel(revealAll: boolean): string {
-  return revealAll ? "Только найденные" : "Показать все";
-}
+/**
+ * Две кнопки под полем поиска вместо одной, менявшей подпись (VED-417).
+ * Заказчик: «Сдвинь надпись Показать все вправо, а вместо неё поставь кнопку
+ * Показать найденные». Слева — «Показать найденные», справа — «Показать
+ * все»; нажатая из пары отмечена рамкой и `aria-pressed`. Одна кнопка с
+ * переменной подписью говорила, что будет после нажатия, а не что на экране
+ * сейчас, — по ней нельзя было понять, какой вид открыт.
+ */
+export const SEARCH_SHOW_FOUND = "Показать найденные";
+export const SEARCH_SHOW_ALL = "Показать все";
 
 export function countTasks(board: Pick<WorkBoardDto, "columns">): number {
   return board.columns.reduce((sum, column) => sum + column.tasks.length, 0);

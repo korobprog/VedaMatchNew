@@ -7,7 +7,8 @@ import {
   searchBoardColumns,
   searchColumns,
   searchSummary,
-  searchToggleLabel,
+  SEARCH_SHOW_ALL,
+  SEARCH_SHOW_FOUND,
 } from "./task-search";
 
 const columns = [
@@ -93,9 +94,9 @@ describe("«Показать все» — вся доска без потери 
     expect(countMatches(columns[1].tasks, matches)).toBe(0);
   });
 
-  it("подпись кнопки говорит, что будет по нажатию", () => {
-    expect(searchToggleLabel(false)).toBe("Показать все");
-    expect(searchToggleLabel(true)).toBe("Только найденные");
+  it("две кнопки: найденные слева, все справа (VED-417)", () => {
+    expect(SEARCH_SHOW_FOUND).toBe("Показать найденные");
+    expect(SEARCH_SHOW_ALL).toBe("Показать все");
   });
 });
 

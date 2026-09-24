@@ -5,6 +5,7 @@ import {
   toWorkPerson,
   toWorkPersonRef,
   toWorkTaskCard,
+  workTaskEditedAt,
   workAgendaBucket,
   type WorkTaskRow,
 } from './work-dto';
@@ -68,9 +69,56 @@ function taskRow(overrides: Partial<WorkTaskRow> = {}): WorkTaskRow {
     checklist: [],
     _count: { comments: 0, attachments: 0 },
     createdAt: new Date('2026-09-01T00:00:00.000Z'),
+    sectionColumnId: null,
+    editedAt: null,
     ...overrides,
   };
 }
+
+describe('раздел и правка на карточке (VED-430, VED-421)', () => {
+  it('в колонке раздела раздел — сама колонка', () => {
+    expect(toWorkTaskCard(taskRow(), 'VM', 'РАБОТА').sectionId).toBe('c1');
+  });
+
+  it('в колонке статуса — запомненный раздел', () => {
+    const card = toWorkTaskCard(
+      taskRow({ sectionColumnId: 'music' }),
+      'VM',
+      'Тестерование',
+    );
+    expect(card.sectionId).toBe('music');
+    expect(card.statusMark).toBe('testing');
+  });
+
+  it('«РАБОТА» — раздел, а не статус «В работе»', () => {
+    expect(toWorkTaskCard(taskRow(), 'VM', 'РАБОТА').statusMark).toBeNull();
+    expect(toWorkTaskCard(taskRow(), 'VM', 'В работе').statusMark).toBe(
+      'in_progress',
+    );
+  });
+
+  it('без отметки правки — время создания', () => {
+    expect(toWorkTaskCard(taskRow(), 'VM', 'РАБОТА').editedAt).toBe(
+      '2026-09-01T00:00:00.000Z',
+    );
+  });
+
+  it('правка раньше создания не опускает задачу ниже её заведения', () => {
+    expect(
+      workTaskEditedAt(
+        new Date('2026-09-02T00:00:00.000Z'),
+        new Date('2026-09-01T00:00:00.000Z'),
+      ).toISOString(),
+    ).toBe('2026-09-02T00:00:00.000Z');
+    expect(
+      toWorkTaskCard(
+        taskRow({ editedAt: new Date('2026-09-05T10:00:00.000Z') }),
+        'VM',
+        'РАБОТА',
+      ).editedAt,
+    ).toBe('2026-09-05T10:00:00.000Z');
+  });
+});
 
 describe('toWorkTaskCard', () => {
   it('собирает читаемый номер из префикса среды', () => {

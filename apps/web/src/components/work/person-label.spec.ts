@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { workActorLabel, workPersonLabel } from "./person-label";
+import {
+  workActorLabel,
+  workPersonLabel,
+  workPersonShortLabel,
+} from "./person-label";
 
 describe("workPersonLabel", () => {
   it("агента помечает, человека оставляет как есть", () => {
@@ -34,5 +38,20 @@ describe("workActorLabel", () => {
     expect(workActorLabel({ name: "Севак", isAgent: true }, null)).toBe(
       "Севак · ИИ",
     );
+  });
+});
+
+describe("workPersonShortLabel (VED-431)", () => {
+  it("первое слово имени, агент с пометкой", () => {
+    expect(
+      workPersonShortLabel({ name: "Станислав Санкаршан", isAgent: false }),
+    ).toBe("Станислав");
+    expect(workPersonShortLabel({ name: "Севак", isAgent: true })).toBe(
+      "Севак · ИИ",
+    );
+  });
+
+  it("без исполнителя — пусто", () => {
+    expect(workPersonShortLabel(null)).toBe("");
   });
 });

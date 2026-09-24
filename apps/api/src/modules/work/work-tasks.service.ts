@@ -56,6 +56,11 @@ import {
 import { assertWorkAccess } from './work-roles';
 import { closesTask, resolveTaskStatusMark } from './work-task-status';
 import {
+  sectionChoiceProblem,
+  sectionOnCreate,
+  sectionOnMove,
+} from './work-task-section';
+import {
   loadCreatedOnBehalf,
   loadWorkViewerState,
   markOwnerIds,
@@ -140,6 +145,40 @@ export class WorkTasksService {
     };
   }
 
+  /**
+   * Отметить правку (VED-421, вид «По правке»). Отдельно от `updatedAt`: тот
+   * двигают и служебные записи, а здесь — только действия человека.
+   */
+  private touch(taskId: string) {
+    return this.prisma.workTask.update({
+      where: { id: taskId },
+      data: { editedAt: new Date() },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Раздел, выбранный в окне задачи (VED-430): колонка раздела этой доски.
+   * `null` — раздел сняли. Колонку статуса разделом назначить нельзя: тогда
+   * «Раздел: Выполнено» вернулось бы ровно туда, откуда его убирали.
+   */
+  private async requireSection(
+    boardId: string,
+    sectionColumnId: string | null,
+  ): Promise<string | null> {
+    if (sectionColumnId === null) return null;
+    if (typeof sectionColumnId !== 'string') {
+      throw new BadRequestException('Раздел указан неверно');
+    }
+    const column = await this.prisma.workColumn.findFirst({
+      where: { id: sectionColumnId, boardId },
+      select: { id: true, name: true },
+    });
+    const problem = sectionChoiceProblem(column);
+    if (problem) throw new BadRequestException(problem);
+    return column!.id;
+  }
+
   private async taskContext(taskId: string) {
     const task = await this.prisma.workTask.findUnique({
       where: { id: taskId },
@@ -159,7 +198,6 @@ export class WorkTasksService {
     assigneeId: string | null;
     createdById: string | null;
   }): Promise<string[] | undefined> {
-    if (!task.assigneeId) return undefined;
     const onBehalf = await loadCreatedOnBehalf(this.prisma, [task.id]);
     return markOwnerIds({
       ...task,
@@ -341,6 +379,10 @@ export class WorkTasksService {
           assigneeId: request.assigneeId ?? null,
           createdById: userId,
           completedAt: column.isDone ? new Date() : null,
+          // Раздел отдельно от статуса (VED-430): заведённая в «РАБОТЕ»
+          // задача и после «Тестерования» будет знать, что она оттуда.
+          sectionColumnId: sectionOnCreate(column),
+          editedAt: new Date(),
           labels: request.labelIds?.length
             ? { create: request.labelIds.map((labelId) => ({ labelId })) }
             : undefined,
@@ -399,6 +441,17 @@ export class WorkTasksService {
         ? { connect: { id: request.assigneeId } }
         : { disconnect: true };
     }
+    if (request.sectionColumnId !== undefined) {
+      const sectionId = await this.requireSection(
+        context.boardId,
+        request.sectionColumnId,
+      );
+      data.sectionColumn = sectionId
+        ? { connect: { id: sectionId } }
+        : { disconnect: true };
+    }
+    // «По правке» (VED-421): любая правка полей карточки поднимает её.
+    data.editedAt = new Date();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.workTask.update({ where: { id: taskId }, data });
@@ -522,14 +575,34 @@ export class WorkTasksService {
 
     const wasDone = await this.prisma.workTask.findUnique({
       where: { id: taskId },
-      select: { completedAt: true, columnId: true },
+      select: {
+        completedAt: true,
+        columnId: true,
+        sectionColumnId: true,
+        column: { select: { id: true, name: true } },
+      },
     });
+    const requestedSectionId =
+      request.sectionColumnId === undefined
+        ? undefined
+        : await this.requireSection(context.boardId, request.sectionColumnId);
 
     await this.prisma.workTask.update({
       where: { id: taskId },
       data: {
         columnId: column.id,
         position,
+        // Раздел отдельно от статуса (VED-430): уехав в «Тестерование»,
+        // задача помнит, из какого раздела она пришла.
+        sectionColumnId: wasDone
+          ? sectionOnMove({
+              from: wasDone.column,
+              to: column,
+              currentSectionId: wasDone.sectionColumnId,
+              requestedSectionId,
+            })
+          : undefined,
+        editedAt: new Date(),
         // Колонка «готово» закрывает задачу, выезд из неё — открывает обратно.
         // Иначе карточка, вынутая из «Готово» на доработку, остаётся закрытой
         // в отчётах и не попадает в «Мой день».
@@ -663,7 +736,7 @@ export class WorkTasksService {
     await this.prisma.$transaction([
       this.prisma.workTask.update({
         where: { id: taskId },
-        data: { archivedAt: new Date() },
+        data: { archivedAt: new Date(), editedAt: new Date() },
       }),
       this.prisma.workActivity.create({
         data: {
@@ -696,7 +769,7 @@ export class WorkTasksService {
     );
     const restored = await this.prisma.workTask.updateMany({
       where: { id: taskId, archivedAt: { not: null } },
-      data: { archivedAt: null },
+      data: { archivedAt: null, editedAt: new Date() },
     });
     if (restored.count > 0) {
       await this.prisma.workActivity.create({
@@ -766,6 +839,7 @@ export class WorkTasksService {
       this.prisma.workComment.create({
         data: { taskId, authorId: userId, body },
       }),
+      this.touch(taskId),
       this.prisma.workActivity.create({
         data: {
           spaceId: context.spaceId,
@@ -884,6 +958,7 @@ export class WorkTasksService {
         height: stored.height,
       },
     });
+    await this.touch(taskId);
 
     return this.get(taskId, userId);
   }
@@ -913,6 +988,7 @@ export class WorkTasksService {
     );
 
     await this.prisma.workAttachment.delete({ where: { id: attachment.id } });
+    await this.touch(attachment.taskId);
     await this.uploads.removeMany([attachment.storageKey]);
 
     return this.get(attachment.taskId, userId);
@@ -940,6 +1016,7 @@ export class WorkTasksService {
         position: (last?.position ?? 0) + WORK_POSITION_STEP,
       },
     });
+    await this.touch(taskId);
     return this.get(taskId, userId);
   }
 
@@ -965,6 +1042,7 @@ export class WorkTasksService {
     if (request.done !== undefined) data.done = request.done;
 
     await this.prisma.workChecklistItem.update({ where: { id: itemId }, data });
+    await this.touch(item.taskId);
     return this.get(item.taskId, userId);
   }
 
@@ -982,6 +1060,7 @@ export class WorkTasksService {
       'editTask',
     );
     await this.prisma.workChecklistItem.delete({ where: { id: itemId } });
+    await this.touch(item.taskId);
     return this.get(item.taskId, userId);
   }
 

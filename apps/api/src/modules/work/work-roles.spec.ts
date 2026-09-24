@@ -3,6 +3,7 @@ import {
   assertWorkAccess,
   canAssignRole,
   canWork,
+  memberChangeProblem,
   workRoleTitle,
 } from './work-roles';
 
@@ -63,9 +64,52 @@ describe('canAssignRole', () => {
     expect(canAssignRole('admin', 'owner')).toBe(false);
   });
 
-  it('владелец назначает кого угодно, кроме второго владельца', () => {
+  // VED-422: совладелец без снятия нынешнего владельца.
+  it('владелец назначает кого угодно, в том числе совладельца', () => {
     expect(canAssignRole('owner', 'admin')).toBe(true);
-    expect(canAssignRole('owner', 'owner')).toBe(false);
+    expect(canAssignRole('owner', 'owner')).toBe(true);
+  });
+});
+
+describe('memberChangeProblem', () => {
+  it('основного владельца не трогает никто, даже совладелец', () => {
+    expect(
+      memberChangeProblem({
+        actor: 'owner',
+        target: 'owner',
+        targetIsPrimaryOwner: true,
+      }),
+    ).toMatch(/передайте владение/);
+  });
+
+  it('совладельца понижает владелец', () => {
+    expect(
+      memberChangeProblem({
+        actor: 'owner',
+        target: 'owner',
+        targetIsPrimaryOwner: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('администратор совладельца не понизит', () => {
+    expect(
+      memberChangeProblem({
+        actor: 'admin',
+        target: 'owner',
+        targetIsPrimaryOwner: false,
+      }),
+    ).toMatch(/только владелец/);
+  });
+
+  it('администратор и участник — как раньше', () => {
+    expect(
+      memberChangeProblem({
+        actor: 'admin',
+        target: 'member',
+        targetIsPrimaryOwner: false,
+      }),
+    ).toBeNull();
   });
 });
 
