@@ -232,7 +232,8 @@ export function TaskComposer({
             onChange={(event) => setDraftAssignee(event.target.value)}
             className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
           >
-            <option value="">Никто</option>
+            {/* Пустой исполнитель сервер заменяет составившим (VED-320). */}
+            <option value="">Кто составил</option>
             {members.map((member) => (
               <option key={member.userId} value={member.userId}>
                 {member.userId === viewerId

@@ -451,7 +451,8 @@ export function WorkTaskDialog({
                   }
                   className={FIELD_CLASS}
                 >
-                  <option value="">Никто</option>
+                  {/* Пустой исполнитель сервер заменяет составившим (VED-320). */}
+                  <option value="">Кто составил</option>
                   {board.members.map((member) => (
                     <option key={member.userId} value={member.userId}>
                       {workPersonLabel(member)}
