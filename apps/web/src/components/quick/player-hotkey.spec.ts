@@ -6,8 +6,8 @@ describe("planPlayerHotkey", () => {
     expect(planPlayerHotkey({ hasTrack: true, isPlaying: false })).toBe("resume");
   });
 
-  it("играющую запись не останавливает", () => {
-    expect(planPlayerHotkey({ hasTrack: true, isPlaying: true })).toBe("keep");
+  it("играющую запись ставит на паузу (VED-438)", () => {
+    expect(planPlayerHotkey({ hasTrack: true, isPlaying: true })).toBe("pause");
   });
 
   it("закрытый плеер поднимает сохранённую запись", () => {

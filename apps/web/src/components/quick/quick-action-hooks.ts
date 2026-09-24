@@ -101,7 +101,9 @@ export function useInviteCopy() {
 
 /**
  * Горячая кнопка «Плеер» (VED-416): полоса плеера выкатывается свёрнутой и
- * играет — см. `player-hotkey.ts`, что делается в каком состоянии.
+ * играет, а повторное нажатие ставит на паузу (VED-438) — см.
+ * `player-hotkey.ts`, что делается в каком состоянии. `playing` — показать
+ * на кнопке паузу вместо «играть».
  *
  * Плеером управляем только его открытым способом: `useMusicPlayer()` для
  * звука и событием `revealMusicPlayerCollapsed()` для полосы. Своего
@@ -118,8 +120,7 @@ export function usePlayerHotkey() {
         ? { hasTrack: Boolean(player.current), isPlaying: player.isPlaying }
         : null,
     );
-    if (step === "keep") return;
-    if (step === "resume") {
+    if (step === "pause" || step === "resume") {
       player?.toggle();
       return;
     }
@@ -132,5 +133,5 @@ export function usePlayerHotkey() {
     router.push("/music");
   }, [player, router]);
 
-  return { run };
+  return { run, playing: Boolean(player?.current && player.isPlaying) };
 }
