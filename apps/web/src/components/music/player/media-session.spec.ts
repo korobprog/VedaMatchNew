@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import {
+  FALLBACK_ARTWORK,
   applyMediaHandlers,
+  artworkType,
+  buildArtwork,
   buildMediaMetadata,
   mediaSeekDelta,
 } from "./media-session";
@@ -28,13 +31,11 @@ describe("buildMediaMetadata", () => {
       title: "Джая Радха-Мадхава",
       artist: "Аударья Дхама дас",
       album: "Вечерняя программа",
-      artwork: [
-        {
-          src: "https://cdn.example.org/cover.jpg",
-          sizes: "512x512",
-          type: "image/jpeg",
-        },
-      ],
+      artwork: ["96x96", "192x192", "512x512"].map((sizes) => ({
+        src: "https://cdn.example.org/cover.jpg",
+        sizes,
+        type: "image/jpeg",
+      })),
     });
   });
 
@@ -50,15 +51,47 @@ describe("buildMediaMetadata", () => {
     expect(buildMediaMetadata(track({ album: null })).album).toBe("VedaMatch");
   });
 
-  it("без обложки не даёт битую картинку", () => {
-    // Ссылка в никуда на экране блокировки хуже системной заглушки.
-    expect(buildMediaMetadata(track({ coverUrl: null })).artwork).toEqual([]);
+  it("без обложки ставит значок портала, а не битую картинку (VED-393)", () => {
+    // Ссылка в никуда на экране блокировки хуже заглушки, а серая нота
+    // системы не говорит, чей это плеер.
+    const artwork = buildMediaMetadata(track({ coverUrl: null })).artwork;
+    expect(artwork.map((item) => item.src)).toEqual([
+      FALLBACK_ARTWORK,
+      FALLBACK_ARTWORK,
+      FALLBACK_ARTWORK,
+    ]);
+    expect(artwork[0].type).toBe("image/png");
   });
 
   it("название берёт как есть — его правит редакция, а не плеер", () => {
     expect(buildMediaMetadata(track({ title: "  Гаура-арати  " })).title).toBe(
       "  Гаура-арати  ",
     );
+  });
+});
+
+describe("обложка на экране блокировки (VED-393)", () => {
+  it("тип — по расширению, с учётом адреса с подписью", () => {
+    expect(artworkType("https://s3.example/c.webp?X-Amz-Signature=1")).toBe("image/webp");
+    expect(artworkType("/covers/a.PNG")).toBe("image/png");
+    expect(artworkType("/covers/a.jpeg#x")).toBe("image/jpeg");
+  });
+
+  it("незнакомый тип не выдумывает", () => {
+    // Жёсткий image/jpeg на WebP-файле система вправе отбросить.
+    expect(artworkType("/music/covers/abc")).toBeUndefined();
+    expect(buildArtwork("/music/covers/abc")[0]).toEqual({
+      src: "/music/covers/abc",
+      sizes: "96x96",
+    });
+  });
+
+  it("даёт размеры под уведомление и под экран блокировки", () => {
+    expect(buildArtwork("/c.jpg").map((item) => item.sizes)).toEqual([
+      "96x96",
+      "192x192",
+      "512x512",
+    ]);
   });
 });
 
@@ -108,5 +141,45 @@ describe("перемотка из системной карточки (VED-388)"
     handlers.get("seekforward")?.({ action: "seekforward" });
 
     expect(seekBy.mock.calls).toEqual([[-10], [30]]);
+  });
+
+  it("«стоп» из шторки ставит на паузу, а не закрывает плеер (VED-393)", () => {
+    const handlers = new Map<string, (details: MediaSessionActionDetails) => void>();
+    Object.defineProperty(navigator, "mediaSession", {
+      configurable: true,
+      value: {
+        setActionHandler: (
+          action: string,
+          handler: (details: MediaSessionActionDetails) => void,
+        ) => handlers.set(action, handler),
+      },
+    });
+    const pause = vi.fn();
+    applyMediaHandlers(
+      {
+        play: vi.fn(),
+        pause,
+        nextTrack: vi.fn(),
+        previousTrack: vi.fn(),
+        seekTo: vi.fn(),
+        seekBy: vi.fn(),
+      },
+      steps,
+    );
+    handlers.get("stop")?.({ action: "stop" });
+    expect(pause).toHaveBeenCalledOnce();
+    // Весь набор кнопок экрана блокировки на месте.
+    expect([...handlers.keys()].sort()).toEqual(
+      [
+        "nexttrack",
+        "pause",
+        "play",
+        "previoustrack",
+        "seekbackward",
+        "seekforward",
+        "seekto",
+        "stop",
+      ].sort(),
+    );
   });
 });
