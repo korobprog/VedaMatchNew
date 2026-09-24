@@ -5079,8 +5079,8 @@ model MusicTrackCategory {
 /// Разные начитки одной книги — разные строки с одним названием и разными
 /// чтецами: у каждой начитки свой порядок глав и своя длительность.
 model MusicAudiobook {
-  id          String       @id @default(uuid())
-  slug        String       @unique
+  id          String             @id @default(uuid())
+  slug        String             @unique
   title       String
   /// Автор текста строкой («Шрила Прабхупада»): справочника авторов нет, а
   /// заводить его ради подписи под обложкой рано.
@@ -5088,19 +5088,30 @@ model MusicAudiobook {
   /// Чтец — исполнитель из справочника. `SetNull`: уход исполнителя из
   /// справочника не уносит книгу с главами.
   readerId    String?
-  reader      MusicArtist? @relation("MusicAudiobookReader", fields: [readerId], references: [id], onDelete: SetNull)
+  reader      MusicArtist?       @relation("MusicAudiobookReader", fields: [readerId], references: [id], onDelete: SetNull)
   description String?
   coverKey    String?
   /// Черновик собирается у редакции, в разделе его нет. Книга без единой
   /// опубликованной главы не показывается, даже отмеченная опубликованной.
-  isPublished Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  isPublished Boolean            @default(false)
+  /// Раздел: «Аудиокниги» или «Лекции» (VED-437). Лекции устроены так же —
+  /// цикл с частями по порядку и продолжением с места, — поэтому это не
+  /// своя модель, а отметка раздела у той же.
+  kind        MusicAudiobookKind @default(audiobook)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   chapters MusicAudiobookChapter[]
 
   @@index([readerId])
   @@index([isPublished, title])
+  @@index([kind, isPublished, title])
+}
+
+/// Раздел Медиатеки, где показывается `MusicAudiobook`.
+enum MusicAudiobookKind {
+  audiobook
+  lecture
 }
 
 /// Глава книги — запись каталога на своём месте. Название главы — название

@@ -361,6 +361,27 @@ export default async function MusicPage({
             </svg>
             Аудиокниги
           </Link>
+          {/* «Лекции» (VED-437) — сразу за «Аудиокнигами»: устроены так же. */}
+          <Link
+            href="/music/lectures"
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="size-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" />
+              <path d="M19 11a7 7 0 0 1-14 0" />
+              <path d="M12 18v3" />
+            </svg>
+            Лекции
+          </Link>
         </div>
       </div>
 

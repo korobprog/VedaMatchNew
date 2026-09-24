@@ -26,6 +26,7 @@ import {
 import { AdminUnlimited } from '../auth/admin-unlimited.guard';
 import { MusicAudiobooksService } from './music-audiobooks.service';
 import { isAdmin } from './is-admin';
+import { parseAudiobookKind } from './music-audiobook-kind';
 
 /**
  * Раздел «Аудиокниги» (VED-237 → VED-297). Открыт гостю, как и витрина:
@@ -38,9 +39,10 @@ import { isAdmin } from './is-admin';
 export class MusicAudiobooksController {
   constructor(private readonly audiobooks: MusicAudiobooksService) {}
 
+  /** `kind=lecture` — раздел «Лекции» (VED-437), без него — «Аудиокниги». */
   @Get()
-  list() {
-    return this.audiobooks.list();
+  list(@Query('kind') kind?: string) {
+    return this.audiobooks.list(parseAudiobookKind(kind));
   }
 
   @Get(':slug')
