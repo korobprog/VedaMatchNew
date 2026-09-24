@@ -1,5 +1,6 @@
 import type {
   WorkCommercialSettingsInput,
+  WorkOvertimeRequestStatus,
   WorkCurrency,
   WorkOvertimeMode,
   WorkPricingModel,
@@ -160,3 +161,43 @@ export function toDateTimeLocal(date: Date): string {
     `T${pad(date.getHours())}:${pad(date.getMinutes())}`
   );
 }
+
+const MONTHS = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+];
+
+/** «24 сентября» или «28 сентября — 2 октября»: дни доски приходят строкой. */
+export function formatDayRange(fromDay: string, toDay: string): string {
+  const day = (value: string) => {
+    const [, month, date] = value.split("-").map(Number);
+    return `${date} ${MONTHS[month - 1] ?? ""}`.trim();
+  };
+  return fromDay === toDay ? day(fromDay) : `${day(fromDay)} — ${day(toDay)}`;
+}
+
+export const OVERTIME_STATUS_LABEL: Record<WorkOvertimeRequestStatus, string> =
+  {
+    pending: "ждёт решения",
+    approved: "одобрено",
+    rejected: "не одобрено",
+    cancelled: "отозвано",
+  };
+
+/** Сдвиг дня строкой: для «по какой день» по умолчанию. */
+export function shiftDay(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+

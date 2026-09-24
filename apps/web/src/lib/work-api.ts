@@ -9,9 +9,11 @@ import type {
   CreateWorkInviteRequest,
   CreateWorkLabelRequest,
   CreateWorkLineItemRequest,
+  CreateWorkOvertimeRequest,
   CreateWorkSpaceRequest,
   CreateWorkTaskRequest,
   CreateWorkTimeEntryRequest,
+  DecideWorkOvertimeRequest,
   MoveWorkTaskRequest,
   SetWorkTaskViewedRequest,
   UpdateWorkBoardRequest,
@@ -29,6 +31,7 @@ import type {
   WorkInviteDto,
   WorkInvitePreviewDto,
   WorkLabelDto,
+  WorkOvertimeRequestsDto,
   WorkPersonRefDto,
   WorkSpaceDto,
   WorkSpaceSummaryDto,
@@ -295,4 +298,27 @@ export const addWorkLineItem = (
 
 export const removeWorkLineItem = (itemId: string) =>
   send<WorkTaskFinanceDto>(`/work/line-items/${itemId}`, "DELETE");
+
+// ===== Запросы сверх нормы (VED-459) =====
+
+export const getWorkOvertimeRequests = (boardId: string) =>
+  request<WorkOvertimeRequestsDto>(`/work/boards/${boardId}/overtime`);
+
+export const requestWorkOvertime = (
+  taskId: string,
+  body: CreateWorkOvertimeRequest,
+) => send<WorkTaskFinanceDto>(`/work/tasks/${taskId}/overtime`, "POST", body);
+
+export const decideWorkOvertime = (
+  requestId: string,
+  body: DecideWorkOvertimeRequest,
+) =>
+  send<WorkOvertimeRequestsDto>(
+    `/work/overtime/${requestId}/decision`,
+    "POST",
+    body,
+  );
+
+export const cancelWorkOvertime = (requestId: string) =>
+  send<WorkOvertimeRequestsDto>(`/work/overtime/${requestId}/cancel`, "POST");
 

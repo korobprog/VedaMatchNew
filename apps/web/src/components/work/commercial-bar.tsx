@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Coins, Loader2, Settings2, X } from "lucide-react";
+import { Clock, Coins, Loader2, Settings2, X } from "lucide-react";
 import type {
   WorkBoardCommercialDto,
   WorkBoardDto,
   WorkBoardFinanceDto,
+  WorkOvertimeRequestsDto,
 } from "@vedamatch/shared";
-import { getWorkBoardFinance, updateWorkBoard } from "@/lib/work-api";
+import {
+  cancelWorkOvertime,
+  decideWorkOvertime,
+  getWorkBoardFinance,
+  getWorkOvertimeRequests,
+  updateWorkBoard,
+} from "@/lib/work-api";
+import { OvertimeRequestList } from "./overtime-requests";
 import {
   BoardKindChoice,
   CommercialSettingsFields,
@@ -60,6 +68,9 @@ export function WorkCommercialBar({
 }) {
   const [finance, setFinance] = useState<WorkBoardFinanceDto | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  // Решили запрос в панели — шапке пора перечитать счётчик и израсходованное.
+  const [financeVersion, setFinanceVersion] = useState(0);
   const commercial = board.commercial;
   const canEditSettings = commercial ? board.canSeeFinance : canManageBoard;
 
@@ -76,7 +87,7 @@ export function WorkCommercialBar({
     return () => {
       alive = false;
     };
-  }, [board, showFinance]);
+  }, [board, showFinance, financeVersion]);
 
   if (!commercial) {
     if (!canManageBoard || personal) return null;
@@ -152,10 +163,37 @@ export function WorkCommercialBar({
           )}
           {shown.pendingOvertimeMinutes > 0 && (
             <span className="text-text-1">
-              · ждут одобрения {formatMinutes(shown.pendingOvertimeMinutes)}
+              · не одобрено {formatMinutes(shown.pendingOvertimeMinutes)}
             </span>
           )}
         </span>
+      )}
+      {shown && shown.pendingRequestCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setRequestsOpen(true)}
+          className="flex min-h-10 items-center gap-1.5 rounded-lg border border-magenta px-2.5 font-semibold text-magenta"
+        >
+          <Clock aria-hidden className="size-4" />
+          Запросы сверх нормы: {shown.pendingRequestCount}
+        </button>
+      )}
+      {shown && shown.pendingRequestCount === 0 && (
+        <button
+          type="button"
+          onClick={() => setRequestsOpen(true)}
+          className="flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-text-1 hover:text-text-0"
+        >
+          <Clock aria-hidden className="size-4" />
+          Запросы
+        </button>
+      )}
+      {requestsOpen && (
+        <OvertimeRequestsDialog
+          boardId={board.id}
+          onClose={() => setRequestsOpen(false)}
+          onChanged={() => setFinanceVersion((value) => value + 1)}
+        />
       )}
       {canEditSettings && (
         <button
@@ -328,3 +366,116 @@ function CommercialSettingsDialog({
     </div>
   );
 }
+
+/** Панель ведущего: все запросы сверх нормы доски, ждущие сверху (VED-459). */
+function OvertimeRequestsDialog({
+  boardId,
+  onClose,
+  onChanged,
+}: {
+  boardId: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const id = useId();
+  const [data, setData] = useState<WorkOvertimeRequestsDto | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getWorkOvertimeRequests(boardId)
+      .then((next) => alive && setData(next))
+      .catch((cause) =>
+        alive &&
+        setError(cause instanceof Error ? cause.message : "Не загрузилось"),
+      );
+    return () => {
+      alive = false;
+    };
+  }, [boardId]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function run(action: () => Promise<WorkOvertimeRequestsDto>) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setData(await action());
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не получилось");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`${id}-title`}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="flex max-h-[90dvh] w-full max-w-2xl flex-col gap-3 overflow-y-auto rounded-t-2xl bg-sheet p-4 sm:rounded-2xl">
+        <div className="flex items-center gap-2">
+          <h2
+            id={`${id}-title`}
+            className="font-display text-base font-semibold text-text-0"
+          >
+            Запросы сверх нормы
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть"
+            className="ml-auto flex size-10 items-center justify-center rounded-lg text-text-1 hover:text-text-0"
+          >
+            <X aria-hidden className="size-4" />
+          </button>
+        </div>
+        {error && (
+          <p role="alert" className="text-sm text-magenta">
+            {error}
+          </p>
+        )}
+        {!data ? (
+          <p className="flex items-center gap-2 text-sm text-text-2">
+            <Loader2 aria-hidden className="size-4 animate-spin" />
+            Загружаем…
+          </p>
+        ) : data.items.length === 0 ? (
+          <p className="text-sm text-text-1">
+            Запросов пока нет. Исполнитель просит часы сверх нормы из карточки
+            задачи.
+          </p>
+        ) : (
+          <OvertimeRequestList
+            items={data.items}
+            currency={data.currency}
+            canDecide={data.canDecide}
+            showTask
+            busy={busy}
+            onDecide={(requestId, decision, note) =>
+              void run(() => decideWorkOvertime(requestId, { decision, note }))
+            }
+            onCancel={(requestId) =>
+              void run(() => cancelWorkOvertime(requestId))
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+

@@ -658,6 +658,8 @@ export interface WorkTimeEntryDto {
   normalMinutes: number;
   /** Из них сверх нормы. */
   overtimeMinutes: number;
+  /** Из сверх нормы — покрыто одобренным запросом (VED-459). */
+  approvedOvertimeMinutes: number;
   note: string;
   /** Сумма за запись; `null` — смотрящему не положено её видеть. */
   amountMinor: number | null;
@@ -708,6 +710,15 @@ export interface WorkTaskFinanceDto {
   /** Идущий таймер смотрящего в этой задаче. */
   running: WorkTimeEntryDto | null;
   canSeeFinance: boolean;
+  /** «Сегодня» в поясе доски — от него форма запроса сверх нормы. */
+  today: string;
+  /**
+   * Запросы сверх нормы по этой задаче (VED-459): ведущему — все, остальным —
+   * свои.
+   */
+  overtimeRequests: WorkOvertimeRequestDto[];
+  /** Можно ли тут просить часы сверх нормы: почасовая и «только по запросу». */
+  canRequestOvertime: boolean;
 }
 
 /** Шапка коммерческой доски: бюджет и сколько израсходовано. */
@@ -719,6 +730,8 @@ export interface WorkBoardFinanceDto {
   minutes: number;
   overtimeMinutes: number;
   pendingOvertimeMinutes: number;
+  /** Запросы сверх нормы, ждущие решения ведущего. */
+  pendingRequestCount: number;
 }
 
 /** Время задним числом. */
@@ -738,4 +751,59 @@ export interface CreateWorkLineItemRequest {
   kind: WorkLineItemKind;
   title: string;
   amountMinor: number;
+}
+
+// ===== Запросы сверх нормы (VED-459) =====
+
+export type WorkOvertimeRequestStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled';
+
+export const WORK_OVERTIME_REASON_MAX = 300;
+/** Самый длинный период одного запроса: дольше — это уже новая норма. */
+export const WORK_OVERTIME_MAX_DAYS = 31;
+/** Сверх нормы в день — от 15 минут до 12 часов. */
+export const WORK_OVERTIME_MIN_MINUTES = 15;
+export const WORK_OVERTIME_MAX_MINUTES = 12 * 60;
+
+export interface WorkOvertimeRequestDto {
+  id: string;
+  boardId: string;
+  task: { id: string; key: string; title: string } | null;
+  person: WorkPersonRefDto | null;
+  /** Дни пояса доски включительно: `2026-09-24`. */
+  fromDay: string;
+  toDay: string;
+  days: number;
+  minutesPerDay: number;
+  reason: string;
+  status: WorkOvertimeRequestStatus;
+  /** Потолок денег: все дни целиком по ставке сверх нормы. `null` — не положено видеть. */
+  maxCostMinor: number | null;
+  decidedBy: WorkPersonRefDto | null;
+  decidedAt: string | null;
+  decisionNote: string;
+  createdAt: string;
+  mine: boolean;
+}
+
+export interface WorkOvertimeRequestsDto {
+  currency: WorkCurrency;
+  /** Смотрящий решает запросы: ведущий или администрация. */
+  canDecide: boolean;
+  items: WorkOvertimeRequestDto[];
+}
+
+export interface CreateWorkOvertimeRequest {
+  fromDay: string;
+  toDay: string;
+  minutesPerDay: number;
+  reason?: string;
+}
+
+export interface DecideWorkOvertimeRequest {
+  decision: 'approved' | 'rejected';
+  note?: string;
 }

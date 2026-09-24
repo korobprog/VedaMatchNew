@@ -367,6 +367,43 @@ export type NotificationEvent =
     }
   | {
       /**
+       * Исполнитель коммерческой доски просит часы сверх нормы (VED-459).
+       * Получатель — ведущий доски. Задача — повод запроса, её может не быть.
+       */
+      name: "work.overtime.requested";
+      recipientId: string;
+      requestId: string;
+      spaceId: string;
+      spaceName: string;
+      taskKey: string | null;
+      taskTitle: string | null;
+      /** Кто просит. */
+      actorName: string;
+      minutesPerDay: number;
+      /** Дни пояса доски: `2026-09-24`. */
+      fromDay: string;
+      toDay: string;
+    }
+  | {
+      /** Ведущий решил запрос сверх нормы; получатель — кто просил. */
+      name: "work.overtime.decided";
+      recipientId: string;
+      requestId: string;
+      spaceId: string;
+      spaceName: string;
+      taskKey: string | null;
+      taskTitle: string | null;
+      /** Кто решил. */
+      actorName: string;
+      decision: "approved" | "rejected";
+      minutesPerDay: number;
+      fromDay: string;
+      toDay: string;
+      /** Пояснение ведущего; пустая строка — без пояснения. */
+      note: string;
+    }
+  | {
+      /**
        * Задачу поручили человеку. Ключ и название едут в событии: подписчик
        * не имеет права дочитывать их из таблиц «Работы».
        */

@@ -23,9 +23,11 @@ import type {
   CreateWorkInviteRequest,
   CreateWorkLabelRequest,
   CreateWorkLineItemRequest,
+  CreateWorkOvertimeRequest,
   CreateWorkSpaceRequest,
   CreateWorkTaskRequest,
   CreateWorkTimeEntryRequest,
+  DecideWorkOvertimeRequest,
   MoveWorkTaskRequest,
   SetWorkTaskViewedRequest,
   UpdateWorkBoardRequest,
@@ -561,6 +563,44 @@ export class WorkFinanceController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.finance.addLineItem(id, user.sub, body ?? ({} as never));
+  }
+
+  /** Запросы сверх нормы (VED-459): ведущему — все, исполнителю — свои. */
+  @Get('boards/:id/overtime')
+  overtimeRequests(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.overtimeRequests(id, user.sub);
+  }
+
+  @Post('tasks/:id/overtime')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  requestOvertime(
+    @Param('id') id: string,
+    @Body() body: CreateWorkOvertimeRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.requestOvertime(id, user.sub, body ?? ({} as never));
+  }
+
+  @Post('overtime/:id/decision')
+  @HttpCode(200)
+  decideOvertime(
+    @Param('id') id: string,
+    @Body() body: DecideWorkOvertimeRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.decideOvertime(id, user.sub, body ?? ({} as never));
+  }
+
+  @Post('overtime/:id/cancel')
+  @HttpCode(200)
+  cancelOvertime(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.cancelOvertime(id, user.sub);
   }
 
   @Delete('line-items/:id')
