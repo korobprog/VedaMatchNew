@@ -243,8 +243,15 @@ export function Header({ user }: { user: UserProfile }) {
               С подписями девять пунктов занимают 1222px, а контейнер шапки
               ограничен 1152px: ряд выталкивал колокольчик, переключатели и
               аватар за край экрана, и страница ехала вбок. Название сервиса
-              остаётся в title и aria-label. */}
-          <nav aria-label={t("services")} className="hidden xl:flex items-center gap-1">
+              остаётся в title и aria-label.
+              `min-w-0` и своя прокрутка (VED-412): верхнюю панель теперь
+              собирают сами, и у админа с четырьмя кнопками на экране 1280
+              правая группа не помещалась — ряд толкал страницу вбок на 65px.
+              Теперь уступает ряд сервисов: он листается, страница — нет. */}
+          <nav
+            aria-label={t("services")}
+            className="scroll-slim hidden min-w-0 items-center gap-1 overflow-x-auto xl:flex"
+          >
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -274,7 +281,7 @@ export function Header({ user }: { user: UserProfile }) {
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {/* Сама CartBadge решает, показываться ли — рендерится только
                 когда в корзине что-то лежит, независимо от раздела. */}
             <CartBadge />

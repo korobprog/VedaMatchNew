@@ -209,7 +209,9 @@ describe("Header", () => {
 
 /* VED-408: настройка бокового меню — прятать сервисы, добавлять горячие
    кнопки и переставлять то и другое. */
-describe("Header: настройка меню", () => {
+// Длинные списки настройки: `getByRole` с именем перебирает их целиком, и
+// под нагрузкой машины тест не укладывается в стандартные 5 с.
+describe("Header: настройка меню", { timeout: 20000 }, () => {
   beforeEach(() => {
     pathname = "/notices/my";
     window.localStorage.clear();
@@ -283,7 +285,7 @@ describe("Header: настройка меню", () => {
 
 /* VED-412, VED-434: настройка верхней панели — из панели горячих кнопок и
    из настройки меню. */
-describe("Header: верхняя панель", () => {
+describe("Header: верхняя панель", { timeout: 20000 }, () => {
   beforeEach(() => {
     pathname = "/notices/my";
     window.localStorage.clear();
