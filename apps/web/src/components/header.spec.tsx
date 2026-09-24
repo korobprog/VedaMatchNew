@@ -318,7 +318,10 @@ describe("Header: верхняя панель", { timeout: 20000 }, () => {
     fireEvent.click(within(settings).getByRole("switch", { name: /^Меню/ }));
     fireEvent.click(within(settings).getByRole("switch", { name: /^Поиск/ }));
 
-    expect(screen.queryByRole("button", { name: "Меню" })).toBeNull();
+    // «Меню» осталось только в заголовке открытой панели (VED-434).
+    const menus = screen.getAllByRole("button", { name: "Меню" });
+    expect(menus).toHaveLength(1);
+    expect(settings.contains(menus[0])).toBe(true);
     const search = screen.getByRole("link", { name: "Поиск" });
     expect(search).toHaveAttribute("href", "/search");
     expect(

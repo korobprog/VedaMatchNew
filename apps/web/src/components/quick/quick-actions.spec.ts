@@ -3,7 +3,8 @@ import {
   BUILTIN_QUICK_ACTIONS,
   DEFAULT_QUICK_ACTIONS,
   PINNED_QUICK_ACTIONS,
-  REQUIRED_QUICK_ACTIONS,
+  HEADER_ONLY_QUICK_ACTIONS,
+  panelQuickActionCatalog,
   addCustomQuickAction,
   arrangeQuickActions,
   customQuickActionId,
@@ -408,60 +409,32 @@ describe("закреплённые кнопки", () => {
   });
 });
 
-// VED-402: бургер шапки переехал в панель плиткой «Меню».
-describe("обязательная кнопка «Меню»", () => {
-  it("есть в каталоге и в наборе по умолчанию сразу за закреплёнными", () => {
-    expect(REQUIRED_QUICK_ACTIONS).toEqual(["menu"]);
+// VED-434: «Меню» — кнопка заголовка панели, а плиткой панели не бывает.
+describe("«Меню» живёт только в шапке", () => {
+  it("в каталоге для шапки есть, в панели и наборе по умолчанию — нет", () => {
+    expect(HEADER_ONLY_QUICK_ACTIONS).toEqual(["menu"]);
     expect(quickActionMeta("menu")?.label).toBe("Меню");
-    expect(DEFAULT_QUICK_ACTIONS.slice(0, 4)).toEqual([
-      "search",
-      "donate",
-      "invite",
-      "menu",
-    ]);
+    expect(DEFAULT_QUICK_ACTIONS).not.toContain("menu");
+    expect(
+      panelQuickActionCatalog(quickActionCatalog()).map((meta) => meta.id),
+    ).not.toContain("menu");
   });
 
-  it("доезжает до старой настроенной панели — первым рядом, а не в конец", () => {
-    // Запись пятой версии, сделанная до переезда бургера: «Меню» в ней нет.
-    const stored = parseQuickConfig('{"v":7,"ids":["donate","aphorism","info"]}');
-    expect(stored.ids).toEqual(["donate", "aphorism", "info"]);
+  it("из старой записи «Меню» уходит, остальное на месте", () => {
+    const stored = parseQuickConfig(
+      '{"v":7,"ids":["search","donate","invite","menu","aphorism"]}',
+    );
     expect(arrangeQuickActions(stored.ids, PINNED_QUICK_ACTIONS)).toEqual([
       "search",
       "donate",
       "invite",
-      "menu",
       "aphorism",
-      "info",
     ]);
   });
 
-  it("у админа без закреплений встаёт первой", () => {
-    expect(arrangeQuickActions(["info"], lockedQuickActions(true))).toEqual([
-      "menu",
-      "info",
-    ]);
-  });
-
-  it("переставленная человеком остаётся на своём месте", () => {
-    const ids = ["search", "donate", "invite", "info", "menu"];
-    expect(arrangeQuickActions(ids, PINNED_QUICK_ACTIONS)).toEqual(ids);
-    expect(moveQuickAction(ids, "menu", -1, 3)).toEqual([
-      "search",
-      "donate",
-      "invite",
-      "menu",
-      "info",
-    ]);
-  });
-
-  it("выключить её нельзя: при раскладке она возвращается", () => {
-    const off = toggleQuickAction(DEFAULT_QUICK_ACTIONS, "menu");
-    expect(off).not.toContain("menu");
-    expect(arrangeQuickActions(off, PINNED_QUICK_ACTIONS)).toContain("menu");
-  });
-
-  it("запись с «Меню» читается и сохраняется как есть", () => {
-    const config: QuickConfig = { ids: ["search", "menu", "info"], custom: [] };
-    expect(parseQuickConfig(serializeQuickConfig(config))).toEqual(config);
+  it("у админа без закреплений — тоже без «Меню»", () => {
+    expect(
+      arrangeQuickActions(["menu", "info"], lockedQuickActions(true)),
+    ).toEqual(["info"]);
   });
 });

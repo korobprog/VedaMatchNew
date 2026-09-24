@@ -80,9 +80,9 @@ import { TuneRow } from "./tune-row";
 import {
   BUILTIN_QUICK_ACTIONS,
   CUSTOM_ACTION_PREFIX,
-  REQUIRED_QUICK_ACTIONS,
   addCustomQuickAction,
   arrangeQuickActions,
+  panelQuickActionCatalog,
   customQuickActionId,
   lockedQuickActions,
   moveQuickAction,
@@ -496,6 +496,27 @@ export function QuickPanel({
             <div className="flex shrink-0 items-center gap-1">
               {view === "tiles" && (
                 <>
+                  {/* «Меню» (VED-434) — вторая галочка заказчика, первой в
+                      ряду. Плиткой панели оно больше не бывает: «добавь туда
+                      ещё одну кнопку — Меню и убери её из горячих клавиш». */}
+                  {openMenu && (
+                    <button
+                      type="button"
+                      onClick={(event) =>
+                        openMenu(
+                          starRef.current?.isConnected
+                            ? starRef.current
+                            : event.currentTarget,
+                        )
+                      }
+                      aria-haspopup="dialog"
+                      aria-label="Меню"
+                      title="Меню"
+                      className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                    >
+                      <Menu className="size-5" />
+                    </button>
+                  )}
                   {/* Настройка верхней панели (VED-434) — там, где заказчик
                       поставил галочки: слева от настройки самой панели. */}
                   <button
@@ -558,7 +579,7 @@ export function QuickPanel({
           ) : tuning === "panel" ? (
             <QuickSettings
               config={config}
-              catalog={catalog}
+              catalog={panelQuickActionCatalog(catalog)}
               locked={locked}
               onChange={save}
             />
@@ -574,14 +595,6 @@ export function QuickPanel({
               catalog={catalog}
               onChange={save}
               onClose={close}
-              onOpenMenu={
-                openMenu
-                  ? () =>
-                      openMenu(
-                        starRef.current?.isConnected ? starRef.current : null,
-                      )
-                  : undefined
-              }
             />
           )}
         </div>
@@ -876,13 +889,11 @@ function QuickTiles({
   catalog,
   onChange,
   onClose,
-  onOpenMenu,
 }: {
   config: QuickConfig;
   catalog: QuickActionMeta[];
   onChange: (next: QuickConfig) => void;
   onClose: () => void;
-  onOpenMenu?: () => void;
 }) {
   const [sheet, setSheet] = useState<QuickSheetId | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -895,9 +906,8 @@ function QuickTiles({
     if (sheet) sheetRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [sheet]);
 
-  // Меню открывает шапка; панель без неё (в тестах, в песочнице) плитку
-  // «Меню» просто не рисует — кнопка в пустоту хуже, чем никакой.
-  const ids = config.ids.filter((id) => id !== "menu" || onOpenMenu);
+  // «Меню» — кнопка заголовка панели, а не плитка (VED-434).
+  const ids = config.ids.filter((id) => id !== "menu");
 
   if (ids.length === 0)
     return (
@@ -926,16 +936,6 @@ function QuickTiles({
                 <InviteTile />
               ) : id === "player" ? (
                 <PlayerTile meta={meta} onRun={onClose} />
-              ) : id === "menu" ? (
-                <button
-                  type="button"
-                  onClick={onOpenMenu}
-                  aria-haspopup="dialog"
-                  className={tileClass}
-                >
-                  <QuickActionIcon meta={meta} />
-                  <span className="line-clamp-2">{meta.label}</span>
-                </button>
               ) : meta.href ? (
                 <Link href={meta.href} onClick={onClose} className={tileClass}>
                   <QuickActionIcon meta={meta} />
@@ -1295,8 +1295,6 @@ function QuickSettings({
             {group.items.map((meta) => {
               const on = config.ids.includes(meta.id);
               const fixed = locked.includes(meta.id);
-              // «Меню» не выключается, но переставляется (VED-402).
-              const required = REQUIRED_QUICK_ACTIONS.includes(meta.id);
               const move = (delta: -1 | 1) => () =>
                 onChange({
                   ...config,
@@ -1306,9 +1304,9 @@ function QuickSettings({
                 <TuneRow
                   key={meta.id}
                   label={meta.label}
-                  hint={fixed || required ? "Всегда в панели" : meta.hint}
+                  hint={fixed ? "Всегда в панели" : meta.hint}
                   on={on}
-                  fixed={fixed || required}
+                  fixed={fixed}
                   onToggle={() =>
                     onChange({
                       ...config,
