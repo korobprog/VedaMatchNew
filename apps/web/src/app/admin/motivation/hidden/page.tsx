@@ -8,6 +8,7 @@ import {
   getAdminMotivationPosts,
   getMotivationCategories,
 } from "@/lib/motivation-api";
+import { parsePostKind } from "@/components/motivation/admin/post-kind";
 
 /**
  * «Скрытые» — весь список снятого с показа отдельно от «Опубликованных»
@@ -20,12 +21,18 @@ import {
  * список сужен до `status === 'hidden'` (`variant="hidden"` меняет только
  * подписи для пустого списка и счётчика).
  */
-export default async function AdminMotivationHiddenPage() {
-  const [posts, categories] = await Promise.all([
+export default async function AdminMotivationHiddenPage({
+  searchParams,
+}: {
+  /** `?kind=art|cards` — какая из двух редакций (VED-299). */
+  searchParams: Promise<{ kind?: string }>;
+}) {
+  const [posts, categories, { kind }] = await Promise.all([
     getAdminMotivationPosts(),
     // Тот же справочник, что и на «Опубликованных»: категорию скрытой
     // карточки можно поправить, не дожидаясь возврата в ленту.
     getMotivationCategories(),
+    searchParams,
   ]);
   const hiddenCount = posts ? selectHiddenPosts(posts).length : undefined;
 
@@ -45,6 +52,7 @@ export default async function AdminMotivationHiddenPage() {
         posts={posts ? selectHiddenPosts(posts) : null}
         categories={categories ?? []}
         variant="hidden"
+        kind={parsePostKind(kind)}
       />
     </>
   );

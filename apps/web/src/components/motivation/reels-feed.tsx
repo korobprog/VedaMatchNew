@@ -21,6 +21,7 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { QuickPanel } from "@/components/quick/quick-panel";
+import { editHref } from "./admin/post-kind";
 import { DonateButton } from "@/components/donate-sheet";
 import {
   isLongQuote,
@@ -568,7 +569,9 @@ export function ReelsFeed({
         ) : null,
         edit: isAdmin ? (
           <Link
-          href={`/admin/motivation/published?post=${encodeURIComponent(activePost.slug)}`}
+          // В редакцию своего вида (VED-299): у афоризма — нейро-афоризмы,
+          // у открытки — открытки.
+          href={editHref(activePost)}
           aria-label="Править эту публикацию"
           className={railItemClass}
         >
@@ -865,7 +868,11 @@ function Tabs({
           «Мои · Студия»), на их местах — «Категории» той ленты, что открыта,
           и звёздочка панели горячих кнопок: у полноэкранной ленты нет шапки
           портала, и без неё до панели отсюда было не дотянуться. */}
-      {link("collections", collectionsHref(tab), "Категории")}
+      {/* В самой ленте избранного вкладка остаётся на месте «Категорий»:
+          иначе в ряду не было бы ни одной текущей, и где ты — не видно. */}
+      {tab === "saved"
+        ? link("saved", "/motivation?tab=saved", "Избранное")
+        : link("collections", collectionsHref(tab), "Категории")}
       <ReelsQuickPanel />
     </nav>
   );
@@ -1202,9 +1209,19 @@ function ReelSlide({
           Убранный текст прячет её целиком — цитату, источник, подпись и
           кнопки, которые эту же цитату раскрывают: смотреть на изображение
           мешает всё перечисленное, а не одна строка. */}
+      {/* У открытки (VED-305) подпись стоит не на затемнённом низу, как у
+          картинки нейросети, а прямо на размытой копии открытки — и на
+          светлой открытке белые буквы пропадали. Цвет букв под фон не
+          подбираем: фон под подписью пёстрый, и чёрный пропал бы на тёмном
+          краю так же, как белый на светлом. Вместо этого под самой подписью —
+          тёмная полупрозрачная плашка: она закрывает только то, что и так
+          закрыто текстом, а открытку не затемняет. Белый 85% на ней даёт не
+          меньше 6:1 даже поверх чисто белого фона. */}
       <div
         hidden={textHidden}
-        className="absolute bottom-[4.5rem] left-4 right-4 z-10"
+        className={`absolute bottom-[4.5rem] left-4 right-4 z-10 ${
+          printed ? "-mx-2 rounded-xl bg-black/70 px-2 py-1.5 backdrop-blur-sm" : ""
+        }`}
       >
         {/* В ролик подпись вшита воркером, и вторая копия поверх кадра
             наезжала бы на первую. Для фото текст рисуем мы. */}

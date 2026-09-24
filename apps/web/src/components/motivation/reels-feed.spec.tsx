@@ -12,6 +12,17 @@ class FakeObserver {
 }
 vi.stubGlobal("IntersectionObserver", FakeObserver);
 
+// Панель горячих кнопок портальная и живёт на контексте локали и каталога
+// сервисов; ленте важна только её кнопка в ряду вкладок (VED-387).
+vi.mock("@/components/quick/quick-panel", () => ({
+  QuickPanel: () => (
+    <div>
+      <button type="button" aria-label="История" />
+      <button type="button" aria-label="Горячие кнопки" />
+    </div>
+  ),
+}));
+
 const post = (id: string, overrides: Partial<MotivationPostDto> = {}): MotivationPostDto => ({
   id,
   slug: id,
@@ -121,7 +132,14 @@ describe("ReelsFeed", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = [...tabs.children].map((node) => node.textContent);
-    expect(labels).toEqual(["Лента", "Открытки", "", "Избранное", "Мои"]);
+    // VED-387: «Избранное» и «Мои» ушли в меню ☰, на их местах —
+    // «Категории» и звёздочка панели горячих кнопок.
+    expect(labels).toEqual(["Лента", "Открытки", "", "Категории", ""]);
+    expect(within(tabs).getByRole("link", { name: "Категории" })).toHaveAttribute(
+      "href",
+      "/motivation/collections",
+    );
+    expect(within(tabs).getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
     expect(within(tabs).queryByText("Для вас")).not.toBeInTheDocument();
     expect(within(tabs).queryByText("Автор и источник")).not.toBeInTheDocument();
     expect(
@@ -140,7 +158,11 @@ describe("ReelsFeed", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = [...tabs.children].map((node) => node.textContent);
-    expect(labels).toEqual(["Лента", "Открытки", "Избранное", "Мои"]);
+    expect(labels).toEqual(["Лента", "Открытки", "Избранное", ""]);
+    expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(
       within(tabs).queryByRole("button", { name: /Фильтр по автору и источнику/ }),
     ).not.toBeInTheDocument();
@@ -638,9 +660,10 @@ describe("ReelsFeed", () => {
 
     expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
+    // VED-387: «Избранное» теперь в меню ☰ — отсюда уходят в «Категории».
+    expect(within(tabs).getByRole("link", { name: "Категории" })).toHaveAttribute(
       "href",
-      "/motivation?tab=saved",
+      "/motivation/collections?tab=cards",
     );
   });
 
@@ -1238,7 +1261,23 @@ describe("ReelsFeed", () => {
 
     expect(
       screen.getByRole("link", { name: "Править эту публикацию" }),
-    ).toHaveAttribute("href", "/admin/motivation/published?post=a");
+    ).toHaveAttribute("href", "/admin/motivation/published?post=a&kind=art");
+  });
+
+  // VED-299: открытка открывается в редакции открыток.
+  it("открытку редакция правит в своём меню — открыток", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("c", { captionInImage: true })], nextCursor: null }}
+        tab="cards"
+        donation={null}
+        isAdmin
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Править эту публикацию" }),
+    ).toHaveAttribute("href", "/admin/motivation/published?post=c&kind=cards");
   });
 
   it("обычному читателю правки не предлагает", () => {
