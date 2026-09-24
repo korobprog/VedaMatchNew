@@ -564,13 +564,15 @@ export function WorkTaskDialog({
                     <label
                       htmlFor={`check-${item.id}`}
                       id={`check-text-${item.id}`}
-                      className={`block whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
+                      // `line-clamp-3` сам задаёт display: вместе с `block`
+                      // побеждал `block`, и свёрнутый пункт не сворачивался.
+                      className={`whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
                         item.done ? "text-text-2 line-through" : "text-text-0"
                       } ${
                         isLongChecklistText(item.text) &&
                         !expandedItems.has(item.id)
                           ? "line-clamp-3"
-                          : ""
+                          : "block"
                       }`}
                     >
                       {item.text}

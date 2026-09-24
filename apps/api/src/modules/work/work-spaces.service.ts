@@ -287,7 +287,8 @@ export class WorkSpacesService {
     const problem = memberChangeProblem({
       actor: actorRole,
       target: target.role,
-      targetIsPrimaryOwner: (await this.primaryOwnerId(spaceId)) === targetUserId,
+      targetIsPrimaryOwner:
+        (await this.primaryOwnerId(spaceId)) === targetUserId,
     });
     if (problem) throw new BadRequestException(problem);
     await this.prisma.workSpaceMember.update({

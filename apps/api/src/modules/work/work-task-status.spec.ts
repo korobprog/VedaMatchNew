@@ -1,6 +1,7 @@
 import {
   closesTask,
   isFinishedColumn,
+  isStatusColumn,
   resolveTaskStatusMark,
 } from './work-task-status';
 
@@ -73,5 +74,22 @@ describe('closesTask — въезд закрывает задачу для дв�
   it('рабочие колонки не закрывают', () => {
     expect(closesTask({ name: 'Тестерование', isDone: false })).toBe(false);
     expect(closesTask({ name: 'На доработку', isDone: false })).toBe(false);
+  });
+});
+
+describe('isStatusColumn — раздел или статус (VED-430)', () => {
+  it('«РАБОТА» — раздел сервиса, а не статус «В работе»', () => {
+    expect(resolveTaskStatusMark('РАБОТА')).toBeNull();
+    expect(isStatusColumn('РАБОТА')).toBe(false);
+    expect(isStatusColumn('В работе')).toBe(true);
+  });
+
+  it('четыре статуса — колонки статуса, остальное — разделы', () => {
+    expect(isStatusColumn('Тестерование')).toBe(true);
+    expect(isStatusColumn('Выполнено')).toBe(true);
+    expect(isStatusColumn('На доработку')).toBe(true);
+    expect(isStatusColumn('МУЗЫКА')).toBe(false);
+    expect(isStatusColumn('ПАУЗА')).toBe(false);
+    expect(isStatusColumn(null)).toBe(false);
   });
 });

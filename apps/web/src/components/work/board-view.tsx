@@ -766,7 +766,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* gap-2 и заголовок text-lg на телефоне (VED-421): в строку названия
+          переехала кнопка «Пригласить», и на 360 точках «Все среды»,
+          название, префикс и кнопка должны встать в одну строку. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-3">
         <Link
           href="/work/planner"
           className="flex items-center gap-1 text-sm text-text-1 hover:text-text-0"
@@ -774,7 +777,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           <ArrowLeft aria-hidden className="size-4" />
           Все среды
         </Link>
-        <h1 className="font-display text-xl font-bold text-text-0 sm:text-2xl">
+        <h1 className="font-display text-lg font-bold text-text-0 sm:text-2xl">
           {space.name}
         </h1>
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
@@ -822,7 +825,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             пикселей, на 320 — на 18). Прижимать вправо и одновременно ровнять
             по левому краю нельзя, поэтому ряд прижат влево на всех ширинах:
             одно правило вместо разъезжающихся по брейкпоинтам. */}
-        <div className="flex w-full flex-wrap items-center justify-start gap-1.5">
+        <div className="flex w-full flex-wrap items-center justify-start gap-1">
           {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
               стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
               не пара рядом: вторая всегда была бы бесполезной, а место
@@ -1098,6 +1101,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               // карточка легла бы не туда. Кнопки переноса работают всегда.
               draggable={!searchActive && groupMode === "none" && !inForeign}
               found={searchActive && revealAll && matches.has(task.id)}
+              viewerId={board.viewerId}
               // Задача в статусе говорит, о чём она (VED-430): «РАБОТА».
               sectionName={
                 isStatusColumn(full) && task.sectionId
@@ -1692,6 +1696,7 @@ function TaskCard({
   draggable,
   found = false,
   sectionName = null,
+  viewerId,
   onOpen,
   onHandleDown,
   onHandleMove,
@@ -1708,6 +1713,8 @@ function TaskCard({
   found?: boolean;
   /** Раздел задачи, стоящей в колонке статуса (VED-430). */
   sectionName?: string | null;
+  /** Кто смотрит: свою задачу подписываем «Вы». */
+  viewerId: string;
   onOpen: () => void;
   onHandleDown: (event: React.PointerEvent) => void;
   onHandleMove: (event: React.PointerEvent) => void;
@@ -1761,11 +1768,11 @@ function TaskCard({
           стрелки» — вправо, в строку с номером. Стрелки и «Просмотрено»
           прижаты вправо и переносятся под сведения, только если в строке им
           не хватило места. */}
-      <div
-        className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-2 ${
-          handle ? "pl-5" : ""
-        }`}
-      >
+      {/* Без отступа под ручку: строка во всю ширину карточки, иначе на
+          360 точках стрелки с «Просмотрено» чаще уезжали строкой ниже.
+          Цвет `text-1`, а не `text-2`: мелкие счётчики на стекле тёмной темы
+          давали 4,29:1 — ниже AA. */}
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-1">
         <span className="font-mono">{task.key}</span>
         {/* Состояние — сразу за номером (VED-311): «в каком состоянии задача»
             человек спрашивает первым. У чужой задачи — «Чужое» вместо
@@ -1852,9 +1859,18 @@ function TaskCard({
             className="max-w-[8rem] truncate text-text-1"
           >
             <span className="sr-only">
-              Исполнитель: {workPersonLabel(task.assignee)}
+              Исполнитель:{" "}
+              {task.assignee.userId === viewerId
+                ? "вы"
+                : workPersonLabel(task.assignee)}
             </span>
-            <span aria-hidden>{workPersonShortLabel(task.assignee)}</span>
+            {/* Своя задача — «Вы»: своё имя на каждой своей карточке
+                занимало место и ничего не сообщало. */}
+            <span aria-hidden>
+              {task.assignee.userId === viewerId
+                ? "Вы"
+                : workPersonShortLabel(task.assignee)}
+            </span>
           </span>
         )}
 
