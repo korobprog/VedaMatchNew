@@ -16,6 +16,7 @@ import {
   type WorkSpaceDto,
   type WorkSpaceSummaryDto,
 } from '@vedamatch/shared';
+import { parseWorkCommercialSettings } from './work-finance-settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WORK_POSITION_STEP } from './work-position';
 import {
@@ -166,6 +167,10 @@ export class WorkSpacesService {
       WORK_SPACE_DESCRIPTION_MAX,
     );
 
+    const commercial = request.commercial
+      ? parseWorkCommercialSettings(request.commercial)
+      : null;
+
     const space = await this.prisma.$transaction(async (tx) => {
       const created = await tx.workSpace.create({
         data: {
@@ -179,7 +184,15 @@ export class WorkSpacesService {
         },
       });
       const board = await tx.workBoard.create({
-        data: { spaceId: created.id, name: 'Доска', position: 0 },
+        data: {
+          spaceId: created.id,
+          name: 'Доска',
+          position: 0,
+          // Коммерческая доска (VED-458): ведущий — тот, кто завёл среду.
+          ...(commercial
+            ? { ...commercial, kind: 'commercial', leadId: userId }
+            : {}),
+        },
       });
       await tx.workColumn.createMany({
         data: WORK_DEFAULT_COLUMNS.map((column, index) => ({

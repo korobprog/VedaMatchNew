@@ -22,8 +22,10 @@ import type {
   CreateWorkCommentRequest,
   CreateWorkInviteRequest,
   CreateWorkLabelRequest,
+  CreateWorkLineItemRequest,
   CreateWorkSpaceRequest,
   CreateWorkTaskRequest,
+  CreateWorkTimeEntryRequest,
   MoveWorkTaskRequest,
   SetWorkTaskViewedRequest,
   UpdateWorkBoardRequest,
@@ -31,6 +33,7 @@ import type {
   UpdateWorkColumnRequest,
   UpdateWorkMemberRequest,
   UpdateWorkSpaceRequest,
+  UpdateWorkTaskFinanceRequest,
   UpdateWorkTaskRequest,
 } from '@vedamatch/shared';
 import {
@@ -41,6 +44,7 @@ import {
 } from '../auth/auth.guard';
 import { WorkBoardsService } from './work-boards.service';
 import { WorkContactsService } from './work-contacts.service';
+import { WorkFinanceService } from './work-finance.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
@@ -486,5 +490,84 @@ export class WorkTasksController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.tasks.removeAttachment(id, user.sub);
+  }
+}
+
+/**
+ * Время и стоимость коммерческой доски (VED-458). Отдельный контроллер: деньги
+ * живут своим сервисом, и маршруты `tasks/:id/finance` не путаются с
+ * `tasks/:id` — у них другое число сегментов.
+ */
+@Controller('work')
+@UseGuards(AuthGuard)
+export class WorkFinanceController {
+  constructor(private readonly finance: WorkFinanceService) {}
+
+  @Get('boards/:id/finance')
+  boardFinance(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.boardFinance(id, user.sub);
+  }
+
+  @Get('tasks/:id/finance')
+  taskFinance(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.taskFinance(id, user.sub);
+  }
+
+  @Patch('tasks/:id/finance')
+  updateTaskFinance(
+    @Param('id') id: string,
+    @Body() body: UpdateWorkTaskFinanceRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.updateTaskFinance(id, user.sub, body ?? {});
+  }
+
+  @Post('tasks/:id/timer/start')
+  @HttpCode(200)
+  startTimer(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.finance.startTimer(id, user.sub);
+  }
+
+  @Post('tasks/:id/timer/stop')
+  @HttpCode(200)
+  stopTimer(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.finance.stopTimer(id, user.sub);
+  }
+
+  @Post('tasks/:id/time')
+  addTime(
+    @Param('id') id: string,
+    @Body() body: CreateWorkTimeEntryRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.addTime(id, user.sub, body ?? ({} as never));
+  }
+
+  @Delete('time/:id')
+  removeTime(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.finance.removeTime(id, user.sub);
+  }
+
+  @Post('tasks/:id/line-items')
+  addLineItem(
+    @Param('id') id: string,
+    @Body() body: CreateWorkLineItemRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.addLineItem(id, user.sub, body ?? ({} as never));
+  }
+
+  @Delete('line-items/:id')
+  removeLineItem(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.finance.removeLineItem(id, user.sub);
   }
 }

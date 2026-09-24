@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { WorkBoardsService } from './work-boards.service';
 import { WorkContactsService } from './work-contacts.service';
+import { WorkFinanceService } from './work-finance.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkNoticeWorkerService } from './work-notice-worker.service';
 import { WorkNoticesService } from './work-notices.service';
@@ -14,6 +15,7 @@ import { WorkVacanciesListener } from './work-vacancies.listener';
 import {
   WorkBoardsController,
   WorkController,
+  WorkFinanceController,
   WorkInvitesController,
   WorkTasksController,
 } from './work.controller';
@@ -32,11 +34,13 @@ import {
     WorkController,
     WorkBoardsController,
     WorkTasksController,
+    WorkFinanceController,
   ],
   providers: [
     WorkSpacesService,
     WorkBoardsService,
     WorkTasksService,
+    WorkFinanceService,
     WorkInvitesService,
     WorkContactsService,
     WorkUploadsService,

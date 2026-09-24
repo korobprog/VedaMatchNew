@@ -445,6 +445,8 @@ model User {
   workTaskNoticesReceived            WorkTaskNotice[]              @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]              @relation("WorkTaskNoticeActor")
   workTaskViews                      WorkTaskView[]                @relation("WorkTaskViews")
+  workBoardsLed                      WorkBoard[]                   @relation("WorkBoardsLed")
+  workTimeEntries                    WorkTimeEntry[]               @relation("WorkTimeEntries")
   workVacancyResponses               WorkVacancyResponse[]         @relation("WorkVacancyResponses")
   apiKeys                            UserApiKey[]                  @relation("UserApiKeys")
   agentApiKeys                       UserApiKey[]                  @relation("AgentApiKeys")
@@ -5686,8 +5688,28 @@ model WorkBoard {
   createdAt  DateTime  @default(now())
   archivedAt DateTime?
 
-  columns WorkColumn[]
-  tasks   WorkTask[]
+  /// Коммерческая доска (VED-458): часы, ставки и сметы. Смена на обычную
+  /// только прячет деньги — поля ниже не стираются.
+  kind              WorkBoardKind    @default(regular)
+  /// Ведущий доски: видит все деньги, одобряет часы сверх нормы.
+  leadId            String?
+  lead              User?            @relation("WorkBoardsLed", fields: [leadId], references: [id], onDelete: SetNull)
+  clientName        String           @default("")
+  currency          String           @default("RUB")
+  pricingModel      WorkPricingModel @default(hourly)
+  /// Деньги — в минимальных единицах валюты (копейках): Float теряет копейки.
+  rateMinor         Int              @default(0)
+  /// Дневная норма на исполнителя в минутах; 0 — нормы нет.
+  dailyNormMinutes  Int              @default(0)
+  overtimeRateMinor Int              @default(0)
+  overtimeMode      WorkOvertimeMode @default(on_request)
+  budgetMinor       Int              @default(0)
+  /// IANA-пояс, по которому режутся сутки для нормы.
+  timezone          String           @default("Europe/Moscow")
+
+  columns     WorkColumn[]
+  tasks       WorkTask[]
+  timeEntries WorkTimeEntry[]
 
   @@index([spaceId, position])
 }
@@ -5753,13 +5775,19 @@ model WorkTask {
   /// `null` у задач до VED-421 без истории — тогда считается `createdAt`.
   editedAt        DateTime?
 
-  labels      WorkTaskLabel[]
-  checklist   WorkChecklistItem[]
-  comments    WorkComment[]
-  attachments WorkAttachment[]
-  activity    WorkActivity[]
-  notices     WorkTaskNotice[]
-  views       WorkTaskView[]
+  labels          WorkTaskLabel[]
+  checklist       WorkChecklistItem[]
+  comments        WorkComment[]
+  attachments     WorkAttachment[]
+  /// Оценка задачи в минутах (VED-458).
+  estimateMinutes Int?
+  /// Фиксированная цена задачи в копейках — при модели «фикс за задачу».
+  priceMinor      Int?
+  timeEntries     WorkTimeEntry[]
+  lineItems       WorkTaskLineItem[]
+  activity        WorkActivity[]
+  notices         WorkTaskNotice[]
+  views           WorkTaskView[]
 
   @@unique([spaceId, number])
   @@index([columnId, position])
@@ -7258,13 +7286,13 @@ model WellnessProductCheck {
   /// отклонена. У принятой — пусто.
   reasons String[]
 
-  model        String?
-  inputTokens  Int     @default(0)
-  outputTokens Int     @default(0)
-  searchCalls  Int     @default(0)
+  model         String?
+  inputTokens   Int     @default(0)
+  outputTokens  Int     @default(0)
+  searchCalls   Int     @default(0)
   /// Оценка расходов в миллионных долях доллара: у одной проверки она меньше
   /// цента, и в целых центах дневной бюджет не складывался бы.
-  costUsdMicros Int @default(0)
+  costUsdMicros Int     @default(0)
 
   finishedAt DateTime?
   createdAt  DateTime  @default(now())
@@ -7272,4 +7300,64 @@ model WellnessProductCheck {
 
   @@index([status, updatedAt])
   @@index([createdAt])
+}
+
+// ===== Работа: коммерческая доска (VED-458) =====
+
+enum WorkBoardKind {
+  regular
+  commercial
+}
+
+enum WorkPricingModel {
+  hourly
+  fixed
+}
+
+enum WorkOvertimeMode {
+  on_request
+  auto
+}
+
+enum WorkLineItemKind {
+  expense
+  discount
+}
+
+/// Отрезок работы над задачей: таймер или запись задним числом. Норма и
+/// «сверх нормы» не хранятся — считаются по дням исполнителя в work-finance.ts,
+/// иначе правка одной записи задним числом требовала бы пересчёта соседних.
+model WorkTimeEntry {
+  id        String    @id @default(uuid())
+  /// Продублирован ради нормы: она считается по всей доске, а не по задаче.
+  boardId   String
+  board     WorkBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  /// Исполнитель обнуляется вместе с аккаунтом, часы остаются: по ним платили.
+  userId    String?
+  user      User?     @relation("WorkTimeEntries", fields: [userId], references: [id], onDelete: SetNull)
+  startedAt DateTime
+  /// `null` — таймер идёт.
+  endedAt   DateTime?
+  note      String    @default("")
+  createdAt DateTime  @default(now())
+
+  @@index([boardId, startedAt])
+  @@index([taskId, startedAt])
+  @@index([userId, endedAt])
+}
+
+/// Строка сметы задачи сверх времени: расход или скидка.
+model WorkTaskLineItem {
+  id          String           @id @default(uuid())
+  taskId      String
+  task        WorkTask         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kind        WorkLineItemKind
+  title       String
+  amountMinor Int
+  position    Float            @default(0)
+  createdAt   DateTime         @default(now())
+
+  @@index([taskId, position])
 }

@@ -13,6 +13,15 @@ import {
   ensurePersonalWorkSpace,
   listWorkSpaces,
 } from "@/lib/work-api";
+import {
+  BoardKindChoice,
+  CommercialSettingsFields,
+} from "./commercial-settings-fields";
+import {
+  EMPTY_COMMERCIAL_DRAFT,
+  browserTimezone,
+  commercialDraftToInput,
+} from "./finance-format";
 
 /** Токен акцента → класс рамки. Хардкод цвета не пережил бы смену темы. */
 const EDGE: Record<WorkColor, string> = {
@@ -38,6 +47,12 @@ export function WorkSpacesView() {
   const [name, setName] = useState("");
   const [color, setColor] = useState<WorkColor>("cyan");
   const [formOpen, setFormOpen] = useState(false);
+  // Коммерческая доска (VED-458): на сайте доска рождается вместе со средой,
+  // поэтому и вопрос «коммерческая или нет» — в этой форме.
+  const [commercial, setCommercial] = useState(false);
+  const [commercialDraft, setCommercialDraft] = useState(
+    EMPTY_COMMERCIAL_DRAFT,
+  );
 
   const reload = useCallback(async () => {
     try {
@@ -61,10 +76,24 @@ export function WorkSpacesView() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim() || creating) return;
+    const settings = commercial
+      ? commercialDraftToInput(commercialDraft, browserTimezone())
+      : null;
+    if (settings && "error" in settings) {
+      setError(settings.error);
+      return;
+    }
     setCreating(true);
     try {
-      await createWorkSpace({ name: name.trim(), color });
+      await createWorkSpace({
+        name: name.trim(),
+        color,
+        commercial: settings ? settings.input : null,
+      });
       setName("");
+      setCommercial(false);
+      setCommercialDraft(EMPTY_COMMERCIAL_DRAFT);
+      setError(null);
       setFormOpen(false);
       await reload();
     } catch (cause) {
@@ -130,7 +159,7 @@ export function WorkSpacesView() {
           </li>
         ))}
 
-        <li>
+        <li className={formOpen && commercial ? "sm:col-span-2" : undefined}>
           {formOpen ? (
             <form
               onSubmit={submit}
@@ -166,6 +195,16 @@ export function WorkSpacesView() {
                   />
                 ))}
               </fieldset>
+              <BoardKindChoice
+                commercial={commercial}
+                onChange={setCommercial}
+              />
+              {commercial && (
+                <CommercialSettingsFields
+                  draft={commercialDraft}
+                  onChange={setCommercialDraft}
+                />
+              )}
               <div className="mt-auto flex gap-2">
                 <button
                   type="submit"

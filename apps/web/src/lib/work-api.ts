@@ -8,18 +8,23 @@ import type {
   CreateWorkCommentRequest,
   CreateWorkInviteRequest,
   CreateWorkLabelRequest,
+  CreateWorkLineItemRequest,
   CreateWorkSpaceRequest,
   CreateWorkTaskRequest,
+  CreateWorkTimeEntryRequest,
   MoveWorkTaskRequest,
   SetWorkTaskViewedRequest,
+  UpdateWorkBoardRequest,
   UpdateWorkChecklistItemRequest,
   UpdateWorkColumnRequest,
   UpdateWorkSpaceRequest,
+  UpdateWorkTaskFinanceRequest,
   UpdateWorkTaskRequest,
   WorkAgendaDto,
   WorkArchiveDto,
   WorkArchiveView,
   WorkBoardDto,
+  WorkBoardFinanceDto,
   WorkContactsDto,
   WorkInviteDto,
   WorkInvitePreviewDto,
@@ -28,6 +33,7 @@ import type {
   WorkSpaceDto,
   WorkSpaceSummaryDto,
   WorkTaskDto,
+  WorkTaskFinanceDto,
   WorkTaskSearchResponse,
   WorkTaskViewedResponse,
   WorkMemberRole,
@@ -253,3 +259,40 @@ export const removeWorkAttachment = (attachmentId: string) =>
   send<WorkTaskDto>(`/work/attachments/${attachmentId}`, "DELETE");
 
 export const getWorkAgenda = () => request<WorkAgendaDto>("/work/agenda");
+
+// ===== Коммерческая доска (VED-458) =====
+
+export const updateWorkBoard = (boardId: string, body: UpdateWorkBoardRequest) =>
+  send<WorkBoardDto>(`/work/boards/${boardId}`, "PATCH", body);
+
+export const getWorkBoardFinance = (boardId: string) =>
+  request<WorkBoardFinanceDto>(`/work/boards/${boardId}/finance`);
+
+export const getWorkTaskFinance = (taskId: string) =>
+  request<WorkTaskFinanceDto>(`/work/tasks/${taskId}/finance`);
+
+export const updateWorkTaskFinance = (
+  taskId: string,
+  body: UpdateWorkTaskFinanceRequest,
+) => send<WorkTaskFinanceDto>(`/work/tasks/${taskId}/finance`, "PATCH", body);
+
+export const startWorkTimer = (taskId: string) =>
+  send<WorkTaskFinanceDto>(`/work/tasks/${taskId}/timer/start`, "POST");
+
+export const stopWorkTimer = (taskId: string) =>
+  send<WorkTaskFinanceDto>(`/work/tasks/${taskId}/timer/stop`, "POST");
+
+export const addWorkTime = (taskId: string, body: CreateWorkTimeEntryRequest) =>
+  send<WorkTaskFinanceDto>(`/work/tasks/${taskId}/time`, "POST", body);
+
+export const removeWorkTime = (entryId: string) =>
+  send<WorkTaskFinanceDto>(`/work/time/${entryId}`, "DELETE");
+
+export const addWorkLineItem = (
+  taskId: string,
+  body: CreateWorkLineItemRequest,
+) => send<WorkTaskFinanceDto>(`/work/tasks/${taskId}/line-items`, "POST", body);
+
+export const removeWorkLineItem = (itemId: string) =>
+  send<WorkTaskFinanceDto>(`/work/line-items/${itemId}`, "DELETE");
+

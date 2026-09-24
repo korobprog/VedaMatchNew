@@ -14,14 +14,25 @@ import {
   type CreateWorkLabelRequest,
   type UpdateWorkBoardRequest,
   type UpdateWorkColumnRequest,
+  type WorkBoardCommercialDto,
   type WorkBoardDto,
+  type WorkCurrency,
   type WorkLabelDto,
   type WorkArchiveDto,
   type WorkTaskSearchResponse,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { columnDoneChange } from './work-column-done';
-import { toWorkLabel, toWorkMember, toWorkTaskCard } from './work-dto';
+import {
+  toWorkLabel,
+  toWorkMember,
+  toWorkPersonRef,
+  toWorkTaskCard,
+} from './work-dto';
+import {
+  canManageWorkFinance,
+  parseWorkCommercialSettings,
+} from './work-finance-settings';
 import { WORK_POSITION_STEP, resolveMovePosition } from './work-position';
 import { assertWorkAccess } from './work-roles';
 import { resolveTaskStatusMark } from './work-task-status';
@@ -168,6 +179,7 @@ export class WorkBoardsService {
     const board = await this.prisma.workBoard.findUnique({
       where: { id: boardId },
       include: {
+        lead: { select: workUserSelect },
         space: {
           select: {
             prefix: true,
@@ -198,12 +210,22 @@ export class WorkBoardsService {
       userId,
     );
 
+    const canSeeFinance =
+      board.kind === 'commercial' &&
+      canManageWorkFinance(role, board.leadId === userId);
+
     return {
       id: board.id,
       spaceId: board.spaceId,
       name: board.name,
       role,
       viewerId: userId,
+      kind: board.kind,
+      commercial:
+        board.kind === 'commercial'
+          ? toCommercialDto(board, canSeeFinance)
+          : null,
+      canSeeFinance,
       labels: board.space.labels.map(toWorkLabel),
       members: board.space.members.map(toWorkMember),
       columns: board.columns.map((column) => ({
@@ -240,11 +262,17 @@ export class WorkBoardsService {
       orderBy: { position: 'desc' },
       select: { position: true },
     });
+    const commercial = request.commercial
+      ? parseWorkCommercialSettings(request.commercial)
+      : null;
     const board = await this.prisma.workBoard.create({
       data: {
         spaceId,
         name: requireText(request.name, 'Название доски', WORK_BOARD_NAME_MAX),
         position: (last?.position ?? 0) + WORK_POSITION_STEP,
+        ...(commercial
+          ? { ...commercial, kind: 'commercial', leadId: userId }
+          : {}),
       },
     });
     return this.board(board.id, userId);
@@ -255,8 +283,27 @@ export class WorkBoardsService {
     userId: string,
     request: UpdateWorkBoardRequest,
   ): Promise<WorkBoardDto> {
-    const spaceId = await this.spaceOfBoard(boardId);
-    assertWorkAccess(await this.spaces.roleOf(spaceId, userId), 'manageBoard');
+    const current = await this.prisma.workBoard.findUnique({
+      where: { id: boardId },
+      select: { spaceId: true, leadId: true, kind: true },
+    });
+    if (!current) throw new NotFoundException('Доска не найдена');
+    const role = await this.spaces.roleOf(current.spaceId, userId);
+    // Настройки оплаты и ведущего меняет ведущий доски, даже не будучи
+    // администратором среды; название и прочее — как раньше, администрация.
+    const onlyMoney =
+      request.name === undefined &&
+      (request.commercial !== undefined || request.leadId !== undefined);
+    if (onlyMoney) {
+      assertWorkAccess(role, 'view');
+      if (!canManageWorkFinance(role, current.leadId === userId)) {
+        assertWorkAccess(role, 'manageBoard');
+      }
+    } else {
+      assertWorkAccess(role, 'manageBoard');
+    }
+
+    await this.applyCommercial(boardId, current, userId, request);
 
     if (request.name !== undefined) {
       await this.prisma.workBoard.update({
@@ -271,6 +318,39 @@ export class WorkBoardsService {
       });
     }
     return this.board(boardId, userId);
+  }
+
+  /**
+   * Настройки оплаты (VED-458): объект делает доску коммерческой, `null` —
+   * обычной. Ведущий назначается из участников среды; у новой коммерческой
+   * доски без ведущего им становится тот, кто её переключил.
+   */
+  private async applyCommercial(
+    boardId: string,
+    current: { spaceId: string; leadId: string | null; kind: string },
+    userId: string,
+    request: UpdateWorkBoardRequest,
+  ): Promise<void> {
+    const data: Prisma.WorkBoardUpdateInput = {};
+    if (request.commercial === null) {
+      data.kind = 'regular';
+    } else if (request.commercial !== undefined) {
+      Object.assign(data, parseWorkCommercialSettings(request.commercial));
+      data.kind = 'commercial';
+      if (!current.leadId && request.leadId === undefined) {
+        data.lead = { connect: { id: userId } };
+      }
+    }
+    if (request.leadId !== undefined) {
+      const member = await this.spaces.roleOf(current.spaceId, request.leadId);
+      if (!member) {
+        throw new BadRequestException('Ведущий: нужен участник среды');
+      }
+      data.lead = { connect: { id: request.leadId } };
+    }
+    if (Object.keys(data).length > 0) {
+      await this.prisma.workBoard.update({ where: { id: boardId }, data });
+    }
   }
 
   async removeBoard(boardId: string, userId: string): Promise<void> {
@@ -473,4 +553,38 @@ export class WorkBoardsService {
     );
     await this.prisma.workLabel.delete({ where: { id: labelId } });
   }
+}
+
+/** Настройки оплаты наружу: ставки и бюджет — только тем, кто видит деньги. */
+function toCommercialDto(
+  board: {
+    clientName: string;
+    currency: string;
+    pricingModel: WorkBoardCommercialDto['pricingModel'];
+    dailyNormMinutes: number;
+    overtimeMode: WorkBoardCommercialDto['overtimeMode'];
+    timezone: string;
+    rateMinor: number;
+    overtimeRateMinor: number;
+    budgetMinor: number;
+    lead: Parameters<typeof toWorkPersonRef>[0] | null;
+  },
+  canSeeFinance: boolean,
+): WorkBoardCommercialDto {
+  return {
+    clientName: board.clientName,
+    currency: board.currency as WorkCurrency,
+    pricingModel: board.pricingModel,
+    dailyNormMinutes: board.dailyNormMinutes,
+    overtimeMode: board.overtimeMode,
+    timezone: board.timezone,
+    lead: board.lead ? toWorkPersonRef(board.lead) : null,
+    rates: canSeeFinance
+      ? {
+          rateMinor: board.rateMinor,
+          overtimeRateMinor: board.overtimeRateMinor,
+          budgetMinor: board.budgetMinor,
+        }
+      : null,
+  };
 }
