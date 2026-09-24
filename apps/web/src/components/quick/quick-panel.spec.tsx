@@ -195,8 +195,6 @@ describe("QuickPanel", () => {
       "search",
       "donate",
       "invite",
-      // VED-402: «Меню» доехало до старой записи сразу за закреплёнными.
-      "menu",
       "aphorism",
       "calendar",
       "postcard",
@@ -610,36 +608,36 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
     ).toBeInTheDocument();
   });
 
-  it("плитка «Меню» закрывает панель и просит шапку открыть меню", async () => {
+  /* VED-434: «добавь туда ещё одну кнопку — Меню и убери её из горячих
+     клавиш». Меню — кнопка в заголовке панели, плиткой его нет. */
+  it("«Меню» в заголовке панели закрывает панель и просит шапку открыть меню", async () => {
     const onOpenMenu = vi.fn();
     const user = renderPanel({ onOpenMenu });
     const star = screen.getByRole("button", { name: "Горячие кнопки" });
     await user.click(star);
 
-    // В первом ряду, сразу за тремя закреплёнными.
     const dialog = screen.getByRole("dialog", { name: "Горячие кнопки" });
     const tiles = within(dialog).getAllByRole("listitem");
-    expect(tiles[3]).toHaveTextContent("Меню");
+    expect(tiles.some((tile) => tile.textContent?.includes("Меню"))).toBe(false);
 
     await user.click(within(dialog).getByRole("button", { name: "Меню" }));
     expect(onOpenMenu).toHaveBeenCalledWith(star);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("«Меню» не выключается, но переставляется", async () => {
+  it("в настройке панели «Меню» нет, а старая запись его теряет", async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      '{"v":7,"ids":["search","donate","invite","menu","info"]}',
+    );
     const user = renderPanel({ onOpenMenu: vi.fn() });
     await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
 
-    const menu = screen.getByRole("switch", { name: /Меню/ });
-    expect(menu).toHaveAttribute("aria-disabled", "true");
-    expect(menu).toHaveTextContent("Всегда в панели");
-    await user.click(menu);
-    expect(menu).toHaveAttribute("aria-checked", "true");
-
-    await user.click(screen.getByRole("button", { name: "Ниже: Меню" }));
+    expect(screen.queryByRole("switch", { name: /^Меню/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Выше: Что нужно знать" }));
     const ids = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids;
-    expect(ids.slice(0, 5)).toEqual(["search", "donate", "invite", "window", "menu"]);
+    expect(ids).not.toContain("menu");
   });
 });
 
