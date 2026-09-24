@@ -69,7 +69,7 @@ const workUserSelect = {
   isAgent: true,
 } satisfies Prisma.UserSelect;
 
-const boardRulesSelect = {
+export const boardRulesSelect = {
   id: true,
   spaceId: true,
   kind: true,
@@ -84,11 +84,11 @@ const boardRulesSelect = {
   timezone: true,
 } satisfies Prisma.WorkBoardSelect;
 
-type BoardRulesRow = Prisma.WorkBoardGetPayload<{
+export type BoardRulesRow = Prisma.WorkBoardGetPayload<{
   select: typeof boardRulesSelect;
 }>;
 
-function rulesOf(board: BoardRulesRow): WorkFinanceRules {
+export function rulesOf(board: BoardRulesRow): WorkFinanceRules {
   return {
     pricingModel: board.pricingModel,
     rateMinor: board.rateMinor,
@@ -100,7 +100,11 @@ function rulesOf(board: BoardRulesRow): WorkFinanceRules {
 }
 
 /** Идущий таймер считается до «сейчас», но не дольше суток. */
-function spanEnd(startedAt: Date, endedAt: Date | null, now: Date): Date {
+export function spanEnd(
+  startedAt: Date,
+  endedAt: Date | null,
+  now: Date,
+): Date {
   if (endedAt) return endedAt;
   const cap = startedAt.getTime() + WORK_TIME_ENTRY_MAX_MINUTES * MINUTE_MS;
   return new Date(Math.min(now.getTime(), cap));
@@ -161,7 +165,7 @@ export class WorkFinanceService {
    * Одобренные запросы доски, чей период ещё не кончился к `fromDay`, —
    * разрешение сверх нормы по дням и людям.
    */
-  private async allowanceFor(
+  async allowanceFor(
     boardId: string,
     fromDay: string,
     userIds?: string[],
@@ -183,7 +187,7 @@ export class WorkFinanceService {
     return workAllowanceFrom(approved);
   }
 
-  private async contextOfBoard(
+  async contextOfBoard(
     board: BoardRulesRow | null,
     userId: string,
   ): Promise<FinanceContext> {
@@ -227,7 +231,7 @@ export class WorkFinanceService {
    * Норма и сверх нормы для набора записей: соседние записи тех же людей на
    * всей доске тоже нужны — норма общая на день, а не на задачу.
    */
-  private async splitsFor(
+  async splitsFor(
     board: BoardRulesRow,
     spans: WorkTimeSpan[],
     now: Date,
@@ -323,6 +327,7 @@ export class WorkFinanceService {
         note: row.note,
         amountMinor: finance || mine ? amount : null,
         mine,
+        locked: row.payoutPeriodId !== null,
       };
       if (mine && !row.endedAt) running = dto;
       return dto;
@@ -355,6 +360,7 @@ export class WorkFinanceService {
             kind: item.kind,
             title: item.title,
             amountMinor: item.amountMinor,
+            locked: item.payoutPeriodId !== null,
           }))
         : [],
       totals: {
@@ -496,9 +502,14 @@ export class WorkFinanceService {
   ): Promise<WorkTaskFinanceDto> {
     const entry = await this.prisma.workTimeEntry.findUnique({
       where: { id: entryId },
-      select: { taskId: true, userId: true },
+      select: { taskId: true, userId: true, payoutPeriodId: true },
     });
     if (!entry) throw new NotFoundException('Запись времени не найдена');
+    if (entry.payoutPeriodId) {
+      throw new BadRequestException(
+        'Запись уже в подбитом периоде выплат — удалить её нельзя',
+      );
+    }
     const context = await this.taskContext(entry.taskId, userId);
     assertWorkAccess(context.role, 'editTask');
     if (entry.userId !== userId) this.assertFinance(context);
@@ -535,9 +546,14 @@ export class WorkFinanceService {
   ): Promise<WorkTaskFinanceDto> {
     const item = await this.prisma.workTaskLineItem.findUnique({
       where: { id: itemId },
-      select: { taskId: true },
+      select: { taskId: true, payoutPeriodId: true },
     });
     if (!item) throw new NotFoundException('Строка сметы не найдена');
+    if (item.payoutPeriodId) {
+      throw new BadRequestException(
+        'Строка уже в подбитом периоде выплат — удалить её нельзя',
+      );
+    }
     const context = await this.taskContext(item.taskId, userId);
     this.assertFinance(context);
     await this.prisma.workTaskLineItem.delete({ where: { id: itemId } });

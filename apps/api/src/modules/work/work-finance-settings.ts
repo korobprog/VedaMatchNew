@@ -14,6 +14,7 @@ import {
   type WorkLineItemKind,
   type WorkMemberRole,
   type WorkOvertimeMode,
+  type WorkPayoutPeriodKind,
   type WorkPricingModel,
 } from '@vedamatch/shared';
 
@@ -33,6 +34,8 @@ export interface WorkCommercialSettingsData {
   overtimeMode?: WorkOvertimeMode;
   budgetMinor?: number;
   timezone?: string;
+  payoutPeriod?: WorkPayoutPeriodKind;
+  payoutDay?: number;
 }
 
 /** Сумма в копейках: целое от 0 до потолка. */
@@ -141,6 +144,20 @@ export function parseWorkCommercialSettings(
       'Норма в день',
       24 * 60,
     );
+  }
+  if (input.payoutPeriod !== undefined) {
+    data.payoutPeriod = pick(
+      input.payoutPeriod,
+      ['weekly', 'biweekly', 'monthly'] as const,
+      'Период выплат',
+    );
+  }
+  if (input.payoutDay !== undefined) {
+    const day = typeof input.payoutDay === 'number' ? input.payoutDay : NaN;
+    if (!Number.isInteger(day) || day < 1 || day > 28) {
+      throw new BadRequestException('День подбития: от 1 до 28');
+    }
+    data.payoutDay = day;
   }
   if (input.timezone !== undefined) {
     const zone =
@@ -282,4 +299,20 @@ export function parseWorkOvertimeRequest(
     );
   }
   return { fromDay, toDay, minutesPerDay, reason };
+}
+
+/**
+ * День подбития под период: у недели — день недели 1…7, у месяца — число
+ * 1…28. Проверяется по итоговым значениям, потому что правка может прислать
+ * только одно из двух полей.
+ */
+export function assertWorkPayoutDay(
+  period: WorkPayoutPeriodKind,
+  payoutDay: number,
+): void {
+  if (period !== 'monthly' && payoutDay > 7) {
+    throw new BadRequestException(
+      'День подбития: для недели — день недели от 1 (пн) до 7 (вс)',
+    );
+  }
 }

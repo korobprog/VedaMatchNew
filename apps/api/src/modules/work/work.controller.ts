@@ -28,6 +28,7 @@ import type {
   CreateWorkTaskRequest,
   CreateWorkTimeEntryRequest,
   DecideWorkOvertimeRequest,
+  MarkWorkPayoutRequest,
   MoveWorkTaskRequest,
   SetWorkTaskViewedRequest,
   UpdateWorkBoardRequest,
@@ -47,6 +48,7 @@ import {
 import { WorkBoardsService } from './work-boards.service';
 import { WorkContactsService } from './work-contacts.service';
 import { WorkFinanceService } from './work-finance.service';
+import { WorkPayoutsService } from './work-payouts.service';
 import { WorkInvitesService } from './work-invites.service';
 import { WorkSpacesService } from './work-spaces.service';
 import { WorkTasksService } from './work-tasks.service';
@@ -503,7 +505,10 @@ export class WorkTasksController {
 @Controller('work')
 @UseGuards(AuthGuard)
 export class WorkFinanceController {
-  constructor(private readonly finance: WorkFinanceService) {}
+  constructor(
+    private readonly finance: WorkFinanceService,
+    private readonly payoutsService: WorkPayoutsService,
+  ) {}
 
   @Get('boards/:id/finance')
   boardFinance(
@@ -601,6 +606,32 @@ export class WorkFinanceController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.finance.cancelOvertime(id, user.sub);
+  }
+
+  /** Календарь выплат (VED-460): идущий период и подбитые. */
+  @Get('boards/:id/payouts')
+  payouts(@Param('id') id: string, @CurrentUser() user: AccessTokenPayload) {
+    return this.payoutsService.payouts(id, user.sub);
+  }
+
+  /** Подбить идущий период сейчас, не дожидаясь дня подбития. */
+  @Post('boards/:id/payouts/close')
+  @HttpCode(200)
+  closePayout(
+    @Param('id') id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.payoutsService.closeNow(id, user.sub);
+  }
+
+  @Post('payouts/:id/mark')
+  @HttpCode(200)
+  markPayout(
+    @Param('id') id: string,
+    @Body() body: MarkWorkPayoutRequest,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.payoutsService.mark(id, user.sub, body ?? ({} as never));
   }
 
   @Delete('line-items/:id')

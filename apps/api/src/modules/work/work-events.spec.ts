@@ -14,6 +14,8 @@ describe('WORK_EVENTS', () => {
       'work.invite.received',
       'work.overtime.requested',
       'work.overtime.decided',
+      'work.payout.closed',
+      'work.payout.paid',
     ]);
   });
 });

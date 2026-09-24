@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Clock, Coins, Loader2, Settings2, X } from "lucide-react";
+import { CalendarClock, Clock, Coins, Loader2, Settings2, X } from "lucide-react";
 import type {
   WorkBoardCommercialDto,
   WorkBoardDto,
@@ -16,6 +16,7 @@ import {
   updateWorkBoard,
 } from "@/lib/work-api";
 import { OvertimeRequestList } from "./overtime-requests";
+import { WorkPayoutsDialog } from "./payouts-dialog";
 import {
   BoardKindChoice,
   CommercialSettingsFields,
@@ -45,6 +46,8 @@ function draftFrom(commercial: WorkBoardCommercialDto | null): CommercialDraft {
     overtimeRate: moneyToInput(commercial.rates?.overtimeRateMinor ?? 0),
     overtimeMode: commercial.overtimeMode,
     budget: moneyToInput(commercial.rates?.budgetMinor ?? 0),
+    payoutPeriod: commercial.payoutPeriod,
+    payoutDay: String(commercial.payoutDay),
   };
 }
 
@@ -69,6 +72,13 @@ export function WorkCommercialBar({
   const [finance, setFinance] = useState<WorkBoardFinanceDto | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
+  // Из уведомления о подбитии ссылка ведёт с `?payouts=1` — окно выплат
+  // открывается сразу, а не ищется глазами.
+  const [payoutsOpen, setPayoutsOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("payouts"),
+  );
   // Решили запрос в панели — шапке пора перечитать счётчик и израсходованное.
   const [financeVersion, setFinanceVersion] = useState(0);
   const commercial = board.commercial;
@@ -187,6 +197,21 @@ export function WorkCommercialBar({
           <Clock aria-hidden className="size-4" />
           Запросы
         </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setPayoutsOpen(true)}
+        className="flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-text-1 hover:text-text-0"
+      >
+        <CalendarClock aria-hidden className="size-4" />
+        Выплаты
+      </button>
+      {payoutsOpen && (
+        <WorkPayoutsDialog
+          boardId={board.id}
+          onClose={() => setPayoutsOpen(false)}
+          onChanged={() => setFinanceVersion((value) => value + 1)}
+        />
       )}
       {requestsOpen && (
         <OvertimeRequestsDialog
