@@ -9,6 +9,11 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_TELEGRAM_BOT
 ENV NEXT_PUBLIC_TELEGRAM_BOT=$NEXT_PUBLIC_TELEGRAM_BOT
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
+# Заплатки зависимостей (`patchedDependencies` в pnpm-workspace.yaml). pnpm
+# проверяет наличие каждого файла заплатки при любой установке, даже если сам
+# пакет этому образу не нужен (expo-audio — только приложение), и без папки
+# падает с ENOENT на `pnpm install`.
+COPY patches patches
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 RUN pnpm install --frozen-lockfile
