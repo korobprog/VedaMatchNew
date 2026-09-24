@@ -11,8 +11,8 @@ describe('categoryLabel', () => {
   it('называет раздел так, как он называется в портале', () => {
     expect(categoryLabel('chat')).toBe('Общение');
     expect(categoryLabel('market')).toBe('Рынок');
-    // На проде сервис называется «Медиатека», а не «Музыка» из старого сида.
-    expect(categoryLabel('music')).toBe('Медиатека');
+    // Сервис снова «Музыка» (VED-426), как в каталоге сервисов.
+    expect(categoryLabel('music')).toBe('Музыка');
     expect(categoryLabel('announcements')).toBe('От администрации');
   });
 

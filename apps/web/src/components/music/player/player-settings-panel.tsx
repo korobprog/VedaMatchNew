@@ -138,7 +138,9 @@ export function MusicPlayerSettingsPanel({
       // браузер не рисует — сквозь панель читался заголовок страницы.
       // Высота — от места над полосой (`--vm-player-space` из globals.css)
       // за вычетом шапки портала: на телефоне 70% экрана уходили под шапку.
-      className="pointer-events-auto absolute bottom-full right-0 z-10 mb-2 flex max-h-[min(34rem,calc(100dvh-var(--vm-player-space,0px)-5.5rem))] w-[min(23rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-glass-brd bg-bg-0 shadow-[0_-2px_24px_var(--vm-player-shadow)]"
+      // На телефоне отступ справа: полоса там во всю ширину экрана
+      // (VED-411), и панель у её края прилипала к краю экрана.
+      className="pointer-events-auto absolute bottom-full right-0 z-10 mb-2 flex max-sm:right-3 max-h-[min(34rem,calc(100dvh-var(--vm-player-space,0px)-5.5rem))] w-[min(23rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-glass-brd bg-bg-0 shadow-[0_-2px_24px_var(--vm-player-shadow)]"
     >
       <div className="flex items-center gap-2 px-3 pt-3">
         <h2 id={titleId} className="font-display text-sm font-bold text-text-0">

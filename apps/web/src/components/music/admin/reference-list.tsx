@@ -393,10 +393,10 @@ function Row({
               disabled={pending}
               aria-label={`«${row.primary}»: ${
                 row.isAudiobook
-                  ? "чтец, записи вне Медиатеки"
-                  : "записи в Медиатеке"
+                  ? "чтец, записи вне каталога Музыки"
+                  : "записи в каталоге Музыки"
               }. Нажмите, чтобы ${
-                row.isAudiobook ? "вернуть в Медиатеку" : "отметить чтецом"
+                row.isAudiobook ? "вернуть в каталог Музыки" : "отметить чтецом"
               }`}
               className={`shrink-0 self-center rounded-full border px-2 text-[11px] transition-colors disabled:opacity-50 ${
                 row.isAudiobook

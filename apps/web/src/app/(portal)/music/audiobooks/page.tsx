@@ -48,7 +48,7 @@ export default async function MusicAudiobooksPage() {
           href="/music"
           className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
         >
-          <span aria-hidden="true">←</span> Медиатека
+          <span aria-hidden="true">←</span> Музыка
         </Link>
 
         <header className="mt-2 flex flex-col gap-1.5">
