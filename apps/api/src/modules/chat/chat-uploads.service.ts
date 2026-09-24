@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
@@ -9,7 +10,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import type { ChatUploadResult } from '@vedamatch/shared';
+import type { ChatAttachmentInput, ChatUploadResult } from '@vedamatch/shared';
 import { attachmentKindFor } from './chat-upload-rules';
 
 /**
@@ -142,6 +143,48 @@ export class ChatUploadsService {
     };
   }
 
+  /**
+   * Копия публичной картинки портала в папку беседы — для постов
+   * официального канала (картинка новости из админки).
+   *
+   * Копия, а не ссылка на чужой объект: вложение переписки обязано лежать в
+   * `chat/<беседа>/` (`assertStorageUrl`), иначе пост нельзя переслать, а
+   * чистка беседы унесла бы файл новости. Копирует само хранилище, без
+   * скачивания. Адрес не из нашего бакета — `null`: чужой сервер узнавал бы
+   * IP каждого, кто открыл канал.
+   */
+  async copyImageIntoConversation(
+    conversationId: string,
+    image: { url: string; width: number; height: number },
+  ): Promise<ChatAttachmentInput | null> {
+    const prefix = this.storagePrefix;
+    if (!this.s3Client || !this.bucket || !this.publicUrl || !prefix) return null;
+    const sourceKey = storageKeyOf(image.url, prefix);
+    if (!sourceKey) return null;
+    const extension = sourceKey.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? '.webp';
+    const key = `chat/${conversationId}/${randomUUID()}${extension.toLowerCase()}`;
+    await this.s3Client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        CopySource: `${this.bucket}/${encodeURI(sourceKey)}`,
+        // Та же политика, что у загрузок переписки: без публичного ACL и
+        // без кеша посредников.
+        MetadataDirective: 'REPLACE',
+        ContentType: imageMimeOf(extension),
+        CacheControl: 'private, max-age=0, no-store',
+      }),
+    );
+    return {
+      kind: 'image',
+      key,
+      url: this.urlFor(key),
+      mimeType: imageMimeOf(extension),
+      ...(image.width > 0 ? { width: image.width } : {}),
+      ...(image.height > 0 ? { height: image.height } : {}),
+    };
+  }
+
   private async storeImage(
     conversationId: string,
     file: UploadedChatFile,
@@ -201,5 +244,34 @@ export class ChatUploadsService {
     this.logger.warn(
       `S3 не настроен — вложение в беседу ${conversationId} не сохранено`,
     );
+  }
+}
+
+/**
+ * Ключ объекта нашего бакета по публичному адресу; `null` — адрес чужой или
+ * пустой. Ключ папки переписки не принимается: копировать чужую переписку
+ * в канал этим путём нельзя, даже если адрес каким-то образом туда ведёт.
+ */
+export function storageKeyOf(url: string, prefix: string): string | null {
+  if (!url.startsWith(prefix)) return null;
+  let key: string;
+  try {
+    key = decodeURIComponent(url.slice(prefix.length).split(/[?#]/, 1)[0]);
+  } catch {
+    return null;
+  }
+  if (!key || key.includes('..') || key.startsWith('chat/')) return null;
+  return key;
+}
+
+function imageMimeOf(extension: string): string {
+  switch (extension.toLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    default:
+      return 'image/webp';
   }
 }

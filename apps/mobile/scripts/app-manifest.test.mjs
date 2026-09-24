@@ -9,6 +9,8 @@ import {
   buildAppManifest,
   DEFAULT_MIN_ANDROID,
   manifestObjectKey,
+  MAX_NOTES_LENGTH,
+  normalizeReleaseNotes,
   objectKeyPrefix,
 } from './app-manifest.mjs';
 
@@ -73,4 +75,27 @@ test('buildAppManifest: отказывает без url и commit', () => {
 
 test('buildAppManifest: отказывает на невалидной builtAt', () => {
   assert.throws(() => buildAppManifest({ ...VALID, builtAt: 'вчера' }));
+});
+
+test('buildAppManifest: без заметки поле notes не пишется — манифест как раньше', () => {
+  assert.equal('notes' in buildAppManifest(VALID), false);
+  assert.equal('notes' in buildAppManifest({ ...VALID, notes: '   ' }), false);
+});
+
+test('buildAppManifest: заметка к выпуску едет в манифест для поста в канале', () => {
+  assert.equal(
+    buildAppManifest({ ...VALID, notes: 'Голосовые\\nТёмная тема' }).notes,
+    'Голосовые\nТёмная тема',
+  );
+});
+
+test('normalizeReleaseNotes: \\n из однострочного поля — перенос, края строк подрезаны', () => {
+  assert.equal(normalizeReleaseNotes('  один \\n  два  '), 'один\nдва');
+  assert.equal(normalizeReleaseNotes(undefined), null);
+  assert.equal(normalizeReleaseNotes(''), null);
+});
+
+test('normalizeReleaseNotes: слишком длинная заметка — ошибка CI, а не обрезок в канале', () => {
+  assert.throws(() => normalizeReleaseNotes('x'.repeat(MAX_NOTES_LENGTH + 1)));
+  assert.equal(normalizeReleaseNotes('x'.repeat(MAX_NOTES_LENGTH)).length, MAX_NOTES_LENGTH);
 });

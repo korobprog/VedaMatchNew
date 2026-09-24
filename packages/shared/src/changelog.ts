@@ -213,3 +213,41 @@ export interface CreateRoadmapItemRequest {
 }
 
 export type UpdateRoadmapItemRequest = Partial<CreateRoadmapItemRequest>;
+
+/**
+ * Событие шины: новость из админки опубликована или поправлена, пока она
+ * опубликована. Самодостаточно — подписчик («Общение», официальный канал)
+ * не читает таблицы changelog: текст, картинки, путь и срок показа едут здесь.
+ *
+ * Издатель сообщает факт, формулировку поста собирает подписчик.
+ */
+export interface ChangelogAnnouncementPublishedEvent {
+  announcementId: string;
+  /**
+   * `true` — новость только что вышла: создана опубликованной или снята из
+   * черновика. `false` — правка уже опубликованной. Подписчик заводит пост
+   * только по первой: иначе правка опечатки в новости месячной давности
+   * вынесла бы её в канал как свежую.
+   */
+  firstPublication: boolean;
+  title: string;
+  body: string;
+  /** Публичные картинки новости в порядке показа. */
+  images: { url: string; width: number; height: number }[];
+  /** Где новость читать на портале: путь, а не адрес — домен знает подписчик. */
+  path: string;
+  /** Отложенная публикация: до этого момента новость не видна (ISO). */
+  publishAt: string | null;
+  /** Срок показа: после него новость снята с главной (ISO). */
+  expiresAt: string | null;
+  /** Кто опубликовал; `null` — неизвестно. */
+  actorId: string | null;
+}
+
+/**
+ * Событие шины: новость больше не видна никому — удалена или возвращена в
+ * черновик. Подписчик снимает то, что успел по ней сделать.
+ */
+export interface ChangelogAnnouncementWithdrawnEvent {
+  announcementId: string;
+}

@@ -16,7 +16,45 @@ describe('normalizeDeviceRequest', () => {
       platform: 'android',
       appVariant: 'ru-site',
       nativeCalls: false,
+      appVersionCode: null,
     });
+  });
+
+  it('принимает versionCode сборки — по нему зовут обновиться', () => {
+    expect(
+      normalizeDeviceRequest({
+        token: 't',
+        provider: 'fcm',
+        platform: 'android',
+        appVariant: 'ru-site',
+        appVersionCode: 1031,
+      }).appVersionCode,
+    ).toBe(1031);
+  });
+
+  it.each([0, -5, 1.5, '1031', 2_147_483_648])(
+    'отвергает versionCode %p: в колонку INTEGER едет только целое больше нуля',
+    (appVersionCode) => {
+      expect(() =>
+        normalizeDeviceRequest({
+          token: 't',
+          provider: 'fcm',
+          platform: 'android',
+          appVersionCode,
+        }),
+      ).toThrow(BadRequestException);
+    },
+  );
+
+  it('null в appVersionCode — то же, что не прислано', () => {
+    expect(
+      normalizeDeviceRequest({
+        token: 't',
+        provider: 'fcm',
+        platform: 'android',
+        appVersionCode: null,
+      }).appVersionCode,
+    ).toBeNull();
   });
 
   it('сборка необязательна', () => {
