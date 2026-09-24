@@ -10,6 +10,7 @@ import { MusicMarqueeText } from "@/components/music/marquee-text";
 import { MusicPositionSlider } from "@/components/music/player/position-slider";
 import { MusicPlayingBars } from "./playing-bars";
 import { useMusicPlayer } from "./player-provider";
+import { useMusicRadio } from "../radio/radio-provider";
 import { MusicPlayGlyph, playButtonLabel } from "./play-glyph";
 import { MusicSleepCountdown } from "./sleep-countdown";
 import { MusicQueuePanel } from "./queue-panel";
@@ -303,9 +304,11 @@ export function MiniPlayer() {
      Верх берём от обёртки, а не от самой полосы: полосу двигает анимация
      выката, и замер посреди неё дал бы лишнее. */
   const onHome = pathname === "/";
+  // Играет радио (VED-437) — на месте полосы стоит полоса эфира.
+  const radioOn = Boolean(useMusicRadio()?.active);
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
-    if (!wrap || !hasTrack || onHome) return;
+    if (!wrap || !hasTrack || onHome || radioOn) return;
     const root = document.documentElement;
     const measure = () => {
       const bar = barRef.current;
@@ -327,7 +330,7 @@ export function MiniPlayer() {
       root.style.removeProperty("--vm-player-measured");
       delete wrap.dataset.measured;
     };
-  }, [view, lifted, hasTrack, onHome]);
+  }, [view, lifted, hasTrack, onHome, radioOn]);
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
@@ -338,6 +341,7 @@ export function MiniPlayer() {
   // корневом layout один раз на всё приложение, и там про страницы ничего
   // не известно.
   if (onHome) return null;
+  if (radioOn) return null;
 
   const {
     current,

@@ -421,6 +421,8 @@ model User {
   musicPlaylists                     MusicPlaylist[]               @relation("MusicPlaylistsOwned")
   musicFavorites                     MusicFavorite[]               @relation("MusicFavorites")
   musicPlayStates                    MusicPlayState[]              @relation("MusicPlayStates")
+  musicRadioInserts                  MusicRadioInsert[]            @relation("MusicRadioInsertAuthor")
+  musicRadioListener                 MusicRadioListener?
   musicPlaybackQueue                 MusicPlaybackQueue?           @relation("MusicPlaybackQueue")
   musicNowPlaying                    MusicNowPlaying?              @relation("MusicNowPlaying")
   musicListens                       MusicListen[]                 @relation("MusicListens")
@@ -5051,6 +5053,7 @@ model MusicTrack {
   ingestDuplicates MusicIngestItem[]      @relation("MusicIngestDuplicate")
   /// Глава аудиокниги (VED-297). Запись — глава не больше чем одной книги.
   audiobookChapter MusicAudiobookChapter?
+  radioSlots       MusicRadioSlot[]
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([artistId])
@@ -7618,4 +7621,62 @@ model ChatStatusView {
 
   @@id([statusId, viewerId])
   @@index([viewerId])
+}
+
+/// «Радио VM» (VED-437): общий эфир Медиатеки. Эфир — расписание слотов,
+/// одно на всех: слушатель, включивший радио, попадает в тот же момент
+/// записи, что и остальные. Записи идут в случайном порядке без повторов,
+/// пока не прозвучит весь каталог (`cycle`), а голосовые вставки редакции
+/// встают в эфир в свою минуту, обрывая запись.
+///
+/// Расписание достраивается лениво, на запросе, на несколько минут вперёд:
+/// эфир без слушателей ничего не стоит.
+model MusicRadioSlot {
+  id         String            @id @default(uuid())
+  startsAt   DateTime
+  /// Длительность в миллисекундах: запись, оборванная вставкой, короче
+  /// своего файла.
+  durationMs Int
+  /// Ровно одно из двух: запись каталога или голосовая вставка.
+  trackId    String?
+  track      MusicTrack?       @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  insertId   String?
+  insert     MusicRadioInsert? @relation(fields: [insertId], references: [id], onDelete: Cascade)
+  /// Номер круга без повторов у записи; у вставки `null`.
+  cycle      Int?
+  createdAt  DateTime          @default(now())
+
+  @@index([startsAt])
+  @@index([cycle])
+  @@index([insertId])
+}
+
+/// Голосовая вставка в эфир от администратора Музыки: сразу или в
+/// назначенную минуту. Файл — в бакете Музыки, закрытым.
+model MusicRadioInsert {
+  id              String   @id @default(uuid())
+  title           String
+  storageKey      String   @unique
+  mime            String
+  sizeBytes       Int
+  durationSeconds Int
+  /// Когда выйти в эфир. «Сейчас» — момент создания.
+  scheduledAt     DateTime
+  createdById     String?
+  createdBy       User?    @relation("MusicRadioInsertAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+
+  slots MusicRadioSlot[]
+
+  @@index([scheduledAt])
+}
+
+/// Кто слушает радио прямо сейчас: плеер отмечается раз в 20 секунд, а
+/// слушателем считается отметившийся за последнюю минуту.
+model MusicRadioListener {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeenAt DateTime @default(now())
+
+  @@index([lastSeenAt])
 }

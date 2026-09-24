@@ -1330,3 +1330,70 @@ export interface PublishMusicIngestBatchRequest {
   /** Непусто — из партии собирается системная подборка с этим названием. */
   playlistTitle?: string;
 }
+
+// ===== Радио VM (VED-437) =====
+
+/** Как часто плеер радио отмечается, что его слушают, мс. */
+export const MUSIC_RADIO_HEARTBEAT_MS = 20_000;
+/** Сколько после последней отметки человек ещё считается слушателем, мс. */
+export const MUSIC_RADIO_LISTENER_TTL_MS = 60_000;
+/** Голосовая вставка: предельный размер файла. */
+export const MUSIC_RADIO_INSERT_MAX_BYTES = 20 * 1024 * 1024;
+/** Голосовая вставка: предельная длительность, секунды. */
+export const MUSIC_RADIO_INSERT_MAX_SECONDS = 15 * 60;
+/** Насколько вперёд можно отложить вставку, дни. */
+export const MUSIC_RADIO_INSERT_MAX_DAYS_AHEAD = 30;
+/**
+ * Форматы вставки: помимо форматов каталога — то, что пишет браузер с
+ * микрофона (`MediaRecorder`: WebM/Opus в Chrome, MP4 в Safari), и OGG.
+ */
+export const MUSIC_RADIO_INSERT_MIME_TYPES = [
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/webm",
+  "audio/wav",
+] as const;
+
+/** Что звучит в эфире: запись каталога или голосовая вставка редакции. */
+export interface MusicRadioItemDto {
+  slotId: string;
+  kind: "track" | "insert";
+  /** Начало в эфире, ISO. */
+  startsAt: string;
+  /** Сколько звучит в эфире, мс; вставка может оборвать запись раньше. */
+  durationMs: number;
+  /** Запись каталога; у вставки `null`. */
+  track: MusicTrackDto | null;
+  /** Название вставки; у записи `null`. */
+  insertTitle: string | null;
+  /** Подписанная ссылка на звук; `null` — хранилище недоступно. */
+  streamUrl: string | null;
+}
+
+export interface MusicRadioStateDto {
+  /** Время сервера, ISO: по нему плеер считает, с какой секунды входить. */
+  serverTime: string;
+  /** `null` — в каталоге нечего играть. */
+  current: MusicRadioItemDto | null;
+  next: MusicRadioItemDto | null;
+  /** Сколько человек слушает радио прямо сейчас. */
+  listeners: number;
+}
+
+/** Состояние вставки для редакции. */
+export type MusicRadioInsertStatus = "scheduled" | "on_air" | "aired";
+
+export interface MusicRadioInsertDto {
+  id: string;
+  title: string;
+  durationSeconds: number;
+  scheduledAt: string;
+  status: MusicRadioInsertStatus;
+  createdAt: string;
+  createdByName: string | null;
+}
+
+export interface MusicRadioInsertsDto {
+  inserts: MusicRadioInsertDto[];
+}

@@ -11,6 +11,8 @@ import { VpnNotice } from "@/components/vpn-notice";
 import { ServiceCatalogProvider } from "@/components/service-catalog-provider";
 import { MusicPlayerProvider } from "@/components/music/player/player-provider";
 import { MiniPlayer } from "@/components/music/player/mini-player";
+import { MusicRadioBar } from "@/components/music/radio/radio-bar";
+import { MusicRadioProvider } from "@/components/music/radio/radio-provider";
 import { PortalWindowsTracker } from "@/components/quick/portal-windows-tracker";
 import { getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
@@ -160,8 +162,13 @@ export default async function RootLayout({
                       историю, вело бы себя загадочно. Гостю окон нет:
                       переключать ему нечего. */}
                   <PortalWindowsTracker />
-                  {children}
-                  <MiniPlayer />
+                  {/* «Радио VM» (VED-437) — рядом с плеером и тоже на весь
+                      портал: эфир переживает переход между разделами. */}
+                  <MusicRadioProvider>
+                    {children}
+                    <MiniPlayer />
+                    <MusicRadioBar />
+                  </MusicRadioProvider>
                 </MusicPlayerProvider>
               ) : (
                 children
