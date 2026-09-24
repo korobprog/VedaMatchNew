@@ -5,6 +5,9 @@ import Link from "next/link";
 import type { ChatCallDto } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import { isAbort } from "@/lib/is-abort";
+import { ChatLocalTime } from "../chat-local-time";
+
+const dateOf = (iso: string) => new Date(iso).toLocaleDateString("ru-RU");
 
 /**
  * История звонков.
@@ -118,7 +121,7 @@ export function CallsHistoryView({ userId }: { userId: string }) {
                 {call.kind === "video" ? " · видео" : ""} ·{" "}
                 {STATUS_LABEL[call.status] ?? call.status}
                 {talk ? ` · ${talk}` : ""} ·{" "}
-                {new Date(call.createdAt).toLocaleDateString("ru-RU")}
+                <ChatLocalTime iso={call.createdAt} format={dateOf} />
               </span>
             </span>
             <Link

@@ -5,6 +5,9 @@ import type { ChatMessageDto, ChatThreadState } from "@vedamatch/shared";
 import { sendChatMessage, setChatReaction } from "@/lib/chat-client";
 import { ChatAvatar } from "./chat-avatar";
 import { ChatMessage } from "./chat-message";
+import { ChatLocalTime } from "./chat-local-time";
+
+const dateTimeOf = (iso: string) => new Date(iso).toLocaleString("ru-RU");
 
 /**
  * Обсуждение поста канала. Отдельная страница, а не лента под постом:
@@ -65,7 +68,7 @@ export function ChatThreadView({
               {initial.post.author.name}
             </span>
             <span className="font-mono text-[11px] text-text-2">
-              {new Date(initial.post.createdAt).toLocaleString("ru-RU")}
+              <ChatLocalTime iso={initial.post.createdAt} format={dateTimeOf} />
             </span>
           </span>
           {typeof initial.post.viewsCount === "number" && (

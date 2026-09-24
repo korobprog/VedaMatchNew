@@ -21,9 +21,12 @@ import type {
 import { CHAT_REACTION_EMOJIS } from "@vedamatch/shared";
 import { authorPalette } from "./chat-author-color";
 import { ChatEmojiPicker } from "./chat-emoji-picker";
-import { formatBytes, formatDuration } from "./chat-time";
+import { formatBytes, formatDuration, time } from "./chat-time";
 import { ChatVoicePlayer } from "./chat-voice-player";
 import { imageAspect } from "./image-frame";
+import { ChatLocalTime } from "./chat-local-time";
+
+const clockOf = (iso: string) => time(new Date(iso));
 
 /**
  * Сообщение в переписке — по макету канвы: имя автора первой строкой внутри
@@ -309,10 +312,7 @@ export function ChatMessage({
             <span className="text-[10px] text-text-2">отправляется…</span>
           ) : (
             <span className="font-mono text-[10px] text-text-2">
-              {new Date(message.createdAt).toLocaleTimeString("ru-RU", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              <ChatLocalTime iso={message.createdAt} format={clockOf} />
             </span>
           )}
           {mine && !deleted && !pending && (

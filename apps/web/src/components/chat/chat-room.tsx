@@ -47,6 +47,7 @@ import { formatChatDivider } from "./chat-time";
 import { isOnline, presenceLabel } from "./chat-presence";
 import { withPlural } from "./chat-plural";
 import { pickBubbleInk } from "./chat-contrast-ink";
+import { ChatLocalTime } from "./chat-local-time";
 
 /** Сколько «печатает…» держится без нового сигнала. */
 const TYPING_TTL_MS = 5000;
@@ -694,7 +695,10 @@ export function ChatRoom({
               )}
               {newDay && (
                 <span className="mx-auto rounded-lg border border-glass-brd bg-white/5 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-text-2">
-                  {formatChatDivider(message.createdAt)}
+                  <ChatLocalTime
+                    iso={message.createdAt}
+                    format={formatChatDivider}
+                  />
                 </span>
               )}
               <ChatMessage
