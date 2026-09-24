@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   LibraryLocale,
+  LineageGroup,
   LineageId,
   LineagePreference,
   LineageViewer,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { useDismissable } from "@/lib/use-dismissable";
 import { t } from "./i18n";
 import {
   activeLineageChoice,
   hrefWithoutLineage,
-  lineageFilterOptions,
+  lineageChoiceGroup,
+  lineageFilterMenu,
   preferenceForChoice,
   type LineageChoice,
 } from "./lineage-filter";
@@ -22,15 +26,15 @@ import {
 const API_URL = apiBase();
 
 /**
- * Кнопки-фильтры по духовной линии над рубриками Образования (VED-395).
+ * Фильтр по духовной линии в Образовании (VED-395, VED-449).
  *
- * Заменили выпадающий список «Как в профиле»: заказчик просил «клавиши» —
- * линии видны сразу, выбор в одно касание. Нажатие сохраняет настройку
- * Образования (как раньше список), поэтому выбранная линия держится и в
+ * Сначала это был ряд из одиннадцати кнопок (VED-395), но на телефоне он
+ * уезжал вбок и занимал строку над рубриками. Заказчик попросил одну кнопку
+ * «Фильтры» и внутри четыре позиции — «Всё», ИСККОН, «Гаудия-матх»,
+ * «Паривары»; матхи и паривары — внутри своих групп.
+ *
+ * Выбор сохраняет настройку Образования, поэтому линия держится и в
  * рубриках, и при следующем заходе, а не живёт в одном адресе.
- *
- * На телефоне ряд прокручивается вбок одной строкой — одиннадцать кнопок в
- * перенос заняли бы полэкрана над рубриками; с планшета — переносятся.
  */
 export function LibraryLineageFilter({
   locale,
@@ -50,7 +54,9 @@ export function LibraryLineageFilter({
   const [pendingChoice, setPendingChoice] = useState<LineageChoice | null>(null);
   const [failed, setFailed] = useState(false);
   const [isRefreshing, startTransition] = useTransition();
-  const rowRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const navigating = useRef(false);
 
   // Нажатая кнопка горит, пока не придёт новая выдача: иначе между ответом
@@ -64,20 +70,31 @@ export function LibraryLineageFilter({
 
   const current = pendingChoice ?? activeLineageChoice(applied);
   const busy = pendingChoice !== null || isRefreshing;
-  const options = lineageFilterOptions(t(locale, "lineage.all"));
+  const menu = lineageFilterMenu({
+    all: t(locale, "lineage.menuAll"),
+    groups: {
+      iskcon: t(locale, "lineage.group.iskcon"),
+      gaudiya_math: t(locale, "lineage.group.gaudiya_math"),
+      parivara: t(locale, "lineage.group.parivara"),
+    },
+  });
+  // Группа выбранной линии раскрыта сразу: видно, что именно выбрано.
+  const [expanded, setExpanded] = useState<LineageGroup | null>(() =>
+    lineageChoiceGroup(current),
+  );
 
-  // Нажатая кнопка может оказаться за правым краем прокручиваемого ряда —
-  // подвигаем ряд к ней, не трогая вертикальную прокрутку страницы.
-  useEffect(() => {
-    const row = rowRef.current;
-    const active = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (!row || !active || row.scrollWidth <= row.clientWidth) return;
-    row.scrollLeft =
-      active.offsetLeft - row.offsetLeft - (row.clientWidth - active.offsetWidth) / 2;
-  }, [applied]);
+  const close = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+  useDismissable(panelRef, close, open, triggerRef);
 
   async function choose(choice: LineageChoice) {
-    if (busy || choice === current) return;
+    if (busy || choice === current) {
+      setOpen(false);
+      return;
+    }
+    setOpen(false);
     setFailed(false);
     setPendingChoice(choice);
     const next = preferenceForChoice(viewer, choice);
@@ -104,35 +121,91 @@ export function LibraryLineageFilter({
     }
   }
 
+  const optionClass = (pressed: boolean) =>
+    `flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm transition-colors ${
+      pressed
+        ? "bg-magenta/10 font-semibold text-text-0"
+        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
+    }`;
+
   return (
-    <div className="mb-4">
-      <div
-        ref={rowRef}
-        role="group"
-        aria-label={t(locale, "lineage.filter")}
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={open}
         aria-busy={busy}
-        className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+        onClick={() => setOpen((value) => !value)}
+        className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-4 text-sm transition-colors ${
+          current === "all"
+            ? "border-glass-brd text-text-1 hover:text-text-0"
+            : "border-magenta text-text-0"
+        }`}
       >
-        {options.map((option) => {
-          const pressed = option.value === current;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={pressed}
-              title={option.title}
-              onClick={() => void choose(option.value)}
-              className={`min-h-11 shrink-0 whitespace-nowrap rounded-xl border px-4 text-sm transition-colors ${
-                pressed
-                  ? "border-magenta bg-magenta/10 font-semibold text-text-0"
-                  : "border-glass-brd bg-bg-0 text-text-1 hover:text-text-0"
-              }`}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
+        <SlidersHorizontal aria-hidden className="size-4" />
+        {t(locale, "lineage.menu")}
+      </button>
+      {open && (
+        <div
+          ref={panelRef}
+          role="group"
+          aria-label={t(locale, "lineage.filter")}
+          className="absolute left-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
+        >
+          {menu.map((item) =>
+            item.kind === "choice" ? (
+              <button
+                key={item.option.value}
+                type="button"
+                aria-pressed={item.option.value === current}
+                title={item.option.title}
+                onClick={() => void choose(item.option.value)}
+                className={optionClass(item.option.value === current)}
+              >
+                {item.option.label}
+              </button>
+            ) : (
+              <div key={item.group}>
+                <button
+                  type="button"
+                  aria-expanded={expanded === item.group}
+                  onClick={() =>
+                    setExpanded((value) =>
+                      value === item.group ? null : item.group,
+                    )
+                  }
+                  className={`${optionClass(false)} justify-between`}
+                >
+                  {item.label}
+                  <ChevronDown
+                    aria-hidden
+                    className={`size-4 transition-transform ${
+                      expanded === item.group ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {expanded === item.group && (
+                  <div className="ml-3 border-l border-glass-brd pl-2">
+                    {item.options.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={option.value === current}
+                        title={option.title}
+                        onClick={() => void choose(option.value)}
+                        className={optionClass(option.value === current)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ),
+          )}
+        </div>
+      )}
       <p role="status" className="text-xs text-text-1">
         {failed ? t(locale, "lineage.filterFailed") : ""}
       </p>

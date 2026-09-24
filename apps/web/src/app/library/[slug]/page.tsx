@@ -142,7 +142,7 @@ export default async function LibraryCategoryPage({
         {/* Ряд линий заменил блок «Для вашей линии здесь пока ничего нет»
             под лентой (VED-396): выбранная линия видна сразу, а не когда
             лента уже опустела. */}
-        <div id="lineage-switch" className="scroll-mt-24">
+        <div id="lineage-switch" className="mb-4 scroll-mt-24">
           <LibraryLineageFilter
             locale={locale}
             applied={appliedLineage}
@@ -156,7 +156,7 @@ export default async function LibraryCategoryPage({
             user={user}
             serviceName="Образования"
             settingsHref="#lineage-switch"
-            settingsLabel="в ряду линий над рубриками"
+            settingsLabel="кнопкой «Фильтры»"
           />
         )}
 

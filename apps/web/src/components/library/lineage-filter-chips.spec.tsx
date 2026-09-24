@@ -17,34 +17,48 @@ vi.mock("@/lib/http-client", () => ({
 
 const devotee = { spiritualStage: "devotee" as const, lineage: "iskcon" as const };
 
-describe("LibraryLineageFilter", () => {
+describe("LibraryLineageFilter (VED-449)", () => {
   beforeEach(() => {
     replace.mockReset();
     refresh.mockReset();
     apiFetch.mockReset().mockResolvedValue({ ok: true });
   });
 
-  it("рисует «все линии» и кнопку на каждую линию, нажата применённая", () => {
+  function open(applied: "iskcon" | "sri_chaitanya_saraswat_math" | null = "iskcon") {
+    render(
+      <LibraryLineageFilter locale="ru" applied={applied} preference={null} viewer={devotee} />,
+    );
+    return userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
+  }
+
+  it("одна кнопка «Фильтры», меню закрыто", () => {
     render(
       <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} viewer={devotee} />,
     );
-    const group = screen.getByRole("group", { name: "Духовная линия материалов" });
-    const buttons = group.querySelectorAll("button");
-    expect(buttons).toHaveLength(11);
-    expect(screen.getByRole("button", { name: "ISKCON" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Фильтры" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.queryByRole("button", { name: "ИСККОН" })).not.toBeInTheDocument();
+  });
+
+  it("в меню четыре позиции: Всё, ИСККОН, Гаудия-матх, Паривары", async () => {
+    await open();
+    const menu = screen.getByRole("group", { name: "Духовная линия материалов" });
+    const top = Array.from(menu.children).map((node) =>
+      (node.tagName === "BUTTON" ? node : node.querySelector("button"))?.textContent,
+    );
+    expect(top).toEqual(["Всё", "ИСККОН", "Гаудия-матх", "Паривары"]);
+    expect(screen.getByRole("button", { name: "ИСККОН" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "Все линии" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
   });
 
-  it("чужая линия сохраняется в настройку Образования и обновляет выдачу", async () => {
-    render(
-      <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} viewer={devotee} />,
-    );
+  it("матхи — внутри «Гаудия-матх», выбор сохраняет настройку", async () => {
+    await open();
+    expect(screen.queryByRole("button", { name: "Сарасват Матх" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
     await userEvent.click(screen.getByRole("button", { name: "Чайтанья Гаудия Матх" }));
     expect(apiFetch).toHaveBeenCalledTimes(1);
     const [url, init] = apiFetch.mock.calls[0];
@@ -52,30 +66,39 @@ describe("LibraryLineageFilter", () => {
     expect(JSON.parse(init.body)).toEqual({ lineage: "sri_chaitanya_gaudiya_math" });
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(replace).toHaveBeenCalledWith("/library", { scroll: false });
+    // Выбор закрывает меню.
+    expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
-  it("нажатая кнопка — ничего не делает", async () => {
-    render(
-      <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} viewer={devotee} />,
+  it("группа выбранной линии раскрыта сразу", async () => {
+    await open("sri_chaitanya_saraswat_math");
+    expect(screen.getByRole("button", { name: "Сарасват Матх" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
-    await userEvent.click(screen.getByRole("button", { name: "ISKCON" }));
+  });
+
+  it("выбранная позиция — ничего не делает", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "ИСККОН" }));
     expect(apiFetch).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("ошибка сохранения — сообщение и прежняя кнопка нажата", async () => {
+  it("Escape закрывает меню", async () => {
+    await open();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("group")).not.toBeInTheDocument();
+  });
+
+  it("ошибка сохранения — сообщение, настройка прежняя", async () => {
     apiFetch.mockResolvedValue({ ok: false, status: 500 });
-    render(
-      <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} viewer={devotee} />,
-    );
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
     await userEvent.click(screen.getByRole("button", { name: "IPBYS" }));
     expect(
       await screen.findByText("Не удалось переключить линию, попробуйте ещё раз"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ISKCON" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(refresh).not.toHaveBeenCalled();
   });
 });

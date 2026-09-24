@@ -1,6 +1,8 @@
 import {
   LINEAGE_ALL,
+  LINEAGE_GROUP_LABELS,
   LINEAGES,
+  type LineageGroup,
   resolveContentLineage,
   type LineageId,
   type LineagePreference,
@@ -41,6 +43,52 @@ export function lineageFilterOptions(allLabel: string): LineageFilterOption[] {
       title: item.hint ? `${item.label} — ${item.hint}` : item.label,
     })),
   ];
+}
+
+/**
+ * Меню кнопки «Фильтры» (VED-449): вместо ряда из одиннадцати кнопок — одна
+ * кнопка и четыре пункта: «Всё», ISKCON, «Гаудия-матх», «Паривары». Группа
+ * из одной линии (ISKCON) — сразу выбор; группа из нескольких раскрывается,
+ * и линия выбирается внутри неё. Группой целиком API не фильтрует — только
+ * по одной линии, поэтому у раскрывающегося пункта своего выбора нет.
+ */
+export type LineageMenuItem =
+  | { kind: "choice"; option: LineageFilterOption }
+  | {
+      kind: "group";
+      group: LineageGroup;
+      label: string;
+      options: LineageFilterOption[];
+    };
+
+export function lineageFilterMenu(labels: {
+  all: string;
+  groups: Record<LineageGroup, string>;
+}): LineageMenuItem[] {
+  const [all, ...lineages] = lineageFilterOptions(labels.all);
+  const items: LineageMenuItem[] = [{ kind: "choice", option: all }];
+  for (const group of Object.keys(LINEAGE_GROUP_LABELS) as LineageGroup[]) {
+    const options = lineages.filter(
+      (option) =>
+        LINEAGES.find((item) => item.id === option.value)?.group === group,
+    );
+    if (options.length === 0) continue;
+    items.push(
+      options.length === 1
+        ? {
+            kind: "choice",
+            option: { ...options[0], label: labels.groups[group] },
+          }
+        : { kind: "group", group, label: labels.groups[group], options },
+    );
+  }
+  return items;
+}
+
+/** Группа, в которой лежит выбранная линия, — её меню раскрывает сразу. */
+export function lineageChoiceGroup(choice: LineageChoice): LineageGroup | null {
+  if (choice === LINEAGE_ALL) return null;
+  return LINEAGES.find((item) => item.id === choice)?.group ?? null;
 }
 
 /** Какая кнопка нажата: применённая линия, а без фильтра — «все линии». */
