@@ -128,13 +128,3 @@ export function blogHomeSlide(post: BlogPostDto): BlogHomeSlide {
     aspect: blogMediaAspect(first),
   };
 }
-
-/**
- * Рамка всей карусели главной — по первому слайду, как у Instagram: у слайдов
- * одна высота, и лента не прыгает при пролистывании. Остальные снимки
- * вписываются в неё целиком.
- */
-export function blogHomeAspect(slides: BlogHomeSlide[]): number {
-  const first = slides.find((slide) => slide.coverUrl !== null);
-  return first ? first.aspect : 1;
-}

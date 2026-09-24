@@ -3,7 +3,6 @@ import type { BlogMediaDto, BlogPostDto } from "@vedamatch/shared";
 import {
   BLOG_MEDIA_MAX_ASPECT,
   BLOG_MEDIA_MIN_ASPECT,
-  blogHomeAspect,
   blogHomeSlide,
   blogMediaAspect,
   formatBlogDuration,
@@ -124,16 +123,5 @@ describe("blogHomeSlide", () => {
     const slide = blogHomeSlide(post({ title: null, text: "а".repeat(200), media: [media()] }));
     expect(slide.title?.endsWith("…")).toBe(true);
     expect(slide.title!.length).toBeLessThanOrEqual(81);
-  });
-});
-
-describe("blogHomeAspect", () => {
-  it("takes the frame of the first slide with a picture", () => {
-    const slides = [
-      blogHomeSlide(post({ title: null, text: "слова" })),
-      blogHomeSlide(post({ media: [media({ width: 1600, height: 900 })] })),
-    ];
-    expect(blogHomeAspect(slides)).toBeCloseTo(16 / 9);
-    expect(blogHomeAspect([])).toBe(1);
   });
 });

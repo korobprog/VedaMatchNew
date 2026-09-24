@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { visibleSlidesHeight } from "./carousel-height";
 
 /**
  * Карусель ленты «как в Instagram» (VED-238): слайды во всю ширину, листаются
@@ -27,6 +28,7 @@ export function BlogCarousel({
   perView = "one",
   dots = false,
   focusable = false,
+  fitHeight = false,
 }: {
   count: number;
   /** Имя группы для скринридера: «Блог-лента», «Вложения поста». */
@@ -42,10 +44,16 @@ export function BlogCarousel({
    * главной не нужно — там каждый слайд ссылка, и Tab листает по ним.
    */
   focusable?: boolean;
+  /**
+   * Слайды разной высоты, лента — по видимому (VED-443): у каждого поста
+   * своя пропорция, и картинка встаёт во всю ширину, а не в рамку соседа.
+   */
+  fitHeight?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const [atEnd, setAtEnd] = useState(count <= 1);
+  const [height, setHeight] = useState<number | null>(null);
 
   const sync = useCallback(() => {
     const node = scroller.current;
@@ -54,7 +62,18 @@ export function BlogCarousel({
     const step = first?.offsetWidth || node.clientWidth || 1;
     setIndex(Math.min(count - 1, Math.max(0, Math.round(node.scrollLeft / step))));
     setAtEnd(node.scrollLeft + node.clientWidth >= node.scrollWidth - 2);
-  }, [count]);
+    if (fitHeight) {
+      const boxes = Array.from(node.children, (child) => {
+        const slide = child as HTMLElement;
+        return {
+          left: slide.offsetLeft,
+          width: slide.offsetWidth,
+          height: slide.offsetHeight,
+        };
+      });
+      setHeight(visibleSlidesHeight(boxes, node.scrollLeft, node.clientWidth));
+    }
+  }, [count, fitHeight]);
 
   useEffect(() => {
     sync();
@@ -62,8 +81,12 @@ export function BlogCarousel({
     if (!node || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(sync);
     observer.observe(node);
+    // Слайды меряются сами: у каждого своя высота, и она меняется с шириной.
+    if (fitHeight) {
+      for (const slide of Array.from(node.children)) observer.observe(slide);
+    }
     return () => observer.disconnect();
-  }, [sync]);
+  }, [sync, fitHeight, count]);
 
   function go(direction: 1 | -1) {
     const node = scroller.current;
@@ -91,7 +114,8 @@ export function BlogCarousel({
         onScroll={sync}
         tabIndex={focusable ? 0 : undefined}
         aria-label={focusable ? `${label}. Листать стрелками` : undefined}
-        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain focus-visible:outline-offset-[-3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={fitHeight && height !== null ? { height } : undefined}
+        className="flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain focus-visible:outline-offset-[-3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {Array.from({ length: count }, (_, slide) => (
           <div
@@ -99,7 +123,7 @@ export function BlogCarousel({
             role="group"
             aria-roledescription="слайд"
             aria-label={`${slide + 1} из ${count}`}
-            className={`${slideWidth} shrink-0 snap-start`}
+            className={`${slideWidth} shrink-0 snap-start ${fitHeight ? "self-start" : ""}`}
           >
             {renderSlide(slide)}
           </div>
