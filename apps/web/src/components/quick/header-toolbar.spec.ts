@@ -72,6 +72,7 @@ describe("header toolbar", () => {
         "menu",
       ]);
       expect(resolveHeaderToolbar(["menu", "search"], known)).toEqual([
+        "hotkeys",
         "menu",
         "search",
         "bell",
@@ -79,20 +80,18 @@ describe("header toolbar", () => {
       ]);
     });
 
-    it("без звёздочки и «Меню» разом не остаётся", () => {
-      expect(resolveHeaderToolbar(["search", "bell", "avatar"], known)).toEqual([
-        "hotkeys",
-        "search",
-        "bell",
-        "avatar",
-      ]);
+    it("звёздочка возвращается первой, даже если её убирали раньше (VED-412)", () => {
+      expect(
+        resolveHeaderToolbar(["search", "bell", "avatar", "menu"], known),
+      ).toEqual(["hotkeys", "search", "bell", "avatar", "menu"]);
     });
 
-    it("не больше четырёх настраиваемых кнопок", () => {
+    it("не больше трёх настраиваемых кнопок", () => {
       const resolved = resolveHeaderToolbar(
         ["search", "history", "player", "bookmarks", "bell", "avatar", "menu"],
         known,
       );
+      expect(MAX_HEADER_BUTTONS).toBe(3);
       expect(headerButtonCount(resolved)).toBe(MAX_HEADER_BUTTONS);
       expect(resolved).toEqual([
         "hotkeys",
@@ -116,17 +115,16 @@ describe("header toolbar", () => {
       ]);
     });
 
-    it("звёздочку и «Меню» можно убрать по одной (VED-412)", () => {
-      const withoutStar = toggleHeaderItem(DEFAULT_HEADER_ITEMS, "hotkeys");
-      expect(withoutStar).toEqual(["bell", "avatar", "menu"]);
-      const withoutMenu = toggleHeaderItem(DEFAULT_HEADER_ITEMS, "menu");
-      expect(withoutMenu).toEqual(["hotkeys", "bell", "avatar"]);
-    });
-
-    it("последнюю из звёздочки и «Меню» не убрать", () => {
-      const ids = ["bell", "avatar", "menu"];
-      expect(headerToggleBlock(ids, "menu")).toBe("last-entry");
-      expect(toggleHeaderItem(ids, "menu")).toEqual(ids);
+    it("звёздочка остаётся всегда, «Меню» — нет (VED-412)", () => {
+      expect(headerToggleBlock(DEFAULT_HEADER_ITEMS, "hotkeys")).toBe("fixed");
+      expect(toggleHeaderItem(DEFAULT_HEADER_ITEMS, "hotkeys")).toEqual(
+        DEFAULT_HEADER_ITEMS,
+      );
+      expect(toggleHeaderItem(DEFAULT_HEADER_ITEMS, "menu")).toEqual([
+        "hotkeys",
+        "bell",
+        "avatar",
+      ]);
     });
 
     it("колокольчик и аватар закреплены", () => {
@@ -136,7 +134,7 @@ describe("header toolbar", () => {
       );
     });
 
-    it("пятую кнопку не поставить, пока не уберёшь одну", () => {
+    it("четвёртую настраиваемую кнопку не поставить, пока не уберёшь одну", () => {
       const full = ["hotkeys", "search", "history", "bell", "avatar", "menu"];
       expect(headerToggleBlock(full, "player")).toBe("full");
       expect(toggleHeaderItem(full, "player")).toEqual(full);
@@ -145,8 +143,7 @@ describe("header toolbar", () => {
 
     it("у каждого запрета есть объяснение", () => {
       expect(headerToggleNote("fixed")).toBe("Всегда в шапке");
-      expect(headerToggleNote("last-entry")).toMatch(/звёздочка или «Меню»/);
-      expect(headerToggleNote("full")).toMatch(/уже 4 кнопки/);
+      expect(headerToggleNote("full")).toMatch(/уже 3 кнопки/);
       expect(headerToggleNote(null)).toBeNull();
     });
   });

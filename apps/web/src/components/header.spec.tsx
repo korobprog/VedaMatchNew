@@ -342,13 +342,17 @@ describe("Header: верхняя панель", { timeout: 20000 }, () => {
       );
   });
 
-  it("без звёздочки настройка шапки открывается из настройки меню", () => {
+  it("звёздочка возвращается в шапку, даже если её убрали раньше (VED-412)", () => {
     window.localStorage.setItem(
       "vedamatch:header-toolbar",
       JSON.stringify({ v: 1, ids: ["bell", "avatar", "menu"] }),
     );
     renderHeader();
-    expect(screen.queryByRole("button", { name: "Горячие кнопки" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
+  });
+
+  it("настройка шапки открывается и из настройки меню", () => {
+    renderHeader();
     fireEvent.click(screen.getByRole("button", { name: "Меню" }));
     const dialog = screen.getByRole("dialog", { name: "Меню" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Настроить меню" }));
@@ -356,11 +360,7 @@ describe("Header: верхняя панель", { timeout: 20000 }, () => {
       within(dialog).getByRole("button", { name: "Настроить верхнюю панель" }),
     );
     expect(screen.queryByRole("dialog", { name: "Меню" })).toBeNull();
-    const settings = screen.getByRole("dialog", { name: "Верхняя панель" });
-    fireEvent.click(
-      within(settings).getByRole("switch", { name: /^Горячие кнопки/ }),
-    );
-    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Верхняя панель" })).toBeInTheDocument();
   });
 });
 
