@@ -398,6 +398,8 @@ model User {
   chatGroupCallParticipations        ChatGroupCallParticipant[]    @relation("ChatGroupCallParticipations")
   chatConferencesOpened              ChatConferenceLink[]          @relation("ChatConferencesOpened")
   chatMessagesSent                   ChatMessage[]                 @relation("ChatMessagesSent")
+  chatStatuses                       ChatStatus[]                  @relation("ChatStatusesAuthored")
+  chatStatusViews                    ChatStatusView[]              @relation("ChatStatusViewsSeen")
   chatReactionsMade                  ChatMessageReaction[]         @relation("ChatReactionsMade")
   chatReportsMade                    ChatReport[]                  @relation("ChatReportsMade")
   chatReportsDecided                 ChatReport[]                  @relation("ChatReportsDecided")
@@ -7559,4 +7561,50 @@ model WorkPayoutPeriod {
 
   @@unique([boardId, fromDay])
   @@index([boardId, toDay])
+}
+
+// ─── Общение: статусы (VED-129) ─────────────────────────────────────────────
+
+enum ChatStatusMediaKind {
+  photo
+  video
+}
+
+/// Статус — короткий пост на сутки, как в WhatsApp и Telegram: текст,
+/// картинка, то и другое или короткое видео. Файлы — в том же бакете, что
+/// вложения переписки, закрытыми и под подписанными ссылками. Истёкшие
+/// удаляет ChatRetentionService вместе с файлами.
+model ChatStatus {
+  id          String               @id @default(uuid())
+  authorId    String
+  author      User                 @relation("ChatStatusesAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+  text        String?
+  mediaKind   ChatStatusMediaKind?
+  mediaUrl    String?
+  mediaKey    String?
+  posterUrl   String?
+  posterKey   String?
+  width       Int?
+  height      Int?
+  durationSec Int?
+  createdAt   DateTime             @default(now())
+  expiresAt   DateTime
+
+  views ChatStatusView[]
+
+  @@index([authorId, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Кто посмотрел статус: по этим строкам секции кружка гаснут у смотрящего,
+/// а автор видит, сколько человек его открыли.
+model ChatStatusView {
+  statusId String
+  status   ChatStatus @relation(fields: [statusId], references: [id], onDelete: Cascade)
+  viewerId String
+  viewer   User       @relation("ChatStatusViewsSeen", fields: [viewerId], references: [id], onDelete: Cascade)
+  viewedAt DateTime   @default(now())
+
+  @@id([statusId, viewerId])
+  @@index([viewerId])
 }

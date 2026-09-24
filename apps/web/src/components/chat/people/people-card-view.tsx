@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ContactsCardDto } from "@vedamatch/shared";
+import { UserStatusAvatar } from "../statuses/user-status-avatar";
 import { ContactsApiError, getContactsCard } from "@/lib/chat-people-api";
 import { PeopleRequestButton } from "./people-request-button";
 import {
@@ -120,7 +121,7 @@ export function PeopleCardView({
 
   return (
     <div className="flex flex-col gap-4">
-      <ContactsCard card={state.card} />
+      <ContactsCard card={state.card} viewerId={viewerId} />
       {/* Кнопка запроса и сами контакты — отдельным блоком под карточкой:
           карточка описывает человека, а этот блок — доступ к нему. */}
       <PeopleRequestButton
@@ -133,7 +134,13 @@ export function PeopleCardView({
   );
 }
 
-function ContactsCard({ card }: { card: ContactsCardDto }) {
+function ContactsCard({
+  card,
+  viewerId,
+}: {
+  card: ContactsCardDto;
+  viewerId: string;
+}) {
   const place = [card.city, card.country].filter(Boolean).join(", ");
   const facts: { label: string; value: string }[] = [];
   if (place) facts.push({ label: "Город", value: place });
@@ -161,22 +168,30 @@ function ContactsCard({ card }: { card: ContactsCardDto }) {
   return (
     <article className="glass flex flex-col gap-6 rounded-3xl border border-glass-brd p-6">
       <div className="flex flex-wrap items-start gap-4">
-        {card.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={card.avatarUrl}
-            alt={card.name}
-            className="h-20 w-20 shrink-0 rounded-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-magenta/25 to-[#B23EFF]/25 font-display text-2xl font-bold text-text-0"
-          >
-            {card.name.charAt(0).toUpperCase()}
-          </span>
-        )}
+        {/* Кружок статусов (VED-129): есть статусы — аватарка открывает их. */}
+        <UserStatusAvatar
+          userId={card.userId}
+          viewerId={viewerId}
+          name={card.name}
+          size={80}
+        >
+          {card.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={card.avatarUrl}
+              alt={card.name}
+              className="h-20 w-20 shrink-0 rounded-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-magenta/25 to-[#B23EFF]/25 font-display text-2xl font-bold text-text-0"
+            >
+              {card.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </UserStatusAvatar>
 
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-xl font-bold text-text-0 sm:text-2xl">

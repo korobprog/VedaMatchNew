@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatListView } from "@/components/chat/chat-list-view";
+import { StatusStrip } from "@/components/chat/statuses/status-strip";
 import { QuickConferenceButton } from "@/components/chat/conference/quick-conference-button";
 import { getChatList } from "@/lib/chat-api";
 import { getProfile } from "@/lib/api";
@@ -121,6 +122,10 @@ export default async function ChatPage() {
         {/* Быстрая конференция (VED-360) — здесь, а не шестым значком в
             шапке: у неё есть что сказать словами («ссылка, по которой
             входят сразу, до четырёх человек»), а значок этого не скажет. */}
+        {/* Статусы (VED-129) — первой строкой, как в WhatsApp и Telegram. */}
+        <StatusStrip
+          me={{ id: user.id, name: user.displayName, avatarUrl: user.avatarUrl }}
+        />
         <QuickConferenceButton />
         <ChatListView initial={state} viewerId={user.id} />
       </main>
