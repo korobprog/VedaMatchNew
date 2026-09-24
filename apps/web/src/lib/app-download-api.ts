@@ -17,6 +17,14 @@ import { parseAppManifest, type AppManifest } from "./app-download";
 const MANIFEST_PATH = "mobile/android/ru-site/latest.json";
 /** Каждые 10 минут: свежая версия не обязана появляться мгновенно. */
 const REVALIDATE_SECONDS = 600;
+/**
+ * Предел ожидания хранилища. Лендинг рендерится на сервере, и зависший
+ * запрос держал весь ответ: 24.09 манифест читался через media.vedamatch.ru —
+ * сервер ходил сам к себе через публичный адрес, запрос не возвращался,
+ * healthcheck (`wget /` с таймаутом 5 с) падал, и Traefik снимал сайт с
+ * маршрута. Меньше таймаута healthcheck с запасом.
+ */
+const FETCH_TIMEOUT_MS = 2_500;
 
 export async function getAppManifest(): Promise<AppManifest | null> {
   const base = process.env.APP_DOWNLOAD_BASE_URL?.trim();
@@ -25,13 +33,14 @@ export async function getAppManifest(): Promise<AppManifest | null> {
   try {
     const response = await fetch(`${base.replace(/\/$/, "")}/${MANIFEST_PATH}`, {
       next: { revalidate: REVALIDATE_SECONDS },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return null;
     const raw: unknown = await response.json();
     return parseAppManifest(raw);
   } catch {
-    // Хранилище недоступно или отдало не JSON — карточка Android покажет
-    // «скоро», а не уронит лендинг.
+    // Хранилище недоступно, не ответило за FETCH_TIMEOUT_MS или отдало не
+    // JSON — карточка Android покажет «скоро», а не уронит лендинг.
     return null;
   }
 }
