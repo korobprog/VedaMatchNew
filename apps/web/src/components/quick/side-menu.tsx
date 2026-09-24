@@ -36,7 +36,9 @@ import {
   toggleSideMenuItem,
   type SideMenuConfig,
 } from "./side-menu-config";
+import { CirclePause } from "lucide-react";
 import { TuneRow } from "./tune-row";
+import { PLAYER_PAUSE_LABEL } from "./player-hotkey";
 
 /*
  * Середина бокового меню (VED-408): сервисы и добавленные горячие кнопки —
@@ -212,7 +214,7 @@ function WindowItem({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** «Плеер» (VED-416): меню закрывается, полоса плеера выкатывается и играет. */
+/** «Плеер» (VED-416): меню закрывается, полоса плеера выкатывается и играет; пока играет — пауза (VED-438). */
 function PlayerItem({
   meta,
   onClose,
@@ -224,15 +226,21 @@ function PlayerItem({
   return (
     <button
       type="button"
-      title={meta.hint}
+      title={player.playing ? PLAYER_PAUSE_LABEL : meta.hint}
       onClick={() => {
         onClose();
         void player.run();
       }}
       className={rowClass}
     >
-      <QuickActionIcon meta={meta} className="h-5 w-5 shrink-0" />
-      <span className="min-w-0 truncate font-medium">{meta.label}</span>
+      {player.playing ? (
+        <CirclePause aria-hidden className="h-5 w-5 shrink-0" />
+      ) : (
+        <QuickActionIcon meta={meta} className="h-5 w-5 shrink-0" />
+      )}
+      <span className="min-w-0 truncate font-medium">
+        {player.playing ? PLAYER_PAUSE_LABEL : meta.label}
+      </span>
     </button>
   );
 }

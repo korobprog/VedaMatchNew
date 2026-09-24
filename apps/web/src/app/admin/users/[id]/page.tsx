@@ -11,6 +11,7 @@ import { AdminUserDeleteForm } from "@/components/admin-user-delete-form";
 import { AdminUserPurgeForm } from "@/components/admin-user-purge-form";
 import { AdminUserApiKeys } from "@/components/admin-user-api-keys";
 import { AdminPhotoVerification } from "@/components/admin-photo-verification";
+import { AdminUserAvatarRemove } from "@/components/admin-user-avatar-remove";
 import { AdminSubscriptionForm } from "@/components/admin-subscription-form";
 import { getAdminUser, getProfile } from "@/lib/api";
 import { actorLabels, formatBool, formatDate, genderLabels, roleLabels, stageLabels, verificationLabels } from "@/lib/admin-labels";
@@ -101,6 +102,13 @@ export default async function AdminUserDetailPage({
             <AdminUserProfileForm
               profile={profile}
               isSelf={currentUser.id === profile.id}
+            />
+          </Section>
+
+          <Section title="Фото профиля">
+            <AdminUserAvatarRemove
+              userId={profile.id}
+              avatarUrl={profile.avatarUrl}
             />
           </Section>
 

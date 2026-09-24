@@ -18,6 +18,7 @@ import {
   Calculator,
   CalendarDays,
   Check,
+  CirclePause,
   CirclePlay,
   Columns2,
   HeartHandshake,
@@ -31,6 +32,7 @@ import {
   Search,
   Settings2,
   Share2,
+  Smartphone,
   Sparkles,
   Users,
   X,
@@ -48,6 +50,7 @@ import {
   useServiceNames,
 } from "@/components/service-catalog-provider";
 import { CalculatorPad } from "./calculator-pad";
+import { PLAYER_PAUSE_LABEL } from "./player-hotkey";
 import { HistorySheet } from "./history-sheet";
 import { FittedLabel } from "./fitted-label";
 import {
@@ -125,6 +128,7 @@ const ICONS: Record<
   history: History,
   // VED-416: кружок «пуск», а не нота — нота уже у Медиатеки в сервисах.
   player: CirclePlay,
+  app: Smartphone,
   search: Search,
   assistant: Bot,
   aphorism: Quote,
@@ -681,11 +685,11 @@ function HeaderPlayerButton({
     <button
       type="button"
       onClick={() => void player.run()}
-      aria-label={meta.label}
-      title={meta.hint}
+      aria-label={player.playing ? PLAYER_PAUSE_LABEL : meta.label}
+      title={player.playing ? PLAYER_PAUSE_LABEL : meta.hint}
       className={headerButtonClass}
     >
-      {icon}
+      {player.playing ? <CirclePause className="size-5" /> : icon}
     </button>
   );
 }
@@ -1106,15 +1110,21 @@ function PlayerTile({
   return (
     <button
       type="button"
-      title={meta.hint}
+      title={player.playing ? PLAYER_PAUSE_LABEL : meta.hint}
       onClick={() => {
         onRun();
         void player.run();
       }}
       className={tileClass}
     >
-      <QuickActionIcon meta={meta} />
-      <span className="line-clamp-2">{meta.label}</span>
+      {player.playing ? (
+        <CirclePause className={TILE_ICON} />
+      ) : (
+        <QuickActionIcon meta={meta} />
+      )}
+      <span className="line-clamp-2">
+        {player.playing ? PLAYER_PAUSE_LABEL : meta.label}
+      </span>
     </button>
   );
 }

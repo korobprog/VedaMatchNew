@@ -31,7 +31,7 @@ describe("parseQuickConfig", () => {
   });
 
   it("возвращает сохранённый порядок как есть", () => {
-    expect(parseQuickConfig('{"v":6,"ids":["donate","aphorism"]}')).toEqual({
+    expect(parseQuickConfig('{"v":7,"ids":["donate","aphorism"]}')).toEqual({
       ids: ["donate", "aphorism"],
       custom: [],
     });
@@ -46,16 +46,16 @@ describe("parseQuickConfig", () => {
   it("молча выбрасывает кнопки, которых больше нет", () => {
     // В хранилище лежит набор с прошлой версии портала.
     expect(
-      parseQuickConfig('{"v":6,"ids":["donate","transits","qr"]}').ids,
+      parseQuickConfig('{"v":7,"ids":["donate","transits","qr"]}').ids,
     ).toEqual(["donate"]);
   });
 
   it("пустой набор — это выбор: панель можно опустошить", () => {
-    expect(parseQuickConfig('{"v":6,"ids":[]}').ids).toEqual([]);
+    expect(parseQuickConfig('{"v":7,"ids":[]}').ids).toEqual([]);
   });
 
   it("убирает дубли: две одинаковые кнопки — сбой, а не выбор", () => {
-    expect(parseQuickConfig('{"v":6,"ids":["donate","donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":7,"ids":["donate","donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -63,7 +63,7 @@ describe("parseQuickConfig", () => {
   it("сервисную кнопку узнаёт по слагу, а не по каталогу с сервера", () => {
     // Каталог приезжает запросом, а набор разбирается сразу при открытии.
     expect(
-      parseQuickConfig('{"v":6,"ids":["service:work","service:выдумка"]}').ids,
+      parseQuickConfig('{"v":7,"ids":["service:work","service:выдумка"]}').ids,
     ).toEqual(["service:work"]);
   });
 
@@ -79,14 +79,16 @@ describe("parseQuickConfig", () => {
       "postcard",
       // VED-392: а «История» — позже.
       "history",
-      // VED-416: «Плеер» — позже всех.
+      // VED-416: «Плеер» — позже.
       "player",
+      // VED-448: «Приложение» — позже всех.
+      "app",
     ]);
   });
 
   it("запись второй версии дополняется: своих кнопок тогда не было", () => {
     expect(parseQuickConfig('{"v":2,"ids":["donate"]}')).toEqual({
-      ids: ["donate", "postcard", "history", "player"],
+      ids: ["donate", "postcard", "history", "player", "app"],
       custom: [],
     });
   });
@@ -94,29 +96,29 @@ describe("parseQuickConfig", () => {
   /* VED-326: «Открытку» просили добавить всем, а не только новичкам. Правило
      «выключенная кнопка остаётся выключенной» она не нарушает: выключить её
      до этой версии было нельзя — кнопки не существовало. */
-  it("запись третьей версии получает «Открытку», «Историю» и «Плеер» в конец", () => {
+  it("запись третьей версии получает «Открытку», «Историю», «Плеер» и «Приложение» в конец", () => {
     expect(parseQuickConfig('{"v":3,"ids":["donate","aphorism"]}')).toEqual({
-      ids: ["donate", "aphorism", "postcard", "history", "player"],
+      ids: ["donate", "aphorism", "postcard", "history", "player", "app"],
       custom: [],
     });
   });
 
   it("«Открытка» не задваивается, если человек её уже включил", () => {
     expect(parseQuickConfig('{"v":3,"ids":["postcard","donate"]}').ids).toEqual(
-      ["postcard", "donate", "history", "player"],
+      ["postcard", "donate", "history", "player", "app"],
     );
   });
 
   /* VED-392: «Сделай горячую клавишу История» — кнопка обязана доехать и до
      тех, у кого панель давно настроена, по правилу «Открытки». */
-  it("запись четвёртой версии получает «Историю» и «Плеер» в конец, свои кнопки целы", () => {
+  it("запись четвёртой версии получает «Историю», «Плеер» и «Приложение» в конец, свои кнопки целы", () => {
     const raw = JSON.stringify({
       v: 4,
       ids: ["donate", "custom:/work"],
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["donate", "custom:/work", "history", "player"],
+      ids: ["donate", "custom:/work", "history", "player", "app"],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
@@ -124,20 +126,30 @@ describe("parseQuickConfig", () => {
   /* VED-416: «Добавь в панель горячих клавиш кнопку ПЛЕЕР» — доезжает и до
      настроенных панелей; выключенная в пятой версии «История» при этом
      остаётся выключенной, а свои кнопки и порядок — как были. */
-  it("запись пятой версии получает только «Плеер» в конец", () => {
+  it("запись пятой версии получает «Плеер» и «Приложение» в конец", () => {
     const raw = JSON.stringify({
       v: 5,
       ids: ["search", "menu", "custom:/work", "aphorism"],
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["search", "menu", "custom:/work", "aphorism", "player"],
+      ids: ["search", "menu", "custom:/work", "aphorism", "player", "app"],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
 
-  it("выключенный в шестой версии «Плеер» остаётся выключенным", () => {
+  /* VED-448: «Добавь горячую клавишу ПРИЛОЖЕНИЕ» — доезжает и до
+     настроенных панелей; выключенный в шестой версии «Плеер» остаётся
+     выключенным. */
+  it("запись шестой версии получает только «Приложение» в конец", () => {
     expect(parseQuickConfig('{"v":6,"ids":["donate"]}').ids).toEqual([
+      "donate",
+      "app",
+    ]);
+  });
+
+  it("выключенное в седьмой версии «Приложение» остаётся выключенным", () => {
+    expect(parseQuickConfig('{"v":7,"ids":["donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -152,7 +164,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка на чужой сайт в панель не попадает", () => {
     const raw = JSON.stringify({
-      v: 6,
+      v: 7,
       ids: ["custom:https://example.com"],
       custom: [{ label: "Не наше", href: "https://example.com" }],
     });
@@ -161,7 +173,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка без подписи — сбой хранилища, а не кнопка", () => {
     const raw = JSON.stringify({
-      v: 6,
+      v: 7,
       ids: ["custom:/work"],
       custom: [{ label: "  ", href: "/work" }],
     });
@@ -411,7 +423,7 @@ describe("обязательная кнопка «Меню»", () => {
 
   it("доезжает до старой настроенной панели — первым рядом, а не в конец", () => {
     // Запись пятой версии, сделанная до переезда бургера: «Меню» в ней нет.
-    const stored = parseQuickConfig('{"v":6,"ids":["donate","aphorism","info"]}');
+    const stored = parseQuickConfig('{"v":7,"ids":["donate","aphorism","info"]}');
     expect(stored.ids).toEqual(["donate", "aphorism", "info"]);
     expect(arrangeQuickActions(stored.ids, PINNED_QUICK_ACTIONS)).toEqual([
       "search",
