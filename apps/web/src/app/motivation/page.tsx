@@ -40,6 +40,8 @@ export default async function MotivationPage({
     category?: string;
     speaker?: string;
     work?: string;
+    from?: string;
+    resume?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -57,6 +59,13 @@ export default async function MotivationPage({
   const text = (value: unknown) =>
     typeof value === "string" && value.trim() ? value.trim() : undefined;
   const attribution = { speaker: text(params.speaker), work: text(params.work) };
+  /* С какого места начать ленту раздела или источника (VED-432): `from` —
+     нажали на цитату в карточке на главной, `resume` — кнопки главной
+     открывают ленту с места, где человек остановился. */
+  const start = {
+    from: text(params.from),
+    resume: params.resume === "1",
+  };
   /* Две ленты (VED-121): «Для вас» — нейросеть и цитата поверх, «Открытки» —
      готовые картинки с напечатанным текстом. Список остаётся общим: у него
      нет вкладок, и прятать там половину публикаций было бы нечем объяснить. */
@@ -73,6 +82,7 @@ export default async function MotivationPage({
       undefined,
       style,
       attribution,
+      start,
     ),
     getDonationSettings(),
     getMotivationStats(),
@@ -97,8 +107,17 @@ export default async function MotivationPage({
      открытая в «Для вас», тянула бы за собой ленту другого стиля. То же для
      папки, где лежат одни открытки: иначе она открылась бы пустой. */
   if (view === "reels" && !params.tab) {
-    if (isPinnedCard(params.post, initial.items[0])) {
-      redirect(reelsHref({ tab: "cards", order, category, post: params.post, ...attribution }));
+    if (isPinnedCard(params.post ?? start.from, initial.items[0])) {
+      redirect(
+        reelsHref({
+          tab: "cards",
+          order,
+          category,
+          post: params.post,
+          from: start.from,
+          ...attribution,
+        }),
+      );
     }
     if (category && initial.items.length === 0) {
       const cards = await getMotivationFeed(
@@ -109,9 +128,18 @@ export default async function MotivationPage({
         undefined,
         "cards",
         attribution,
+        start,
       );
       if (cards?.items.length) {
-        redirect(reelsHref({ tab: "cards", order, category, ...attribution }));
+        redirect(
+          reelsHref({
+            tab: "cards",
+            order,
+            category,
+            resume: start.resume,
+            ...attribution,
+          }),
+        );
       }
     }
   }
@@ -176,6 +204,8 @@ export default async function MotivationPage({
             params.post ?? "",
             attribution.speaker ?? "",
             attribution.work ?? "",
+            start.from ?? "",
+            start.resume ? "resume" : "",
           ].join("|")}
           initial={initial}
           tab={tab}

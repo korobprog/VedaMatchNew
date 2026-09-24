@@ -12,6 +12,17 @@ class FakeObserver {
 }
 vi.stubGlobal("IntersectionObserver", FakeObserver);
 
+// Панель горячих кнопок портальная и живёт на контексте локали и каталога
+// сервисов; ленте важна только её кнопка в ряду вкладок (VED-387).
+vi.mock("@/components/quick/quick-panel", () => ({
+  QuickPanel: () => (
+    <div>
+      <button type="button" aria-label="История" />
+      <button type="button" aria-label="Горячие кнопки" />
+    </div>
+  ),
+}));
+
 const post = (id: string, overrides: Partial<MotivationPostDto> = {}): MotivationPostDto => ({
   id,
   slug: id,
@@ -121,7 +132,14 @@ describe("ReelsFeed", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = [...tabs.children].map((node) => node.textContent);
-    expect(labels).toEqual(["Лента", "Открытки", "", "Избранное", "Мои"]);
+    // VED-387: «Избранное» и «Мои» ушли в меню ☰, на их местах —
+    // «Категории» и звёздочка панели горячих кнопок.
+    expect(labels).toEqual(["Лента", "Открытки", "", "Категории", ""]);
+    expect(within(tabs).getByRole("link", { name: "Категории" })).toHaveAttribute(
+      "href",
+      "/motivation/collections",
+    );
+    expect(within(tabs).getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
     expect(within(tabs).queryByText("Для вас")).not.toBeInTheDocument();
     expect(within(tabs).queryByText("Автор и источник")).not.toBeInTheDocument();
     expect(
@@ -140,13 +158,73 @@ describe("ReelsFeed", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = [...tabs.children].map((node) => node.textContent);
-    expect(labels).toEqual(["Лента", "Открытки", "Избранное", "Мои"]);
+    expect(labels).toEqual(["Лента", "Открытки", "Избранное", ""]);
+    expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(
       within(tabs).queryByRole("button", { name: /Фильтр по автору и источнику/ }),
     ).not.toBeInTheDocument();
   });
 
   // VED-135: на пустом тёмном экране разделителя — кнопки категорий вверху.
+  // VED-432: лента раздела запоминает пост, провисевший на экране.
+  it("запоминает место в ленте раздела, а в личной ленте — нет", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = fetchOk({ ok: true });
+      const { unmount } = render(
+        <ReelsFeed
+          initial={{ items: [post("a"), post("b")], nextCursor: null }}
+          tab="forYou"
+          donation={null}
+          category="filosofiya-2"
+        />,
+      );
+      await vi.advanceTimersByTimeAsync(1600);
+      const put = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/motivation/feed-position"));
+      expect(put).toBeDefined();
+      expect(put![1]).toMatchObject({ method: "PUT" });
+      expect(JSON.parse(put![1].body as string)).toEqual({
+        post: "a",
+        style: "art",
+        category: "filosofiya-2",
+      });
+      unmount();
+
+      const personal = fetchOk({ ok: true });
+      render(
+        <ReelsFeed
+          initial={{ items: [post("a")], nextCursor: null }}
+          tab="forYou"
+          donation={null}
+        />,
+      );
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(
+        personal.mock.calls.some(([url]) => String(url).endsWith("/motivation/feed-position")),
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("лента, открытая с места остановки, предлагает «С начала»", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("c"), post("d")], nextCursor: null, resumed: true }}
+        tab="cards"
+        donation={null}
+        category="filosofiya-2"
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: "Лента открыта с места, где вы остановились. Открыть с начала" }),
+    ).toHaveAttribute("href", "/motivation?tab=cards&category=filosofiya-2");
+  });
+
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
     fetchOk({});
     render(
@@ -179,9 +257,18 @@ describe("ReelsFeed", () => {
       );
       expect(within(nav).getByRole("link", { name: "Гуру" })).toHaveAttribute("aria-current", "page");
       // Кнопки стоят над текстом слайда, а не под ним.
-      const heading = within(slide).getByText(/Вы посмотрели всё новое|На сегодня это всё/);
+      // В конце ленты раздела (VED-432) — «посмотрели все открытки раздела».
+      const heading = within(slide).getByText(
+        /Вы посмотрели всё новое|Вы посмотрели все открытки раздела «Гуру»/,
+      );
       expect(nav.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+    // Лента раздела кончилась — «Начать сначала» ведёт в её начало, без resume.
+    const end = within(feed).getByRole("region", { name: "Конец ленты" });
+    expect(within(end).getByRole("link", { name: /Начать сначала/ })).toHaveAttribute(
+      "href",
+      "/motivation?tab=cards&category=guru",
+    );
   });
 
   it("без непустых категорий кнопок нет", () => {
@@ -573,9 +660,10 @@ describe("ReelsFeed", () => {
 
     expect(screen.getByText("Открыток здесь пока нет")).toBeInTheDocument();
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
+    // VED-387: «Избранное» теперь в меню ☰ — отсюда уходят в «Категории».
+    expect(within(tabs).getByRole("link", { name: "Категории" })).toHaveAttribute(
       "href",
-      "/motivation?tab=saved",
+      "/motivation/collections?tab=cards",
     );
   });
 
@@ -1173,7 +1261,23 @@ describe("ReelsFeed", () => {
 
     expect(
       screen.getByRole("link", { name: "Править эту публикацию" }),
-    ).toHaveAttribute("href", "/admin/motivation/published?post=a");
+    ).toHaveAttribute("href", "/admin/motivation/published?post=a&kind=art");
+  });
+
+  // VED-299: открытка открывается в редакции открыток.
+  it("открытку редакция правит в своём меню — открыток", () => {
+    render(
+      <ReelsFeed
+        initial={{ items: [post("c", { captionInImage: true })], nextCursor: null }}
+        tab="cards"
+        donation={null}
+        isAdmin
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Править эту публикацию" }),
+    ).toHaveAttribute("href", "/admin/motivation/published?post=c&kind=cards");
   });
 
   it("обычному читателю правки не предлагает", () => {

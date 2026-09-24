@@ -109,11 +109,21 @@ export function isTelegramWebView(
 export function shareButtonState(input: {
   prepare: FilePrepare;
   sharing: boolean;
-}): { label: string; busy: boolean } {
-  if (input.sharing) return { label: "Открываем приложения…", busy: true };
+  /** Окно умеет отдавать файлы в приложения; `false` — известно, что нет. */
+  supported?: boolean;
+}): { label: string; busy: boolean; ready: boolean } {
+  if (input.sharing)
+    return { label: "Открываем приложения…", busy: true, ready: false };
   if (input.prepare === "loading")
-    return { label: "Готовим картинку…", busy: true };
-  return { label: "Отправить в приложение", busy: false };
+    return { label: "Готовим картинку…", busy: true, ready: false };
+  /* VED-414: картинка готова — кнопка меняется заметно, толстой цветной
+     рамкой, а не только исчезнувшим значком ожидания. Если окно файлы не
+     отдаёт или приготовить не вышло, звать к кнопке нечестно. */
+  return {
+    label: "Отправить в приложение",
+    busy: false,
+    ready: input.prepare === "ready" && input.supported !== false,
+  };
 }
 
 /** Подсказка, когда отдать файл в приложение из этого окна нельзя. */

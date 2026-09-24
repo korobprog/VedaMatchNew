@@ -3,6 +3,7 @@ import {
   PICTURE_TEXT_MAX,
   normalizePictureInput,
   pictureImageKey,
+  freshPictureTitle,
   pictureTitle,
 } from './picture-post';
 
@@ -95,5 +96,32 @@ describe('pictureTitle', () => {
 describe('pictureImageKey', () => {
   it('keeps pictures apart from cropped reel frames', () => {
     expect(pictureImageKey('p1', 5)).toBe('motivation/pictures/p1/v5.webp');
+  });
+});
+
+describe('freshPictureTitle (VED-301)', () => {
+  it('подставляет нынешнее название раздела в автоматический заголовок', () => {
+    expect(
+      freshPictureTitle('Картинка из раздела «Философия»', 'Мудрость мира'),
+    ).toBe('Картинка из раздела «Мудрость мира»');
+    // Слаг вместо названия — след старой правки текста.
+    expect(
+      freshPictureTitle('Картинка из раздела «filosofiya-2»', 'Мудрость мира'),
+    ).toBe('Картинка из раздела «Мудрость мира»');
+  });
+
+  it('заголовок из цитаты или написанный руками не трогает', () => {
+    expect(freshPictureTitle('Кто видит меня везде', 'Мудрость мира')).toBe(
+      'Кто видит меня везде',
+    );
+    expect(
+      freshPictureTitle('Картинка из раздела «Веды» и ещё слова', 'Шастры'),
+    ).toBe('Картинка из раздела «Веды» и ещё слова');
+  });
+
+  it('без названия раздела оставляет как было', () => {
+    expect(freshPictureTitle('Картинка из раздела «Веды»', '  ')).toBe(
+      'Картинка из раздела «Веды»',
+    );
   });
 });

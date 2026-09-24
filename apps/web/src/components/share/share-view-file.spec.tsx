@@ -206,3 +206,52 @@ describe("ShareView: три качества «Сохранить картинк
     expect(clicks).toEqual([]);
   });
 });
+
+describe("ShareView: готовность и «Галерея» (VED-414, VED-353)", () => {
+  beforeEach(() => {
+    Object.assign(navigator, {
+      share: vi.fn().mockResolvedValue(undefined),
+      canShare: vi.fn(() => true),
+    });
+    URL.createObjectURL = vi.fn(() => "blob:ready");
+    URL.revokeObjectURL = vi.fn();
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("готовая картинка выделяет «Отправить в приложение» толстой рамкой", async () => {
+    const pending = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    render(<ShareView {...PROPS} />);
+
+    expect(screen.getByRole("button", { name: "Готовим картинку…" })).not.toHaveClass(
+      "border-[3px]",
+    );
+    await act(async () => pending.resolve(jpegResponse()));
+    const ready = await screen.findByRole("button", { name: "Отправить в приложение" });
+    expect(ready).toHaveClass("border-[3px]", "border-cyan");
+  });
+
+  it("сохранённая картинка появляется в «Галерее» и переживает перезагрузку", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jpegResponse())));
+    const { unmount } = render(<ShareView {...PROPS} fileQualities />);
+
+    const gallery = screen.getByRole("button", { name: "Галерея" });
+    fireEvent.click(gallery);
+    expect(gallery).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/Пока пусто/)).toBeInTheDocument();
+
+    await screen.findByRole("button", { name: "Отправить в приложение" });
+    fireEvent.click(screen.getByRole("link", { name: /Лёгкое/ }));
+    const thumb = await screen.findByRole("img", { name: PROPS.text });
+    expect(thumb).toHaveAttribute("src", PROPS.filePath);
+    expect(screen.getByRole("button", { name: /Галерея/ })).toHaveTextContent("· 1");
+    unmount();
+
+    render(<ShareView {...PROPS} fileQualities />);
+    fireEvent.click(await screen.findByRole("button", { name: /Галерея/ }));
+    expect(screen.getByRole("img", { name: PROPS.text })).toBeInTheDocument();
+  });
+});

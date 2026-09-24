@@ -32,15 +32,23 @@ describe("resolveHomeButtons", () => {
     const buttons = resolveHomeButtons(null, [vedy, wisdom]);
 
     expect(buttons.source).toEqual({
-      href: "/motivation?work=%D0%91%D1%85%D0%B0%D0%B3%D0%B0%D0%B2%D0%B0%D0%B4-%D0%B3%D0%B8%D1%82%D0%B0",
+      href: "/motivation?work=%D0%91%D1%85%D0%B0%D0%B3%D0%B0%D0%B2%D0%B0%D0%B4-%D0%B3%D0%B8%D1%82%D0%B0&resume=1",
       title: "Бхагавад-гита",
       custom: false,
     });
     expect(buttons.cards).toEqual({
-      href: "/motivation?tab=cards&category=filosofiya-2",
+      href: "/motivation?tab=cards&category=filosofiya-2&resume=1",
       title: "Мудрость мира",
       custom: false,
     });
+  });
+
+  // VED-432: карточка открывает «Ленту» «Мудрости мира» с места остановки.
+  it("карточка ведёт в «Ленту» «Мудрости мира» с места остановки", () => {
+    expect(resolveHomeButtons(null, [vedy, wisdom]).card).toBe(
+      "/motivation?category=filosofiya-2&resume=1",
+    );
+    expect(resolveHomeButtons(null, [vedy]).card).toBeNull();
   });
 
   // Умолчание — по слагу: переименование папки его не ломает.
@@ -61,7 +69,7 @@ describe("resolveHomeButtons", () => {
     expect(buttons.source.custom).toBe(true);
     expect(buttons.source.href).toContain("work=");
     expect(buttons.cards).toMatchObject({
-      href: "/motivation?tab=cards&category=vedy",
+      href: "/motivation?tab=cards&category=vedy&resume=1",
       title: "Веды",
       custom: true,
     });
@@ -81,13 +89,13 @@ describe("resolveHomeButtons", () => {
 describe("categoryCardsHref", () => {
   it("папка без открыток, но с афоризмами — в «Ленту» той же папки", () => {
     expect(categoryCardsHref(category("Практика", "praktika", { art: 4 }))).toBe(
-      "/motivation?category=praktika",
+      "/motivation?category=praktika&resume=1",
     );
   });
 
   it("пустая папка — всё равно в открытки, как просили", () => {
     expect(categoryCardsHref(category("Пусто", "pusto"))).toBe(
-      "/motivation?tab=cards&category=pusto",
+      "/motivation?tab=cards&category=pusto&resume=1",
     );
   });
 });

@@ -30,6 +30,12 @@ import {
   type SavePhase,
   type SaveQuality,
 } from "./share-file";
+import {
+  SAVED_GALLERY_STORAGE_KEY,
+  addSavedPicture,
+  parseSavedGallery,
+  type SavedPicture,
+} from "./saved-gallery";
 
 /** Файл одного качества, уже полученный страницей. */
 type SavedFile = { url: string; name: string; size: number };
@@ -106,6 +112,22 @@ export function ShareView({
   const [unsupported, setUnsupported] = useState<string | null>(null);
   /** Нажали, пока индикатор крутится, — объяснить словами, а не молчать. */
   const [waitNote, setWaitNote] = useState(false);
+  /**
+   * «Галерея» (VED-353): что уже сохраняли с этого экрана на этом
+   * устройстве. Читается эффектом — на сервере `localStorage` нет.
+   */
+  const [gallery, setGallery] = useState<SavedPicture[]>([]);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const galleryId = useId();
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- см. комментарий выше. */
+    try {
+      setGallery(parseSavedGallery(window.localStorage.getItem(SAVED_GALLERY_STORAGE_KEY)));
+    } catch {
+      // Приватный режим: галерея пуста, экран работает.
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
   /** Источник для тела сообщения: пусто, если он уже в заголовке превью. */
   const messageSource = sourceInPreview ? null : source;
   const message = shareText({ text, source: messageSource, link });
@@ -243,6 +265,7 @@ export function ShareView({
    * сообщает — говорим, что сохраняем и где искать.
    */
   function markSaved(quality: SaveQuality) {
+    rememberSaved();
     setPhases((current) => ({ ...current, [quality]: "saved" }));
     setLastSaved(quality);
     window.clearTimeout(savedTimers.current[quality]);
@@ -253,6 +276,45 @@ export function ShareView({
       setLastSaved((current) => (current === quality ? null : current));
     }, 5000);
   }
+
+  /**
+   * Запомнить картинку в «Галерее» (VED-353). Миниатюра — сам файл на
+   * нашем домене: подписанная ссылка превью из хранилища через время
+   * истекает, и старые миниатюры превратились бы в пустые клетки.
+   */
+  function rememberSaved() {
+    if (!file) return;
+    setGallery((current) => {
+      const next = addSavedPicture(current, {
+        file,
+        sharePath: `${window.location.pathname}${window.location.search}`,
+        thumb: file,
+        text,
+        savedAt: Date.now(),
+      });
+      try {
+        window.localStorage.setItem(SAVED_GALLERY_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Приватный режим: галерея живёт до конца сессии.
+      }
+      return next;
+    });
+  }
+
+  const galleryButton = (
+    <button
+      type="button"
+      onClick={() => setGalleryOpen((value) => !value)}
+      aria-expanded={galleryOpen}
+      aria-controls={galleryId}
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0"
+    >
+      Галерея
+      {gallery.length > 0 && (
+        <span className="font-mono text-xs text-text-1">· {gallery.length}</span>
+      )}
+    </button>
+  );
 
   /** Готовый файл качества: лёгкий приготовлен заранее, остальные — по нажатию. */
   function savedFile(quality: SaveQuality): SavedFile | null {
@@ -399,10 +461,13 @@ export function ShareView({
                 })}
               </div>
             </div>
-            <ShareFileButton
-              state={shareButtonState({ prepare, sharing })}
-              onClick={() => void shareFile()}
-            />
+            <div className="flex flex-wrap gap-2">
+              <ShareFileButton
+                state={shareButtonState({ prepare, sharing, supported: !unsupported })}
+                onClick={() => void shareFile()}
+              />
+              {galleryButton}
+            </div>
           </div>
         ) : file ? (
           <div className="flex flex-wrap gap-2">
@@ -415,9 +480,10 @@ export function ShareView({
               {phases.light === "saved" ? "✓ Картинка сохранена" : "Сохранить картинку"}
             </a>
             <ShareFileButton
-              state={shareButtonState({ prepare, sharing })}
+              state={shareButtonState({ prepare, sharing, supported: !unsupported })}
               onClick={() => void shareFile()}
             />
+            {galleryButton}
           </div>
         ) : (
           <p className="text-sm text-text-2">У этой карточки нет картинки.</p>
@@ -432,6 +498,9 @@ export function ShareView({
               ? "Картинка ещё готовится — подождите пару секунд, кнопка оживёт сама."
               : ""}
         </p>
+        {galleryOpen && (
+          <SavedGallery id={galleryId} pictures={gallery} />
+        )}
         {unsupported && !fileError && (
           <p className="text-sm text-text-1">{unsupported}</p>
         )}
@@ -518,6 +587,49 @@ function downloadUrl(url: string, name: string) {
 }
 
 /**
+ * «Галерея» (VED-353): уже сохранённые отсюда картинки. Нажатие открывает
+ * экран «Поделиться» той картинки — там её сохраняют снова или отправляют.
+ */
+function SavedGallery({ id, pictures }: { id: string; pictures: SavedPicture[] }) {
+  return (
+    <div id={id} className="rounded-2xl border border-glass-brd p-3">
+      <p className="text-sm font-semibold text-text-0">Сохранённые картинки</p>
+      {pictures.length === 0 ? (
+        <p className="mt-1 text-sm text-text-1">
+          Пока пусто. Здесь появятся картинки, которые вы сохраните с этого
+          экрана.
+        </p>
+      ) : (
+        <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {pictures.map((picture) => (
+            <li key={picture.file}>
+              <Link
+                href={picture.sharePath}
+                title={picture.text || undefined}
+                className="block overflow-hidden rounded-xl border border-glass-brd hover:border-text-2"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={picture.thumb}
+                  alt={picture.text || "Сохранённая картинка"}
+                  loading="lazy"
+                  className="aspect-[9/16] w-full bg-bg-1 object-cover"
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-text-1">
+        Сами файлы лежат в «Загрузках» телефона. Здесь — то, что сохраняли с
+        этого устройства; нажмите на картинку, чтобы сохранить или отправить её
+        снова.
+      </p>
+    </div>
+  );
+}
+
+/**
  * Одно качество «Сохранить картинку» (VED-156): название, для чего оно и
  * вес файла. Пока файл готовится — крутится значок; сохранили — отметка и
  * точный вес. Ссылка, а не кнопка: без скриптов и по долгому нажатию
@@ -579,7 +691,7 @@ function ShareFileButton({
   state,
   onClick,
 }: {
-  state: { label: string; busy: boolean };
+  state: { label: string; busy: boolean; ready: boolean };
   onClick: () => void;
 }) {
   return (
@@ -588,9 +700,14 @@ function ShareFileButton({
       onClick={onClick}
       aria-disabled={state.busy || undefined}
       aria-busy={state.busy || undefined}
-      className={`inline-flex min-h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-1 hover:text-text-0 ${
-        state.busy ? "cursor-progress" : ""
-      }`}
+      /* VED-414: готовая картинка — толстая рамка `--vm-cyan` и текст ярче.
+         Рамка — не текст, ей хватает 3:1 к фону; текст — `text-0`. Поле
+         внутри на 2px уже, чтобы размер кнопки не прыгал при смене рамки. */
+      className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm hover:text-text-0 ${
+        state.ready
+          ? "border-[3px] border-cyan px-[14px] font-semibold text-text-0"
+          : "border border-glass-brd text-text-1"
+      } ${state.busy ? "cursor-progress" : ""}`}
     >
       {state.busy && (
         <span

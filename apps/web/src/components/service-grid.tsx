@@ -29,6 +29,8 @@ interface ServiceExtra {
   extra?: ReactNode;
   /** Кнопки в шапке карточки, справа от названия (VED-401). */
   headerExtra?: ReactNode;
+  /** Куда ведёт сама карточка, если не на главную сервиса (VED-432). */
+  href?: string;
 }
 
 /** Летящая за курсором копия карточки. */
@@ -386,6 +388,7 @@ export function ServiceGrid({
                   badgeCount={extras?.[service.id]?.badgeCount}
                   extra={extras?.[service.id]?.extra}
                   headerExtra={extras?.[service.id]?.headerExtra}
+                  href={extras?.[service.id]?.href}
                   isPinned={pinnedId === service.id}
                   onOpen={openService}
                   dragHandleProps={{

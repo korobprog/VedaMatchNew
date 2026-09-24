@@ -9,6 +9,7 @@ import {
   getAdminMotivationPosts,
   getMotivationCategories,
 } from "@/lib/motivation-api";
+import { parsePostKind } from "@/components/motivation/admin/post-kind";
 
 /**
  * Опубликованное — отдельным разделом.
@@ -20,10 +21,13 @@ import {
 export default async function AdminMotivationPublishedPage({
   searchParams,
 }: {
-  /** `?post=<slug>` — переход из ленты: открываем правку сразу этой карточки. */
-  searchParams: Promise<{ post?: string }>;
+  /**
+   * `?post=<slug>` — переход из ленты: открываем правку сразу этой карточки.
+   * `?kind=art|cards` — какая из двух редакций (VED-299).
+   */
+  searchParams: Promise<{ post?: string; kind?: string }>;
 }) {
-  const [posts, categories, { post }] = await Promise.all([
+  const [posts, categories, { post, kind }] = await Promise.all([
     getAdminMotivationPosts(),
     // Справочник — ради выбора категории в правке: перекладывать вышедшую
     // карточку в другую папку иначе можно было только пересоздав её.
@@ -49,6 +53,7 @@ export default async function AdminMotivationPublishedPage({
         posts={posts ? selectPublishedPosts(posts) : null}
         categories={categories ?? []}
         openSlug={post}
+        kind={parsePostKind(kind)}
       />
     </>
   );

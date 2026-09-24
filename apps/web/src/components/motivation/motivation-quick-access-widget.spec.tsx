@@ -40,7 +40,7 @@ describe("MotivationQuickAccessWidget", () => {
 
     expect(screen.getByRole("link", { name: /откладываем/ })).toHaveAttribute(
       "href",
-      "/motivation?category=filosofiya-2&post=seneka-1",
+      "/motivation?category=filosofiya-2&from=seneka-1",
     );
   });
 

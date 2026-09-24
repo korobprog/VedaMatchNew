@@ -72,11 +72,21 @@ export function reelsHref({
   post,
   speaker,
   work,
+  from,
+  resume,
 }: {
   tab?: ReelsTab;
   order?: "random";
   category?: string;
   post?: string;
+  /**
+   * Начать ленту раздела или источника с этого поста и идти дальше по
+   * порядку (VED-432) — в отличие от `post`, после которого лента идёт с
+   * начала.
+   */
+  from?: string;
+  /** С места, где человек остановился в этой ленте (VED-432). */
+  resume?: boolean;
   /** Фильтр по автору (VED-206). */
   speaker?: string;
   /** Фильтр по источнику (VED-206). */
@@ -91,6 +101,8 @@ export function reelsHref({
   if (work?.trim() && tab !== "saved") query.set("work", work.trim());
   if (order) query.set("order", order);
   if (post) query.set("post", post);
+  if (from) query.set("from", from);
+  if (resume && !from && !post) query.set("resume", "1");
   const suffix = query.toString();
   return `/motivation${suffix ? `?${suffix}` : ""}`;
 }

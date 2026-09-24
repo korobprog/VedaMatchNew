@@ -27,7 +27,14 @@ export function MotivationQuickAccessWidget({
   return (
     <div className="mb-4 space-y-1.5">
       <Link
-        href={reelsHref({ post: quote.slug, category: category ?? undefined })}
+        /* Цитата открывается на своём месте в папке и листается дальше по
+           порядку (VED-432), а не первой перед началом папки. Без папки —
+           личная лента, где порядка нет: там цитата просто первая. */
+        href={
+          category
+            ? reelsHref({ from: quote.slug, category })
+            : reelsHref({ post: quote.slug })
+        }
         className="relative z-10 block rounded-xl border border-glass-brd bg-glass px-3 py-2 hover:border-gold/50"
       >
         {/* Текстовый шрифт, не заголовочный: Unbounded курсивом вмещал в две

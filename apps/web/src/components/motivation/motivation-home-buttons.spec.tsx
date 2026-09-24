@@ -4,6 +4,7 @@ import { MotivationHomeButtons } from "./motivation-home-buttons";
 
 describe("MotivationHomeButtons", () => {
   const buttons = {
+    card: "/motivation?category=filosofiya-2&resume=1",
     source: { href: "/motivation?work=X", title: "Бхагавад-гита", custom: false },
     cards: {
       href: "/motivation?tab=cards&category=filosofiya-2",
@@ -24,7 +25,9 @@ describe("MotivationHomeButtons", () => {
     );
     // Без подъёма нажатие уходило бы в ссылку названия, растянутую на карточку.
     for (const link of [source, cards]) {
-      expect(link).toHaveClass("relative", "z-10", "size-11");
+      // VED-432: клетка видимо меньше (36px), область нажатия — 44px за
+      // счёт выступающего на 4px псевдоэлемента.
+      expect(link).toHaveClass("relative", "z-10", "size-9", "before:-inset-1");
       expect(link).toHaveAttribute("title");
     }
   });

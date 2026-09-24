@@ -114,6 +114,7 @@ describe('MotivationService admin list', () => {
     };
     const prisma = {
       motivationPost: { findMany: jest.fn().mockResolvedValue([post]) },
+      motivationCategory: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new MotivationService(
       prisma as never,
@@ -183,6 +184,7 @@ describe('MotivationService admin list', () => {
     };
     const prisma = {
       motivationPost: { findMany: jest.fn().mockResolvedValue([post]) },
+      motivationCategory: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new MotivationService(
       prisma as never,
@@ -362,6 +364,10 @@ describe('MotivationService feed tiers', () => {
       motivationPost,
       userBlock: { findMany: jest.fn().mockResolvedValue([]) },
       motivationCategory: { findMany: jest.fn().mockResolvedValue([]) },
+      motivationFeedPosition: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
     };
     const service = new MotivationService(
       prisma as never,
@@ -596,6 +602,130 @@ describe('MotivationService feed tiers', () => {
     expect(light.select).toMatchObject({
       translations: { where: { language: 'ru' }, select: { title: true } },
     });
+  });
+
+  // VED-432: лента раздела начинается с места, где человек остановился, и
+  // идёт дальше по порядку, а не с закреплённого поста и снова с начала.
+  it('resumes a category feed from the saved position', async () => {
+    const posts = ['a', 'b', 'c', 'd'].map((id, index) =>
+      post(id, day(20 - index), null),
+    );
+    const { service, prisma } = build(day(10), posts);
+    prisma.motivationFeedPosition.findUnique.mockResolvedValue({
+      postId: 'c',
+      post: { status: 'published' },
+    });
+
+    const page = await service.feed('user-1', {
+      category: 'filosofiya-2',
+      style: 'art',
+      resume: true,
+      limit: 1,
+    });
+
+    expect(page.items.map((item) => item.id)).toEqual(['c']);
+    expect(page.resumed).toBe(true);
+    expect(prisma.motivationFeedPosition.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_feedKey: { userId: 'user-1', feedKey: 'art|filosofiya-2||' },
+        },
+      }),
+    );
+    const next = await service.feed('user-1', {
+      category: 'filosofiya-2',
+      style: 'art',
+      resume: true,
+      limit: 1,
+      cursor: page.nextCursor ?? undefined,
+    });
+    expect(next.items.map((item) => item.id)).toEqual(['d']);
+  });
+
+  it('starts from the beginning for a newcomer or a hidden saved post', async () => {
+    const posts = ['a', 'b'].map((id, index) =>
+      post(id, day(20 - index), null),
+    );
+    const { service, prisma } = build(day(10), posts);
+
+    const fresh = await service.feed('user-1', {
+      category: 'filosofiya-2',
+      resume: true,
+    });
+    expect(fresh.items.map((item) => item.id)).toEqual(['a', 'b']);
+    expect(fresh.resumed).toBeUndefined();
+
+    prisma.motivationFeedPosition.findUnique.mockResolvedValue({
+      postId: 'b',
+      post: { status: 'hidden' },
+    });
+    const hidden = await service.feed('user-1', {
+      category: 'filosofiya-2',
+      resume: true,
+    });
+    expect(hidden.items.map((item) => item.id)).toEqual(['a', 'b']);
+  });
+
+  it('does not remember the personal feed', async () => {
+    const { service, prisma } = build(day(10), [post('a', day(12), null)]);
+
+    await service.feed('user-1', { resume: true });
+
+    expect(prisma.motivationFeedPosition.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('opens `from` in place and goes on in verse order', async () => {
+    const verse = (id: string, locator: string) => ({
+      ...post(id, day(5), null),
+      attributionWork: 'Бхагавад-гита',
+      attributionLocator: locator,
+    });
+    const all = [
+      verse('v47', '2.47'),
+      verse('v11', '1.1'),
+      verse('v27', '2.7'),
+    ];
+    const { service, motivationPost } = build(day(10), []);
+    motivationPost.findFirst.mockResolvedValue({ id: 'v27' });
+    motivationPost.findMany.mockImplementation(
+      (args: {
+        distinct?: string[];
+        select?: unknown;
+        where: { id?: { in: string[] } };
+      }) => {
+        if (args.distinct)
+          return Promise.resolve([{ attributionWork: 'Бхагавад-гита' }]);
+        if (args.select) return Promise.resolve(all);
+        const ids = args.where.id?.in ?? [];
+        return Promise.resolve(all.filter((item) => ids.includes(item.id)));
+      },
+    );
+
+    const page = await service.feed('user-1', {
+      work: 'Бхагавад-гита',
+      from: 'v27',
+    });
+
+    expect(page.items.map((item) => item.id)).toEqual(['v27', 'v47']);
+    expect(page.resumed).toBe(true);
+  });
+
+  it('pins `from` first when the post is not in this feed', async () => {
+    const posts = ['a', 'b'].map((id, index) =>
+      post(id, day(20 - index), null),
+    );
+    const { service, motivationPost } = build(day(10), posts);
+    motivationPost.findFirst
+      .mockResolvedValueOnce({ id: 'elsewhere' })
+      .mockResolvedValueOnce(post('elsewhere', day(3), null));
+
+    const page = await service.feed('user-1', {
+      category: 'filosofiya-2',
+      from: 'elsewhere',
+    });
+
+    expect(page.items.map((item) => item.id)).toEqual(['elsewhere', 'a', 'b']);
+    expect(page.resumed).toBeUndefined();
   });
 
   it('shows an empty feed for an unknown work instead of the whole feed', async () => {
@@ -1884,5 +2014,66 @@ describe('MotivationService.deleteOwn', () => {
       build(prisma).deleteOwn('user-1', 'p1'),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('MotivationService.saveFeedPosition (VED-432)', () => {
+  function build(found: { id: string } | null) {
+    const prisma = {
+      motivationPost: { findFirst: jest.fn().mockResolvedValue(found) },
+      motivationFeedPosition: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+    const service = new MotivationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, prisma };
+  }
+
+  it('remembers the post under the same key the feed reads', async () => {
+    const { service, prisma } = build({ id: 'p1' });
+
+    await service.saveFeedPosition('user-1', {
+      post: 'slug-1',
+      work: 'Бхагавад-гита 2.7',
+    });
+
+    expect(prisma.motivationFeedPosition.upsert).toHaveBeenCalledWith({
+      where: {
+        userId_feedKey: { userId: 'user-1', feedKey: 'all|||бхагавад-гита' },
+      },
+      create: {
+        userId: 'user-1',
+        feedKey: 'all|||бхагавад-гита',
+        postId: 'p1',
+      },
+      update: { postId: 'p1' },
+    });
+  });
+
+  it('skips the personal feed and unknown posts, rejects an empty slug', async () => {
+    const personal = build({ id: 'p1' });
+    await personal.service.saveFeedPosition('user-1', { post: 'slug-1' });
+    expect(
+      personal.prisma.motivationFeedPosition.upsert,
+    ).not.toHaveBeenCalled();
+
+    const missing = build(null);
+    await missing.service.saveFeedPosition('user-1', {
+      post: 'gone',
+      category: 'vedy',
+    });
+    expect(missing.prisma.motivationFeedPosition.upsert).not.toHaveBeenCalled();
+
+    await expect(
+      missing.service.saveFeedPosition('user-1', { post: ' ' }),
+    ).rejects.toThrow('Не указан пост');
   });
 });

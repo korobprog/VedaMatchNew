@@ -333,6 +333,7 @@ model User {
   gitabaseAnnotations                GitabaseAnnotation[]
   gitabaseSyncMutations              GitabaseSyncMutation[]
   motivationPreference               MotivationPreference?
+  motivationFeedPositions            MotivationFeedPosition[]
   motivationFavorites                MotivationFavorite[]
   motivationViews                    MotivationView[]
   motivationLikes                    MotivationLike[]
@@ -680,6 +681,7 @@ model MotivationPost {
   views            MotivationView[]
   likes            MotivationLike[]
   reports          MotivationReport[]
+  feedPositions    MotivationFeedPosition[]
   moderationAudits MotivationModerationAudit[]
 
   @@index([profileType, audienceTrack, status, publishedAt])
@@ -902,6 +904,22 @@ model MotivationPreference {
   homeCategorySlug String?                 @db.VarChar(120)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
+}
+
+/// Где человек остановился в ленте раздела или источника (VED-432): кнопки
+/// «Вдохновения» на главной открывают такую ленту с этого поста, а новичка —
+/// с начала. Одна строка на пару «человек — лента»; личная лента, избранное и
+/// «Вперемешку» позиции не помнят. Ключ собирает `feedPositionKey`.
+model MotivationFeedPosition {
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedKey   String         @db.VarChar(400)
+  postId    String
+  post      MotivationPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  updatedAt DateTime       @updatedAt
+
+  @@id([userId, feedKey])
+  @@index([postId])
 }
 
 /// Жалоба на рилс участника. Одна на пару «человек — пост»: повторные нажатия
