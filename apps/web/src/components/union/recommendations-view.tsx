@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { UnionRecommendation } from "@vedamatch/shared";
 import {
   DEFAULT_DENSITY,
@@ -85,10 +85,27 @@ export function RecommendationsView({
     }
   }
 
+  /*
+    Запись в истории нужна, чтобы системное «назад» закрывало просмотр, а не
+    уводило со страницы. Но ставим её, только когда в просмотр вошли
+    нажатием. На телефоне колода открывается сама при входе на страницу, и
+    pushState без жеста пользователя Chrome помечает как навязанный: «назад»
+    перескакивает и нашу запись, и саму страницу — крестик, который жил на
+    history.back(), выбрасывал человека на прошлые экраны (VED-470).
+  */
+  const openedByTapRef = useRef(false);
+  const pushedEntryRef = useRef(false);
+
   useEffect(() => {
     if (!focusMode) return;
-    window.history.pushState({ unionFocusMode: true }, "");
-    const onPopState = () => setModeOverride("grid");
+    if (openedByTapRef.current) {
+      window.history.pushState({ unionFocusMode: true }, "");
+      pushedEntryRef.current = true;
+    }
+    const onPopState = () => {
+      pushedEntryRef.current = false;
+      setModeOverride("grid");
+    };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [focusMode]);
@@ -107,17 +124,28 @@ export function RecommendationsView({
     // На десктопе у полноэкранного режима есть клавиатура, и Esc — то, чем
     // такой режим закрывают не глядя. На телефоне обработчик просто молчит.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") window.history.back();
+      if (event.key === "Escape") exitFocusMode();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [focusMode]);
 
   function exitFocusMode() {
-    // history.back() запускает popstate-обработчик выше, который и
-    // переключает mode на "grid" — единая точка выхода что для клика,
-    // что для системного «назад», без лишней записи в истории.
-    window.history.back();
+    // Своя запись в истории есть — снимаем её: history.back() запускает
+    // popstate-обработчик выше, и он переключает mode на "grid", без
+    // лишней записи. Записи нет — просто закрываем, «назад» здесь ушёл бы
+    // на чужую страницу.
+    if (pushedEntryRef.current) {
+      window.history.back();
+      return;
+    }
+    setModeOverride("grid");
+  }
+
+  function enterFocusMode(position: number) {
+    openedByTapRef.current = true;
+    setViewerIndex(position);
+    setModeOverride("swipe");
   }
 
   if (focusMode) {
@@ -151,10 +179,7 @@ export function RecommendationsView({
           icon={<DeckGlyph />}
           label="Свайпами"
           pressable={false}
-          onClick={() => {
-            setViewerIndex(0);
-            setModeOverride("swipe");
-          }}
+          onClick={() => enterFocusMode(0)}
         />
 
         {/* Плотность — выбор человека, а не наше решение за него: две
@@ -188,10 +213,7 @@ export function RecommendationsView({
             <RecommendationTile
               key={item.user.id}
               item={item}
-              onOpen={() => {
-                setViewerIndex(position);
-                setModeOverride("swipe");
-              }}
+              onOpen={() => enterFocusMode(position)}
             />
           ))}
         </div>
