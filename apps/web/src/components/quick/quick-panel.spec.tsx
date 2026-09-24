@@ -676,11 +676,11 @@ describe("QuickPanel: кнопка «Плеер»", () => {
     return { current, isPlaying, toggle: vi.fn(), play: vi.fn() };
   }
 
-  async function pressPlayer() {
+  async function pressPlayer(name: RegExp = /Плеер/) {
     const reveal = vi.fn();
     window.addEventListener("vedamatch:music-player-reveal", reveal);
     const user = await openPanel();
-    await user.click(screen.getByRole("button", { name: /Плеер/ }));
+    await user.click(screen.getByRole("button", { name }));
     window.removeEventListener("vedamatch:music-player-reveal", reveal);
     return reveal;
   }
@@ -701,12 +701,12 @@ describe("QuickPanel: кнопка «Плеер»", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("играющую запись не ставит на паузу", async () => {
+  it("пока играет — кнопка «Пауза» и ставит на паузу (VED-438)", async () => {
     const player = playerStub({ id: "t1" }, true);
     music.player = player;
-    const reveal = await pressPlayer();
+    const reveal = await pressPlayer(/Пауза/);
     expect(reveal).toHaveBeenCalledTimes(1);
-    expect(player.toggle).not.toHaveBeenCalled();
+    expect(player.toggle).toHaveBeenCalledTimes(1);
   });
 
   it("закрытый плеер поднимает недослушанное с той же секунды", async () => {
