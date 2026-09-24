@@ -93,6 +93,9 @@ const PROFILE_FIELD_LABELS: Record<string, string> = {
   homeLocation: 'город',
   socialLinks: 'соцсети',
   messengers: 'мессенджеры',
+  // VED-471: фото убирает администрация — не поле формы, но человеку о нём
+  // говорится тем же уведомлением.
+  avatar: 'фото профиля',
 };
 
 export function describeProfileFields(fields: string[]): string {

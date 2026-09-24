@@ -17,6 +17,7 @@ import type {
   AdminManualStageUpdateRequest,
   AdminProfileUpdateRequest,
   AdminMentorVerificationRequest,
+  AdminRemoveAvatarRequest,
   AdminAuditAction,
   AdminAuditDetails,
   AdminAuditEvent,
@@ -490,6 +491,48 @@ export class AdminUsersService {
         };
         this.events.emit('portal.profile.edited-by-admin', event);
       }
+    }
+
+    return this.getUser(admin.role, userId);
+  }
+
+  /**
+   * Убрать фото профиля (VED-471): снимок, который нельзя показывать, а сам
+   * человек его не убирает. Файл уходит из хранилища тем же путём, что и при
+   * удалении своего фото. Человек узнаёт об этом уведомлением «Администрация
+   * изменила ваш профиль» — молча пропавшее фото выглядело бы как сбой.
+   */
+  async removeAvatar(
+    admin: { sub: string; role: Role },
+    userId: string,
+    body: AdminRemoveAvatarRequest | undefined,
+  ): Promise<AdminUserDetail> {
+    this.ensureAdmin(admin.role);
+
+    const note = body?.reason?.trim() ?? '';
+    if (note.length > PROFILE_EDIT_REASON_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Пояснение не длиннее ${PROFILE_EDIT_REASON_MAX_LENGTH} символов`,
+      );
+    }
+
+    const before = await this.users.getProfile(userId);
+    // Фото уже нет — удалять нечего, и писать человеку не о чем.
+    if (!before.avatarUrl) return this.getUser(admin.role, userId);
+
+    await this.users.deleteAvatar(userId);
+    this.audit(admin.sub, 'user.avatar-removed', userId, {
+      reason: note || null,
+    });
+
+    if (admin.sub !== userId) {
+      const event: NotificationEvent = {
+        name: 'portal.profile.edited-by-admin',
+        recipientId: userId,
+        fields: ['avatar'],
+        reason: note || null,
+      };
+      this.events.emit('portal.profile.edited-by-admin', event);
     }
 
     return this.getUser(admin.role, userId);

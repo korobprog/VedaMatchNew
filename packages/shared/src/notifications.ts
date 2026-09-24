@@ -163,7 +163,7 @@ export type NotificationEvent =
        */
       name: "portal.profile.edited-by-admin";
       recipientId: string;
-      /** `name`, `spiritualName`, `birthDate`, `gender`, `about`, `languages`, `homeLocation`, `socialLinks`, `messengers`. */
+      /** `name`, `spiritualName`, `birthDate`, `gender`, `about`, `languages`, `homeLocation`, `socialLinks`, `messengers`, `avatar`. */
       fields: string[];
       /** Пояснение администратора; null — не оставил. */
       reason: string | null;
