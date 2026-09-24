@@ -57,11 +57,6 @@ function RootStackInner() {
       <ConferenceReturn />
       <TelegramShell />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg0 } }}>
-        {/* Ссылка на конференцию (VED-360) — ВНЕ охраны: её присылают
-            человеку, у которого аккаунта может ещё не быть, и он обязан
-            увидеть, кто зовёт, до входа. Единственный экран приложения,
-            открытый и гостю, и вошедшему. */}
-        <Stack.Screen name="j/[token]" />
         <Stack.Protected guard={status === 'guest'}>
           <Stack.Screen name="login" />
           <Stack.Screen name="auth" />
@@ -170,6 +165,16 @@ function RootStackInner() {
             options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false, animation: 'fade' }}
           />
         </Stack.Protected>
+        {/* Ссылка на конференцию (VED-360) — ВНЕ охраны: её присылают
+            человеку, у которого аккаунта может ещё не быть, и он обязан
+            увидеть, кто зовёт, до входа. Единственный экран приложения,
+            открытый и гостю, и вошедшему.
+
+            Стоит ПОСЛЕДНИМ намеренно. Без ссылки (обычный запуск) гость и
+            новичок в онбординге попадают на первый доступный экран стека;
+            пока этот экран стоял первым, им вместо входа показывалось
+            «Конференция не открылась» без токена (сборка 1026). */}
+        <Stack.Screen name="j/[token]" />
       </Stack>
     </>
   );
