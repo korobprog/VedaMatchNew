@@ -778,8 +778,8 @@ function HeaderSettings({
   return (
     <div>
       <p className="px-1 pb-2 text-[11px] text-text-1">
-        Кнопки справа в шапке, слева направо. Колокольчик и аватар на месте
-        всегда, остальных — до {MAX_HEADER_BUTTONS}.
+        Кнопки справа в шапке, слева направо. Звёздочка, колокольчик и аватар
+        на месте всегда, остальных — до {MAX_HEADER_BUTTONS}.
       </p>
       {groups.map((group) => (
         <section key={group.key} className="mb-2 last:mb-0">
