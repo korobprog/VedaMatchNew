@@ -10,6 +10,7 @@ import {
 } from "@/lib/chat-client";
 import { ChatAvatar } from "./chat-avatar";
 import { formatChatStamp } from "./chat-time";
+import { ChatLocalTime } from "./chat-local-time";
 
 /**
  * Запросы на переписку. Профиль без фото и без общин показывается свёрнутым:
@@ -149,7 +150,7 @@ function RequestCard({
           <span className="text-xs text-text-1">Хочет написать вам</span>
         </div>
         <span className="font-mono text-[11px] text-text-2">
-          {formatChatStamp(request.createdAt)}
+          <ChatLocalTime iso={request.createdAt} format={formatChatStamp} />
         </span>
       </header>
 

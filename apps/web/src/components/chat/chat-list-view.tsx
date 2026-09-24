@@ -17,6 +17,7 @@ import { chatListPreview } from "./chat-list-preview";
 import { formatChatStamp } from "./chat-time";
 import { isOnline } from "./chat-presence";
 import { plural } from "./chat-plural";
+import { ChatLocalTime } from "./chat-local-time";
 
 type Tab = "all" | "direct" | "group" | "channel";
 
@@ -285,7 +286,10 @@ export function ChatListView({
                 </span>
               </span>
               <span className="shrink-0 font-mono text-[11px] text-text-2">
-                {formatChatStamp(hit.message.createdAt)}
+                <ChatLocalTime
+                  iso={hit.message.createdAt}
+                  format={formatChatStamp}
+                />
               </span>
             </Link>
           ))}
@@ -378,7 +382,10 @@ function ConversationRow({
               conversation.unreadCount > 0 ? "text-cyan" : "text-text-2"
             }`}
           >
-            {formatChatStamp(conversation.lastMessageAt)}
+            <ChatLocalTime
+              iso={conversation.lastMessageAt}
+              format={formatChatStamp}
+            />
           </span>
         </span>
         <span className="flex items-center justify-between gap-2">
