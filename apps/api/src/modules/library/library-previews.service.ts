@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolvePreviewUrl } from './preview-url';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 /** Обложку в ленте показываем шириной до 640px — больше не нужно. */
 const PREVIEW_WIDTH = 640;
@@ -244,6 +245,12 @@ export class LibraryPreviewsService {
         ResponseContentDisposition: disposition,
       }),
       { expiresIn: COVER_DOWNLOAD_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 

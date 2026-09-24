@@ -11,6 +11,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MUSIC_STREAM_URL_TTL_SECONDS } from '@vedamatch/shared';
 import type { Readable } from 'node:stream';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 /**
  * Объекты Музыки в S3.
@@ -130,6 +131,12 @@ export class MusicStorageService {
         ContentLength: sizeBytes,
       }),
       { expiresIn: UPLOAD_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 
@@ -212,6 +219,12 @@ export class MusicStorageService {
         ...(disposition ? { ResponseContentDisposition: disposition } : {}),
       }),
       { expiresIn: MUSIC_STREAM_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 

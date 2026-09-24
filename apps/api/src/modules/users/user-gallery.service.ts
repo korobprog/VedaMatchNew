@@ -35,6 +35,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { PersonalDataService } from '../personal-data/personal-data.service';
 import { RESET_PHOTO_VERIFICATION } from './photo-verification';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -529,6 +530,12 @@ export class UserGalleryService {
         Key: storageKey,
       }),
       { expiresIn: SIGNED_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
     return signed;
   }

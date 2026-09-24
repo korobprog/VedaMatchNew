@@ -9,6 +9,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { toPublicStorageUrl } from '../../common/storage-public-url';
 
 export const MAX_GUEST_PHOTO_BYTES = 10 * 1024 * 1024;
 export const GUEST_PHOTO_MIME = new Set([
@@ -94,6 +95,12 @@ export class TravelGuestPhotosService {
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       { expiresIn: SIGNED_URL_TTL_SECONDS },
+    ).then((url) =>
+      toPublicStorageUrl(
+        url,
+        this.config.get<string>('S3_ENDPOINT'),
+        this.config.get<string>('S3_PUBLIC_URL'),
+      ),
     );
   }
 
