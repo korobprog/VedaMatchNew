@@ -3,6 +3,8 @@ import { LINEAGES } from "@vedamatch/shared";
 import {
   activeLineageChoice,
   hrefWithoutLineage,
+  lineageChoiceGroup,
+  lineageFilterMenu,
   lineageFilterOptions,
   preferenceForChoice,
 } from "./lineage-filter";
@@ -76,5 +78,38 @@ describe("hrefWithoutLineage", () => {
   it("без параметров — голый путь", () => {
     expect(hrefWithoutLineage("/library", "?lineage=iskcon")).toBe("/library");
     expect(hrefWithoutLineage("/library", "")).toBe("/library");
+  });
+});
+
+describe("lineageFilterMenu (VED-449)", () => {
+  const menu = lineageFilterMenu({
+    all: "Всё",
+    groups: { iskcon: "ИСККОН", gaudiya_math: "Гаудия-матх", parivara: "Паривары" },
+  });
+
+  it("четыре позиции: всё, ИСККОН сразу выбором, две раскрывающиеся группы", () => {
+    expect(menu.map((item) => (item.kind === "choice" ? item.option.label : item.label))).toEqual([
+      "Всё",
+      "ИСККОН",
+      "Гаудия-матх",
+      "Паривары",
+    ]);
+    expect(menu.map((item) => item.kind)).toEqual(["choice", "choice", "group", "group"]);
+  });
+
+  it("в группах — все линии справочника, ни одна не потеряна", () => {
+    const inGroups = menu.flatMap((item) =>
+      item.kind === "group" ? item.options.map((option) => option.value) : [item.option.value],
+    );
+    expect(inGroups).toHaveLength(11);
+    expect(inGroups).toContain("ipbys");
+    expect(inGroups).toContain("shyamananda_parivara");
+  });
+
+  it("группа выбранной линии", () => {
+    expect(lineageChoiceGroup("all")).toBeNull();
+    expect(lineageChoiceGroup("iskcon")).toBe("iskcon");
+    expect(lineageChoiceGroup("ipbys")).toBe("gaudiya_math");
+    expect(lineageChoiceGroup("narottama_parivara")).toBe("parivara");
   });
 });

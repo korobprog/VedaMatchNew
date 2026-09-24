@@ -78,32 +78,34 @@ export default async function LibraryPage({
               className="mt-1"
             />
           </div>
+          {/* Порядок по просьбе заказчика (VED-449): «Создать пост»,
+              «Фильтры», «Избранное», язык. Фильтр линий — кнопкой в этом
+              ряду, а не отдельной лентой над рубриками. */}
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/library/favorites"
-              className="rounded-xl border border-glass-brd px-4 py-2 text-sm text-text-2 hover:text-text-0"
-            >
-              {t(locale, "bookmark.title")}
-            </Link>
-            <Link
               href="/library/add"
-              className="btn-mint rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+              className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
             >
               {t(locale, "nav.add")}
             </Link>
+            {/* Якорь `#lineage-switch` прежний: на него ведут «настроить» в
+                подписи и подсказка выбрать линию со страниц рубрик. */}
+            <div id="lineage-switch" className="scroll-mt-24">
+              <LibraryLineageFilter
+                locale={locale}
+                applied={appliedLineage}
+                preference={preferences?.lineage ?? null}
+                viewer={lineageViewer}
+              />
+            </div>
+            <Link
+              href="/library/favorites"
+              className="inline-flex min-h-11 items-center rounded-xl border border-glass-brd px-4 text-sm text-text-2 hover:text-text-0"
+            >
+              {t(locale, "bookmark.title")}
+            </Link>
             <LocaleSwitch locale={locale} />
           </div>
-        </div>
-
-        {/* Якорь `#lineage-switch` прежний: на него ведут «настроить» в
-            подписи и подсказка выбрать линию со страниц рубрик. */}
-        <div id="lineage-switch" className="scroll-mt-24">
-          <LibraryLineageFilter
-            locale={locale}
-            applied={appliedLineage}
-            preference={preferences?.lineage ?? null}
-            viewer={lineageViewer}
-          />
         </div>
 
         {user && (
@@ -111,7 +113,7 @@ export default async function LibraryPage({
             user={user}
             serviceName="Образования"
             settingsHref="#lineage-switch"
-            settingsLabel="в ряду линий над рубриками"
+            settingsLabel="кнопкой «Фильтры»"
           />
         )}
 
