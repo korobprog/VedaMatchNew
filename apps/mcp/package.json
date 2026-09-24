@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "postinstall": "tsc -p tsconfig.json || true",
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "test": "vitest run",

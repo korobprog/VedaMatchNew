@@ -11,7 +11,7 @@
     },
     "vedamatch": {
       "command": "node",
-      "args": ["C:/Users/makst/Documents/VedaMatchNew/apps/mcp/dist/index.js"],
+      "args": ["apps/mcp/dist/index.js"],
       "env": {
         "VEDAMATCH_API_KEY": "${VEDAMATCH_API_KEY}",
         "VEDAMATCH_API_URL": "https://api.vedamatch.ru"
