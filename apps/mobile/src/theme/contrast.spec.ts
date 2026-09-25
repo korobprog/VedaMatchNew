@@ -315,6 +315,15 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   { name: 'заливка шкалы перемотки на дорожке', graphic: 'magenta', surface: 'bg2' },
   { name: 'значки «пауза» и «закрыть» мини-плеера', graphic: 'text1', surface: 'bg1' },
   { name: 'значки «−10/+10» полноэкранного плеера', graphic: 'text0', surface: 'bg0' },
+  // Своя анкета Знакомств: полоса заполненности на дорожке `bg1`. Цвет
+  // говорит «насколько готово», но то же самое написано словами — процент
+  // над полосой и подсказка «что дальше» под ней.
+  { name: 'полоса заполненности анкеты — мало', graphic: 'magenta', surface: 'bg1' },
+  { name: 'полоса заполненности анкеты — половина', graphic: 'gold', surface: 'bg1' },
+  { name: 'полоса заполненности анкеты — почти всё', graphic: 'cyan', surface: 'bg1' },
+  // Выбранный чип анкеты — рамка magenta на `bg2`; выбор дублирует
+  // `accessibilityState` и заливка.
+  { name: 'рамка выбранного чипа анкеты', graphic: 'magenta', surface: 'bg2' },
 ];
 
 /**

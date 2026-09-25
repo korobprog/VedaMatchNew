@@ -157,6 +157,13 @@ function RootStackInner() {
           <Stack.Screen name="union/likes" />
           <Stack.Screen name="union/connections" />
           <Stack.Screen name="union/report/[id]" />
+          {/* Своя анкета, место жительства, подборки и скрытые — вторая
+              часть переноса. Вход в раздел ведёт на место или анкету сам,
+              если их ещё нет. */}
+          <Stack.Screen name="union/profile" />
+          <Stack.Screen name="union/location" />
+          <Stack.Screen name="union/collections" />
+          <Stack.Screen name="union/hidden" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />

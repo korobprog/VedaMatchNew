@@ -1,5 +1,15 @@
 import type {
   CreateUserReportRequest,
+  GeoSearchResult,
+  UnionArchiveListResponse,
+  UnionGenerableField,
+  UnionGenerateTextResponse,
+  UnionProfileUpdateRequest,
+  UserBlocksState,
+  UserGalleryState,
+  UserPhotoDto,
+  UserPhotoUploadResponse,
+  UserProfile,
   UnionBoostStatus,
   UnionConnectionCounts,
   UnionConnectionRequestsState,
@@ -15,7 +25,11 @@ import type {
   UnionSwipeUndoResult,
 } from '@vedamatch/shared';
 import type { ApiClient } from '@/lib/api/client';
+import { buildUploadFormPart, type UploadFormPart, type UploadSource } from '@/lib/upload/upload-form-part';
 import { recommendationsQuery } from './recommendations-query';
+
+/** Часть формы из локального файла. Подменяется в тестах. */
+export type BuildPart = (source: UploadSource) => Promise<UploadFormPart>;
 
 /**
  * Маршруты Знакомств (`union/*`), которыми пользуется приложение. Контракт
@@ -24,7 +38,7 @@ import { recommendationsQuery } from './recommendations-query';
  * и серверные чтения `apps/web/src/lib/union-api.ts`. Нового серверного кода
  * под приложение не заводилось.
  */
-export function createUnionApi(api: ApiClient) {
+export function createUnionApi(api: ApiClient, buildPart: BuildPart = buildUploadFormPart) {
   const id = (value: string) => encodeURIComponent(value);
   return {
     /** Своя анкета и прогресс заполнения; `profile: null` — анкеты ещё нет. */
@@ -65,6 +79,51 @@ export function createUnionApi(api: ApiClient) {
     block: (userId: string) => api.request<unknown>(`/union/users/${id(userId)}/block`, { method: 'POST' }),
     report: (userId: string, body: CreateUserReportRequest) =>
       api.request<unknown>(`/union/users/${id(userId)}/report`, { method: 'POST', body }),
+
+    // ---- своя анкета ----
+
+    /** Сохранить анкету; первый `PUT` её и создаёт. Цели обязательны в каждом запросе. */
+    updateProfile: (body: UnionProfileUpdateRequest) =>
+      api.request<UnionProfileState>('/union/profile', { method: 'PUT', body }),
+    /** Черновик статуса или «о себе» нейросетью по данным профиля. */
+    generateText: (field: UnionGenerableField) =>
+      api.request<UnionGenerateTextResponse>('/union/profile/generate', { method: 'POST', body: { field } }),
+    /**
+     * Статус — портальный: одна строка на весь портал, поэтому уходит в
+     * профиль (`PATCH /profile`), а не в анкету — тем же путём, что на сайте.
+     */
+    saveStatusLine: (statusLine: string | null) =>
+      api.request<UserProfile>('/profile', { method: 'PATCH', body: { statusLine } }),
+    /** Место жительства — тоже портальное поле профиля. */
+    saveHomeLocation: (homeLocation: GeoSearchResult) =>
+      api.request<UserProfile>('/profile', { method: 'PATCH', body: { homeLocation } }),
+    /** Подсказки городов — портальный прокси к геокодеру, с отбором по стране. */
+    searchCities: (city: string, country: string, signal?: AbortSignal) =>
+      api.request<GeoSearchResult[]>(
+        `/geo/search?q=${encodeURIComponent(city.trim())}&country=${encodeURIComponent(country.trim())}`,
+        { signal },
+      ),
+
+    // ---- фото анкеты: портальная галерея, в Знакомствах видны открытые ----
+
+    gallery: () => api.request<UserGalleryState>('/profile/photos'),
+    uploadPhotos: async (files: readonly UploadSource[]) => {
+      const form = new FormData();
+      for (const file of files) form.append('files', (await buildPart(file)) as unknown as Blob);
+      return api.request<UserPhotoUploadResponse>('/profile/photos', { method: 'POST', body: form });
+    },
+    setPhotoPublic: (photoId: string, isPublic: boolean) =>
+      api.request<UserPhotoDto>(`/profile/photos/${id(photoId)}`, { method: 'PATCH', body: { isPublic } }),
+    deletePhoto: (photoId: string) => api.request<unknown>(`/profile/photos/${id(photoId)}`, { method: 'DELETE' }),
+    reorderPhotos: (photoIds: string[]) =>
+      api.request<UserGalleryState>('/profile/photos/order', { method: 'PUT', body: { photoIds } }),
+
+    // ---- скрытые мной ----
+
+    archiveList: () => api.request<UnionArchiveListResponse>('/union/archive'),
+    unarchive: (userId: string) => api.request<unknown>(`/union/archive/${id(userId)}`, { method: 'DELETE' }),
+    blocks: () => api.request<UserBlocksState>('/union/blocks'),
+    unblock: (userId: string) => api.request<unknown>(`/union/users/${id(userId)}/block`, { method: 'DELETE' }),
   };
 }
 

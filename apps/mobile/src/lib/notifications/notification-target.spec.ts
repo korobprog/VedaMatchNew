@@ -275,9 +275,19 @@ describe('Знакомства: пуш «Новая заявка» и ссылк
     });
   });
 
-  it('остальные разделы Знакомств — вход в раздел, он сам решит, куда вести', () => {
+  it('анкета, место, подборки, скрытые и подбор — тоже свои экраны', () => {
+    for (const section of ['profile', 'location', 'collections', 'hidden', 'recommendations']) {
+      expect(pushDestination(`/union/${section}`)).toEqual({ kind: 'route', pathname: `/union/${section}` });
+    }
+    expect(pushDestination('/union/recommendations?intentions=family')).toEqual({
+      kind: 'route',
+      pathname: '/union/recommendations',
+    });
+  });
+
+  it('незнакомый раздел Знакомств — вход в раздел, он сам решит, куда вести', () => {
     expect(pushDestination('/union')).toEqual({ kind: 'route', pathname: '/union' });
-    expect(pushDestination('/union/profile')).toEqual({ kind: 'route', pathname: '/union' });
+    expect(pushDestination('/union/showcase')).toEqual({ kind: 'route', pathname: '/union' });
     expect(pushDestination('/union/users/')).toEqual({ kind: 'route', pathname: '/union' });
   });
 

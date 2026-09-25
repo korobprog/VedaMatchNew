@@ -40,13 +40,12 @@ export type NotificationTarget =
   | { kind: 'wellness-product'; barcode: string }
   | { kind: 'wellness-history' }
   /**
-   * Знакомства: пуш «Новая заявка» ведёт на `/union/connections`. Своими
-   * экранами — связи, лайки и анкета человека; остальное (подборки, скрытые,
-   * своя анкета) — вход в раздел, он сам решит, куда вести.
-   * `/union/chats/*` сюда не попадает: переписка Знакомств переехала в
-   * «Общение», и такие пути ведут на сайт, где стоят редиректы.
+   * Знакомства: пуш «Новая заявка» ведёт на `/union/connections`. У каждого
+   * раздела свой экран; незнакомый путь — вход в раздел, он сам решит, куда
+   * вести. `/union/chats/*` сюда не попадает: переписка Знакомств переехала
+   * в «Общение», и такие пути ведут на сайт, где стоят редиректы.
    */
-  | { kind: 'union'; section: 'entry' | 'connections' | 'likes' }
+  | { kind: 'union'; section: UnionSection }
   | { kind: 'union-user'; userId: string }
   /**
    * Вышла новая версия приложения: пуш «Доступна новая версия» с путём
@@ -62,6 +61,14 @@ export type NotificationTarget =
    * открыл бы пустую форму вместо нужного рилса.
    */
   | { kind: 'site'; path: string };
+
+/** Разделы Знакомств со своим экраном в приложении; `entry` — вход в раздел. */
+const UNION_SECTIONS = ['connections', 'likes', 'recommendations', 'profile', 'location', 'collections', 'hidden'] as const;
+type UnionSection = 'entry' | (typeof UNION_SECTIONS)[number];
+
+function unionSection(segment: string | undefined): UnionSection {
+  return (UNION_SECTIONS as readonly string[]).includes(segment ?? '') ? (segment as UnionSection) : 'entry';
+}
 
 /**
  * Служебные разделы сайта, по форме пути неотличимые от беседы
@@ -155,12 +162,11 @@ export function resolveNotificationTarget(url: unknown): NotificationTarget {
   }
 
   if (first === 'union' && second !== 'chats' && second !== 'admin') {
-    if (second === 'connections' || second === 'likes') return { kind: 'union', section: second };
     if (second === 'users') {
       const userId = idOf(third);
       if (userId) return { kind: 'union-user', userId };
     }
-    return { kind: 'union', section: 'entry' };
+    return { kind: 'union', section: unionSection(second) };
   }
 
   if (first === 'app' && !second) return { kind: 'app-update' };
