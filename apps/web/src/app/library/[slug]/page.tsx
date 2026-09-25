@@ -16,6 +16,7 @@ import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { CategoryBreadcrumbs } from "@/components/library/category-breadcrumbs";
 import { CategoryNavigator } from "@/components/library/category-navigator";
+import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
@@ -115,10 +116,22 @@ export default async function LibraryCategoryPage({
           current={title}
         />
 
-        <div className="mb-1 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="font-display text-2xl font-bold text-text-0">
-            {title}
-          </h1>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          {/* Число подразделов — рядом с заголовком, а не отдельной строкой
+              под кнопками (VED-511): так экран компактнее.
+
+              То же одно число, что и в плитке: раздел — свои подразделы,
+              подраздел — свои материалы. Голое «3 материалов» над лентой
+              раздела, у которого своих материалов нет, читалось как «здесь
+              три» — а все три лежали в подразделах. */}
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="font-display text-2xl font-bold text-text-0">
+              {title}
+            </h1>
+            <p className="text-sm text-text-2">
+              {categoryPageSummary(locale, category)}
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/library/add?category=${encodeURIComponent(category.slug)}`}
@@ -129,23 +142,23 @@ export default async function LibraryCategoryPage({
             <CategoryTitleEdit locale={locale} category={category} />
           </div>
         </div>
-        {/* То же одно число, что и в плитке: раздел — свои подразделы,
-            подраздел — свои материалы. Голое «3 материалов» над лентой
-            раздела, у которого своих материалов нет, читалось как «здесь
-            три» — а все три лежали в подразделах. */}
-        <p className="mb-6 text-sm text-text-2">
-          {categoryPageSummary(locale, category)}
-        </p>
-
-        {/* Ряд линий заменил блок «Для вашей линии здесь пока ничего нет»
-            под лентой (VED-396): выбранная линия видна сразу, а не когда
-            лента уже опустела. */}
-        <div id="lineage-switch" className="mb-4 scroll-mt-24">
-          <LibraryLineageFilter
-            locale={locale}
-            applied={appliedLineage}
-            preference={preferences?.lineage ?? null}
-          />
+        {/* «Фильтры» и «Упорядочить» — рядом, в один ряд (VED-511), как в
+            ряду кнопок на главной Образования (VED-483). Ряд линий заменил
+            блок «Для вашей линии здесь пока ничего нет» под лентой (VED-396):
+            выбранная линия видна сразу, а не когда лента уже опустела. */}
+        <div
+          className={`mb-4 grid gap-2 sm:flex sm:flex-wrap sm:items-center ${
+            category.canMove ? "grid-cols-2" : "grid-cols-1"
+          }`}
+        >
+          <div id="lineage-switch" className="scroll-mt-24">
+            <LibraryLineageFilter
+              locale={locale}
+              applied={appliedLineage}
+              preference={preferences?.lineage ?? null}
+            />
+          </div>
+          {category.canMove && <LibraryOrganizeButton locale={locale} />}
         </div>
 
         {user && (
@@ -163,6 +176,7 @@ export default async function LibraryCategoryPage({
           tree={tree ?? []}
           activeSlug={category.slug}
           canOrganize={category.canMove}
+          organizeInToolbar
         />
 
         {shlokaMode === "root" && (
