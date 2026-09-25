@@ -1,5 +1,5 @@
 import type { UnionIntentionCounts, UnionRecommendation, UnionRecommendationFilters } from '@vedamatch/shared';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BackHandler,
@@ -39,6 +39,7 @@ import {
   tileSize,
   type GridDensity,
 } from '@/lib/union/recommendations-query';
+import { collectionByKey } from '@/lib/union/union-collections';
 import { readDensity, writeDensity } from '@/lib/union/union-device-prefs';
 import { describeUnionError, isNotFound } from '@/lib/union/union-error';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -74,7 +75,12 @@ export default function UnionRecommendationsScreen() {
   const unionApi = useUnionApi();
   const incomingPending = useIncomingPending(unionApi);
 
-  const [filters, setFilters] = useState<UnionRecommendationFilters>({});
+  // Подборка (`union/collections`) приезжает ключом в адресе экрана, фильтр
+  // берётся из списка подборок: чужой ключ — обычный подбор.
+  const { collection } = useLocalSearchParams<{ collection?: string }>();
+  const [preset] = useState(() => collectionByKey(collection));
+  const [collectionTitle, setCollectionTitle] = useState<string | null>(preset?.title ?? null);
+  const [filters, setFilters] = useState<UnionRecommendationFilters>(() => preset?.filters ?? {});
   const [feed, setFeed] = useState<Feed | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,6 +164,12 @@ export default function UnionRecommendationsScreen() {
     [load],
   );
 
+  /** Последний выход с пустой выдачи: без фильтров, истории и подборки. */
+  const showEveryone = useCallback(() => {
+    setCollectionTitle(null);
+    applyFilters(EVERYTHING_FILTERS);
+  }, [applyFilters]);
+
   const hasMore = Boolean(feed && feed.page < feed.totalPages);
   const loadMore = useCallback(async () => {
     if (!feed || loadingMore || feed.page >= feed.totalPages) return;
@@ -230,14 +242,23 @@ export default function UnionRecommendationsScreen() {
         counts={feed?.intentionCounts ?? null}
         onChange={(intentions) => applyFilters({ ...filters, intentions: intentions.length > 0 ? intentions : undefined })}
       />
-      {filters.showAll || filters.includeSwiped ? (
+      {collectionTitle || filters.showAll || filters.includeSwiped ? (
         <View style={[styles.notice, { backgroundColor: colors.bg1 }]}>
           <Text style={[styles.noticeText, { color: colors.text1 }]}>
             {filters.showAll
               ? 'Показаны все анкеты, включая уже отсмотренные и не подходящие по вашей анкете.'
-              : 'Показаны и уже отсмотренные анкеты.'}
+              : filters.includeSwiped
+                ? 'Показаны и уже отсмотренные анкеты.'
+                : `Подборка «${collectionTitle}».`}
           </Text>
-          <UnionButton kind="secondary" label="Как обычно" onPress={() => applyFilters({})} />
+          <UnionButton
+            kind="secondary"
+            label="Как обычно"
+            onPress={() => {
+              setCollectionTitle(null);
+              applyFilters({});
+            }}
+          />
         </View>
       ) : null}
       {feed && feed.items.length > 0 ? (
@@ -293,11 +314,18 @@ export default function UnionRecommendationsScreen() {
                 ) : null}
                 {empty.canResetFilters ? (
                   <>
-                    <UnionButton kind="secondary" label="Сбросить фильтры" onPress={() => applyFilters({})} />
+                    <UnionButton
+                      kind="secondary"
+                      label="Сбросить фильтры"
+                      onPress={() => {
+                        setCollectionTitle(null);
+                        applyFilters({});
+                      }}
+                    />
                     {/* Сброс фильтров не снимает историю показов, а «показать
                         отсмотренных» сохраняет фильтры. Когда пусто из-за
                         обоих сразу — это последний выход. */}
-                    <UnionButton kind="secondary" label="Показать вообще всех" onPress={() => applyFilters(EVERYTHING_FILTERS)} />
+                    <UnionButton kind="secondary" label="Показать вообще всех" onPress={showEveryone} />
                   </>
                 ) : null}
               </UnionEmpty>
@@ -346,7 +374,7 @@ export default function UnionRecommendationsScreen() {
             setDeckIndex(0);
             void load(filters);
           }}
-          onShowEveryone={() => applyFilters(EVERYTHING_FILTERS)}
+          onShowEveryone={showEveryone}
         />
       ) : null}
     </View>

@@ -7,7 +7,7 @@
  * «Чаты» Знакомств сюда не входят: переписка портала одна, она в «Чатах»
  * приложения, а страницы `/union/chats` на сайте — редиректы туда же.
  */
-export type UnionSectionKey = 'recommendations' | 'likes' | 'connections';
+export type UnionSectionKey = 'recommendations' | 'likes' | 'connections' | 'collections' | 'hidden' | 'profile';
 
 export interface UnionSection {
   key: UnionSectionKey;
@@ -20,6 +20,9 @@ export const UNION_SECTIONS: readonly UnionSection[] = [
   { key: 'recommendations', title: 'Анкеты', route: '/union/recommendations' },
   { key: 'likes', title: 'Лайки', route: '/union/likes' },
   { key: 'connections', title: 'Связи', route: '/union/connections' },
+  { key: 'collections', title: 'Подборки', route: '/union/collections' },
+  { key: 'hidden', title: 'Скрытые', route: '/union/hidden' },
+  { key: 'profile', title: 'Моя анкета', route: '/union/profile' },
 ];
 
 /** Счётчик на вкладке: больше 99 не пишем, «99+» — и так понятно, что много. */
