@@ -7,6 +7,7 @@ import {
   ogImageSource,
   ogPreviewSize,
 } from "@/lib/motivation-og-image";
+import { toInternalStorageUrl } from "@/lib/storage-internal-url";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,9 @@ export async function GET(
   const source = post ? ogImageSource(post) : null;
   if (!source) return new Response("Not found", { status: 404 });
 
-  const upstream = await fetch(source, { signal: AbortSignal.timeout(20_000) });
+  const upstream = await fetch(toInternalStorageUrl(source), {
+    signal: AbortSignal.timeout(20_000),
+  });
   if (!upstream.ok) return new Response("Upstream unavailable", { status: 502 });
   const original = Buffer.from(await upstream.arrayBuffer());
 

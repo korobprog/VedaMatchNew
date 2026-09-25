@@ -10,6 +10,7 @@ import {
   ogPreviewSize,
 } from "@/lib/motivation-og-image";
 import { probeImageSize } from "@/lib/motivation-og-probe";
+import { toInternalStorageUrl } from "@/lib/storage-internal-url";
 import { buildShareMeta } from "./share-meta";
 
 /**
@@ -37,7 +38,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // страница узнаёт его размер по заголовку файла и считает кадр той же
   // функцией, что и маршрут `/m/[slug]/og`. Не узнали — размеры не
   // объявляем: бот прочтёт их из самого файла.
-  const sourceSize = source ? await probeImageSize(source) : null;
+  const sourceSize = source
+    ? await probeImageSize(toInternalStorageUrl(source))
+    : null;
   const previewSize = sourceSize ? ogPreviewSize(sourceSize) : null;
   return {
     title: `${post.title} — Inspiration`,

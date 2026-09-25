@@ -1,4 +1,5 @@
 import { parseAppManifest, type AppManifest } from "./app-download";
+import { toInternalStorageUrl } from "./storage-internal-url";
 
 /**
  * Манифест Android-сборки, раздаваемой с сайта (VED-176).
@@ -31,7 +32,10 @@ export async function getAppManifest(): Promise<AppManifest | null> {
   if (!base) return null;
 
   try {
-    const response = await fetch(`${base.replace(/\/$/, "")}/${MANIFEST_PATH}`, {
+    const url = toInternalStorageUrl(
+      `${base.replace(/\/$/, "")}/${MANIFEST_PATH}`,
+    );
+    const response = await fetch(url, {
       next: { revalidate: REVALIDATE_SECONDS },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
