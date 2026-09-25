@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type Ref,
 } from "react";
@@ -37,6 +38,13 @@ import {
   Users,
   X,
 } from "lucide-react";
+import {
+  VCALENDAR_URL,
+  getVcalendarButtonServerSnapshot,
+  getVcalendarButtonSnapshot,
+  setVcalendarButtonShown,
+  subscribeVcalendarButton,
+} from "@/lib/vcalendar-button";
 import {
   donateTileView,
   loadDonationSettings,
@@ -1150,6 +1158,11 @@ function InviteTile() {
  * «когда экадаши» и «что у нас в субботу» — разные вопросы.
  */
 function CalendarSheet({ onClose }: { onClose: () => void }) {
+  const onBlog = useSyncExternalStore(
+    subscribeVcalendarButton,
+    getVcalendarButtonSnapshot,
+    getVcalendarButtonServerSnapshot,
+  );
   return (
     <div className="mt-3 rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm text-text-1">
       <ul className="space-y-2">
@@ -1169,7 +1182,7 @@ function CalendarSheet({ onClose }: { onClose: () => void }) {
           {/* Внешний сайт: `rel` обязателен — без `noopener` открытая
               вкладка получает доступ к нашей через `window.opener`. */}
           <a
-            href="https://vcalendar.ru"
+            href={VCALENDAR_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-cyan hover:text-magenta"
@@ -1179,6 +1192,19 @@ function CalendarSheet({ onClose }: { onClose: () => void }) {
           <p className="text-xs text-text-1">
             Экадаши, посты и дни явления — на vcalendar.ru
           </p>
+          {/* Кнопка календаря на Блог-ленте главной (VED-489): прячется и
+              возвращается здесь, у самого календаря. */}
+          <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 text-xs text-text-0">
+            <input
+              type="checkbox"
+              checked={onBlog}
+              onChange={(event) =>
+                setVcalendarButtonShown(window.localStorage, event.target.checked)
+              }
+              className="size-4"
+            />
+            Кнопка календаря на Блог-ленте
+          </label>
         </li>
       </ul>
       <button
