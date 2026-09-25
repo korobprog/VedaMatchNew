@@ -142,9 +142,12 @@ export function BlogPostText({
 export function BlogMoreButton({
   fold,
   className,
+  compact = false,
 }: {
   fold: BlogTextFold;
   className?: string;
+  /** В шапке карточки (VED-501) — ниже и мельче, в строку с автором. */
+  compact?: boolean;
 }) {
   if (!fold.canExpand) return null;
   // Ссылаться можно только на то, что есть в разметке: у поста бывает
@@ -158,7 +161,9 @@ export function BlogMoreButton({
       onClick={fold.toggle}
       aria-expanded={fold.expanded}
       aria-controls={controls || undefined}
-      className={`inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-glass-brd bg-bg-1 px-4 text-base font-semibold text-text-0 hover:border-cyan/60 ${
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl border border-glass-brd bg-bg-1 font-semibold text-text-0 hover:border-cyan/60 ${
+        compact ? "min-h-11 px-3 text-sm" : "min-h-12 px-4 text-base"
+      } ${
         className ?? ""
       }`}
     >

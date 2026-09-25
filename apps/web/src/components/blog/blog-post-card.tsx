@@ -189,6 +189,12 @@ export function BlogPostCard({
             </span>
           </span>
         </Link>
+        {/* «Далее / Свернуть» — в шапке, справа (VED-501): внизу, под
+            развёрнутым текстом, до неё и до остальных кнопок «слишком долго
+            мотать». У репоста своя кнопка — под чужим текстом. */}
+        {!editing && !source && (
+          <BlogMoreButton fold={fold} compact className="ml-auto shrink-0" />
+        )}
       </header>
 
       {editing ? (
@@ -232,9 +238,6 @@ export function BlogPostCard({
           <BlogPostText fold={fold} attach={attachBody} className="px-4 pt-1" />
 
           <footer className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-2">
-            {/* «Далее» забирает свободную ширину ряда: крупная надпись во всю
-                оставшуюся ширину, а не ещё одна маленькая кнопка. */}
-            <BlogMoreButton fold={fold} className="grow" />
             <BlogSpeakButton post={post} />
             <button
               type="button"

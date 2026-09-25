@@ -2,8 +2,31 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
-import { CalendarDays, EyeOff, PenLine, Play, Rows3, Star } from "lucide-react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  type ReactNode,
+} from "react";
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  EyeOff,
+  PenLine,
+  Play,
+  Rows3,
+  Settings2,
+  Share2,
+  Square,
+  Star,
+  Volume2,
+} from "lucide-react";
 import type { BlogHomeFeedResponse, BlogPostDto } from "@vedamatch/shared";
 import {
   BLOG_HOME_COOKIE,
@@ -19,6 +42,25 @@ import {
 } from "@/lib/vcalendar-button";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
 import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
+import {
+  buildSpokenPost,
+  canSpeak,
+  getBlogSpeakingId,
+  getBlogSpeakingServerId,
+  speakBlogPost,
+  stopBlogSpeech,
+  subscribeBlogSpeech,
+} from "./blog-speech";
+import {
+  HOME_PANEL_DEFAULT_ORDER,
+  HOME_PANEL_LABELS,
+  movePanelButton,
+  readPanelOrder,
+  writePanelOrder,
+  type HomePanelButton,
+} from "./home-panel-order";
+
+const subscribeNothing = () => () => {};
 
 /**
  * Блог-лента на главной (VED-238) — на месте, где раньше стояли карточка
@@ -94,86 +136,246 @@ export function BlogHomeWidget({
     }
   }
 
-  const slides = useMemo(
-    () => (showFavorites ? (favorites ?? []) : data.posts).map(blogHomeSlide),
+  const posts = useMemo(
+    () => (showFavorites ? (favorites ?? []) : data.posts),
     [showFavorites, favorites, data.posts],
   );
+  const slides = useMemo(() => posts.map(blogHomeSlide), [posts]);
 
-  /* 44px — размер пальца: четыре кнопки панели стоят вплотную, и мелкие
-     промахивались бы на соседнюю — а соседняя здесь «убрать ленту». */
+  /* Какой пост на экране — «Поделиться» и «Озвучить» (VED-497) работают с
+     ним. Смена ленты (избранное) пересоздаёт карусель, и она сообщит 0. */
+  const [slideIndex, setSlideIndex] = useState(0);
+  const onIndexChange = useCallback(
+    (index: number) => setSlideIndex(index),
+    [],
+  );
+  const currentPost = posts[Math.min(slideIndex, posts.length - 1)] ?? null;
+  const spokenSource = currentPost
+    ? (currentPost.repostOf ?? currentPost)
+    : null;
+  const spokenText = spokenSource ? buildSpokenPost(spokenSource) : "";
+
+  const speakingId = useSyncExternalStore(
+    subscribeBlogSpeech,
+    getBlogSpeakingId,
+    getBlogSpeakingServerId,
+  );
+  const canSpeakHere = useSyncExternalStore(
+    subscribeNothing,
+    canSpeak,
+    () => false,
+  );
+  const speaking = currentPost !== null && speakingId === currentPost.id;
+
+  const [order, setOrder] = useState<HomePanelButton[]>(() => [
+    ...HOME_PANEL_DEFAULT_ORDER,
+  ]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Порядок с устройства — после гидрации, иначе разметка сервера и
+  // браузера разойдётся.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage доступен только в браузере
+    setOrder(readPanelOrder());
+  }, []);
+  function move(id: HomePanelButton, direction: -1 | 1) {
+    const next = movePanelButton(order, id, direction);
+    setOrder(next);
+    writePanelOrder(next);
+  }
+
+  const [shared, setShared] = useState(false);
+  async function share() {
+    if (!currentPost) return;
+    const url = `${window.location.origin}/blog/posts/${encodeURIComponent(currentPost.id)}`;
+    const title = spokenSource?.title ?? "Блог-лента VedaMatch";
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      window.setTimeout(() => setShared(false), 2000);
+    } catch {
+      // Человек закрыл окно «Поделиться» — это не ошибка.
+    }
+  }
+
+  function toggleSpeak() {
+    if (!currentPost) return;
+    if (speaking) stopBlogSpeech();
+    else speakBlogPost(currentPost.id, spokenText);
+  }
+
+  /* Кнопки панели стоят на равном расстоянии по всей ширине (VED-497), а
+     надписи «Блог-лента» больше нет — она «занимала место». Название
+     осталось для скринридера. На узком телефоне кнопки 36px, от 400 точек —
+     40px: восемь штук по 44 в строку 360 точек не встают. */
   const iconButton =
-    "inline-flex size-11 items-center justify-center rounded-lg border border-glass-brd text-text-1";
+    "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-glass-brd text-text-1 min-[400px]:size-10";
+
+  const buttons: Record<HomePanelButton, ReactNode> = {
+    calendar: showCalendar ? (
+      // Внешний сайт: `noopener`, чтобы вкладка не получила доступ к
+      // нашей через `window.opener`.
+      <a
+        href={VCALENDAR_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Вайшнавский календарь (vcalendar.ru, откроется в новой вкладке)"
+        title="Вайшнавский календарь: экадаши, посты и дни явления"
+        className={`${iconButton} hover:border-cyan/60`}
+      >
+        <CalendarDays aria-hidden className="size-4" />
+      </a>
+    ) : null,
+    write: (
+      <Link
+        href="/blog?new=1"
+        aria-label="Написать пост"
+        title="Написать пост"
+        className={`${iconButton} hover:border-cyan/60`}
+      >
+        <PenLine aria-hidden className="size-4" />
+      </Link>
+    ),
+    feed: (
+      <Link
+        href="/blog"
+        aria-label="Вся лента и прошлые посты"
+        title="Вся лента и прошлые посты"
+        className={`${iconButton} hover:border-cyan/60`}
+      >
+        <Rows3 aria-hidden className="size-4" />
+      </Link>
+    ),
+    favorites: (
+      <button
+        type="button"
+        onClick={toggleFavorites}
+        aria-pressed={showFavorites}
+        aria-label="Избранное"
+        title="Избранное"
+        className={`${iconButton} hover:border-gold/60 ${
+          showFavorites ? "border-gold" : ""
+        }`}
+      >
+        <Star
+          aria-hidden
+          className={`size-4 ${showFavorites ? "fill-gold text-gold" : ""}`}
+        />
+      </button>
+    ),
+    share: (
+      <button
+        type="button"
+        onClick={() => void share()}
+        disabled={!currentPost}
+        aria-label={shared ? "Ссылка на пост скопирована" : "Поделиться постом"}
+        title="Поделиться постом"
+        className={`${iconButton} hover:border-cyan/60 disabled:opacity-50`}
+      >
+        {shared ? (
+          <Check aria-hidden className="size-4" />
+        ) : (
+          <Share2 aria-hidden className="size-4" />
+        )}
+      </button>
+    ),
+    speak:
+      canSpeakHere && spokenText ? (
+        <button
+          type="button"
+          onClick={toggleSpeak}
+          aria-pressed={speaking}
+          aria-label={speaking ? "Остановить озвучку" : "Озвучить пост"}
+          title={speaking ? "Остановить озвучку" : "Озвучить пост"}
+          className={`${iconButton} hover:border-cyan/60 ${speaking ? "border-cyan" : ""}`}
+        >
+          {speaking ? (
+            <Square aria-hidden className="size-3.5" fill="currentColor" />
+          ) : (
+            <Volume2 aria-hidden className="size-4" />
+          )}
+        </button>
+      ) : null,
+    hide: (
+      <button
+        type="button"
+        onClick={hide}
+        disabled={pending}
+        aria-label="Убрать ленту с экрана"
+        title="Убрать ленту с экрана"
+        className={`${iconButton} hover:border-magenta/60 disabled:opacity-60`}
+      >
+        <EyeOff aria-hidden className="size-4" />
+      </button>
+    ),
+  };
 
   return (
     <section
       aria-labelledby="blog-home-heading"
       className={`overflow-hidden rounded-2xl border border-glass-brd bg-glass ${className ?? ""}`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-1.5 pl-3 pr-1.5">
-        <h2
-          id="blog-home-heading"
-          className="font-display text-sm font-semibold text-text-0"
+      <h2 id="blog-home-heading" className="sr-only">
+        {showFavorites ? "Избранное Блог-ленты" : "Блог-лента"}
+      </h2>
+      <div className="flex items-center justify-between gap-1 px-1.5 py-1.5">
+        {order.map((id) =>
+          buttons[id] ? <Fragment key={id}>{buttons[id]}</Fragment> : null,
+        )}
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((open) => !open)}
+          aria-expanded={settingsOpen}
+          aria-controls="blog-home-settings"
+          aria-label="Настройки панели: порядок кнопок"
+          title="Порядок кнопок"
+          className={`${iconButton} hover:border-cyan/60 ${settingsOpen ? "border-cyan" : ""}`}
         >
-          {showFavorites ? "Избранное" : "Блог-лента"}
-        </h2>
-        <div className="flex items-center gap-1">
-          {showCalendar && (
-            // Внешний сайт: `noopener`, чтобы вкладка не получила доступ к
-            // нашей через `window.opener`.
-            <a
-              href={VCALENDAR_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Вайшнавский календарь (vcalendar.ru, откроется в новой вкладке)"
-              title="Вайшнавский календарь: экадаши, посты и дни явления"
-              className={`${iconButton} hover:border-cyan/60`}
-            >
-              <CalendarDays aria-hidden className="size-4" />
-            </a>
-          )}
-          <Link
-            href="/blog?new=1"
-            aria-label="Написать пост"
-            title="Написать пост"
-            className={`${iconButton} hover:border-cyan/60`}
-          >
-            <PenLine aria-hidden className="size-4" />
-          </Link>
-          <Link
-            href="/blog"
-            aria-label="Вся лента и прошлые посты"
-            title="Вся лента и прошлые посты"
-            className={`${iconButton} hover:border-cyan/60`}
-          >
-            <Rows3 aria-hidden className="size-4" />
-          </Link>
-          <button
-            type="button"
-            onClick={toggleFavorites}
-            aria-pressed={showFavorites}
-            aria-label="Избранное"
-            title="Избранное"
-            className={`${iconButton} hover:border-gold/60 ${
-              showFavorites ? "border-gold" : ""
-            }`}
-          >
-            <Star
-              aria-hidden
-              className={`size-4 ${showFavorites ? "fill-gold text-gold" : ""}`}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={hide}
-            disabled={pending}
-            aria-label="Убрать ленту с экрана"
-            title="Убрать ленту с экрана"
-            className={`${iconButton} hover:border-magenta/60 disabled:opacity-60`}
-          >
-            <EyeOff aria-hidden className="size-4" />
-          </button>
-        </div>
+          <Settings2 aria-hidden className="size-4" />
+        </button>
       </div>
+
+      {settingsOpen && (
+        <div
+          id="blog-home-settings"
+          className="mx-1.5 mb-2 rounded-xl border border-glass-brd bg-bg-1 p-2"
+        >
+          <p className="px-1 pb-1 text-xs text-text-1">
+            Порядок кнопок — стрелками. Кнопку календаря можно спрятать в меню
+            горячей кнопки «Календарь».
+          </p>
+          <ol className="flex flex-col">
+            {order.map((id, at) => (
+              <li key={id} className="flex items-center gap-1">
+                <span className="min-w-0 flex-1 truncate px-1 text-sm text-text-0">
+                  {HOME_PANEL_LABELS[id]}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => move(id, -1)}
+                  disabled={at === 0}
+                  aria-label={`${HOME_PANEL_LABELS[id]}: левее`}
+                  className="inline-flex size-11 items-center justify-center rounded-lg text-text-1 hover:text-text-0 disabled:opacity-30"
+                >
+                  <ChevronUp aria-hidden className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(id, 1)}
+                  disabled={at === order.length - 1}
+                  aria-label={`${HOME_PANEL_LABELS[id]}: правее`}
+                  className="inline-flex size-11 items-center justify-center rounded-lg text-text-1 hover:text-text-0 disabled:opacity-30"
+                >
+                  <ChevronDown aria-hidden className="size-4" />
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* Итог переключения — вслух: содержимое виджета сменилось на месте. */}
       <p role="status" className="sr-only">
@@ -205,6 +407,7 @@ export function BlogHomeWidget({
           perView="responsive"
           fitHeight
           renderSlide={(index) => <HomeSlide slide={slides[index]} />}
+          onIndexChange={onIndexChange}
         />
       )}
     </section>
