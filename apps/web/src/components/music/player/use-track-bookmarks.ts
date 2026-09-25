@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import type { MusicBookmarkDto } from "@vedamatch/shared";
 import {
   createBookmark,
+  deleteAllBookmarks,
   deleteBookmark,
   getBookmarks,
   renameBookmark,
@@ -87,6 +88,14 @@ export function useTrackBookmarks(trackId: string | null) {
     [trackId, apply],
   );
 
+  /** «Удалить все метки» записи (VED-450). */
+  const removeAll = useCallback(async () => {
+    if (!trackId) return false;
+    const done = await deleteAllBookmarks(trackId);
+    if (done) apply(trackId, () => []);
+    return Boolean(done);
+  }, [trackId, apply]);
+
   return {
     /** `null` — ещё не читали (или читаем). */
     items: mine?.items ?? null,
@@ -95,6 +104,7 @@ export function useTrackBookmarks(trackId: string | null) {
     add,
     rename,
     remove,
+    removeAll,
   };
 }
 

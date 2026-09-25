@@ -1,6 +1,7 @@
 "use client";
 
 import { formatTrackDuration } from "@/lib/music-duration";
+import { markPercents } from "./player-marks";
 
 /**
  * Дорожка. Ползунок настоящий, а не полоска с обработчиком клика: он даёт
@@ -14,15 +15,19 @@ export function MusicPositionSlider({
   position,
   total,
   onSeek,
+  marks,
   /** Раскладка снаружи: у полосы плеера и у виджета на главной она разная. */
   className = "flex w-full min-w-0 items-center gap-2",
 }: {
   position: number;
   total: number;
   onSeek: (seconds: number) => void;
+  /** Места меток в секундах (VED-450) — засечки на дорожке. */
+  marks?: readonly number[];
   className?: string;
 }) {
   const percent = total > 0 ? Math.min(100, (position / total) * 100) : 0;
+  const ticks = marks ? markPercents(marks, total) : [];
 
   return (
     <div className={className}>
@@ -40,6 +45,16 @@ export function MusicPositionSlider({
             style={{ width: `${percent}%` }}
           />
         </span>
+        {/* Метки — засечки поверх дорожки. Только для глаз: к меткам ведут
+            кнопки вкладки «Метки», у каждой — время словами. */}
+        {ticks.map((at) => (
+          <span
+            key={at}
+            aria-hidden="true"
+            className="pointer-events-none absolute h-2.5 w-[3px] -translate-x-1/2 rounded-full bg-magenta"
+            style={{ left: `${at}%` }}
+          />
+        ))}
         <input
           type="range"
           min={0}

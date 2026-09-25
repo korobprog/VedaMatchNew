@@ -4,6 +4,7 @@ import {
   bookmarkJumpLabel,
   bookmarkSavedText,
   bookmarkTitle,
+  markPercents,
   historyQueue,
   historyResumeAt,
   historyRows,
@@ -57,5 +58,16 @@ describe("история", () => {
     expect(historyResumeAt(listen("a", 312))).toBe(312);
     expect(historyResumeAt(listen("a", null))).toBeUndefined();
     expect(historyResumeAt({ ...listen("a"), positionSeconds: undefined })).toBeUndefined();
+  });
+});
+
+describe("markPercents (VED-450)", () => {
+  it("доля длины записи, по порядку, без повторов", () => {
+    expect(markPercents([60, 30, 30, 0], 120)).toEqual([0, 25, 50]);
+  });
+
+  it("за концом — к концу; мусор и пустая длительность — мимо", () => {
+    expect(markPercents([200, -5, Number.NaN], 100)).toEqual([100]);
+    expect(markPercents([10], 0)).toEqual([]);
   });
 });

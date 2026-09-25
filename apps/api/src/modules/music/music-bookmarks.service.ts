@@ -148,6 +148,24 @@ export class MusicBookmarksService {
     return toDto(row);
   }
 
+  /**
+   * «Удалить все метки» записи (VED-450). Только свои: чужие метки той же
+   * записи условие по `userId` не заденет. Запись не проверяется на
+   * доступность — убрать свои метки можно и у снятой с публикации.
+   */
+  async removeAllForTrack(
+    userId: string,
+    trackId: unknown,
+  ): Promise<{ ok: true; count: number }> {
+    if (typeof trackId !== 'string' || !trackId) {
+      throw new BadRequestException('Не указана запись');
+    }
+    const { count } = await this.prisma.musicBookmark.deleteMany({
+      where: { userId, trackId },
+    });
+    return { ok: true, count };
+  }
+
   /** Идемпотентно: второе нажатие «удалить» не должно выглядеть ошибкой. */
   async remove(userId: string, id: string): Promise<{ ok: true }> {
     await this.prisma.musicBookmark.deleteMany({ where: { id, userId } });

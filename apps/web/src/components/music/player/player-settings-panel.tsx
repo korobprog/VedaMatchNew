@@ -588,6 +588,20 @@ function BookmarksTab({
           ))}
         </ul>
       )}
+      {items !== null && items.length > 1 && (
+        <button
+          type="button"
+          onClick={() => {
+            if (!window.confirm(`Удалить все метки записи (${items.length})?`)) return;
+            void bookmarks.removeAll().then((ok) =>
+              onAnnounce(ok ? "Все метки удалены" : "Не удалось удалить метки"),
+            );
+          }}
+          className="min-h-11 self-start rounded-xl px-3 text-[13px] text-text-1 hover:bg-glass hover:text-magenta sm:min-h-9"
+        >
+          Удалить все метки
+        </button>
+      )}
     </div>
   );
 }
