@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { HomeFeaturedOption } from "@/lib/home-featured";
+import { distinctAccents, type FeaturedAccent } from "./featured-accents";
 
 /**
  * Три ходовых сервиса крупным планом, над общей сеткой.
@@ -35,8 +36,11 @@ type IconComponent =
 interface FeaturedLook {
   /** Значок: готовый из lucide или свой, нарисованный здесь. */
   Icon: IconComponent;
-  /** Цвет знака: акценты чередуются, чтобы кнопки различались не только словом. */
-  accent: string;
+  /**
+   * Любимый цвет знака. Совпадёт с соседом — возьмёт свободный
+   * (`distinctAccents`, VED-452): кнопки различаются не только словом.
+   */
+  accent: FeaturedAccent;
 }
 
 /**
@@ -101,11 +105,15 @@ export function FeaturedServices({
   items: HomeFeaturedOption[];
   unread?: number;
 }) {
+  const accents = distinctAccents(
+    items.map(({ key }) => (LOOKS[key] ?? FALLBACK_LOOK).accent),
+  );
   return (
     <section aria-label="Ходовые сервисы" className="mb-4">
       <ul className="grid grid-cols-3 gap-2 sm:gap-3">
-        {items.map(({ key, name, hint, href }) => {
-          const { Icon, accent } = LOOKS[key] ?? FALLBACK_LOOK;
+        {items.map(({ key, name, hint, href }, index) => {
+          const { Icon } = LOOKS[key] ?? FALLBACK_LOOK;
+          const accent = accents[index];
           const badge = key === "chat" ? unread : 0;
           const label =
             badge > 0 ? `${name}, непрочитанных: ${badge}` : undefined;
