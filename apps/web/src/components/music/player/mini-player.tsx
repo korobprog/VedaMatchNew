@@ -1018,16 +1018,18 @@ export function MiniPlayer() {
             вынесенных кнопок не растёт. От `sm` — своей строкой под полосой:
             в однострочной раскладке для них нет места.
 
-            На телефоне ряд занимает всё место между управлением и кнопками
-            полосы, и кнопки в нём стоят на равном расстоянии (VED-450), а не
-            кучкой у пуска. Свободное место отдано эквалайзеру: пока ничего
-            не вынесено — во весь рост, при одной-двух кнопках — меньше, при
-            трёх-четырёх его нет (`pinnedEqualizer`). */}
+            На телефоне кнопки прижаты вправо, к кнопкам полосы (VED-450,
+            круг 2: «перенеси кнопку по стрелке, остальные появляются справа
+            около неё»), а эквалайзер стоит слева, посередине свободного места.
+            Эквалайзер своего размера и не растягивается: растянутый, он
+            расходился редкими полосками. Пока ничего не вынесено — крупный,
+            при одной-двух кнопках — меньше, при трёх-четырёх его нет
+            (`pinnedEqualizer`). */}
         {(pinned !== "none" || equalizer !== "none") && (
           <div
             role={pinned !== "none" ? "group" : undefined}
             aria-label={pinned !== "none" ? "Вынесенные кнопки" : undefined}
-            className={`order-5 ml-1 flex min-w-0 flex-1 items-center justify-evenly gap-0 min-[400px]:ml-2 min-[400px]:gap-0.5 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
+            className={`order-5 ml-1 flex min-w-0 flex-1 items-center gap-0 min-[400px]:ml-2 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
               pinned === "none"
                 ? "sm:hidden"
                 : pinned === "narrow"
@@ -1035,51 +1037,53 @@ export function MiniPlayer() {
                   : ""
             }`}
           >
-            {prefs.showSeek && (
-              <span className="contents lg:hidden">
-                <button
-                  type="button"
-                  aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
-                  onClick={() => seekStep(-1)}
-                  className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
-                >
-                  <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
-                  onClick={() => seekStep(1)}
-                  className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
-                >
-                  <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
-                </button>
+            {equalizer !== "none" && (
+              <span className="flex min-w-0 flex-1 justify-center sm:hidden">
+                <MusicPlayingBars
+                  playing={isPlaying}
+                  className={
+                    equalizer === "large"
+                      ? "h-5 w-20 shrink-0 max-[359px]:w-12"
+                      : "h-3.5 w-11 shrink-0 max-[359px]:hidden"
+                  }
+                />
               </span>
             )}
-            {prefs.showBookmark && (
-              <BookmarkButton
-                onClick={quickBookmark}
-                className={`${ctrl} h-11 w-9 text-text-2 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
-              />
-            )}
-            {prefs.showHistory && (
-              <HistoryButton
-                open={panelTab === "history"}
-                onClick={() => openPanel("history")}
-                className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
-              />
-            )}
-            {equalizer !== "none" && (
-              <MusicPlayingBars
-                playing={isPlaying}
-                className={`shrink-0 sm:hidden ${
-                  equalizer === "large"
-                    ? // Ничего не вынесено — эквалайзер занимает всё
-                      // свободное место ряда (VED-450), а не 80 точек.
-                      "mx-2 h-5 min-w-12 flex-1"
-                    : "h-3.5 w-11 max-[359px]:hidden"
-                }`}
-              />
-            )}
+            <span className="ml-auto flex items-center gap-0 min-[400px]:gap-0.5 sm:ml-0 sm:gap-2">
+              {prefs.showSeek && (
+                <span className="contents lg:hidden">
+                  <button
+                    type="button"
+                    aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
+                    onClick={() => seekStep(-1)}
+                    className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
+                  >
+                    <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
+                    onClick={() => seekStep(1)}
+                    className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
+                  >
+                    <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
+                  </button>
+                </span>
+              )}
+              {prefs.showBookmark && (
+                <BookmarkButton
+                  onClick={quickBookmark}
+                  className={`${ctrl} h-11 w-9 text-text-2 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
+                />
+              )}
+              {prefs.showHistory && (
+                <HistoryButton
+                  open={panelTab === "history"}
+                  onClick={() => openPanel("history")}
+                  className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
+                />
+              )}
+            </span>
           </div>
         )}
 
