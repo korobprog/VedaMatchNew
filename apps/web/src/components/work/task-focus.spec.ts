@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findTaskByKey, parseFocusKey } from "./task-focus";
+import { findTaskByKey, parseFocusKey, urlWithoutFocus } from "./task-focus";
 
 const board = {
   columns: [
@@ -69,5 +69,21 @@ describe("findTaskByKey", () => {
 
   it("пустая доска не роняет поиск", () => {
     expect(findTaskByKey({ columns: [] }, "VED-42")).toBeNull();
+  });
+});
+
+describe("urlWithoutFocus (VED-500)", () => {
+  it("убирает только task, остальное оставляет", () => {
+    expect(
+      urlWithoutFocus("/work/planner/s1", "?task=VED-42&view=x", "#c"),
+    ).toBe("/work/planner/s1?view=x#c");
+    expect(urlWithoutFocus("/work/planner/s1", "?task=VED-42")).toBe(
+      "/work/planner/s1",
+    );
+  });
+
+  it("ключа нет — адрес не трогаем", () => {
+    expect(urlWithoutFocus("/work/planner/s1", "")).toBeNull();
+    expect(urlWithoutFocus("/work/planner/s1", "?view=x")).toBeNull();
   });
 });
