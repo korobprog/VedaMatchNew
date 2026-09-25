@@ -9,6 +9,7 @@ import { getProfile } from "@/lib/api";
 import { LineagePrompt } from "@/components/lineage-prompt";
 import { LineageStatus } from "@/components/lineage-status";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
+import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import {
   getLibraryCategoryTree,
   getLibraryCommunities,
@@ -60,6 +61,9 @@ export default async function LibraryPage({
   // линии», и выдача та же, что была, — но сузить её он теперь может в одно
   // касание, а не через профиль.
 
+  // «Упорядочить» — у тех, кто может переставлять рубрики.
+  const canOrganize = roots.some((root) => root.canMove);
+
   return (
     <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
@@ -77,12 +81,18 @@ export default async function LibraryPage({
             />
           </div>
           {/* Порядок по просьбе заказчика (VED-449): «Создать пост»,
-              «Фильтры», «Избранное», язык. Фильтр линий — кнопкой в этом
-              ряду, а не отдельной лентой над рубриками. */}
-          <div className="flex flex-wrap items-center gap-2">
+              «Фильтры», «Избранное», язык, «Упорядочить». На телефоне —
+              ровная сетка одинаковых ячеек (VED-483: «чтобы были ровно в
+              один, два ряда»): два столбца, а у редакции, у которой есть
+              «Упорядочить», — три, и та занимает две ячейки второго ряда. */}
+          <div
+            className={`grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center ${
+              canOrganize ? "grid-cols-3" : "grid-cols-2"
+            }`}
+          >
             <Link
               href="/library/add"
-              className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+              className="btn-mint inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)] sm:px-4"
             >
               {t(locale, "nav.add")}
             </Link>
@@ -97,11 +107,14 @@ export default async function LibraryPage({
             </div>
             <Link
               href="/library/favorites"
-              className="inline-flex min-h-11 items-center rounded-xl border border-glass-brd px-4 text-sm text-text-2 hover:text-text-0"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-glass-brd px-3 text-sm text-text-2 hover:text-text-0 sm:px-4"
             >
               {t(locale, "bookmark.title")}
             </Link>
-            <LocaleSwitch locale={locale} />
+            <LocaleSwitch locale={locale} className="min-h-11 w-full sm:w-auto" />
+            {canOrganize && (
+              <LibraryOrganizeButton locale={locale} className="col-span-2" />
+            )}
           </div>
         </div>
 
@@ -118,8 +131,9 @@ export default async function LibraryPage({
           locale={locale}
           categories={roots}
           tree={roots}
-          canOrganize={roots.some((root) => root.canMove)}
+          canOrganize={canOrganize}
           root
+          organizeInToolbar
         />
         <EntryFilters
           locale={locale}

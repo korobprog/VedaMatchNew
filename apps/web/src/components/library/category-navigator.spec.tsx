@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LibraryCategoryTreeNode } from "@vedamatch/shared";
 import { CategoryNavigator } from "./category-navigator";
+import { LibraryOrganizeButton } from "./organize-button";
+import { setOrganizing } from "./organize-state";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -67,99 +69,57 @@ function shownOrder() {
 
 beforeEach(() => {
   window.localStorage.clear();
+  setOrganizing(false);
 });
 
-describe("CategoryNavigator — порядок рубрик", () => {
-  it("по умолчанию показывает свой порядок, выставленный перетаскиванием", () => {
+describe("CategoryNavigator (VED-483)", () => {
+  it("рубрики — в своём порядке, выставленном перетаскиванием", () => {
     setup();
     expect(shownOrder()).toEqual(["Философия", "Ёлка", "Музыка"]);
   });
 
-  it("переставляет по алфавиту", async () => {
-    const user = userEvent.setup();
-    setup();
-
-    await user.selectOptions(
-      screen.getByLabelText("Порядок рубрик"),
-      "По алфавиту",
-    );
-
-    expect(shownOrder()).toEqual(["Ёлка", "Музыка", "Философия"]);
+  it("выбора порядка больше нет — ни подписи, ни списка", () => {
+    setup(true);
+    expect(screen.queryByText("Порядок рубрик")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
-  it("переставляет по дате — сначала новые", async () => {
-    const user = userEvent.setup();
-    setup();
-
-    await user.selectOptions(
-      screen.getByLabelText("Порядок рубрик"),
-      "Сначала новые",
-    );
-
-    expect(shownOrder()).toEqual(["Музыка", "Философия", "Ёлка"]);
-  });
-
-  it("помнит выбор между заходами", async () => {
-    const user = userEvent.setup();
-    const first = setup();
-    await user.selectOptions(
-      screen.getByLabelText("Порядок рубрик"),
-      "По алфавиту",
-    );
-    first.unmount();
-
-    setup();
-
-    expect(await screen.findByDisplayValue("По алфавиту")).toBeInTheDocument();
-    expect(shownOrder()).toEqual(["Ёлка", "Музыка", "Философия"]);
-  });
-
-  it("мусор в хранилище не ломает показ", () => {
-    window.localStorage.setItem("vedamatch:library-category-order", "что попало");
-    setup();
-
-    expect(shownOrder()).toEqual(["Философия", "Ёлка", "Музыка"]);
-  });
-
-  it("выбор порядка есть и у того, кому дерево менять нельзя", () => {
+  it("без права менять дерево — никаких кнопок", () => {
     setup(false);
-
-    expect(screen.getByLabelText("Порядок рубрик")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Упорядочить/ }),
     ).not.toBeInTheDocument();
   });
 
-  it("на одной рубрике выбора порядка нет", () => {
-    const only = [tree()[0]];
-    render(
-      <CategoryNavigator
-        locale="ru"
-        categories={only}
-        tree={only}
-        canOrganize={false}
-        root
-      />,
-    );
-
-    expect(screen.queryByLabelText("Порядок рубрик")).not.toBeInTheDocument();
-  });
-
-  it("упорядочивание показывает настоящий порядок дерева, а не алфавит", async () => {
+  it("«Упорядочить» над рубриками открывает дерево в настоящем порядке", async () => {
     const user = userEvent.setup();
     setup(true);
-    await user.selectOptions(
-      screen.getByLabelText("Порядок рубрик"),
-      "По алфавиту",
-    );
-
     await user.click(screen.getByRole("button", { name: /Упорядочить/ }));
-
-    // Перекладывать вслепую нельзя: строка встала бы не туда, куда её кладут.
     expect(
       screen.getAllByRole("treeitem").map((item) =>
         within(item).getByText(/Философия|Ёлка|Музыка/).textContent,
       ),
     ).toEqual(["Философия", "Ёлка", "Музыка"]);
+  });
+
+  it("кнопка в ряду страницы управляет тем же деревом", async () => {
+    const user = userEvent.setup();
+    const categories = tree();
+    render(
+      <>
+        <LibraryOrganizeButton locale="ru" />
+        <CategoryNavigator
+          locale="ru"
+          categories={categories}
+          tree={categories}
+          canOrganize
+          root
+          organizeInToolbar
+        />
+      </>,
+    );
+    expect(screen.getAllByRole("button", { name: /Упорядочить/ })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: /Упорядочить/ }));
+    expect(screen.getAllByRole("treeitem")).toHaveLength(3);
   });
 });
