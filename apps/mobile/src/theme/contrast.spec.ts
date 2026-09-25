@@ -317,6 +317,38 @@ const NON_TEXT_PAIRS: { name: string; graphic: keyof Palette; surface: keyof Pal
   { name: 'значки «−10/+10» полноэкранного плеера', graphic: 'text0', surface: 'bg0' },
 ];
 
+/**
+ * Знакомства (`components/union/*`): подписи поверх фотографии. Под текстом
+ * произвольный снимок, в худшем случае белый, поэтому палитра там всегда
+ * тёмная, независимо от темы телефона, а подложка считается наложенной на
+ * белый, а не на фон экрана.
+ */
+const UNION_OVER_PHOTO: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
+  // Пилюли фактов и интересов, активность, пометка решения, процент на плитке,
+  // счётчик «3 из 12» колоды — `text0` на `scrim`.
+  { name: 'пилюля поверх фото на затемнении', text: 'text0', surface: 'scrim' },
+];
+
+/** Панели колоды поверх фото — непрозрачные, фон тёмной темы. */
+const UNION_DECK_PANELS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
+  { name: 'раскрытая анкета и разбор совместимости', text: 'text0', surface: 'bg1' },
+  { name: 'подписи в раскрытой анкете и вес критерия', text: 'text1', surface: 'bg1' },
+  { name: 'итог решения и ошибка колоды', text: 'text0', surface: 'bg1' },
+  { name: 'подсказка о жесте', text: 'text1', surface: 'bg0' },
+  { name: 'процент совместимости в анкете', text: 'onAccent', surface: 'magenta' },
+  { name: 'остаток «Внимания» на золотой кнопке', text: 'onAccent', surface: 'gold' },
+];
+
+describe('контраст Знакомств поверх фото', () => {
+  it.each(UNION_OVER_PHOTO)('$name — не ниже 4.5:1 даже над белым снимком', ({ text, surface }) => {
+    expect(contrastRatio(dark[text], dark[surface], '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(UNION_DECK_PANELS)('$name — не ниже 4.5:1', ({ text, surface }) => {
+    expect(contrastRatio(dark[text], dark[surface], dark.bg0)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe.each([
   ['светлая тема', light],
   ['тёмная тема', dark],

@@ -40,6 +40,15 @@ export type NotificationTarget =
   | { kind: 'wellness-product'; barcode: string }
   | { kind: 'wellness-history' }
   /**
+   * Знакомства: пуш «Новая заявка» ведёт на `/union/connections`. Своими
+   * экранами — связи, лайки и анкета человека; остальное (подборки, скрытые,
+   * своя анкета) — вход в раздел, он сам решит, куда вести.
+   * `/union/chats/*` сюда не попадает: переписка Знакомств переехала в
+   * «Общение», и такие пути ведут на сайт, где стоят редиректы.
+   */
+  | { kind: 'union'; section: 'entry' | 'connections' | 'likes' }
+  | { kind: 'union-user'; userId: string }
+  /**
    * Вышла новая версия приложения: пуш «Доступна новая версия» с путём
    * `/app` (на сайте это страница загрузки). В приложении — вкладка
    * «Сервисы»: там раздел обновления, который при открытии вкладки сам
@@ -145,6 +154,15 @@ export function resolveNotificationTarget(url: unknown): NotificationTarget {
     if (second === 'history') return { kind: 'wellness-history' };
   }
 
+  if (first === 'union' && second !== 'chats' && second !== 'admin') {
+    if (second === 'connections' || second === 'likes') return { kind: 'union', section: second };
+    if (second === 'users') {
+      const userId = idOf(third);
+      if (userId) return { kind: 'union-user', userId };
+    }
+    return { kind: 'union', section: 'entry' };
+  }
+
   if (first === 'app' && !second) return { kind: 'app-update' };
 
   if (first === 'communities') {
@@ -187,6 +205,13 @@ export function routeOfTarget(target: NotificationTarget): NotificationDestinati
       };
     case 'wellness-history':
       return { kind: 'route', pathname: '/wellness/history' };
+    case 'union':
+      return {
+        kind: 'route',
+        pathname: target.section === 'entry' ? '/union' : `/union/${target.section}`,
+      };
+    case 'union-user':
+      return { kind: 'route', pathname: '/union/users/[id]', params: { id: target.userId } };
     case 'app-update':
       return { kind: 'route', pathname: '/services' };
     case 'site':

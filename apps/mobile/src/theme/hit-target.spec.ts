@@ -113,6 +113,11 @@ describe('зона нажатия', () => {
         // в карточке человека.
         'components/chat/conversation-row.tsx:avatarButton=60',
         'app/people/[id].tsx:avatarButton=72',
+        // Знакомства: кнопки решений колоды — круги 56, «вернуть» поменьше,
+        // 48 (действие второстепенное, но в ряду с остальными). Обложка
+        // карточки лайка — ссылка на анкету высотой 220.
+        'components/union/swipe-deck.tsx:actionSmall/action/disabled=48',
+        'app/union/likes.tsx:cover=220',
       ].sort(),
     );
   });

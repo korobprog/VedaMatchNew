@@ -258,3 +258,34 @@ describe('новая версия приложения: пуш «Доступн�
     });
   });
 });
+
+describe('Знакомства: пуш «Новая заявка» и ссылки на анкеты', () => {
+  it('«Новая заявка» (`/union/connections`) открывает связи в приложении', () => {
+    expect(resolveNotificationTarget('/union/connections')).toEqual({ kind: 'union', section: 'connections' });
+    expect(pushDestination('/union/connections')).toEqual({ kind: 'route', pathname: '/union/connections' });
+    expect(inboxDestination('/union/connections')).toEqual({ kind: 'route', pathname: '/union/connections' });
+  });
+
+  it('лайки и анкета человека — свои экраны', () => {
+    expect(pushDestination('/union/likes')).toEqual({ kind: 'route', pathname: '/union/likes' });
+    expect(pushDestination('/union/users/u%201')).toEqual({
+      kind: 'route',
+      pathname: '/union/users/[id]',
+      params: { id: 'u 1' },
+    });
+  });
+
+  it('остальные разделы Знакомств — вход в раздел, он сам решит, куда вести', () => {
+    expect(pushDestination('/union')).toEqual({ kind: 'route', pathname: '/union' });
+    expect(pushDestination('/union/profile')).toEqual({ kind: 'route', pathname: '/union' });
+    expect(pushDestination('/union/users/')).toEqual({ kind: 'route', pathname: '/union' });
+  });
+
+  it('старые ссылки на чаты Знакомств и админка остаются сайтом — там редиректы', () => {
+    expect(resolveNotificationTarget('/union/chats/r-1')).toEqual({ kind: 'site', path: '/union/chats/r-1' });
+    expect(resolveNotificationTarget('/union/admin/profiles/u-1')).toEqual({
+      kind: 'site',
+      path: '/union/admin/profiles/u-1',
+    });
+  });
+});
