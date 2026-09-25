@@ -1612,7 +1612,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('преданному показывает свою линию и материалы «для всех»', async () => {
+  it('без настройки — «Все», даже у преданного с линией (VED-483)', async () => {
     const prisma = prismaMock();
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
@@ -1622,9 +1622,7 @@ describe('LibraryEntriesService — духовная линия', () => {
 
     await service.feed({}, 'user-1');
 
-    expect(whereOf(prisma).AND).toEqual([
-      { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
-    ]);
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
   });
 
   it('йогу линию не навязывает, даже если она записана в профиле', async () => {
@@ -1694,7 +1692,7 @@ describe('LibraryEntriesService — духовная линия', () => {
       JSON.stringify({ p: NOW.toISOString(), i: 'entry-0' }),
       'utf8',
     ).toString('base64url');
-    await service.feed({ cursor }, 'user-1');
+    await service.feed({ cursor, lineage: 'ipbys' }, 'user-1');
 
     const where = whereOf(prisma);
     expect(where.OR).toBeDefined();

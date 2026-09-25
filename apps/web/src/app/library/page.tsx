@@ -54,13 +54,11 @@ export default async function LibraryPage({
       : null;
   const appliedLineage = explicitLineage
     ? resolveContentLineage(null, explicitLineage)
-    : resolveContentLineage(user, preferences?.lineage ?? null);
+    : // Без настройки — «Все» (VED-483), профиль фильтр не включает.
+      resolveContentLineage(null, preferences?.lineage ?? null);
   // Кнопки линий видны всем (VED-395): у ищущего без настройки нажата «все
   // линии», и выдача та же, что была, — но сузить её он теперь может в одно
   // касание, а не через профиль.
-  const lineageViewer = user
-    ? { spiritualStage: user.spiritualStage, lineage: user.lineage }
-    : null;
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -95,7 +93,6 @@ export default async function LibraryPage({
                 locale={locale}
                 applied={appliedLineage}
                 preference={preferences?.lineage ?? null}
-                viewer={lineageViewer}
               />
             </div>
             <Link

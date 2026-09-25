@@ -191,8 +191,8 @@ export class LibraryEntriesService {
 
   /**
    * Какую линию показать в ленте. Явный параметр запроса сильнее настройки
-   * Образования, та — сильнее профиля; правило одно на все сервисы —
-   * `resolveContentLineage`. `null` — не фильтровать.
+   * Образования. Без настройки — «Все» (VED-483): линия из профиля больше
+   * не включает фильтр сама, как и в Медиатеке. `null` — не фильтровать.
    */
   private async viewerLineage(
     viewerId: string | undefined,
@@ -202,14 +202,14 @@ export class LibraryEntriesService {
       return resolveContentLineage(null, explicit);
     }
     if (!viewerId) return null;
-    const [preference, viewer] = await Promise.all([
-      this.prisma.libraryPreference.findUnique({
-        where: { userId: viewerId },
-        select: { lineage: true },
-      }),
-      this.lineageViewer(viewerId),
-    ]);
-    return resolveContentLineage(viewer, toLineagePreference(preference?.lineage));
+    const preference = await this.prisma.libraryPreference.findUnique({
+      where: { userId: viewerId },
+      select: { lineage: true },
+    });
+    return resolveContentLineage(
+      null,
+      toLineagePreference(preference?.lineage),
+    );
   }
 
   /**

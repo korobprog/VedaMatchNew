@@ -63,19 +63,20 @@ export const LINEAGES: readonly LineageOption[] = [
     id: 'sri_chaitanya_gaudiya_math',
     group: 'gaudiya_math',
     label: 'Шри Чайтанья Гаудия Матх',
-    shortLabel: 'Чайтанья Гаудия Матх',
+    // Короткие названия матхов — как их назвал заказчик (VED-483).
+    shortLabel: 'Шри Чайтанья Матх',
   },
   {
     id: 'sri_chaitanya_saraswat_math',
     group: 'gaudiya_math',
     label: 'Шри Чайтанья Сарасват Матх',
-    shortLabel: 'Сарасват Матх',
+    shortLabel: 'Шри Чайтанья Сарасват Матх',
   },
   {
     id: 'sri_gopinath_gaudiya_math',
     group: 'gaudiya_math',
     label: 'Шри Гопинатх Гаудия Матх',
-    shortLabel: 'Гопинатх Гаудия Матх',
+    shortLabel: 'Шри Гопинатх Гаудия-матх',
   },
   {
     id: 'ipbys',

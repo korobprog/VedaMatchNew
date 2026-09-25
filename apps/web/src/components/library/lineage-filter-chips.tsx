@@ -8,7 +8,6 @@ import type {
   LineageGroup,
   LineageId,
   LineagePreference,
-  LineageViewer,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -40,14 +39,12 @@ export function LibraryLineageFilter({
   locale,
   applied,
   preference,
-  viewer,
 }: {
   locale: LibraryLocale;
   /** Линия, по которой API отфильтровал выдачу, — та же, что в подписи. */
   applied: LineageId | null;
   /** Сохранённая настройка Образования. */
   preference: LineagePreference;
-  viewer: LineageViewer | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -78,10 +75,10 @@ export function LibraryLineageFilter({
       parivara: t(locale, "lineage.group.parivara"),
     },
   });
-  // Группа выбранной линии раскрыта сразу: видно, что именно выбрано.
-  const [expanded, setExpanded] = useState<LineageGroup | null>(() =>
-    lineageChoiceGroup(current),
-  );
+  // Группы свёрнуты (VED-483): «шапка Гаудия-матх должна быть свёрнута,
+  // при нажатии разворачиваться». Что выбрано внутри — видно в самой шапке.
+  const [expanded, setExpanded] = useState<LineageGroup | null>(null);
+  const currentGroup = lineageChoiceGroup(current);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -97,7 +94,7 @@ export function LibraryLineageFilter({
     setOpen(false);
     setFailed(false);
     setPendingChoice(choice);
-    const next = preferenceForChoice(viewer, choice);
+    const next = preferenceForChoice(choice);
     try {
       if (next !== preference) {
         const response = await apiFetch(`${API_URL}/library/me/preferences`, {
@@ -175,9 +172,16 @@ export function LibraryLineageFilter({
                       value === item.group ? null : item.group,
                     )
                   }
-                  className={`${optionClass(false)} justify-between`}
+                  className={`${optionClass(currentGroup === item.group)} justify-between`}
                 >
-                  {item.label}
+                  <span className="min-w-0">
+                    {item.label}
+                    {currentGroup === item.group && expanded !== item.group && (
+                      <span className="block truncate text-xs font-normal text-text-1">
+                        {item.options.find((option) => option.value === current)?.label}
+                      </span>
+                    )}
+                  </span>
                   <ChevronDown
                     aria-hidden
                     className={`size-4 transition-transform ${
