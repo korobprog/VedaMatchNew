@@ -3,6 +3,7 @@ import type {
   ChatConversationDetail,
   ChatMessageDto,
   ChatReplyPreview,
+  ChatStatusAuthorDto,
 } from '@vedamatch/shared';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -29,6 +30,7 @@ import { CallHeaderButtons } from '@/components/calls/call-header-buttons';
 import { GroupCallHeaderButton } from '@/components/calls/group-call-header-button';
 import { ConferenceHeaderButton } from '@/components/chat/conference-header-button';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
+import { useStatusViewer } from '@/components/chat/statuses/use-status-viewer';
 import { VoiceRecorderControl } from '@/components/chat/voice/voice-recorder-control';
 import { canOpenMessageMenuWhileRecording } from '@/lib/chat/voice/voice-composer-lock';
 import { ChatKeyboardAvoidingView as KeyboardAvoidingView } from '@/components/keyboard-controller-web';
@@ -38,6 +40,8 @@ import { MessagesSkeleton } from '@/components/skeleton';
 import { SupportLink } from '@/components/support/support-link';
 import { useSession } from '@/lib/auth/session';
 import { createChatApi } from '@/lib/chat/chat-api';
+import { createStatusApi } from '@/lib/chat/status-api';
+import { authorWithStatuses, ringOf, statusA11yLabel } from '@/lib/chat/statuses/status-playback';
 import {
   addAttachment,
   buildEditRequest,
@@ -113,6 +117,7 @@ export default function ChatRoomScreen() {
   const { api, user } = useSession();
   const stream = useChatStream();
   const chatApi = useMemo(() => createChatApi(api), [api]);
+  const statusApi = useMemo(() => createStatusApi(api), [api]);
 
   // Пока беседа на экране, пуши о её сообщениях не показываются.
   useEffect(() => {
@@ -707,6 +712,32 @@ export default function ChatRoomScreen() {
     ),
     [colors, myId, showAuthors, openMenu, reactToMessage, voiceRecording],
   );
+  /* Кружок статусов собеседника в шапке (VED-129). На сайте он только для
+     вида; здесь аватарка с кружком ещё и открывает статусы — в шапке
+     личной беседы ей больше нечего делать. */
+  const companionId = detail?.kind === 'direct' ? (detail.companion?.id ?? null) : null;
+  const [companionStatuses, setCompanionStatuses] = useState<ChatStatusAuthorDto | null>(null);
+  const [statusesEpoch, setStatusesEpoch] = useState(0);
+  useEffect(() => {
+    if (!companionId) return;
+    let alive = true;
+    statusApi
+      .ofUser(companionId)
+      .then((author) => {
+        if (alive) setCompanionStatuses(authorWithStatuses(author));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [companionId, statusApi, statusesEpoch]);
+  const statusViewer = useStatusViewer({
+    statusApi,
+    viewerId: myId,
+    onChanged: () => setStatusesEpoch((value) => value + 1),
+  });
+  const companionRing = ringOf(companionStatuses);
+
   const subtitle = detail
     ? detail.kind === 'direct'
       ? isOnline(detail.companion?.lastSeenAt)
@@ -737,28 +768,54 @@ export default function ChatRoomScreen() {
           headerTitleAlign: 'left',
           headerTitle: () => {
             const label = [detail?.title, typingName ? 'печатает' : subtitle].filter(Boolean).join(', ');
+            const avatar = detail ? (
+              <ChatAvatar
+                id={detail.companion?.id ?? detail.id}
+                name={detail.title}
+                uri={detail.kind === 'direct' ? detail.companion?.avatarUrl : detail.avatarUrl}
+                size={36}
+                ring={detail.kind === 'direct' ? companionRing : null}
+              />
+            ) : null;
+            const text = (
+              <View style={styles.headerText}>
+                <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text0 }]}>
+                  {detail?.title ?? ' '}
+                </Text>
+                {typingName || subtitle ? (
+                  <Text numberOfLines={1} style={[styles.headerSub, { color: typingName ? colors.cyan : colors.text2 }]}>
+                    {typingName ? `${detail?.kind === 'direct' ? '' : `${typingName} `}печатает…` : subtitle}
+                  </Text>
+                ) : null}
+              </View>
+            );
             const body = (
               <>
-                {detail ? (
-                  <ChatAvatar
-                    id={detail.companion?.id ?? detail.id}
-                    name={detail.title}
-                    uri={detail.kind === 'direct' ? detail.companion?.avatarUrl : detail.avatarUrl}
-                    size={36}
-                  />
-                ) : null}
-                <View style={styles.headerText}>
-                  <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text0 }]}>
-                    {detail?.title ?? ' '}
-                  </Text>
-                  {typingName || subtitle ? (
-                    <Text numberOfLines={1} style={[styles.headerSub, { color: typingName ? colors.cyan : colors.text2 }]}>
-                      {typingName ? `${detail?.kind === 'direct' ? '' : `${typingName} `}печатает…` : subtitle}
-                    </Text>
-                  ) : null}
-                </View>
+                {avatar}
+                {text}
               </>
             );
+            // Личная беседа с живыми статусами: аватарка — отдельная кнопка,
+            // имя остаётся заголовком. Обёртка тогда не группирует детей,
+            // иначе кнопка пропала бы для скринридера.
+            if (detail && detail.kind === 'direct' && companionStatuses) {
+              const statuses = companionStatuses;
+              return (
+                <View style={[styles.headerTitleRow, { maxWidth: width - 96 }]}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={statusA11yLabel(detail.title, statuses.unseen)}
+                    onPress={() => statusViewer.open([statuses])}
+                    hitSlop={6}
+                  >
+                    {avatar}
+                  </Pressable>
+                  <View accessible accessibilityRole="header" accessibilityLabel={label} style={styles.headerText}>
+                    {text}
+                  </View>
+                </View>
+              );
+            }
             // В группе и канале название — вход в участников (VED-292):
             // привычный жест мессенджера и единственное место в шапке, не
             // занятое кнопками звонка. У личного диалога участников нет,
@@ -1123,6 +1180,7 @@ export default function ChatRoomScreen() {
         onPickCamera={() => void pickFromCamera()}
         onPickFile={() => void pickDocument()}
       />
+      {statusViewer.viewer}
     </View>
   );
 }

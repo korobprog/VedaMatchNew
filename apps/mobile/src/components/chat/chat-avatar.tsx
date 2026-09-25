@@ -1,6 +1,8 @@
+import type { ChatStatusRing } from '@vedamatch/shared';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 import { initialOf } from '@/lib/chat/chat-format';
+import { StatusRing } from './statuses/status-ring';
 import { useTheme } from '@/theme/theme';
 import { fonts } from '@/theme/tokens';
 import type { Palette } from '@/theme/tokens';
@@ -22,15 +24,24 @@ interface Props {
   uri?: string | null;
   size?: number;
   online?: boolean;
+  /**
+   * Кружок статусов человека (VED-129). Пока он есть, аватарка круглая:
+   * кольцо — окружность, и скруглённый квадрат углами вылезал бы на него.
+   */
+  ring?: ChatStatusRing | null;
+  /** Круглая и без кольца — полоса статусов, где круглые все. */
+  round?: boolean;
 }
 
-export function ChatAvatar({ id, name, uri, size = 52, online = false }: Props) {
+export function ChatAvatar({ id, name, uri, size = 52, online = false, ring = null, round = false }: Props) {
   const { colors } = useTheme();
-  const radius = Math.round(size * 0.3);
+  const withRing = Boolean(ring && ring.total > 0);
+  const radius = withRing || round ? size / 2 : Math.round(size * 0.3);
   const accent = accentFor(id, colors);
 
   return (
     <View style={{ width: size, height: size }}>
+      <StatusRing ring={ring} size={size} />
       {uri ? (
         <Image
           source={{ uri }}

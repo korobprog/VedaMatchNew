@@ -1,8 +1,9 @@
-import type { ChatConversationSummary } from '@vedamatch/shared';
+import type { ChatConversationSummary, ChatStatusRing } from '@vedamatch/shared';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { conversationA11yLabel, formatChatStamp, previewOf, unreadLabel } from '@/lib/chat/chat-format';
 import { isOnline } from '@/lib/chat/presence';
+import { statusA11yLabel } from '@/lib/chat/statuses/status-playback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
@@ -12,6 +13,10 @@ interface Props {
   conversation: ChatConversationSummary;
   /** Id вместо замыкания: колбэк один на весь список, и memo строки не сбрасывается. */
   onPress(id: string): void;
+  /** Кружок статусов собеседника личной беседы (VED-129). */
+  ring?: ChatStatusRing | null;
+  /** Нажатие на аватарку с кружком — открыть статусы человека, а не беседу. */
+  onStatusesPress?(userId: string): void;
 }
 
 const KIND_LABEL: Record<ChatConversationSummary['kind'], string | null> = {
@@ -20,7 +25,7 @@ const KIND_LABEL: Record<ChatConversationSummary['kind'], string | null> = {
   channel: 'Канал',
 };
 
-function ConversationRowImpl({ conversation, onPress }: Props) {
+function ConversationRowImpl({ conversation, onPress, ring, onStatusesPress }: Props) {
   const { colors } = useTheme();
   const companion = conversation.companion;
   const avatarId = companion?.id ?? conversation.id;
@@ -31,6 +36,10 @@ function ConversationRowImpl({ conversation, onPress }: Props) {
   // о котором нет смысла напоминать в каждой строке.
   const kindLabel = conversation.official ? 'Официальный' : KIND_LABEL[conversation.kind];
   const showMuted = conversation.muted && !conversation.official;
+  // Кружок только у личной беседы: статусы бывают у людей, не у групп.
+  const statusRing = conversation.kind === 'direct' && companion && ring && ring.total > 0 ? ring : null;
+  const openStatuses = statusRing && companion && onStatusesPress ? () => onStatusesPress(companion.id) : null;
+  const avatar = <ChatAvatar id={avatarId} name={conversation.title} uri={avatarUri} online={online} ring={statusRing} />;
 
   return (
     <Pressable
@@ -38,10 +47,28 @@ function ConversationRowImpl({ conversation, onPress }: Props) {
       accessibilityLabel={conversationA11yLabel(conversation, online)}
       accessibilityHint={previewOf(conversation)}
       onPress={() => onPress(conversation.id)}
+      // Строка для скринридера — одна кнопка, вложенная аватарка ему не
+      // видна; статусы открываются отдельным действием строки.
+      accessibilityActions={openStatuses ? [{ name: 'statuses', label: statusA11yLabel(conversation.title, statusRing?.unseen ?? 0) }] : undefined}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'statuses') openStatuses?.();
+      }}
       android_ripple={ripple(colors.glassBorder)}
       style={({ pressed }) => [styles.row, { borderBottomColor: colors.glassBorder }, pressedStyle(pressed)]}
     >
-      <ChatAvatar id={avatarId} name={conversation.title} uri={avatarUri} online={online} />
+      {openStatuses ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={statusA11yLabel(conversation.title, statusRing?.unseen ?? 0)}
+          onPress={openStatuses}
+          hitSlop={4}
+          style={styles.avatarButton}
+        >
+          {avatar}
+        </Pressable>
+      ) : (
+        avatar
+      )}
       <View style={styles.body}>
         <View style={styles.line}>
           <Text numberOfLines={1} style={[styles.title, { color: colors.text0 }]}>
@@ -93,6 +120,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 76,
   },
+  avatarButton: { width: 52, height: 52, borderRadius: 26 },
   body: { flex: 1, gap: 4, minWidth: 0 },
   line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 16 },
