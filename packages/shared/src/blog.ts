@@ -33,8 +33,12 @@ export const BLOG_POST_MAX_IMAGES = 10;
 /** Сколько постов участник может опубликовать за сутки. */
 export const BLOG_MAX_POSTS_PER_DAY = 20;
 
-/** Срок по умолчанию: трое суток. Столько живёт новость портала в ленте. */
-export const BLOG_DEFAULT_FEED_LIFETIME_HOURS = 72;
+/**
+ * Срок по умолчанию: без срока (`0`, VED-446). Раньше было трое суток, но
+ * заказчик попросил, чтобы новые посты по умолчанию держались в ленте, пока
+ * их не уберут; срок у отдельного поста администратор ставит по-прежнему.
+ */
+export const BLOG_DEFAULT_FEED_LIFETIME_HOURS = 0;
 export const BLOG_MIN_FEED_LIFETIME_HOURS = 1;
 /** Год — верхняя граница; «совсем без срока» задаётся отдельным значением. */
 export const BLOG_MAX_FEED_LIFETIME_HOURS = 24 * 365;

@@ -7163,8 +7163,9 @@ model BlogFavorite {
 /// Единственная строка настроек сервиса (id всегда "global").
 model BlogSettings {
   id                String   @id @default("global")
-  /// Срок нахождения поста в ленте по умолчанию, в часах. 0 — без срока.
-  feedLifetimeHours Int      @default(72)
+  /// Срок нахождения поста в ленте по умолчанию, в часах. 0 — без срока
+  /// (VED-446: по умолчанию без срока).
+  feedLifetimeHours Int      @default(0)
   updatedAt         DateTime @updatedAt
 }
 
