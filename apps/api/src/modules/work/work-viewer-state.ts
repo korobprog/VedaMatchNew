@@ -105,12 +105,39 @@ export function othersActivityWhere(
 export interface WorkViewerState {
   foreign: boolean;
   viewed: boolean;
+  /**
+   * Когда смотрящий последний раз открывал задачу или что-то с ней делал
+   * (VED-485, вид «Последние»); `null` — не трогал.
+   */
+  touchedAt: Date | null;
 }
 
 export const NO_VIEWER_STATE: WorkViewerState = {
   foreign: false,
   viewed: false,
+  touchedAt: null,
 };
+
+/** Позднее из двух дат; обе пусты — `null`. */
+export function latestDate(
+  a: Date | null | undefined,
+  b: Date | null | undefined,
+): Date | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return a.getTime() >= b.getTime() ? a : b;
+}
+
+/** Свои действия с задачами — свои и агента от имени смотрящего. */
+export function ownActivityWhere(
+  taskIds: string[],
+  viewerId: string,
+): Prisma.WorkActivityWhereInput {
+  return {
+    taskId: { in: taskIds },
+    OR: [{ actorId: viewerId }, { onBehalfOfId: viewerId }],
+  };
+}
 
 /**
  * От чьего имени агент заводил задачи: `taskId → userId`. Запись о создании
@@ -153,7 +180,7 @@ export async function loadWorkViewerState(
   const taskIds = tasks.map((task) => task.id);
   if (taskIds.length === 0) return new Map();
 
-  const [onBehalf, views, changes] = await Promise.all([
+  const [onBehalf, views, changes, visits, own] = await Promise.all([
     loadCreatedOnBehalf(prisma, taskIds),
     prisma.workTaskView.findMany({
       where: { userId: viewerId, taskId: { in: taskIds } },
@@ -164,7 +191,18 @@ export async function loadWorkViewerState(
       where: othersActivityWhere(taskIds, viewerId),
       _max: { createdAt: true },
     }),
+    prisma.workTaskVisit.findMany({
+      where: { userId: viewerId, taskId: { in: taskIds } },
+      select: { taskId: true, visitedAt: true },
+    }),
+    prisma.workActivity.groupBy({
+      by: ['taskId'],
+      where: ownActivityWhere(taskIds, viewerId),
+      _max: { createdAt: true },
+    }),
   ]);
+  const visitedAt = new Map(visits.map((row) => [row.taskId, row.visitedAt]));
+  const actedAt = new Map(own.map((row) => [row.taskId, row._max.createdAt]));
   const viewedAt = new Map(views.map((row) => [row.taskId, row.viewedAt]));
   const changedAt = new Map(
     changes.map((row) => [row.taskId, row._max.createdAt]),
@@ -179,6 +217,7 @@ export async function loadWorkViewerState(
           viewerId,
         ),
         viewed: isWorkTaskViewed(viewedAt.get(task.id), changedAt.get(task.id)),
+        touchedAt: latestDate(visitedAt.get(task.id), actedAt.get(task.id)),
       },
     ]),
   );
