@@ -275,6 +275,14 @@ export class WorkTasksService {
     });
     if (!task) throw new NotFoundException('Задача не найдена');
 
+    // След «открывал» для вида «Последние» (VED-485). До чтения состояния
+    // смотрящего: открытая сейчас задача — самая последняя.
+    await this.prisma.workTaskVisit.upsert({
+      where: { taskId_userId: { taskId, userId } },
+      create: { taskId, userId },
+      update: { visitedAt: new Date() },
+    });
+
     const viewer = await loadWorkViewerState(this.prisma, [task], userId);
     const card = toWorkTaskCard(
       {

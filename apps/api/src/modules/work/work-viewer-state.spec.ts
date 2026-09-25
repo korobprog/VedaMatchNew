@@ -154,6 +154,8 @@ describe('loadWorkViewerState', () => {
     onBehalf?: Array<{ taskId: string; onBehalfOfId: string }>;
     views?: Array<{ taskId: string; viewedAt: Date }>;
     changes?: Array<{ taskId: string; _max: { createdAt: Date | null } }>;
+    own?: Array<{ taskId: string; _max: { createdAt: Date | null } }>;
+    visits?: Array<{ taskId: string; visitedAt: Date }>;
   }) {
     const calls = { findMany: 0, views: 0, groupBy: 0 };
     const prisma = {
@@ -162,9 +164,12 @@ describe('loadWorkViewerState', () => {
           calls.findMany += 1;
           return Promise.resolve(data.onBehalf ?? []);
         },
-        groupBy: () => {
+        // Два разреза: чужие действия (условие `AND`) и свои (`OR`).
+        groupBy: (args: { where: { OR?: unknown } }) => {
           calls.groupBy += 1;
-          return Promise.resolve(data.changes ?? []);
+          return Promise.resolve(
+            (args.where.OR ? data.own : data.changes) ?? [],
+          );
         },
       },
       workTaskView: {
@@ -172,6 +177,9 @@ describe('loadWorkViewerState', () => {
           calls.views += 1;
           return Promise.resolve(data.views ?? []);
         },
+      },
+      workTaskVisit: {
+        findMany: () => Promise.resolve(data.visits ?? []),
       },
     } as unknown as PrismaService;
     return { prisma, calls };
@@ -207,9 +215,49 @@ describe('loadWorkViewerState', () => {
       ],
       'stas',
     );
-    expect(state.get('mine')).toEqual({ foreign: false, viewed: true });
-    expect(state.get('moved')).toEqual({ foreign: false, viewed: false });
-    expect(state.get('theirs')).toEqual({ foreign: true, viewed: false });
-    expect(state.get('by-agent')).toEqual({ foreign: false, viewed: false });
+    expect(state.get('mine')).toMatchObject({ foreign: false, viewed: true });
+    expect(state.get('moved')).toMatchObject({
+      foreign: false,
+      viewed: false,
+    });
+    expect(state.get('theirs')).toMatchObject({
+      foreign: true,
+      viewed: false,
+    });
+    expect(state.get('by-agent')).toMatchObject({
+      foreign: false,
+      viewed: false,
+    });
+  });
+
+  it('«Последние» (VED-485): позднее из открытия и своего действия', async () => {
+    const { prisma } = prismaWith({
+      visits: [
+        { taskId: 'opened', visitedAt: new Date('2026-09-24T10:00:00Z') },
+        { taskId: 'both', visitedAt: new Date('2026-09-24T09:00:00Z') },
+      ],
+      own: [
+        {
+          taskId: 'both',
+          _max: { createdAt: new Date('2026-09-24T11:00:00Z') },
+        },
+      ],
+    });
+    const state = await loadWorkViewerState(
+      prisma,
+      [
+        { id: 'opened', createdById: 'stas', assigneeId: null },
+        { id: 'both', createdById: 'stas', assigneeId: null },
+        { id: 'never', createdById: 'stas', assigneeId: null },
+      ],
+      'stas',
+    );
+    expect(state.get('opened')?.touchedAt).toEqual(
+      new Date('2026-09-24T10:00:00Z'),
+    );
+    expect(state.get('both')?.touchedAt).toEqual(
+      new Date('2026-09-24T11:00:00Z'),
+    );
+    expect(state.get('never')?.touchedAt).toBeNull();
   });
 });

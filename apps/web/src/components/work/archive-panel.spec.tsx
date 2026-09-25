@@ -35,6 +35,7 @@ function item(over: Partial<WorkArchiveItemDto> = {}): WorkArchiveItemDto {
     viewed: false,
     sectionId: null,
     editedAt: "2026-09-01T00:00:00.000Z",
+    touchedAt: null,
     columnName: "Выполнено",
     archivedAt: null,
     ...over,

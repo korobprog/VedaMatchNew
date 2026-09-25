@@ -449,6 +449,7 @@ model User {
   workTaskNoticesReceived            WorkTaskNotice[]              @relation("WorkTaskNoticeRecipient")
   workTaskNoticesCaused              WorkTaskNotice[]              @relation("WorkTaskNoticeActor")
   workTaskViews                      WorkTaskView[]                @relation("WorkTaskViews")
+  workTaskVisits                     WorkTaskVisit[]               @relation("WorkTaskVisits")
   workBoardsLed                      WorkBoard[]                   @relation("WorkBoardsLed")
   workTimeEntries                    WorkTimeEntry[]               @relation("WorkTimeEntries")
   workOvertimeRequested              WorkOvertimeRequest[]         @relation("WorkOvertimeRequester")
@@ -5834,6 +5835,7 @@ model WorkTask {
   activity            WorkActivity[]
   notices             WorkTaskNotice[]
   views               WorkTaskView[]
+  visits              WorkTaskVisit[]
 
   @@unique([spaceId, number])
   @@index([columnId, position])
@@ -5992,6 +5994,22 @@ model WorkTaskView {
 
   @@id([taskId, userId])
   @@index([userId])
+}
+
+/// Когда человек последний раз открывал задачу (VED-485, вид «Последние»).
+///
+/// Не «Просмотрено» (`WorkTaskView`): та отметка ставится кнопкой и гаснет
+/// от чужих действий, а эта — просто след «открывал окно задачи», одна строка
+/// на пару «задача — человек», дата переставляется при каждом открытии.
+model WorkTaskVisit {
+  taskId    String
+  task      WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("WorkTaskVisits", fields: [userId], references: [id], onDelete: Cascade)
+  visitedAt DateTime @default(now())
+
+  @@id([taskId, userId])
+  @@index([userId, visitedAt])
 }
 
 /// Мой отклик в «Вакансиях» — для агенды «Мой день».

@@ -33,6 +33,7 @@ function card(id: string): WorkTaskCardDto {
     viewed: false,
     sectionId: null,
     editedAt: "2026-09-01T00:00:00.000Z",
+    touchedAt: null,
   };
 }
 

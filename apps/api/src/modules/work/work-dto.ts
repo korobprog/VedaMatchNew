@@ -136,6 +136,7 @@ export function toWorkTaskCard(
       task.sectionColumnId,
     ),
     editedAt: workTaskEditedAt(task.createdAt, task.editedAt).toISOString(),
+    touchedAt: viewer.touchedAt?.toISOString() ?? null,
   };
 }
 

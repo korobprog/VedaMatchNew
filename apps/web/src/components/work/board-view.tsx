@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   CalendarClock,
   Check,
+  Clock,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -107,6 +108,7 @@ import {
 } from "./task-composer";
 import { priorityMark } from "./task-priority";
 import { groupTasksByPriority } from "./task-grouping";
+import { recentTasks } from "./task-recent";
 import {
   groupTasksByCreatedDate,
   groupTasksByEditedDate,
@@ -762,7 +764,18 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             панели вида (VED-421): «кнопку ссылка убери отсюда, он тут не в
             тему и занимает место». Панель — про то, как разложить задачи;
             состав среды — про саму среду, ему место рядом с её именем. */}
-        <span className="ml-auto">
+        {/* «Архив» — в строке с названием, рядом со ссылкой-приглашением
+            (VED-485): его место в ряду вида занял вид «Последние». */}
+        <span className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            aria-label="Архив"
+            title="Архив"
+            className={workToolbarButtonClass()}
+          >
+            <Archive aria-hidden className="size-4 shrink-0" />
+          </button>
           <WorkInvitePanel
             space={space}
             viewerId={board.viewerId}
@@ -886,15 +899,25 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           >
             По важности
           </button>
+          {/* «Последние» (VED-485) — на месте «Архива», переехавшего к
+              названию среды: свои задачи, которые открывал или трогал,
+              одним списком, свежие сверху. */}
           <button
             type="button"
-            onClick={() => setArchiveOpen(true)}
-            aria-label="Архив"
-            title="Архив"
-            className={workToolbarButtonClass()}
+            aria-pressed={groupMode === "recent"}
+            onClick={() => toggleGroupMode("recent")}
+            aria-label="Последние"
+            title={
+              groupMode === "recent"
+                ? "Показаны последние задачи, с которыми вы работали"
+                : "Последние задачи, которые вы открывали или меняли: свежие сверху"
+            }
+            className={workToolbarButtonClass({
+              pressed: groupMode === "recent",
+            })}
           >
-            <Archive aria-hidden className="size-4 shrink-0" />
-            <span className="hidden sm:inline">Архив</span>
+            <Clock aria-hidden className="size-4 shrink-0" />
+            <span className="hidden sm:inline">Последние</span>
           </button>
         </div>
       </div>
@@ -1033,6 +1056,13 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         </p>
       )}
 
+      {groupMode === "recent" && !searchActive && (
+        <p className="mb-3 text-xs text-text-2">
+          Последние задачи, которые вы открывали или меняли, — свежие сверху.
+          Чужие сюда не входят.
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="mb-3 text-sm text-magenta">
           {error}
@@ -1049,6 +1079,38 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           краем: доску не видно целиком, и каждое движение приходится выбирать
           между двумя осями. Столбиком видно всё, а порядок колонок сверху
           вниз читается так же, как слева направо. */}
+      {groupMode === "recent" && !searchActive ? (
+        <RecentTasksList
+          tasks={recentTasks(board.columns)}
+          renderCard={(task) => {
+            const column = board.columns.find(
+              (item) => item.id === task.columnId,
+            );
+            return (
+              <TaskCard
+                task={task}
+                dragging={false}
+                canEdit={Boolean(canEdit)}
+                draggable={false}
+                found={false}
+                viewerId={board.viewerId}
+                sectionName={
+                  column && isStatusColumn(column) && task.sectionId
+                    ? (sectionNames.get(task.sectionId) ?? null)
+                    : (column?.name ?? null)
+                }
+                onOpen={() => setOpenTaskId(task.id)}
+                onHandleDown={() => undefined}
+                onHandleMove={() => undefined}
+                onHandleUp={() => undefined}
+                onMoveBeside={(direction) => moveBeside(task, direction)}
+                onToggleViewed={() => void toggleViewed(task.id, !task.viewed)}
+                cardRef={() => undefined}
+              />
+            );
+          }}
+        />
+      ) : (
       <div className="-mx-4 flex flex-col gap-3 px-4 pb-4 sm:snap-x sm:flex-row sm:overflow-x-auto">
         {shownColumns.map((column) => {
           // Номер, лимит и «пустая ли колонка» — по доске целиком: поиск
@@ -1470,6 +1532,7 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             </form>
           ))}
       </div>
+      )}
 
       {archiveOpen && (
         <WorkArchivePanel
@@ -1745,5 +1808,36 @@ function TaskCard({
         </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * Вид «Последние» (VED-485): одна колонка на всю ширину, без разделов.
+ * Подпись раздела на карточке говорит, откуда задача.
+ */
+function RecentTasksList({
+  tasks,
+  renderCard,
+}: {
+  tasks: WorkTaskCardDto[];
+  renderCard: (task: WorkTaskCardDto) => React.ReactNode;
+}) {
+  return (
+    <section
+      aria-label="Последние задачи"
+      className="glass mb-4 flex flex-col rounded-2xl p-3 sm:max-w-xl"
+    >
+      {tasks.length === 0 ? (
+        <p className="text-sm text-text-1">
+          Здесь появятся задачи, которые вы откроете или поменяете.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {tasks.map((task) => (
+            <li key={task.id}>{renderCard(task)}</li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
