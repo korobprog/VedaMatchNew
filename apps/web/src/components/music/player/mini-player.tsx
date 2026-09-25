@@ -1,9 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import type { AnimationEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  getModalOpen,
+  getModalOpenServer,
+  subscribeModals,
+} from "./modal-watch";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
@@ -25,6 +39,8 @@ import {
   History,
   ListEnd,
   PictureInPicture2,
+  Pause,
+  Play,
   Settings,
 } from "lucide-react";
 import {
@@ -79,6 +95,12 @@ const icon = {
 
 export function MiniPlayer() {
   const player = useMusicPlayer();
+  // Поверх полосы открыто окно задачи или другое модальное (VED-499).
+  const modalOpen = useSyncExternalStore(
+    subscribeModals,
+    getModalOpen,
+    getModalOpenServer,
+  );
   const pathname = usePathname();
   const [queueOpen, setQueueOpen] = useState(false);
   /**
@@ -1098,6 +1120,28 @@ export function MiniPlayer() {
         )}
       </section>
       )}
+      {/* Пузырь «пуск / пауза» поверх модального окна (VED-499): окно
+          накрывает полосу затемнением, и остановить музыку было нечем.
+          Разворачивать плеер отсюда нельзя — только пуск и пауза, как просил
+          заказчик. Порталом в `body`: у полосы свой слой z-40, и изнутри него
+          выше окна (z-50) не подняться. */}
+      {modalOpen &&
+        createPortal(
+          <button
+            type="button"
+            onClick={() => player.toggle()}
+            aria-label={isPlaying ? `Пауза: ${current.title}` : `Играть: ${current.title}`}
+            title={isPlaying ? "Пауза" : "Играть"}
+            className="btn-mint fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-3 z-[70] flex size-12 items-center justify-center rounded-full shadow-lg"
+          >
+            {isPlaying ? (
+              <Pause aria-hidden className="size-5" fill="currentColor" />
+            ) : (
+              <Play aria-hidden className="ml-0.5 size-5" fill="currentColor" />
+            )}
+          </button>,
+          document.body,
+        )}
       {/* Объявления полосы (VED-388). Вне свёрнутого/развёрнутого вида:
           живая область должна существовать до того, как в неё пишут. */}
       <p role="status" aria-live="polite" className="sr-only">
