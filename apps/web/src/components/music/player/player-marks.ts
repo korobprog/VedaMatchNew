@@ -22,6 +22,29 @@ export function upsertBookmark(
   return sortBookmarks([...items.filter((row) => row.id !== item.id), item]);
 }
 
+/**
+ * Где рисовать метки на дорожке (VED-450): доля длины записи в процентах.
+ * Метки за концом (длительность уточнилась после пересчёта) прижимаются к
+ * концу, совпадающие места рисуются одной засечкой.
+ */
+export function markPercents(
+  positions: readonly number[],
+  totalSeconds: number,
+): number[] {
+  if (!(totalSeconds > 0)) return [];
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const position of positions) {
+    if (!Number.isFinite(position) || position < 0) continue;
+    const percent =
+      Math.round(Math.min(100, (position / totalSeconds) * 100) * 10) / 10;
+    if (seen.has(percent)) continue;
+    seen.add(percent);
+    out.push(percent);
+  }
+  return out.sort((a, b) => a - b);
+}
+
 /** Как метку назвать: подписью, а без неё — местом. */
 export function bookmarkTitle(item: MusicBookmarkDto): string {
   return item.label ?? `Метка на ${formatTrackDuration(item.positionSeconds)}`;

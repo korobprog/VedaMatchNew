@@ -119,6 +119,13 @@ export const renameBookmark = (id: string, label: string | null) =>
     body: JSON.stringify({ label }),
   });
 
+/** Все свои метки записи (VED-450). */
+export const deleteAllBookmarks = (trackId: string) =>
+  quiet<{ ok: true; count: number }>(
+    `/music/bookmarks?trackId=${encodeURIComponent(trackId)}`,
+    { method: "DELETE" },
+  );
+
 export const deleteBookmark = (id: string) =>
   quiet<{ ok: true }>(`/music/bookmarks/${encodeURIComponent(id)}`, {
     method: "DELETE",

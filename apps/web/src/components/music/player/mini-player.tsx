@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AnimationEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -228,6 +228,16 @@ export function MiniPlayer() {
   });
 
   const bookmarks = useTrackBookmarks(player?.current?.id ?? null);
+  // Метки видны на дорожке (VED-450), поэтому список читается сразу при
+  // смене записи, а не только в открытой вкладке «Метки».
+  const loadBookmarks = bookmarks.load;
+  useEffect(() => {
+    loadBookmarks();
+  }, [loadBookmarks]);
+  const markSeconds = useMemo(
+    () => (bookmarks.items ?? []).map((item) => item.positionSeconds),
+    [bookmarks.items],
+  );
 
   /**
    * Перемотка на шаг из настроек (VED-388) — кнопками, клавиатурой.
@@ -749,6 +759,7 @@ export function MiniPlayer() {
               position={positionSeconds}
               total={total}
               onSeek={player.seek}
+              marks={markSeconds}
             />
             <MusicLyricsButton
               trackId={current.id}
@@ -1062,7 +1073,9 @@ export function MiniPlayer() {
                 playing={isPlaying}
                 className={`shrink-0 sm:hidden ${
                   equalizer === "large"
-                    ? "h-5 w-20 max-[359px]:w-12"
+                    ? // Ничего не вынесено — эквалайзер занимает всё
+                      // свободное место ряда (VED-450), а не 80 точек.
+                      "mx-2 h-5 min-w-12 flex-1"
                     : "h-3.5 w-11 max-[359px]:hidden"
                 }`}
               />

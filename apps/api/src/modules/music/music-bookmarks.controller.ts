@@ -51,6 +51,15 @@ export class MusicBookmarksController {
     return this.bookmarks.update(user.sub, id, body);
   }
 
+  /** Все свои метки записи разом (VED-450): `?trackId=`. */
+  @Delete()
+  removeAll(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('trackId') trackId: string,
+  ) {
+    return this.bookmarks.removeAllForTrack(user.sub, trackId);
+  }
+
   @Delete(':id')
   remove(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.bookmarks.remove(user.sub, id);

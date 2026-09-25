@@ -180,4 +180,24 @@ describe('MusicBookmarksService.update / remove', () => {
       where: { id: 'b1', userId: 'u1' },
     });
   });
+
+  it('«удалить все» — только свои метки этой записи (VED-450)', async () => {
+    const prisma = prismaMock();
+    prisma.musicBookmark.deleteMany.mockResolvedValue({ count: 3 });
+
+    await expect(
+      service(prisma).removeAllForTrack('u1', 't1'),
+    ).resolves.toEqual({ ok: true, count: 3 });
+    expect(prisma.musicBookmark.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', trackId: 't1' },
+    });
+  });
+
+  it('«удалить все» без записи — отказ, а не все метки человека', async () => {
+    const prisma = prismaMock();
+    await expect(
+      service(prisma).removeAllForTrack('u1', undefined),
+    ).rejects.toThrow('Не указана запись');
+    expect(prisma.musicBookmark.deleteMany).not.toHaveBeenCalled();
+  });
 });
