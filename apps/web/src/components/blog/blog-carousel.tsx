@@ -29,6 +29,7 @@ export function BlogCarousel({
   dots = false,
   focusable = false,
   fitHeight = false,
+  onIndexChange,
 }: {
   count: number;
   /** Имя группы для скринридера: «Блог-лента», «Вложения поста». */
@@ -49,9 +50,14 @@ export function BlogCarousel({
    * своя пропорция, и картинка встаёт во всю ширину, а не в рамку соседа.
    */
   fitHeight?: boolean;
+  /** Какой слайд сейчас на экране — панели Блог-ленты (VED-497). */
+  onIndexChange?: (index: number) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
+  useEffect(() => {
+    onIndexChange?.(index);
+  }, [index, onIndexChange]);
   const [atEnd, setAtEnd] = useState(count <= 1);
   const [height, setHeight] = useState<number | null>(null);
 
