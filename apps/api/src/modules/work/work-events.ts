@@ -54,6 +54,22 @@ export function workTaskRecipients(
 }
 
 /**
+ * Кому всплывает уведомление о переносе и комментарии (VED-507): тому, на ком
+ * сейчас ход, — исполнителю. Автор, поручивший задачу другому, уведомлений о
+ * ней не получает: «это совершенно не нужно». Нет исполнителя — автору.
+ *
+ * Поднятие задачи в ленте (VED-320) идёт по `workTaskRecipients`, шире: там
+ * просили, чтобы изменение видели «все остальные админы».
+ */
+export function workTaskNoticeRecipients(
+  task: { assigneeId: string | null; createdById: string | null },
+  actorId: string,
+): string[] {
+  const target = task.assigneeId ?? task.createdById;
+  return target && target !== actorId ? [target] : [];
+}
+
+/**
  * У кого поднять задачу в ленте на смене статуса (VED-320): у тех же, кому о
  * задаче сообщаем, — кроме двигавшего, — и только у участников среды.
  *
