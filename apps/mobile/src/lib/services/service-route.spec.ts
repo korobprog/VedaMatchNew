@@ -29,6 +29,11 @@ describe('serviceTarget', () => {
     expect(serviceTarget({ slug: 'blog', url: '/blog' }, 'web').kind).toBe('in-app');
   });
 
+  it('Знакомства открываются своими экранами — в раздел, а не сразу в колоду', () => {
+    expect(serviceTarget({ slug: 'union', url: '/union' }, 'android')).toEqual({ kind: 'in-app', path: '/union' });
+    expect(hasInAppScreen('union', 'android')).toBe(true);
+  });
+
   it('остальные сервисы по-прежнему уходят на сайт', () => {
     expect(serviceTarget({ slug: 'market', url: '/market' })).toEqual({
       kind: 'site',

@@ -146,6 +146,17 @@ function RootStackInner() {
               animation: reducedMotion ? 'fade' : 'slide_from_bottom',
             }}
           />
+          {/* Знакомства (сервис `union`) — маршруты корневого стека, а не
+              шестая вкладка: вход — карточкой «Знакомства» в «Сервисах»,
+              чипом панели быстрого доступа и пушем «Новая заявка». Колода
+              свайпов живёт внутри экрана подбора полноэкранной накладкой, а
+              не своим маршрутом: ей нужна та же выдача, что у сетки. */}
+          <Stack.Screen name="union/index" />
+          <Stack.Screen name="union/recommendations" />
+          <Stack.Screen name="union/users/[id]" />
+          <Stack.Screen name="union/likes" />
+          <Stack.Screen name="union/connections" />
+          <Stack.Screen name="union/report/[id]" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />
