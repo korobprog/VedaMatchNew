@@ -32,6 +32,7 @@ const entry = (over: Partial<LibraryEntryDto> = {}): LibraryEntryDto => ({
   lineage: "iskcon",
   canEdit: false,
   hasCustomPreview: false,
+  blogSharedAt: null,
   ...over,
 });
 

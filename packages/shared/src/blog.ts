@@ -119,6 +119,27 @@ export interface BlogMediaDto extends BlogImageDto {
 }
 
 /** Исходный пост под репостом: снимка не делаем, читаем оригинал. */
+/**
+ * Ссылка на материал другого сервиса (VED-490): пост отправлен в ленту
+ * кнопкой «В Блог-ленту», например из Образования. Снимок на момент
+ * отправки — лента не читает чужие таблицы.
+ */
+export interface BlogPostLinkDto {
+  /** Путь на портале или полный адрес. */
+  url: string;
+  /** Откуда: «Образование». */
+  label: string;
+  imageUrl: string | null;
+}
+
+/**
+ * Ответ «Блог-ленты» на событие отправки материала в ленту. `ok: false` —
+ * пост не создан, `reason` — код ошибки для человека (суточный предел и т.п.).
+ */
+export type BlogLinkPostResult =
+  | { ok: true; postId: string }
+  | { ok: false; reason: string };
+
 export interface BlogRepostSourceDto {
   id: string;
   author: BlogAuthorDto;
@@ -127,6 +148,7 @@ export interface BlogRepostSourceDto {
   images: BlogImageDto[];
   media: BlogMediaDto[];
   createdAt: string;
+  link?: BlogPostLinkDto | null;
 }
 
 export interface BlogPostDto {
@@ -152,6 +174,8 @@ export interface BlogPostDto {
   pinned: boolean;
   repostCount: number;
   repostOf: BlogRepostSourceDto | null;
+  /** Материал другого сервиса, отправленный в ленту (VED-490). */
+  link?: BlogPostLinkDto | null;
   /**
    * Может править: автор или администратор. У репоста всегда `false` —
    * правится оригинал его автором, а карточка репоста показывает живой

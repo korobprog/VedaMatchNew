@@ -37,6 +37,7 @@ const entry: LibraryEntryDto = {
   ],
   addedBy: { id: "user-1", name: "Тест" },
   community: null,
+  blogSharedAt: null,
   canEdit: false,
   hasCustomPreview: false,
   lineage: "iskcon",

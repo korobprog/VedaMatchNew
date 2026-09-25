@@ -15,6 +15,7 @@ import { BookmarkButton } from "@/components/library/bookmark-button";
 import { CoverPicture } from "@/components/library/cover-picture";
 import { CoverViewer } from "@/components/library/cover-viewer";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
+import { EntryShareActions } from "@/components/library/entry-share-actions";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
 import { OutsideLink } from "@/components/library/outside-link";
@@ -290,6 +291,16 @@ export default async function LibraryEntryPage({
             </p>
           )}
         </section>
+
+        {/* «Поделиться» и «В Блог-ленту» (VED-490) — как в карточке ленты. */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <EntryShareActions
+            locale={locale}
+            entryId={entry.id}
+            title={title}
+            blogSharedAt={entry.blogSharedAt}
+          />
+        </div>
 
         {entry.canEdit && (
           <>

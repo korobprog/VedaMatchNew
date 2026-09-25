@@ -124,4 +124,19 @@ describe("blogHomeSlide", () => {
     expect(slide.title?.endsWith("…")).toBe(true);
     expect(slide.title!.length).toBeLessThanOrEqual(81);
   });
+
+  // VED-490: материал из Образования — обложка материала вместо фото.
+  it("covers a link post with the material's picture", () => {
+    const slide = blogHomeSlide(
+      post({
+        link: {
+          url: "/library/entry/e1",
+          label: "Образование",
+          imageUrl: "https://cdn/cover.webp",
+        },
+      }),
+    );
+    expect(slide.coverUrl).toBe("https://cdn/cover.webp");
+    expect(slide.title).toBe("Заголовок");
+  });
 });

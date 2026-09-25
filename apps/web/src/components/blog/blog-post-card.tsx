@@ -24,6 +24,7 @@ import {
   setBlogPostPinned,
 } from "@/lib/blog-client-api";
 import { BlogMedia } from "./blog-media";
+import { BlogPostLinkButton, BlogPostLinkCover } from "./blog-post-link";
 import {
   buildSpokenPost,
   canSpeak,
@@ -213,6 +214,9 @@ export function BlogPostCard({
           ) : (
             <>
               <BlogMedia media={postMedia(post)} alt={post.title} />
+              {post.link && post.media.length === 0 && (
+                <BlogPostLinkCover link={post.link} alt={post.title} />
+              )}
               {/* 16px, а не 18px (VED-371): Unbounded широкий, и при 18px
                   заголовок в три слова на телефоне ложился в две строки —
                   22px на карточку, которых не хватало третьему посту.
@@ -223,7 +227,9 @@ export function BlogPostCard({
                   id={fold.titleId}
                   ref={attachTitle}
                   className={`px-4 font-display text-base leading-snug text-text-0 ${
-                    post.images.length > 0 ? "pt-3" : "pt-0.5"
+                    post.images.length > 0 || post.link?.imageUrl
+                      ? "pt-3"
+                      : "pt-0.5"
                   } ${fold.titleClassName}`}
                 >
                   {post.title}
@@ -236,6 +242,9 @@ export function BlogPostCard({
               страниц, и целиком развёрнутым он выталкивает из ленты
               соседей. Кнопка «Далее» — первой в ряду действий ниже. */}
           <BlogPostText fold={fold} attach={attachBody} className="px-4 pt-1" />
+          {!source && post.link && (
+            <BlogPostLinkButton link={post.link} className="mx-4 mt-2" />
+          )}
 
           <footer className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-2">
             <BlogSpeakButton post={post} />
@@ -367,9 +376,15 @@ function RepostSource({
         </p>
       )}
       <BlogMedia media={postMedia(source)} alt={source.title} compact />
+      {source.link && source.media.length === 0 && (
+        <BlogPostLinkCover link={source.link} alt={source.title} />
+      )}
       {/* Чужой длинный текст сворачивается так же: репост вдвое длиннее
           оригинала — это не то, что человек пересылал. */}
       <BlogPostText fold={fold} attach={attachBody} className="mt-2" />
+      {source.link && (
+        <BlogPostLinkButton link={source.link} className="mt-2" />
+      )}
       <BlogMoreButton fold={fold} className="mt-2 w-full" />
     </div>
   );

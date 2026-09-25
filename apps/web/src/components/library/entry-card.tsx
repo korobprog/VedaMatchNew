@@ -9,6 +9,7 @@ import { videoEmbedUrl } from "@vedamatch/shared";
 import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
+import { EntryShareActions } from "./entry-share-actions";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
 import { VERSE_FONT_FAMILY, verseFontVariables } from "./shloka/shloka-font";
@@ -198,23 +199,31 @@ export function EntryCard({
         </Link>
       </div>
 
-      {/* Автору и админу правку и удаление показываем прямо в ленте: ради них
-          незачем открывать карточку. */}
-      {entry.canEdit && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd pt-3">
-          <Link
-            href={`/library/entry/${entry.id}`}
-            className="rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0"
-          >
-            {t(locale, "entry.edit")}
-          </Link>
-          <DeleteEntryButton
-            locale={locale}
-            entryId={entry.id}
-            onDeleted={onDeleted}
-          />
-        </div>
-      )}
+      {/* «Поделиться» и «В Блог-ленту» — всем (VED-490); автору и админу
+          ещё правка и удаление: ради них незачем открывать карточку. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd pt-3">
+        <EntryShareActions
+          locale={locale}
+          entryId={entry.id}
+          title={title}
+          blogSharedAt={entry.blogSharedAt}
+        />
+        {entry.canEdit && (
+          <>
+            <Link
+              href={`/library/entry/${entry.id}`}
+              className="inline-flex min-h-9 items-center rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0"
+            >
+              {t(locale, "entry.edit")}
+            </Link>
+            <DeleteEntryButton
+              locale={locale}
+              entryId={entry.id}
+              onDeleted={onDeleted}
+            />
+          </>
+        )}
+      </div>
     </article>
   );
 }

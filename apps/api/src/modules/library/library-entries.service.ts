@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -11,6 +12,7 @@ import type {
   CreateLibraryEntryRequest,
   LibraryCommunityFacet,
   LibraryDuplicateEntryConflict,
+  LibraryBlogShareResponse,
   LibraryEntryDto,
   LibraryEntryType,
   LibraryFeedResponse,
@@ -43,6 +45,11 @@ import {
   normalizeEntryBody,
 } from './entry-body';
 import { coverDisposition } from './cover-download';
+import {
+  LIBRARY_BLOG_SHARE_REQUESTED,
+  libraryBlogShareEvent,
+  pickBlogShareResult,
+} from './library-blog-share';
 import { LibraryBookmarksService } from './library-bookmarks.service';
 import { LibraryCategoriesService } from './library-categories.service';
 import { LibraryPreviewsService } from './library-previews.service';
@@ -127,6 +134,7 @@ const ENTRY_SELECT = {
   faviconUrl: true,
   previewUrl: true,
   previewIsCustom: true,
+  blogSharedAt: true,
   lineage: true,
   status: true,
   usefulCount: true,
@@ -926,6 +934,52 @@ export class LibraryEntriesService {
   }
 
   /**
+   * «В Блог-ленту» (VED-490): пост в ленту от имени того, кто нажал, со
+   * ссылкой на материал. Отправить может любой, кому материал виден, — как
+   * поделиться. Пост публикует «Блог-лента» по событию (emitAsync), здесь
+   * только отметка у материала, и ставится она лишь после удачного поста.
+   */
+  async shareToBlog(
+    id: string,
+    userId: string,
+    viewerIsAdmin: boolean,
+  ): Promise<LibraryBlogShareResponse> {
+    const entry = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        titleRu: true,
+        titleEn: true,
+        descriptionRu: true,
+        descriptionEn: true,
+        source: true,
+        previewUrl: true,
+      },
+    });
+    if (!entry || entry.status !== 'published') {
+      throw new NotFoundException('entry_not_found');
+    }
+    const answers: unknown[] = await this.events.emitAsync(
+      LIBRARY_BLOG_SHARE_REQUESTED,
+      libraryBlogShareEvent(entry, { id: userId, isAdmin: viewerIsAdmin }),
+    );
+    const result = pickBlogShareResult(answers);
+    if (!result) throw new ServiceUnavailableException('blog_unavailable');
+    if (!result.ok) throw new BadRequestException(result.reason);
+
+    const updated = await this.prisma.libraryEntry.update({
+      where: { id },
+      data: { blogSharedAt: new Date() },
+      select: { blogSharedAt: true },
+    });
+    return {
+      postId: result.postId,
+      blogSharedAt: (updated.blogSharedAt ?? new Date()).toISOString(),
+    };
+  }
+
+  /**
    * Ссылка «Скачать картинку» материала (VED-138). Доступ тот же, что у
    * страницы материала: скрытая жалобами запись отвечает 404. Скачать можно
    * только свою копию обложки из бакета — у записи, чья картинка так и
@@ -1056,6 +1110,7 @@ function toEntryDto(
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
     hasCustomPreview: entry.previewIsCustom,
+    blogSharedAt: entry.blogSharedAt ? entry.blogSharedAt.toISOString() : null,
     // Только у шлоки: у остальных ключа нет вовсе, а не `null`.
     ...(entry.shloka
       ? {

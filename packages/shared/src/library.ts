@@ -164,6 +164,11 @@ export interface LibraryEntryDto {
   /** `true` — обложка загружена вручную, а не взята автоматически с сайта-источника. */
   hasCustomPreview: boolean;
   /**
+   * Когда материал последний раз отправили в Блог-ленту (VED-490); `null` —
+   * не отправляли. Карточка показывает это отметкой с датой.
+   */
+  blogSharedAt: string | null;
+  /**
    * Файлы книги: pdf, epub, djvu и прочие. Приходят только со страницы
    * материала; в ленте поля нет.
    */
@@ -690,4 +695,31 @@ export function libraryShlokaSourceLabel(
     .map(title)
     .filter(Boolean)
     .join(', ');
+}
+
+/** Ответ на «В Блог-ленту» (VED-490): пост в ленте и новая отметка материала. */
+export interface LibraryBlogShareResponse {
+  postId: string;
+  blogSharedAt: string;
+}
+
+/**
+ * Событие шины: материал Образования отправляют в Блог-ленту (VED-490).
+ * Слушает «Блог-лента», публикует пост от имени отправителя и возвращает
+ * `BlogLinkPostResult` — издатель зовёт emitAsync.
+ *
+ * Самодостаточно: блог не читает таблицы Образования, поэтому заголовок,
+ * описание, обложка и адрес материала едут здесь снимком на момент отправки.
+ */
+export interface LibraryBlogShareRequestedEvent {
+  requesterId: string;
+  requesterIsAdmin: boolean;
+  entryId: string;
+  title: string | null;
+  text: string;
+  /** Путь на портале: `/library/entry/<id>`. */
+  url: string;
+  imageUrl: string | null;
+  /** Подпись ссылки в посте: «Образование». */
+  label: string;
 }
