@@ -405,7 +405,10 @@ export function QuickPanel({
     : undefined;
 
   return (
-    <div className="relative flex items-center gap-2">
+    // На телефоне ряд плотнее (VED-439: «немного уменьши расстояние»):
+    // промежуток 4px вместо 8, поля нажатия 44px заходят друг на друга на
+    // 4px — палец всё равно попадает в ту кнопку, над чьим значком он.
+    <div className="relative flex items-center gap-1 sm:gap-2">
       {toolbar.map((id) => {
         switch (id) {
           case HEADER_HOTKEYS_ID:
