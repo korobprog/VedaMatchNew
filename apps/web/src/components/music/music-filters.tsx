@@ -101,8 +101,14 @@ export function MusicFilters({
   state,
   artists,
   categories,
+  compact = false,
 }: {
   state: MusicFilterState;
+  /**
+   * Значком без подписи — в строке «Исполнители» (VED-516). Раскрытая панель
+   * уходит в конец ряда и встаёт на всю ширину под ним.
+   */
+  compact?: boolean;
   artists: MusicArtistDto[];
   /** Полный список категорий каталога — стилевые (`kind: 'style'`) отбираются здесь. */
   categories: MusicCategoryDto[];
@@ -123,11 +129,25 @@ export function MusicFilters({
     // `w-fit` и `open:w-full` — чтобы свёрнутый чип стоял в одном ряду с
     // соседней кнопкой («Аудиокниги», VED-237), а раскрытая панель занимала
     // всю ширину, а не жалась в колонку под чипом.
-    <details className="group w-fit open:w-full" open={active > 0}>
-      <summary className="flex h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0">
+    <details
+      className={
+        compact
+          ? "group open:order-last open:basis-full"
+          : "group w-fit open:w-full"
+      }
+      open={active > 0}
+    >
+      <summary
+        title={compact ? "Фильтры" : undefined}
+        className={
+          compact
+            ? "relative flex size-10 cursor-pointer list-none items-center justify-center rounded-xl border border-glass-brd text-text-1 hover:text-text-0"
+            : "flex h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+        }
+      >
         <svg
           viewBox="0 0 24 24"
-          className="size-3.5"
+          className={compact ? "size-4" : "size-3.5"}
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -136,9 +156,17 @@ export function MusicFilters({
         >
           <path d="M4 6h16M7 12h10M10 18h4" />
         </svg>
-        Фильтры
+        <span className={compact ? "sr-only" : undefined}>Фильтры</span>
         {active > 0 && (
-          <span className="font-mono text-[11px] text-violet">{active}</span>
+          <span
+            className={
+              compact
+                ? "absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-violet font-mono text-[10px] text-bg-0"
+                : "font-mono text-[11px] text-violet"
+            }
+          >
+            {active}
+          </span>
         )}
       </summary>
 

@@ -10,6 +10,13 @@ import { MusicCover } from "./music-cover";
 const VIEW_KEY = "vm.music.artistsView";
 
 /**
+ * Значок в строке «Исполнители» (VED-516): 40px, рамка — как у соседних
+ * кнопок-чипов, но без подписи; имя кнопки — в `aria-label`.
+ */
+export const MUSIC_ICON_BUTTON =
+  "flex size-10 shrink-0 items-center justify-center rounded-xl border border-glass-brd text-text-1 transition-colors hover:text-text-0";
+
+/**
  * Исполнители кружками или списком, с переключателем — тот же приём, что у
  * записей (`music-track-list.tsx`), но свой ключ `localStorage`: человек
  * может держать записи «списком», а исполнителей — «плиткой», выбор не
@@ -49,41 +56,45 @@ export function MusicArtistsSection({
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
-  const toggle = () => {
-    setList((was) => {
-      const next = !was;
-      try {
-        window.localStorage.setItem(VIEW_KEY, next ? "list" : "grid");
-      } catch {
-        // см. выше
-      }
-      return next;
-    });
+  const choose = (next: boolean) => {
+    setList(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next ? "list" : "grid");
+    } catch {
+      // см. выше
+    }
   };
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Одна строка (VED-516): заголовок слева, значки — «Фильтры»,
+          «Добавить исполнителя», «Списком», «Плиткой» — напротив него.
+          Отдельный ряд кнопок над заголовком съедал место, и кружки
+          исполнителей уезжали вниз. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {heading}
         {toolbar}
-        {/* Высота `h-9` — как у переключателя «Записей» ниже
-            (`music-track-list.tsx`): две однотипные кнопки на одной
-            странице обязаны выглядеть одного роста. Область нажатия при
-            этом не меньше прежней: прозрачный `before:` раздвигает её на
-            ±2px по вертикали (`before:-inset-y-0.5`, 36+2+2=40) — тот же
-            приём, что `feed-attribution-filter.tsx` использует по
-            горизонтали. */}
         <button
           type="button"
-          onClick={toggle}
+          onClick={() => choose(true)}
           aria-pressed={list}
-          className="relative ml-auto flex h-9 min-w-10 items-center gap-2 rounded-xl border border-glass-brd px-3 text-xs font-semibold text-text-1 transition-colors before:absolute before:-inset-y-0.5 before:inset-x-0 before:content-[''] hover:text-text-0"
+          aria-label="Списком"
+          title="Списком"
+          className={`${MUSIC_ICON_BUTTON} ${list ? "border-violet/50 bg-violet/12 text-text-0" : ""}`}
         >
-          {list ? <GridIcon /> : <ListIcon />}
-          {list ? "Плиткой" : "Списком"}
+          <ListIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => choose(false)}
+          aria-pressed={!list}
+          aria-label="Плиткой"
+          title="Плиткой"
+          className={`${MUSIC_ICON_BUTTON} ${!list ? "border-violet/50 bg-violet/12 text-text-0" : ""}`}
+        >
+          <GridIcon />
         </button>
       </div>
-
-      {heading}
 
       {list ? (
         <ul className="mt-2 flex flex-col">

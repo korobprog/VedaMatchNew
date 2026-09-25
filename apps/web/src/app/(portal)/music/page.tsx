@@ -20,7 +20,10 @@ import {
   getMyMusicUploads,
 } from "@/lib/music-api";
 import { LineageStatus } from "@/components/lineage-status";
-import { MusicArtistsSection } from "@/components/music/music-artists-section";
+import {
+  MUSIC_ICON_BUTTON,
+  MusicArtistsSection,
+} from "@/components/music/music-artists-section";
 import { MusicCover } from "@/components/music/music-cover";
 import {
   MusicFilters,
@@ -178,22 +181,26 @@ export default async function MusicPage({
         "music",
       )
     : false;
-  const artistsToolbar = (
+  // Значки в строке «Исполнители» (VED-516): «Фильтры» и «Добавить
+  // исполнителя» (его видит только редакция Музыки — справочник исполнителей
+  // правит она). Функция, а не готовый узел: исполнители вкладки известны
+  // только ниже, после проверки каталога.
+  const artistsToolbar = () => (
     <>
-      {/* «Радио» (VED-437) — отдельный режим, а не раздел каталога. */}
-      <MusicRadioButton />
+      <MusicFilters
+        state={filterState}
+        artists={rootArtists}
+        categories={catalog?.categories ?? []}
+        compact
+      />
       {canEditMusic && (
         <Link
           href="/admin/music/catalog"
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+          aria-label="Добавить исполнителя"
+          title="Добавить исполнителя"
+          className={MUSIC_ICON_BUTTON}
         >
-          <UserPlus aria-hidden className="size-3.5" />
-          {/* На телефоне — «Добавить»: полной подписи с «Радио» и «Списком»
-              в одном ряду места нет, а значок человека с плюсом досказывает. */}
-          <span aria-hidden className="sm:hidden">
-            Добавить
-          </span>
-          <span className="sr-only sm:not-sr-only">Добавить исполнителя</span>
+          <UserPlus aria-hidden className="size-4" />
         </Link>
       )}
     </>
@@ -255,10 +262,14 @@ export default async function MusicPage({
   const myPlaylists = playlists?.items ?? [];
 
   return (
-    <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 md:px-6 md:py-10 lg:flex-row">
+    <main className="mx-auto flex max-w-7xl flex-col px-4 py-8 md:px-6 md:py-10 lg:flex-row lg:gap-6">
       {/* Рельс и свои плейлисты — одна колонка, как в макете каталога:
-          «своя музыка» стоит слева целиком, а не разъезжается по экрану. */}
-      <div className="flex shrink-0 flex-col gap-4 lg:w-56">
+          «своя музыка» стоит слева целиком, а не разъезжается по экрану.
+
+          На телефоне (VED-516) название Медиатеки и поиск — на самом верху,
+          над рельсом: колонка справа там раскрывается (`max-lg:contents`), и
+          шапка встаёт первой через `order-first`. */}
+      <div className="flex shrink-0 flex-col gap-4 max-lg:mt-4 lg:w-56">
         <MusicRail
           active="catalog"
           uploadsCount={pendingUploads}
@@ -302,8 +313,8 @@ export default async function MusicPage({
         )}
       </div>
 
-      <div className="min-w-0 flex-1">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0 flex-1 max-lg:contents">
+      <header className="flex flex-col gap-4 max-lg:order-first sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
@@ -359,43 +370,21 @@ export default async function MusicPage({
               <path d="M8 8l4-4 4 4" />
               <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
             </svg>
-            Загрузить
+            {/* На экране уже 380 точек — только значок (VED-516): подсказке
+                поиска «Название, исполнитель» нужно место целиком. */}
+            <span className="max-[379px]:sr-only">Загрузить</span>
           </Link>
         </div>
       </header>
 
-      <div className="mt-6 flex flex-col gap-3">
-        <MusicRootTabs categories={catalog.categories} state={filterState} />
-        {/* «Фильтры» и «Аудиокниги» — одним рядом, как на скриншоте
-            карточки VED-237: раздел книг стоит рядом с фильтрами каталога,
-            а не прячется в меню. Сами аудиокниги в каталоге не
-            показываются — их «отображение находится внутри этой кнопки». */}
-        <div className="flex flex-wrap items-start gap-2">
-          <MusicFilters
-            state={filterState}
-            artists={rootArtists}
-            categories={catalog.categories}
-          />
-          <Link
-            href="/music/audiobooks"
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="size-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
-              <path d="M9 7h6" />
-            </svg>
-            Аудиокниги
-          </Link>
-          {/* «Лекции» (VED-437) — сразу за «Аудиокнигами»: устроены так же. */}
+      <div className="mt-4 flex flex-col gap-3 lg:mt-6">
+        {/* Разделы одним рядом, слева направо (VED-516): «Радио», «Лекции»,
+            «Аудиокниги». Сами аудиокниги в каталоге не показываются — их
+            «отображение находится внутри этой кнопки» (VED-237). «Фильтры»
+            переехали значком к «Исполнителям». */}
+        <div className="flex flex-wrap items-center gap-2">
+          <MusicRadioButton />
+          {/* «Лекции» (VED-437) устроены так же, как «Аудиокниги». */}
           <Link
             href="/music/lectures"
             className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
@@ -416,13 +405,32 @@ export default async function MusicPage({
             </svg>
             Лекции
           </Link>
+          <Link
+            href="/music/audiobooks"
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="size-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+              <path d="M9 7h6" />
+            </svg>
+            Аудиокниги
+          </Link>
         </div>
-        {/* Второй ряд (VED-513): «Радио» и «Добавить исполнителя» слева,
-            «Списком» — справа. Пока исполнителей нет, переключателя нет, и
-            ряд стоит сам по себе. */}
+        <MusicRootTabs categories={catalog.categories} state={filterState} />
+        {/* Пока исполнителей нет, строки «Исполнители» нет — значки
+            «Фильтры» и «Добавить исполнителя» стоят своим рядом. */}
         {rootArtists.length === 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            {artistsToolbar}
+            {artistsToolbar()}
           </div>
         )}
       </div>
@@ -433,7 +441,7 @@ export default async function MusicPage({
           вкладке (VED-165): у «Традиционного» нет ни одного современного
           исполнителя, а не «записей нет, а кружки на месте». */}
       {rootArtists.length > 0 && (
-        <section className="mt-3" aria-labelledby="music-artists">
+        <section className="mt-6" aria-labelledby="music-artists">
           {/* Сетка по четыре кружка в ряд, заполняется слева направо
               (VED-103, VED-115). Витрина отдаёт всех исполнителей выбранной
               вкладки, и каждый
@@ -443,11 +451,11 @@ export default async function MusicPage({
               — внутри компонента, тем же приёмом, что у записей ниже (VED-225). */}
           <MusicArtistsSection
             artists={rootArtists}
-            toolbar={artistsToolbar}
+            toolbar={artistsToolbar()}
             heading={
               <h2
                 id="music-artists"
-                className="mt-6 font-display text-base font-bold text-text-0"
+                className="mr-auto font-display text-base font-bold text-text-0"
               >
                 Исполнители
               </h2>
