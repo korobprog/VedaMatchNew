@@ -6,13 +6,13 @@ const ALL: TaskStatusMark[] = ["in_progress", "testing", "done", "rework"];
 
 describe("taskStatusMarkView", () => {
   /**
-   * Слово — ровно название колонки доски, включая «Тестерование» через «е»:
-   * так она называется у заказчика, и подменять её написание в ярлыке значит
-   * показывать человеку не то слово, на которое он нажимал (VED-312).
+   * Слово — ровно название колонки доски: «Тестерование» заказчик сам
+   * переименовал в «На тестирование» и завёл «На проверке» (VED-487).
    */
-  it("даёт слово каждому из четырёх состояний", () => {
+  it("даёт слово каждому из пяти состояний", () => {
     expect(taskStatusMarkView("in_progress")?.label).toBe("В работе");
-    expect(taskStatusMarkView("testing")?.label).toBe("Тестерование");
+    expect(taskStatusMarkView("testing")?.label).toBe("На тестирование");
+    expect(taskStatusMarkView("review")?.label).toBe("На проверке");
     expect(taskStatusMarkView("done")?.label).toBe("Выполнено");
     expect(taskStatusMarkView("rework")?.label).toBe("На доработку");
   });

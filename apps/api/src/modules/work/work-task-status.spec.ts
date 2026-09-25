@@ -18,6 +18,9 @@ describe('resolveTaskStatusMark', () => {
     // самый частый переход в тестирование оставался без значка (VED-312).
     expect(resolveTaskStatusMark('Тестерование')).toBe('testing');
     expect(resolveTaskStatusMark('  тестерование ')).toBe('testing');
+    // VED-487: переименованная колонка и новое состояние «На проверке».
+    expect(resolveTaskStatusMark('На тестирование')).toBe('testing');
+    expect(resolveTaskStatusMark('На проверке')).toBe('review');
   });
 
   it('не спотыкается о регистр, пробелы, кавычки и ё', () => {
