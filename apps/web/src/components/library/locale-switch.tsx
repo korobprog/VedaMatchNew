@@ -8,7 +8,13 @@ import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
 
-export function LocaleSwitch({ locale }: { locale: LibraryLocale }) {
+export function LocaleSwitch({
+  locale,
+  className = "",
+}: {
+  locale: LibraryLocale;
+  className?: string;
+}) {
   const router = useRouter();
 
   async function change(next: LibraryLocale) {
@@ -29,7 +35,7 @@ export function LocaleSwitch({ locale }: { locale: LibraryLocale }) {
       aria-label={t(locale, "locale.switch")}
       value={locale}
       onChange={(event) => void change(event.target.value as LibraryLocale)}
-      className="rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0"
+      className={`rounded-xl border border-glass-brd bg-bg-0 px-2 py-2 text-sm text-text-0 ${className}`}
     >
       <option value="ru">RU</option>
       <option value="en">EN</option>

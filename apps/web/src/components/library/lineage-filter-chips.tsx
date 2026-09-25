@@ -39,12 +39,15 @@ export function LibraryLineageFilter({
   locale,
   applied,
   preference,
+  className = "",
 }: {
   locale: LibraryLocale;
   /** Линия, по которой API отфильтровал выдачу, — та же, что в подписи. */
   applied: LineageId | null;
   /** Сохранённая настройка Образования. */
   preference: LineagePreference;
+  /** Раскладка снаружи: в ряду кнопок Образования кнопка тянется на ячейку. */
+  className?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -126,7 +129,7 @@ export function LibraryLineageFilter({
     }`;
 
   return (
-    <div className="relative">
+    <div className={`relative ${className}`}>
       <button
         ref={triggerRef}
         type="button"
@@ -134,7 +137,7 @@ export function LibraryLineageFilter({
         aria-expanded={open}
         aria-busy={busy}
         onClick={() => setOpen((value) => !value)}
-        className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-4 text-sm transition-colors ${
+        className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-4 text-sm transition-colors ${
           current === "all"
             ? "border-glass-brd text-text-1 hover:text-text-0"
             : "border-magenta text-text-0"
