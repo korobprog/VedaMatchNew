@@ -21,6 +21,7 @@ import {
   takePendingScroll,
 } from "./portal-windows-store";
 import { noteNavigationHistory } from "./navigation-history-store";
+import { withoutOneShotParams } from "@/lib/one-shot-params";
 
 /**
  * Следит за переходами портала и складывает их в историю активного окна
@@ -48,7 +49,9 @@ function Tracker() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const query = searchParams.toString();
-  const url = query ? `${pathname}?${query}` : pathname;
+  // Разовое «открой задачу» из уведомления в историю не пишем (VED-500):
+  // иначе «назад» по окну открывал уже закрытую задачу снова.
+  const url = withoutOneShotParams(query ? `${pathname}?${query}` : pathname);
 
   useEffect(() => {
     hydratePortalWindows(url);

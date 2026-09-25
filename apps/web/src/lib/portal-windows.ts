@@ -1,3 +1,5 @@
+import { withoutOneShotParams } from "./one-shot-params";
+
 /**
  * Режим нескольких окон портала (VED-118, VED-163).
  *
@@ -66,10 +68,15 @@ export function createPortalWindows(
   return { windows, active: 0 };
 }
 
-/** Текущий адрес окна; `null` — окно ещё не открывали. */
+/**
+ * Текущий адрес окна; `null` — окно ещё не открывали. Без разового
+ * «открой задачу» (VED-500): его могли записать до исправления, а
+ * `sessionStorage` вкладки хранит окна и дальше.
+ */
 export function windowUrl(window: PortalWindow | undefined): string | null {
   if (!window || window.at < 0) return null;
-  return window.entries[window.at]?.url ?? null;
+  const url = window.entries[window.at]?.url;
+  return url ? withoutOneShotParams(url) : null;
 }
 
 export function currentPortalUrl(state: PortalWindowsState): string | null {

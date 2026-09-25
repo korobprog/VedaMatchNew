@@ -12,6 +12,7 @@ import {
   clearNavigationHistory,
   readNavigationHistory,
 } from "./navigation-history-store";
+import { withoutOneShotParams } from "@/lib/one-shot-params";
 
 /**
  * История перемещений по порталу (VED-392).
@@ -88,7 +89,8 @@ export function HistorySheet({
                       {PORTAL_LOCATION_JOINER.trim()}
                     </span>
                     <Link
-                      href={step.url}
+                      // Записи до VED-500 могли унести разовый ключ задачи.
+                      href={withoutOneShotParams(step.url)}
                       onClick={onNavigate}
                       /* Одна ступень без сервиса скринридеру ничего не
                          говорит: «Доска» — чья? Полное имя места — то же,
