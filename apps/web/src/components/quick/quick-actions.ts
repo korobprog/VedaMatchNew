@@ -427,14 +427,29 @@ export function serviceQuickActions(options?: {
   }));
 }
 
+/**
+ * Короткая подпись своей кнопки из закладки (VED-484). Закладка берёт
+ * заголовок страницы — «Доска — Планировщик», — и на плитке он ломался в две
+ * строки и сдвигал значок. Заказчик: «не делай больше двухсложные названия
+ * на горячих клавишах». Оставляем последнюю часть заголовка — название
+ * раздела, без хвоста «VedaMatch». Полный заголовок остаётся в подсказке.
+ */
+export function shortQuickLabel(label: string): string {
+  const parts = label
+    .split(/\s+[—–-]\s+|\s*\|\s*/)
+    .map((part) => part.trim())
+    .filter((part) => part && !/^vedamatch$/i.test(part));
+  return parts.length > 0 ? parts[parts.length - 1] : label.trim();
+}
+
 export function customQuickActions(
   custom: readonly QuickCustomAction[],
 ): QuickActionMeta[] {
   return custom.map((action) => ({
     id: customQuickActionId(action.href),
     kind: "custom" as const,
-    label: action.label,
-    hint: `Ваша кнопка из закладки: ${action.href}`,
+    label: shortQuickLabel(action.label),
+    hint: `Ваша кнопка из закладки «${action.label}»: ${action.href}`,
     href: action.href,
   }));
 }
