@@ -107,7 +107,11 @@ export function blogHomeSlide(post: BlogPostDto): BlogHomeSlide {
   const media = postMedia(shown);
   const first = media[0] ?? null;
   const text = shown.text.replace(/\s+/g, " ").trim();
-  const coverUrl = first ? blogMediaPreviewUrl(first) : null;
+  // Материал из другого сервиса (VED-490) своих фото не несёт — на главной
+  // вместо них его обложка.
+  const coverUrl = first
+    ? blogMediaPreviewUrl(first)
+    : (shown.link?.imageUrl ?? null);
 
   let title: string | null;
   let frameText = "";

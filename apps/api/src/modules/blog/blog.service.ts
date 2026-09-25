@@ -16,11 +16,13 @@ import {
   type BlogImageRejection,
   type BlogPostCreatedResponse,
   type BlogPostDto,
+  type BlogPostLinkDto,
   type BlogPostUpdatedResponse,
   type BlogSettingsDto,
   type CreateBlogPostRequest,
   type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
+import type { BlogLinkPostInput } from './blog-link-post';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
@@ -83,6 +85,9 @@ const POST_SELECT_BASE = {
   editedAt: true,
   // Нужен не карточке, а праву на правку: репост не правится никем.
   repostOfId: true,
+  linkUrl: true,
+  linkLabel: true,
+  linkImageUrl: true,
   author: { select: AUTHOR_SELECT },
   images: { select: IMAGE_SELECT, orderBy: { position: 'asc' as const } },
   repostOf: {
@@ -91,6 +96,9 @@ const POST_SELECT_BASE = {
       title: true,
       text: true,
       createdAt: true,
+      linkUrl: true,
+      linkLabel: true,
+      linkImageUrl: true,
       author: { select: AUTHOR_SELECT },
       images: { select: IMAGE_SELECT, orderBy: { position: 'asc' as const } },
     },
@@ -801,6 +809,31 @@ export class BlogService {
    * Суточный предел тот же, что у Моментов: спам в общей ленте портала
    * виден всем сразу.
    */
+  /**
+   * Пост из материала другого сервиса (VED-490). Тот же суточный предел,
+   * что у обычной публикации: кнопка «В Блог-ленту» — не обход лимита.
+   */
+  async createLinked(
+    userId: string,
+    input: BlogLinkPostInput,
+  ): Promise<string> {
+    await this.assertDailyLimit(userId);
+    const settings = await this.settingsRow();
+    const created = await this.prisma.blogPost.create({
+      data: {
+        authorId: userId,
+        title: input.title,
+        text: input.text,
+        linkUrl: input.linkUrl,
+        linkLabel: input.linkLabel,
+        linkImageUrl: input.linkImageUrl,
+        feedUntil: feedUntilFrom(new Date(), settings.feedLifetimeHours),
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
   private async assertDailyLimit(userId: string): Promise<void> {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const posted = await this.prisma.blogPost.count({
@@ -850,6 +883,20 @@ function toMedia(rows: MediaRow[]): Pick<BlogPostDto, 'images' | 'media'> {
   };
 }
 
+/** Ссылка на материал другого сервиса (VED-490); без адреса — нет ссылки. */
+function toLinkDto(row: {
+  linkUrl: string | null;
+  linkLabel: string | null;
+  linkImageUrl: string | null;
+}): BlogPostLinkDto | null {
+  if (!row.linkUrl) return null;
+  return {
+    url: row.linkUrl,
+    label: row.linkLabel ?? '',
+    imageUrl: row.linkImageUrl,
+  };
+}
+
 function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
   return {
     id: row.id,
@@ -871,8 +918,10 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
           text: row.repostOf.text,
           ...toMedia(row.repostOf.images),
           createdAt: row.repostOf.createdAt.toISOString(),
+          link: toLinkDto(row.repostOf),
         }
       : null,
+    link: toLinkDto(row),
     // Ровно то же правило, по которому отлупается PATCH: кнопка на экране и
     // проверка на сервере не имеют права разойтись.
     canEdit:

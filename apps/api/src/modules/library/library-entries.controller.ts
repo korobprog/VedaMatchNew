@@ -181,6 +181,16 @@ export class LibraryEntriesController {
     return this.files.remove(user.sub, isAdmin(user), id, fileId);
   }
 
+  /** «В Блог-ленту» (VED-490): пост в ленту со ссылкой на материал. */
+  @Post(':id/blog-share')
+  @Throttle({ default: { ttl: 3_600_000, limit: 30 } })
+  shareToBlog(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.entries.shareToBlog(id, user.sub, isAdmin(user));
+  }
+
   @Post(':id/bookmark')
   @HttpCode(204)
   addBookmark(

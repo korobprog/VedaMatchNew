@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { BlogAdminController } from './blog-admin.controller';
 import { BlogImagesService } from './blog-images.service';
+import { BlogLibraryListener } from './blog-library.listener';
 import { BlogPurgeListener } from './blog-purge.listener';
 import { BlogController } from './blog.controller';
 import { BlogService } from './blog.service';
@@ -26,6 +27,7 @@ import { BlogVideoService } from './blog-video.service';
     BlogImagesService,
     BlogVideoService,
     BlogPurgeListener,
+    BlogLibraryListener,
   ],
 })
 export class BlogModule {}
