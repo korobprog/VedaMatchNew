@@ -47,8 +47,13 @@ describe("MusicArtistsSection", () => {
 
     await user.click(screen.getByRole("button", { name: /Списком/ }));
 
-    const toggle = screen.getByRole("button", { name: /Плиткой/ });
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // Две кнопки вида (VED-516): нажатая — «Списком», «Плиткой» отжата.
+    expect(
+      screen.getByRole("button", { name: /Списком/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: /Плиткой/ }),
+    ).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("3 записи")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Vrindavan/ }),
@@ -68,7 +73,7 @@ describe("MusicArtistsSection", () => {
     // Повторный монтаж — режим уже сохранён и открывается сразу списком.
     render(<MusicArtistsSection artists={artists} />);
     expect(
-      await screen.findByRole("button", { name: /Плиткой/ }),
-    ).toHaveAttribute("aria-pressed", "true");
+      await screen.findByRole("button", { name: /Списком/, pressed: true }),
+    ).toBeInTheDocument();
   });
 });

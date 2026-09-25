@@ -153,13 +153,15 @@ export function MusicRail({
   // вставал шестью строками НАД каталогом: человек открывал Музыку и видел
   // меню вместо музыки. Лентой он занимает одну строку и прокручивается
   // пальцем. Высота 44px — минимальная цель на телефоне; на широком экране,
-  // где целятся курсором, остаются прежние 40.
+  // где целятся курсором, остаются прежние 40. Поля на телефоне узкие
+  // (VED-516): «Каталог», «Избранное» и «Плейлисты» обязаны влезать в экран
+  // целиком, а раньше «Плейлисты» обрезались краем.
   const row =
-    "flex h-11 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-xl px-3 text-[13px] font-semibold lg:h-10 lg:px-2.5";
+    "flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-[13px] font-semibold lg:h-10 lg:gap-2.5 lg:px-2.5";
 
   return (
     <nav aria-label="Своя музыка" className="w-full lg:w-56 lg:shrink-0">
-      <ul className="glass scroll-slim flex gap-1.5 overflow-x-auto rounded-2xl p-2 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:p-2.5">
+      <ul className="glass scroll-slim flex gap-0.5 overflow-x-auto rounded-2xl p-1.5 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:p-2.5">
         {items.map((item) => {
           const current = item.key === active;
           const badge =
