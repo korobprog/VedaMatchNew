@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { MusicArtistDto } from "@vedamatch/shared";
 import { plural } from "@/lib/plural";
@@ -20,8 +20,18 @@ const VIEW_KEY = "vm.music.artistsView";
  */
 export function MusicArtistsSection({
   artists,
+  toolbar,
+  heading,
 }: {
   artists: MusicArtistDto[];
+  /**
+   * Кнопки слева в ряду переключателя (VED-513): «Радио» и «Добавить
+   * исполнителя». Ряд стоит над заголовком секции — кнопки выровнены в два
+   * ряда с фильтрами выше, а «Списком» уходит к правому краю того же ряда.
+   */
+  toolbar?: ReactNode;
+  /** Заголовок секции — под рядом кнопок. */
+  heading?: ReactNode;
 }) {
   const [list, setList] = useState(false);
 
@@ -53,7 +63,8 @@ export function MusicArtistsSection({
 
   return (
     <>
-      <div className="mt-2 flex justify-end">
+      <div className="flex flex-wrap items-center gap-2">
+        {toolbar}
         {/* Высота `h-9` — как у переключателя «Записей» ниже
             (`music-track-list.tsx`): две однотипные кнопки на одной
             странице обязаны выглядеть одного роста. Область нажатия при
@@ -65,12 +76,14 @@ export function MusicArtistsSection({
           type="button"
           onClick={toggle}
           aria-pressed={list}
-          className="relative flex h-9 min-w-10 items-center gap-2 rounded-xl border border-glass-brd px-3 text-xs font-semibold text-text-1 transition-colors before:absolute before:-inset-y-0.5 before:inset-x-0 before:content-[''] hover:text-text-0"
+          className="relative ml-auto flex h-9 min-w-10 items-center gap-2 rounded-xl border border-glass-brd px-3 text-xs font-semibold text-text-1 transition-colors before:absolute before:-inset-y-0.5 before:inset-x-0 before:content-[''] hover:text-text-0"
         >
           {list ? <GridIcon /> : <ListIcon />}
           {list ? "Плиткой" : "Списком"}
         </button>
       </div>
+
+      {heading}
 
       {list ? (
         <ul className="mt-2 flex flex-col">

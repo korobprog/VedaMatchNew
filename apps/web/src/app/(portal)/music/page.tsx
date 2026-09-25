@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { UserPlus } from "lucide-react";
 import { MusicRadioButton } from "@/components/music/radio/radio-button";
 import { getLocale } from "next-intl/server";
 import {
+  canAdminService,
   isLineagePreference,
   isMusicTrackSort,
   resolveContentLineage,
   serviceCardName,
 } from "@vedamatch/shared";
-import { getServiceCard } from "@/lib/api";
+import { getProfile, getServiceCard } from "@/lib/api";
 import {
   getMusicCatalog,
   getMusicSettingsServer,
@@ -135,6 +137,7 @@ export default async function MusicPage({
     favorites,
     playlists,
     settings,
+    profile,
   ] = await Promise.all([
       // Название и подпись раздела — из каталога сервисов: их правит
       // администратор, а не правка кода. cache() в getServiceCard делает
@@ -164,7 +167,37 @@ export default async function MusicPage({
       // Настройки — ради линии: подпись над списком ставится, только когда
       // человек сам выбрал линию в настройках Музыки. Гостю — null.
       getMusicSettingsServer().catch(() => null),
+      getProfile().catch(() => null),
     ]);
+
+  // «Добавить исполнителя» (VED-513) — редакции Музыки: справочник
+  // исполнителей правит только она.
+  const canEditMusic = profile
+    ? canAdminService(
+        { role: profile.role, adminServices: profile.adminServices },
+        "music",
+      )
+    : false;
+  const artistsToolbar = (
+    <>
+      {/* «Радио» (VED-437) — отдельный режим, а не раздел каталога. */}
+      <MusicRadioButton />
+      {canEditMusic && (
+        <Link
+          href="/admin/music/catalog"
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+        >
+          <UserPlus aria-hidden className="size-3.5" />
+          {/* На телефоне — «Добавить»: полной подписи с «Радио» и «Списком»
+              в одном ряду места нет, а значок человека с плюсом досказывает. */}
+          <span aria-hidden className="sm:hidden">
+            Добавить
+          </span>
+          <span className="sr-only sm:not-sr-only">Добавить исполнителя</span>
+        </Link>
+      )}
+    </>
+  );
 
   // Та же арифметика, что в API: явный параметр сильнее настройки Музыки, а
   // линию из профиля Музыка не наследует (VED-82) — без настройки слышно всё
@@ -383,10 +416,15 @@ export default async function MusicPage({
             </svg>
             Лекции
           </Link>
-          {/* «Радио» (VED-437) — у правого края ряда, как на скриншоте
-              карточки: эфир — не раздел каталога, а отдельный режим. */}
-          <MusicRadioButton className="ml-auto" />
         </div>
+        {/* Второй ряд (VED-513): «Радио» и «Добавить исполнителя» слева,
+            «Списком» — справа. Пока исполнителей нет, переключателя нет, и
+            ряд стоит сам по себе. */}
+        {rootArtists.length === 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {artistsToolbar}
+          </div>
+        )}
       </div>
 
       {/* Исполнители — до списка записей. Хвостом после подборок их не
@@ -395,13 +433,7 @@ export default async function MusicPage({
           вкладке (VED-165): у «Традиционного» нет ни одного современного
           исполнителя, а не «записей нет, а кружки на месте». */}
       {rootArtists.length > 0 && (
-        <section className="mt-8" aria-labelledby="music-artists">
-          <h2
-            id="music-artists"
-            className="font-display text-base font-bold text-text-0"
-          >
-            Исполнители
-          </h2>
+        <section className="mt-3" aria-labelledby="music-artists">
           {/* Сетка по четыре кружка в ряд, заполняется слева направо
               (VED-103, VED-115). Витрина отдаёт всех исполнителей выбранной
               вкладки, и каждый
@@ -409,7 +441,18 @@ export default async function MusicPage({
               прокрутки вбок нет ни на телефоне, ни на широком экране: лента
               прятала хвост за краем. Переключатель вида — «плиткой»/«списком»
               — внутри компонента, тем же приёмом, что у записей ниже (VED-225). */}
-          <MusicArtistsSection artists={rootArtists} />
+          <MusicArtistsSection
+            artists={rootArtists}
+            toolbar={artistsToolbar}
+            heading={
+              <h2
+                id="music-artists"
+                className="mt-6 font-display text-base font-bold text-text-0"
+              >
+                Исполнители
+              </h2>
+            }
+          />
         </section>
       )}
 
