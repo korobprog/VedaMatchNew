@@ -15,7 +15,12 @@ import { BookmarkButton } from "@/components/library/bookmark-button";
 import { CoverPicture } from "@/components/library/cover-picture";
 import { CoverViewer } from "@/components/library/cover-viewer";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
-import { EntryShareActions } from "@/components/library/entry-share-actions";
+import {
+  ENTRY_ICON_BUTTON,
+  EntryShareActions,
+} from "@/components/library/entry-share-actions";
+import { EntrySpeakButton } from "@/components/library/entry-speak-button";
+import { buildSpokenEntry } from "@/components/library/entry-speech";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
 import { EntryComments } from "@/components/library/entry-comments";
 import { OutsideLink } from "@/components/library/outside-link";
@@ -132,15 +137,43 @@ export default async function LibraryEntryPage({
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
         {/* Только что опубликованный материал: «Назад» ведёт в его раздел,
             а не по истории — там позади форма добавления (VED-91). */}
-        <BackLink
-          locale={locale}
-          fallbackHref={
-            entry.categories[0]
-              ? `/library/${entry.categories[0].slug}`
-              : "/library"
-          }
-          skipHistory={justCreated}
-        />
+        {/* Справа от «Назад» — «Поделиться», «В Блог-ленту» и «Озвучить»
+            значками, слева направо, как на скриншоте карточки VED-515. */}
+        <div className="-mt-3 mb-2 flex flex-wrap items-center gap-2">
+          <div className="mt-3">
+            <BackLink
+              locale={locale}
+              fallbackHref={
+                entry.categories[0]
+                  ? `/library/${entry.categories[0].slug}`
+                  : "/library"
+              }
+              skipHistory={justCreated}
+            />
+          </div>
+          <EntryShareActions
+            locale={locale}
+            entryId={entry.id}
+            title={title}
+            blogSharedAt={entry.blogSharedAt}
+            compact
+            trailing={
+              <EntrySpeakButton
+                locale={locale}
+                entryId={entry.id}
+                text={buildSpokenEntry({
+                  title,
+                  description: pickLocalized(locale, {
+                    ru: entry.descriptionRu,
+                    en: entry.descriptionEn,
+                  }),
+                  body: entry.body,
+                })}
+                className={ENTRY_ICON_BUTTON}
+              />
+            }
+          />
+        </div>
         <p className="mb-2 text-xs text-text-2">
           {/* Домена нет у материала без адреса — тогда и разделитель перед
               типом лишний, иначе строка начинается с висящей точки. */}
@@ -291,16 +324,6 @@ export default async function LibraryEntryPage({
             </p>
           )}
         </section>
-
-        {/* «Поделиться» и «В Блог-ленту» (VED-490) — как в карточке ленты. */}
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <EntryShareActions
-            locale={locale}
-            entryId={entry.id}
-            title={title}
-            blogSharedAt={entry.blogSharedAt}
-          />
-        </div>
 
         {entry.canEdit && (
           <>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Check, Newspaper, Share2 } from "lucide-react";
 import type {
@@ -15,6 +15,10 @@ const API_URL = apiBase();
 
 const button =
   "inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0 disabled:opacity-50";
+
+/** Значок без подписи — шапка страницы материала (VED-515). */
+export const ENTRY_ICON_BUTTON =
+  "inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0";
 
 function shortDate(iso: string, locale: LibraryLocale): string {
   return new Date(iso).toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", {
@@ -37,11 +41,20 @@ export function EntryShareActions({
   entryId,
   title,
   blogSharedAt: initialSharedAt,
+  compact = false,
+  trailing,
 }: {
   locale: LibraryLocale;
   entryId: string;
   title: string;
   blogSharedAt: string | null;
+  /**
+   * Значками без подписей, справа от «Назад» (VED-515). Подтверждение и
+   * отметка «В Блог-ленте» тогда встают своей строкой ниже.
+   */
+  compact?: boolean;
+  /** Кнопка за «В Блог-ленту» в том же ряду значков — «Озвучить». */
+  trailing?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -49,6 +62,8 @@ export function EntryShareActions({
   const [error, setError] = useState<string | null>(null);
   const [sharedAt, setSharedAt] = useState(initialSharedAt);
   const [postId, setPostId] = useState<string | null>(null);
+
+  const shareLabel = t(locale, copied ? "entry.shareCopied" : "entry.share");
 
   async function share() {
     const url = `${window.location.origin}/library/entry/${encodeURIComponent(entryId)}`;
@@ -100,17 +115,44 @@ export function EntryShareActions({
 
   return (
     <>
-      <button type="button" onClick={() => void share()} className={button}>
+      <button
+        type="button"
+        onClick={() => void share()}
+        aria-label={compact ? shareLabel : undefined}
+        title={compact ? shareLabel : undefined}
+        className={compact ? `${ENTRY_ICON_BUTTON} ml-auto` : button}
+      >
         {copied ? (
-          <Check aria-hidden className="h-3.5 w-3.5" />
+          <Check aria-hidden className={compact ? "size-4" : "h-3.5 w-3.5"} />
         ) : (
-          <Share2 aria-hidden className="h-3.5 w-3.5" />
+          <Share2 aria-hidden className={compact ? "size-4" : "h-3.5 w-3.5"} />
         )}
-        {t(locale, copied ? "entry.shareCopied" : "entry.share")}
+        {!compact && shareLabel}
       </button>
 
+      {compact && (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setConfirming((was) => !was);
+          }}
+          aria-expanded={confirming}
+          aria-label={t(locale, "entry.toBlog")}
+          title={t(locale, "entry.toBlog")}
+          className={`${ENTRY_ICON_BUTTON} ${sharedAt ? "text-cyan" : ""}`}
+        >
+          <Newspaper aria-hidden className="size-4" />
+        </button>
+      )}
+      {compact && trailing}
+
       {confirming ? (
-        <span className="inline-flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex flex-wrap items-center gap-2 ${
+            compact ? "basis-full justify-end" : ""
+          }`}
+        >
           <span className="text-sm text-text-1">
             {t(locale, "entry.toBlogConfirm")}
           </span>
@@ -132,21 +174,27 @@ export function EntryShareActions({
           </button>
         </span>
       ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setError(null);
-            setConfirming(true);
-          }}
-          className={button}
-        >
-          <Newspaper aria-hidden className="h-3.5 w-3.5" />
-          {t(locale, "entry.toBlog")}
-        </button>
+        !compact && (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setConfirming(true);
+            }}
+            className={button}
+          >
+            <Newspaper aria-hidden className="h-3.5 w-3.5" />
+            {t(locale, "entry.toBlog")}
+          </button>
+        )
       )}
 
       {sharedAt && (
-        <span className="inline-flex items-center gap-1 text-xs text-text-2">
+        <span
+          className={`inline-flex items-center gap-1 text-xs text-text-2 ${
+            compact ? "basis-full justify-end" : ""
+          }`}
+        >
           <Check aria-hidden className="h-3.5 w-3.5 text-cyan" />
           {t(locale, "entry.inBlog")}
           {" · "}
