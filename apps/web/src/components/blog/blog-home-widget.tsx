@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
-import { EyeOff, PenLine, Play, Rows3, Star } from "lucide-react";
+import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { CalendarDays, EyeOff, PenLine, Play, Rows3, Star } from "lucide-react";
 import type { BlogHomeFeedResponse, BlogPostDto } from "@vedamatch/shared";
 import {
   BLOG_HOME_COOKIE,
@@ -11,6 +11,12 @@ import {
   serializeBlogHomeVisible,
 } from "@/lib/blog-home-visibility";
 import { BlogApiError, fetchBlogFavorites } from "@/lib/blog-client-api";
+import {
+  VCALENDAR_URL,
+  getVcalendarButtonServerSnapshot,
+  getVcalendarButtonSnapshot,
+  subscribeVcalendarButton,
+} from "@/lib/vcalendar-button";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
 import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
 
@@ -53,6 +59,13 @@ export function BlogHomeWidget({
   const [favorites, setFavorites] = useState<BlogPostDto[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* «Вайшнавский календарь» (VED-489) — в свободном месте панели, у всех
+     по умолчанию; спрятать можно в меню горячей кнопки «Календарь». */
+  const showCalendar = useSyncExternalStore(
+    subscribeVcalendarButton,
+    getVcalendarButtonSnapshot,
+    getVcalendarButtonServerSnapshot,
+  );
 
   function hide() {
     document.cookie = `${BLOG_HOME_COOKIE}=${serializeBlogHomeVisible(
@@ -104,6 +117,20 @@ export function BlogHomeWidget({
           {showFavorites ? "Избранное" : "Блог-лента"}
         </h2>
         <div className="flex items-center gap-1">
+          {showCalendar && (
+            // Внешний сайт: `noopener`, чтобы вкладка не получила доступ к
+            // нашей через `window.opener`.
+            <a
+              href={VCALENDAR_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Вайшнавский календарь (vcalendar.ru, откроется в новой вкладке)"
+              title="Вайшнавский календарь: экадаши, посты и дни явления"
+              className={`${iconButton} hover:border-cyan/60`}
+            >
+              <CalendarDays aria-hidden className="size-4" />
+            </a>
+          )}
           <Link
             href="/blog?new=1"
             aria-label="Написать пост"
