@@ -63,13 +63,15 @@ export interface MarkView {
 
 /**
  * Слова — ровно названия колонок доски «Работа», как их видит человек,
- * который её завёл. «Тестерование» через «е» не опечатка: так называется
- * колонка, и переименовывать её от себя значило бы показывать не то слово,
- * на которое человек нажимал (см. `apps/web/src/lib/notification-mark.ts`).
+ * который её завёл. «Тестерование» заказчик переименовал в «На
+ * тестирование» и завёл «На проверке» (VED-487); слово меняется только
+ * вслед за доской (см. `apps/web/src/lib/status-mark.ts`).
  */
 const MARK_VIEWS: Record<NotificationMark, MarkView> = {
   in_progress: { label: 'В работе', border: 'blue' },
-  testing: { label: 'Тестерование', border: 'violet' },
+  testing: { label: 'На тестирование', border: 'violet' },
+  // «На проверке» (VED-487): акценты заняты, берём смысловой «warning».
+  review: { label: 'На проверке', border: 'warning' },
   done: { label: 'Выполнено', border: 'cyan' },
   rework: { label: 'На доработку', border: 'magenta' },
   // Уведомление о комментарии к задаче без состояния (VED-298). Золото —

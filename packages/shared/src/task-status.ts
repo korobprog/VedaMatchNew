@@ -21,8 +21,10 @@
 export type TaskStatusMark =
   /** «В работе» — за карточку взялись. */
   | 'in_progress'
-  /** «Тестирование» — сделанное просят проверить. */
+  /** «На тестирование» — сделанное просят проверить. */
   | 'testing'
+  /** «На проверке» — сделанное смотрит проверяющий (VED-487). */
+  | 'review'
   /** «Выполнено» — карточка закрыта. */
   | 'done'
   /** «На доработку» — сделанное вернули. */
@@ -42,6 +44,7 @@ export function parseTaskStatusMark(
   switch (value) {
     case 'in_progress':
     case 'testing':
+    case 'review':
     case 'done':
     case 'rework':
       return value;

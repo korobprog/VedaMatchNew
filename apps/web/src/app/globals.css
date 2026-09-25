@@ -48,6 +48,7 @@
   --color-chart-expense: var(--vm-chart-expense);
   --color-mark-progress: var(--vm-mark-progress);
   --color-mark-testing: var(--vm-mark-testing);
+  --color-mark-review: var(--vm-mark-review);
   --color-mark-done: var(--vm-mark-done);
   --color-mark-rework: var(--vm-mark-rework);
   --color-mark-comment: var(--vm-mark-comment);
@@ -189,6 +190,9 @@
      «От администрации» выше видно, чем заливка кончается для контраста. */
   --vm-mark-progress: #6B4220;
   --vm-mark-testing: #07734F;
+  /* «На проверке» (VED-487) — тёмный янтарь: остальные тона заняты.
+     Расчёт 11px: 7,13:1 на #FFF · 6,26:1 на --vm-bg-1 · 5,66:1 на #E9E2F5. */
+  --vm-mark-review: #7A4F00;
   --vm-mark-done: #15357F;
   --vm-mark-rework: #9B1B1B;
   /* «Комментарий» (VED-298) — значок уведомления о комментарии к задаче,
@@ -299,6 +303,7 @@
      синее взять нельзя: тёмно-красное слово на #0A0614 даёт 1,7:1. */
   --vm-mark-progress: #DBA372;
   --vm-mark-testing: #3FDFA8;
+  --vm-mark-review: #FFC857;
   --vm-mark-done: #8FB6FF;
   --vm-mark-rework: #FF8A85;
   --vm-mark-comment: #D0A6FF;
@@ -377,6 +382,7 @@
     /* Значки состояния задачи (VED-312) — зеркало тёмного блока. */
     --vm-mark-progress: #DBA372;
     --vm-mark-testing: #3FDFA8;
+    --vm-mark-review: #FFC857;
     --vm-mark-done: #8FB6FF;
     --vm-mark-rework: #FF8A85;
     --vm-mark-comment: #D0A6FF;

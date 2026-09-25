@@ -22,9 +22,10 @@ describe('categoryLabel', () => {
 });
 
 describe('markView', () => {
-  it('слово — название колонки доски, включая «Тестерование» через «е»', () => {
+  it('слово — название колонки доски (VED-487)', () => {
     expect(markView('in_progress')?.label).toBe('В работе');
-    expect(markView('testing')?.label).toBe('Тестерование');
+    expect(markView('testing')?.label).toBe('На тестирование');
+    expect(markView('review')?.label).toBe('На проверке');
     expect(markView('done')?.label).toBe('Выполнено');
     expect(markView('rework')?.label).toBe('На доработку');
   });
