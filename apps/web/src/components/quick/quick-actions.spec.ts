@@ -8,6 +8,7 @@ import {
   addCustomQuickAction,
   arrangeQuickActions,
   customQuickActionId,
+  shortQuickLabel,
   lockedQuickActions,
   moveQuickAction,
   parseQuickConfig,
@@ -436,5 +437,22 @@ describe("«Меню» живёт только в шапке", () => {
     expect(
       arrangeQuickActions(["menu", "info"], lockedQuickActions(true)),
     ).toEqual(["info"]);
+  });
+});
+
+describe("shortQuickLabel (VED-484)", () => {
+  it("от заголовка страницы — последняя часть, название раздела", () => {
+    expect(shortQuickLabel("Доска — Планировщик")).toBe("Планировщик");
+    expect(shortQuickLabel("Доска - Планировщик")).toBe("Планировщик");
+    expect(shortQuickLabel("Статья | Библиотека")).toBe("Библиотека");
+  });
+
+  it("хвост «VedaMatch» не становится подписью", () => {
+    expect(shortQuickLabel("Музыка — VedaMatch")).toBe("Музыка");
+  });
+
+  it("простую подпись не трогает", () => {
+    expect(shortQuickLabel("Avantika")).toBe("Avantika");
+    expect(shortQuickLabel("Shanti people")).toBe("Shanti people");
   });
 });
