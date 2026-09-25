@@ -111,26 +111,39 @@ export function EntryCard({
         </span>
       </div>
 
-      <h3 className="mb-1 font-display text-base font-semibold text-text-0">
-        {/* Без адреса открывать снаружи нечего — заголовок остаётся текстом,
-            а куда смотреть, говорит строка источника выше. Катха — другое
-            дело: её текст лежит у нас, и заголовок ведёт на её страницу. */}
-        {entry.url ? (
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <h3 className="min-w-0 font-display text-base font-semibold text-text-0">
+          {/* Без адреса открывать снаружи нечего — заголовок остаётся текстом,
+              а куда смотреть, говорит строка источника выше. Катха — другое
+              дело: её текст лежит у нас, и заголовок ведёт на её страницу. */}
+          {entry.url ? (
+            <OutsideLink href={entry.url} className="hover:underline">
+              {title}
+            </OutsideLink>
+          ) : entry.type === "katha" || entry.type === "shloka" ? (
+            <Link
+              href={`/library/entry/${entry.id}`}
+              className="hover:underline"
+            >
+              {title}
+            </Link>
+          ) : (
+            title
+          )}
+        </h3>
+        {/* «Открыть по ссылке» — отдельной кнопкой в размер пальца справа от
+            заголовка (VED-512): значок в 14px в конце строки заголовка на
+            телефоне было не попасть. */}
+        {entry.url && (
           <OutsideLink
             href={entry.url}
-            className="inline-flex items-center gap-1 hover:underline"
+            aria-label={t(locale, "entry.openLink")}
+            className="-mr-1 -mt-1.5 inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0"
           >
-            {title}
-            <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+            <ExternalLink aria-hidden className="size-5" />
           </OutsideLink>
-        ) : entry.type === "katha" || entry.type === "shloka" ? (
-          <Link href={`/library/entry/${entry.id}`} className="hover:underline">
-            {title}
-          </Link>
-        ) : (
-          title
         )}
-      </h3>
+      </div>
 
       {/* Шлока показывает начало самого стиха — шрифтом для санскрита,
           как в её окне (VED-386). */}
