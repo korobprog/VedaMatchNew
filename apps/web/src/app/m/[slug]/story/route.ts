@@ -1,4 +1,5 @@
 import { getPublicMotivationPost } from "@/lib/motivation-api";
+import { toInternalStorageUrl } from "@/lib/storage-internal-url";
 import {
   clientHeaders,
   savedImageApiPath,
@@ -84,6 +85,8 @@ async function savedImage(
   const post = await getPublicMotivationPost(slug).catch(() => null);
   const source = post?.storyImageUrl || post?.imageUrl;
   if (!source) return post ? "missing" : null;
-  const fallback = await fetch(source).catch(() => null);
+  const fallback = await fetch(toInternalStorageUrl(source)).catch(
+    () => null,
+  );
   return fallback?.ok && fallback.body ? fallback : null;
 }

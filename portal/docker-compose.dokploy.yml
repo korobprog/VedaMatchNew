@@ -189,6 +189,12 @@ services:
       # лендингах читают отсюда mobile/android/ru-site/latest.json (VED-176).
       # Пусто — карточка Android честно показывает «скоро», без падения.
       APP_DOWNLOAD_BASE_URL: ${APP_DOWNLOAD_BASE_URL:-${S3_PUBLIC_URL:-}}
+      # Сервер сайта до media.vedamatch.ru не достаёт — запрос на публичный
+      # адрес своей же машины не возвращается. Файлы с этого домена сервер
+      # берёт прямо из хранилища (lib/storage-internal-url.ts, VED-508):
+      # превью ссылок в мессенджерах, кадр сторис, манифест APK.
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+      S3_INTERNAL_URL: ${S3_UPSTREAM:-https://firsts3.ru}
     depends_on:
       api:
         condition: service_healthy
