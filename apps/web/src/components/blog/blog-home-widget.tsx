@@ -18,12 +18,12 @@ import {
   ChevronDown,
   ChevronUp,
   EyeOff,
+  Pause,
   PenLine,
   Play,
   Rows3,
   Settings2,
   Share2,
-  Square,
   Star,
   Volume2,
 } from "lucide-react";
@@ -45,10 +45,14 @@ import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
 import {
   buildSpokenPost,
   canSpeak,
+  getBlogPausedId,
+  getBlogPausedServerId,
   getBlogSpeakingId,
   getBlogSpeakingServerId,
+  pauseBlogSpeech,
+  resumeBlogSpeech,
   speakBlogPost,
-  stopBlogSpeech,
+  speakButtonAction,
   subscribeBlogSpeech,
 } from "./blog-speech";
 import {
@@ -165,7 +169,13 @@ export function BlogHomeWidget({
     canSpeak,
     () => false,
   );
+  const pausedId = useSyncExternalStore(
+    subscribeBlogSpeech,
+    getBlogPausedId,
+    getBlogPausedServerId,
+  );
   const speaking = currentPost !== null && speakingId === currentPost.id;
+  const paused = currentPost !== null && pausedId === currentPost.id;
 
   const [order, setOrder] = useState<HomePanelButton[]>(() => [
     ...HOME_PANEL_DEFAULT_ORDER,
@@ -201,11 +211,20 @@ export function BlogHomeWidget({
     }
   }
 
+  /* Второе нажатие — пауза, а не «стоп» (VED-514): третье продолжает с того
+     же места, а не читает пост сначала. */
   function toggleSpeak() {
     if (!currentPost) return;
-    if (speaking) stopBlogSpeech();
+    const action = speakButtonAction({ speaking, paused });
+    if (action === "pause") pauseBlogSpeech();
+    else if (action === "resume") resumeBlogSpeech();
     else speakBlogPost(currentPost.id, spokenText);
   }
+  const speakLabel = speaking
+    ? "Пауза"
+    : paused
+      ? "Продолжить озвучку"
+      : "Озвучить пост";
 
   /* Кнопки панели стоят на равном расстоянии по всей ширине (VED-497), а
      надписи «Блог-лента» больше нет — она «занимала место». Название
@@ -288,12 +307,14 @@ export function BlogHomeWidget({
           type="button"
           onClick={toggleSpeak}
           aria-pressed={speaking}
-          aria-label={speaking ? "Остановить озвучку" : "Озвучить пост"}
-          title={speaking ? "Остановить озвучку" : "Озвучить пост"}
-          className={`${iconButton} hover:border-cyan/60 ${speaking ? "border-cyan" : ""}`}
+          aria-label={speakLabel}
+          title={speakLabel}
+          className={`${iconButton} hover:border-cyan/60 ${speaking || paused ? "border-cyan" : ""}`}
         >
           {speaking ? (
-            <Square aria-hidden className="size-3.5" fill="currentColor" />
+            <Pause aria-hidden className="size-4" fill="currentColor" />
+          ) : paused ? (
+            <Play aria-hidden className="size-4" fill="currentColor" />
           ) : (
             <Volume2 aria-hidden className="size-4" />
           )}
