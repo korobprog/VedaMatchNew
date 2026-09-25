@@ -54,10 +54,16 @@ import { blogEditedLabel, blogPostDate } from "./blog-format";
  * 100px на карточку — третий пост на экран 375×812 не влезал. Подпись
  * остаётся в разметке (`ACTION_LABEL`) и служит кнопке именем для
  * скринридера; значки здесь общеупотребимые.
+ *
+ * Ряд не переносится (VED-509): семь кнопок по 44px на экране в 360–400
+ * точек уводили «Удалить» второй строкой. На телефоне кнопки делят ширину
+ * поровну (`flex-1`), но не шире 56px — у читателя их четыре, и растянутые
+ * на всю карточку они выглядели бы плашками. Подписей нет и на широком
+ * экране: карточка там не шире 640px, и с ними ряд тоже ломался надвое.
  */
 const ACTION =
-  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-glass-brd px-2.5 py-1.5 text-xs text-text-1 disabled:opacity-60 max-sm:px-0";
-const ACTION_LABEL = "max-sm:sr-only";
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-glass-brd px-0 py-1.5 text-xs text-text-1 disabled:opacity-60 max-sm:min-w-0 max-sm:max-w-14 max-sm:flex-1";
+const ACTION_LABEL = "sr-only";
 
 /**
  * Карточка поста блог-ленты.
@@ -246,7 +252,7 @@ export function BlogPostCard({
             <BlogPostLinkButton link={post.link} className="mx-4 mt-2" />
           )}
 
-          <footer className="flex flex-wrap items-center gap-1.5 px-4 pb-2 pt-2">
+          <footer className="flex flex-nowrap items-center gap-1.5 px-4 pb-2 pt-2 max-sm:gap-1">
             <BlogSpeakButton post={post} />
             <button
               type="button"
