@@ -94,9 +94,25 @@ const now = new Date('2026-09-22T10:00:00.000Z');
 const due = new Date(now.getTime() + WORK_NOTICE_DELAY_MS);
 
 describe('WorkNoticesService — кого касается', () => {
-  it('тот, кто действовал, себе уведомления не заводит', async () => {
+  it('уведомление — исполнителю; автор, поручивший задачу, его не получает (VED-507)', async () => {
+    const { service, rows } = createStore();
+    await service.enqueueMove(task, 'author', 'col-todo', now);
+    expect([...rows.values()].map((row) => row.recipientId)).toEqual([
+      'assignee',
+    ]);
+  });
+
+  it('исполнитель работает с задачей — автору не всплывает (VED-507)', async () => {
     const { service, rows } = createStore();
     await service.enqueueMove(task, 'assignee', 'col-todo', now);
+    await service.enqueueComment(task, 'assignee', 'Сделал', now);
+    expect(rows.size).toBe(0);
+  });
+
+  it('без исполнителя — автору', async () => {
+    const { service, rows } = createStore();
+    const orphan = { id: 'task-3', assigneeId: null, createdById: 'author' };
+    await service.enqueueComment(orphan, 'outsider', 'Кто возьмёт?', now);
     expect([...rows.values()].map((row) => row.recipientId)).toEqual([
       'author',
     ]);
@@ -109,12 +125,11 @@ describe('WorkNoticesService — кого касается', () => {
     expect(rows.size).toBe(0);
   });
 
-  it('комментарий уведомляет обоих, кроме автора реплики', async () => {
+  it('комментарий постороннего — исполнителю', async () => {
     const { service, rows } = createStore();
     await service.enqueueComment(task, 'outsider', 'Вопрос', now);
-    expect([...rows.values()].map((row) => row.recipientId).sort()).toEqual([
+    expect([...rows.values()].map((row) => row.recipientId)).toEqual([
       'assignee',
-      'author',
     ]);
   });
 
@@ -128,9 +143,7 @@ describe('WorkNoticesService — кого касается', () => {
     ]);
 
     await service.enqueueComment(task, 'assignee', 'Уже чиню', now);
-    expect([...rows.values()].map((row) => row.recipientId)).toEqual([
-      'author',
-    ]);
+    expect(rows.size).toBe(0);
   });
 
   it('взятую воркером строку не снимаем — она уже в отправке', async () => {
@@ -138,9 +151,8 @@ describe('WorkNoticesService — кого касается', () => {
     await service.enqueueMove(task, 'author', 'col-todo', now);
     for (const row of rows.values()) row.claimedAt = now;
     await service.enqueueComment(task, 'assignee', 'Уже чиню', now);
-    expect([...rows.values()].map((row) => row.recipientId).sort()).toEqual([
+    expect([...rows.values()].map((row) => row.recipientId)).toEqual([
       'assignee',
-      'author',
     ]);
   });
 });
@@ -156,11 +168,11 @@ describe('WorkNoticesService — склейка окна', () => {
       new Date(now.getTime() + 5_000),
     );
 
-    expect(rows.size).toBe(2); // по строке на получателя, не по действию
-    const forAuthor = [...rows.values()].find(
-      (r) => r.recipientId === 'author',
+    expect(rows.size).toBe(1); // строка на получателя, не на действие
+    const forAssignee = [...rows.values()].find(
+      (r) => r.recipientId === 'assignee',
     );
-    expect(forAuthor).toMatchObject({
+    expect(forAssignee).toMatchObject({
       fromColumnId: 'col-todo',
       commentBody: 'Проверьте',
       commentCount: 1,
@@ -177,10 +189,10 @@ describe('WorkNoticesService — склейка окна', () => {
       'Проверьте',
       new Date(now.getTime() + 5_000),
     );
-    const forAuthor = [...rows.values()].find(
-      (r) => r.recipientId === 'author',
+    const forAssignee = [...rows.values()].find(
+      (r) => r.recipientId === 'assignee',
     );
-    expect(forAuthor).toMatchObject({
+    expect(forAssignee).toMatchObject({
       fromColumnId: 'col-todo',
       commentBody: 'Проверьте',
       commentCount: 1,
@@ -202,10 +214,10 @@ describe('WorkNoticesService — склейка окна', () => {
       'Три',
       new Date(now.getTime() + 120_000),
     );
-    const forAuthor = [...rows.values()].find(
-      (r) => r.recipientId === 'author',
+    const forAssignee = [...rows.values()].find(
+      (r) => r.recipientId === 'assignee',
     );
-    expect(forAuthor).toMatchObject({
+    expect(forAssignee).toMatchObject({
       commentBody: 'Три',
       commentCount: 3,
       // Окно считается от первой реплики: иначе болтливый собеседник отложил
@@ -223,10 +235,10 @@ describe('WorkNoticesService — склейка окна', () => {
       'col-doing',
       new Date(now.getTime() + 30_000),
     );
-    const forAuthor = [...rows.values()].find(
-      (r) => r.recipientId === 'author',
+    const forAssignee = [...rows.values()].find(
+      (r) => r.recipientId === 'assignee',
     );
-    expect(forAuthor).toMatchObject({
+    expect(forAssignee).toMatchObject({
       fromColumnId: 'col-todo',
       notifyAt: due,
     });
@@ -244,16 +256,19 @@ describe('WorkNoticesService — склейка окна', () => {
       new Date(now.getTime() + 10_000),
     );
 
-    const forAuthor = [...rows.values()].filter(
-      (r) => r.recipientId === 'author',
+    const forAssignee = [...rows.values()].filter(
+      (r) => r.recipientId === 'assignee',
     );
-    expect(forAuthor).toHaveLength(2);
-    expect(forAuthor.map((r) => r.actorId).sort()).toEqual(['gopal', 'nitai']);
+    expect(forAssignee).toHaveLength(2);
+    expect(forAssignee.map((r) => r.actorId).sort()).toEqual([
+      'gopal',
+      'nitai',
+    ]);
     expect(
-      forAuthor.find((r) => r.actorId === 'gopal')?.fromColumnId,
+      forAssignee.find((r) => r.actorId === 'gopal')?.fromColumnId,
     ).toBeNull();
     expect(
-      forAuthor.find((r) => r.actorId === 'nitai')?.commentBody,
+      forAssignee.find((r) => r.actorId === 'nitai')?.commentBody,
     ).toBeNull();
   });
 
@@ -266,10 +281,10 @@ describe('WorkNoticesService — склейка окна', () => {
 
     const later = new Date(now.getTime() + 60 * 60_000);
     await service.enqueueMove(task, 'outsider', 'col-todo', later);
-    const forAuthor = [...rows.values()].find(
-      (r) => r.recipientId === 'author',
+    const forAssignee = [...rows.values()].find(
+      (r) => r.recipientId === 'assignee',
     );
-    expect(forAuthor).toMatchObject({
+    expect(forAssignee).toMatchObject({
       commentBody: null,
       commentCount: 0,
       notifyAt: new Date(later.getTime() + WORK_NOTICE_DELAY_MS),

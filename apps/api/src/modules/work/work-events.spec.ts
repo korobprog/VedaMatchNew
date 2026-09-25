@@ -1,6 +1,7 @@
 import {
   WORK_EVENTS,
   workTaskLiftRecipients,
+  workTaskNoticeRecipients,
   workTaskRecipients,
 } from './work-events';
 
@@ -85,5 +86,43 @@ describe('workTaskLiftRecipients (VED-320)', () => {
 
   it('исключённому из среды задача не поднимается', () => {
     expect(workTaskLiftRecipients(task, 'mamu', ['mamu'])).toEqual([]);
+  });
+});
+
+describe('workTaskNoticeRecipients (VED-507)', () => {
+  it('поручил другому — автору уведомлений нет, только исполнителю', () => {
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: 'sevak', createdById: 'stas' },
+        'sevak',
+      ),
+    ).toEqual([]);
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: 'sevak', createdById: 'stas' },
+        'mamu',
+      ),
+    ).toEqual(['sevak']);
+  });
+
+  it('исполнитель действует сам — себе не шлём', () => {
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: 'stas', createdById: 'mamu' },
+        'stas',
+      ),
+    ).toEqual([]);
+  });
+
+  it('без исполнителя — автору', () => {
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: null, createdById: 'stas' },
+        'mamu',
+      ),
+    ).toEqual(['stas']);
+    expect(
+      workTaskNoticeRecipients({ assigneeId: null, createdById: null }, 'mamu'),
+    ).toEqual([]);
   });
 });

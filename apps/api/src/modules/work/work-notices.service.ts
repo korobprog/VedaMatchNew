@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolveNotifyAt } from './work-notice';
-import { workTaskRecipients } from './work-events';
+import { workTaskNoticeRecipients } from './work-events';
 
 type NoticeTask = {
   id: string;
@@ -22,8 +22,8 @@ export class WorkNoticesService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Записать факт переезда. Получатели — те же, что у прочих новостей про
-   * задачу: исполнитель и автор, кроме того, кто двигал.
+   * Записать факт переезда. Получатель — исполнитель (VED-507), а без него
+   * автор; не тот, кто двигал.
    *
    * Существующая запись обновляется, а не создаётся второй: за окно карточку
    * могут перенести несколько раз, и человека это касается один раз. Колонку
@@ -37,7 +37,7 @@ export class WorkNoticesService {
     now = new Date(),
   ): Promise<void> {
     await this.clearOwn(task.id, actorId);
-    for (const recipientId of workTaskRecipients(task, actorId)) {
+    for (const recipientId of workTaskNoticeRecipients(task, actorId)) {
       const existing = await this.find(task.id, recipientId, actorId);
       await this.prisma.workTaskNotice.upsert({
         where: this.key(task.id, recipientId, actorId),
@@ -74,7 +74,7 @@ export class WorkNoticesService {
     now = new Date(),
   ): Promise<void> {
     await this.clearOwn(task.id, actorId);
-    for (const recipientId of workTaskRecipients(task, actorId)) {
+    for (const recipientId of workTaskNoticeRecipients(task, actorId)) {
       const existing = await this.find(task.id, recipientId, actorId);
       await this.prisma.workTaskNotice.upsert({
         where: this.key(task.id, recipientId, actorId),
