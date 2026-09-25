@@ -1060,12 +1060,16 @@ export function MiniPlayer() {
             }`}
           >
             {equalizer !== "none" && (
-              <span className="flex min-w-0 flex-1 justify-center sm:hidden">
+              <span className="flex min-w-0 flex-1 justify-center px-3 sm:hidden">
+                {/* Крупный — почти во всё свободное место, с полями до кнопок
+                    по краям (VED-450, круг 3): «сделай длиннее, немного
+                    оставь до краёв места». Потолок 160px: шире столбики
+                    расходятся редкими полосками. */}
                 <MusicPlayingBars
                   playing={isPlaying}
                   className={
                     equalizer === "large"
-                      ? "h-5 w-20 shrink-0 max-[359px]:w-12"
+                      ? "h-5 w-full max-w-40"
                       : "h-3.5 w-11 shrink-0 max-[359px]:hidden"
                   }
                 />
