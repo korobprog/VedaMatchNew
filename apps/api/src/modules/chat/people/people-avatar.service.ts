@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { toPublicStorageUrl } from '../../../common/storage-public-url';
+import {
+  stableSignedTtl,
+  stableSigningDate,
+} from '../../../common/stable-signing';
 
 /** Аватар кэшируется как immutable, поэтому подписываем надолго — до недели, максимум для SigV4. */
 const AVATAR_SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -47,7 +51,12 @@ export class PeopleAvatarService {
     return getSignedUrl(
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
       new GetObjectCommand({ Bucket: bucket, Key: user.avatarKey }),
-      { expiresIn: AVATAR_SIGNED_URL_TTL_SECONDS },
+      // Одна ссылка на сутки (VED-498): иначе браузер качал аватарку заново
+      // на каждой странице — подпись «сейчас» каждый раз новая.
+      {
+        expiresIn: stableSignedTtl(AVATAR_SIGNED_URL_TTL_SECONDS),
+        signingDate: stableSigningDate(),
+      },
     ).then((url) =>
       toPublicStorageUrl(
         url,
