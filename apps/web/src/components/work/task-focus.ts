@@ -64,3 +64,25 @@ export function findTaskByKey(
   }
   return null;
 }
+
+/**
+ * Адрес без `?task=` (VED-500). Ключ в адресе — разовое «открой эту задачу»
+ * из уведомления. Оставленный в адресе, он открывал уже закрытую задачу
+ * снова: при возврате в планировщик из истории окон, кнопкой «назад», после
+ * перезагрузки. Поэтому, открыв задачу, ключ из адреса убираем.
+ *
+ * `null` — ключа не было, адрес менять не нужно.
+ */
+export function urlWithoutFocus(
+  pathname: string,
+  search: string,
+  hash = "",
+): string | null {
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  if (!params.has("task")) return null;
+  params.delete("task");
+  const rest = params.toString();
+  return `${pathname}${rest ? `?${rest}` : ""}${hash}`;
+}

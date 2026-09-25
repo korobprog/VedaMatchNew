@@ -83,7 +83,7 @@ import {
   searchSummary,
 } from "./task-search";
 import { WorkTaskDialog } from "./task-dialog";
-import { findTaskByKey, parseFocusKey } from "./task-focus";
+import { findTaskByKey, parseFocusKey, urlWithoutFocus } from "./task-focus";
 import { BOARD_REFRESH_MS, shouldApplyBoardRefresh } from "./board-refresh";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
 import {
@@ -312,6 +312,14 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           loaded.board ? readWorkGroupMode(loaded.board.id) : "none",
         );
         if (focused) setOpenTaskId(focused.taskId);
+        // Ключ из уведомления — разовый (VED-500): закрытая задача не должна
+        // открываться снова при возврате в планировщик из истории окон.
+        const clean = urlWithoutFocus(
+          window.location.pathname,
+          window.location.search,
+          window.location.hash,
+        );
+        if (clean) window.history.replaceState(window.history.state, "", clean);
         setError(null);
       })
       .catch((cause: unknown) => {
