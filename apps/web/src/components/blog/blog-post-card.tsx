@@ -1,8 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { Copy, Check, Pencil, Repeat2, Trash2, Pin, Star } from "lucide-react";
+import {
+  Copy,
+  Check,
+  Pencil,
+  Repeat2,
+  Trash2,
+  Pin,
+  Star,
+  Square,
+  Volume2,
+} from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { copyText } from "@/lib/copy-text";
 import { buildBlogPostCopy } from "@/lib/blog-copy";
@@ -14,6 +24,15 @@ import {
   setBlogPostPinned,
 } from "@/lib/blog-client-api";
 import { BlogMedia } from "./blog-media";
+import {
+  buildSpokenPost,
+  canSpeak,
+  getBlogSpeakingId,
+  getBlogSpeakingServerId,
+  speakBlogPost,
+  stopBlogSpeech,
+  subscribeBlogSpeech,
+} from "./blog-speech";
 import { postMedia } from "./blog-media-list";
 import { BlogLifetimeControl } from "./blog-lifetime-control";
 import { BlogPostEditor } from "./blog-post-editor";
@@ -216,6 +235,7 @@ export function BlogPostCard({
             {/* «Далее» забирает свободную ширину ряда: крупная надпись во всю
                 оставшуюся ширину, а не ещё одна маленькая кнопка. */}
             <BlogMoreButton fold={fold} className="grow" />
+            <BlogSpeakButton post={post} />
             <button
               type="button"
               onClick={copy}
@@ -370,5 +390,54 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
     >
       {name.slice(0, 1)}
     </span>
+  );
+}
+
+const subscribeNothing = () => () => {};
+
+/**
+ * «Слушать» (VED-476): пост читает голос браузера. Кнопки нет, где синтеза
+ * речи нет, и у поста без текста. Нажатие во время чтения — «Стоп».
+ */
+function BlogSpeakButton({ post }: { post: BlogPostDto }) {
+  const speakingId = useSyncExternalStore(
+    subscribeBlogSpeech,
+    getBlogSpeakingId,
+    getBlogSpeakingServerId,
+  );
+  const available = useSyncExternalStore(
+    subscribeNothing,
+    canSpeak,
+    () => false,
+  );
+  const speaking = speakingId === post.id;
+
+  // Карточка ушла со страницы — голос не должен читать в пустоту.
+  useEffect(
+    () => () => {
+      if (getBlogSpeakingId() === post.id) stopBlogSpeech();
+    },
+    [post.id],
+  );
+
+  const text = buildSpokenPost(post);
+  if (!available || !text) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        speaking ? stopBlogSpeech() : speakBlogPost(post.id, text)
+      }
+      aria-pressed={speaking}
+      className={`${ACTION} hover:border-cyan/60 ${speaking ? "border-cyan" : ""}`}
+    >
+      {speaking ? (
+        <Square aria-hidden className="size-3.5" fill="currentColor" />
+      ) : (
+        <Volume2 aria-hidden className="size-3.5" />
+      )}
+      <span className={ACTION_LABEL}>{speaking ? "Стоп" : "Слушать"}</span>
+    </button>
   );
 }
