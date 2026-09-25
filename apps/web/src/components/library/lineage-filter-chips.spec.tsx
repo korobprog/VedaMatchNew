@@ -15,7 +15,6 @@ vi.mock("@/lib/http-client", () => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }));
 
-const devotee = { spiritualStage: "devotee" as const, lineage: "iskcon" as const };
 
 describe("LibraryLineageFilter (VED-449)", () => {
   beforeEach(() => {
@@ -26,14 +25,14 @@ describe("LibraryLineageFilter (VED-449)", () => {
 
   function open(applied: "iskcon" | "sri_chaitanya_saraswat_math" | null = "iskcon") {
     render(
-      <LibraryLineageFilter locale="ru" applied={applied} preference={null} viewer={devotee} />,
+      <LibraryLineageFilter locale="ru" applied={applied} preference={null} />,
     );
     return userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
   }
 
   it("одна кнопка «Фильтры», меню закрыто", () => {
     render(
-      <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} viewer={devotee} />,
+      <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} />,
     );
     expect(screen.getByRole("button", { name: "Фильтры" })).toHaveAttribute(
       "aria-expanded",
@@ -57,9 +56,11 @@ describe("LibraryLineageFilter (VED-449)", () => {
 
   it("матхи — внутри «Гаудия-матх», выбор сохраняет настройку", async () => {
     await open();
-    expect(screen.queryByRole("button", { name: "Сарасват Матх" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Шри Чайтанья Сарасват Матх" }),
+    ).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
-    await userEvent.click(screen.getByRole("button", { name: "Чайтанья Гаудия Матх" }));
+    await userEvent.click(screen.getByRole("button", { name: "Шри Чайтанья Матх" }));
     expect(apiFetch).toHaveBeenCalledTimes(1);
     const [url, init] = apiFetch.mock.calls[0];
     expect(String(url)).toMatch(/\/library\/me\/preferences$/);
@@ -70,12 +71,15 @@ describe("LibraryLineageFilter (VED-449)", () => {
     expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
-  it("группа выбранной линии раскрыта сразу", async () => {
+  it("группа свёрнута и с выбранной линией внутри — выбор виден в шапке (VED-483)", async () => {
     await open("sri_chaitanya_saraswat_math");
-    expect(screen.getByRole("button", { name: "Сарасват Матх" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const group = screen.getByRole("button", { name: /^Гаудия-матх/ });
+    expect(group).toHaveAttribute("aria-expanded", "false");
+    expect(group).toHaveTextContent("Шри Чайтанья Сарасват Матх");
+    await userEvent.click(group);
+    expect(
+      screen.getByRole("button", { name: "Шри Чайтанья Сарасват Матх" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("выбранная позиция — ничего не делает", async () => {

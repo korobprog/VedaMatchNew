@@ -9,12 +9,6 @@ import {
   preferenceForChoice,
 } from "./lineage-filter";
 
-const devotee = (lineage: (typeof LINEAGES)[number]["id"] | null) => ({
-  spiritualStage: "devotee" as const,
-  lineage,
-});
-const seeker = { spiritualStage: "seeker" as const, lineage: null };
-
 describe("lineageFilterOptions", () => {
   it("начинается с «все линии» и содержит каждую линию справочника по порядку", () => {
     const options = lineageFilterOptions("Все линии");
@@ -28,7 +22,7 @@ describe("lineageFilterOptions", () => {
     expect(iskcon?.label).toBe("ISKCON");
     expect(iskcon?.title).toBe("ISKCON — Международное общество сознания Кришны");
     const saraswat = options.find((o) => o.value === "sri_chaitanya_saraswat_math");
-    expect(saraswat?.label).toBe("Сарасват Матх");
+    expect(saraswat?.label).toBe("Шри Чайтанья Сарасват Матх");
     expect(saraswat?.title).toBe("Шри Чайтанья Сарасват Матх");
   });
 });
@@ -42,29 +36,16 @@ describe("activeLineageChoice", () => {
   });
 });
 
-describe("preferenceForChoice", () => {
-  it("своя линия преданного сбрасывает настройку в «как в профиле»", () => {
-    expect(preferenceForChoice(devotee("iskcon"), "iskcon")).toBeNull();
+describe("preferenceForChoice (VED-483)", () => {
+  it("«Все» — пустая настройка: так Образование и показывает по умолчанию", () => {
+    expect(preferenceForChoice("all")).toBeNull();
   });
 
-  it("чужая линия преданного записывается явно", () => {
-    expect(
-      preferenceForChoice(devotee("iskcon"), "sri_chaitanya_gaudiya_math"),
-    ).toBe("sri_chaitanya_gaudiya_math");
-  });
-
-  it("«все линии» у преданного с линией — явное «all»", () => {
-    expect(preferenceForChoice(devotee("iskcon"), "all")).toBe("all");
-  });
-
-  it("«все линии» у преданного без линии и у ищущего — «как в профиле»", () => {
-    expect(preferenceForChoice(devotee(null), "all")).toBeNull();
-    expect(preferenceForChoice(seeker, "all")).toBeNull();
-    expect(preferenceForChoice(null, "all")).toBeNull();
-  });
-
-  it("линия у ищущего записывается явно: без неё он видит всё", () => {
-    expect(preferenceForChoice(seeker, "iskcon")).toBe("iskcon");
+  it("линия записывается явно — и у преданного, и у ищущего", () => {
+    expect(preferenceForChoice("iskcon")).toBe("iskcon");
+    expect(preferenceForChoice("sri_chaitanya_gaudiya_math")).toBe(
+      "sri_chaitanya_gaudiya_math",
+    );
   });
 });
 

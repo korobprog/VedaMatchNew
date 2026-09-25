@@ -3,10 +3,8 @@ import {
   LINEAGE_GROUP_LABELS,
   LINEAGES,
   type LineageGroup,
-  resolveContentLineage,
   type LineageId,
   type LineagePreference,
-  type LineageViewer,
 } from "@vedamatch/shared";
 
 /**
@@ -99,19 +97,12 @@ export function activeLineageChoice(applied: LineageId | null): LineageChoice {
 /**
  * Что записать в настройку Образования по нажатию кнопки.
  *
- * Если нажатое совпадает с тем, что человек видит и без настройки (своя линия
- * у преданного, «все» у остальных), настройка сбрасывается в «как в профиле»
- * (`null`), а не закрепляет линию намертво. Иначе преданный, однажды нажавший
- * свою же линию, перестал бы следовать за профилем: сменил линию в профиле — а
- * Образование по-прежнему показывает старую.
+ * Без настройки Образование показывает «Все» (VED-483): линия из профиля
+ * фильтр сама не включает. Поэтому «Все» — это пустая настройка, а линия —
+ * явная, и держится во всём Образовании, пока человек её не сменит.
  */
-export function preferenceForChoice(
-  viewer: LineageViewer | null,
-  choice: LineageChoice,
-): LineagePreference {
-  const byProfile = resolveContentLineage(viewer, null);
-  const wanted = choice === LINEAGE_ALL ? null : choice;
-  return byProfile === wanted ? null : choice;
+export function preferenceForChoice(choice: LineageChoice): LineagePreference {
+  return choice === LINEAGE_ALL ? null : choice;
 }
 
 /**

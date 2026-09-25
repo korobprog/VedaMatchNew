@@ -91,12 +91,10 @@ export default async function LibraryCategoryPage({
       : null;
   const appliedLineage = explicitLineage
     ? resolveContentLineage(null, explicitLineage)
-    : resolveContentLineage(user, preferences?.lineage ?? null);
+    : // Без настройки — «Все» (VED-483), профиль фильтр не включает.
+      resolveContentLineage(null, preferences?.lineage ?? null);
   // Кнопки линий — те же, что на главной Образования (VED-395): выбор
   // сохраняется в настройке и действует во всех рубриках.
-  const lineageViewer = user
-    ? { spiritualStage: user.spiritualStage, lineage: user.lineage }
-    : null;
   // Линия — в ключе ленты: кнопка меняет настройку, а не адрес, и без неё
   // лента после router.refresh() держала бы прежнюю выдачу.
   const lineageKey = appliedLineage ?? "all";
@@ -147,7 +145,6 @@ export default async function LibraryCategoryPage({
             locale={locale}
             applied={appliedLineage}
             preference={preferences?.lineage ?? null}
-            viewer={lineageViewer}
           />
         </div>
 
