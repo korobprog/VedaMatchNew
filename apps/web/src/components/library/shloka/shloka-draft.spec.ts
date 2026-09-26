@@ -103,12 +103,15 @@ describe("draftToRequest", () => {
 describe("draftError", () => {
   it("проверяет обязательное", () => {
     expect(draftError(emptyDraft(""))).toBe("source_required");
-    expect(draftError(emptyDraft("БГ"))).toBe("text_required");
-    expect(draftError({ ...emptyDraft("БГ"), text: "стих" })).toBeNull();
+    // Оригинал необязателен, перевод — да (VED-464).
+    expect(draftError({ ...emptyDraft("БГ"), text: "стих" })).toBe(
+      "translation_required",
+    );
+    expect(draftError({ ...emptyDraft("БГ"), translation: "перевод" })).toBeNull();
   });
 
   it("блок ачарьи — имя и хотя бы одно поле", () => {
-    const base = { ...emptyDraft("БГ"), text: "стих" };
+    const base = { ...emptyDraft("БГ"), translation: "перевод" };
     expect(
       draftError({ ...base, acharyas: [{ ...emptyAcharya(), text: "т" }] }),
     ).toBe("acharya_name_required");
@@ -126,7 +129,7 @@ describe("draftError", () => {
       height: null,
       removed: index === 0,
     }));
-    const draft = { ...emptyDraft("БГ"), text: "стих", images };
+    const draft = { ...emptyDraft("БГ"), translation: "перевод", images };
     expect(imagesAfterSave(draft)).toBe(12);
     expect(draftError(draft)).toBeNull();
     expect(

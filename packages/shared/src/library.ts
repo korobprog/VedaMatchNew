@@ -644,8 +644,10 @@ export interface CreateLibraryShlokaRequest {
   categoryId: string;
   source?: string | null;
   verse?: string | null;
-  text: string;
+  /** Оригинал стиха — необязателен (VED-464). */
+  text?: string | null;
   wordByWord?: string | null;
+  /** Обязателен: без него сервер ответит `translation_required`. */
   translation?: string | null;
   commentary?: string | null;
   contentLanguage?: string;

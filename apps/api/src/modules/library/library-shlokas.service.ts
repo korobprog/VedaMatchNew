@@ -33,6 +33,7 @@ import {
   preview,
   shlokaDescription,
   shlokaFieldsError,
+  shlokaRequiredError,
   shlokaTitle,
   sourceError,
   type ShlokaTextFields,
@@ -305,18 +306,23 @@ export class LibraryShlokasService {
       translation: cleanMultiline(body.translation),
       commentary: cleanMultiline(body.commentary),
     };
-    const error = sourceError(source) ?? shlokaFieldsError(fields);
+    const error = sourceError(source) ?? shlokaRequiredError(fields);
     if (error) throw new BadRequestException(error);
     const acharyas = cleanAcharyas(body.acharyas);
     if (!acharyas.ok) throw new BadRequestException(acharyas.error);
-    const text = fields.text as string;
+    // Оригинал необязателен (VED-464); колонка не пустая — пустая строка.
+    const text = fields.text ?? '';
 
     const created = await this.prisma.$transaction(async (tx) => {
       const entry = await tx.libraryEntry.create({
         data: {
           type: 'shloka',
           source,
-          titleRu: shlokaTitle(source, fields.verse, text),
+          titleRu: shlokaTitle(
+            source,
+            fields.verse,
+            text || (fields.translation ?? ''),
+          ),
           descriptionRu: shlokaDescription(
             fields.translation,
             fields.wordByWord,
@@ -360,7 +366,11 @@ export class LibraryShlokasService {
       return entry;
     });
 
-    const title = shlokaTitle(source, fields.verse, text);
+    const title = shlokaTitle(
+      source,
+      fields.verse,
+      text || (fields.translation ?? ''),
+    );
     const event: PortalActivityEvent = {
       name: PORTAL_ACTIVITY_EVENTS.library,
       userId,
@@ -397,12 +407,19 @@ export class LibraryShlokasService {
       translation: pick(body.translation, cleanMultiline, current.translation),
       commentary: pick(body.commentary, cleanMultiline, current.commentary),
     };
-    const error = sourceError(source) ?? shlokaFieldsError(fields);
+    const error =
+      sourceError(source) ??
+      // Перевод обязателен, но шлоки, заведённые до VED-464 без него, должны
+      // оставаться правимыми: требуем его, только когда запрос трогает поле.
+      (body.translation === undefined
+        ? shlokaFieldsError(fields)
+        : shlokaRequiredError(fields));
     if (error) throw new BadRequestException(error);
     const acharyas =
       body.acharyas === undefined ? null : cleanAcharyas(body.acharyas);
     if (acharyas && !acharyas.ok) throw new BadRequestException(acharyas.error);
-    const text = fields.text as string;
+    // Оригинал необязателен (VED-464); колонка не пустая — пустая строка.
+    const text = fields.text ?? '';
     const sourceText = source as string;
 
     // Блоки ачарьев: с известным id — правка, без него или с чужим id —
@@ -433,7 +450,11 @@ export class LibraryShlokasService {
         where: { id },
         data: {
           source: sourceText,
-          titleRu: shlokaTitle(sourceText, fields.verse, text),
+          titleRu: shlokaTitle(
+            sourceText,
+            fields.verse,
+            text || (fields.translation ?? ''),
+          ),
           descriptionRu: shlokaDescription(
             fields.translation,
             fields.wordByWord,

@@ -312,7 +312,8 @@ function ShlokaReading({
 }) {
   return (
     <div className="grid gap-5">
-      <ShlokaVerse text={shloka.text} />
+      {/* Оригинал необязателен (VED-464). */}
+      {shloka.text && <ShlokaVerse text={shloka.text} />}
 
       {shloka.translation && (
         <section aria-labelledby="shloka-translation">
