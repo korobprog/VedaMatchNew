@@ -58,7 +58,16 @@ export function StatusStrip({ me }: { me: ChatUserSummary }) {
               user={me}
               title={me.name}
               size={52}
-              ring={mine ? { total: mine.statuses.length, unseen: 0 } : null}
+              /* Своё кольцо — зелёное целиком (VED-494): это живые статусы,
+                 а не просмотренные чужие, и серое читалось как «погасло». */
+              ring={
+                mine
+                  ? {
+                      total: mine.statuses.length,
+                      unseen: mine.statuses.length,
+                    }
+                  : null
+              }
             />
           </button>
           {/* Плюс — всегда: ещё один статус можно добавить и поверх живых. */}
