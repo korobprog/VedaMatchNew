@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { InviteService } from "@/lib/rewards-share";
 import { copyText } from "@/lib/copy-text";
 
 /**
@@ -9,16 +8,10 @@ import { copyText } from "@/lib/copy-text";
  * другу сам — и чаще всего не пишет вовсе. Здесь текст уже собран: чем
  * портал полезен, что даёт регистрация по ссылке и куда идти.
  *
- * Текст приходит готовым из серверного компонента, потому что собирается из
- * каталога сервисов; здесь только копирование и отправка.
+ * Текст приходит готовым из серверного компонента (VED-423); здесь только
+ * копирование и отправка.
  */
-export function RewardsInviteMessage({
-  message,
-  services,
-}: {
-  message: string;
-  services: InviteService[];
-}) {
+export function RewardsInviteMessage({ message }: { message: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -59,13 +52,6 @@ export function RewardsInviteMessage({
       <p role="status" aria-live="polite" className="sr-only">
         {copied ? "Текст приглашения скопирован" : ""}
       </p>
-
-      {services.length === 0 && (
-        <p className="mt-3 font-body text-sm text-text-1">
-          Каталог сервисов сейчас недоступен — в тексте только приглашение и
-          ссылка.
-        </p>
-      )}
     </section>
   );
 }
