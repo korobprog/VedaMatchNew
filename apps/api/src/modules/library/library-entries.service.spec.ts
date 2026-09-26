@@ -634,15 +634,8 @@ describe('LibraryEntriesService.feed', () => {
     expect(result.nextCursor).not.toBeNull();
   });
 
-  it('помечает материалы со своим текстом, не забирая сам текст (VED-538)', async () => {
+  it('textOnly — только материалы со своим текстом, без шлок (VED-538)', async () => {
     const prisma = prismaMock();
-    prisma.libraryEntry.findMany = jest
-      .fn()
-      .mockResolvedValueOnce([
-        entryRecord({ id: 'katha' }),
-        entryRecord({ id: 'link' }),
-      ])
-      .mockResolvedValueOnce([{ id: 'katha' }]);
     const service = new LibraryEntriesService(
       prisma as never,
       previewsMock() as never,
@@ -652,21 +645,15 @@ describe('LibraryEntriesService.feed', () => {
       eventsMock() as never,
     );
 
-    const result = await service.feed({});
+    await service.feed({ textOnly: 'true' });
 
-    expect(result.items.map((item) => [item.id, item.hasText])).toEqual([
-      ['katha', true],
-      ['link', false],
-    ]);
-    const textQuery = prisma.libraryEntry.findMany.mock.calls[1][0] as {
-      where: unknown;
-      select: unknown;
+    const args = prisma.libraryEntry.findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
     };
-    expect(textQuery.where).toEqual({
-      id: { in: ['katha', 'link'] },
+    expect(args.where).toMatchObject({
       body: { not: null },
+      type: { not: 'shloka' },
     });
-    expect(textQuery.select).toEqual({ id: true });
   });
 
   it('ignores a broken cursor instead of failing', async () => {

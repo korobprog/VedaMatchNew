@@ -128,11 +128,6 @@ export interface LibraryEntryDto {
    * там хватает описания, а текст бывает в сотни килобайт.
    */
   body?: string | null;
-  /**
-   * У материала есть свой текст (VED-538) — в ленте, где самого текста нет:
-   * по нему карточка показывает «Содержание». Без поля — неизвестно.
-   */
-  hasText?: boolean;
   type: LibraryEntryType;
   contentLanguage: string;
   titleRu: string | null;
