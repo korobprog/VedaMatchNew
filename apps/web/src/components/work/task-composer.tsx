@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { WorkMemberDto, WorkTaskPriority } from "@vedamatch/shared";
 import { MAX_FILES_AT_ONCE } from "./attach-files";
@@ -89,6 +89,7 @@ export function TaskComposer({
      выведенному заголовку (WCAG 2.2, SC 2.4.3). */
   const editTitleRef = useRef<HTMLButtonElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const filesLabelId = useId();
   const returnFocusToEditTitle = useRef(false);
 
   useEffect(() => {
@@ -289,23 +290,37 @@ export function TaskComposer({
           них и приходилось заходить в только что заведённую
           карточку. Уйдут сразу после её создания — сервер
           принимает вложения только к существующей задаче. */}
-      <label className="mt-2 block text-xs text-text-1">
-        Скриншоты и файлы
-        <input
-          type="file"
-          multiple
-          /* Ключ по числу файлов: после отправки список
-             очищается, поле пересоздаётся и перестаёт
-             показывать имя уже приложенного файла. */
-          key={draftFiles.length === 0 ? "empty" : "picked"}
-          onChange={(event) =>
-            setDraftFiles(
-              Array.from(event.target.files ?? []).slice(0, MAX_FILES_AT_ONCE),
-            )
-          }
-          className="mt-1 block w-full text-xs text-text-2 file:mr-2 file:rounded-lg file:border file:border-glass-brd file:bg-bg-1 file:px-2 file:py-1 file:text-xs file:text-text-1"
-        />
-      </label>
+      {/* Кнопка — своя, со словом «Выбрать» (VED-376): стандартное поле
+          файла пишет «Выбрать файлы» и «Файл не выбран» на языке браузера,
+          и слово «файлы» заказчик просил убрать. Само поле спрятано, но
+          остаётся в разметке: подпись ведёт в него, и клавиатура с
+          читалкой экрана работают как с обычным полем. */}
+      <div className="mt-2 text-xs text-text-1">
+        <span id={filesLabelId}>Скриншоты и файлы</span>
+        <label className="mt-1 flex items-center gap-2">
+          <input
+            type="file"
+            multiple
+            aria-labelledby={filesLabelId}
+            /* Ключ по числу файлов: после отправки список
+               очищается, поле пересоздаётся и перестаёт
+               показывать имя уже приложенного файла. */
+            key={draftFiles.length === 0 ? "empty" : "picked"}
+            onChange={(event) =>
+              setDraftFiles(
+                Array.from(event.target.files ?? []).slice(
+                  0,
+                  MAX_FILES_AT_ONCE,
+                ),
+              )
+            }
+            className="peer sr-only"
+          />
+          <span className="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-glass-brd bg-bg-1 px-3 py-1 text-xs text-text-1 hover:text-text-0 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-magenta">
+            Выбрать
+          </span>
+        </label>
+      </div>
       {draftFiles.length > 0 && (
         <p className="mt-1 text-xs text-text-2">
           Приложится {draftFiles.map((file) => file.name).join(", ")}
