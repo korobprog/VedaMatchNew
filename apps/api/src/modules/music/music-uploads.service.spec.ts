@@ -58,6 +58,7 @@ function prismaMock() {
         aggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0 } }),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       musicUpload: {
         aggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0 } }),
@@ -626,17 +627,40 @@ describe('MusicUploadsService.completeUpload', () => {
     );
   });
 
-  it('дубль по ETag отклоняет и убирает объект из бакета', async () => {
+  it('дубль по ETag отклоняет, называет запись и убирает объект из бакета', async () => {
     const prisma = prismaMock();
     const storage = storageMock();
     prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
-    prisma.prisma.musicUpload.findFirst.mockResolvedValue({ id: 'старая' });
+    prisma.prisma.musicUpload.findMany.mockResolvedValue([
+      { storageKey: 'music/uploads/u1/old.mp3' },
+    ]);
+    prisma.prisma.musicTrack.findFirst.mockResolvedValue({
+      title: 'Гаура-арати',
+      status: 'pending',
+    });
 
     await expect(
       service(prisma, storage).completeUpload('u1', 'up1', 'g.mp3'),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrow(/«Гаура-арати» — на проверке/);
     expect(storage.remove).toHaveBeenCalledWith('music/uploads/u1/abc.mp3');
     expect(prisma.tx.musicTrack.create).not.toHaveBeenCalled();
+  });
+
+  it('прежней записи больше нет (удалена, отклонена, снята) — не дубль (VED-533)', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.musicUpload.findMany.mockResolvedValue([
+      { storageKey: 'music/uploads/u1/old.mp3' },
+    ]);
+    // Живых записей с этим файлом нет.
+    prisma.prisma.musicTrack.findFirst.mockResolvedValue(null);
+
+    await service(prisma, storage).completeUpload('u1', 'up1', 'g.mp3');
+
+    const where = prisma.prisma.musicTrack.findFirst.mock.calls[0][0].where;
+    expect(where.status).toEqual({ in: ['published', 'pending', 'draft'] });
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalled();
   });
 
   it('нечитаемые теги — отказ, а не запись с нулевой длительностью', async () => {

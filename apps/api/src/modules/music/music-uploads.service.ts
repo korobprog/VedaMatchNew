@@ -397,18 +397,10 @@ export class MusicUploadsService {
       readBytes: prefix ? prefix.length : 0,
     });
 
-    const duplicate = object.etag
-      ? Boolean(
-          await this.prisma.musicUpload.findFirst({
-            where: {
-              uploaderId: userId,
-              checksum: object.etag,
-              status: 'completed',
-            },
-            select: { id: true },
-          }),
-        )
-      : false;
+    const duplicateOf = object.etag
+      ? await this.liveDuplicate(userId, object.etag)
+      : null;
+    const duplicate = duplicateOf !== null;
 
     const rejection = validateMusicUploadCompletion(
       {
@@ -425,7 +417,14 @@ export class MusicUploadsService {
       // считается в квоте, а нужен уже никому.
       await this.storage.remove(upload.storageKey);
       await this.fail(upload.id, rejection);
-      throw new BadRequestException(MUSIC_UPLOAD_REJECTION_TEXT[rejection]);
+      // Дубль называем по имени (VED-533): поиск мог его не показать —
+      // запись на проверке или в другой линии, — и «уже есть» без названия
+      // выглядело ошибкой.
+      throw new BadRequestException(
+        duplicateOf
+          ? duplicateMessage(duplicateOf)
+          : MUSIC_UPLOAD_REJECTION_TEXT[rejection],
+      );
     }
 
     const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
@@ -585,6 +584,34 @@ export class MusicUploadsService {
   }
 
   /**
+   * Запись этого человека с тем же файлом, которая ещё жива (VED-533).
+   *
+   * Раньше дублем считалась любая завершённая заливка с той же суммой — даже
+   * если запись давно удалила или отклонила редакция, или её сняли по
+   * жалобам. Человек видел «Такая запись у вас уже есть», искал её в
+   * каталоге и не находил: её там и не было. Теперь дубль — только запись,
+   * которая есть: опубликованная, на проверке или черновик.
+   */
+  private async liveDuplicate(
+    userId: string,
+    checksum: string,
+  ): Promise<{ title: string; status: string } | null> {
+    const uploads = await this.prisma.musicUpload.findMany({
+      where: { uploaderId: userId, checksum, status: 'completed' },
+      select: { storageKey: true },
+      take: 20,
+    });
+    if (uploads.length === 0) return null;
+    return this.prisma.musicTrack.findFirst({
+      where: {
+        storageKey: { in: uploads.map((row) => row.storageKey) },
+        status: { in: ['published', 'pending', 'draft'] },
+      },
+      select: { title: true, status: true },
+    });
+  }
+
+  /**
    * Чистка брошенных загрузок. Образец — MotivationWorkerService: клейм
    * через `updateMany` с проверкой статуса, чтобы два процесса не взялись за
    * одну строку.
@@ -618,4 +645,18 @@ export class MusicUploadsService {
     }
     return removed;
   }
+}
+
+/** «Такая запись у вас уже есть: «Название» — на проверке». */
+export function duplicateMessage(existing: {
+  title: string;
+  status: string;
+}): string {
+  const where =
+    existing.status === 'published'
+      ? 'в каталоге'
+      : existing.status === 'pending'
+        ? 'на проверке — видна в «Моих загрузках»'
+        : 'в «Моих загрузках»';
+  return `Такая запись у вас уже есть: «${existing.title}» — ${where}.`;
 }
