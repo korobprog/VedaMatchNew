@@ -91,6 +91,7 @@ import {
 import { TuneRow } from "./tune-row";
 import {
   BUILTIN_QUICK_ACTIONS,
+  isExternalQuickHref,
   CUSTOM_ACTION_PREFIX,
   addCustomQuickAction,
   arrangeQuickActions,
@@ -174,14 +175,12 @@ const TILE_ICON = "size-6";
 export type QuickSheetId =
   | "calculator"
   | "info"
-  | "calendar"
   | "bookmarks"
   | "history";
 
 const SHEET_TITLES: Record<QuickSheetId, string> = {
   calculator: "Калькулятор",
   info: "Что нужно знать",
-  calendar: "Календарь",
   bookmarks: "Закладки",
   history: "История",
 };
@@ -724,6 +723,19 @@ function HeaderAction({
         </Link>
       );
   }
+  if (meta.href && isExternalQuickHref(meta.href))
+    return (
+      <a
+        href={meta.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`${meta.label} (откроется в новой вкладке)`}
+        title={meta.hint}
+        className={headerButtonClass}
+      >
+        {icon}
+      </a>
+    );
   if (meta.href)
     return (
       <Link
@@ -950,8 +962,6 @@ function QuickSheet({
       return <CalculatorPad onClose={onClose} />;
     case "info":
       return <InfoSheet onClose={onClose} />;
-    case "calendar":
-      return <CalendarSheet onClose={onClose} />;
     case "history":
       return <HistorySheet onClose={onClose} onNavigate={onNavigate} />;
     case "bookmarks":
@@ -1027,6 +1037,18 @@ function QuickTiles({
                 <PlayerTile meta={meta} onRun={onClose} />
               ) : id === "radio" ? (
                 <RadioTile meta={meta} />
+              ) : meta.href && isExternalQuickHref(meta.href) ? (
+                <a
+                  href={meta.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onClose}
+                  title={meta.hint}
+                  className={tileClass}
+                >
+                  <QuickActionIcon meta={meta} />
+                  <span className="line-clamp-2">{meta.label}</span>
+                </a>
               ) : meta.href ? (
                 <Link href={meta.href} onClick={onClose} className={tileClass}>
                   <QuickActionIcon meta={meta} />
@@ -1258,75 +1280,6 @@ function InviteTile() {
 }
 
 /**
- * Календарь — два разных календаря, а не один.
- *
- * Афиша портала знает о программах и встречах, которые завели участники;
- * вайшнавский календарь — об экадаши и явлениях, и вести его у себя значило
- * бы содержать вторую астрономическую службу. Поэтому выбор, а не переход:
- * «когда экадаши» и «что у нас в субботу» — разные вопросы.
- */
-function CalendarSheet({ onClose }: { onClose: () => void }) {
-  const onBlog = useSyncExternalStore(
-    subscribeVcalendarButton,
-    getVcalendarButtonSnapshot,
-    getVcalendarButtonServerSnapshot,
-  );
-  return (
-    <div className="mt-3 rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm text-text-1">
-      <ul className="space-y-2">
-        <li>
-          <Link
-            href="/notices/events"
-            onClick={onClose}
-            className="text-cyan hover:text-magenta"
-          >
-            Афиша портала
-          </Link>
-          <p className="text-xs text-text-1">
-            Программы, встречи и события, которые завели участники
-          </p>
-        </li>
-        <li>
-          {/* Внешний сайт: `rel` обязателен — без `noopener` открытая
-              вкладка получает доступ к нашей через `window.opener`. */}
-          <a
-            href={VCALENDAR_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-cyan hover:text-magenta"
-          >
-            Вайшнавский календарь ↗
-          </a>
-          <p className="text-xs text-text-1">
-            Экадаши, посты и дни явления — на vcalendar.ru
-          </p>
-          {/* Кнопка календаря на Блог-ленте главной (VED-489): прячется и
-              возвращается здесь, у самого календаря. */}
-          <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 text-xs text-text-0">
-            <input
-              type="checkbox"
-              checked={onBlog}
-              onChange={(event) =>
-                setVcalendarButtonShown(window.localStorage, event.target.checked)
-              }
-              className="size-4"
-            />
-            Кнопка календаря на Блог-ленте
-          </label>
-        </li>
-      </ul>
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-3 rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-1 hover:text-text-0"
-      >
-        Закрыть
-      </button>
-    </div>
-  );
-}
-
-/**
  * «Что нужно знать» — не справка на десять экранов, а короткий ответ на
  * «куда я попал»: три ссылки туда, где остальное написано подробно.
  */
@@ -1469,6 +1422,33 @@ function QuickSettings({
           Сервисы появятся в списке, когда портал ответит.
         </p>
       )}
+      <BlogCalendarToggle />
     </div>
+  );
+}
+
+/**
+ * Кнопка календаря на Блог-ленте главной (VED-489). Жила в шторке
+ * «Календаря», а шторки больше нет: плитка сразу открывает вайшнавский
+ * календарь (VED-496). Галочка переехала сюда, к остальным настройкам.
+ */
+function BlogCalendarToggle() {
+  const onBlog = useSyncExternalStore(
+    subscribeVcalendarButton,
+    getVcalendarButtonSnapshot,
+    getVcalendarButtonServerSnapshot,
+  );
+  return (
+    <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 border-t border-glass-brd px-1 pt-2 text-xs text-text-0">
+      <input
+        type="checkbox"
+        checked={onBlog}
+        onChange={(event) =>
+          setVcalendarButtonShown(window.localStorage, event.target.checked)
+        }
+        className="size-4"
+      />
+      Кнопка календаря на Блог-ленте
+    </label>
   );
 }

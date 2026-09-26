@@ -17,6 +17,7 @@ import {
   type QuickSheetId,
 } from "./quick-panel";
 import {
+  isExternalQuickHref,
   parseQuickConfig,
   quickActionCatalog,
   quickActionMeta,
@@ -165,6 +166,20 @@ function SideMenuItem({
   // «Поддержать» в меню — страница с реквизитами: шторка доната живёт в
   // панели, а меню закрывается при переходе.
   const href = meta.id === "donate" ? "/donate" : meta.href;
+  // «Календарь» (VED-496) ведёт на чужой сайт — новой вкладкой.
+  if (href && isExternalQuickHref(href))
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClose}
+        className={rowClass}
+      >
+        {icon}
+        {label}
+      </a>
+    );
   if (href)
     return (
       <Link
