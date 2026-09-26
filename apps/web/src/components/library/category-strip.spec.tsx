@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LibraryCategoryDto } from "@vedamatch/shared";
 import { CategoryStrip } from "./category-strip";
@@ -34,10 +33,7 @@ function category(overrides: Partial<LibraryCategoryDto>): LibraryCategoryDto {
 describe("CategoryStrip", () => {
   it("не обрезает счётчиком и кнопкой редактирования название категории", () => {
     render(
-      <CategoryStrip
-        locale="ru"
-        categories={[category({ canEdit: true })]}
-      />,
+      <CategoryStrip locale="ru" categories={[category({ canEdit: true })]} />,
     );
 
     // Название — в собственной ссылке, без соседей внутри неё: раньше счётчик
@@ -46,46 +42,30 @@ describe("CategoryStrip", () => {
     expect(link.textContent).toBe("Проповедники");
   });
 
-  it("кнопка редактирования не абсолютно спозиционирована поверх соседних плиток", () => {
-    const { container } = render(
-      <CategoryStrip
-        locale="ru"
-        categories={[
-          category({ id: "c1", slug: "guru", titleRu: "Гуру", canEdit: true }),
-          category({ id: "c2", slug: "zdorovye", titleRu: "Здоровье" }),
-        ]}
-      />,
-    );
-
-    // Раньше форма редактирования наследовала `absolute right-2 top-2` от
-    // обёртки-триггера и могла наплыть на соседнюю плитку в сетке.
-    expect(container.querySelector(".absolute")).toBeNull();
-  });
-
-  it("открывает форму редактирования без переноса иконки редактирования на название", async () => {
-    const user = userEvent.setup();
+  it("у автора нет карандаша — имя правят на его странице (VED-528)", () => {
     render(
-      <CategoryStrip
-        locale="ru"
-        categories={[category({ canEdit: true })]}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Редактировать категорию" }));
-
-    expect(
-      screen.getByText("Редактировать категорию: Проповедники"),
-    ).toBeInTheDocument();
-  });
-
-  it("не показывает кнопку редактирования без прав", () => {
-    render(
-      <CategoryStrip locale="ru" categories={[category({ canEdit: false })]} />,
+      <CategoryStrip locale="ru" categories={[category({ canEdit: true })]} />,
     );
 
     expect(
       screen.queryByRole("button", { name: "Редактировать категорию" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("число — в одной строке с именем, плитка по ширине имени (VED-528)", () => {
+    render(
+      <CategoryStrip
+        locale="ru"
+        categories={[category({ titleRu: "Аиндра Прабху", entriesCount: 1 })]}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "Аиндра Прабху" });
+    const tile = link.parentElement!;
+    expect(tile.className).toContain("flex-auto");
+    expect(tile.className).not.toContain("flex-col");
+    expect(link.className).toContain("truncate");
+    expect(tile).toContainElement(screen.getByLabelText("Материалов: 1"));
   });
 
   describe("верхний уровень", () => {
@@ -134,16 +114,14 @@ describe("CategoryStrip", () => {
     });
 
     it("рисует название прописными — чтобы уровень был виден", () => {
-      render(
-        <CategoryStrip locale="ru" root categories={[category({})]} />,
-      );
+      render(<CategoryStrip locale="ru" root categories={[category({})]} />);
 
       expect(
         screen.getByRole("link", { name: "Проповедники" }).className,
       ).toContain("uppercase");
     });
 
-    it("подраздел остаётся как был: строчными, со значком и карандашом", () => {
+    it("подраздел остаётся строчными, со значком у числа", () => {
       render(
         <CategoryStrip
           locale="ru"
@@ -155,9 +133,8 @@ describe("CategoryStrip", () => {
         screen.getByRole("link", { name: "Проповедники" }).className,
       ).not.toContain("uppercase");
       expect(
-        screen.getByRole("button", { name: "Редактировать категорию" }),
+        screen.getByLabelText("Подразделов внутри: 4"),
       ).toBeInTheDocument();
-      expect(screen.getByLabelText("Подразделов внутри: 4")).toBeInTheDocument();
     });
   });
 });
