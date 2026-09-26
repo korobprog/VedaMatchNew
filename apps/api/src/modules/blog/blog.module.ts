@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { BlogAdminController } from './blog-admin.controller';
+import { BlogAvatarService } from './blog-avatar.service';
 import { BlogImagesService } from './blog-images.service';
 import { BlogLibraryListener } from './blog-library.listener';
 import { BlogPurgeListener } from './blog-purge.listener';
@@ -24,6 +25,7 @@ import { BlogVideoService } from './blog-video.service';
   controllers: [BlogAdminController, BlogController],
   providers: [
     BlogService,
+    BlogAvatarService,
     BlogImagesService,
     BlogVideoService,
     BlogPurgeListener,

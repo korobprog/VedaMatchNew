@@ -35,6 +35,7 @@ import {
   decodeBlogCursor,
   takeBlogPage,
 } from './blog-feed-query';
+import { BlogAvatarService } from './blog-avatar.service';
 import {
   BlogImagesService,
   type UploadedImageFile,
@@ -62,6 +63,9 @@ const AUTHOR_SELECT = {
   // Контракт: рядом с именем наружу Prisma-select обязан тянуть духовное имя.
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото лежит в приватном бакете: `avatarUrl` у него пуст, а
+  // ссылку подписываем по ключу (VED-492, «пустого кругляшка быть не должно»).
+  avatarKey: true,
 } satisfies Prisma.UserSelect;
 
 const IMAGE_SELECT = {
@@ -148,7 +152,43 @@ export class BlogService {
     private readonly moderation: ModerationService,
     private readonly images: BlogImagesService,
     private readonly video: BlogVideoService,
+    private readonly avatars: BlogAvatarService,
   ) {}
+
+  /**
+   * Подписанные ссылки на фото авторов (VED-492) — одним проходом на всю
+   * страницу, по одному разу на человека.
+   */
+  private async avatarsFor(authors: AuthorRow[]): Promise<AvatarMap> {
+    const map: AvatarMap = new Map();
+    for (const author of authors) {
+      if (!author.avatarKey || map.has(author.id)) continue;
+      map.set(author.id, await this.avatars.resolveAvatarUrl(author));
+    }
+    return map;
+  }
+
+  private async postDtos(
+    rows: PostRow[],
+    viewer: Viewer,
+    now: Date,
+  ): Promise<BlogPostDto[]> {
+    const avatars = await this.avatarsFor(
+      rows.flatMap((row) =>
+        row.repostOf ? [row.author, row.repostOf.author] : [row.author],
+      ),
+    );
+    return rows.map((row) => toPostDto(row, viewer, now, avatars));
+  }
+
+  private async postDto(
+    row: PostRow,
+    viewer: Viewer,
+    now: Date,
+  ): Promise<BlogPostDto> {
+    const [dto] = await this.postDtos([row], viewer, now);
+    return dto;
+  }
 
   /**
    * Виджет главной: первые посты текущей ленты и сколько их всего.
@@ -176,7 +216,7 @@ export class BlogService {
       this.prisma.blogPost.count({ where }),
     ]);
 
-    return { posts: rows.map((row) => toPostDto(row, viewer, now)), total };
+    return { posts: await this.postDtos(rows, viewer, now), total };
   }
 
   /**
@@ -208,7 +248,7 @@ export class BlogService {
 
     const page = takeBlogPage(rows);
     return {
-      posts: page.items.map((row) => toPostDto(row, viewer, now)),
+      posts: await this.postDtos(page.items, viewer, now),
       nextCursor: page.nextCursor,
     };
   }
@@ -256,8 +296,8 @@ export class BlogService {
 
     const page = takeBlogPage(rows);
     return {
-      author: toAuthorDto(author),
-      posts: page.items.map((row) => toPostDto(row, viewer, now)),
+      author: toAuthorDto(author, await this.avatarsFor([author])),
+      posts: await this.postDtos(page.items, viewer, now),
       nextCursor: page.nextCursor,
       total,
     };
@@ -277,7 +317,7 @@ export class BlogService {
     if (viewer.hiddenUserIds.has(row.authorId) && row.authorId !== userId) {
       throw new NotFoundException('post_not_found');
     }
-    return toPostDto(row, viewer, new Date());
+    return this.postDto(row, viewer, new Date());
   }
 
   /**
@@ -339,7 +379,7 @@ export class BlogService {
       isAdmin: viewerIsAdmin,
       hiddenUserIds: new Set(),
     };
-    return { post: toPostDto(row, viewer, now), failed };
+    return { post: await this.postDto(row, viewer, now), failed };
   }
 
   /**
@@ -446,7 +486,7 @@ export class BlogService {
       select: postSelect(userId),
     });
     const viewer = await this.viewer(userId, viewerIsAdmin);
-    return { post: toPostDto(updated, viewer, now), failed };
+    return { post: await this.postDto(updated, viewer, now), failed };
   }
 
   /**
@@ -502,7 +542,7 @@ export class BlogService {
       }),
     ]);
 
-    return toPostDto(row, viewer, now);
+    return this.postDto(row, viewer, now);
   }
 
   /** Удаляет автор или администратор. Картинки уходят из бакета следом. */
@@ -763,7 +803,7 @@ export class BlogService {
     });
     const page = takeBlogPage(rows);
     return {
-      posts: page.items.map((row) => toPostDto(row, viewer, now)),
+      posts: await this.postDtos(page.items, viewer, now),
       nextCursor: page.nextCursor,
     };
   }
@@ -813,7 +853,7 @@ export class BlogService {
       isAdmin: true,
       hiddenUserIds: new Set(),
     };
-    return toPostDto(updated, viewer, new Date());
+    return this.postDto(updated, viewer, new Date());
   }
 
   async setPinned(
@@ -833,7 +873,7 @@ export class BlogService {
       select: postSelect(userId),
     });
     const viewer: Viewer = { userId, isAdmin: true, hiddenUserIds: new Set() };
-    return toPostDto(updated, viewer, new Date());
+    return this.postDto(updated, viewer, new Date());
   }
 
   // ---- внутреннее -------------------------------------------------------
@@ -922,11 +962,17 @@ function mediaKeys(
   );
 }
 
-function toAuthorDto(author: AuthorRow): BlogAuthorDto {
+type AvatarMap = Map<string, string | null>;
+
+function toAuthorDto(author: AuthorRow, avatars?: AvatarMap): BlogAuthorDto {
   return {
     id: author.id,
     name: resolveDisplayName(author),
-    avatarUrl: author.avatarUrl,
+    avatarUrl: avatars?.has(author.id)
+      ? (avatars.get(author.id) ?? null)
+      : author.avatarKey
+        ? null
+        : author.avatarUrl,
   };
 }
 
@@ -965,10 +1011,15 @@ function toLinkDto(row: {
   };
 }
 
-function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
+function toPostDto(
+  row: PostRow,
+  viewer: Viewer,
+  now: Date,
+  avatars?: AvatarMap,
+): BlogPostDto {
   return {
     id: row.id,
-    author: toAuthorDto(row.author),
+    author: toAuthorDto(row.author, avatars),
     title: row.title,
     text: row.text,
     ...toMedia(row.images),
@@ -981,7 +1032,7 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
     repostOf: row.repostOf
       ? {
           id: row.repostOf.id,
-          author: toAuthorDto(row.repostOf.author),
+          author: toAuthorDto(row.repostOf.author, avatars),
           title: row.repostOf.title,
           text: row.repostOf.text,
           ...toMedia(row.repostOf.images),
