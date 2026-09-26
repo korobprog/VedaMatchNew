@@ -1,5 +1,9 @@
 import {
+  appManifestStorageUrl,
   appManifestUrl,
+  isManifestAppVariant,
+  manifestStorageBase,
+  manifestTrack,
   newReleaseStatus,
   parseReleaseManifest,
 } from './app-release';
@@ -80,5 +84,90 @@ describe('newReleaseStatus', () => {
 
   it('откат на прежний APK — не объявляем', () => {
     expect(newReleaseStatus(1031, 1029)).toBe('baseline');
+  });
+});
+
+describe('манифест через API: какие сборки и какая папка', () => {
+  it('отдаёт только сборки с сайта — у витрины самообновления нет', () => {
+    expect(isManifestAppVariant('ru-site')).toBe(true);
+    expect(isManifestAppVariant('com-site')).toBe(true);
+    expect(isManifestAppVariant('ru-store')).toBe(false);
+    expect(isManifestAppVariant('../secret')).toBe(false);
+  });
+
+  it('тестовая папка — только по явному track=test', () => {
+    expect(manifestTrack('test')).toBe('test');
+    expect(manifestTrack(undefined)).toBe('release');
+    expect(manifestTrack('TEST')).toBe('release');
+    expect(manifestTrack(['test'])).toBe('release');
+  });
+
+  it('путь в хранилище тот же, что пишет CI, тестовый — под test/', () => {
+    expect(
+      appManifestStorageUrl('https://firsts3.ru/bucket/', 'ru-site', 'release'),
+    ).toBe('https://firsts3.ru/bucket/mobile/android/ru-site/latest.json');
+    expect(
+      appManifestStorageUrl('https://firsts3.ru/bucket', 'ru-site', 'test'),
+    ).toBe('https://firsts3.ru/bucket/test/mobile/android/ru-site/latest.json');
+  });
+});
+
+describe('manifestStorageBase', () => {
+  const prod = {
+    s3Endpoint: 'https://firsts3.ru',
+    s3PublicUrl: 'https://media.vedamatch.ru/bucket',
+  };
+
+  it('прод: прямой адрес хранилища — берём', () => {
+    expect(
+      manifestStorageBase({
+        ...prod,
+        appDownloadBaseUrl: 'https://firsts3.ru/bucket/',
+      }),
+    ).toEqual({ ok: true, baseUrl: 'https://firsts3.ru/bucket' });
+  });
+
+  it('публичный прокси вместо хранилища (подстановка compose при пустом APP_DOWNLOAD_BASE_URL) — отказ', () => {
+    const base = manifestStorageBase({
+      ...prod,
+      appDownloadBaseUrl: 'https://media.vedamatch.ru/bucket',
+    });
+    expect(base.ok).toBe(false);
+    expect(!base.ok && base.reason).toMatch(
+      /публичный адрес media\.vedamatch\.ru/,
+    );
+  });
+
+  it('регистр хоста не обходит проверку', () => {
+    expect(
+      manifestStorageBase({
+        ...prod,
+        appDownloadBaseUrl: 'https://MEDIA.vedamatch.ru/bucket',
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('публичный адрес и есть хранилище (как до переезда) — можно', () => {
+    expect(
+      manifestStorageBase({
+        appDownloadBaseUrl: 'https://s3.example/bucket',
+        s3PublicUrl: 'https://s3.example/bucket',
+        s3Endpoint: 'https://s3.example',
+      }),
+    ).toEqual({ ok: true, baseUrl: 'https://s3.example/bucket' });
+  });
+
+  it('без APP_DOWNLOAD_BASE_URL не подставляет S3_PUBLIC_URL сам', () => {
+    expect(manifestStorageBase({ ...prod }).ok).toBe(false);
+    expect(manifestStorageBase({ ...prod, appDownloadBaseUrl: '  ' }).ok).toBe(
+      false,
+    );
+  });
+
+  it('мусор вместо адреса — отказ, а не падение', () => {
+    expect(
+      manifestStorageBase({ ...prod, appDownloadBaseUrl: 'firsts3.ru/bucket' })
+        .ok,
+    ).toBe(false);
   });
 });

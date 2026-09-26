@@ -1,4 +1,11 @@
-import { classifyManifestResponse, fetchAppManifest, MANIFEST_TIMEOUT_MS, manifestUrl } from './self-update-client';
+import { API_MANIFEST_TIMEOUT_MS } from './manifest-sources';
+import {
+  classifyManifestResponse,
+  combineManifestResults,
+  fetchAppManifest,
+  MANIFEST_TIMEOUT_MS,
+  manifestUrl,
+} from './self-update-client';
 
 const S3 = 'https://s3.example.com/bucket-id';
 
@@ -84,7 +91,10 @@ describe('classifyManifestResponse', () => {
 });
 
 describe('fetchAppManifest', () => {
-  const variant = { downloadBaseUrl: S3, contour: 'ru' as const, channel: 'site' as const };
+  // Только прямой адрес хранилища (`apiOrigin: null`) — то, как проверяли
+  // сборки до манифеста через API; порядок источников — ниже и в
+  // `manifest-sources.spec.ts`.
+  const variant = { apiOrigin: null, downloadBaseUrl: S3, contour: 'ru' as const, channel: 'site' as const };
 
   function fakeFetch(status: number, body: string) {
     return jest.fn(async () => ({ status, text: async () => body }) as unknown as Response);
@@ -178,5 +188,99 @@ describe('fetchAppManifest', () => {
       });
       expect(jest.getTimerCount()).toBe(0);
     });
+  });
+});
+
+describe('combineManifestResults', () => {
+  const ok = { kind: 'ok', manifest: validManifest } as const;
+
+  it('первый манифест побеждает', () => {
+    expect(combineManifestResults([{ kind: 'network' }, ok])).toEqual(ok);
+  });
+
+  it('без манифеста — «нет связи» важнее «не опубликовано»: кнопка повтора остаётся', () => {
+    expect(combineManifestResults([{ kind: 'not-found' }, { kind: 'network' }])).toEqual({ kind: 'network' });
+    expect(combineManifestResults([{ kind: 'network' }, { kind: 'not-found' }])).toEqual({ kind: 'network' });
+  });
+
+  it('непонятный ответ важнее «не опубликовано»', () => {
+    expect(combineManifestResults([{ kind: 'not-found' }, { kind: 'malformed' }])).toEqual({ kind: 'malformed' });
+  });
+
+  it('оба «не опубликовано» — не опубликовано', () => {
+    expect(combineManifestResults([{ kind: 'not-found' }, { kind: 'not-found' }])).toEqual({ kind: 'not-found' });
+  });
+});
+
+describe('fetchAppManifest: сначала API, хранилище — запасной путь', () => {
+  const API = 'https://api.vedamatch.ru';
+  const variant = { apiOrigin: API, downloadBaseUrl: S3, contour: 'ru' as const, channel: 'site' as const };
+  const apiUrl = `${API}/notifications/app-release/ru-site/latest.json`;
+  const directUrl = `${S3}/mobile/android/ru-site/latest.json`;
+
+  function routedFetch(routes: Record<string, { status: number; body: string } | 'throw'>) {
+    return jest.fn(async (url: string) => {
+      const route = routes[url];
+      if (!route || route === 'throw') throw new TypeError('Network request failed');
+      return { status: route.status, text: async () => route.body } as unknown as Response;
+    });
+  }
+
+  it('API ответил — хранилище не трогаем', async () => {
+    const fetchImpl = routedFetch({ [apiUrl]: { status: 200, body: JSON.stringify(validManifest) } });
+    await expect(fetchAppManifest(variant, fetchImpl as unknown as typeof fetch)).resolves.toEqual({
+      kind: 'ok',
+      manifest: validManifest,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toBe(apiUrl);
+  });
+
+  it('API 503 (хранилище за ним не ответило) — идём по зашитому адресу', async () => {
+    const fetchImpl = routedFetch({
+      [apiUrl]: { status: 503, body: '{"message":"Хранилище обновлений сейчас недоступно"}' },
+      [directUrl]: { status: 200, body: JSON.stringify(validManifest) },
+    });
+    await expect(fetchAppManifest(variant, fetchImpl as unknown as typeof fetch)).resolves.toMatchObject({ kind: 'ok' });
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([apiUrl, directUrl]);
+  });
+
+  it('старый сервер без маршрута (404) — тоже запасной путь', async () => {
+    const fetchImpl = routedFetch({
+      [apiUrl]: { status: 404, body: '{"message":"Cannot GET"}' },
+      [directUrl]: { status: 200, body: JSON.stringify(validManifest) },
+    });
+    await expect(fetchAppManifest(variant, fetchImpl as unknown as typeof fetch)).resolves.toMatchObject({ kind: 'ok' });
+  });
+
+  it('API недоступен и хранилище тоже — «нет связи»', async () => {
+    const fetchImpl = routedFetch({ [apiUrl]: 'throw', [directUrl]: { status: 404, body: '' } });
+    await expect(fetchAppManifest(variant, fetchImpl as unknown as typeof fetch)).resolves.toEqual({ kind: 'network' });
+  });
+
+  it('адреса хранилища в сборке нет — спрашиваем только API', async () => {
+    const fetchImpl = routedFetch({ [apiUrl]: { status: 200, body: JSON.stringify(validManifest) } });
+    await expect(
+      fetchAppManifest({ ...variant, downloadBaseUrl: null }, fetchImpl as unknown as typeof fetch),
+    ).resolves.toMatchObject({ kind: 'ok' });
+  });
+
+  it('повисший API отпускается раньше хранилища, и запасной путь успевает', async () => {
+    jest.useFakeTimers();
+    try {
+      const fetchImpl = jest.fn((url: string, init?: RequestInit) =>
+        url === apiUrl
+          ? new Promise<Response>((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+            })
+          : Promise.resolve({ status: 200, text: async () => JSON.stringify(validManifest) } as unknown as Response),
+      );
+      const run = fetchAppManifest(variant, fetchImpl as unknown as typeof fetch);
+      await jest.advanceTimersByTimeAsync(API_MANIFEST_TIMEOUT_MS);
+      await expect(run).resolves.toMatchObject({ kind: 'ok' });
+      expect(API_MANIFEST_TIMEOUT_MS).toBeLessThan(MANIFEST_TIMEOUT_MS);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
