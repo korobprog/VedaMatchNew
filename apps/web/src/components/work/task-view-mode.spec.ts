@@ -29,9 +29,9 @@ describe("вид доски на устройстве", () => {
     expect(readWorkGroupMode("b1")).toBe("date");
   });
 
-  it("«По правке» запоминается тем же ключом (VED-421)", () => {
-    writeWorkGroupMode("b1", "edited");
-    expect(readWorkGroupMode("b1")).toBe("edited");
+  it("сохранённый «По правке» читается как «none» — кнопки больше нет (VED-525)", () => {
+    window.localStorage.setItem("vedamatch:work-view:b1", "edited");
+    expect(readWorkGroupMode("b1")).toBe("none");
   });
 
   it("испорченное значение в хранилище читается как «none»", () => {
