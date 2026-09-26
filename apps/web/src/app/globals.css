@@ -118,23 +118,27 @@
      text-cyan). На светлом фоне #DB1B84 давал 4.46:1, #0C917C — 3.75:1
      при 14px, то есть ниже порога AA. Затемнены до 4.62:1 и 4.53:1:
      на глаз не отличить, но мелкий текст перестал проваливаться. */
+  /* Мята и малиновый приглушены на 15% насыщенности (VED-535: «слишком
+     яркий»). Контраст не упал: тёмный текст на мяте 7,48:1, малиновый
+     мелким текстом на --vm-bg-0 — 4,91:1 на светлой и 5,97:1 на тёмной,
+     белый на малиновой кнопке — 5,13:1. */
   /* Мятная плашка кнопок — историческая пара hex-ов портала. Значения
      одинаковы в обеих темах, поэтому и текст на ней фиксированный: --vm-text-0
      в тёмной теме белый, а белый на мяте даёт 1,97:1. С --vm-on-mint — 9,3:1.
      Контур чуть темнее заливки: на белой карточке кнопка иначе сливается.
      Для контурной версии берётся --vm-cyan: сама мята текстом на светлом фоне
      не проходит контраст, а токен для того и держит разные значения по темам. */
-  --vm-mint-from: #33CCCC;
-  --vm-mint-to: #5CCCCC;
-  --vm-mint-edge: #2AB5B5;
+  --vm-mint-from: #3EC1C1;
+  --vm-mint-to: #64C4C4;
+  --vm-mint-edge: #34ABAB;
   --vm-on-mint: #14212C;
-  --vm-glow-mint: rgba(51, 204, 204, 0.45);
+  --vm-glow-mint: rgba(62, 193, 193, 0.45);
   /* Полоса перелива по карточке сервиса. На светлой теме белый по белому
      стеклу не виден, поэтому здесь подкрашенный: тот же акцент портала,
      разведённый до намёка. */
-  --vm-sheen: rgba(215, 26, 128, 0.12);
+  --vm-sheen: rgba(201, 40, 127, 0.12);
 
-  --vm-magenta: #D71A80;
+  --vm-magenta: #C9287F;
   --vm-cyan: #0B826F;
   --vm-gold: #B0770E;
 
@@ -220,11 +224,11 @@
      синий из оригинального логотипа и легче, и узнаваемее. */
   --vm-logo-mark: #26356B;
 
-  --vm-glow-magenta: rgba(215, 26, 128, 0.28);
+  --vm-glow-magenta: rgba(201, 40, 127, 0.28);
   --vm-glow-cyan: rgba(11, 130, 111, 0.28);
   --vm-glow-gold: rgba(176, 119, 14, 0.28);
   --vm-glow-like: rgba(75, 232, 107, 0.5);
-  --vm-glow-text-magenta: rgba(215, 26, 128, 0.25);
+  --vm-glow-text-magenta: rgba(201, 40, 127, 0.25);
   --vm-glow-text-cyan: rgba(11, 130, 111, 0.25);
 
   --vm-orb-opacity: 0.2;
@@ -245,9 +249,9 @@
   /* Курсор-чешуйка лендинга: тот же шестиугольник, что и в фоне. Цвет
      вписан в data-URI числом, а не токеном: внутрь такой ссылки var() не
      подставляется, поэтому у каждой темы своя копия — светлая берёт тёмную
-     мадженту #D71A80, тёмная светлую #FF3E9E. Меняешь --vm-magenta —
+     мадженту #C9287F, тёмная светлую #F14C9E. Меняешь --vm-magenta —
      поправь и здесь. */
-  --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23D71A80' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
+  --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23C9287F' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
   /* На светлом фоне те же акценты темнее и читаются сильнее — кромка тише. */
   --vm-edge-opacity: 0.28;
   --vm-edge-opacity-hover: 0.7;
@@ -287,7 +291,7 @@
   --vm-player-brd: rgba(255, 255, 255, 0.14);
   --vm-player-shadow: rgba(0, 0, 0, 0.55);
 
-  --vm-magenta: #FF3E9E;
+  --vm-magenta: #F14C9E;
   --vm-cyan: #23F0C7;
   --vm-gold: #FFC85C;
   --vm-like: #4BE86B;
@@ -318,11 +322,11 @@
   /* На тёмном знак совпадает с основным текстом: синий здесь бы утонул. */
   --vm-logo-mark: #F6F1FF;
 
-  --vm-glow-magenta: rgba(255, 62, 158, 0.45);
+  --vm-glow-magenta: rgba(241, 76, 158, 0.45);
   --vm-glow-cyan: rgba(35, 240, 199, 0.45);
   --vm-glow-gold: rgba(255, 200, 92, 0.45);
   --vm-glow-like: rgba(75, 232, 107, 0.5);
-  --vm-glow-text-magenta: rgba(255, 62, 158, 0.7);
+  --vm-glow-text-magenta: rgba(241, 76, 158, 0.7);
   --vm-glow-text-cyan: rgba(35, 240, 199, 0.7);
 
   --vm-orb-opacity: 0.4;
@@ -333,7 +337,7 @@
   --vm-hex-shadow: rgba(0, 0, 0, 0.85);
   --vm-hex-lit: 0.42;
   --vm-hex-face: rgba(255, 255, 255, 0.04);
-  --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23FF3E9E' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
+  --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23F14C9E' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
   --vm-edge-opacity: 0.45;
   --vm-edge-opacity-hover: 0.9;
   /* На тёмном мята ярче, поэтому доля меньше — иначе кромка слепит. */
@@ -369,7 +373,7 @@
     --vm-player-brd: rgba(255, 255, 255, 0.14);
     --vm-player-shadow: rgba(0, 0, 0, 0.55);
 
-    --vm-magenta: #FF3E9E;
+    --vm-magenta: #F14C9E;
     --vm-cyan: #23F0C7;
     --vm-gold: #FFC85C;
     --vm-like: #4BE86B;
@@ -394,11 +398,11 @@
 
     --vm-logo-mark: #F6F1FF;
 
-    --vm-glow-magenta: rgba(255, 62, 158, 0.45);
+    --vm-glow-magenta: rgba(241, 76, 158, 0.45);
     --vm-glow-cyan: rgba(35, 240, 199, 0.45);
     --vm-glow-gold: rgba(255, 200, 92, 0.45);
     --vm-glow-like: rgba(75, 232, 107, 0.5);
-    --vm-glow-text-magenta: rgba(255, 62, 158, 0.7);
+    --vm-glow-text-magenta: rgba(241, 76, 158, 0.7);
     --vm-glow-text-cyan: rgba(35, 240, 199, 0.7);
 
     --vm-orb-opacity: 0.4;
@@ -407,7 +411,7 @@
     --vm-hex-shadow: rgba(0, 0, 0, 0.85);
     --vm-hex-lit: 0.42;
     --vm-hex-face: rgba(255, 255, 255, 0.04);
-    --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23FF3E9E' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
+    --vm-cursor-hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 3.5h10L24 12l-5 8.5H9L4 12z' fill='none' stroke='%23F14C9E' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 14 12, auto;
     --vm-edge-opacity: 0.45;
     --vm-edge-opacity-hover: 0.9;
     --vm-service-edge-opacity: 0.34;
