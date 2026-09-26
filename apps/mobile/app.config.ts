@@ -1,5 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { appIdentity, firebaseConfigCovers, resolveBuildKind } from './src/config/build-kind.ts';
 import { capabilitiesFor } from './src/config/capabilities.ts';
 import { resolveVariant } from './src/config/variant.ts';
 import { resolveVersionCode, resolveVersionName } from './src/config/app-version.ts';
@@ -7,11 +8,26 @@ import { version as packageVersion } from './package.json';
 
 /**
  * Одна кодовая база, четыре сборки: контур `APP_CONTOUR` (ru, com) на канал
- * `APP_CHANNEL` (site, store). Пакет один на все сборки: приложение
+ * `APP_CHANNEL` (site, store). Пакет у всех боевых сборок один: приложение
  * зарегистрировано в Firebase как com.vedamatch.app.
+ *
+ * Боевой пакет — только при `APP_BUILD_KIND=release` (воркфлоу Mobile APK,
+ * `Dockerfile.web`). Без него сборка разработчика: `com.vedamatch.app.dev`,
+ * «VedaMatch Dev», схема `vedamatch-dev://` — ставится рядом с боевой, а не
+ * поверх (`src/config/build-kind.ts`).
  */
+function readJson(file: string): unknown {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = resolveVariant(process.env);
+  const buildKind = resolveBuildKind(process.env);
+  const identity = appIdentity(buildKind);
   // Что этой сборке разрешено (VED-207). Разрешения манифеста и плагины
   // гейтятся той же таблицей, что и экраны, — иначе «в интерфейсе выключено,
   // а в манифесте просим» расходятся и ловятся уже на ревью витрины.
@@ -19,12 +35,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   // Настройки Firebase не в репозитории: локально файл лежит рядом (он в
   // .gitignore), в CI путь приходит переменной. Без файла сборка всё равно
   // собирается, только без пушей FCM.
+  //
+  // Файл выписан на com.vedamatch.app: сборке разработчика он подключается,
+  // только если в нём есть и её пакет, — иначе gradle-плагин Google Services
+  // падает на «No matching client found». Боевой сборке — как раньше, без
+  // разбора файла.
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON ?? './google-services.json';
-  const withFirebase = existsSync(googleServicesFile);
+  const withFirebase =
+    existsSync(googleServicesFile) &&
+    (buildKind === 'release' || firebaseConfigCovers(readJson(googleServicesFile), identity.androidPackage));
 
   return {
     ...config,
-    name: 'VedaMatch',
+    name: identity.name,
     slug: 'vedamatch',
     // versionName человека: номер пакета (+короткий sha в сборках CI).
     // versionCode системы самообновления — ниже, в android.versionCode.
@@ -36,10 +59,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     // же): `pnpm --filter @vedamatch/mobile generate:brand-assets`
     // (`scripts/generate-brand-assets.mjs`).
     icon: './assets/images/icon.png',
-    scheme: 'vedamatch',
+    scheme: identity.scheme,
     userInterfaceStyle: 'automatic',
     android: {
-      package: 'com.vedamatch.app',
+      package: identity.androidPackage,
       ...(withFirebase ? { googleServicesFile } : {}),
       // Обязан расти от сборки к сборке — иначе самообновление с сайта
       // (channel=site) сочтёт новый файл не новее уже установленного.

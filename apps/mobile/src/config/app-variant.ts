@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { TurboModuleRegistry } from 'react-native';
+import { authRedirectFor, schemeFromConfig } from './build-kind';
 import { capabilitiesFor, type AppCapabilities } from './capabilities';
 import { devApiOrigin } from './dev-origin';
 import { PRODUCTION_API_ORIGINS, type AppVariant } from './variant';
@@ -31,4 +32,13 @@ export function appVariant(): AppVariant {
  */
 export function appCapabilities(): AppCapabilities {
   return capabilitiesFor(appVariant());
+}
+
+/**
+ * Куда API вернёт код после входа в этой сборке: `vedamatch://auth` у
+ * боевой, `vedamatch-dev://auth` у сборки разработчика — по схеме, с
+ * которой собрано приложение (`app.config.ts`, `config/build-kind.ts`).
+ */
+export function appAuthRedirect(): string {
+  return authRedirectFor(schemeFromConfig(Constants.expoConfig?.scheme));
 }

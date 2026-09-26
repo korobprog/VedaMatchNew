@@ -31,3 +31,23 @@ describe('parseAuthRedirect', () => {
     }
   });
 });
+
+// Сборка разработчика (`com.vedamatch.app.dev`) возвращается по своей схеме,
+// чтобы не делить `vedamatch://auth` с боевой, стоящей рядом.
+describe('вход сборки разработчика', () => {
+  const DEV = 'vedamatch-dev://auth';
+
+  it('просит сервер вернуть код на свою схему', () => {
+    const url = new URL(buildLoginUrl('https://api.vedamatch.ru', 'google', 'CHALLENGE', DEV));
+    expect(url.searchParams.get('app_redirect')).toBe(DEV);
+  });
+
+  it('принимает возврат на свою схему', () => {
+    expect(parseAuthRedirect('vedamatch-dev://auth/?code=abc', DEV)).toEqual({ kind: 'code', code: 'abc' });
+  });
+
+  it('возврат, адресованный боевой сборке, не принимает — и наоборот', () => {
+    expect(parseAuthRedirect('vedamatch://auth?code=abc', DEV)).toEqual({ kind: 'invalid' });
+    expect(parseAuthRedirect('vedamatch-dev://auth?code=abc')).toEqual({ kind: 'invalid' });
+  });
+});

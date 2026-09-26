@@ -7,8 +7,11 @@ FROM node:24-alpine AS build
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 WORKDIR /app
 ARG APP_CONTOUR=com
+# APP_BUILD_KIND=release — боевая сборка (src/config/build-kind.ts): без неё
+# app.config.ts собрал бы «VedaMatch Dev» со схемой vedamatch-dev.
 ENV APP_CONTOUR=$APP_CONTOUR \
     APP_CHANNEL=store \
+    APP_BUILD_KIND=release \
     EXPO_NO_TELEMETRY=1 \
     CI=1
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./

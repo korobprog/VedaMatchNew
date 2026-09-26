@@ -5,11 +5,21 @@
 
 export type LoginProvider = 'google' | 'yandex';
 
+/**
+ * Возврат боевой сборки. У сборки разработчика своя схема —
+ * `vedamatch-dev://auth` (`config/build-kind.ts`); какой адрес у этой
+ * сборки, говорит `appAuthRedirect()` из `config/app-variant.ts`.
+ */
 export const APP_AUTH_REDIRECT = 'vedamatch://auth';
 
-export function buildLoginUrl(apiOrigin: string, provider: LoginProvider, challenge: string): string {
+export function buildLoginUrl(
+  apiOrigin: string,
+  provider: LoginProvider,
+  challenge: string,
+  redirect: string = APP_AUTH_REDIRECT,
+): string {
   const url = new URL(`${apiOrigin.replace(/\/+$/, '')}/auth/${provider}`);
-  url.searchParams.set('app_redirect', APP_AUTH_REDIRECT);
+  url.searchParams.set('app_redirect', redirect);
   url.searchParams.set('app_challenge', challenge);
   return url.toString();
 }
@@ -24,7 +34,7 @@ export type AuthRedirectResult =
  * снаружи: чужое приложение может открыть `vedamatch://auth` с чем угодно,
  * поэтому всё, кроме ровно нашего адреса с кодом или ошибкой, — `invalid`.
  */
-export function parseAuthRedirect(raw: string): AuthRedirectResult {
+export function parseAuthRedirect(raw: string, redirect: string = APP_AUTH_REDIRECT): AuthRedirectResult {
   let url: URL;
   try {
     url = new URL(raw);
@@ -34,7 +44,7 @@ export function parseAuthRedirect(raw: string): AuthRedirectResult {
   // Node на сервере сериализует `vedamatch://auth?x` как `vedamatch://auth/?x`:
   // косая после хоста это тот же адрес.
   const pathname = url.pathname === '/' ? '' : url.pathname;
-  if (`${url.protocol}//${url.host}${pathname}` !== APP_AUTH_REDIRECT) {
+  if (`${url.protocol}//${url.host}${pathname}` !== redirect) {
     return { kind: 'invalid' };
   }
   const code = url.searchParams.get('code');

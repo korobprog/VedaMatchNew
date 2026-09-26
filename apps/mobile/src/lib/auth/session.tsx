@@ -11,12 +11,12 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
-import { appVariant } from '@/config/app-variant';
+import { appAuthRedirect, appVariant } from '@/config/app-variant';
 import { createApiClient, type ApiClient, type SessionRefreshResult } from '@/lib/api/client';
 import { createAuthApi, type AppTokens } from './auth-api';
 import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
 import { msUntilRefresh } from './jwt-expiry';
-import { buildLoginUrl, parseAuthRedirect, APP_AUTH_REDIRECT, type LoginProvider } from './login-flow';
+import { buildLoginUrl, parseAuthRedirect, type LoginProvider } from './login-flow';
 import { createPkcePair } from './pkce';
 import { nextRefreshBackoffMs } from './refresh-backoff';
 import { reactToTokenChange } from './session-token-reaction';
@@ -313,7 +313,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (url: string) => {
       const verifier = pendingVerifier.current;
       if (!verifier) return;
-      const parsed = parseAuthRedirect(url);
+      const parsed = parseAuthRedirect(url, appAuthRedirect());
       if (parsed.kind === 'invalid') return;
       pendingVerifier.current = null;
       if (parsed.kind === 'error') throw new Error(parsed.message);
@@ -327,9 +327,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (provider: LoginProvider) => {
       const pkce = await createPkcePair(pkceCrypto);
       pendingVerifier.current = pkce.verifier;
+      const redirect = appAuthRedirect();
       const result = await WebBrowser.openAuthSessionAsync(
-        buildLoginUrl(apiOrigin, provider, pkce.challenge),
-        APP_AUTH_REDIRECT,
+        buildLoginUrl(apiOrigin, provider, pkce.challenge, redirect),
+        redirect,
       );
       if (result.type === 'success') await completeSignIn(result.url);
     },
