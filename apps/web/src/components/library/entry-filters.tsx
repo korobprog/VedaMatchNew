@@ -10,7 +10,7 @@ import type {
 } from "@vedamatch/shared";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
 
-const TYPES: LibraryEntryType[] = [
+export const ENTRY_FILTER_TYPES: LibraryEntryType[] = [
   "website",
   "article",
   "video",
@@ -27,7 +27,7 @@ const TYPES: LibraryEntryType[] = [
   "other",
 ];
 const SORTS: LibraryFeedSort[] = ["new"];
-const LANGUAGES = ["ru", "en"];
+export const ENTRY_FILTER_LANGUAGES = ["ru", "en"];
 
 export function EntryFilters({
   locale,
@@ -88,8 +88,8 @@ export function EntryFilters({
             className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
             value={
               categoryBasePath
-                ? currentCategorySlug ?? ""
-                : params.get("categorySlug") ?? ""
+                ? (currentCategorySlug ?? "")
+                : (params.get("categorySlug") ?? "")
             }
             onChange={(event) => applyCategory(event.target.value)}
           >
@@ -114,7 +114,7 @@ export function EntryFilters({
           onChange={(event) => apply("type", event.target.value)}
         >
           <option value="">{t(locale, "filters.all")}</option>
-          {TYPES.map((type) => (
+          {ENTRY_FILTER_TYPES.map((type) => (
             <option key={type} value={type}>
               {entryTypeLabel(locale, type)}
             </option>
@@ -130,7 +130,7 @@ export function EntryFilters({
           onChange={(event) => apply("language", event.target.value)}
         >
           <option value="">{t(locale, "filters.all")}</option>
-          {LANGUAGES.map((language) => (
+          {ENTRY_FILTER_LANGUAGES.map((language) => (
             <option key={language} value={language}>
               {language.toUpperCase()}
             </option>
