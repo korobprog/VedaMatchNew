@@ -4,7 +4,7 @@
 Цель: над каждым сервисом можно работать независимо, не затрагивая портал и другие сервисы.
 Эталонная реализация — сервис **Union** (`apps/api/src/modules/union/`, `apps/web/src/app/union/`).
 
-> Оговорка про эталон: `union-chat.service.ts` инжектит `UsersService` — это нарушение правила ниже, оставшееся с ранних этапов. Копировать его нельзя; свежие примеры соблюдения контракта — **Market** (`apps/api/src/modules/market/`) и **Общение** (`apps/api/src/modules/chat/`), где данные профиля читаются read-only через `PrismaService`, а общие хелперы (`is-admin.ts`, транслитерация слага, подпись аватара в S3, расчёт возраста) продублированы внутри модуля вместо импорта из чужого.
+> Оговорка про эталон: `union-profile.service.ts` и `union-connection.service.ts` инжектят `UsersService` — это нарушение правила ниже, оставшееся с ранних этапов. Копировать это устройство нельзя; свежие примеры соблюдения контракта — **Market** (`apps/api/src/modules/market/`) и **Общение** (`apps/api/src/modules/chat/`), где данные профиля читаются read-only через `PrismaService`, а общие хелперы (`is-admin.ts`, транслитерация слага, подпись аватара в S3, расчёт возраста) продублированы внутри модуля вместо импорта из чужого.
 
 ## Backend (`apps/api`)
 
@@ -211,7 +211,7 @@
   журнала админки (`contacts.*`). Переименование потребовало бы переписать
   данные живого портала ради косметики — сделано осознанно, и новые модели
   раздела именуются уже с префиксом сервиса-владельца.
-- `union-chat.service.ts` и его инъекция `UsersService` — см. оговорку выше.
+- Инъекция `UsersService` в `union-profile.service.ts` и `union-connection.service.ts` — см. оговорку выше.
 - Сводка админки (`apps/api/src/modules/stats/admin-stats.service.ts`)
   читает чужие таблицы напрямую: `UserReport`, `SupportTicket`,
   `MentorVerificationRequest`, а с вехи 7 iPhone-PRD ещё и `LoginAudit`
