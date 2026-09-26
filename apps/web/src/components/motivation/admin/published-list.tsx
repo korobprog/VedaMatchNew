@@ -323,6 +323,7 @@ export function MotivationPublishedList({
           {found.map((post) => (
             <li
               key={post.id}
+              data-post-id={post.id}
               ref={post.id === openId ? openCard : undefined}
               // Та самая карточка обведена: после прокрутки видно, что
               // открылась именно она, а не соседняя.
@@ -440,7 +441,10 @@ export function MotivationPublishedList({
                   post={post}
                   categories={categories}
                   pendingAction={pending[post.id]}
-                  onSaved={() => setEditing(null)}
+                  onSaved={() => {
+                    setEditing(null);
+                    keepCardInView(post.id);
+                  }}
                   run={run}
                 />
               )}
@@ -939,4 +943,19 @@ function PublishedTextForm({
       </button>
     </div>
   );
+}
+
+/**
+ * После «Сохранить» форма правки сворачивается, карточка становится ниже, а
+ * прокрутка остаётся на месте — и отредактированный афоризм уезжал из вида
+ * (VED-473: «окно дёргается и слетает куда-то по ленте… редактируемый
+ * афоризм должен оставаться в фокусе»). Возвращаем его в поле зрения, когда
+ * свёрнутая карточка уже отрисована.
+ */
+function keepCardInView(postId: string) {
+  requestAnimationFrame(() => {
+    document
+      .querySelector<HTMLElement>(`[data-post-id="${CSS.escape(postId)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  });
 }
