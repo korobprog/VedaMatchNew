@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { MusicRailScroller } from "./music-rail-scroller";
 
 /**
  * Левый рельс сервиса — «своя музыка». См. макет `.design/music/Catalog.dc.html`.
@@ -161,7 +162,15 @@ export function MusicRail({
 
   return (
     <nav aria-label="Своя музыка" className="w-full lg:w-56 lg:shrink-0">
-      <ul className="glass scroll-slim flex gap-0.5 overflow-x-auto rounded-2xl p-1.5 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:p-2.5">
+      {/* Правый край ленты на телефоне тает (VED-535): обрезанный краем
+          значок следующего пункта выглядел поломкой, а плавное исчезновение
+          читается как «дальше есть ещё». Тает список, а не рамка: рамка
+          ровно по краю «Загрузить» над ней. Раз в день лента сама показывает,
+          что листается (`MusicRailScroller`). */}
+      <MusicRailScroller
+        boxClassName="glass rounded-2xl p-1.5 lg:p-2.5"
+        className="scroll-slim flex gap-0.5 overflow-x-auto max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] lg:flex-col lg:gap-0.5 lg:overflow-visible"
+      >
         {items.map((item) => {
           const current = item.key === active;
           const badge =
@@ -211,7 +220,7 @@ export function MusicRail({
             </li>
           );
         })}
-      </ul>
+      </MusicRailScroller>
     </nav>
   );
 }
