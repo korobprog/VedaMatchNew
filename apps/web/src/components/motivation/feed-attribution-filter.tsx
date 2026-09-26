@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { ListFilter } from "lucide-react";
 import type {
   MotivationAttributionOptionDto,
   MotivationFeedAttributionsDto,
@@ -425,10 +426,7 @@ function OptionList({
   );
 }
 
+/** Значок фильтров — один на весь портал (VED-517): три полоски, как в Медиатеке. */
 function FilterIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 5h18l-7 8v6l-4-2v-4z" />
-    </svg>
-  );
+  return <ListFilter aria-hidden size={14} />;
 }

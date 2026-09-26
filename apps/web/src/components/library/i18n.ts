@@ -8,8 +8,7 @@ const ui = {
     "service.subtitle":
       "Общая база полезных материалов: пополняйте её и находите нужное быстрее",
     "nav.sections": "Рубрики",
-    "nav.add": "Создать пост",
-    "nav.addShort": "Добавить",
+    "nav.add": "Добавить",
     "nav.back": "Назад",
     "filters.title": "Фильтры",
     "filters.section": "Рубрика",
@@ -314,8 +313,7 @@ const ui = {
     "service.subtitle":
       "A shared base of useful materials: contribute and find things faster",
     "nav.sections": "Categories",
-    "nav.add": "Create a post",
-    "nav.addShort": "Add",
+    "nav.add": "Add",
     "nav.back": "Back",
     "filters.title": "Filters",
     "filters.section": "Category",
@@ -698,6 +696,16 @@ export function categoryCountLabel(
  * из-за которого правка и начиналась. Что лежит в подразделах, видно на них
  * самих, строкой ниже.
  */
+/** «123 материала» у заголовка главной Образования (VED-517). */
+export function libraryMaterialsCount(
+  locale: LibraryLocale,
+  count: number,
+): string {
+  return locale === "ru"
+    ? `${count} ${plural(count, "материал", "материала", "материалов")}`
+    : `${count} material${count === 1 ? "" : "s"}`;
+}
+
 export function categoryPageSummary(
   locale: LibraryLocale,
   category: { childrenCount: number; entriesCount: number },

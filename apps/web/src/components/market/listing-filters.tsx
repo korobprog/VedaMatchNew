@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { ListFilter } from "lucide-react";
 import type { MarketCategoryDto } from "@vedamatch/shared";
 import type { Locale } from "@/lib/locale";
 
@@ -115,7 +115,7 @@ export function ListingFilters({
           aria-expanded={open}
           className="inline-flex items-center gap-1.5 rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-2 hover:text-text-0"
         >
-          <SlidersHorizontal aria-hidden className="h-4 w-4" />
+          <ListFilter aria-hidden className="h-4 w-4" />
           <span className="hidden sm:inline">{labels.title}</span>
         </button>
       </form>

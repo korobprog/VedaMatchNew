@@ -150,7 +150,7 @@ export default async function LibraryCategoryPage({
             href={`/library/add?category=${encodeURIComponent(category.slug)}`}
             className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
           >
-            {t(locale, "nav.addShort")}
+            {t(locale, "nav.add")}
           </Link>
           <div id="lineage-switch" className="ml-auto scroll-mt-24">
             <LibraryLineageFilter
