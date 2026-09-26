@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 import { fetchAllowedOfflineIds } from "@/lib/music/offline-api";
-import { dropRevokedTracks } from "@/lib/music/offline-manager";
+import {
+  dropRevokedTracks,
+  evictAutoCopies,
+} from "@/lib/music/offline-manager";
 import { useMusicPlayer } from "./player-provider";
 
 /**
@@ -31,6 +34,11 @@ export function MusicOfflineIdentity({ userId }: { userId: string }) {
   useEffect(() => {
     void dropRevokedTracks(userId, fetchAllowedOfflineIds).catch(() => {
       // Нет сети или запрет хранилища — ничего не трогаем.
+    });
+    // Копии, оставленные заливкой и не слушанные месяц, уходят сами — место
+    // на телефоне не копится (файл остаётся на сервере и играет оттуда).
+    void evictAutoCopies(userId).catch(() => {
+      // Запрет хранилища — нечего и чистить.
     });
   }, [userId]);
 
