@@ -40,16 +40,19 @@ export function EntryCard({
     ru: entry.descriptionRu,
     en: entry.descriptionEn,
   });
-  // Видео открываем у себя — там плеер; для остального ведём к источнику.
+  // Видео с картинки открывается там же, где и по кнопке у заголовка, — в
+  // самом YouTube или Rutube (VED-536): встроенный плеер у части зрителей
+  // оставался белым окном, а переход по ссылке работает всегда. Значок
+  // «пуск» остаётся: по нему видно, что это видео.
   const playable = entry.url !== null && videoEmbedUrl(entry.url) !== null;
 
   return (
     <article className="glass rounded-2xl border border-glass-brd p-4">
       {entry.previewUrl &&
-        (playable ? (
-          <Link
-            href={`/library/entry/${entry.id}`}
-            aria-label={t(locale, "entry.play")}
+        (playable && entry.url ? (
+          <OutsideLink
+            href={entry.url}
+            aria-label={t(locale, "entry.openLink")}
             className="relative mb-3 block"
           >
             <PreviewImage locale={locale} src={entry.previewUrl} />
@@ -58,7 +61,7 @@ export function EntryCard({
                 <Play aria-hidden className="ml-0.5 h-5 w-5" />
               </span>
             </span>
-          </Link>
+          </OutsideLink>
         ) : entry.url ? (
           <OutsideLink href={entry.url} className="mb-3 block">
             <PreviewImage locale={locale} src={entry.previewUrl} />
