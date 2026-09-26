@@ -755,9 +755,16 @@ export class NotificationsService {
    * в «Выполнено». Новостью для него они перестали быть в тот миг, когда он
    * сам закрыл задачу: закрытие и есть контакт с ними.
    *
-   * Только непрочитанное: прочитанное уже разобрано, и его место в истории —
-   * по настоящему контакту. Ищем по адресу, как `refreshWorkTaskMark`: FK на
-   * задачу чужого сервиса у уведомления нет и быть не может.
+   * Прочтение и контакт — только у непрочитанного: прочитанное уже
+   * разобрано, и его место в истории — по настоящему контакту. Ищем по
+   * адресу, как `refreshWorkTaskMark`: FK на задачу чужого сервиса у
+   * уведомления нет и быть не может.
+   *
+   * Из ленты уходят все его строки о задаче, прочитанные тоже (VED-522):
+   * «только что пометил задачу выполненной и опять она у меня вылезла в
+   * уведомлениях, мне-то это зачем?» — погашенная строка вставала первой в
+   * «Прочитанном» с новым значком. В истории она остаётся; новая новость от
+   * другого вернёт её в ленту (`threadLiftData`).
    */
   async readClosedWorkTask(
     spaceId: string,
@@ -767,14 +774,18 @@ export class NotificationsService {
   ): Promise<number> {
     const readers = closedTaskReaders(readerIds);
     if (readers.length === 0) return 0;
+    const task = {
+      userId: { in: readers },
+      url: workTaskUrl(spaceId, taskKey),
+      category: 'work',
+    };
     const { count } = await this.prisma.notificationItem.updateMany({
-      where: {
-        userId: { in: readers },
-        url: workTaskUrl(spaceId, taskKey),
-        category: 'work',
-        readAt: null,
-      },
-      data: readContactData(now),
+      where: { ...task, readAt: null },
+      data: { ...readContactData(now), feedHiddenAt: now },
+    });
+    await this.prisma.notificationItem.updateMany({
+      where: { ...task, feedHiddenAt: null },
+      data: { feedHiddenAt: now },
     });
     return count;
   }

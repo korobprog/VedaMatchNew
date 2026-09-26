@@ -16,6 +16,8 @@ interface InboxRow {
   contactAt?: Date | null;
   mark?: string | null;
   threadKey?: string | null;
+  /** Убрано из ленты своим действием (VED-522). */
+  feedHiddenAt?: Date | null;
 }
 
 type InboxDraftRow = Omit<InboxRow, 'id' | 'createdAt' | 'readAt'>;
@@ -26,6 +28,7 @@ interface InboxWhere {
   category?: string;
   threadKey?: string;
   readAt?: null | { lt: Date } | { not: null };
+  feedHiddenAt?: null;
   contactAt?: Date | null | { lt: Date } | { not: null };
   createdAt?: Date | { lt: Date };
   id?: string | { in: string[] } | { lt: string };
@@ -50,6 +53,8 @@ function matchesInbox(row: InboxRow, where: InboxWhere): boolean {
   )
     return false;
   if (where.readAt === null && row.readAt !== null) return false;
+  if (where.feedHiddenAt === null && (row.feedHiddenAt ?? null) !== null)
+    return false;
   if (where.readAt && 'not' in where.readAt && row.readAt === null)
     return false;
   if (
@@ -1661,6 +1666,39 @@ describe('NotificationsService.readClosedWorkTask (VED-406)', () => {
     expect(byId.get('other-task')!.readAt).toBeNull();
     expect(byId.get('not-work')!.readAt).toBeNull();
     expect(byId.get('read')!.contactAt).toEqual(earlier);
+  });
+
+  it('своё действие убирает строки о задаче из ленты, но не из истории (VED-522)', async () => {
+    const { service, store } = createService();
+    const earlier = new Date('2026-09-23T07:00:00Z');
+    store.inbox.push(
+      row('unread', 'stas'),
+      row('read', 'stas', { readAt: earlier, contactAt: earlier }),
+      row('other-task', 'stas', {
+        url: '/work/planner/space-1?task=VED-381',
+        readAt: earlier,
+        contactAt: earlier,
+      }),
+    );
+    const now = new Date('2026-09-23T08:01:37Z');
+
+    await service.readClosedWorkTask('space-1', 'VED-380', ['stas'], now);
+
+    const byId = new Map(store.inbox.map((item) => [item.id, item]));
+    expect(byId.get('unread')!.feedHiddenAt).toEqual(now);
+    expect(byId.get('read')!.feedHiddenAt).toEqual(now);
+    // Прочитанное не поднимается в истории: это не контакт с ним.
+    expect(byId.get('read')!.contactAt).toEqual(earlier);
+    expect(byId.get('other-task')!.feedHiddenAt ?? null).toBeNull();
+
+    const feed = await service.listInbox('stas');
+    expect(feed.items.map((item) => item.id)).toEqual(['other-task']);
+    const history = await service.listHistory('stas');
+    expect(history.items.map((item) => item.id).sort()).toEqual([
+      'other-task',
+      'read',
+      'unread',
+    ]);
   });
 
   it('агент закрыл от имени человека — гаснет у обоих', async () => {

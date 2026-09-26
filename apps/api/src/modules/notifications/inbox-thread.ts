@@ -60,8 +60,14 @@ export function threadRefreshData(news: InboxThreadNews, now: Date) {
  * непрочитанным, то есть не поднялась бы. Да и смысл подъёма — «посмотри, в
  * задаче что-то изменилось», а это и есть непрочитанное.
  */
-export function threadLiftData(now: Date): { createdAt: Date; readAt: null } {
-  return { createdAt: now, readAt: null };
+export function threadLiftData(now: Date): {
+  createdAt: Date;
+  readAt: null;
+  feedHiddenAt: null;
+} {
+  // Строка, убранная из ленты после своего действия (VED-522), с новой
+  // новостью возвращается: это уже событие от другого человека.
+  return { createdAt: now, readAt: null, feedHiddenAt: null };
 }
 
 /**
