@@ -13,7 +13,7 @@ import {
   Check,
   Heart,
   Pencil,
-  Repeat2,
+  Forward,
   Trash2,
   Pin,
   Star,
@@ -278,7 +278,9 @@ export function BlogPostCard({
         disabled={pending}
         className={`${ACTION} hover:border-cyan/60`}
       >
-        <Repeat2 aria-hidden className="size-3.5" />
+        {/* Стрелка «переслать», а не две по кругу (VED-442): «на более
+            привычный — стрелочка, как в Озоне». */}
+        <Forward aria-hidden className="size-3.5" />
         <span className={ACTION_LABEL}>Репост</span>
         {post.repostCount > 0 && (
           <span className="text-text-2">{post.repostCount}</span>
