@@ -39,7 +39,6 @@ import {
   getWorkSpace,
   moveWorkTask,
   searchWorkBoardTasks,
-  setWorkTaskViewed,
   updateWorkColumn,
 } from "@/lib/work-api";
 import { plural } from "@/lib/plural";
@@ -529,21 +528,18 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   }
 
   /**
-   * «Просмотрено» (VED-365): своя отметка на карточке, сразу и без ожидания
-   * сервера. Неудача возвращает кнопку и говорит почему — иначе человек
-   * уверен, что отметил, а после перезагрузки отметки нет.
+   * Открыть карточку. На тестировании открытие само ставит «Просмотрено»
+   * (VED-365) — на сервере, в ответе на открытие; здесь отметка загорается
+   * сразу, не дожидаясь перезагрузки доски.
    */
-  async function toggleViewed(taskId: string, viewed: boolean) {
-    if (!board) return;
-    const before = board;
-    setBoard(setTaskViewedLocally(board, taskId, viewed));
-    try {
-      await setWorkTaskViewed(taskId, { viewed });
-    } catch (cause) {
-      setBoard(before);
-      setError(
-        cause instanceof Error ? cause.message : "Отметка не сохранилась",
-      );
+  function openTask(task: {
+    id: string;
+    statusMark: string | null;
+    viewed: boolean;
+  }) {
+    setOpenTaskId(task.id);
+    if (board && task.statusMark === "testing" && !task.viewed) {
+      setBoard(setTaskViewedLocally(board, task.id, true));
     }
   }
 
@@ -1148,12 +1144,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                     ? (sectionNames.get(task.sectionId) ?? null)
                     : (column?.name ?? null)
                 }
-                onOpen={() => setOpenTaskId(task.id)}
+                onOpen={() => openTask(task)}
                 onHandleDown={() => undefined}
                 onHandleMove={() => undefined}
                 onHandleUp={() => undefined}
                 onMoveBeside={(direction) => moveBeside(task, direction)}
-                onToggleViewed={() => void toggleViewed(task.id, !task.viewed)}
                 cardRef={() => undefined}
               />
             );
@@ -1202,12 +1197,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                   ? (sectionNames.get(task.sectionId) ?? null)
                   : null
               }
-              onOpen={() => setOpenTaskId(task.id)}
+              onOpen={() => openTask(task)}
               onHandleDown={(event) => onHandleDown(event, task.id)}
               onHandleMove={onHandleMove}
               onHandleUp={onHandleUp}
               onMoveBeside={(direction) => moveBeside(task, direction)}
-              onToggleViewed={() => void toggleViewed(task.id, !task.viewed)}
               cardRef={(element) => {
                 if (element) cardRefs.current.set(task.id, element);
                 else cardRefs.current.delete(task.id);
@@ -1617,7 +1611,6 @@ function TaskCard({
   onHandleMove,
   onHandleUp,
   onMoveBeside,
-  onToggleViewed,
   cardRef,
 }: {
   task: WorkTaskCardDto;
@@ -1635,7 +1628,6 @@ function TaskCard({
   onHandleMove: (event: React.PointerEvent) => void;
   onHandleUp: (event: React.PointerEvent) => void;
   onMoveBeside: (direction: -1 | 1) => void;
-  onToggleViewed: () => void;
   cardRef: (element: HTMLElement | null) => void;
 }) {
   const overdue =
@@ -1819,34 +1811,19 @@ function TaskCard({
               </button>
             </>
           )}
-          {/* «Просмотрено» — своя отметка, у каждого своя (VED-365). Гаснет
-              сама, когда задачу после этого переносит или комментирует
-              другой. `aria-pressed` говорит скринридеру, отмечено ли, а
-              галочка — глазам. Пилюля маленькая, а цель нажатия — 44px по
-              высоте: отрицательные поля не раздувают строку. */}
-          <button
-            type="button"
-            aria-pressed={task.viewed}
-            onClick={onToggleViewed}
-            aria-label={`Просмотрено: «${task.title}»`}
-            title={
-              task.viewed
-                ? "Вы отметили задачу просмотренной. Нажмите, чтобы снять отметку"
-                : "Отметить задачу просмотренной"
-            }
-            className="group -my-2.5 ml-1 inline-flex min-h-11 items-center py-2.5"
-          >
+          {/* «Просмотрено» — своя отметка, у каждого своя (VED-365). Ставит
+              её само открытие задачи на тестировании, кнопки нет; гаснет,
+              когда задачу после этого переносит или комментирует другой, и
+              загорается снова на следующем тестировании. */}
+          {task.viewed && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                task.viewed
-                  ? "border-cyan bg-glass text-text-0"
-                  : "border-text-2/60 text-text-1 group-hover:text-text-0"
-              }`}
+              title="Вы открывали задачу на тестировании, и с тех пор её никто не трогал"
+              className="ml-1 inline-flex items-center gap-1 rounded-full border border-cyan bg-glass px-2 py-0.5 text-[11px] font-medium text-text-0"
             >
-              {task.viewed && <Check aria-hidden className="size-3" />}
+              <Check aria-hidden className="size-3" />
               Просмотрено
             </span>
-          </button>
+          )}
         </span>
       </div>
     </div>
