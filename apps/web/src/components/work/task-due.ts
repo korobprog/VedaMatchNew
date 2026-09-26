@@ -40,3 +40,24 @@ export function endOfDayInput(now: Date): string {
   end.setHours(23, 59, 0, 0);
   return toInput(end);
 }
+
+/**
+ * Варианты для пустого срока (VED-529): «Сегодня», «До завтра»,
+ * «Послезавтра и позже». Каждый — конец своего дня, как `endOfDayInput`;
+ * «позже» ставит послезавтра, а точный день потом правят в самом поле.
+ */
+export type DuePreset = "today" | "tomorrow" | "later";
+
+export const DUE_PRESETS: readonly { value: DuePreset; label: string }[] = [
+  { value: "today", label: "Сегодня" },
+  { value: "tomorrow", label: "До завтра" },
+  { value: "later", label: "Послезавтра и позже" },
+];
+
+export function duePresetInput(preset: DuePreset, now: Date): string {
+  const day = new Date(now);
+  day.setDate(
+    day.getDate() + (preset === "today" ? 0 : preset === "tomorrow" ? 1 : 2),
+  );
+  return endOfDayInput(day);
+}
