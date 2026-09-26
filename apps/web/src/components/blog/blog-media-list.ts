@@ -49,6 +49,30 @@ export function blogMediaAspect(
   return Math.min(BLOG_MEDIA_MAX_ASPECT, Math.max(BLOG_MEDIA_MIN_ASPECT, ratio));
 }
 
+/**
+ * Рамка по пропорции самого снимка — без полей (VED-527: «никаких полей не
+ * должно быть НИГДЕ»). `raw` — ширина к высоте, как она есть; неизвестна —
+ * квадрат до загрузки.
+ *
+ * В границах 4:5…1,91:1 рамка совпадает со снимком. Снимок вытянутее границ
+ * рамка не повторяет (иначе панорама становится полоской, а вертикаль —
+ * простынёй на экран), и тогда он обрезается по краям (`crop`), а не
+ * обрастает полями: поля заказчик просил убрать везде.
+ */
+export function blogFrameFit(raw: number | null): {
+  aspect: number;
+  crop: boolean;
+} {
+  if (raw === null || !Number.isFinite(raw) || raw <= 0) {
+    return { aspect: 1, crop: true };
+  }
+  const aspect = Math.min(
+    BLOG_MEDIA_MAX_ASPECT,
+    Math.max(BLOG_MEDIA_MIN_ASPECT, raw),
+  );
+  return { aspect, crop: aspect !== raw };
+}
+
 /** Что показать картинкой вместо самого вложения: у ролика — обложку. */
 export function blogMediaPreviewUrl(item: BlogMediaDto): string | null {
   return item.kind === "video" ? item.posterUrl : item.url;
@@ -83,6 +107,12 @@ export interface BlogHomeSlide {
   /** Сколько вложений в посте — для отметки на слайде. */
   mediaCount: number;
   aspect: number;
+  /**
+   * Ширина к высоте снимка как есть, без границ; `null` — размеров нет
+   * (обложка материала из Образования): рамка узнает их у загруженного
+   * снимка (`BlogFitImage`, VED-527).
+   */
+  coverAspect: number | null;
 }
 
 const EXCERPT_LENGTH = 140;
@@ -130,5 +160,9 @@ export function blogHomeSlide(post: BlogPostDto): BlogHomeSlide {
     isVideo: first?.kind === "video",
     mediaCount: media.length,
     aspect: blogMediaAspect(first),
+    coverAspect:
+      first?.width && first.height && first.width > 0 && first.height > 0
+        ? first.width / first.height
+        : null,
   };
 }

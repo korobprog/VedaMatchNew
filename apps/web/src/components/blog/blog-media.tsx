@@ -1,5 +1,6 @@
 import type { BlogMediaDto } from "@vedamatch/shared";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
+import { BlogFitImage } from "./blog-fit-image";
 import { blogMediaAspect, formatBlogDuration } from "./blog-media-list";
 
 /**
@@ -25,35 +26,36 @@ export function BlogMedia({
   compact?: boolean;
 }) {
   if (media.length === 0) return null;
-  const aspect = blogMediaAspect(media[0]);
 
-  const item = (entry: BlogMediaDto, index: number) =>
+  /* Каждое вложение — в рамке своей пропорции, без полей (VED-527): раньше
+     все слайды брали рамку первого, и снимок другой формы обрастал полями.
+     Высота карусели садится по видимому слайду (`fitHeight`, VED-443). */
+  const slide = (
+    entry: BlogMediaDto,
+    index: number,
+    frame: { className?: string; maxHeight?: string } = {},
+  ) =>
     entry.kind === "video" ? (
-      <BlogVideo key={entry.id} video={entry} index={index} />
+      <BlogFrame key={entry.id} aspect={blogMediaAspect(entry)} {...frame}>
+        <BlogVideo video={entry} index={index} />
+      </BlogFrame>
     ) : (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <BlogFitImage
         key={entry.id}
         src={entry.url}
         alt={alt ?? ""}
-        width={entry.width ?? undefined}
-        height={entry.height ?? undefined}
-        loading={index === 0 ? undefined : "lazy"}
-        className="size-full object-contain"
+        width={entry.width}
+        height={entry.height}
+        lazy={index > 0}
+        {...frame}
       />
     );
 
   if (compact) {
-    return (
-      <BlogFrame aspect={aspect} className="rounded-lg" maxHeight="18rem">
-        {item(media[0], 0)}
-      </BlogFrame>
-    );
+    return slide(media[0], 0, { className: "rounded-lg", maxHeight: "18rem" });
   }
 
-  if (media.length === 1) {
-    return <BlogFrame aspect={aspect}>{item(media[0], 0)}</BlogFrame>;
-  }
+  if (media.length === 1) return slide(media[0], 0);
 
   return (
     <BlogCarousel
@@ -61,9 +63,8 @@ export function BlogMedia({
       label={`Вложения поста: ${media.length}`}
       dots
       focusable
-      renderSlide={(index) => (
-        <BlogFrame aspect={aspect}>{item(media[index], index)}</BlogFrame>
-      )}
+      fitHeight
+      renderSlide={(index) => slide(media[index], index)}
     />
   );
 }

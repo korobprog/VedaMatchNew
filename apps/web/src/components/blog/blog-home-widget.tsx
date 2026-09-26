@@ -41,6 +41,7 @@ import {
   subscribeVcalendarButton,
 } from "@/lib/vcalendar-button";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
+import { BlogFitImage } from "./blog-fit-image";
 import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
 import {
   buildSpokenPost,
@@ -445,6 +446,17 @@ export function BlogHomeWidget({
  * заголовка — только когда он есть (VED-441): пустая полоса под картинкой
  * «сжирала место на главном экране».
  */
+function VideoMark() {
+  return (
+    <span
+      aria-hidden
+      className="absolute left-1/2 top-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-bg-0/85 text-text-0"
+    >
+      <Play className="ml-0.5 size-6 fill-current" />
+    </span>
+  );
+}
+
 function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
   return (
     <Link
@@ -455,28 +467,26 @@ function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
          обводка та же, что у глобального `*:focus-visible`. */
       className="group relative block focus-visible:outline-none after:pointer-events-none after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:after:outline-2 focus-visible:after:outline-offset-[-4px] focus-visible:after:outline-magenta focus-visible:after:outline-solid"
     >
-      <BlogFrame aspect={slide.coverUrl ? slide.aspect : 1}>
-        {slide.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={slide.coverUrl}
-            alt=""
-            className="size-full object-contain"
-          />
-        ) : (
+      {/* Рамка — по пропорции самого снимка, без полей (VED-527); у
+          обложки без размеров — по загруженному снимку. */}
+      {slide.coverUrl ? (
+        <BlogFitImage
+          src={slide.coverUrl}
+          alt=""
+          width={
+            slide.coverAspect ? Math.round(slide.coverAspect * 1000) : null
+          }
+          height={slide.coverAspect ? 1000 : null}
+        >
+          {slide.isVideo && <VideoMark />}
+        </BlogFitImage>
+      ) : (
+        <BlogFrame aspect={1}>
           <span className="flex size-full items-center justify-center px-6 text-center text-sm leading-6 text-text-1">
             {slide.frameText}
           </span>
-        )}
-        {slide.isVideo && (
-          <span
-            aria-hidden
-            className="absolute left-1/2 top-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-bg-0/85 text-text-0"
-          >
-            <Play className="ml-0.5 size-6 fill-current" />
-          </span>
-        )}
-      </BlogFrame>
+        </BlogFrame>
+      )}
       {slide.title && (
         <span className="flex min-h-14 items-center px-3 py-2">
           <span className="line-clamp-2 font-display text-sm font-semibold leading-snug text-text-0 group-hover:underline">
