@@ -5,6 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { attachmentLabel, formatTime } from '@/lib/chat/chat-format';
 import { isPendingMessage } from '@/lib/chat/chat-room-state';
 import { VoiceMessageAttachment } from '@/components/chat/voice/voice-message-attachment';
+import { GroupCallMessageCard } from '@/components/chat/group-call-message-card';
+import { isGroupCallCard } from '@/lib/group-calls/group-call-card';
 import { ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
@@ -27,7 +29,12 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionP
   const createdAtMs = new Date(message.createdAt).getTime();
   const images = message.attachments.filter((attachment) => attachment.kind === 'image' && (attachment.previewUrl || attachment.url));
   const voices = message.attachments.filter((attachment) => attachment.kind === 'voice');
-  const others = message.attachments.filter((attachment) => !images.includes(attachment) && !voices.includes(attachment));
+  // Карточка группового звонка — живая, с кнопкой входа; тело сообщения
+  // повторяет её («Групповой звонок начался»), поэтому текстом не дублируется.
+  const groupCalls = message.attachments.filter(isGroupCallCard);
+  const others = message.attachments.filter(
+    (attachment) => !images.includes(attachment) && !voices.includes(attachment) && !groupCalls.includes(attachment),
+  );
   const status = mine ? (pending ? ' · отправляется' : message.readByOthers ? ' · прочитано' : '') : '';
 
   return (
@@ -95,6 +102,9 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionP
               // один order и автопереход не путал их местами.
               <VoiceMessageAttachment key={attachment.id} attachment={attachment} order={createdAtMs + index * 0.001} />
             ))}
+            {groupCalls.map((attachment) => (
+              <GroupCallMessageCard key={attachment.id} attachment={attachment} conversationId={message.conversationId} />
+            ))}
             {others.map((attachment) => (
               <View key={attachment.id} style={[styles.chip, { borderColor: colors.glassBorder }]}>
                 <Text numberOfLines={1} style={[styles.chipText, { color: colors.text1 }]}>
@@ -102,7 +112,7 @@ function MessageBubbleImpl({ message, mine, showAuthor, onLongPress, onReactionP
                 </Text>
               </View>
             ))}
-            {message.body ? <Text style={[styles.body, { color: colors.text0 }]}>{message.body}</Text> : null}
+            {message.body && groupCalls.length === 0 ? <Text style={[styles.body, { color: colors.text0 }]}>{message.body}</Text> : null}
           </>
         )}
         <Text style={[styles.meta, styles.time, { color: colors.text1 }]}>

@@ -4,23 +4,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { overlayTopOffset } from '@/lib/calls/call-overlay-position';
 import { useGroupCalls } from '@/lib/group-calls/group-call-context';
 import { confirmTap } from '@/lib/feedback';
-import { groupCallBannerLabel } from '@/lib/group-calls/group-call-banner-text';
+import { ownCallBanner } from '@/lib/group-calls/group-call-banner-text';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 
 /**
- * Плашка «идёт групповой звонок» — она же «входящий групповой».
+ * Плавающая плашка «Вы в звонке · 2 из 4 · Вернуться в звонок» — путь назад
+ * к своему групповому звонку, когда его экран свёрнут системным «назад»
+ * (как `ReturnToCallBanner` у звонка один на один).
  *
- * Группового дозвона с рингтоном на этом этапе нет намеренно: комната
- * открыта постоянно, входят и выходят по ходу, и звонить всей беседе по
- * каждому входу — это будильник, а не приглашение. Человек видит строку с
- * составом и кнопкой, как в общем голосовом чате Телеграма.
- *
- * Та же плашка служит возвратом к своему звонку, когда экран свёрнут
- * системным «назад» (`ReturnToCallBanner` у звонка один на один) — тексты
- * и то, какое из двух состояний показывать, решает чистый
- * `group-call-banner-text.ts`.
+ * Приглашение «идёт звонок, войти» здесь больше не живёт: плавающая строка
+ * закрывала первые сообщения беседы, и в конференции её не замечали. Теперь
+ * вход стоит в потоке экрана беседы над перепиской (`GroupCallStrip`) и
+ * карточкой в ленте (`GroupCallMessageCard`). По той же причине в беседе
+ * самого звонка эта плашка молчит — там её заменяет строка над перепиской с
+ * тем же текстом. Тексты — в чистом `group-call-banner-text.ts`.
  */
 export function GroupCallBanner({ visible }: { visible: boolean }) {
   const { colors } = useTheme();
@@ -29,13 +28,9 @@ export function GroupCallBanner({ visible }: { visible: boolean }) {
   const calls = useGroupCalls();
 
   const own = calls?.state.phase === 'active' ? (calls?.state.call ?? null) : null;
-  const conversationId = conversationIdFromPath(pathname);
-  const inConversation = conversationId
-    ? (calls?.callInConversation(conversationId) ?? null)
-    : null;
-  const banner = groupCallBannerLabel(own, inConversation, calls?.selfId ?? '');
-
-  if (!calls || !visible || !banner) return null;
+  if (!calls || !visible || !own) return null;
+  if (conversationIdFromPath(pathname) === own.conversationId) return null;
+  const banner = ownCallBanner(own);
 
   return (
     <Pressable
@@ -43,9 +38,7 @@ export function GroupCallBanner({ visible }: { visible: boolean }) {
       accessibilityLabel={`${banner.title}. ${banner.action}`}
       onPress={() => {
         confirmTap();
-        if (banner.kind === 'own')
-          router.push({ pathname: '/group-call/[id]', params: { id: banner.callId } });
-        else void calls.join(banner.callId);
+        router.push({ pathname: '/group-call/[id]', params: { id: banner.callId } });
       }}
       android_ripple={ripple(colors.glassBorder)}
       style={({ pressed }) => [
@@ -71,7 +64,7 @@ export function GroupCallBanner({ visible }: { visible: boolean }) {
   );
 }
 
-/** `/chat/<id>` → `<id>`. Плашку «войти» показываем только в той беседе. */
+/** `/chat/<id>` → `<id>`: в беседе своего звонка плашку заменяет строка над перепиской. */
 function conversationIdFromPath(pathname: string): string | null {
   const match = /^\/chat\/([^/]+)$/.exec(pathname);
   return match ? decodeURIComponent(match[1]) : null;

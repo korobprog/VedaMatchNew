@@ -239,6 +239,19 @@ const PAIRS: { name: string; text: keyof Palette; surface: keyof Palette }[] = [
   { name: 'плашка «Нет соединения» над вкладками', text: 'text0', surface: 'bg1' },
   { name: 'заголовок экрана «Нет соединения»', text: 'text0', surface: 'bg0' },
   { name: 'пояснение экрана «Нет соединения»', text: 'text1', surface: 'bg0' },
+  // Вход в групповой звонок из беседы (`components/calls/group-call-strip.tsx`,
+  // `components/chat/group-call-message-card.tsx`). Плашка над перепиской —
+  // непрозрачный `bg1`: «Идёт звонок · 2 из 4» — `text0`, погашенная кнопка
+  // («Мест нет») — `text1` без заливки. Карточка в ленте стоит на пузыре:
+  // `bg2` у своего сообщения, стекло у чужого — заголовок `text0`, подпись
+  // `text1`, погашенная кнопка тоже `text1`. Кнопка входа — `onAccent` на
+  // `magenta`, пара уже закреплена выше.
+  { name: '«Идёт звонок» на плашке над перепиской', text: 'text0', surface: 'bg1' },
+  { name: '«Мест нет» на плашке над перепиской', text: 'text1', surface: 'bg1' },
+  { name: 'заголовок карточки звонка в своём сообщении', text: 'text0', surface: 'bg2' },
+  { name: 'подпись и «Мест нет» карточки звонка в своём сообщении', text: 'text1', surface: 'bg2' },
+  { name: 'заголовок карточки звонка в чужом сообщении', text: 'text0', surface: 'glass' },
+  { name: 'подпись и «Мест нет» карточки звонка в чужом сообщении', text: 'text1', surface: 'glass' },
 ];
 
 describe.each([
