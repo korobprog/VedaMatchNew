@@ -1,5 +1,6 @@
 import type { PrismaService } from '../../prisma/prisma.service';
 import {
+  opensAsViewed,
   isForeignWorkTask,
   isWorkTaskViewed,
   loadWorkViewerState,
@@ -259,5 +260,14 @@ describe('loadWorkViewerState', () => {
       new Date('2026-09-24T11:00:00Z'),
     );
     expect(state.get('never')?.touchedAt).toBeNull();
+  });
+});
+
+describe('opensAsViewed (VED-365)', () => {
+  it('открытие ставит «Просмотрено» только на тестировании', () => {
+    expect(opensAsViewed('testing')).toBe(true);
+    expect(opensAsViewed('rework')).toBe(false);
+    expect(opensAsViewed('in_progress')).toBe(false);
+    expect(opensAsViewed(null)).toBe(false);
   });
 });

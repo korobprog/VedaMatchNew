@@ -67,6 +67,7 @@ import {
   loadCreatedOnBehalf,
   loadWorkViewerState,
   markOwnerIds,
+  opensAsViewed,
 } from './work-viewer-state';
 import { WorkSpacesService } from './work-spaces.service';
 import {
@@ -308,6 +309,15 @@ export class WorkTasksService {
       create: { taskId, userId },
       update: { visitedAt: new Date() },
     });
+    // Открыл на тестировании — «Просмотрено» само (VED-365), без кнопки.
+    if (opensAsViewed(resolveTaskStatusMark(task.column.name))) {
+      const now = new Date();
+      await this.prisma.workTaskView.upsert({
+        where: { taskId_userId: { taskId, userId } },
+        create: { taskId, userId, viewedAt: now },
+        update: { viewedAt: now },
+      });
+    }
 
     const viewer = await loadWorkViewerState(this.prisma, [task], userId);
     const card = toWorkTaskCard(
