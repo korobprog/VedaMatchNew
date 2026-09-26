@@ -7,6 +7,13 @@ import {
   type VideoEncoding,
 } from '@/lib/calls/video-encoding';
 import { decideSdpApply, type SignalingState } from '@/lib/calls/webrtc-signal-guard';
+import {
+  mergeRemoteTrack,
+  pickVideoTransceiver,
+  videoStatsDigest,
+  type PeerVideoDiagnostics,
+  type VideoStatsEntry,
+} from './group-video-link';
 import { localAudioLevel, remoteAudioLevel, type StatsEntry } from './speaking-state';
 
 /**
@@ -41,6 +48,14 @@ import { localAudioLevel, remoteAudioLevel, type StatsEntry } from './speaking-s
  * соединение при его установке и ноль трафика дальше — дорожки нет, кодер
  * не работает.
  *
+ * Заводит видеосекцию только ИНИЦИАТОР пары. Отвечающий берёт ту, что
+ * создал пришедший offer, и открывает ей отдачу до answer'а: свой
+ * заранее заведённый трансивер к offer'у не присоединяется (JSEP 5.10), и
+ * камера отвечающего уходила бы в никуда. Картинка собеседника собирается
+ * из самой дорожки, а не из `event.streams` — у видеосекции без потока он
+ * пуст. Обе ловушки и почему они давали чёрную плитку при живом звуке —
+ * в шапке `group-video-link.ts`.
+ *
  * Не тестируется в jest-expo: склейка вокруг нативного модуля. Чистое —
  * `group-call-peers.ts` (кто кому шлёт offer), `speaking-state.ts` (разбор
  * уровней), `group-video-quality.ts` (потолок качества по составу) и
@@ -58,6 +73,7 @@ interface IceCandidateEvent {
   candidate: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null } | null;
 }
 interface TrackEvent {
+  track: MediaStreamTrack | null;
   streams: MediaStream[];
 }
 
@@ -76,6 +92,13 @@ interface VideoSender {
   setParameters(params: unknown): Promise<void>;
 }
 
+/** Трансивер видеосекции — только то, что попадает в сводку диагностики. */
+interface VideoTransceiverView {
+  mid: string | null;
+  direction: string;
+  currentDirection: string | null;
+}
+
 /** Столько же, сколько у звонка один на один. */
 const DISCONNECT_GRACE_MS = 15_000;
 
@@ -87,8 +110,24 @@ export class GroupPeerLink {
   private restartingIce = false;
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
-  /** Отправитель пустой видеосекции — см. шапку класса. */
-  private readonly videoSender: VideoSender;
+  /**
+   * Отправитель видеосекции — см. шапку класса. У отвечающего `null`, пока
+   * не пришёл offer: его видеосекцию создаёт offer.
+   */
+  private videoSender: VideoSender | null = null;
+  /** Трансивер той же секции — ради сводки диагностики. */
+  private videoTransceiver: VideoTransceiverView | null = null;
+  /**
+   * Что должно стоять в отправителе и каким качеством. Запоминаем, потому
+   * что у отвечающего отправителя до offer'а нет, а провайдер отдаёт камеру
+   * и потолок качества сразу при создании пары.
+   */
+  private wantedVideoTrack: MediaStreamTrack | null = null;
+  private wantedEncoding: VideoEncoding | null = null;
+  /** Чужие дорожки, из которых собрана картинка (`mergeRemoteTrack`). */
+  private remoteTracks: MediaStreamTrack[] = [];
+  /** Поток-обёртка над чужой видеодорожкой — его `toURL()` берёт `RTCView`. */
+  private remoteVideo: MediaStream | null = null;
 
   constructor(
     readonly userId: string,
@@ -120,10 +159,7 @@ export class GroupPeerLink {
       });
     }) as typeof this.pc.onicecandidate;
 
-    this.pc.ontrack = ((event: TrackEvent) => {
-      const [stream] = event.streams;
-      if (stream) handlers.onRemoteStream(stream);
-    }) as typeof this.pc.ontrack;
+    this.pc.ontrack = ((event: TrackEvent) => this.onTrack(event)) as typeof this.pc.ontrack;
 
     this.pc.onconnectionstatechange = (() => {
       switch (this.pc.connectionState) {
@@ -148,13 +184,71 @@ export class GroupPeerLink {
 
     for (const track of localStream.getAudioTracks())
       this.pc.addTrack(track, localStream);
-    // Пустая видеосекция заводится сразу — см. шапку класса. Направление
-    // `sendrecv`: мы вправе и показывать, и смотреть, а кто из пары включит
-    // камеру первым, заранее неизвестно.
-    this.videoSender = this.pc.addTransceiver('video', {
-      direction: 'sendrecv',
-    }).sender as unknown as VideoSender;
+    // Пустая видеосекция заводится сразу, но только у инициатора — см.
+    // шапку класса. Направление `sendrecv`: кто из пары включит камеру
+    // первым, заранее неизвестно. Поток — тот же, что у микрофона: так
+    // видеодорожка приезжает к собеседнику в одном потоке со звуком, и её
+    // покажет даже приложение без этой починки (оно берёт `streams[0]`).
+    // `streamIds`, а не `streams`: библиотека сама превращает `streams` в
+    // `streamIds`, но и объекты потоков оставляет в том же `init`, который
+    // уходит через мост целиком. Строки через мост проходят гарантированно.
+    if (initiator) {
+      const transceiver = this.pc.addTransceiver('video', {
+        direction: 'sendrecv',
+        streamIds: [localStream.id],
+      });
+      this.videoSender = transceiver.sender as unknown as VideoSender;
+      this.videoTransceiver = transceiver;
+    }
     handlers.onStateChange('connecting');
+  }
+
+  /**
+   * Чужая дорожка. Картинку собираем из `event.track`, а не из
+   * `event.streams[0]`: у видеосекции без потока он пуст, и прежний код
+   * выбрасывал видео, отдавая плитке поток звука (чёрная плитка).
+   *
+   * Звук в поток не берём: на Android его играет сам WebRTC, без привязки
+   * к потоку и без `RTCView`.
+   */
+  private onTrack(event: TrackEvent): void {
+    if (this.closed) return;
+    const next = mergeRemoteTrack(this.remoteTracks, event.track, ['video']);
+    if (!next) return;
+    this.remoteTracks = next;
+    const previous = this.remoteVideo;
+    this.remoteVideo = new MediaStream(next);
+    releaseWrapper(previous);
+    this.handlers.onRemoteStream(this.remoteVideo);
+  }
+
+  /**
+   * Отвечающий: взять видеосекцию, созданную offer'ом, и открыть ей отдачу.
+   * Вызывается между `setRemoteDescription(offer)` и `createAnswer`, иначе
+   * answer уйдёт `recvonly` и наша камера до собеседника не дойдёт.
+   */
+  private adoptVideoTransceiver(): void {
+    if (this.initiator) return;
+    const transceivers = this.pc.getTransceivers();
+    const pick = pickVideoTransceiver(
+      transceivers.map((t) => ({
+        kind: t.receiver.track?.kind,
+        mid: t.mid,
+        stopped: t.stopped,
+        direction: t.direction,
+      })),
+    );
+    if (!pick) return;
+    const transceiver = transceivers[pick.index];
+    if (pick.setDirection) transceiver.direction = pick.setDirection;
+    this.videoTransceiver = transceiver;
+    const sender = transceiver.sender as unknown as VideoSender;
+    if (this.videoSender === sender) return;
+    this.videoSender = sender;
+    // Камеру и потолок качества провайдер отдал, когда отправителя ещё не
+    // было, — применяем запомненное.
+    void this.pushVideoTrack();
+    if (this.wantedEncoding) void this.applyVideoEncoding(this.wantedEncoding);
   }
 
   /** Инициатор пары: собрать и отправить offer. */
@@ -193,6 +287,7 @@ export class GroupPeerLink {
       await this.pc.setRemoteDescription(signal.sdp);
       this.remoteSet = true;
       if (isOffer) {
+        this.adoptVideoTransceiver();
         const answer = await this.pc.createAnswer();
         await this.pc.setLocalDescription(answer);
         this.answerInFlight = false;
@@ -223,9 +318,14 @@ export class GroupPeerLink {
    * иначе выход одного собеседника гасил бы камеру для остальных.
    */
   async setVideoTrack(track: MediaStreamTrack | null): Promise<void> {
-    if (this.closed) return;
+    this.wantedVideoTrack = track;
+    await this.pushVideoTrack();
+  }
+
+  private async pushVideoTrack(): Promise<void> {
+    if (this.closed || !this.videoSender) return;
     try {
-      await this.videoSender.replaceTrack(track);
+      await this.videoSender.replaceTrack(this.wantedVideoTrack);
     } catch {
       // Соединение уже закрывается — следующий пересчёт состава уберёт его.
     }
@@ -239,7 +339,8 @@ export class GroupPeerLink {
    * собеседнику ничего не приходит.
    */
   async applyVideoEncoding(target: VideoEncoding): Promise<void> {
-    if (this.closed) return;
+    this.wantedEncoding = target;
+    if (this.closed || !this.videoSender) return;
     try {
       const params = this.videoSender.getParameters() as SenderParameters;
       const next = withVideoEncoding(params, target);
@@ -254,8 +355,7 @@ export class GroupPeerLink {
   async audioLevel(): Promise<number> {
     if (this.closed) return 0;
     try {
-      const stats = (await this.pc.getStats()) as unknown as Iterable<StatsEntry>;
-      return remoteAudioLevel(stats);
+      return remoteAudioLevel(await this.statsEntries<StatsEntry>());
     } catch {
       return 0;
     }
@@ -265,11 +365,51 @@ export class GroupPeerLink {
   async ownAudioLevel(): Promise<number> {
     if (this.closed) return 0;
     try {
-      const stats = (await this.pc.getStats()) as unknown as Iterable<StatsEntry>;
-      return localAudioLevel(stats);
+      return localAudioLevel(await this.statsEntries<StatsEntry>());
     } catch {
       return 0;
     }
+  }
+
+  /**
+   * Записи `getStats()`. react-native-webrtc отдаёт отчёт как `Map`
+   * (`new Map(JSON.parse(data))`), а обход `Map` даёт пары `[id, запись]`,
+   * не записи: разбор по `type` такие пары не узнаёт, и подпись «говорит»
+   * не загоралась никогда. Поэтому значения берём явно.
+   */
+  private async statsEntries<T>(): Promise<T[]> {
+    const report = (await this.pc.getStats()) as unknown as Map<string, T>;
+    return [...report.values()];
+  }
+
+  /**
+   * Что пара знает о своём видео — для скрытой сводки на экране звонка
+   * (`formatVideoDiagnostics`). Без имён и id собеседника.
+   */
+  async videoDiagnostics(): Promise<PeerVideoDiagnostics> {
+    let stats: VideoStatsEntry[] = [];
+    if (!this.closed) {
+      try {
+        stats = await this.statsEntries<VideoStatsEntry>();
+      } catch {
+        // Статистики нет — сводка так и скажет.
+      }
+    }
+    const t = this.videoTransceiver;
+    return {
+      initiator: this.initiator,
+      connectionState: this.closed ? 'closed' : String(this.pc.connectionState),
+      transceiver: t
+        ? {
+            mid: t.mid ?? null,
+            direction: t.direction ?? null,
+            current: t.currentDirection ?? null,
+          }
+        : null,
+      sendingTrack: Boolean(this.videoSender && this.wantedVideoTrack),
+      remoteTrack: this.remoteTracks.length > 0,
+      stats: videoStatsDigest(stats),
+    };
   }
 
   /**
@@ -283,6 +423,12 @@ export class GroupPeerLink {
     this.pc.onicecandidate = null;
     this.pc.ontrack = null;
     this.pc.onconnectionstatechange = null;
+    // Обёртку отпускаем ДО закрытия соединения: пока оно живо, нативная
+    // сторона ещё находит чужую дорожку и вынимает её из обёртки, а не
+    // уничтожает вместе с ней (`releaseWrapper`).
+    releaseWrapper(this.remoteVideo);
+    this.remoteVideo = null;
+    this.remoteTracks = [];
     this.pc.close();
   }
 
@@ -298,5 +444,20 @@ export class GroupPeerLink {
   private clearDisconnectTimer(): void {
     if (this.disconnectTimer) clearTimeout(this.disconnectTimer);
     this.disconnectTimer = null;
+  }
+}
+
+/**
+ * Отпустить нативный поток-обёртку, НЕ трогая дорожки: они принадлежат
+ * соединению. `release(false)` сперва вынимает дорожки из потока и только
+ * потом уничтожает его — нативный `MediaStream.dispose()` уничтожил бы и
+ * всё, что в нём осталось.
+ */
+function releaseWrapper(stream: MediaStream | null): void {
+  if (!stream) return;
+  try {
+    stream.release(false);
+  } catch {
+    // Уже отпущен — делать нечего.
   }
 }

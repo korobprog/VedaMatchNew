@@ -51,6 +51,12 @@ export interface GroupCallsApi {
   /** Экран группового звонка сообщает о своей видимости. */
   reportScreenMounted: (visible: boolean) => void;
   dismiss: () => void;
+  /**
+   * Сводка видео по каждой паре словами, без имён и id
+   * (`group-video-link.ts`). Открывается долгим нажатием на заголовок
+   * экрана звонка — для разбора чёрной плитки на релизной сборке.
+   */
+  videoDiagnostics: () => Promise<string>;
 }
 
 export const GroupCallsContext = createContext<GroupCallsApi | null>(null);
