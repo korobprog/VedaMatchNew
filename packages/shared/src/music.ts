@@ -696,8 +696,15 @@ export interface CreateMusicCoverUploadResponse {
 
 /** Сколько места занято и сколько всего разрешено. */
 export interface MusicStorageUsageDto {
+  /**
+   * Сколько занято неопубликованным: на проверке, отклонённым, снятым и
+   * незавершёнными заливками. Опубликованное — уже каталог портала и в квоту
+   * не входит.
+   */
   usedBytes: number;
   quotaBytes: number;
+  /** Редакция Музыки — без квоты: она и наполняет каталог. */
+  unlimited?: boolean;
   maxUploadBytes: number;
   acceptedMime: string[];
 }

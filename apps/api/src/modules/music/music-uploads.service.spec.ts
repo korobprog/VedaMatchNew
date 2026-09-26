@@ -7,7 +7,10 @@ import type { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { MusicStorageService } from './music-storage.service';
 import type { MusicMetadataReader } from './music-metadata-reader';
-import { MusicUploadsService } from './music-uploads.service';
+import {
+  MusicUploadsService,
+  REJECTED_TRACK_TTL_MS,
+} from './music-uploads.service';
 
 function storageMock(over: Record<string, unknown> = {}) {
   return {
@@ -217,6 +220,31 @@ describe('MusicUploadsService.createUpload', () => {
     await expect(
       service(prisma, storage).createUpload('u1', body()),
     ).rejects.toThrow(/место/i);
+  });
+
+  it('опубликованное в квоту не считает — только то, что ещё на совести загрузившего', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    await service(prisma, storage).createUpload('u1', body());
+
+    expect(prisma.prisma.musicTrack.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { uploadedById: 'u1', status: { not: 'published' } },
+      }),
+    );
+  });
+
+  it('редакции Музыки квота не мешает', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicTrack.aggregate.mockResolvedValue({
+      _sum: { sizeBytes: 50_000_000_000 },
+    });
+
+    await expect(
+      service(prisma, storage).createUpload('u1', body(), true),
+    ).resolves.toMatchObject({ uploadId: 'up1' });
   });
 });
 
@@ -668,6 +696,49 @@ describe('MusicUploadsService.cleanupStale', () => {
 
     expect(removed).toBe(0);
     expect(storage.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('MusicUploadsService.cleanupRejected', () => {
+  it('через месяц убирает отклонённую запись человека вместе с файлом', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicTrack.findMany.mockResolvedValue([
+      { id: 't9', storageKey: 'music/uploads/u1/old.mp3' },
+    ]);
+    const now = new Date('2026-10-01T00:00:00Z');
+
+    const removed = await service(prisma, storage).cleanupRejected(now);
+
+    expect(removed).toBe(1);
+    const where = prisma.prisma.musicTrack.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('rejected');
+    expect(where.uploadedById).toEqual({ not: null });
+    expect(where.updatedAt.lt.getTime()).toBe(
+      now.getTime() - REJECTED_TRACK_TTL_MS,
+    );
+    expect(prisma.tx.musicTrack.delete).toHaveBeenCalledWith({
+      where: { id: 't9' },
+    });
+    expect(storage.remove).toHaveBeenCalledWith('music/uploads/u1/old.mp3');
+  });
+
+  it('упавшая строка не останавливает остальные', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicTrack.findMany.mockResolvedValue([
+      { id: 'a', storageKey: 'k/a' },
+      { id: 'b', storageKey: 'k/b' },
+    ]);
+    prisma.tx.musicTrack.delete
+      .mockRejectedValueOnce(new Error('уже удалена'))
+      .mockResolvedValueOnce({});
+
+    const removed = await service(prisma, storage).cleanupRejected();
+
+    expect(removed).toBe(1);
+    expect(storage.remove).toHaveBeenCalledWith('k/b');
+    expect(storage.remove).not.toHaveBeenCalledWith('k/a');
   });
 });
 
