@@ -817,12 +817,18 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           переехала кнопка «Пригласить», и на 360 точках «Все среды»,
           название, префикс и кнопка должны встать в одну строку. */}
       <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-3">
+        {/* «Назад» (VED-493, было «Все среды») — ступенью вверх, к списку
+            сред, а не шагом по истории браузера: из доски, куда пришли по
+            ссылке из уведомления или из окна задачи, человек обязан уйти
+            наверх, а не обратно в правку. Дальше вверх — «Работа», потом
+            главная портала. */}
         <Link
           href="/work/planner"
+          title="К списку рабочих сред"
           className="flex items-center gap-1 text-sm text-text-1 hover:text-text-0"
         >
           <ArrowLeft aria-hidden className="size-4" />
-          Все среды
+          Назад
         </Link>
         <h1 className="font-display text-lg font-bold text-text-0 sm:text-2xl">
           {space.name}

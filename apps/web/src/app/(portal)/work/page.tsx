@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { CalendarClock, Hammer, KanbanSquare, Briefcase } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  Hammer,
+  KanbanSquare,
+  Briefcase,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { WORK_SECTIONS } from "@/lib/work-sections";
 
@@ -36,6 +42,15 @@ const ACCENT: Record<string, string> = {
 export default function WorkPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 pb-28">
+      {/* Верхняя ступень «назад» в Работе (VED-493): доска → список сред →
+          Работа → главная портала. Без неё лестница обрывалась здесь. */}
+      <Link
+        href="/"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-text-1 hover:text-text-0"
+      >
+        <ArrowLeft aria-hidden className="size-4" />
+        Главная
+      </Link>
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
           Работа
