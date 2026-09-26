@@ -60,14 +60,10 @@ export default async function MusicArtistPage({
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
-      <Link
-        href="/music"
-        className="inline-flex items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
-      >
-        <span aria-hidden="true">←</span> Каталог
-      </Link>
-
-      <header className="mt-5 flex items-center gap-5">
+      {/* Шапка исполнителя (VED-530): «← Каталог» — в строке имени, справа,
+          на месте прежнего карандаша; отдельной строки над шапкой больше нет,
+          и всё ниже поднялось на её высоту. */}
+      <header className="flex items-center gap-5">
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full">
           <MusicCover
             url={artist.coverUrl}
@@ -77,24 +73,31 @@ export default async function MusicArtistPage({
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-text-0">
+          <div className="flex min-w-0 items-start gap-2">
+            <h1 className="min-w-0 flex-1 break-words font-display text-2xl font-bold tracking-tight text-text-0">
               {artist.name}
             </h1>
-            {isMusicEditor && (
-              <MusicArtistAdminRename artistId={artist.id} name={artist.name} />
-            )}
+            <Link
+              href="/music"
+              className="-mr-2 inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-sm text-text-2 hover:text-text-0"
+            >
+              <span aria-hidden="true">←</span> Каталог
+            </Link>
           </div>
-          {/* Категория исполнителя (VED-165) — рядом с переименованием, там
-              же, где тестировщик поставил галочку на скриншоте: всё, что
-              редакция правит у карточки, собрано в одном месте. */}
+          {/* Категория и имя исполнителя (VED-165, VED-102) — в одном ряду
+              правки для редакции. Карандаш у самого имени убран (VED-530):
+              там теперь «Каталог», а переименование осталось здесь, среди
+              остальных правок карточки, — другого места для него нет. */}
           {isMusicEditor && (
-            <MusicArtistAdminCategory
-              artistId={artist.id}
-              artistName={artist.name}
-              rootCategoryId={artist.rootCategoryId}
-              categories={categories}
-            />
+            <div className="flex flex-wrap items-center gap-1">
+              <MusicArtistAdminCategory
+                artistId={artist.id}
+                artistName={artist.name}
+                rootCategoryId={artist.rootCategoryId}
+                categories={categories}
+              />
+              <MusicArtistAdminRename artistId={artist.id} name={artist.name} />
+            </div>
           )}
           <p className="text-sm text-text-2">
             {[kind, `${artist.trackCount} ${plural(artist.trackCount, "запись", "записи", "записей")}`]

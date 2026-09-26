@@ -199,7 +199,7 @@ describe("MusicArtistPlayback", () => {
     expect(screen.getByRole("heading", { name: "Записи" })).toBeInTheDocument();
   });
 
-  it("редактору музыки показывает ссылку «Загрузить треки»", () => {
+  it("редактору музыки показывает ссылку «Загрузить» (VED-530)", () => {
     render(
       <MusicArtistPlayback
         tracks={tracks}
@@ -209,7 +209,7 @@ describe("MusicArtistPlayback", () => {
     );
 
     expect(
-      screen.getByRole("link", { name: /Загрузить треки/ }),
+      screen.getByRole("link", { name: "Загрузить" }),
     ).toHaveAttribute("href", "/music/uploads?artist=shanti");
   });
 

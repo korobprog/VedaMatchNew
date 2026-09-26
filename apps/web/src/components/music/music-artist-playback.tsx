@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { MusicPlayAllButton } from "./player/play-all-button";
-import { MusicPlayModeButtons } from "./player/play-mode-buttons";
+import {
+  MusicPlayModeButtons,
+  MusicShuffleIconButton,
+} from "./player/play-mode-buttons";
 import { MusicTrackCard } from "./music-track-card";
 import { MusicTrackRow } from "./music-track-row";
 import { sortTracks, type TrackSortMode } from "./sort-tracks";
@@ -66,32 +69,11 @@ export function MusicArtistPlayback({
   return (
     <>
       {/* Кнопки порядка (VED-33): «Слушать» рядом — про «включи и не думай»,
-          а эти про выбор: одна запись, весь список до конца, вперемешку. */}
+          вторая — про одну запись или весь список до конца. В один ряд
+          (VED-530); «Перемешать» и «Загрузить» переехали в строку «Записи». */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <MusicPlayAllButton queue={queue} />
-        <MusicPlayModeButtons queue={queue} />
-        {isMusicEditor && (
-          <Link
-            href={uploadHref}
-            className="btn-mint flex h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-bold"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 16V4" />
-              <path d="M8 8l4-4 4 4" />
-              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-            </svg>
-            Загрузить треки
-          </Link>
-        )}
+        <MusicPlayModeButtons queue={queue} showShuffle={false} />
       </div>
 
       {children}
@@ -100,13 +82,25 @@ export function MusicArtistPlayback({
         {/* Переключатель вида — в строке заголовка, а не в ряду сортировки:
             тот на 360 точках занят до края, и четвёртая кнопка уводила бы
             его на вторую строку. */}
-        <div className="flex items-center justify-between gap-3">
+        {/* В строке заголовка (VED-530): «Загрузить» — нейтральной кнопкой,
+            без мятного, и «Перемешать» значком; «Плиткой» — у правого края. */}
+        <div className="flex flex-wrap items-center gap-2">
           <h2
             id="artist-tracks"
-            className="font-display text-base font-bold text-text-0"
+            className="mr-auto font-display text-base font-bold text-text-0"
           >
             Записи
           </h2>
+          {isMusicEditor && (
+            <Link
+              href={uploadHref}
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-glass-brd px-3 text-xs font-semibold text-text-1 hover:text-text-0"
+            >
+              <UploadIcon />
+              Загрузить
+            </Link>
+          )}
+          <MusicShuffleIconButton queue={queue} />
           {tracks.length > 0 && (
             <button
               type="button"
@@ -120,7 +114,9 @@ export function MusicArtistPlayback({
               }`}
             >
               <GridIcon />
-              Плиткой
+              {/* На самых узких (<380) — значком: иначе кнопка уходит второй
+                  строкой под «Записи». Имя кнопки остаётся для скринридера. */}
+              <span className="max-[379px]:sr-only">Плиткой</span>
             </button>
           )}
         </div>
@@ -130,7 +126,8 @@ export function MusicArtistPlayback({
           </p>
         ) : (
           <>
-            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            {/* Сортировка — от левого края, вровень со списком (VED-530). */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setMode("date")}
@@ -210,6 +207,25 @@ function ReverseIcon({ flipped }: { flipped: boolean }) {
       aria-hidden="true"
     >
       <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 16V4" />
+      <path d="M8 8l4-4 4 4" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
     </svg>
   );
 }
