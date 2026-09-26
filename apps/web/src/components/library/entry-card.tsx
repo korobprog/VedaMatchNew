@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   Bookmark,
   ExternalLink,
-  ListOrdered,
   MessageSquare,
   Play,
   Users,
@@ -231,17 +230,7 @@ export function EntryCard({
           title={title}
           blogSharedAt={entry.blogSharedAt}
         />
-        {/* «Содержание» (VED-538) — у материалов со своим текстом: ведёт на
-            страницу материала сразу к раскрытому списку разделов. */}
-        {entry.hasText && (
-          <Link
-            href={`/library/entry/${entry.id}#contents`}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0"
-          >
-            <ListOrdered aria-hidden className="size-4" />
-            {t(locale, "entry.contents")}
-          </Link>
-        )}
+
         {entry.canEdit && (
           <>
             <Link

@@ -19,6 +19,7 @@ import {
 import { Header } from "@/components/header";
 import { CategoryNavigator } from "@/components/library/category-navigator";
 import { EntryFilters } from "@/components/library/entry-filters";
+import { LibraryContents } from "@/components/library/library-contents";
 import { EntryList } from "@/components/library/entry-list";
 import { LocaleSwitch } from "@/components/library/locale-switch";
 import { libraryMaterialsCount, t } from "@/components/library/i18n";
@@ -122,6 +123,10 @@ export default async function LibraryPage({
           </div>
           {canOrganize && <LibraryOrganizeButton locale={locale} />}
         </div>
+
+        {/* «Содержание» (VED-538) — оглавление текстовых материалов всего
+            Образования. */}
+        <LibraryContents locale={locale} />
 
         {user && (
           <LineagePrompt

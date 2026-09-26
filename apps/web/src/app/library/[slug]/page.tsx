@@ -22,6 +22,7 @@ import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
+import { LibraryContents } from "@/components/library/library-contents";
 import { LIBRARY_ICON_BUTTON } from "@/components/library/icon-button";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
@@ -201,6 +202,12 @@ export default async function LibraryCategoryPage({
             </>
           )}
         </div>
+
+        {/* «Содержание» автора (VED-538) — оглавление его текстовых
+            материалов. */}
+        {authorPage && (
+          <LibraryContents locale={locale} categorySlug={category.slug} />
+        )}
 
         {user && !authorPage && (
           <LineagePrompt
