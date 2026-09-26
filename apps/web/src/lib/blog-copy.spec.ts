@@ -21,6 +21,8 @@ function makePost(overrides: Partial<BlogPostDto> = {}): BlogPostDto {
     canManage: false,
     canModerate: false,
     favorited: false,
+    liked: false,
+    likeCount: 0,
     ...overrides,
   };
 }

@@ -144,6 +144,18 @@ export class BlogController {
     return this.blog.repost(user.sub, isAdmin(user), id, body);
   }
 
+  @Put('posts/:id/like')
+  @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
+  like(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.blog.setLike(user.sub, isAdmin(user), id, true);
+  }
+
+  @Delete('posts/:id/like')
+  @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
+  unlike(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.blog.setLike(user.sub, isAdmin(user), id, false);
+  }
+
   @Put('posts/:id/favorite')
   @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
   favorite(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {

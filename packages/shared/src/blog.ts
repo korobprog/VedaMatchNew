@@ -188,6 +188,10 @@ export interface BlogPostDto {
   canModerate: boolean;
   /** Пост в «Избранном» у того, кто смотрит (VED-238). */
   favorited: boolean;
+  /** Тот, кто смотрит, отметил пост «Нравится» (VED-505). */
+  liked: boolean;
+  /** Сколько человек отметили пост «Нравится». */
+  likeCount: number;
 }
 
 export interface BlogFeedResponse {
@@ -207,6 +211,12 @@ export interface BlogAuthorFeedResponse extends BlogFeedResponse {
   author: BlogAuthorDto;
   /** Сколько всего постов у автора. */
   total: number;
+}
+
+/** Ответ на «Нравится» и его снятие (VED-505): отметка и новое число. */
+export interface BlogLikeResponse {
+  liked: boolean;
+  likeCount: number;
 }
 
 /** Ответ на «в избранное» / «из избранного». */
