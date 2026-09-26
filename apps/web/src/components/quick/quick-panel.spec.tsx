@@ -330,6 +330,8 @@ describe("QuickPanel", () => {
 
     const button = screen.getByRole("button", { name: /Перейти в окно 2/ });
     expect(button).toHaveTextContent("Новое окно");
+    // VED-469: номер окна — цифрой в углу плитки.
+    expect(button).toHaveTextContent("2");
 
     await user.click(button);
     // Второе окно ещё не открывали — оно начинает с главной. `replace`, а не

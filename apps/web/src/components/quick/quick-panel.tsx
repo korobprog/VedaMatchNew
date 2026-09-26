@@ -822,9 +822,15 @@ function HeaderWindowButton({
       onClick={() => windowSwitch.go(onSwitch)}
       aria-label={windowSwitch.hint}
       title={windowSwitch.hint}
-      className={headerButtonClass}
+      className={`relative ${headerButtonClass}`}
     >
       {icon}
+      <span
+        aria-hidden
+        className="absolute right-1 top-1 font-mono text-[10px] font-semibold leading-none text-text-1"
+      >
+        {windowSwitch.number}
+      </span>
     </button>
   );
 }
@@ -1137,9 +1143,17 @@ function WindowTile({ onSwitch }: { onSwitch: () => void }) {
       title={windowSwitch.hint}
       aria-label={windowSwitch.hint}
       onClick={() => windowSwitch.go(onSwitch)}
-      className={tileClass}
+      className={`relative ${tileClass}`}
     >
       <Columns2 className={TILE_ICON} />
+      {/* Номер окна, куда ведёт плитка (VED-469), — тихой цифрой в углу.
+          Для скринридера он уже есть в подсказке кнопки. */}
+      <span
+        aria-hidden
+        className="absolute right-1.5 top-1 font-mono text-[11px] font-semibold text-text-1"
+      >
+        {windowSwitch.number}
+      </span>
       {/* Одна строка, а не `line-clamp-2` (VED-374): «надпись не должна
           быть длинной». Значок от числа строк больше не зависит вовсе —
           его держит верхний отступ плитки (`tileInnerClass`). */}
