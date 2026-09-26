@@ -132,11 +132,13 @@ describe("ServiceGrid", () => {
   });
 
   // VED-383: подпись короткая, имя — полное, как у соседних «Кнопок».
-  it("подписывает перестановку коротко, но называет её полностью", () => {
+  // VED-363: значком — две стрелки вверх-вниз, а имя и подсказка полные.
+  it("перестановка — значком, но называется полностью", () => {
     render(grid());
 
     const reorder = screen.getByRole("button", { name: "Изменить порядок" });
-    expect(reorder).toHaveTextContent("Порядок");
+    expect(reorder).toHaveTextContent("");
+    expect(reorder.querySelector("svg")).not.toBeNull();
     // Подсказка называет и булавку: закрепляют теперь здесь (VED-401).
     expect(reorder).toHaveAttribute("title", "Изменить порядок и закрепить");
   });
