@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AppManifestService } from './app-manifest.service';
+import { AppReleaseManifestController } from './app-release-manifest.controller';
 import { AppReleaseWorkerService } from './app-release-worker.service';
 import { NotificationBroadcastController } from './notification-broadcast.controller';
 import { NotificationBroadcastWorkerService } from './notification-broadcast-worker.service';
@@ -26,6 +28,7 @@ import { TelegramSenderService } from './telegram-sender.service';
     NotificationDevicesAdminController,
     NotificationDeliveryAdminController,
     TelegramNotificationsController,
+    AppReleaseManifestController,
   ],
   providers: [
     NotificationsService,
@@ -38,6 +41,7 @@ import { TelegramSenderService } from './telegram-sender.service';
     NotificationBroadcastWorkerService,
     NotificationPurgeWorkerService,
     AppReleaseWorkerService,
+    AppManifestService,
     TelegramNotificationsService,
     TelegramSenderService,
   ],

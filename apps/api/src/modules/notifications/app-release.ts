@@ -81,3 +81,88 @@ export function newReleaseStatus(
   if (maxKnownVersionCode === null) return 'baseline';
   return versionCode > maxKnownVersionCode ? 'pending' : 'baseline';
 }
+
+/**
+ * Сборки, чей манифест самообновления API отдаёт приложению
+ * (`GET /notifications/app-release/:variant/latest.json`). Шире, чем
+ * `TRACKED_APP_VARIANTS`: выпуски `com-site` сервер пока не объявляет, но
+ * отдать его манифест сборке, которая его спросит, ничего не стоит. Каналу
+ * `store` самообновление не положено вовсе — его здесь нет.
+ */
+export const MANIFEST_APP_VARIANTS = ['ru-site', 'com-site'] as const;
+export type ManifestAppVariant = (typeof MANIFEST_APP_VARIANTS)[number];
+
+/**
+ * Боевая раздача или тестовая папка (`test/` в бакете, вход `test_folder`
+ * воркфлоу Mobile APK) — чтобы сборка стенда проверки самообновления шла
+ * через API так же, как боевая, но видела свой манифест.
+ */
+export type ManifestTrack = 'release' | 'test';
+
+export function isManifestAppVariant(
+  value: string,
+): value is ManifestAppVariant {
+  return (MANIFEST_APP_VARIANTS as readonly string[]).includes(value);
+}
+
+/** `?track=` запроса: всё, кроме явного `test`, — боевая раздача. */
+export function manifestTrack(raw: unknown): ManifestTrack {
+  return raw === 'test' ? 'test' : 'release';
+}
+
+/** Адрес манифеста в хранилище с учётом тестовой папки. */
+export function appManifestStorageUrl(
+  baseUrl: string,
+  variant: ManifestAppVariant,
+  track: ManifestTrack,
+): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return appManifestUrl(track === 'test' ? `${base}/test` : base, variant);
+}
+
+function hostOf(value: string | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw).host.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+export type ManifestStorageBase =
+  { ok: true; baseUrl: string } | { ok: false; reason: string };
+
+/**
+ * Откуда API читает манифест: только `APP_DOWNLOAD_BASE_URL` — прямой адрес
+ * хранилища (в проде `https://firsts3.ru/<бакет>`).
+ *
+ * Никогда — публичный адрес для клиентов (`S3_PUBLIC_URL`, сейчас прокси
+ * `media.vedamatch.ru` в том же стеке). 24.09 веб при SSR читал манифест
+ * через собственный публичный домен, запрос зависал, healthcheck падал, и
+ * сайт лежал ~12 минут. `portal/docker-compose.dokploy.yml` подставляет
+ * `S3_PUBLIC_URL` в `APP_DOWNLOAD_BASE_URL`, если тот не задан, — поэтому
+ * совпадение хостов ловится здесь явно: адрес с хостом публичного и при
+ * этом не хранилища (`S3_ENDPOINT`) — отказ. Когда публичный адрес и есть
+ * хранилище (как было до переезда 24.09), совпадение безопасно.
+ */
+export function manifestStorageBase(env: {
+  appDownloadBaseUrl?: string;
+  s3PublicUrl?: string;
+  s3Endpoint?: string;
+}): ManifestStorageBase {
+  const raw = env.appDownloadBaseUrl?.trim();
+  if (!raw) return { ok: false, reason: 'APP_DOWNLOAD_BASE_URL не задан' };
+  const host = hostOf(raw);
+  if (!host)
+    return { ok: false, reason: 'APP_DOWNLOAD_BASE_URL не является адресом' };
+  const publicHost = hostOf(env.s3PublicUrl);
+  const storageHost = hostOf(env.s3Endpoint);
+  if (publicHost && host === publicHost && host !== storageHost) {
+    return {
+      ok: false,
+      reason: `APP_DOWNLOAD_BASE_URL указывает на публичный адрес ${host}, а не на хранилище — свой публичный домен сервер не читает`,
+    };
+  }
+  return { ok: true, baseUrl: raw.replace(/\/+$/, '') };
+}

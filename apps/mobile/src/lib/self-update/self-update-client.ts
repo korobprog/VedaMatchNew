@@ -1,33 +1,26 @@
-import type { AppVariant } from '@/config/variant';
 import { parseAppManifest, type AppManifest } from './manifest-validation';
+import {
+  API_MANIFEST_TIMEOUT_MS,
+  manifestSources,
+  manifestUrl,
+  type ManifestSource,
+  type ManifestUrlVariant,
+} from './manifest-sources';
 
 /**
- * `GET` манифеста самообновления (VED-176). Публичный файл в
- * S3-совместимом хранилище портала, как на сайте
- * (`apps/web/src/lib/app-download-api.ts`) — без `credentials`, без
+ * `GET` манифеста самообновления (VED-176). Без `credentials`, без
  * `Authorization`, обычный `fetch` мимо `lib/api/client.ts` (тот клиент
- * заточен под API портала с access-токеном и refresh). Контур/канал и
- * базовый адрес — из варианта сборки, не хардкод «ru-site», как в
- * `MANIFEST_PATH` веба: иначе `com-site` не заработает без правки этого файла.
+ * заточен под API портала с access-токеном и refresh): манифест публичный.
+ *
+ * Откуда и в каком порядке спрашивать — `manifest-sources.ts`: сначала API
+ * портала, потом зашитый в сборку адрес хранилища. Контур/канал и адреса —
+ * из варианта сборки, не хардкод «ru-site», как в `MANIFEST_PATH` веба.
  *
  * Модуль не читает `appVariant()` сам — вариант передаёт хук, поэтому и
- * адрес, и разбор ответа покрыты тестом (`self-update-client.spec.ts`).
+ * адреса, и разбор ответа покрыты тестом (`self-update-client.spec.ts`).
  */
-const MANIFEST_FILE = 'latest.json';
-
-export type ManifestUrlVariant = Pick<AppVariant, 'downloadBaseUrl' | 'contour' | 'channel'>;
-
-/**
- * `null` — адрес раздачи в сборку не зашит (`APP_DOWNLOAD_BASE_URL` не задан).
- * Итерация 1 молча подставляла сюда адрес сайта, а `vedamatch.ru/mobile/...`
- * отвечает 307 на лендинг (`apps/web/src/proxy.ts`) — проверка всегда
- * заканчивалась ошибкой без подсказки, в чём дело.
- */
-export function manifestUrl(variant: ManifestUrlVariant): string | null {
-  const base = variant.downloadBaseUrl?.trim().replace(/\/+$/, '');
-  if (!base) return null;
-  return `${base}/mobile/android/${variant.contour}-${variant.channel}/${MANIFEST_FILE}`;
-}
+export { manifestUrl };
+export type { ManifestUrlVariant };
 
 /**
  * Результат проверки — размеченный, чтобы экран говорил человеку, что именно
@@ -68,14 +61,30 @@ export function classifyManifestResponse(status: number, bodyText: string): Mani
 /** Сколько ждать ответа хранилища, прежде чем сказать «нет связи» (раунд 002, замечание 6). */
 export const MANIFEST_TIMEOUT_MS = 15_000;
 
-export async function fetchAppManifest(
-  variant: ManifestUrlVariant,
-  fetchImpl: typeof fetch = fetch,
-  timeoutMs: number = MANIFEST_TIMEOUT_MS,
-): Promise<ManifestFetchResult> {
-  const url = manifestUrl(variant);
-  if (!url) return { kind: 'not-configured' };
+/**
+ * Какой отказ показать, если не ответил ни один источник. «Нет связи» —
+ * первым: повтор может помочь, и кнопка «Повторить» на месте. Непонятный
+ * ответ — вторым. «Не опубликовано» — последним: API старого сервера без
+ * нового маршрута тоже отвечает 404, и прятать за ним сетевую беду
+ * хранилища значило бы убрать кнопку повтора там, где она нужна.
+ */
+const FAILURE_PRIORITY: ManifestFailureKind[] = ['network', 'malformed', 'not-found', 'not-configured'];
 
+/** Итог по ответам источников, опрошенных по порядку. */
+export function combineManifestResults(results: ManifestFetchResult[]): ManifestFetchResult {
+  const ok = results.find((result) => result.kind === 'ok');
+  if (ok) return ok;
+  for (const kind of FAILURE_PRIORITY) {
+    if (results.some((result) => result.kind === kind)) return { kind } as ManifestFetchResult;
+  }
+  return { kind: 'not-configured' };
+}
+
+async function fetchManifestFrom(
+  source: ManifestSource,
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+): Promise<ManifestFetchResult> {
   // Повисшее соединение не должно крутить индикатор вечно: по таймауту
   // запрос прерывается и это та же ветка «нет связи», что и обрыв.
   const controller = new AbortController();
@@ -83,7 +92,7 @@ export async function fetchAppManifest(
   let status: number;
   let bodyText: string;
   try {
-    const response = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+    const response = await fetchImpl(source.url, { headers: { Accept: 'application/json' }, signal: controller.signal });
     status = response.status;
     bodyText = await response.text();
   } catch {
@@ -92,4 +101,26 @@ export async function fetchAppManifest(
     clearTimeout(timer);
   }
   return classifyManifestResponse(status, bodyText);
+}
+
+/**
+ * Опрашивает источники по порядку до первого манифеста. `timeoutMs` —
+ * общий потолок на каждый источник (для тестов); по умолчанию у API свой,
+ * более короткий (`API_MANIFEST_TIMEOUT_MS`), у хранилища — `MANIFEST_TIMEOUT_MS`.
+ */
+export async function fetchAppManifest(
+  variant: ManifestUrlVariant,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs?: number,
+): Promise<ManifestFetchResult> {
+  const sources = manifestSources(variant);
+  if (sources.length === 0) return { kind: 'not-configured' };
+  const results: ManifestFetchResult[] = [];
+  for (const source of sources) {
+    const limit = timeoutMs ?? (source.kind === 'api' ? API_MANIFEST_TIMEOUT_MS : MANIFEST_TIMEOUT_MS);
+    const result = await fetchManifestFrom(source, fetchImpl, limit);
+    if (result.kind === 'ok') return result;
+    results.push(result);
+  }
+  return combineManifestResults(results);
 }
