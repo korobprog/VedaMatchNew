@@ -34,6 +34,7 @@ import { pressedStyle, ripple } from '@/theme/press';
 import { dark, fonts, hitTarget, radius } from '@/theme/tokens';
 import { ChatAvatar } from '../chat-avatar';
 import { STATUS_VIDEO_INLINE, StatusVideo } from './status-video';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /** Шаг таймера показа: полоска прогресса обновляется десять раз в секунду. */
 const TICK_MS = 100;
@@ -191,7 +192,7 @@ export function StatusViewer({
       finish();
     } catch (cause) {
       setConfirming(false);
-      setError(cause instanceof Error ? cause.message : 'Не удалось удалить статус');
+      setError(screenErrorText('components/chat/statuses/status-viewer', cause, 'Не удалось удалить статус'));
     } finally {
       setDeleting(false);
     }

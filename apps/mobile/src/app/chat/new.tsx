@@ -46,6 +46,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 const keyOf = (person: ChatUserSummary) => person.id;
 
@@ -97,7 +98,7 @@ export default function NewConversationScreen() {
       setPeople(peopleState.people);
       setCommunities(communitiesState.communities);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить список');
+      setLoadError(screenErrorText('app/chat/new', e, 'Не удалось загрузить список'));
     }
   }, [chatApi]);
 
@@ -163,7 +164,7 @@ export default function NewConversationScreen() {
       // форму, где можно случайно завести вторую такую же.
       router.replace({ pathname: '/chat/[id]', params: { id: conversation.id } });
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Беседа не создалась');
+      setSubmitError(screenErrorText('app/chat/new', e, 'Беседа не создалась'));
       setBusy(false);
     }
   }, [chatApi, draft]);

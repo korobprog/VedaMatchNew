@@ -7,6 +7,7 @@ import {
   profileRestorePlan,
   settleWithin,
   shouldAutoRetryRestore,
+  shouldReloadOnReconnect,
   shouldReloadProfile,
   shouldShowOfflineBanner,
   stalledCopy,
@@ -120,6 +121,21 @@ describe('shouldReloadProfile', () => {
   it('гость и загрузка — не наше дело', () => {
     expect(shouldReloadProfile({ ...base, status: 'guest' })).toBe(false);
     expect(shouldReloadProfile({ ...base, status: 'loading' })).toBe(false);
+  });
+});
+
+describe('shouldReloadOnReconnect', () => {
+  it('экран с ошибкой, сеть вернулась — перечитать (вкладка «Чаты», сборка 1034)', () => {
+    expect(shouldReloadOnReconnect({ failed: true, previous: 'offline', current: 'online' })).toBe(true);
+  });
+
+  it('экран без ошибки не трогаем', () => {
+    expect(shouldReloadOnReconnect({ failed: false, previous: 'offline', current: 'online' })).toBe(false);
+  });
+
+  it('сеть не возвращалась — не перечитываем: без сети повтор в цикле бессмыслен', () => {
+    expect(shouldReloadOnReconnect({ failed: true, previous: 'online', current: 'offline' })).toBe(false);
+    expect(shouldReloadOnReconnect({ failed: true, previous: 'online', current: 'online' })).toBe(false);
   });
 });
 

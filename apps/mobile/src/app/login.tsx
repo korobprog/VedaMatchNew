@@ -9,6 +9,7 @@ import { buildStamp, buildStampLabel } from '@/config/build-stamp';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * Экран входа. Кнопки открывают системный браузер на API нужного контура;
@@ -37,7 +38,7 @@ export default function LoginScreen() {
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось войти');
+      setError(screenErrorText('app/login', e, 'Не удалось войти'));
     } finally {
       setBusy(null);
     }

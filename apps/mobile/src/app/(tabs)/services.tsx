@@ -21,6 +21,7 @@ import { visibleServices } from '@/lib/services/services-list';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { useReloadWhenOnline } from '@/lib/startup/connectivity';
 
 /**
  * Вкладка «Сервисы» (VED-174): настоящий каталог с `GET /services`, а не
@@ -93,6 +94,9 @@ export default function ServicesScreen() {
     setRetrying(true);
     void load();
   }, [load]);
+
+  // Сеть вернулась, а экран в ошибке — перечитать самим, как «Повторить».
+  useReloadWhenOnline(error !== null, retry);
 
   // У «Здоровья» есть свой экран в приложении (VED-335): сканер состава
   // нельзя отправить в браузер телефона, там камеры либо нет, либо она

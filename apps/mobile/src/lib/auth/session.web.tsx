@@ -13,6 +13,7 @@ import { tokenAuthority } from './token-authority';
 import { telegramLaunch } from '@/lib/telegram/web-app';
 import type { Session, SessionStatus } from './session';
 import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * Сессия веб-версии приложения (`ios.vedamatch.com`). Какую именно сессию
@@ -291,7 +292,7 @@ function TelegramTokenSessionProvider({
         await loadProfile();
       } catch (error) {
         if (cancelled) return;
-        setLoginError(error instanceof Error ? error.message : 'Не удалось войти через Telegram');
+        setLoginError(screenErrorText('lib/auth/session', error, 'Не удалось войти через Telegram'));
         await dropSession();
       }
     })();

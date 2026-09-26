@@ -41,6 +41,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 const VISIBILITY_OPTIONS: ChipOption<ChatConversationVisibility>[] = [
   { value: 'private', label: 'По приглашению' },
@@ -100,7 +101,7 @@ export default function ConversationMembersScreen() {
         setPeople(peopleState.people);
       }
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить участников');
+      setLoadError(screenErrorText('app/chat/members/[id]', e, 'Не удалось загрузить участников'));
     }
   }, [chatApi, conversationId]);
 
@@ -127,7 +128,7 @@ export default function ConversationMembersScreen() {
       setDetail({ ...detail, title: updated.title, visibility: updated.visibility });
       setSaved(true);
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : 'Не получилось сохранить');
+      setFormError(screenErrorText('app/chat/members/[id]', e, 'Не получилось сохранить'));
     } finally {
       setSaving(false);
     }
@@ -148,7 +149,7 @@ export default function ConversationMembersScreen() {
           );
         }
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : 'Не получилось позвать');
+        setActionError(screenErrorText('app/chat/members/[id]', e, 'Не получилось позвать'));
       } finally {
         setBusyId(null);
       }
@@ -166,7 +167,7 @@ export default function ConversationMembersScreen() {
         await chatApi.setMemberRole(detail.id, userId, role);
         setMembers((current) => sortMembers(withRole(current, userId, role)));
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : 'Не получилось сменить права');
+        setActionError(screenErrorText('app/chat/members/[id]', e, 'Не получилось сменить права'));
       } finally {
         setBusyId(null);
       }
@@ -193,7 +194,7 @@ export default function ConversationMembersScreen() {
       }
       setPending(null);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Не получилось');
+      setActionError(screenErrorText('app/chat/members/[id]', e, 'Не получилось'));
       setPending(null);
     } finally {
       setPendingBusy(false);

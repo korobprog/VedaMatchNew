@@ -10,14 +10,13 @@ import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
 import { PushBridge } from '@/lib/push/push-bridge';
 import { quickPinsStore } from '@/lib/services/quick-pins-store';
-import { useConnectivity } from '@/lib/startup/connectivity';
+import { useConnectivity, usePreviousConnectivity } from '@/lib/startup/connectivity';
 import {
   decideStartupView,
   shouldAutoRetryRestore,
   shouldReloadProfile,
   shouldShowOfflineBanner,
   STARTUP_STALL_MS,
-  type Connectivity,
   type SessionStatusLike,
 } from '@/lib/startup/startup-decision';
 import { TelegramShell } from '@/lib/telegram/telegram-shell';
@@ -66,21 +65,11 @@ function useLoadingForMs(status: SessionStatusLike): number {
   return now - startedAt;
 }
 
-/** Предыдущее значение сети — чтобы поймать именно момент возвращения. */
-function usePrevious(value: Connectivity): Connectivity {
-  const ref = useRef<Connectivity>(value);
-  const previous = ref.current;
-  useEffect(() => {
-    ref.current = value;
-  }, [value]);
-  return previous;
-}
-
 function RootStackInner() {
   const { scheme, colors } = useTheme();
   const { status, user, reloadUser, retryRestore } = useSession();
   const connectivity = useConnectivity();
-  const previousConnectivity = usePrevious(connectivity);
+  const previousConnectivity = usePreviousConnectivity(connectivity);
   const view = decideStartupView({ status, loadingForMs: useLoadingForMs(status) });
   const onboarding = useOnboardingGate();
   // Полноэкранный плеер Медиатеки выезжает снизу из мини-плеера; при

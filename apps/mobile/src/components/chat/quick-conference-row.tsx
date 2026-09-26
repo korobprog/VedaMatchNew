@@ -9,6 +9,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * «Быстрая конференция» в шапке списка чатов.
@@ -50,7 +51,7 @@ export function QuickConferenceRow() {
       await share(created);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : 'Не удалось открыть конференцию',
+        screenErrorText('components/chat/quick-conference-row', cause, 'Не удалось открыть конференцию'),
       );
     } finally {
       setBusy(false);

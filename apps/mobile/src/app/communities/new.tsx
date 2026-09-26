@@ -26,6 +26,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 const KIND_OPTIONS: ChipOption<CommunityKind>[] = COMMUNITY_KIND_ORDER.map((kind) => ({
   value: kind,
@@ -99,7 +100,7 @@ export default function NewCommunityScreen() {
       const community = await communitiesApi.create(buildCreateCommunityRequest(draft));
       setCreatedName(community.name);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить');
+      setError(screenErrorText('app/communities/new', e, 'Не удалось сохранить'));
     } finally {
       setBusy(false);
     }

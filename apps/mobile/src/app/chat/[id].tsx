@@ -83,6 +83,7 @@ import { confirmTap, longPressTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /** Лимит длины сообщения, как на сервере (`CHAT_MESSAGE_MAX_LENGTH`). */
 const MAX_LENGTH = 2000;
@@ -192,7 +193,7 @@ export default function ChatRoomScreen() {
       setError(null);
       markRead();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось открыть беседу');
+      setError(screenErrorText('app/chat/[id]', e, 'Не удалось открыть беседу'));
     }
   }, [chatApi, conversationId, markRead]);
 
@@ -328,7 +329,7 @@ export default function ChatRoomScreen() {
       setDraft((current) => current || bodyText);
       setAttachments(sentAttachments);
       setReplyTo(sentReply);
-      setSendError(e instanceof Error ? e.message : 'Сообщение не отправлено');
+      setSendError(screenErrorText('app/chat/[id]', e, 'Сообщение не отправлено'));
     }
   }, [anyUploading, attachments, chatApi, conversationId, draft, replyTo, user]);
 
@@ -357,7 +358,7 @@ export default function ChatRoomScreen() {
           setMessages((current) => settlePendingMessage(current, pending.id, saved));
         } catch (e) {
           setMessages((current) => dropPendingMessage(current, pending.id));
-          setSendError(e instanceof Error ? e.message : 'Голосовое не отправилось');
+          setSendError(screenErrorText('app/chat/[id]', e, 'Голосовое не отправилось'));
         }
       })();
     },
@@ -385,7 +386,7 @@ export default function ChatRoomScreen() {
       setReplyBeforeEdit(restored.replyBeforeEdit);
     } catch (e) {
       // Текст остаётся в поле в режиме правки — можно поправить и повторить.
-      setSendError(e instanceof Error ? e.message : 'Не сохранилось, попробуйте ещё раз');
+      setSendError(screenErrorText('app/chat/[id]', e, 'Не сохранилось, попробуйте ещё раз'));
     } finally {
       setSending(false);
     }
@@ -505,7 +506,7 @@ export default function ChatRoomScreen() {
                   applyRoomEvent(current, { type: 'message.deleted', conversationId, messageId: message.id }, conversationId),
                 );
               } catch (e) {
-                Alert.alert('Не получилось', e instanceof Error ? e.message : 'Сообщение не удалено, попробуйте ещё раз');
+                Alert.alert('Не получилось', screenErrorText('app/chat/[id]', e, 'Сообщение не удалено, попробуйте ещё раз'));
               }
             })();
           },

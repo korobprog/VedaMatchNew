@@ -127,6 +127,21 @@ export function shouldReloadProfile(input: {
   return input.status === 'signed' && !input.hasUser && cameOnline(input.previous, input.current);
 }
 
+/**
+ * Экран в состоянии ошибки перечитывает себя сам, когда сеть вернулась, —
+ * тем же сигналом, что снимает плашку «Нет соединения». Без этого вкладка
+ * «Чаты» оставалась с ошибкой после включения сети (Realme, сборка 1034),
+ * хотя плашка ушла и соседние полосы перечитались. Экран без ошибки не
+ * трогаем: лишний запрос на каждую смену сети незачем.
+ */
+export function shouldReloadOnReconnect(input: {
+  failed: boolean;
+  previous: Connectivity;
+  current: Connectivity;
+}): boolean {
+  return input.failed && cameOnline(input.previous, input.current);
+}
+
 /** Повторить восстановление само, когда на экране повтора появилась сеть. */
 export function shouldAutoRetryRestore(input: {
   view: StartupView;
