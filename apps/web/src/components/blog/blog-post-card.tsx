@@ -88,16 +88,29 @@ export function BlogPostCard({
   onChanged,
   onRemoved,
   expanded = false,
+  editRequest = 0,
 }: {
   post: BlogPostDto;
   onChanged?: (post: BlogPostDto) => void;
   onRemoved?: (id: string) => void;
   /** Страница одного поста: текст сразу целиком, без «Далее». */
   expanded?: boolean;
+  /**
+   * Счётчик нажатий «Редактировать» снаружи карточки (VED-495: кнопка
+   * вверху страницы поста). Каждое новое значение открывает правку.
+   */
+  editRequest?: number;
 }) {
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Правка по кнопке снаружи — подстройкой состояния при смене пропа, без
+  // эффекта: так открытие правки не стоит лишнего прохода отрисовки.
+  const [seenEditRequest, setSeenEditRequest] = useState(editRequest);
+  if (editRequest !== seenEditRequest) {
+    setSeenEditRequest(editRequest);
+    if (post.canEdit) setEditing(true);
+  }
   const [error, setError] = useState<string | null>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const source = post.repostOf;
