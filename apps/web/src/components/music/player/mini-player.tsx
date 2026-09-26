@@ -48,7 +48,8 @@ import {
   type PlayerPanelTab,
 } from "./player-settings-panel";
 import { SeekStepGlyph } from "./seek-step-glyph";
-import { pinnedEqualizer, pinnedLayout, seekButtonLabel } from "./player-prefs";
+import { pinnedButtonCount, pinnedLayout, seekButtonLabel } from "./player-prefs";
+import { useEqualizerRoom } from "./use-equalizer-room";
 import { seekHotkeyDirection } from "./seek-hotkeys";
 import { bookmarkSavedText } from "./player-marks";
 import { useTrackBookmarks } from "./use-track-bookmarks";
@@ -261,6 +262,21 @@ export function MiniPlayer() {
     [bookmarks.items],
   );
 
+  // Место эквалайзеру во втором ряду телефона (VED-450, круг 5) — по замеру
+  // ряда, а не по числу вынесенных кнопок. 24 — его поля `px-3`.
+  const pinnedPrefs = player?.prefs;
+  const {
+    room: eqRoom,
+    attachRow: attachPinnedRow,
+    attachButtons: attachPinnedButtons,
+  } = useEqualizerRoom(
+    24,
+    pinnedPrefs ? pinnedButtonCount(pinnedPrefs) <= 2 : true,
+    pinnedPrefs
+      ? `${pinnedPrefs.showSeek}${pinnedPrefs.showBookmark}${pinnedPrefs.showHistory}`
+      : "",
+  );
+
   /**
    * Перемотка на шаг из настроек (VED-388) — кнопками, клавиатурой.
    * Позицию после сдвига объявляем: кнопка сама говорит только, что
@@ -402,7 +418,6 @@ export function MiniPlayer() {
      там не заводит. Строка появляется, только когда что-то вынесено: по
      умолчанию полоса не выросла ни на точку. */
   const pinned = pinnedLayout(prefs);
-  const equalizer = pinnedEqualizer(prefs);
 
   // Ожидание важнее «играет»: пока звука нет, полоса не должна показывать
   // паузу — это единственная кнопка, по которой судят, сработало ли нажатие.
@@ -1040,80 +1055,74 @@ export function MiniPlayer() {
             вынесенных кнопок не растёт. От `sm` — своей строкой под полосой:
             в однострочной раскладке для них нет места.
 
-            На телефоне кнопки прижаты вправо, к кнопкам полосы (VED-450,
-            круг 2: «перенеси кнопку по стрелке, остальные появляются справа
-            около неё»), а эквалайзер стоит слева, посередине свободного места.
-            Эквалайзер занимает свободное место с полями по краям, но не
-            шире потолка: растянутый без меры, он расходился редкими
-            полосками. Пока ничего не вынесено — крупный, при одной-двух
-            кнопках — ниже и уже, при трёх-четырёх его нет
-            (`pinnedEqualizer`). */}
-        {(pinned !== "none" || equalizer !== "none") && (
-          <div
-            role={pinned !== "none" ? "group" : undefined}
-            aria-label={pinned !== "none" ? "Вынесенные кнопки" : undefined}
-            className={`order-5 ml-1 flex min-w-0 flex-1 items-center gap-0 min-[400px]:ml-2 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
-              pinned === "none"
-                ? "sm:hidden"
-                : pinned === "narrow"
-                  ? "lg:hidden"
-                  : ""
+            На телефоне (VED-450, круг 5) эквалайзер занимает всё свободное
+            место между управлением и кнопками, с полями по краям, а кнопки
+            прижаты вправо, к кнопкам полосы. Столбики стоят с постоянным
+            шагом: шире ряд — больше столбиков, а не реже. Когда после кнопок
+            меньше порога (`eqFits`), эквалайзера нет, а кнопки встают
+            сразу за управлением с равными зазорами. */}
+        <div
+          ref={attachPinnedRow}
+          role={pinned !== "none" ? "group" : undefined}
+          aria-label={pinned !== "none" ? "Вынесенные кнопки" : undefined}
+          className={`order-5 ml-1 flex min-w-0 flex-1 items-center gap-0 min-[400px]:ml-2 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
+            pinned === "none"
+              ? "sm:hidden"
+              : pinned === "narrow"
+                ? "lg:hidden"
+                : ""
+          }`}
+        >
+          {eqRoom && (
+            <span className="flex min-w-0 flex-1 px-3 sm:hidden">
+              <MusicPlayingBars playing={isPlaying} fill className="h-5 w-full" />
+            </span>
+          )}
+          <span
+            ref={attachPinnedButtons}
+            className={`flex items-center sm:ml-0 sm:flex-none sm:justify-center sm:gap-2 ${
+              eqRoom
+                ? "ml-auto gap-0 min-[400px]:gap-0.5"
+                : "flex-1 justify-evenly"
             }`}
           >
-            {equalizer !== "none" && (
-              <span className="flex min-w-0 flex-1 justify-center px-3 sm:hidden">
-                {/* Почти во всё свободное место, с полями до кнопок по краям
-                    (VED-450, круги 3–4): «сделай длиннее, немного оставь до
-                    краёв места» — и при одной-двух вынесенных кнопках тоже.
-                    Потолок 160px у крупного и 112px у малого: шире столбики
-                    расходятся редкими полосками. */}
-                <MusicPlayingBars
-                  playing={isPlaying}
-                  className={
-                    equalizer === "large"
-                      ? "h-5 w-full max-w-40"
-                      : "h-4 w-full min-w-11 max-w-28 max-[359px]:hidden"
-                  }
-                />
+            {prefs.showSeek && (
+              <span className="flex sm:contents lg:hidden">
+                {/* Пара перемотки — одна группа: без эквалайзера зазоры
+                    раздаются между группами, и «15 15» не разъезжаются. */}
+                <button
+                  type="button"
+                  aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
+                  onClick={() => seekStep(-1)}
+                  className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
+                >
+                  <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
+                  onClick={() => seekStep(1)}
+                  className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
+                >
+                  <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
+                </button>
               </span>
             )}
-            <span className="ml-auto flex items-center gap-0 min-[400px]:gap-0.5 sm:ml-0 sm:gap-2">
-              {prefs.showSeek && (
-                <span className="contents lg:hidden">
-                  <button
-                    type="button"
-                    aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
-                    onClick={() => seekStep(-1)}
-                    className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
-                  >
-                    <SeekStepGlyph direction={-1} seconds={prefs.seekBackSeconds} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={seekButtonLabel(1, prefs.seekForwardSeconds)}
-                    onClick={() => seekStep(1)}
-                    className={`${ctrl} h-11 min-w-9 px-0.5 min-[400px]:min-w-10 sm:min-w-11 sm:px-2 lg:h-9 lg:min-w-9`}
-                  >
-                    <SeekStepGlyph direction={1} seconds={prefs.seekForwardSeconds} />
-                  </button>
-                </span>
-              )}
-              {prefs.showBookmark && (
-                <BookmarkButton
-                  onClick={quickBookmark}
-                  className={`${ctrl} h-11 w-9 text-text-2 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
-                />
-              )}
-              {prefs.showHistory && (
-                <HistoryButton
-                  open={panelTab === "history"}
-                  onClick={() => openPanel("history")}
-                  className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
-                />
-              )}
-            </span>
-          </div>
-        )}
+            {prefs.showBookmark && (
+              <BookmarkButton
+                onClick={quickBookmark}
+                className={`${ctrl} h-11 w-9 text-text-2 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
+              />
+            )}
+            {prefs.showHistory && (
+              <HistoryButton
+                open={panelTab === "history"}
+                onClick={() => openPanel("history")}
+                className={`${ctrl} h-11 w-9 min-[400px]:w-10 sm:w-11 lg:h-9 lg:w-9`}
+              />
+            )}
+          </span>
+        </div>
 
         {panelTab && (
           <MusicPlayerSettingsPanel

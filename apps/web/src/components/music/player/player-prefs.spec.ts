@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PLAYER_PREFS,
   pinnedButtonCount,
-  pinnedEqualizer,
   pinnedLayout,
   parseStoredPrefs,
   prefsFromSettings,
@@ -88,35 +87,18 @@ describe("pinnedLayout", () => {
   });
 });
 
-describe("pinnedEqualizer (VED-450)", () => {
+describe("pinnedButtonCount (VED-450)", () => {
   const prefs = (over: Partial<PlayerPrefs>): PlayerPrefs => ({
     ...DEFAULT_PLAYER_PREFS,
     ...over,
   });
 
-  it("ничего не вынесено — эквалайзер во весь рост", () => {
+  it("перемотка — две кнопки, метка и история — по одной", () => {
     expect(pinnedButtonCount(prefs({}))).toBe(0);
-    expect(pinnedEqualizer(prefs({}))).toBe("large");
-  });
-
-  it("одна-две кнопки — эквалайзер меньше", () => {
-    expect(pinnedEqualizer(prefs({ showBookmark: true }))).toBe("small");
-    expect(pinnedEqualizer(prefs({ showBookmark: true, showHistory: true }))).toBe(
-      "small",
-    );
-    // Перемотка — две кнопки.
+    expect(pinnedButtonCount(prefs({ showBookmark: true }))).toBe(1);
     expect(pinnedButtonCount(prefs({ showSeek: true }))).toBe(2);
-    expect(pinnedEqualizer(prefs({ showSeek: true }))).toBe("small");
-  });
-
-  it("вынесено почти всё или всё — эквалайзера нет", () => {
-    expect(pinnedEqualizer(prefs({ showSeek: true, showHistory: true }))).toBe(
-      "none",
-    );
     expect(
-      pinnedEqualizer(
-        prefs({ showSeek: true, showBookmark: true, showHistory: true }),
-      ),
-    ).toBe("none");
+      pinnedButtonCount(prefs({ showSeek: true, showBookmark: true, showHistory: true })),
+    ).toBe(4);
   });
 });
