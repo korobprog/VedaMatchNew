@@ -108,6 +108,22 @@ describe("QuickPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  /* VED-472: в ленте Вдохновения — только звёздочка, без остального ряда
+     шапки, даже если человек поставил туда «Историю» и «Плеер». */
+  it("starOnly рисует только звёздочку", () => {
+    window.localStorage.setItem(
+      "vedamatch:header-toolbar",
+      JSON.stringify({ v: 1, ids: ["hotkeys", "history", "player", "bell", "avatar"] }),
+    );
+    render(
+      <NextIntlClientProvider locale="ru" messages={ru}>
+        <QuickPanel starOnly />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
+  });
+
   it("показывает набор по умолчанию", async () => {
     await openPanel();
 
