@@ -18,7 +18,10 @@ import {
   parseHomeFeatured,
   resolveHomeFeatured,
 } from "@/lib/home-featured";
-import { MemberCountLine } from "@/components/member-count-line";
+import {
+  MemberCountLine,
+  MemberCountToolbar,
+} from "@/components/member-count-line";
 import { PortalNews } from "@/components/portal-news";
 import { BlogHomeWidget } from "@/components/blog/blog-home-widget";
 import { BlogFeedToggle } from "@/components/blog/blog-feed-toggle";
@@ -387,19 +390,29 @@ export default async function Home({
              остальных настроек главной. */
           toolbarStart={
             <>
-              <FeaturedServicesEditor
-                userId={user.id}
-                current={featured.map((item) => item.key)}
-                options={featuredOptions.map(({ key, name }) => ({
-                  key,
-                  name,
-                }))}
-              />
+              {/* На месте «Кнопок» — число участников и путь к статистике
+                  (VED-504); «Кнопки» уехали вправо, к виду плиток. */}
+              {communityStats && (
+                <MemberCountToolbar
+                  userId={user.id}
+                  total={communityStats.totalMembers}
+                />
+              )}
               {/* Возврат спрятанной ленты — здесь, а не наверху: в
                   спрятанном виде верх главной обязан выглядеть как раньше.
                   Пока лента показана, кнопки нет вовсе. */}
               <BlogFeedToggle userId={user.id} hidden={!blogVisible} />
             </>
+          }
+          toolbarEnd={
+            <FeaturedServicesEditor
+              userId={user.id}
+              current={featured.map((item) => item.key)}
+              options={featuredOptions.map(({ key, name }) => ({
+                key,
+                name,
+              }))}
+            />
           }
         />
         {/* Подвал главной, под сеткой: действия людей, которые открыли

@@ -88,12 +88,16 @@ describe("ServiceGrid", () => {
   });
 
   // VED-127: «Изменить порядок» стоит сразу за «Кнопками», вид — справа.
-  it("держит «Изменить порядок» рядом с настройкой кнопок, а вид — у правого края", () => {
+  /* VED-504: «Кнопки» — у правого края, к виду; «Изменить порядок» по-прежнему
+     рядом с ними (VED-127), а левый край отдан тому, что пришло в
+     `toolbarStart`. */
+  it("держит «Изменить порядок» рядом с настройкой кнопок, а их — у вида справа", () => {
     render(
       <ServiceGrid
         services={SERVICES}
         userId={USER}
-        toolbarStart={<button type="button">Настроить кнопки</button>}
+        toolbarStart={<span>Вместе нас</span>}
+        toolbarEnd={<button type="button">Настроить кнопки</button>}
       />,
     );
 
@@ -102,7 +106,10 @@ describe("ServiceGrid", () => {
     const view = screen.getByRole("group", { name: "Вид сервисов" });
     expect(settings.nextElementSibling).toBe(reorder);
     expect(reorder.nextElementSibling).toBe(view);
-    expect(view).toHaveClass("ml-auto");
+    expect(view.parentElement).toHaveClass("ml-auto");
+    expect(screen.getByText("Вместе нас").nextElementSibling).toBe(
+      view.parentElement,
+    );
   });
 
   /**
