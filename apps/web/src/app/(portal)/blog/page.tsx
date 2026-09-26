@@ -64,39 +64,41 @@ export default async function BlogPage({
         </p>
       </div>
 
-      <nav aria-label="Разделы ленты" className="mb-4 flex gap-2">
-        <Link
-          href="/blog"
-          aria-current={favorites ? undefined : "page"}
-          className={`${tab} ${
-            favorites
-              ? "border-glass-brd text-text-1 hover:border-cyan/60"
-              : "border-cyan bg-bg-1 font-semibold text-text-0"
-          }`}
-        >
-          Все посты
-        </Link>
-        <Link
-          href="/blog?view=favorites"
-          aria-current={favorites ? "page" : undefined}
-          className={`${tab} ${
-            favorites
-              ? "border-gold bg-bg-1 font-semibold text-text-0"
-              : "border-glass-brd text-text-1 hover:border-gold/60"
-          }`}
-        >
-          Избранное
-        </Link>
-      </nav>
-
-      {settings && <BlogSettingsForm initial={settings} />}
-
+      {/* Вкладки и «Создать новый пост» — одной строкой (VED-519): форма и
+          настройки срока свёрнуты в кнопку справа от вкладок. */}
       <BlogFeed
         key={favorites ? "favorites" : "all"}
         initial={feed ?? { posts: [], nextCursor: null }}
         scope={favorites ? "favorites" : "all"}
         showComposer={!favorites}
         autoFocusComposer={compose}
+        nav={
+          <nav aria-label="Разделы ленты" className="flex gap-1.5 sm:gap-2">
+            <Link
+              href="/blog"
+              aria-current={favorites ? undefined : "page"}
+              className={`${tab} ${
+                favorites
+                  ? "border-glass-brd text-text-1 hover:border-cyan/60"
+                  : "border-cyan bg-bg-1 font-semibold text-text-0"
+              }`}
+            >
+              Все посты
+            </Link>
+            <Link
+              href="/blog?view=favorites"
+              aria-current={favorites ? "page" : undefined}
+              className={`${tab} ${
+                favorites
+                  ? "border-gold bg-bg-1 font-semibold text-text-0"
+                  : "border-glass-brd text-text-1 hover:border-gold/60"
+              }`}
+            >
+              Избранное
+            </Link>
+          </nav>
+        }
+        beforeComposer={settings && <BlogSettingsForm initial={settings} />}
       />
     </main>
   );

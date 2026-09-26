@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Plus, X } from "lucide-react";
 import type { BlogFeedResponse, BlogPostDto } from "@vedamatch/shared";
 import {
   BlogApiError,
@@ -19,13 +20,24 @@ export function BlogFeed({
   scope = "all",
   showComposer = true,
   autoFocusComposer = false,
+  nav,
+  beforeComposer,
 }: {
   initial: BlogFeedResponse;
   /** `favorites` — вкладка «Избранное» (VED-238). */
   scope?: "current" | "all" | "favorites";
   showComposer?: boolean;
+  /** Форма раскрыта сразу и в фокусе — `?new=1`, карандаш с главной. */
   autoFocusComposer?: boolean;
+  /**
+   * Вкладки ленты. Рядом с ними — «Создать новый пост» (VED-519): форма и
+   * настройки срока свёрнуты в эту кнопку и не занимают экран над постами.
+   */
+  nav?: ReactNode;
+  /** Над формой, в том же свёрнутом блоке, — настройки срока для админа. */
+  beforeComposer?: ReactNode;
 }) {
+  const [composing, setComposing] = useState(autoFocusComposer);
   const [posts, setPosts] = useState(initial.posts);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [pending, setPending] = useState(false);
@@ -65,11 +77,49 @@ export function BlogFeed({
 
   return (
     <div>
-      {showComposer && (
-        <BlogComposer
-          autoFocus={autoFocusComposer}
-          onPublished={(post) => setPosts((current) => [post, ...current])}
-        />
+      {/* Зазоры 6px на телефоне: вкладки и «Новый пост» встают в одну
+          строку и на 360 точках. */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
+        {nav}
+        {showComposer && (
+          <button
+            type="button"
+            onClick={() => setComposing((open) => !open)}
+            aria-expanded={composing}
+            aria-controls="blog-compose"
+            className="btn-mint ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold sm:gap-1.5 sm:px-3"
+          >
+            {composing ? (
+              <X aria-hidden className="size-4" />
+            ) : (
+              <Plus aria-hidden className="size-4" />
+            )}
+            {/* На телефоне короче: полная подпись с двумя вкладками в строку
+                360 точек не встаёт. */}
+            {composing ? (
+              "Свернуть"
+            ) : (
+              <>
+                <span className="sm:hidden">Новый пост</span>
+                <span className="hidden sm:inline">Создать новый пост</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {showComposer && composing && (
+        <div id="blog-compose">
+          {beforeComposer}
+          <BlogComposer
+            autoFocus
+            onPublished={(post) => {
+              setPosts((current) => [post, ...current]);
+              // Опубликовали — форма сворачивается, пост встаёт первым.
+              setComposing(false);
+            }}
+          />
+        </div>
       )}
 
       {posts.length === 0 ? (
