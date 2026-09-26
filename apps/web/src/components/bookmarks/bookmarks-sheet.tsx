@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { BookmarkPlus, Loader2, Trash2, Zap } from "lucide-react";
+import { shortQuickLabel } from "@/components/quick/quick-actions";
 import type { BookmarkDto } from "@vedamatch/shared";
 import {
   addBookmark,
@@ -186,7 +187,12 @@ export function BookmarksSheet({
                     title={`${item.title} — ${service}`}
                     className="flex min-h-11 min-w-0 flex-1 items-baseline gap-1.5 rounded-lg px-2 py-1.5 text-sm text-text-1 transition-colors hover:bg-white/4 hover:text-text-0"
                   >
-                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                    {/* Коротким именем (VED-364: «название закладки не должно
+                        состоять из более чем одного слова»): «Доска —
+                        Планировщик» — «Планировщик»; полное — в подсказке. */}
+                    <span className="min-w-0 flex-1 truncate">
+                      {shortQuickLabel(item.title)}
+                    </span>
                     <span className="shrink-0 text-[11px] text-text-1">
                       {service}
                     </span>
@@ -206,7 +212,10 @@ export function BookmarksSheet({
                           ? "Уже в панели горячих клавиш"
                           : "Создать горячую клавишу"
                       }
-                      className={`flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${
+                      // Молния ближе к корзине, корзина — к правому краю
+                      // (VED-364): поля нажатия заходят друг на друга, значки
+                      // сдвигаются, а цель остаётся не меньше 44px.
+                      className={`-mr-2 flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${
                         here
                           ? "text-mint-edge"
                           : "text-text-2 hover:text-text-0"
@@ -219,7 +228,7 @@ export function BookmarksSheet({
                     type="button"
                     onClick={() => void drop(item)}
                     aria-label={`Удалить закладку: ${item.title}`}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 transition-colors hover:text-text-0"
+                    className="-mr-3 flex size-11 shrink-0 items-center justify-center rounded-full text-text-2 transition-colors hover:text-text-0"
                   >
                     <Trash2 className="size-4" />
                   </button>
