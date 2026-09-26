@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MusicUploadForm } from "./upload-form";
 
 const uploadMusicTrack = vi.fn();
+const fetchMusicUploadUsage = vi.fn();
 
 vi.mock("@/lib/music-client-api", () => ({
   uploadMusicTrack: (...args: unknown[]) => uploadMusicTrack(...args),
+  fetchMusicUploadUsage: () => fetchMusicUploadUsage(),
 }));
 
 vi.mock("@/lib/music-playback-api", () => ({ getTrack: vi.fn() }));
@@ -26,6 +28,8 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
 }
 
 beforeEach(() => {
+  // По умолчанию сведений о месте нет — решает сервер, как раньше.
+  fetchMusicUploadUsage.mockReset().mockRejectedValue(new Error("offline"));
   uploadMusicTrack.mockReset().mockResolvedValue({
     trackId: "t1",
     status: "published",
@@ -133,5 +137,64 @@ describe("MusicUploadForm — из редактора книги (VED-297)", () 
         "book-1",
       ),
     );
+  });
+});
+
+describe("MusicUploadForm — место для загрузок", () => {
+  it("не поместившиеся файлы не отправляет и пишет одно сообщение", async () => {
+    const user = userEvent.setup();
+    // Свободно 10 байт: первый файл (4 байта) влезает, второй (20) — нет.
+    fetchMusicUploadUsage.mockResolvedValue({
+      usedBytes: 90,
+      quotaBytes: 100,
+      maxUploadBytes: 1000,
+      acceptedMime: ["audio/mpeg"],
+    });
+    render(<MusicUploadForm />);
+
+    await user.upload(screen.getByLabelText(/Файлы/i), [
+      new File(["звук"], "one.mp3", { type: "audio/mpeg" }),
+      new File(["a".repeat(20)], "two.mp3", { type: "audio/mpeg" }),
+    ]);
+    await user.selectOptions(
+      screen.getByLabelText(/Основание/i),
+      "own_recording",
+    );
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Не поместилось 1 из 2/)).toBeInTheDocument(),
+    );
+    expect(uploadMusicTrack).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("нет места")).toBeInTheDocument();
+  });
+
+  it("отказ сервера по квоте останавливает партию", async () => {
+    const user = userEvent.setup();
+    uploadMusicTrack.mockRejectedValue(
+      new Error(
+        "Закончилось место. Удалите старые загрузки или напишите в поддержку.",
+      ),
+    );
+    render(<MusicUploadForm />);
+
+    await user.upload(screen.getByLabelText(/Файлы/i), [
+      new File(["1"], "a.mp3", { type: "audio/mpeg" }),
+      new File(["2"], "b.mp3", { type: "audio/mpeg" }),
+      new File(["3"], "c.mp3", { type: "audio/mpeg" }),
+    ]);
+    await user.selectOptions(
+      screen.getByLabelText(/Основание/i),
+      "own_recording",
+    );
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Ни один файл не поместился/),
+      ).toBeInTheDocument(),
+    );
+    expect(uploadMusicTrack).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("нет места")).toHaveLength(3);
   });
 });
