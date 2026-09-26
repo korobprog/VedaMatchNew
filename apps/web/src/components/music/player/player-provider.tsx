@@ -47,6 +47,7 @@ import {
 } from "@/lib/music/media-error";
 import {
   findSavedTrack,
+  markOfflinePlayed,
   type MusicOfflineTrack,
 } from "@/lib/music/offline-db";
 import {
@@ -514,6 +515,8 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
         // Хранилище недоступно (приватный режим, запрет) — идём в сеть.
       }
       if (saved && wantedTrackRef.current === trackId) setCurrent(saved.track);
+      // Копию включили — автоочистка не тронет её ещё месяц.
+      if (saved) void markOfflinePlayed(savedFor, trackId).catch(() => {});
     }
 
     const track = await getTrack(trackId);

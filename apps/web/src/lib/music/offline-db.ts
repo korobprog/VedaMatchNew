@@ -35,6 +35,14 @@ export interface MusicOfflineTrack {
   sizeBytes: number;
   mime: string;
   savedAt: string;
+  /**
+   * Откуда копия: `upload` — оставлена заливкой и чистится сама
+   * (`offline-evict.ts`), `download` — скачана кнопкой и не трогается. У
+   * записей, сохранённых раньше, поля нет — они считаются скачанными.
+   */
+  origin?: "upload" | "download";
+  /** Когда копию последний раз включали в плеере. */
+  lastPlayedAt?: string;
 }
 
 interface MusicDbSchema extends DBSchema {
@@ -111,6 +119,18 @@ export async function listOfflineTracks(
 
 export async function listOfflineTrackIds(db: MusicDb): Promise<string[]> {
   return db.getAllKeys("tracks") as Promise<string[]>;
+}
+
+/** Отметить, что копию включали: автоочистка смотрит на это время. */
+export async function markOfflinePlayed(
+  userId: string,
+  trackId: string,
+  at: Date = new Date(),
+): Promise<void> {
+  const db = await openMusicDb(userId);
+  const record = await getOfflineTrack(db, trackId);
+  if (!record) return;
+  await putOfflineTrack(db, { ...record, lastPlayedAt: at.toISOString() });
 }
 
 /**

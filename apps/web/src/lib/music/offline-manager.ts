@@ -1,8 +1,10 @@
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { fetchTrackStreamUrl } from "@/lib/music-playback-api";
 import { canFitOffline } from "./offline-capacity";
+import { pickOfflineEvictions } from "./offline-evict";
 import {
   deleteOfflineTrack,
+  listOfflineTracks,
   getOfflineTrack,
   listOfflineTrackIds,
   openMusicDb,
@@ -109,6 +111,8 @@ export async function saveTrackOffline(
     sizeBytes: body.size,
     mime,
     savedAt: new Date().toISOString(),
+    // Скачано кнопкой — человек сам просил, автоочистка это не трогает.
+    origin: "download",
   };
 
   const db = await openMusicDb(userId);
@@ -135,8 +139,13 @@ export async function keepUploadedTrackOffline(
   track: MusicTrackDto,
   file: Blob,
 ): Promise<MusicOfflineTrack> {
-  const estimate = await currentEstimate();
-  const verdict = canFitOffline(estimate, file.size);
+  let verdict = canFitOffline(await currentEstimate(), file.size);
+  // Не хватает места — сначала освобождаем его от старых автоматических
+  // копий (самые давно не слушанные), а не отказываем человеку.
+  if (!verdict.ok) {
+    const freed = await evictAutoCopies(userId, file.size);
+    if (freed > 0) verdict = canFitOffline(await currentEstimate(), file.size);
+  }
   if (!verdict.ok) throw new Error(verdict.reason);
 
   await requestPersistence();
@@ -149,6 +158,7 @@ export async function keepUploadedTrackOffline(
     // У файла с диска тип бывает пустым — браузер не всегда его определяет.
     mime: file.type || "audio/mpeg",
     savedAt: new Date().toISOString(),
+    origin: "upload",
   };
 
   const db = await openMusicDb(userId);
@@ -205,6 +215,28 @@ export async function removeTrackOffline(
  * отозвано, а чистить «на всякий случай» значит отнять у человека музыку
  * ровно тогда, когда он в самолёте.
  */
+/**
+ * Автоочистка копий, оставленных заливкой (`offline-evict.ts`): просроченные
+ * всегда, а при `needBytes > 0` — ещё давно не слушанные, пока не
+ * освободится столько. Возвращает, сколько байт освобождено.
+ */
+export async function evictAutoCopies(
+  userId: string,
+  needBytes = 0,
+  now: Date = new Date(),
+): Promise<number> {
+  const db = await openMusicDb(userId);
+  const copies = await listOfflineTracks(db);
+  const ids = new Set(pickOfflineEvictions(copies, needBytes, now));
+  let freed = 0;
+  for (const copy of copies) {
+    if (!ids.has(copy.trackId)) continue;
+    await deleteOfflineTrack(db, copy.trackId);
+    freed += copy.sizeBytes;
+  }
+  return freed;
+}
+
 export async function dropRevokedTracks(
   userId: string,
   stillAllowed: (ids: string[]) => Promise<string[] | null>,
