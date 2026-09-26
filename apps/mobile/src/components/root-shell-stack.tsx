@@ -1,12 +1,25 @@
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useReducedMotion } from 'react-native-reanimated';
 import { ConferenceReturn } from '@/components/chat/conference-return';
+import { OfflineBannerFrame } from '@/components/startup/offline-banner';
+import { StartupOfflineScreen } from '@/components/startup/startup-offline-screen';
 import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
 import { PushBridge } from '@/lib/push/push-bridge';
 import { quickPinsStore } from '@/lib/services/quick-pins-store';
+import { useConnectivity } from '@/lib/startup/connectivity';
+import {
+  decideStartupView,
+  shouldAutoRetryRestore,
+  shouldReloadProfile,
+  shouldShowOfflineBanner,
+  STARTUP_STALL_MS,
+  type Connectivity,
+  type SessionStatusLike,
+} from '@/lib/startup/startup-decision';
 import { TelegramShell } from '@/lib/telegram/telegram-shell';
 import { useTheme } from '@/theme/theme';
 
@@ -16,8 +29,11 @@ import { useTheme } from '@/theme/theme';
  * провайдеров (`RootProviders`), см. оба файла.
  *
  * Гость видит только экран входа, вошедший — только вкладки. Пока сессия
- * восстанавливается, не показываем ничего: мигание экрана входа перед чатами
- * выглядит как разлогин.
+ * восстанавливается, показываем пустой фон темы: мигание экрана входа перед
+ * чатами выглядит как разлогин. Если восстановление затянулось — экран «Нет
+ * соединения» с «Повторить» (раньше тут был `return null` и вечный белый
+ * экран без сети, Realme, Android 12); вошедший без сети видит вкладки с
+ * плашкой. Решения — `lib/startup/startup-decision.ts`.
  *
  * Третья развилка — онбординг новичка (VED-333): у вошедшего без пола или
  * этапа пути доступен ровно один экран вопросов, и он стоит ВЫШЕ вкладок,
@@ -33,9 +49,39 @@ export function RootStack() {
   );
 }
 
+/**
+ * Сколько длится «загрузка» сессии — чтобы через `STARTUP_STALL_MS` сменить
+ * пустой фон на экран повтора. Отсчёт от первого рендера: «загрузка» бывает
+ * только на старте, выход из аккаунта ведёт сразу в `'guest'`.
+ */
+function useLoadingForMs(status: SessionStatusLike): number {
+  const [startedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(startedAt);
+  useEffect(() => {
+    if (status !== 'loading') return undefined;
+    const remaining = STARTUP_STALL_MS - (Date.now() - startedAt);
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, remaining));
+    return () => clearTimeout(timer);
+  }, [status, startedAt]);
+  return now - startedAt;
+}
+
+/** Предыдущее значение сети — чтобы поймать именно момент возвращения. */
+function usePrevious(value: Connectivity): Connectivity {
+  const ref = useRef<Connectivity>(value);
+  const previous = ref.current;
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return previous;
+}
+
 function RootStackInner() {
   const { scheme, colors } = useTheme();
-  const { status } = useSession();
+  const { status, user, reloadUser, retryRestore } = useSession();
+  const connectivity = useConnectivity();
+  const previousConnectivity = usePrevious(connectivity);
+  const view = decideStartupView({ status, loadingForMs: useLoadingForMs(status) });
   const onboarding = useOnboardingGate();
   // Полноэкранный плеер Медиатеки выезжает снизу из мини-плеера; при
   // «уменьшить движение» — проявляется на месте (VED-331).
@@ -46,9 +92,41 @@ function RootStackInner() {
   useEffect(() => {
     void quickPinsStore.load();
   }, []);
-  if (status === 'loading') return null;
+
+  // «Повторить» на экране «Нет соединения»: кнопка занята, пока не пройдёт
+  // ещё один срок ожидания или сессия не решится (экран тогда уйдёт сам).
+  const [retrying, setRetrying] = useState(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retry = useCallback(() => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    setRetrying(true);
+    retryRestore();
+    retryTimer.current = setTimeout(() => setRetrying(false), STARTUP_STALL_MS);
+  }, [retryRestore]);
+  useEffect(() => () => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+  }, []);
+
+  // Сеть вернулась: на экране повтора — повторяем сами; во вкладках без
+  // профиля (пустили без сети) — догружаем профиль.
+  useEffect(() => {
+    if (shouldAutoRetryRestore({ view, previous: previousConnectivity, current: connectivity })) retry();
+    if (shouldReloadProfile({ status, hasUser: Boolean(user), previous: previousConnectivity, current: connectivity })) {
+      reloadUser().catch(() => undefined);
+    }
+  }, [connectivity, previousConnectivity, view, status, user, retry, reloadUser]);
+
+  if (view === 'splash') return <View style={{ flex: 1, backgroundColor: colors.bg0 }} />;
+  if (view === 'stalled') {
+    return (
+      <>
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <StartupOfflineScreen connectivity={connectivity} retrying={retrying} onRetry={retry} />
+      </>
+    );
+  }
   return (
-    <>
+    <OfflineBannerFrame visible={shouldShowOfflineBanner({ status, connectivity })}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <PushBridge />
       {/* Возврат в конференцию после входа (VED-360): здесь по той же
@@ -194,6 +272,6 @@ function RootStackInner() {
             «Конференция не открылась» без токена (сборка 1026). */}
         <Stack.Screen name="j/[token]" />
       </Stack>
-    </>
+    </OfflineBannerFrame>
   );
 }

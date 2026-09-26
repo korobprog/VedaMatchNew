@@ -23,6 +23,13 @@ import { reactToTokenChange } from './session-token-reaction';
 import { tokenAuthority } from './token-authority';
 import type { TokenPair } from './token-store';
 import { unregisterDevice } from '@/lib/push/push-api';
+import { probeConnectivity } from '@/lib/startup/connectivity';
+import {
+  NETWORK_PROBE_TIMEOUT_MS,
+  PROFILE_RESTORE_TIMEOUT_MS,
+  profileRestorePlan,
+  settleWithin,
+} from '@/lib/startup/startup-decision';
 
 /**
  * Сессия приложения: токены в защищённом хранилище, обновление access-токена
@@ -89,6 +96,13 @@ export interface Session {
    * старое имя до перезапуска приложения.
    */
   reloadUser(): Promise<void>;
+  /**
+   * Начать восстановление сессии заново — кнопка «Повторить» на экране
+   * «Нет соединения» (`startup-offline-screen.tsx`), когда старт затянулся
+   * дольше `STARTUP_STALL_MS`. Токены не трогает: отсутствие сети — не
+   * повод выходить из аккаунта.
+   */
+  retryRestore(): void;
 }
 
 /** Сколько максимум ждать все `registerBeforeSignOut`-колбэки в сумме,
@@ -245,9 +259,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStatus('signed');
   }, [api]);
 
+  // Счётчик попыток восстановления: «Повторить» на экране «Нет соединения»
+  // увеличивает его, и эффект ниже запускается заново.
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const retryRestore = useCallback(() => setRestoreAttempt((n) => n + 1), []);
+
   // Восстановление при запуске: токены из хранилища (через `tokenAuthority`
   // — если фоновая задача уже что-то туда писала до первого рендера
   // приложения, подхватится оно), профиль с сервера.
+  //
+  // Без сети профиль не ждём вовсе, с сетью — не дольше
+  // `PROFILE_RESTORE_TIMEOUT_MS` (`startup-decision.ts`): у `fetch` на
+  // Android нет своего таймаута, и раньше запрос без сети мог держать
+  // приложение на пустом белом экране бесконечно (Realme, Android 12).
+  // Запрос профиля при этом не бросаем — успеет позже, `loadProfile` сам
+  // положит пользователя; не успеет — догрузит корневой стек, когда сеть
+  // вернётся (`shouldReloadProfile`).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -258,19 +285,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return;
       }
       scheduleRefresh(stored.accessToken);
-      try {
-        await loadProfile();
-      } catch {
-        // Профиль не загрузился, а сессия не сброшена: сеть. Пускаем в
-        // приложение с тем, что есть, профиль догрузится позже.
-        if (tokenAuthority.peekAccessToken()) setStatus('signed');
+      const plan = profileRestorePlan(await probeConnectivity(NETWORK_PROBE_TIMEOUT_MS));
+      if (cancelled) return;
+      const profile = loadProfile();
+      let loaded = false;
+      if (plan === 'wait') {
+        loaded = Boolean((await settleWithin(profile, PROFILE_RESTORE_TIMEOUT_MS))?.ok);
+      } else {
+        profile.catch(() => undefined);
       }
+      if (cancelled || loaded) return;
+      // Профиль не загрузился (сеть, таймаут), а сессия не сброшена: пускаем
+      // в приложение с тем, что есть, профиль догрузится позже. Если сервер
+      // явно отверг токен, `tokenAuthority` уже стёр его — тогда здесь пусто
+      // и остаётся экран входа.
+      if (tokenAuthority.peekAccessToken()) setStatus((current) => (current === 'loading' ? 'signed' : current));
     })();
     return () => {
       cancelled = true;
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, [loadProfile, scheduleRefresh]);
+  }, [loadProfile, scheduleRefresh, restoreAttempt]);
 
   // Токены могли обновиться не отсюда — фоновое отклонение звонка (тот же
   // `tokenAuthority` в том же процессе). Подписка регистрируется один раз
@@ -379,6 +414,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signOut,
       registerBeforeSignOut,
       reloadUser: loadProfile,
+      retryRestore,
     }),
     [
       status,
@@ -393,6 +429,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signOut,
       registerBeforeSignOut,
       loadProfile,
+      retryRestore,
     ],
   );
 

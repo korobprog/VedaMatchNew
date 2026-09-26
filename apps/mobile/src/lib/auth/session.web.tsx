@@ -40,6 +40,10 @@ const BEFORE_SIGN_OUT_TIMEOUT_MS = 2000;
 const SessionContext = createContext<Session | null>(null);
 
 
+function reloadPage(): void {
+  window.location.reload();
+}
+
 function currentPath(): string {
   const { pathname, search } = window.location;
   return pathname === '/login' ? '/' : `${pathname}${search}`;
@@ -143,6 +147,9 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       signOut,
       registerBeforeSignOut,
       reloadUser: loadProfile,
+      // Веб: заново — это перезагрузка страницы; её же делает браузер сам,
+      // и незачем держать вторую копию логики восстановления.
+      retryRestore: reloadPage,
     }),
     [
       status,
@@ -372,6 +379,9 @@ function TelegramTokenSessionProvider({
       signOut,
       registerBeforeSignOut,
       reloadUser: loadProfile,
+      // Веб: заново — это перезагрузка страницы; её же делает браузер сам,
+      // и незачем держать вторую копию логики восстановления.
+      retryRestore: reloadPage,
     }),
     [status, user, api, apiOrigin, loginError, getAccessToken, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut, loadProfile],
   );
