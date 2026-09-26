@@ -10,6 +10,7 @@ import { portalLocationLabels, portalLocationTitle } from "@/lib/portal-location
 import {
   nextPortalWindow,
   portalWindowButtonHint,
+  portalWindowNumber,
   portalWindowTargetUrl,
 } from "@/lib/portal-windows";
 import { getPlaybackState } from "@/lib/music-playback-api";
@@ -61,6 +62,8 @@ export function usePortalWindowSwitch() {
   return {
     hint: portalWindowButtonHint(state, title),
     options: portalLocationLabels(portalWindowTargetUrl(state), names),
+    /** Номер окна, куда ведёт кнопка (VED-469): цифрой в углу значка. */
+    number: portalWindowNumber(nextPortalWindow(state, state.windows.length)),
     go,
   };
 }
