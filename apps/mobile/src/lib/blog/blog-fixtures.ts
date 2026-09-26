@@ -24,6 +24,8 @@ export function blogPost(id: string, overrides: Partial<BlogPostDto> = {}): Blog
     canManage: false,
     canModerate: false,
     favorited: false,
+    liked: false,
+    likeCount: 0,
     ...overrides,
   };
 }

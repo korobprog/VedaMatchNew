@@ -11,6 +11,7 @@ import {
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
   type BlogFavoriteResponse,
+  type BlogLikeResponse,
   type BlogFeedResponse,
   type BlogHomeFeedResponse,
   type BlogImageRejection,
@@ -81,6 +82,7 @@ const POST_SELECT_BASE = {
   feedUntil: true,
   pinned: true,
   repostCount: true,
+  likeCount: true,
   createdAt: true,
   editedAt: true,
   // Нужен не карточке, а праву на правку: репост не правится никем.
@@ -114,6 +116,11 @@ function postSelect(viewerId: string) {
   return {
     ...POST_SELECT_BASE,
     favorites: {
+      where: { userId: viewerId },
+      select: { userId: true },
+      take: 1,
+    },
+    likes: {
       where: { userId: viewerId },
       select: { userId: true },
       take: 1,
@@ -629,6 +636,67 @@ export class BlogService {
     return null;
   }
 
+  // ---- «Нравится» (VED-505) --------------------------------------------
+
+  /**
+   * Поставить или снять «Нравится». Идемпотентно, как избранное: счётчик
+   * меняется, только когда строка действительно появилась или исчезла.
+   */
+  async setLike(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    liked: boolean,
+  ): Promise<BlogLikeResponse> {
+    const post = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true },
+    });
+    if (!post) throw new NotFoundException('post_not_found');
+
+    if (liked) {
+      const viewer = await this.viewer(userId, viewerIsAdmin);
+      if (viewer.hiddenUserIds.has(post.authorId) && post.authorId !== userId) {
+        throw new NotFoundException('post_not_found');
+      }
+    }
+
+    const likeCount = await this.prisma.$transaction(async (tx) => {
+      if (liked) {
+        const created = await tx.blogLike.createMany({
+          data: [{ userId, postId: id }],
+          skipDuplicates: true,
+        });
+        if (created.count > 0) {
+          const row = await tx.blogPost.update({
+            where: { id },
+            data: { likeCount: { increment: 1 } },
+            select: { likeCount: true },
+          });
+          return row.likeCount;
+        }
+      } else {
+        const removed = await tx.blogLike.deleteMany({
+          where: { userId, postId: id },
+        });
+        if (removed.count > 0) {
+          const row = await tx.blogPost.update({
+            where: { id },
+            data: { likeCount: { decrement: 1 } },
+            select: { likeCount: true },
+          });
+          return Math.max(0, row.likeCount);
+        }
+      }
+      const row = await tx.blogPost.findUniqueOrThrow({
+        where: { id },
+        select: { likeCount: true },
+      });
+      return row.likeCount;
+    });
+    return { liked, likeCount };
+  }
+
   // ---- избранное (VED-238) ---------------------------------------------
 
   /**
@@ -932,5 +1000,7 @@ function toPostDto(row: PostRow, viewer: Viewer, now: Date): BlogPostDto {
     canManage: row.authorId === viewer.userId || viewer.isAdmin,
     canModerate: viewer.isAdmin,
     favorited: row.favorites.length > 0,
+    liked: row.likes.length > 0,
+    likeCount: row.likeCount,
   };
 }

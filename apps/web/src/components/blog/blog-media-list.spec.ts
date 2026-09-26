@@ -42,6 +42,8 @@ function post(over: Partial<BlogPostDto> = {}): BlogPostDto {
     canManage: false,
     canModerate: false,
     favorited: false,
+    liked: false,
+    likeCount: 0,
     ...over,
   };
 }

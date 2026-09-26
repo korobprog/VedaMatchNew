@@ -12,6 +12,7 @@
  * странице событием, чтобы они перестроились сразу, без перезагрузки.
  */
 export type PostAction =
+  | "like"
   | "speak"
   | "copy"
   | "favorite"
@@ -21,6 +22,9 @@ export type PostAction =
   | "delete";
 
 export const POST_ACTIONS_DEFAULT_ORDER: readonly PostAction[] = [
+  // «Нравится» (VED-505) — первой: заказчик поставил её сразу за «Далее».
+  // У тех, кто уже менял порядок, она встанет в конец — порядок их.
+  "like",
   "speak",
   "copy",
   "favorite",
@@ -31,6 +35,7 @@ export const POST_ACTIONS_DEFAULT_ORDER: readonly PostAction[] = [
 ];
 
 export const POST_ACTION_LABELS: Record<PostAction, string> = {
+  like: "Нравится",
   speak: "Слушать",
   copy: "Копировать",
   favorite: "Избранное",

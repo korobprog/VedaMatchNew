@@ -28,11 +28,18 @@ describe("порядок кнопок под постом (VED-509)", () => {
 
   it("сдвиг на шаг, у края — без изменений", () => {
     const order = [...POST_ACTIONS_DEFAULT_ORDER];
-    expect(movePostAction(order, "copy", -1).slice(0, 2)).toEqual([
+    expect(movePostAction(order, "copy", -1).slice(1, 3)).toEqual([
       "copy",
       "speak",
     ]);
-    expect(movePostAction(order, "speak", -1)).toEqual(order);
+    expect(movePostAction(order, "like", -1)).toEqual(order);
     expect(movePostAction(order, "delete", 1)).toEqual(order);
+  });
+
+  it("«Нравится» (VED-505) у сохранённого раньше порядка встаёт в конец", () => {
+    const saved = POST_ACTIONS_DEFAULT_ORDER.filter((id) => id !== "like");
+    const order = parsePostActionsOrder(JSON.stringify(saved));
+    expect(order[order.length - 1]).toBe("like");
+    expect(POST_ACTIONS_DEFAULT_ORDER[0]).toBe("like");
   });
 });

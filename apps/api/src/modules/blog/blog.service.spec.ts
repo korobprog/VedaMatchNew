@@ -37,11 +37,13 @@ function storedPost(over: Record<string, unknown> = {}) {
     feedUntil: null,
     pinned: false,
     repostCount: 0,
+    likeCount: 0,
     createdAt: new Date('2026-09-21T10:00:00.000Z'),
     editedAt: null,
     author,
     images: [],
     favorites: [],
+    likes: [],
     repostOf: null,
     ...over,
   };
@@ -390,6 +392,71 @@ describe('BlogService media', () => {
     ]);
     expect(post.media.map((item) => item.kind)).toEqual(['video', 'photo']);
     expect(post.favorited).toBe(true);
+  });
+});
+
+describe('BlogService likes (VED-505)', () => {
+  function withLikes(created: number, removed: number, count: number) {
+    const built = build(storedPost());
+    const prisma = built.prisma as unknown as Record<
+      string,
+      Record<string, jest.Mock>
+    >;
+    prisma.blogLike = {
+      createMany: fn(() => Promise.resolve({ count: created })),
+      deleteMany: fn(() => Promise.resolve({ count: removed })),
+    };
+    prisma.blogPost.update = fn(() => Promise.resolve({ likeCount: count }));
+    prisma.blogPost.findUniqueOrThrow = fn(() =>
+      Promise.resolve({ likeCount: count }),
+    );
+    return { ...built, prisma };
+  }
+
+  it('likes once and bumps the counter', async () => {
+    const { service, prisma } = withLikes(1, 0, 3);
+
+    await expect(
+      service.setLike('viewer', false, 'post-1', true),
+    ).resolves.toEqual({ liked: true, likeCount: 3 });
+    expect(prisma.blogLike.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'viewer', postId: 'post-1' }],
+      skipDuplicates: true,
+    });
+    expect(prisma.blogPost.update).toHaveBeenCalledWith({
+      where: { id: 'post-1' },
+      data: { likeCount: { increment: 1 } },
+      select: { likeCount: true },
+    });
+  });
+
+  it('a second like leaves the counter alone', async () => {
+    const { service, prisma } = withLikes(0, 0, 3);
+
+    await expect(
+      service.setLike('viewer', false, 'post-1', true),
+    ).resolves.toEqual({ liked: true, likeCount: 3 });
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+  });
+
+  it('unlike decrements only when there was a like', async () => {
+    const { service, prisma } = withLikes(0, 1, 2);
+
+    await expect(
+      service.setLike('viewer', false, 'post-1', false),
+    ).resolves.toEqual({ liked: false, likeCount: 2 });
+    expect(prisma.blogPost.update).toHaveBeenCalledWith({
+      where: { id: 'post-1' },
+      data: { likeCount: { decrement: 1 } },
+      select: { likeCount: true },
+    });
+  });
+
+  it('answers 404 for a missing post', async () => {
+    const built = build(null);
+    await expect(
+      built.service.setLike('viewer', false, 'post-1', true),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 

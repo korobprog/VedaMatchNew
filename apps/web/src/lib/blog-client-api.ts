@@ -11,6 +11,7 @@ import type {
   BlogAuthorFeedResponse,
   BlogFavoriteResponse,
   BlogFeedResponse,
+  BlogLikeResponse,
   BlogPostCreatedResponse,
   BlogPostDto,
   BlogPostUpdatedResponse,
@@ -114,6 +115,17 @@ export function fetchBlogFeed(
 export function fetchBlogFavorites(cursor?: string): Promise<BlogFeedResponse> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   return request<BlogFeedResponse>(`/blog/favorites${query}`);
+}
+
+/** «Нравится» и его снятие (VED-505). */
+export function setBlogLike(
+  id: string,
+  liked: boolean,
+): Promise<BlogLikeResponse> {
+  return request<BlogLikeResponse>(
+    `/blog/posts/${encodeURIComponent(id)}/like`,
+    { method: liked ? "PUT" : "DELETE" },
+  );
 }
 
 export function setBlogFavorite(

@@ -472,6 +472,7 @@ model User {
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
   blogFavorites                      BlogFavorite[]
+  blogLikes                          BlogLike[]
 
   @@index([accountStatus])
   @@index([birthDate])
@@ -7102,6 +7103,9 @@ model BlogPost {
   /// Денормализованный счётчик: в карточке он нужен всегда, а подзапрос на
   /// каждый пост ленты — нет.
   repostCount Int        @default(0)
+  /// Сколько раз пост отметили «Нравится» (VED-505). Денормализован по той
+  /// же причине, что и repostCount.
+  likeCount   Int        @default(0)
 
   /// Ссылка на материал другого сервиса (VED-490): пост отправлен в ленту
   /// кнопкой «В Блог-ленту», например из Образования. Снимок на момент
@@ -7120,6 +7124,7 @@ model BlogPost {
 
   images    BlogPostImage[]
   favorites BlogFavorite[]
+  likes     BlogLike[]
 
   @@index([pinned, createdAt(sort: Desc)])
   @@index([feedUntil])
@@ -7166,6 +7171,20 @@ enum BlogMediaKind {
 /// не флаг поста. Cascade в обе стороны: удалённый пост уходит из избранного
 /// у всех, а удалённый аккаунт — со своим избранным.
 model BlogFavorite {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+  @@index([postId])
+}
+
+/// «Нравится» участника (VED-505): сердечко под постом. Как и избранное —
+/// своё у каждого, одна строка на человека и пост; число у поста в
+/// BlogPost.likeCount.
+model BlogLike {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   postId    String

@@ -11,6 +11,7 @@ import Link from "next/link";
 import {
   Copy,
   Check,
+  Heart,
   Pencil,
   Repeat2,
   Trash2,
@@ -27,6 +28,7 @@ import {
   deleteBlogPost,
   repostBlogPost,
   setBlogFavorite,
+  setBlogLike,
   setBlogPostPinned,
 } from "@/lib/blog-client-api";
 import { BlogMedia } from "./blog-media";
@@ -106,6 +108,8 @@ export function BlogPostCard({
     expanded,
   );
   const favorited = post.favorited ?? false;
+  const liked = post.liked ?? false;
+  const likeCount = post.likeCount ?? 0;
 
   /** Выход из правки возвращает клавиатуру на кнопку, которой её открыли. */
   function closeEditor() {
@@ -166,6 +170,28 @@ export function BlogPostCard({
     }
   }
 
+  /**
+   * «Нравится» (VED-505). Сердечко и число меняются сразу, как звёздочка
+   * избранного, а после ответа число берётся с сервера: пока шёл запрос,
+   * пост могли отметить и другие.
+   */
+  async function toggleLike() {
+    const next = !liked;
+    setError(null);
+    onChanged?.({
+      ...post,
+      liked: next,
+      likeCount: Math.max(0, likeCount + (next ? 1 : -1)),
+    });
+    try {
+      const saved = await setBlogLike(post.id, next);
+      onChanged?.({ ...post, liked: saved.liked, likeCount: saved.likeCount });
+    } catch (cause) {
+      onChanged?.({ ...post, liked, likeCount });
+      setError(cause instanceof BlogApiError ? cause.message : "Не вышло.");
+    }
+  }
+
   async function togglePin() {
     setPending(true);
     setError(null);
@@ -182,6 +208,22 @@ export function BlogPostCard({
   // кнопкой рядом с «Поделиться» на странице поста, и он один на всю ленту.
   const actionOrder = usePostActionsOrder();
   const actions: Record<PostAction, ReactNode> = {
+    like: (
+      <button
+        key="like"
+        type="button"
+        onClick={toggleLike}
+        aria-pressed={liked}
+        className={`${ACTION} hover:border-magenta/60`}
+      >
+        <Heart
+          aria-hidden
+          className={`size-3.5 ${liked ? "fill-magenta text-magenta" : ""}`}
+        />
+        <span className={ACTION_LABEL}>Нравится</span>
+        {likeCount > 0 && <span className="text-text-2">{likeCount}</span>}
+      </button>
+    ),
     speak: <BlogSpeakButton key="speak" post={post} />,
     copy: (
       <button
