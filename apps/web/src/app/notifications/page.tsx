@@ -19,11 +19,16 @@ export default async function NotificationsPage() {
   return (
     <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
-      <main className="mx-auto max-w-3xl px-4 py-8 pb-28">
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <main className="relative mx-auto max-w-3xl px-4 py-8 pb-28">
+        {/* Место справа под «Историю» (VED-435): она стоит в углу, выше и
+            правее заголовка, и не должна на него наезжать. */}
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pr-12 min-[400px]:pr-28">
           <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
             Уведомления
           </h1>
+          {/* «История» — в правом верхнем углу, выше и ближе к краю, чем
+              заголовок (VED-435, «подвинь кнопку выше и ближе к правому
+              краю»). */}
           {/* История уведомлений (VED-404) — тем же значком, что «История»
               переходов на панели быстрых кнопок (VED-392): заказчик просил
               «по типу истории навигации, такой же значок». Полное имя для
@@ -33,7 +38,7 @@ export default async function NotificationsPage() {
             href="/notifications/history"
             aria-label="История уведомлений"
             title="История уведомлений"
-            className="glass inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-glass-brd px-3 text-sm font-medium text-text-1 transition-colors hover:border-magenta/40 hover:text-text-0 min-[400px]:px-4"
+            className="glass absolute right-2 top-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-glass-brd px-3 text-sm font-medium text-text-1 transition-colors hover:border-magenta/40 hover:text-text-0 min-[400px]:px-4"
           >
             <History className="h-[18px] w-[18px]" aria-hidden="true" />
             {/* На 320–360 заголовок «Уведомления» шрифтом Unbounded и подпись
