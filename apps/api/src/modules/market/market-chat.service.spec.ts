@@ -1,5 +1,19 @@
 import { NotFoundException } from '@nestjs/common';
 import { MarketChatService } from './market-chat.service';
+import { MarketAvatarService } from './market-avatar.service';
+
+/** Подпись фото без S3: ключ превращается в узнаваемую «подписанную» ссылку. */
+function fakeAvatars() {
+  const avatars = new MarketAvatarService({ get: () => undefined } as never);
+  const resolve = jest
+    .spyOn(avatars, 'resolveAvatarUrl')
+    .mockImplementation((user) =>
+      Promise.resolve(
+        user.avatarKey ? `https://signed/${user.avatarKey}` : user.avatarUrl,
+      ),
+    );
+  return { avatars, resolve };
+}
 
 const chatRow = {
   id: 'c1',
@@ -15,7 +29,13 @@ const chatRow = {
     logoUrl: null,
     ownerId: 'seller',
   },
-  buyer: { id: 'buyer', name: 'B', spiritualName: null, avatarUrl: null },
+  buyer: {
+    id: 'buyer',
+    name: 'B',
+    spiritualName: null,
+    avatarUrl: null as string | null,
+    avatarKey: null as string | null,
+  },
 };
 
 function makeService(opts: {
@@ -49,11 +69,13 @@ function makeService(opts: {
       findMany: jest.fn().mockResolvedValue(opts.messages ?? []),
     },
   };
+  const { avatars, resolve } = fakeAvatars();
   const service = new MarketChatService(
     prisma as never,
     { emit: jest.fn() } as never,
+    avatars,
   );
-  return { service, prisma };
+  return { service, prisma, resolve };
 }
 
 describe('MarketChatService.start — повод должен принадлежать сделке', () => {
@@ -129,5 +151,46 @@ describe('MarketChatService.open — последние сообщения в х
     expect(state.messages.map((m) => m.id)).toEqual(['m1', 'm2', 'm3']);
     // Превью — по самому свежему сообщению.
     expect(state.chat.lastMessagePreview).toBe('m3');
+  });
+});
+
+describe('MarketChatService.open — фото собеседника (VED-492)', () => {
+  it('загруженное фото покупателя подписывается по разу и без ключа наружу', async () => {
+    const buyer = {
+      id: 'buyer',
+      name: 'B',
+      spiritualName: null,
+      avatarUrl: null,
+      avatarKey: 'avatars/buyer.webp',
+    };
+    const mk = (id: string) => ({
+      id,
+      conversationId: 'c1',
+      body: id,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      editedAt: null,
+      readAt: null,
+      fromUserId: 'buyer',
+      fromUser: { ...buyer },
+    });
+    const { service, prisma, resolve } = makeService({
+      messages: [mk('m2'), mk('m1')],
+    });
+    prisma.marketConversation.findUnique.mockResolvedValue({
+      ...chatRow,
+      buyer: { ...buyer },
+    });
+
+    const state = await service.open('seller', 'c1');
+
+    expect(state.chat.buyer?.avatarUrl).toBe(
+      'https://signed/avatars/buyer.webp',
+    );
+    expect(state.messages.map((m) => m.author?.avatarUrl)).toEqual([
+      'https://signed/avatars/buyer.webp',
+      'https://signed/avatars/buyer.webp',
+    ]);
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(state)).not.toContain('avatarKey');
   });
 });

@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { WorkSpacesService } from './work-spaces.service';
+import type { WorkAvatarService } from './work-avatar.service';
 
 /**
  * Приём ИИ-агента в среду. Единственный путь, которым служебный аккаунт туда
@@ -34,7 +35,14 @@ function createService(options: {
       findMany: userFindMany,
     },
   } as unknown as PrismaService;
-  return { service: new WorkSpacesService(prisma), memberCreate, userFindMany };
+  const avatars = {
+    signAvatars: jest.fn(() => Promise.resolve()),
+  } as unknown as WorkAvatarService;
+  return {
+    service: new WorkSpacesService(prisma, avatars),
+    memberCreate,
+    userFindMany,
+  };
 }
 
 describe('WorkSpacesService.agentsForSpace', () => {

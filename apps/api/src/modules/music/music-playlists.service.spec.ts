@@ -5,6 +5,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import { PortalAccessService } from '../access/access.service';
 import { MusicCoversService } from './music-covers.service';
 import { MusicPlaylistsService } from './music-playlists.service';
+import { MusicAvatarService } from './music-avatar.service';
 import { MusicStorageService } from './music-storage.service';
 
 const config = { get: () => undefined } as unknown as ConfigService;
@@ -90,6 +91,7 @@ const service = (p: ReturnType<typeof prismaMock>) =>
     covers(),
     new PortalAccessService(p as unknown as PrismaService),
     config,
+    new MusicAvatarService(config),
   );
 
 describe('MusicPlaylistsService.getOne', () => {

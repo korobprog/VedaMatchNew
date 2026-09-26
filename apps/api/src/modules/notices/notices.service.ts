@@ -73,6 +73,7 @@ import {
   type UploadedImageFile,
 } from './notice-images.service';
 import { NoticesSubscriptionsService } from './notices-subscriptions.service';
+import { NoticesAvatarService } from './notices-avatar.service';
 import {
   NOTICE_VALIDATION_MESSAGES,
   parseDate,
@@ -108,6 +109,7 @@ export class NoticesService {
     private readonly images: NoticeImagesService,
     private readonly subscriptions: NoticesSubscriptionsService,
     private readonly bus: EventEmitter2,
+    private readonly avatars: NoticesAvatarService,
   ) {}
 
   /**
@@ -191,6 +193,7 @@ export class NoticesService {
     const hasMore = rows.length > filters.limit;
     const page = hasMore ? rows.slice(0, filters.limit) : rows;
     const last = page.at(-1);
+    await this.avatars.signAvatars(page.map((row) => row.author));
     return {
       items: page.map((row) =>
         toNoticeDto(row, viewer.userId, now, viewer.isAdmin),
@@ -225,6 +228,7 @@ export class NoticesService {
         data: { viewsCount: { increment: 1 } },
       });
     }
+    await this.avatars.signAvatars([row.author]);
     return toNoticeDto(row, viewer.userId, now, viewer.isAdmin);
   }
 
@@ -517,6 +521,7 @@ export class NoticesService {
       title: created.titleRu ?? created.titleEn,
       audience: created.audience,
     });
+    await this.avatars.signAvatars([created.author]);
     return toNoticeDto(created, userId, now);
   }
 
@@ -624,6 +629,7 @@ export class NoticesService {
       await this.recountRubric(rubric.id);
       await this.recountRubric(notice.rubricId);
     }
+    await this.avatars.signAvatars([updated.author]);
     return toNoticeDto(updated, userId, now);
   }
 
@@ -656,6 +662,7 @@ export class NoticesService {
       include: NOTICE_INCLUDE,
     });
     await this.recountRubric(notice.rubricId);
+    await this.avatars.signAvatars([updated.author]);
     return toNoticeDto(updated, userId, now);
   }
 
@@ -677,6 +684,7 @@ export class NoticesService {
       },
       include: NOTICE_INCLUDE,
     });
+    await this.avatars.signAvatars([updated.author]);
     return toNoticeDto(updated, userId, now);
   }
 

@@ -11,6 +11,7 @@ import { readBillingMode } from '../billing/billing-mode';
 import { RewardsAccountsService } from './rewards-accounts.service';
 import { RewardsLedgerService } from './rewards-ledger.service';
 import { RewardsSettingsService } from './rewards-settings.service';
+import { RewardsAvatarService } from './rewards-avatar.service';
 import { revokedIds } from './rewards-balance';
 
 const PAGE_SIZE = 20;
@@ -23,6 +24,7 @@ export class RewardsService {
     private readonly accounts: RewardsAccountsService,
     private readonly ledger: RewardsLedgerService,
     private readonly settings: RewardsSettingsService,
+    private readonly avatars: RewardsAvatarService,
   ) {}
 
   async me(userId: string): Promise<RewardsMeDto> {
@@ -77,6 +79,9 @@ export class RewardsService {
       );
     }
 
+    await this.avatars.signAvatars(
+      [...direct, ...second].map((row) => row.invitee),
+    );
     const toDto = (
       row: (typeof direct)[number],
       level: 1 | 2,
@@ -137,7 +142,13 @@ export class RewardsService {
       awardedAt: true,
       inviteeId: true,
       invitee: {
-        select: { name: true, spiritualName: true, avatarUrl: true },
+        select: {
+          name: true,
+          spiritualName: true,
+          avatarUrl: true,
+          // Загруженное фото — подписываем по ключу, наружу не едет (VED-492).
+          avatarKey: true,
+        },
       },
     } as const;
 

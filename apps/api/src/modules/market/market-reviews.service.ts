@@ -18,6 +18,7 @@ import type {
 } from '@vedamatch/shared';
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MarketAvatarService } from './market-avatar.service';
 import {
   isValidRating,
   ratingBreakdown,
@@ -40,7 +41,14 @@ const REVIEW_SELECT = {
   createdAt: true,
   authorId: true,
   author: {
-    select: { id: true, name: true, spiritualName: true, avatarUrl: true },
+    select: {
+      id: true,
+      name: true,
+      spiritualName: true,
+      avatarUrl: true,
+      // Загруженное фото — подписываем по ключу, наружу ключ не едет (VED-492).
+      avatarKey: true,
+    },
   },
 } satisfies Prisma.MarketReviewSelect;
 
@@ -53,6 +61,7 @@ export class MarketReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly avatars: MarketAvatarService,
   ) {}
 
   /**
@@ -129,6 +138,7 @@ export class MarketReviewsService {
     } satisfies NotificationEvent;
     this.events.emit(event.name, event);
 
+    await this.avatars.signAvatars([created.author]);
     return toReviewDto(created, userId, false);
   }
 
@@ -159,6 +169,7 @@ export class MarketReviewsService {
       this.prisma.marketReview.findMany({ where, select: { rating: true } }),
     ]);
 
+    await this.avatars.signAvatars(rows.map((row) => row.author));
     return {
       items: rows.map((row) => toReviewDto(row, viewerId, viewerIsAdmin)),
       total,
@@ -176,7 +187,9 @@ export class MarketReviewsService {
       where: { orderId },
       select: REVIEW_SELECT,
     });
-    return review ? toReviewDto(review, viewerId, false) : null;
+    if (!review) return null;
+    await this.avatars.signAvatars([review.author]);
+    return toReviewDto(review, viewerId, false);
   }
 
   /**
@@ -279,6 +292,7 @@ export class MarketReviewsService {
               name: true,
               spiritualName: true,
               avatarUrl: true,
+              avatarKey: true,
             },
           },
         },
@@ -286,6 +300,7 @@ export class MarketReviewsService {
       this.prisma.marketListingComment.count({ where }),
     ]);
 
+    await this.avatars.signAvatars(rows.map((row) => row.user));
     return {
       items: rows.map((row) => ({
         id: row.id,
@@ -346,6 +361,7 @@ export class MarketReviewsService {
               name: true,
               spiritualName: true,
               avatarUrl: true,
+              avatarKey: true,
             },
           },
         },
@@ -357,6 +373,7 @@ export class MarketReviewsService {
       return comment;
     });
 
+    await this.avatars.signAvatars([created.user]);
     return {
       id: created.id,
       listingId: created.listingId,

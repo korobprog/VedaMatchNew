@@ -22,6 +22,7 @@ import {
   type VacancyResponseStatusChangedEvent,
 } from './vacancy-events';
 import { VacanciesService } from './vacancies.service';
+import { VacanciesAvatarService } from './vacancies-avatar.service';
 
 const AUTHOR_DECISIONS: UpdateVacancyResponseStatusRequest['status'][] = [
   'in_dialog',
@@ -39,6 +40,7 @@ export class VacanciesResponsesService {
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
     private readonly offers: VacanciesService,
+    private readonly avatars: VacanciesAvatarService,
   ) {}
 
   async create(
@@ -104,6 +106,7 @@ export class VacanciesResponsesService {
       message,
     };
     this.events.emit(event.name, event);
+    await this.avatars.signAvatars([row.user]);
     return toResponseDto(row);
   }
 
@@ -125,6 +128,7 @@ export class VacanciesResponsesService {
       include: RESPONSE_INCLUDE,
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+    await this.avatars.signAvatars(rows.map((row) => row.user));
     return { items: rows.map(toResponseDto) };
   }
 
@@ -136,6 +140,7 @@ export class VacanciesResponsesService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     const sentToday = await this.countToday(userId);
+    await this.avatars.signAvatars(rows.map((row) => row.user));
     return {
       items: rows.map(toResponseDto),
       remainingToday: Math.max(0, VACANCY_RESPONSES_PER_DAY - sentToday),
@@ -163,7 +168,10 @@ export class VacanciesResponsesService {
       throw new BadRequestException('Соискатель отозвал отклик');
     if (row.status === 'accepted' || row.status === 'declined')
       throw new BadRequestException('По этому отклику уже есть решение');
-    if (row.status === body.status) return toResponseDto(row);
+    if (row.status === body.status) {
+      await this.avatars.signAvatars([row.user]);
+      return toResponseDto(row);
+    }
 
     const updated = await this.prisma.vacancyResponse.update({
       where: { id: responseId },
@@ -184,6 +192,7 @@ export class VacanciesResponsesService {
       status: body.status,
     };
     this.events.emit(event.name, event);
+    await this.avatars.signAvatars([updated.user]);
     return toResponseDto(updated);
   }
 

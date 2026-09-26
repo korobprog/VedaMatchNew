@@ -9,6 +9,7 @@ import { RewardsAdminService } from './rewards-admin.service';
 import { RewardsLedgerService } from './rewards-ledger.service';
 import { RewardsListener } from './rewards.listener';
 import { RewardsReferralsService } from './rewards-referrals.service';
+import { RewardsAvatarService } from './rewards-avatar.service';
 import { RewardsService } from './rewards.service';
 import { RewardsSettingsService } from './rewards-settings.service';
 import { RewardsSpendService } from './rewards-spend.service';
@@ -25,6 +26,7 @@ import { RewardsWorkerService } from './rewards-worker.service';
   controllers: [RewardsController, AdminRewardsController],
   providers: [
     RewardsService,
+    RewardsAvatarService,
     RewardsAccountsService,
     RewardsLedgerService,
     RewardsSettingsService,

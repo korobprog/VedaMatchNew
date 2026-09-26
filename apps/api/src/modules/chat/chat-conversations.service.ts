@@ -40,6 +40,7 @@ import {
   type ChatConversationRow,
   type ChatMessageRow,
 } from './chat-dto';
+import { attachAvatarKey, avatarKeyOf } from './chat-avatar-key';
 import { ChatEventsService } from './chat-events.service';
 import { ChatPresenceService } from './chat-presence.service';
 import { liveCallByConversation } from './calls/group/group-call-room';
@@ -188,7 +189,11 @@ export class ChatConversationsService {
             : { id: 'unknown', name: 'Профиль удалён', avatarUrl: null },
           message: message ? toMessageDto(message, userId) : null,
           createdAt: row.createdAt.toISOString(),
-          lowTrust: !fromRow?.user.avatarUrl && communities === 0,
+          // Загруженное фото — тоже фото, хоть `avatarUrl` у него пуст.
+          lowTrust:
+            !fromRow?.user.avatarUrl &&
+            !fromRow?.user.avatarKey &&
+            communities === 0,
         };
       }),
     );
@@ -268,20 +273,25 @@ export class ChatConversationsService {
       select: { id: true },
     });
 
-    return {
-      ...summary,
-      description: row.description,
-      pinnedMessage: row.pinnedMessage
-        ? toMessageDto(row.pinnedMessage, userId)
-        : null,
-      members: row.members.map(toMemberDto),
-      messages: page.map((message) =>
-        toMessageDto(message as ChatMessageRow, userId, othersLastReadAt),
-      ),
-      hasMore,
-      myRole: mine?.role ?? 'member',
-      isConference: Boolean(conferenceLink),
-    };
+    // Пометка фото собеседника — не перечисляемое свойство и спредом не
+    // копируется; переносим её явно (VED-492).
+    return attachAvatarKey(
+      {
+        ...summary,
+        description: row.description,
+        pinnedMessage: row.pinnedMessage
+          ? toMessageDto(row.pinnedMessage, userId)
+          : null,
+        members: row.members.map(toMemberDto),
+        messages: page.map((message) =>
+          toMessageDto(message as ChatMessageRow, userId, othersLastReadAt),
+        ),
+        hasMore,
+        myRole: mine?.role ?? 'member',
+        isConference: Boolean(conferenceLink),
+      },
+      avatarKeyOf(summary),
+    );
   }
 
   /**

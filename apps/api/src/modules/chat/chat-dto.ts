@@ -18,6 +18,7 @@ import {
   type ChatUserSummary,
 } from '@vedamatch/shared';
 import { canWrite } from './chat-access';
+import { attachAvatarKey, avatarKeyOf } from './chat-avatar-key';
 
 /**
  * Сборка того, что уезжает в браузер. Отдельным модулем: полей много, и
@@ -29,7 +30,11 @@ import { canWrite } from './chat-access';
 export type ChatUserRow = Pick<
   User,
   'id' | 'name' | 'spiritualName' | 'avatarUrl'
-> & { lastSeenAt?: Date | null };
+> & {
+  lastSeenAt?: Date | null;
+  /** Загруженное фото; подписывает перехватчик, наружу не едет (VED-492). */
+  avatarKey?: string | null;
+};
 
 export type ChatMessageRow = ChatMessage & {
   author: ChatUserRow;
@@ -58,13 +63,18 @@ export type ChatConversationRow = ChatConversation & {
 };
 
 export function toUserSummary(row: ChatUserRow): ChatUserSummary {
-  return {
-    id: row.id,
-    // Имя собирает resolveDisplayName, а не user.name — правило контракта.
-    name: resolveDisplayName(row),
-    avatarUrl: row.avatarUrl,
-    lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
-  };
+  // Ключ загруженного фото — символом: ссылку по нему подпишет
+  // ChatSignedUrlsInterceptor, а в JSON ключ не попадёт (VED-492).
+  return attachAvatarKey(
+    {
+      id: row.id,
+      // Имя собирает resolveDisplayName, а не user.name — правило контракта.
+      name: resolveDisplayName(row),
+      avatarUrl: row.avatarUrl,
+      lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+    },
+    row.avatarKey,
+  );
 }
 
 export function toAttachmentDto(row: ChatAttachment): ChatAttachmentDto {
@@ -207,43 +217,48 @@ export function toConversationSummary(
   const { title, companion, avatarUrl } = conversationTitle(row, viewerId);
   const now = new Date();
 
-  return {
-    id: row.id,
-    kind: row.kind,
-    state: row.state,
-    visibility: row.visibility,
-    title,
-    avatarUrl,
-    companion,
-    community: row.community
-      ? {
-          id: row.community.id,
-          slug: row.community.slug,
-          name: row.community.name,
-        }
-      : null,
-    membersCount:
-      row._count?.members ?? row.members.filter((m) => !m.leftAt).length,
-    unreadCount: extra.unreadCount,
-    muted: Boolean(mine?.mutedUntil && mine.mutedUntil > now),
-    pinned: Boolean(mine?.pinnedAt),
-    official: row.official,
-    canWrite: canWrite(
-      {
-        kind: row.kind,
-        state: row.state,
-        requestedById: row.requestedById,
-        messageCount: extra.messageCount,
-      },
-      mine
-        ? { userId: mine.userId, role: mine.role, leftAt: mine.leftAt }
+  // Картинка личного диалога — фото собеседника, и загруженное фото
+  // подписывается так же, как у него самого (VED-492).
+  return attachAvatarKey(
+    {
+      id: row.id,
+      kind: row.kind,
+      state: row.state,
+      visibility: row.visibility,
+      title,
+      avatarUrl,
+      companion,
+      community: row.community
+        ? {
+            id: row.community.id,
+            slug: row.community.slug,
+            name: row.community.name,
+          }
         : null,
-    ),
-    lastMessage: extra.lastMessage ?? null,
-    lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
-    context: toConversationContext(row),
-    activeGroupCallId: extra.activeGroupCallId ?? null,
-  };
+      membersCount:
+        row._count?.members ?? row.members.filter((m) => !m.leftAt).length,
+      unreadCount: extra.unreadCount,
+      muted: Boolean(mine?.mutedUntil && mine.mutedUntil > now),
+      pinned: Boolean(mine?.pinnedAt),
+      official: row.official,
+      canWrite: canWrite(
+        {
+          kind: row.kind,
+          state: row.state,
+          requestedById: row.requestedById,
+          messageCount: extra.messageCount,
+        },
+        mine
+          ? { userId: mine.userId, role: mine.role, leftAt: mine.leftAt }
+          : null,
+      ),
+      lastMessage: extra.lastMessage ?? null,
+      lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
+      context: toConversationContext(row),
+      activeGroupCallId: extra.activeGroupCallId ?? null,
+    },
+    companion ? avatarKeyOf(companion) : null,
+  );
 }
 
 /**

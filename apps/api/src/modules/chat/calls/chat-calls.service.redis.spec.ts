@@ -7,6 +7,7 @@ import type { ChatConversationsService } from '../chat-conversations.service';
 import type { ChatEventsService } from '../chat-events.service';
 import { BUSY_TTL_ACTIVE_MS } from './call-state';
 import { ChatCallsService } from './chat-calls.service';
+import { PeopleAvatarService } from '../people/people-avatar.service';
 
 /**
  * Redis-ветка хранения сигналов (VED-261, feedback-001.md, блокирующие
@@ -164,6 +165,7 @@ function buildServiceWithRedis(row = callRow()) {
     events as unknown as ChatEventsService,
     bus as unknown as EventEmitter2,
     config,
+    new PeopleAvatarService(config),
   );
   const redis = lastRedis!;
   return { service, events, redis };
