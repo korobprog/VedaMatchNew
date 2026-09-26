@@ -9,7 +9,9 @@ import {
 } from '@vedamatch/shared';
 import {
   WORK_TASK_CLOSED_EVENT,
+  WORK_TASK_HANDLED_EVENT,
   type WorkTaskClosedEvent,
+  type WorkTaskHandledEvent,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NativePushService } from './native-push.service';
@@ -921,6 +923,46 @@ describe('NotificationsListener wiring', () => {
       'space-1',
       'VED-380',
       ['agent', 'stas'],
+    );
+
+    await app.close();
+  });
+
+  it('has a live @OnEvent handler for work.task.handled (VED-522)', async () => {
+    // Поработал с задачей сам — его старые уведомления о ней гаснут, а не
+    // перекрашиваются в новый статус и не стоят наверху «Нового».
+    const notifications = {
+      readClosedWorkTask: jest.fn(() => Promise.resolve(1)),
+    };
+    const moduleRef = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
+      providers: [
+        NotificationsListener,
+        { provide: NotificationsService, useValue: notifications },
+        { provide: PushSenderService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
+        { provide: NativePushService, useValue: {} },
+        { provide: TelegramNotificationsService, useValue: {} },
+        { provide: TelegramSenderService, useValue: {} },
+      ],
+    }).compile();
+
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    const emitter = moduleRef.get(EventEmitter2);
+
+    emitter.emit(WORK_TASK_HANDLED_EVENT, {
+      name: WORK_TASK_HANDLED_EVENT,
+      spaceId: 'space-1',
+      taskKey: 'VED-516',
+      actorId: 'stas',
+      onBehalfOfId: null,
+    } satisfies WorkTaskHandledEvent);
+
+    expect(notifications.readClosedWorkTask).toHaveBeenCalledWith(
+      'space-1',
+      'VED-516',
+      ['stas', null],
     );
 
     await app.close();
