@@ -15,7 +15,7 @@ const artistsWord = (n: number) =>
  * Рядом с массовой простановкой корневой категории и тем же приёмом:
  * редакция размечает чтеца один раз — и все его записи, включая будущие,
  * уходят в раздел «Аудиокниги» и пропадают из общего каталога. Обратное
- * действие — той же панелью: ошибочно отмеченного возвращают в каталог Музыки
+ * действие — той же панелью: ошибочно отмеченного возвращают в каталог Медиатеки
  * одним нажатием, а не по одной записи.
  */
 export function MusicBulkArtistAudiobookBar({
@@ -44,8 +44,8 @@ export function MusicBulkArtistAudiobookBar({
       const what = `${result.updated} ${artistsWord(result.updated)}`;
       setDone(
         isAudiobook
-          ? `${what} — записи ушли из каталога Музыки. Соберите их в книги во вкладке «Аудиокниги».`
-          : `${what} — записи вернулись в каталог Музыки.`,
+          ? `${what} — записи ушли из каталога Медиатеки. Соберите их в книги во вкладке «Аудиокниги».`
+          : `${what} — записи вернулись в каталог Медиатеки.`,
       );
       onClear();
       router.refresh();
@@ -88,7 +88,7 @@ export function MusicBulkArtistAudiobookBar({
           onClick={() => void apply(false)}
           className="h-9 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
         >
-          Вернуть в каталог Музыки
+          Вернуть в каталог Медиатеки
         </button>
       </div>
 

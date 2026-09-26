@@ -7,7 +7,7 @@ import {
 } from "@/lib/music-admin-api";
 
 export const metadata: Metadata = {
-  title: "Радио Музыки",
+  title: "Радио Медиатеки",
   robots: { index: false, follow: false },
 };
 

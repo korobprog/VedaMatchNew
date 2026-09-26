@@ -1,6 +1,12 @@
 import Link from "next/link";
-import type { MusicAudiobookKind } from "@vedamatch/shared";
+import { canAdminService, type MusicAudiobookKind } from "@vedamatch/shared";
+import { getProfile } from "@/lib/api";
 import { getMusicAudiobooks } from "@/lib/music-api";
+import {
+  getMusicAdminArtists,
+  getMusicAdminAudiobooks,
+} from "@/lib/music-admin-api";
+import { MusicAudiobooksEditor } from "./admin/audiobooks-editor";
 import { plural } from "@/lib/plural";
 import { MusicAudiobookCard } from "./audiobook-card";
 import { AUDIOBOOK_KIND_COPY } from "./audiobook-kind";
@@ -19,7 +25,22 @@ export async function MusicAudiobookSectionPage({
   kind: MusicAudiobookKind;
 }) {
   const copy = AUDIOBOOK_KIND_COPY[kind];
-  const page = await getMusicAudiobooks(kind);
+  const [page, user] = await Promise.all([
+    getMusicAudiobooks(kind),
+    getProfile().catch(() => null),
+  ]);
+  // Редакция Медиатеки заводит книги прямо здесь (VED-237: «добавление
+  // аудиокниг для админов не из админки, а прямо в Медиатеке, иначе долго»).
+  // Остальным за данными редактора не ходим.
+  const isMusicEditor = user
+    ? canAdminService(
+        { role: user.role, adminServices: user.adminServices },
+        "music",
+      )
+    : false;
+  const [adminBooks, adminArtists] = isMusicEditor
+    ? await Promise.all([getMusicAdminAudiobooks(), getMusicAdminArtists()])
+    : [null, null];
 
   if (!page) {
     return (
@@ -47,7 +68,7 @@ export async function MusicAudiobookSectionPage({
           href="/music"
           className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
         >
-          <span aria-hidden="true">←</span> Музыка
+          <span aria-hidden="true">←</span> Медиатека
         </Link>
 
         <header className="mt-2 flex flex-col gap-1.5">
@@ -63,6 +84,25 @@ export async function MusicAudiobookSectionPage({
           </div>
           <p className="text-sm text-text-2">{copy.lead}</p>
         </header>
+
+        {/* Тот же редактор, что во вкладке админки: новая книга, главы из
+            загруженных записей или новые загрузки, порядок, публикация.
+            Свёрнут, чтобы не заслонять раздел самой редакции. */}
+        {isMusicEditor && adminBooks && (
+          <details className="mt-5 rounded-2xl border border-glass-brd bg-bg-1 p-3">
+            <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-text-0">
+              Добавить и править: {copy.section}
+            </summary>
+            <div className="mt-3">
+              <MusicAudiobooksEditor
+                kind={kind}
+                books={adminBooks.books}
+                unassigned={adminBooks.unassigned}
+                artists={adminArtists?.items ?? []}
+              />
+            </div>
+          </details>
+        )}
 
         {books.length === 0 ? (
           <p className="mt-8 text-sm text-text-1">{copy.empty}</p>

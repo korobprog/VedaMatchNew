@@ -4,7 +4,7 @@ import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
 
 /**
- * Оболочка админки Музыки: право на сервис и заголовок раздела. Шапка и
+ * Оболочка админки Медиатеки: право на сервис и заголовок раздела. Шапка и
  * сайдбар приходят из общего layout админки.
  */
 export default async function AdminMusicLayout({
@@ -19,7 +19,7 @@ export default async function AdminMusicLayout({
   return (
     <>
       <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
-        Управление Музыкой
+        Управление Медиатекой
       </h1>
       {children}
     </>
