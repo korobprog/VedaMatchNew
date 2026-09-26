@@ -21,7 +21,7 @@ import {
   X,
   Home,
   HeartHandshake,
-  LifeBuoy,
+  Users,
   Bell,
   Gift,
   MoreHorizontal,
@@ -507,13 +507,17 @@ export function Header({ user }: { user: UserProfile }) {
                     <Gift size={20} />
                     <span className="text-sm">{t("rewards")}</span>
                   </Link>
+                  {/* «Админ» (VED-420, было «Поддержка») — та же подпись и
+                      значок, что у горячей кнопки: одна и та же страница не
+                      должна называться в меню и в панели по-разному. */}
                   <Link
                     href="/support"
                     onClick={closeDrawer}
+                    title="Вопрос, новость или сообщение о поломке — администрации портала"
                     className="flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-cyan hover:bg-glass transition-colors"
                   >
-                    <LifeBuoy size={20} />
-                    <span className="text-sm">{tCommon("support")}</span>
+                    <Users size={20} />
+                    <span className="text-sm">{t("adminContact")}</span>
                   </Link>
                   {/* «Поддержать» рядом с «Поддержкой» (VED-11, VED-12,
                       VED-62): до этого просьба о помощи жила только кнопкой

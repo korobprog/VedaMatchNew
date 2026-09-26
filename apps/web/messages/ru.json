@@ -26,6 +26,7 @@
     }
   },
   "Header": {
+    "adminContact": "Админ",
     "beta": "Beta",
     "services": "Сервисы",
     "moreServices": "Остальные сервисы",
