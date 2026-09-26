@@ -263,14 +263,16 @@ export function MiniPlayer() {
   );
 
   // Место эквалайзеру во втором ряду телефона (VED-450, круг 5) — по замеру
-  // ряда, а не по числу вынесенных кнопок. 24 — его поля `px-3`.
+  // ряда, а не по числу вынесенных кнопок. 16 — его поле справа (`pr-4`),
+  // 6 — зазор внутри пары перемотки (`gap-1.5`, круг 6): кнопки меряются
+  // по одной, и зазор между ними в их ширину не входит.
   const pinnedPrefs = player?.prefs;
   const {
     room: eqRoom,
     attachRow: attachPinnedRow,
     attachButtons: attachPinnedButtons,
   } = useEqualizerRoom(
-    24,
+    16 + (pinnedPrefs?.showSeek ? 6 : 0),
     pinnedPrefs ? pinnedButtonCount(pinnedPrefs) <= 2 : true,
     pinnedPrefs
       ? `${pinnedPrefs.showSeek}${pinnedPrefs.showBookmark}${pinnedPrefs.showHistory}`
@@ -1074,7 +1076,11 @@ export function MiniPlayer() {
           }`}
         >
           {eqRoom && (
-            <span className="flex min-w-0 flex-1 px-3 sm:hidden">
+            /* Поля несимметричны нарочно (VED-450, круг 6): слева до
+               столбиков и так ~19 точек — поля ряда и кнопки «Дальше», —
+               справа у кнопок полей почти нет. `pr-4` без левого поля даёт
+               по ~19 с обеих сторон; с `px-3` было 31 слева и 15 справа. */
+            <span className="flex min-w-0 flex-1 pr-4 sm:hidden">
               <MusicPlayingBars playing={isPlaying} fill className="h-5 w-full" />
             </span>
           )}
@@ -1087,9 +1093,10 @@ export function MiniPlayer() {
             }`}
           >
             {prefs.showSeek && (
-              <span className="flex sm:contents lg:hidden">
+              <span className="flex gap-1.5 sm:contents lg:hidden">
                 {/* Пара перемотки — одна группа: без эквалайзера зазоры
-                    раздаются между группами, и «15 15» не разъезжаются. */}
+                    раздаются между группами, и «15 15» не разъезжаются.
+                    Внутри пары 6px (круг 6): вплотную «15 15» сливались. */}
                 <button
                   type="button"
                   aria-label={seekButtonLabel(-1, prefs.seekBackSeconds)}
