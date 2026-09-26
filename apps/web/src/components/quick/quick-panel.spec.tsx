@@ -201,11 +201,29 @@ describe("QuickPanel", () => {
       "history",
       "player",
       "app",
+      "radio",
+      "blog",
     ]);
   });
 
+  /* VED-502, VED-534, VED-506: «Радио» включает радио на месте, «Блог-лента»
+     ведёт в ленту постов. */
+  it("«Радио» — кнопка на месте, «Блог-лента» — ссылка на ленту", async () => {
+    window.localStorage.setItem(STORAGE_KEY, '{"v":8,"ids":["radio","blog"]}');
+    await openPanel({ admin: true });
+
+    expect(screen.getByRole("button", { name: "Радио" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("link", { name: "Блог-лента" })).toHaveAttribute(
+      "href",
+      "/blog",
+    );
+  });
+
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":7,"ids":[]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":8,"ids":[]}');
     // Опустошить панель может только админ: у остальных три кнопки
     // закреплены (VED-326), и пустой она не бывает.
     await openPanel({ admin: true });
@@ -628,7 +646,7 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
   it("в настройке панели «Меню» нет, а старая запись его теряет", async () => {
     window.localStorage.setItem(
       STORAGE_KEY,
-      '{"v":7,"ids":["search","donate","invite","menu","info"]}',
+      '{"v":8,"ids":["search","donate","invite","menu","info"]}',
     );
     const user = renderPanel({ onOpenMenu: vi.fn() });
     await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));
