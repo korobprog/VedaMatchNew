@@ -158,7 +158,7 @@ describe("Header", () => {
     expect(screen.queryByRole("button", { name: "История" })).toBeNull();
     const star = screen.getByRole("button", { name: "Горячие кнопки" });
     const bell = screen.getByRole("link", { name: "Колокольчик" });
-    const avatar = screen.getByRole("link", { name: "Р" });
+    const avatar = screen.getByRole("link", { name: "Радха" });
     const menu = screen.getByRole("button", { name: "Меню" });
     const order = [star, bell, avatar, menu];
     for (let i = 1; i < order.length; i += 1)
@@ -326,7 +326,7 @@ describe("Header: верхняя панель", { timeout: 20000 }, () => {
     expect(search).toHaveAttribute("href", "/search");
     expect(
       JSON.parse(window.localStorage.getItem("vedamatch:header-toolbar")!),
-    ).toEqual({ v: 1, ids: ["hotkeys", "search", "bell", "avatar"] });
+    ).toEqual({ v: 2, ids: ["hotkeys", "search", "bell", "avatar"] });
 
     // Звёздочка осталась одна из двух входов — её галочку не снять.
     const star = within(settings).getByRole("switch", { name: /^Горячие кнопки/ });
@@ -355,14 +355,34 @@ describe("Header: верхняя панель", { timeout: 20000 }, () => {
     ).toEqual(["hotkeys", "bell", "avatar", "menu"]);
   });
 
-  it("колокольчик и аватар закреплены", () => {
+  it("колокольчик закреплён", () => {
     renderHeader();
     const settings = openHeaderSettings();
-    for (const name of [/^Уведомления/, /^Профиль/])
-      expect(within(settings).getByRole("switch", { name })).toHaveAttribute(
-        "aria-disabled",
-        "true",
-      );
+    expect(
+      within(settings).getByRole("switch", { name: /^Уведомления/ }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
+  /* VED-480: «Сделай возможность прятать профиль в боковое меню». */
+  it("убранный из шапки профиль стоит в боковом меню рядом с «Главной»", () => {
+    renderHeader();
+    const settings = openHeaderSettings();
+    fireEvent.click(within(settings).getByRole("switch", { name: /^Профиль/ }));
+    fireEvent.click(within(settings).getByRole("button", { name: "Закрыть" }));
+
+    expect(screen.queryByRole("link", { name: "Радха" })).not.toBeInTheDocument();
+    const menu = openMenu();
+    expect(within(menu).getByRole("link", { name: "Радха" })).toHaveAttribute(
+      "href",
+      "/profile",
+    );
+  });
+
+  it("профиль в шапке — в боковом меню его нет", () => {
+    renderHeader();
+    expect(screen.getByRole("link", { name: "Радха" })).toBeInTheDocument();
+    const menu = openMenu();
+    expect(within(menu).queryByRole("link", { name: "Радха" })).not.toBeInTheDocument();
   });
 
   it("звёздочка возвращается в шапку, даже если её убрали раньше (VED-412)", () => {

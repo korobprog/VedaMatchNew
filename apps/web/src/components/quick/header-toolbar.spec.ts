@@ -8,6 +8,7 @@ import {
   headerToggleBlock,
   headerToggleNote,
   moveHeaderItem,
+  headerShowsAvatar,
   parseHeaderToolbar,
   resolveHeaderToolbar,
   serializeHeaderToolbar,
@@ -64,11 +65,10 @@ describe("header toolbar", () => {
       ).toEqual(["hotkeys", "bell", "avatar", "menu"]);
     });
 
-    it("возвращает колокольчик и аватар, если их нет в записи, — перед последним «Меню»", () => {
+    it("возвращает колокольчик, если его нет в записи, — перед последним «Меню»", () => {
       expect(resolveHeaderToolbar(["hotkeys", "menu"], known)).toEqual([
         "hotkeys",
         "bell",
-        "avatar",
         "menu",
       ]);
       expect(resolveHeaderToolbar(["menu", "search"], known)).toEqual([
@@ -76,8 +76,14 @@ describe("header toolbar", () => {
         "menu",
         "search",
         "bell",
-        "avatar",
       ]);
+    });
+
+    /* VED-480: аватар можно убрать в боковое меню — выбор не отменяется. */
+    it("убранный аватар не возвращается сам", () => {
+      expect(
+        resolveHeaderToolbar(["hotkeys", "bell", "menu"], known),
+      ).toEqual(["hotkeys", "bell", "menu"]);
     });
 
     it("звёздочка возвращается первой, даже если её убирали раньше (VED-412)", () => {
@@ -127,11 +133,32 @@ describe("header toolbar", () => {
       ]);
     });
 
-    it("колокольчик и аватар закреплены", () => {
+    it("колокольчик закреплён, аватар убирается и встаёт обратно на место", () => {
       expect(headerToggleBlock(DEFAULT_HEADER_ITEMS, "bell")).toBe("fixed");
-      expect(toggleHeaderItem(DEFAULT_HEADER_ITEMS, "avatar")).toEqual(
-        DEFAULT_HEADER_ITEMS,
-      );
+      const without = toggleHeaderItem(DEFAULT_HEADER_ITEMS, "avatar");
+      expect(without).toEqual(["hotkeys", "bell", "menu"]);
+      expect(headerShowsAvatar(without)).toBe(false);
+      // Возвращается к правому краю, перед «Меню», даже при полном ряду.
+      const full = ["hotkeys", "search", "history", "player", "bell", "menu"];
+      expect(headerToggleBlock(full, "avatar")).toBeNull();
+      expect(toggleHeaderItem(full, "avatar")).toEqual([
+        "hotkeys",
+        "search",
+        "history",
+        "player",
+        "bell",
+        "avatar",
+        "menu",
+      ]);
+    });
+
+    it("запись первой версии без аватара получает его обратно", () => {
+      expect(
+        parseHeaderToolbar('{"v":1,"ids":["hotkeys","bell","menu"]}'),
+      ).toEqual(["hotkeys", "bell", "avatar", "menu"]);
+      expect(
+        parseHeaderToolbar('{"v":2,"ids":["hotkeys","bell","menu"]}'),
+      ).toEqual(["hotkeys", "bell", "menu"]);
     });
 
     it("четвёртую настраиваемую кнопку не поставить, пока не уберёшь одну", () => {
