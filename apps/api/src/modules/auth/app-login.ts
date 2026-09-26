@@ -15,7 +15,13 @@ import { createHash, timingSafeEqual } from 'node:crypto';
  * Куда колбэк вправе вернуть код. Список закрытый: адрес приходит в query от
  * клиента, и произвольный адрес превратил бы вход в выдачу кода кому угодно.
  */
-export const APP_REDIRECT_URIS: readonly string[] = ['vedamatch://auth'];
+export const APP_REDIRECT_URIS: readonly string[] = [
+  'vedamatch://auth',
+  // Сборка разработчика `com.vedamatch.app.dev` стоит рядом с боевой и
+  // возвращается по своей схеме, чтобы не делить с ней `vedamatch://auth`
+  // (apps/mobile/src/config/build-kind.ts). Защита та же — PKCE.
+  'vedamatch-dev://auth',
+];
 
 /** RFC 7636: верификатор 43–128 символов из unreserved-алфавита. */
 const VERIFIER_RE = /^[A-Za-z0-9\-._~]{43,128}$/;
