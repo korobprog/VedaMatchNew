@@ -26,6 +26,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * Панель конференции — отдельным экраном поверх комнаты (VED-360).
@@ -68,7 +69,7 @@ export default function ConferencePanelScreen() {
       .catch((cause: unknown) => {
         if (alive)
           setError(
-            cause instanceof Error ? cause.message : 'Ссылка не открылась',
+            screenErrorText('app/conference/[id]', cause, 'Ссылка не открылась'),
           );
       });
     return () => {
@@ -90,7 +91,7 @@ export default function ConferencePanelScreen() {
         if (result) setRoom(result);
         setNote(conferenceActionNote(action));
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Не получилось');
+        setError(screenErrorText('app/conference/[id]', cause, 'Не получилось'));
       } finally {
         setBusy(false);
       }

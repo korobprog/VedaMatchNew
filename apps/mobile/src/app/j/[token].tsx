@@ -15,6 +15,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * Экран короткой ссылки на конференцию: `vedamatch://j/<токен>` и
@@ -59,7 +60,7 @@ export default function ConferenceLinkScreen() {
       })
       .catch((cause: unknown) => {
         if (alive)
-          setError(cause instanceof Error ? cause.message : 'Ссылка не открылась');
+          setError(screenErrorText('app/j/[token]', cause, 'Ссылка не открылась'));
       });
     return () => {
       alive = false;
@@ -82,7 +83,7 @@ export default function ConferenceLinkScreen() {
       )
       .catch((cause: unknown) => {
         entering.current = false;
-        setError(cause instanceof Error ? cause.message : 'Не получилось войти');
+        setError(screenErrorText('app/j/[token]', cause, 'Не получилось войти'));
       });
   }, [step.kind, token, conference]);
 

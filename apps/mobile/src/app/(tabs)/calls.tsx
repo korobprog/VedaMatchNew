@@ -16,6 +16,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { useReloadWhenOnline } from '@/lib/startup/connectivity';
 
 /**
  * Вкладка «Звонки» (VED-219) — история личных звонков вместо заглушки.
@@ -61,6 +62,9 @@ export default function CallsScreen() {
     },
     [callsApi],
   );
+
+  // Сеть вернулась, а экран в ошибке — перечитать самим, как «Повторить».
+  useReloadWhenOnline(phase === 'error', () => void load(true));
 
   useEffect(() => {
     void load();

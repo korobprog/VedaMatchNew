@@ -20,6 +20,8 @@ import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 import { PersonCardRow } from './person-card-row';
+import { screenErrorText } from '@/lib/api/error-text';
+import { useReloadWhenOnline } from '@/lib/startup/connectivity';
 
 interface Props {
   peopleApi: PeopleApi;
@@ -75,7 +77,7 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
         }
       } catch (e) {
         if (isCurrentSearchGeneration(gen, generation.current)) {
-          setError(e instanceof Error ? e.message : 'Не удалось выполнить поиск');
+          setError(screenErrorText('components/people/people-directory-section', e, 'Не удалось выполнить поиск'));
         }
       } finally {
         if (mode === 'more') setLoadingMore(false);
@@ -130,6 +132,8 @@ export function PeopleDirectorySection({ peopleApi, onOpenPerson }: Props) {
   }, [items, query, appliedQuery, hasMore, loadingMore, page, load]);
 
   const retry = useCallback(() => void load(query, 1, items ? 'refresh' : 'initial'), [load, query, items]);
+  // Сеть вернулась, а экран в ошибке — перечитать самим, как «Повторить».
+  useReloadWhenOnline(error !== null, retry);
 
   const renderItem = useCallback<ListRenderItem<ContactsCardDto>>(({ item }) => <PersonCardRow card={item} onPress={onOpenPerson} />, [onOpenPerson]);
 

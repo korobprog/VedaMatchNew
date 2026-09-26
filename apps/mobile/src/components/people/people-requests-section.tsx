@@ -11,6 +11,8 @@ import { showRemainingToday, type RequestAction } from '@/lib/people/people-requ
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
 import { RequestRow } from './request-row';
+import { screenErrorText } from '@/lib/api/error-text';
+import { useReloadWhenOnline } from '@/lib/startup/connectivity';
 
 interface Props {
   peopleApi: PeopleApi;
@@ -49,7 +51,7 @@ export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
       setLoadError(null);
     } catch (e) {
       if (version.current !== seq) return;
-      setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить запросы');
+      setLoadError(screenErrorText('components/people/people-requests-section', e, 'Не удалось загрузить запросы'));
     } finally {
       // Безусловно: если пока этот `GET` летел, прошла мутация (`version`
       // сдвинулся), его данные отбрасываются выше — но крутилку
@@ -89,7 +91,7 @@ export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
       version.current += 1;
       setState(next);
     } catch (e) {
-      setErrors((current) => ({ ...current, [requestId]: e instanceof Error ? e.message : 'Не удалось выполнить действие' }));
+      setErrors((current) => ({ ...current, [requestId]: screenErrorText('components/people/people-requests-section', e, 'Не удалось выполнить действие') }));
     } finally {
       setBusy(({ [requestId]: _done, ...rest }) => rest);
     }
@@ -111,7 +113,7 @@ export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
         const conversation = await chatApi.createDirect(request.user.userId);
         router.push({ pathname: '/chat/[id]', params: { id: conversation.id } });
       } catch (e) {
-        setErrors((current) => ({ ...current, [request.id]: e instanceof Error ? e.message : 'Не удалось открыть переписку' }));
+        setErrors((current) => ({ ...current, [request.id]: screenErrorText('components/people/people-requests-section', e, 'Не удалось открыть переписку') }));
       } finally {
         setBusy(({ [request.id]: _done, ...rest }) => rest);
       }
@@ -120,6 +122,8 @@ export function PeopleRequestsSection({ peopleApi, chatApi, active }: Props) {
   );
 
   const retry = useCallback(() => void load(), [load]);
+  // Сеть вернулась, а экран в ошибке — перечитать самим, как «Повторить».
+  useReloadWhenOnline(loadError !== null, retry);
 
   const renderRow = useCallback(
     (request: ContactsRequestDto) => (

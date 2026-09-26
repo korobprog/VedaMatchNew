@@ -16,6 +16,8 @@ import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
+import { screenErrorText } from '@/lib/api/error-text';
+import { useReloadWhenOnline } from '@/lib/startup/connectivity';
 
 function openCommunity(community: CommunityBadgeDto) {
   router.push({
@@ -62,12 +64,15 @@ export default function CommunitiesScreen() {
       }
     } catch (e) {
       if (request.current === id) {
-        setError(e instanceof Error ? e.message : 'Не удалось загрузить общины');
+        setError(screenErrorText('app/(tabs)/communities', e, 'Не удалось загрузить общины'));
       }
     } finally {
       if (request.current === id) setRefreshing(false);
     }
   }, [communitiesApi]);
+
+  // Сеть вернулась, а экран в ошибке — перечитать самим, как «Повторить».
+  useReloadWhenOnline(error !== null, () => void load());
 
   // Членство могло измениться на сайте (приняли в общину, разобрали заявку) —
   // перечитываем при каждом возврате на вкладку, а не только при первом монтировании.

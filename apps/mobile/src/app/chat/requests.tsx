@@ -12,6 +12,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 const keyOf = (request: ChatRequestSummary) => request.conversation.id;
 
@@ -40,7 +41,7 @@ export default function ChatRequestsScreen() {
       setRequests(withoutHandled(state.requests, handled.current));
       setLoadError(null);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить запросы');
+      setLoadError(screenErrorText('app/chat/requests', e, 'Не удалось загрузить запросы'));
     }
   }, [chatApi]);
 
@@ -69,7 +70,7 @@ export default function ChatRequestsScreen() {
       } catch (e) {
         // Запрос мог быть уже разобран в другом месте: повтор не поможет,
         // карточку убираем, а не оставляем сломанной.
-        setActionError(e instanceof Error ? e.message : 'Не получилось принять запрос');
+        setActionError(screenErrorText('app/chat/requests', e, 'Не получилось принять запрос'));
         handled.current.add(id);
         setRequests((current) => (current ? withoutRequest(current, id) : current));
       } finally {
@@ -90,7 +91,7 @@ export default function ChatRequestsScreen() {
         handled.current.add(id);
         setRequests((current) => (current ? withoutRequest(current, id) : current));
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : 'Не получилось отклонить запрос');
+        setActionError(screenErrorText('app/chat/requests', e, 'Не получилось отклонить запрос'));
       } finally {
         setBusy(({ [id]: _done, ...rest }) => rest);
       }

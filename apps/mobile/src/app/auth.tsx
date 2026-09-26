@@ -6,6 +6,7 @@ import { APP_AUTH_REDIRECT } from '@/lib/auth/login-flow';
 import { WebPortalButton } from '@/components/web-portal-button';
 import { useTheme } from '@/theme/theme';
 import { fonts } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * Приёмник возврата из браузера: `vedamatch://auth?code=…` или `?error=…`.
@@ -26,7 +27,7 @@ export default function AuthReturnScreen() {
     completeSignIn(url.toString())
       .then(() => router.replace('/'))
       .catch((e: unknown) => {
-        const message = e instanceof Error ? e.message : 'Не удалось войти';
+        const message = screenErrorText('app/auth', e, 'Не удалось войти');
         router.replace({ pathname: '/login', params: { error: message } });
       });
     // Один раз на вход: параметры маршрута после replace уже не важны.

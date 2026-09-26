@@ -9,6 +9,7 @@ import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 import { BlogImages } from './blog-images';
+import { screenErrorText } from '@/lib/api/error-text';
 
 export interface BlogPostCardProps {
   post: BlogPostDto;
@@ -74,7 +75,7 @@ export const BlogPostCard = memo(function BlogPostCard({
         await action();
         setDone(kind);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Не получилось. Попробуйте ещё раз.');
+        setError(screenErrorText('components/blog/blog-post-card', cause, 'Не получилось. Попробуйте ещё раз.'));
       } finally {
         setBusy(null);
       }

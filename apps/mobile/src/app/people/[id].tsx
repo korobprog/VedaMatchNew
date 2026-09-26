@@ -30,6 +30,7 @@ import { visibleVerificationBadges } from '@/lib/people/verification';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /** Столько же, сколько принимает `people-requests.service.ts` на сервере. */
 const CONTACTS_MAX_MESSAGE_LENGTH = 500;
@@ -134,7 +135,7 @@ export default function PersonScreen() {
       setCard(result);
       setLoadError(null);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Не удалось открыть карточку');
+      setLoadError(screenErrorText('app/people/[id]', e, 'Не удалось открыть карточку'));
     }
   }, [peopleApi, userId]);
 
@@ -171,7 +172,7 @@ export default function PersonScreen() {
       setRemainingToday(state.remainingToday);
       setMessage('');
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : 'Не удалось отправить запрос');
+      setSendError(screenErrorText('app/people/[id]', e, 'Не удалось отправить запрос'));
     } finally {
       setSending(false);
     }
@@ -186,7 +187,7 @@ export default function PersonScreen() {
       const conversation = await chatApi.createDirect(userId);
       router.push({ pathname: '/chat/[id]', params: { id: conversation.id } });
     } catch (e) {
-      setWriteError(e instanceof Error ? e.message : 'Не удалось открыть переписку');
+      setWriteError(screenErrorText('app/people/[id]', e, 'Не удалось открыть переписку'));
     } finally {
       setWriteBusy(false);
     }

@@ -31,6 +31,7 @@ import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /** Съёмка ролика в камере ограничивается сразу пределом статуса. */
 const VIDEO_MAX_SECONDS = 60;
@@ -113,7 +114,7 @@ export function StatusComposer({
       confirmTap();
       onCreated();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось опубликовать статус');
+      setError(screenErrorText('components/chat/statuses/status-composer', cause, 'Не удалось опубликовать статус'));
     } finally {
       setPending(false);
     }

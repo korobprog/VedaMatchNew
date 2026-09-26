@@ -21,6 +21,8 @@ import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
 import { useScreenTopInset } from '@/components/quick-bar/screen-top-inset';
+import { screenErrorText } from '@/lib/api/error-text';
+import { useReloadWhenOnline } from '@/lib/startup/connectivity';
 
 const keyOf = (item: ChatConversationSummary) => item.id;
 
@@ -49,9 +51,12 @@ export default function ChatsScreen() {
       setRequestsCount(state.requestsCount);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить беседы');
+      setError(screenErrorText('app/(tabs)/index', e, 'Не удалось загрузить беседы'));
     }
   }, [chatApi]);
+
+  // Сеть вернулась, а экран в ошибке — перечитать самим, как «Повторить».
+  useReloadWhenOnline(error !== null, () => void load());
 
   // При каждом возврате на вкладку: счётчик запросов мог измениться на экране
   // запросов, а поток событий о нём не сообщает.

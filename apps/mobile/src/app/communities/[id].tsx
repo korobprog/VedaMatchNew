@@ -13,6 +13,7 @@ import { COMMUNITY_KIND_LABELS } from '@/lib/communities/community-labels';
 import { confirmTap } from '@/lib/feedback';
 import { useTheme } from '@/theme/theme';
 import { fonts, radius } from '@/theme/tokens';
+import { screenErrorText } from '@/lib/api/error-text';
 
 const keyOf = (item: ChatDiscoverItem) => item.conversation.id;
 
@@ -58,7 +59,7 @@ export default function CommunityDiscoverScreen() {
       }
     } catch (e) {
       if (request.current === id) {
-        setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить беседы общины');
+        setLoadError(screenErrorText('app/communities/[id]', e, 'Не удалось загрузить беседы общины'));
       }
     } finally {
       if (request.current === id) setRefreshing(false);
@@ -94,7 +95,7 @@ export default function CommunityDiscoverScreen() {
         openConversation(id);
         setItems((current) => (current ? markJoined(current, id) : current));
       } catch (e) {
-        setActionError({ id, message: e instanceof Error ? e.message : 'Не получилось войти в беседу' });
+        setActionError({ id, message: screenErrorText('app/communities/[id]', e, 'Не получилось войти в беседу') });
       } finally {
         joiningRef.current = null;
         setBusyId(null);

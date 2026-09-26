@@ -13,6 +13,7 @@ import { tokenAuthority } from './token-authority';
 import { telegramLaunch } from '@/lib/telegram/web-app';
 import type { Session, SessionStatus } from './session';
 import { toSessionUser, type ProfileResponse, type SessionUser } from './session-user';
+import { screenErrorText } from '@/lib/api/error-text';
 
 /**
  * Сессия веб-версии приложения (`ios.vedamatch.com`). Какую именно сессию
@@ -39,6 +40,10 @@ const BEFORE_SIGN_OUT_TIMEOUT_MS = 2000;
 
 const SessionContext = createContext<Session | null>(null);
 
+
+function reloadPage(): void {
+  window.location.reload();
+}
 
 function currentPath(): string {
   const { pathname, search } = window.location;
@@ -143,6 +148,9 @@ function CookieSessionProvider({ apiOrigin, children }: { apiOrigin: string; chi
       signOut,
       registerBeforeSignOut,
       reloadUser: loadProfile,
+      // Веб: заново — это перезагрузка страницы; её же делает браузер сам,
+      // и незачем держать вторую копию логики восстановления.
+      retryRestore: reloadPage,
     }),
     [
       status,
@@ -284,7 +292,7 @@ function TelegramTokenSessionProvider({
         await loadProfile();
       } catch (error) {
         if (cancelled) return;
-        setLoginError(error instanceof Error ? error.message : 'Не удалось войти через Telegram');
+        setLoginError(screenErrorText('lib/auth/session', error, 'Не удалось войти через Telegram'));
         await dropSession();
       }
     })();
@@ -372,6 +380,9 @@ function TelegramTokenSessionProvider({
       signOut,
       registerBeforeSignOut,
       reloadUser: loadProfile,
+      // Веб: заново — это перезагрузка страницы; её же делает браузер сам,
+      // и незачем держать вторую копию логики восстановления.
+      retryRestore: reloadPage,
     }),
     [status, user, api, apiOrigin, loginError, getAccessToken, signIn, completeSignIn, signInDev, signOut, registerBeforeSignOut, loadProfile],
   );
