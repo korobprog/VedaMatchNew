@@ -165,11 +165,12 @@ export function MusicRail({
       {/* Правый край ленты на телефоне тает (VED-535): обрезанный краем
           значок следующего пункта выглядел поломкой, а плавное исчезновение
           читается как «дальше есть ещё». Тает список, а не рамка: рамка
-          ровно по краю «Загрузить» над ней. Раз в день лента сама показывает,
+          ровно по краю «Загрузить» над ней. Последние 20px — уже пусто
+          (VED-535, круг 2): «кругляшок „Истории“ всё равно заметен». Раз в день лента сама показывает,
           что листается (`MusicRailScroller`). */}
       <MusicRailScroller
         boxClassName="glass rounded-2xl p-1.5 lg:p-2.5"
-        className="scroll-slim flex gap-0.5 overflow-x-auto max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] lg:flex-col lg:gap-0.5 lg:overflow-visible"
+        className="scroll-slim flex gap-0.5 overflow-x-auto max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-4.5rem),transparent_calc(100%-1.25rem))] lg:flex-col lg:gap-0.5 lg:overflow-visible"
       >
         {items.map((item) => {
           const current = item.key === active;

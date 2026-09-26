@@ -58,11 +58,25 @@ export default async function MusicArtistPage({
      лишний запрос на каждое открытие страницы исполнителя. */
   const categories = isMusicEditor ? ((await getMusicCategories()) ?? []) : [];
 
+  const stats = (
+    <p className="text-sm text-text-2">
+      {[kind, `${artist.trackCount} ${plural(artist.trackCount, "запись", "записи", "записей")}`]
+        .filter(Boolean)
+        .join(" · ")}
+    </p>
+  );
+
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
-      {/* Шапка исполнителя (VED-530): «← Каталог» — в строке имени, справа,
-          на месте прежнего карандаша; отдельной строки над шапкой больше нет,
-          и всё ниже поднялось на её высоту. */}
+    <main className="relative mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
+      {/* «← Каталог» — в правом верхнем углу, над строкой имени (VED-535):
+          своей строки у него нет, как и раньше (VED-530), но и имя он больше
+          не теснит. */}
+      <Link
+        href="/music"
+        className="absolute right-2 top-0 inline-flex min-h-9 items-center gap-1.5 px-2 text-sm text-text-2 hover:text-text-0 md:right-4"
+      >
+        <span aria-hidden="true">←</span> Каталог
+      </Link>
       <header className="flex items-center gap-5">
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full">
           <MusicCover
@@ -73,37 +87,30 @@ export default async function MusicArtistPage({
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex min-w-0 items-start gap-2">
-            <h1 className="min-w-0 flex-1 break-words font-display text-2xl font-bold tracking-tight text-text-0">
-              {artist.name}
-            </h1>
-            <Link
-              href="/music"
-              className="-mr-2 inline-flex min-h-11 shrink-0 items-center gap-1.5 px-2 text-sm text-text-2 hover:text-text-0"
-            >
-              <span aria-hidden="true">←</span> Каталог
-            </Link>
-          </div>
+          <h1 className="min-w-0 break-words font-display text-2xl font-bold tracking-tight text-text-0">
+            {artist.name}
+          </h1>
           {/* Категория и имя исполнителя (VED-165, VED-102) — в одном ряду
               правки для редакции. Карандаш у самого имени убран (VED-530):
-              там теперь «Каталог», а переименование осталось здесь, среди
-              остальных правок карточки, — другого места для него нет. */}
-          {isMusicEditor && (
-            <div className="flex flex-wrap items-center gap-1">
-              <MusicArtistAdminCategory
-                artistId={artist.id}
-                artistName={artist.name}
-                rootCategoryId={artist.rootCategoryId}
-                categories={categories}
-              />
+              там было «Каталог», а переименование осталось здесь, среди
+              остальных правок карточки, — другого места для него нет.
+              Число записей — по центру под списком категорий (VED-535). */}
+          {isMusicEditor ? (
+            <div className="flex items-start gap-1">
+              <div className="flex flex-col items-center gap-1">
+                <MusicArtistAdminCategory
+                  artistId={artist.id}
+                  artistName={artist.name}
+                  rootCategoryId={artist.rootCategoryId}
+                  categories={categories}
+                />
+                {stats}
+              </div>
               <MusicArtistAdminRename artistId={artist.id} name={artist.name} />
             </div>
+          ) : (
+            stats
           )}
-          <p className="text-sm text-text-2">
-            {[kind, `${artist.trackCount} ${plural(artist.trackCount, "запись", "записи", "записей")}`]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
         </div>
       </header>
 
