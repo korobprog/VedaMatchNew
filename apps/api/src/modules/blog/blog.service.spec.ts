@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { BlogAvatarService } from './blog-avatar.service';
 import { BlogService } from './blog.service';
 import type { BlogImagesService } from './blog-images.service';
 import type { BlogVideoService } from './blog-video.service';
@@ -99,13 +100,19 @@ function build(post: ReturnType<typeof storedPost> | null) {
       }),
     ),
   };
+  const avatars = {
+    resolveAvatarUrl: fn((user: { avatarKey: string | null }) =>
+      Promise.resolve(`https://signed/${user.avatarKey}`),
+    ),
+  };
   const service = new BlogService(
     prisma as unknown as PrismaService,
     moderation as unknown as ModerationService,
     images as unknown as BlogImagesService,
     video as unknown as BlogVideoService,
+    avatars as unknown as BlogAvatarService,
   );
-  return { service, prisma, images, video };
+  return { service, prisma, images, video, avatars };
 }
 
 describe('BlogService.update', () => {
@@ -457,6 +464,34 @@ describe('BlogService likes (VED-505)', () => {
     await expect(
       built.service.setLike('viewer', false, 'post-1', true),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('BlogService avatars (VED-492)', () => {
+  it('signs an uploaded author photo instead of an empty circle', async () => {
+    const { service, avatars } = build(
+      storedPost({
+        author: { ...author, avatarUrl: null, avatarKey: 'avatars/a.webp' },
+      }),
+    );
+
+    const post = await service.post('viewer', false, 'post-1');
+
+    expect(post.author.avatarUrl).toBe('https://signed/avatars/a.webp');
+    expect(avatars.resolveAvatarUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a public (Google) photo as is', async () => {
+    const { service, avatars } = build(
+      storedPost({
+        author: { ...author, avatarUrl: 'https://g/p.jpg', avatarKey: null },
+      }),
+    );
+
+    const post = await service.post('viewer', false, 'post-1');
+
+    expect(post.author.avatarUrl).toBe('https://g/p.jpg');
+    expect(avatars.resolveAvatarUrl).not.toHaveBeenCalled();
   });
 });
 
