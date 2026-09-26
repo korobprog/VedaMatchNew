@@ -105,7 +105,11 @@ describe('buildInboxWhere', () => {
       cursor: null,
     });
 
-    expect(where).toEqual({ userId: 'u1', readAt: null });
+    expect(where).toEqual({
+      userId: 'u1',
+      readAt: null,
+      feedHiddenAt: null,
+    });
   });
 
   it('поток прочитанного — это readAt: не null', () => {
@@ -115,7 +119,11 @@ describe('buildInboxWhere', () => {
       cursor: null,
     });
 
-    expect(where).toEqual({ userId: 'u1', readAt: { not: null } });
+    expect(where).toEqual({
+      userId: 'u1',
+      readAt: { not: null },
+      feedHiddenAt: null,
+    });
   });
 
   /**

@@ -155,6 +155,7 @@ export function inboxSections(cursor: InboxCursor | null): InboxSection[] {
 export interface InboxWhere {
   userId: string;
   readAt: null | { not: null };
+  feedHiddenAt: null;
   AND?: object[];
 }
 
@@ -187,6 +188,9 @@ export function buildInboxWhere(params: {
   return {
     userId,
     readAt: section === 'unread' ? null : { not: null },
+    // Убранное после своего действия (VED-522) в ленту не попадает, только в
+    // историю.
+    feedHiddenAt: null,
     ...(and.length > 0 ? { AND: and } : {}),
   };
 }

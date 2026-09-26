@@ -48,6 +48,8 @@ describe('threadRefreshData', () => {
       mark: 'done',
       createdAt: now,
       readAt: null,
+      // Убранная из ленты своим действием строка возвращается (VED-522).
+      feedHiddenAt: null,
     });
   });
 });
