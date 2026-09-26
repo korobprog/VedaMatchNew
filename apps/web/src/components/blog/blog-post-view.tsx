@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { BlogPostCard } from "./blog-post-card";
+import { PostActionsOrderButton } from "./post-actions-order-button";
 
 /**
  * Один пост целиком (VED-238): «нажатие на картинку или на заголовок должно
@@ -42,7 +43,7 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="relative mb-4 flex items-center justify-between gap-2">
         <Link
           href="/blog"
           className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60"
@@ -50,18 +51,23 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
           <ArrowLeft aria-hidden className="size-4" />
           Вся лента
         </Link>
-        <button
-          type="button"
-          onClick={() => void share()}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60"
-        >
-          {copied ? (
-            <Check aria-hidden className="size-4" />
-          ) : (
-            <Share2 aria-hidden className="size-4" />
-          )}
-          {copied ? "Ссылка скопирована" : "Поделиться"}
-        </button>
+        {/* «Порядок кнопок» (VED-509) — слева от «Поделиться»: кнопки под
+            постом переставляются отсюда для всей ленты. */}
+        <div className="flex items-center gap-2">
+          <PostActionsOrderButton />
+          <button
+            type="button"
+            onClick={() => void share()}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60"
+          >
+            {copied ? (
+              <Check aria-hidden className="size-4" />
+            ) : (
+              <Share2 aria-hidden className="size-4" />
+            )}
+            {copied ? "Ссылка скопирована" : "Поделиться"}
+          </button>
+        </div>
       </div>
       <BlogPostCard
         post={post}
