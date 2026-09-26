@@ -10,6 +10,7 @@ jest.mock('jose', () => ({}));
 import { AuthGuard, OptionalAuthGuard } from '../../auth/auth.guard';
 import { ChatConferenceController } from './chat-conference.controller';
 import { ChatConferenceService } from './chat-conference.service';
+import { ChatSignedUrlsInterceptor } from '../chat-signed-urls.interceptor';
 
 /**
  * Ссылка обязана доходить до своего обработчика.
@@ -69,6 +70,11 @@ describe('порядок маршрутов конференции', () => {
       .useValue(allowGuard)
       .overrideGuard(OptionalAuthGuard)
       .useValue(allowGuard)
+      .overrideInterceptor(ChatSignedUrlsInterceptor)
+      .useValue({
+        intercept: (_context: unknown, next: { handle: () => unknown }) =>
+          next.handle(),
+      })
       .compile();
 
     app = moduleRef.createNestApplication();

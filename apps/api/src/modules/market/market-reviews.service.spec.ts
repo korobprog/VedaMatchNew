@@ -1,4 +1,18 @@
 import { MarketReviewsService } from './market-reviews.service';
+import { MarketAvatarService } from './market-avatar.service';
+
+/** Подпись фото без S3: ключ превращается в узнаваемую «подписанную» ссылку. */
+function fakeAvatars() {
+  const avatars = new MarketAvatarService({ get: () => undefined } as never);
+  const resolve = jest
+    .spyOn(avatars, 'resolveAvatarUrl')
+    .mockImplementation((user) =>
+      Promise.resolve(
+        user.avatarKey ? `https://signed/${user.avatarKey}` : user.avatarUrl,
+      ),
+    );
+  return { avatars, resolve };
+}
 
 /**
  * Рейтинг магазина обновляется атомарно: `{ increment/decrement }` по
@@ -26,6 +40,7 @@ function makeService(opts: {
           name: 'B',
           spiritualName: null,
           avatarUrl: null,
+          avatarKey: 'avatars/buyer.webp',
         },
       }),
       update: jest.fn().mockResolvedValue({}),
@@ -53,7 +68,12 @@ function makeService(opts: {
     ),
   };
   const events = { emit: jest.fn() };
-  const service = new MarketReviewsService(prisma as never, events as never);
+  const { avatars } = fakeAvatars();
+  const service = new MarketReviewsService(
+    prisma as never,
+    events as never,
+    avatars,
+  );
   return { service, tx, prisma, events };
 }
 
@@ -70,7 +90,10 @@ const completedOrder = {
 describe('MarketReviewsService — атомарный рейтинг магазина', () => {
   it('create: increment без чтения текущих счётчиков и пересчёт среднего', async () => {
     const { service, tx } = makeService({ order: completedOrder });
-    await service.create('buyer', { orderId: 'o1', rating: 5 });
+    const review = await service.create('buyer', { orderId: 'o1', rating: 5 });
+    // Загруженное фото автора — подписанной ссылкой, без ключа (VED-492).
+    expect(review.author?.avatarUrl).toBe('https://signed/avatars/buyer.webp');
+    expect(JSON.stringify(review)).not.toContain('avatarKey');
 
     expect(tx.marketShop.findUniqueOrThrow).not.toHaveBeenCalled();
     expect(tx.marketShop.update).toHaveBeenCalledWith({

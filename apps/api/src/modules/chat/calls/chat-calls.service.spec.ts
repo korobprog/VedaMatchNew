@@ -8,6 +8,7 @@ import type { ChatEventsService } from '../chat-events.service';
 import { CHAT_CALL_ENDED_EVENT } from '@vedamatch/shared';
 import { BUSY_TTL_ACTIVE_MS, RING_TIMEOUT_MS } from './call-state';
 import { ChatCallsService } from './chat-calls.service';
+import { PeopleAvatarService } from '../people/people-avatar.service';
 
 /**
  * Хранение сигналов звонка (VED-261): без REDIS_HOST сервис обязан
@@ -98,6 +99,7 @@ function buildService(row = callRow()) {
     events as unknown as ChatEventsService,
     bus as unknown as EventEmitter2,
     config,
+    new PeopleAvatarService(config),
   );
   return { service, events, bus, getRow: () => stored };
 }

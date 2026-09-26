@@ -12,6 +12,8 @@
  * известно, что именно в ответе — а это чистая работа со структурой.
  */
 
+import { avatarKeyOf } from './chat-avatar-key';
+
 /** Все адреса нашего хранилища, встреченные в ответе. Без повторов. */
 export function collectStorageUrls(payload: unknown, prefix: string): string[] {
   const found = new Set<string>();
@@ -29,17 +31,43 @@ export function collectStorageUrls(payload: unknown, prefix: string): string[] {
 export function replaceStorageUrls(
   payload: unknown,
   signed: ReadonlyMap<string, string>,
+  avatars: ReadonlyMap<string, string | null> = new Map(),
 ): unknown {
   if (typeof payload === 'string') return signed.get(payload) ?? payload;
   if (Array.isArray(payload))
-    return payload.map((item) => replaceStorageUrls(item, signed));
+    return payload.map((item) => replaceStorageUrls(item, signed, avatars));
   if (isPlainObject(payload)) {
     const copy: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(payload))
-      copy[key] = replaceStorageUrls(value, signed);
+      copy[key] = replaceStorageUrls(value, signed, avatars);
+    // Человек с загруженным фото (VED-492): ссылка — подпись по ключу.
+    const avatarKey = avatarKeyOf(payload);
+    const avatarUrl = avatarKey ? avatars.get(avatarKey) : undefined;
+    if (avatarUrl) copy.avatarUrl = avatarUrl;
     return copy;
   }
   return payload;
+}
+
+/**
+ * Ключи загруженных фото, которыми помечены DTO людей в ответе
+ * (`attachAvatarKey`). Без повторов: один собеседник встречается в ленте
+ * десятки раз, а подписывается однажды.
+ */
+export function collectAvatarKeys(payload: unknown): string[] {
+  const found = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!isPlainObject(value)) return;
+    const avatarKey = avatarKeyOf(value);
+    if (avatarKey) found.add(avatarKey);
+    for (const item of Object.values(value)) visit(item);
+  };
+  visit(payload);
+  return [...found];
 }
 
 function walk(value: unknown, visit: (found: string) => void): void {

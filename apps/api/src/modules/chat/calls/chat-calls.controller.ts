@@ -7,9 +7,11 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
+import { ChatSignedUrlsInterceptor } from '../chat-signed-urls.interceptor';
 import type {
   AccessTokenPayload,
   ChatActiveCallState,
@@ -37,6 +39,8 @@ import {
  */
 @Controller('chat/calls')
 @UseGuards(AuthGuard)
+// Фото людей в звонке — загруженные подписываются здесь (VED-492).
+@UseInterceptors(ChatSignedUrlsInterceptor)
 export class ChatCallsController {
   constructor(
     private readonly config: ConfigService,

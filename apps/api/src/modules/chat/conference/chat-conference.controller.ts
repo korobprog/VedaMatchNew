@@ -7,8 +7,10 @@ import {
   Param,
   Post,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { ChatSignedUrlsInterceptor } from '../chat-signed-urls.interceptor';
 import type {
   AccessTokenPayload,
   ChatConferenceDto,
@@ -39,6 +41,8 @@ import { conferenceGoneText } from './conference-retention';
  * Сторожит `chat-conference-route-order.spec.ts`.
  */
 @Controller('chat/conference')
+// Загруженные фото людей подписываются перехватчиком (VED-492).
+@UseInterceptors(ChatSignedUrlsInterceptor)
 export class ChatConferenceController {
   constructor(private readonly conference: ChatConferenceService) {}
 

@@ -70,6 +70,7 @@ import {
   opensAsViewed,
 } from './work-viewer-state';
 import { WorkSpacesService } from './work-spaces.service';
+import { WorkAvatarService } from './work-avatar.service';
 import {
   validateWorkUpload,
   workAttachmentName,
@@ -92,6 +93,9 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото: `avatarUrl` у него пуст, ссылку подписываем по ключу
+  // (VED-492). Наружу ключ не едет — только подписанный `avatarUrl`.
+  avatarKey: true,
   isAgent: true,
 } satisfies Prisma.UserSelect;
 
@@ -113,6 +117,7 @@ export class WorkTasksService {
     private readonly events: EventEmitter2,
     private readonly uploads: WorkUploadsService,
     private readonly notices: WorkNoticesService,
+    private readonly avatars: WorkAvatarService,
   ) {}
 
   /**
@@ -319,6 +324,11 @@ export class WorkTasksService {
       });
     }
 
+    // Фото рисуются у исполнителя и авторов комментариев — подписываем их.
+    await this.avatars.signAvatars([
+      task.assignee,
+      ...task.comments.map((comment) => comment.author),
+    ]);
     const viewer = await loadWorkViewerState(this.prisma, [task], userId);
     const card = toWorkTaskCard(
       {

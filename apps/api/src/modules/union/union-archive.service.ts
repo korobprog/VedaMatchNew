@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { resolveDisplayName } from '@vedamatch/shared';
 import type { UnionArchiveListResponse } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UnionAvatarService } from './union-avatar.service';
 
 /**
  * Архив анкет: «убрать совсем», в отличие от пропуска, который живёт до
@@ -10,7 +11,10 @@ import { PrismaService } from '../../prisma/prisma.service';
  */
 @Injectable()
 export class UnionArchiveService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avatars: UnionAvatarService,
+  ) {}
 
   async archive(ownerId: string, targetUserId: string): Promise<void> {
     if (ownerId === targetUserId) {
@@ -59,11 +63,14 @@ export class UnionArchiveService {
             // Обязателен рядом с name: имя наружу собирает resolveDisplayName.
             spiritualName: true,
             avatarUrl: true,
+            // Загруженное фото — подписываем по ключу, наружу не едет (VED-492).
+            avatarKey: true,
           },
         },
       },
     });
 
+    await this.avatars.signAvatars(rows.map((row) => row.archivedUser));
     return {
       items: rows.map((row) => ({
         archivedAt: row.createdAt.toISOString(),
