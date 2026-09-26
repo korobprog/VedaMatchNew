@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Play } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { t } from "./i18n";
+import { OutsideLink } from "./outside-link";
 
 /**
  * Плеер стороннего видео на нашей странице.
@@ -17,24 +18,41 @@ export function VideoEmbed({
   embedUrl,
   previewUrl,
   title,
+  sourceUrl = null,
 }: {
   locale: LibraryLocale;
   embedUrl: string;
   previewUrl: string | null;
   title: string;
+  /** Адрес видео у источника — запасной выход, если плеер не покажется. */
+  sourceUrl?: string | null;
 }) {
   const [playing, setPlaying] = useState(false);
 
   if (playing) {
     return (
-      <div className="mb-4 aspect-video w-full overflow-hidden rounded-2xl border border-glass-brd">
-        <iframe
-          src={`${embedUrl}${embedUrl.includes("?") ? "&" : "?"}autoplay=1`}
-          title={title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="h-full w-full"
-        />
+      <div className="mb-4">
+        <div className="aspect-video w-full overflow-hidden rounded-2xl border border-glass-brd">
+          <iframe
+            src={`${embedUrl}${embedUrl.includes("?") ? "&" : "?"}autoplay=1`}
+            title={title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="h-full w-full"
+          />
+        </div>
+        {/* Встроенный плеер у части зрителей остаётся белым окном (VED-536):
+            сеть пускает к YouTube приложение и сайт, но не встраивание. Узнать
+            об этом странице нельзя — iframe чужого сайта о себе не сообщает, —
+            поэтому выход виден сразу под плеером. */}
+        {sourceUrl && (
+          <OutsideLink
+            href={sourceUrl}
+            className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-sm text-text-1 underline underline-offset-2 hover:text-text-0"
+          >
+            {t(locale, "entry.embedFallback")}
+          </OutsideLink>
+        )}
       </div>
     );
   }

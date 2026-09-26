@@ -59,7 +59,7 @@ describe("EntryCard", () => {
     expect(screen.getByText("Video")).toBeDefined();
   });
 
-  it("sends a video cover to our own player page", () => {
+  it("обложка видео открывает его у источника, как кнопка у заголовка (VED-536)", () => {
     render(
       <EntryCard
         entry={{
@@ -71,9 +71,17 @@ describe("EntryCard", () => {
       />,
     );
 
+    // Встроенный плеер у части зрителей оставался белым окном; по ссылке
+    // видео открывается всегда. На источник ведут обложка, заголовок и
+    // кнопка у заголовка.
+    const links = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
     expect(
-      screen.getByRole("link", { name: "Смотреть здесь" }).getAttribute("href"),
-    ).toBe("/library/entry/entry-1");
+      links.filter(
+        (href) => href === "https://www.youtube.com/watch?v=OXDrvBwIHLg",
+      ),
+    ).toHaveLength(3);
   });
 
   it("keeps a non-video cover pointing at the source", () => {

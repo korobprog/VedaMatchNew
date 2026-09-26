@@ -200,6 +200,7 @@ export default async function LibraryEntryPage({
             embedUrl={embedUrl}
             previewUrl={entry.previewUrl}
             title={title}
+            sourceUrl={entry.url}
           />
         ) : (
           entry.previewUrl && (
