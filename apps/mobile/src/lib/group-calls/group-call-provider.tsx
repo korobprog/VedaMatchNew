@@ -63,6 +63,7 @@ import {
   encodingChanged,
   groupVideoEncoding,
 } from './group-video-quality';
+import { formatVideoDiagnostics } from './group-video-link';
 import { shouldSendGroupVideo } from './group-video-state';
 import { GroupPeerLink } from './group-peer-link';
 import {
@@ -204,8 +205,9 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
         onRemoteStream: (remote) => {
           // Звук играет сам через нативный аудиовыход WebRTC — отдельный
           // элемент воспроизведения нужен только вебу
-          // (`remote-audio-playback.ts`). Поток запоминаем ради картинки:
-          // `RTCView` показывает его по `toURL()`.
+          // (`remote-audio-playback.ts`). Сюда приходит обёртка над ЧУЖОЙ
+          // ВИДЕОДОРОЖКОЙ (`GroupPeerLink.onTrack`), а не поток звука: её
+          // `toURL()` и показывает `RTCView`.
           setRemoteStreams((streams) => ({ ...streams, [peerId]: remote }));
         },
         onStateChange: (peerState) => {
@@ -779,6 +781,20 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /**
+   * Скрытая сводка видео по парам (`formatVideoDiagnostics`) — снять с
+   * релизной сборки, которая молчит в logcat, при следующей чёрной плитке.
+   */
+  const videoDiagnostics = useCallback(async () => {
+    const peers = await Promise.all(
+      [...links.current.values()].map((link) => link.videoDiagnostics()),
+    );
+    const own = cameraTrack.current
+      ? `Своя камера: снимает (${sendingVideoRef.current ? 'отдаём' : 'не отдаём'})`
+      : 'Своя камера: выключена';
+    return `${own}\n\n${formatVideoDiagnostics(peers)}`;
+  }, []);
+
   const value = useMemo<GroupCallsApi>(
     () => ({
       state,
@@ -800,8 +816,10 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       clearActionError,
       reportScreenMounted: setScreenVisible,
       dismiss,
+      videoDiagnostics,
     }),
     [
+      videoDiagnostics,
       callInConversation,
       cameraOn,
       clearActionError,

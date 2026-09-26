@@ -12,6 +12,7 @@ import {
   type VideoEncoding,
 } from "./group-video-quality";
 import type { PeerConnectionState } from "./group-call-state";
+import { mergeRemoteTrack, pickVideoTransceiver } from "./group-video-link";
 
 /**
  * ОДНО соединение mesh'а — с одним собеседником.
@@ -42,6 +43,11 @@ import type { PeerConnectionState } from "./group-call-state";
  * где камеру никто не включит. Это сотни байт при установке соединения и
  * ноль трафика дальше — дорожки нет, кодер не работает.
  *
+ * Заводит видеосекцию только ИНИЦИАТОР пары; отвечающий берёт созданную
+ * offer'ом и открывает ей отдачу до answer'а. Поток собеседника
+ * собирается из самих дорожек, а не из `event.streams`. Почему иначе
+ * плитка собеседника была чёрной при живом звуке — `group-video-link.ts`.
+ *
  * В jsdom не запускается: склейка вокруг браузерного API. Чистое —
  * `group-call-peers.ts` (кто кому шлёт offer), `speaking-state.ts` (разбор
  * уровней) и общий с звонком один на один `webrtc-signal-guard.ts` (когда
@@ -65,8 +71,20 @@ export class GroupPeerLink {
   private restartingIce = false;
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
-  /** Отправитель пустой видеосекции — см. шапку класса. */
-  private readonly videoSender: RTCRtpSender;
+  /**
+   * Отправитель видеосекции — см. шапку класса. У отвечающего `null`, пока
+   * не пришёл offer: его видеосекцию создаёт offer.
+   */
+  private videoSender: RTCRtpSender | null = null;
+  /**
+   * Что должно стоять в отправителе и каким качеством: у отвечающего
+   * отправителя до offer'а нет, а провайдер отдаёт камеру и потолок
+   * качества сразу при создании пары.
+   */
+  private wantedVideoTrack: MediaStreamTrack | null = null;
+  private wantedEncoding: VideoEncoding | null = null;
+  /** Чужие дорожки, из которых собран поток собеседника (`mergeRemoteTrack`). */
+  private remoteTracks: MediaStreamTrack[] = [];
 
   constructor(
     readonly userId: string,
@@ -92,9 +110,19 @@ export class GroupPeerLink {
       });
     };
 
+    // Поток собеседника собираем из самих дорожек: у видеосекции без
+    // потока `event.streams` пуст, и `streams[0]` отдавал плитке поток
+    // звука без картинки. Новый объект на каждое изменение набора — иначе
+    // провайдер (сравнивает по ссылке) не перерисует `<video>`/`<audio>`.
     this.pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (stream) handlers.onRemoteStream(stream);
+      if (this.closed) return;
+      const next = mergeRemoteTrack(this.remoteTracks, event.track, [
+        "audio",
+        "video",
+      ]);
+      if (!next) return;
+      this.remoteTracks = next;
+      handlers.onRemoteStream(new MediaStream(next));
     };
 
     this.pc.onconnectionstatechange = () => {
@@ -120,12 +148,43 @@ export class GroupPeerLink {
 
     for (const track of localStream.getAudioTracks())
       this.pc.addTrack(track, localStream);
-    // Пустая видеосекция заводится сразу — см. шапку класса.
-    // `sendrecv`: кто из пары включит камеру первым, заранее неизвестно.
-    this.videoSender = this.pc.addTransceiver("video", {
-      direction: "sendrecv",
-    }).sender;
+    // Пустая видеосекция заводится сразу, но только у инициатора — см.
+    // шапку класса. `sendrecv`: кто из пары включит камеру первым, заранее
+    // неизвестно. Поток — микрофонный: так видеодорожка едет к собеседнику
+    // в одном потоке со звуком, и её покажет даже клиент без этой починки.
+    if (initiator)
+      this.videoSender = this.pc.addTransceiver("video", {
+        direction: "sendrecv",
+        streams: [localStream],
+      }).sender;
     handlers.onStateChange("connecting");
+  }
+
+  /**
+   * Отвечающий: взять видеосекцию, созданную offer'ом, и открыть ей отдачу.
+   * Между `setRemoteDescription(offer)` и `createAnswer` — иначе answer
+   * уйдёт `recvonly`, и наша камера до собеседника не дойдёт.
+   */
+  private adoptVideoTransceiver(): void {
+    if (this.initiator) return;
+    const transceivers = this.pc.getTransceivers();
+    const pick = pickVideoTransceiver(
+      transceivers.map((t) => ({
+        kind: t.receiver.track?.kind,
+        mid: t.mid,
+        stopped: t.currentDirection === "stopped",
+        direction: t.direction,
+      })),
+    );
+    if (!pick) return;
+    const transceiver = transceivers[pick.index];
+    if (pick.setDirection) transceiver.direction = pick.setDirection;
+    if (this.videoSender === transceiver.sender) return;
+    this.videoSender = transceiver.sender;
+    // Камеру и потолок качества провайдер отдал, когда отправителя ещё не
+    // было, — применяем запомненное.
+    void this.pushVideoTrack();
+    if (this.wantedEncoding) void this.applyVideoEncoding(this.wantedEncoding);
   }
 
   /** Инициатор пары: собрать и отправить offer. */
@@ -175,6 +234,7 @@ export class GroupPeerLink {
       await this.pc.setRemoteDescription(signal.sdp);
       this.remoteSet = true;
       if (isOffer) {
+        this.adoptVideoTransceiver();
         const answer = await this.pc.createAnswer();
         await this.pc.setLocalDescription(answer);
         this.answerInFlight = false;
@@ -206,9 +266,14 @@ export class GroupPeerLink {
    * гасил бы камеру для остальных.
    */
   async setVideoTrack(track: MediaStreamTrack | null): Promise<void> {
-    if (this.closed) return;
+    this.wantedVideoTrack = track;
+    await this.pushVideoTrack();
+  }
+
+  private async pushVideoTrack(): Promise<void> {
+    if (this.closed || !this.videoSender) return;
     try {
-      await this.videoSender.replaceTrack(track);
+      await this.videoSender.replaceTrack(this.wantedVideoTrack);
     } catch {
       // Соединение уже закрывается — пересчёт состава уберёт его.
     }
@@ -222,7 +287,8 @@ export class GroupPeerLink {
    * приходит.
    */
   async applyVideoEncoding(target: VideoEncoding): Promise<void> {
-    if (this.closed) return;
+    this.wantedEncoding = target;
+    if (this.closed || !this.videoSender) return;
     try {
       const next = withVideoEncoding(this.videoSender.getParameters(), target);
       if (!next) return;

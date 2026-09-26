@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import {
+  Alert,
   BackHandler,
   FlatList,
   Pressable,
@@ -121,7 +122,20 @@ export default function GroupCallScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.bg0, paddingTop: insets.top + 16 }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text0 }]}>Групповой звонок</Text>
+        {/* Долгое нажатие на заголовок — скрытая сводка видео по парам
+            (`group-video-link.ts`): релизная сборка молчит в logcat, а
+            чёрную плитку иначе не разобрать. Без имён и id собеседников. */}
+        <Text
+          style={[styles.title, { color: colors.text0 }]}
+          onLongPress={() => {
+            void calls
+              .videoDiagnostics()
+              .then((text) => Alert.alert('Видео по соединениям', text))
+              .catch(() => undefined);
+          }}
+        >
+          Групповой звонок
+        </Text>
         <Text style={[styles.subtitle, { color: colors.text1 }]}>
           {ended
             ? (state.error ?? 'Звонок завершён')
