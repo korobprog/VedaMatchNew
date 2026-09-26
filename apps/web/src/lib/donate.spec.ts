@@ -10,10 +10,10 @@ describe("buildTransferPurpose", () => {
   it("собирает цель и подпись в одну строку", () => {
     expect(
       buildTransferPurpose({
-        purposeText: "Дар на разработку и поддержку Портала VedaMatch",
+        purposeText: "Дар на развитие и поддержку Портала VedaMatch",
         donorName: "Кришна дас",
       }),
-    ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Кришна дас");
+    ).toBe("Дар на развитие и поддержку Портала VedaMatch. От: Кришна дас");
   });
 
   it("ФИО и духовное имя — через скобки", () => {
@@ -31,21 +31,21 @@ describe("buildTransferPurpose", () => {
   it("только духовное имя — без пустых скобок", () => {
     expect(
       buildTransferPurpose({
-        purposeText: "Дар на разработку и поддержку Портала VedaMatch",
+        purposeText: "Дар на развитие и поддержку Портала VedaMatch",
         donorName: "  ",
         spiritualName: "Кришна дас",
       }),
-    ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Кришна дас");
+    ).toBe("Дар на развитие и поддержку Портала VedaMatch. От: Кришна дас");
   });
 
   it("только ФИО — без скобок", () => {
     expect(
       buildTransferPurpose({
-        purposeText: "Дар на разработку и поддержку Портала VedaMatch",
+        purposeText: "Дар на развитие и поддержку Портала VedaMatch",
         donorName: "Иванов Иван Иванович",
         spiritualName: "",
       }),
-    ).toBe("Дар на разработку и поддержку Портала VedaMatch. От: Иванов Иван Иванович");
+    ).toBe("Дар на развитие и поддержку Портала VedaMatch. От: Иванов Иван Иванович");
   });
 
   it("без подписи оставляет только цель", () => {
@@ -65,7 +65,7 @@ describe("buildTransferPurpose", () => {
 
   it("подставляет общую формулировку, когда цель не выбрали", () => {
     expect(buildTransferPurpose({ purposeText: "  ", donorName: null })).toBe(
-      "Дар на разработку и поддержку Портала VedaMatch",
+      "Дар на развитие и поддержку Портала VedaMatch",
     );
   });
 
@@ -89,7 +89,7 @@ describe("buildTransferPurpose", () => {
 
   it("обрезает длинную подпись по границе слова", () => {
     const result = buildTransferPurpose({
-      purposeText: "Дар на разработку и поддержку Портала VedaMatch",
+      purposeText: "Дар на развитие и поддержку Портала VedaMatch",
       donorName: "Абвгдеж ".repeat(40),
     });
 
@@ -150,7 +150,7 @@ describe("DONATE_PURPOSES", () => {
     // и назвал две формулировки. Новый пункт здесь — только с его слов.
     expect(DONATE_PURPOSES).toHaveLength(2);
     expect(DONATE_PURPOSES[0].label).toBe(
-      "На разработку и поддержку Портала VedaMatch",
+      "На развитие и поддержку Портала VedaMatch",
     );
     expect(DONATE_PURPOSES[1].label).toBe("Благодарность разработчикам");
   });
