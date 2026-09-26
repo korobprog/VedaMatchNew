@@ -18,7 +18,9 @@ import {
 } from '@vedamatch/shared';
 import {
   WORK_TASK_CLOSED_EVENT,
+  WORK_TASK_HANDLED_EVENT,
   type WorkTaskClosedEvent,
+  type WorkTaskHandledEvent,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { androidChannelFor } from './android-channel';
@@ -514,6 +516,24 @@ export class NotificationsListener {
    * действовал агент, непрочитанное о ней гаснет и уходит в историю.
    * Поправка, а не новость: мимо `deliver()`, осечка — только в лог.
    */
+  /**
+   * Человек сам поработал с задачей (VED-522) — его непрочитанные
+   * уведомления о ней гаснут, как при закрытии: он ими уже воспользовался.
+   */
+  @OnEvent(WORK_TASK_HANDLED_EVENT)
+  onWorkTaskHandled(event: WorkTaskHandledEvent): void {
+    void this.notifications
+      .readClosedWorkTask(event.spaceId, event.taskKey, [
+        event.actorId,
+        event.onBehalfOfId,
+      ])
+      .catch((error) =>
+        this.logger.warn(
+          `Уведомления о ${event.taskKey} не погашены: ${String(error)}`,
+        ),
+      );
+  }
+
   @OnEvent(WORK_TASK_CLOSED_EVENT)
   onWorkTaskClosed(event: WorkTaskClosedEvent): void {
     void this.notifications

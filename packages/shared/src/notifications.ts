@@ -1264,6 +1264,25 @@ export const BROADCAST_BODY_MAX_LENGTH = 1000;
  */
 export const WORK_TASK_CLOSED_EVENT = "work.task.closed";
 
+/**
+ * Имя события «человек сам поработал с задачей» (VED-522): перенёс,
+ * поправил, прокомментировал, поручил. Публикует `modules/work`, слушает
+ * `NotificationsListener` и гасит этому человеку непрочитанные уведомления о
+ * задаче — ровно как при закрытии (VED-406).
+ *
+ * Жалоба («в двадцатый раз»): после своего же действия задача «вылезала» в
+ * уведомлениях. Новостью о своём действии человек не получал давно, но его
+ * старое непрочитанное уведомление о той же задаче — «перенесли в
+ * тестирование» от ИИ — перекрашивалось пометкой, догоняющей карточку
+ * (VED-320), в «На доработку» и стояло наверху, как будто пришло только что.
+ * Поработав с задачей, человек этим уведомлением уже воспользовался.
+ */
+export const WORK_TASK_HANDLED_EVENT = "work.task.handled";
+
+export type WorkTaskHandledEvent = Omit<WorkTaskClosedEvent, "name"> & {
+  name: typeof WORK_TASK_HANDLED_EVENT;
+};
+
 export interface WorkTaskClosedEvent {
   name: typeof WORK_TASK_CLOSED_EVENT;
   /** Среда задачи — вместе с ключом даёт тот же адрес, что и у уведомления. */

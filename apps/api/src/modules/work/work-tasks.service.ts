@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import {
   WORK_CHECKLIST_TEXT_MAX,
+  WORK_TASK_HANDLED_EVENT,
   WORK_TASK_MARK_REFRESHED_EVENT,
   WORK_COMMENT_MAX,
   WORK_TASK_DESCRIPTION_MAX,
@@ -30,6 +31,7 @@ import { resolveDisplayName } from '@vedamatch/shared';
 import {
   WORK_TASK_CLOSED_EVENT,
   type WorkTaskClosedEvent,
+  type WorkTaskHandledEvent,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -178,6 +180,30 @@ export class WorkTasksService {
     const problem = sectionChoiceProblem(column);
     if (problem) throw new BadRequestException(problem);
     return column!.id;
+  }
+
+  /**
+   * Человек сам поработал с задачей (VED-522): его непрочитанные уведомления
+   * о ней гаснут — это решает подписчик, здесь только факт.
+   */
+  private async emitHandled(
+    taskId: string,
+    spaceId: string,
+    actorId: string,
+    onBehalfOfId: string | null,
+  ): Promise<void> {
+    const task = await this.prisma.workTask.findUnique({
+      where: { id: taskId },
+      select: { number: true, space: { select: { prefix: true } } },
+    });
+    if (!task) return;
+    this.events.emit(WORK_TASK_HANDLED_EVENT, {
+      name: WORK_TASK_HANDLED_EVENT,
+      spaceId,
+      taskKey: workTaskKey(task.space.prefix, task.number),
+      actorId,
+      onBehalfOfId,
+    } satisfies WorkTaskHandledEvent);
   }
 
   private async taskContext(taskId: string) {
@@ -558,6 +584,7 @@ export class WorkTasksService {
       }
     }
 
+    await this.emitHandled(taskId, context.spaceId, userId, onBehalfOfId);
     return this.get(taskId, userId);
   }
 
@@ -719,6 +746,7 @@ export class WorkTasksService {
       }
     }
 
+    await this.emitHandled(taskId, context.spaceId, userId, onBehalfOfId);
     return this.get(taskId, userId);
   }
 
@@ -883,6 +911,7 @@ export class WorkTasksService {
     });
     if (task) await this.notices.enqueueComment(task, userId, body);
 
+    await this.emitHandled(taskId, context.spaceId, userId, onBehalfOfId);
     return this.get(taskId, userId);
   }
 
