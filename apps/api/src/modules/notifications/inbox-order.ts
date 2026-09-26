@@ -52,6 +52,13 @@ export interface InboxOrderRow {
 export function compareInboxRows(a: InboxOrderRow, b: InboxOrderRow): number {
   const unreadFirst = Number(a.readAt !== null) - Number(b.readAt !== null);
   if (unreadFirst !== 0) return unreadFirst;
+  // Прочитанное — сначала по времени прочтения (VED-405): только что
+  // прочитанное сверху. При равном (одна «Отметить все прочитанными») и у
+  // непрочитанного — по времени прихода.
+  if (a.readAt && b.readAt) {
+    const byRead = b.readAt.getTime() - a.readAt.getTime();
+    if (byRead !== 0) return byRead;
+  }
   const byDate = b.createdAt.getTime() - a.createdAt.getTime();
   if (byDate !== 0) return byDate;
   return (b.id ?? '').localeCompare(a.id ?? '');

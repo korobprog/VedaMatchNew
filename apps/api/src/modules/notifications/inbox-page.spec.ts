@@ -3,6 +3,7 @@ import {
   clampInboxLimit,
   encodeInboxCursor,
   inboxFetchSize,
+  inboxKeysetClause,
   inboxSections,
   isPaginationRequested,
   INBOX_PAGE_SIZE,
@@ -221,6 +222,38 @@ describe('sliceInboxPage', () => {
     const page = sliceInboxPage(rows, 2);
 
     expect(parseInboxCursor(page.nextCursor)).toEqual({
+      kind: 'cursor',
+      cursor: {
+        section: 'read',
+        createdAt: at('2026-09-19T12:00:00Z'),
+        id: 'b',
+        readAt: at('2026-09-19T13:00:00Z'),
+      },
+    });
+  });
+
+  // VED-405: прочитанное продолжается по времени прочтения, при равном —
+  // по времени прихода.
+  it('keyset прочитанного — по времени прочтения, потом по времени прихода', () => {
+    const readAt = at('2026-09-19T13:00:00Z');
+    const createdAt = at('2026-09-19T12:00:00Z');
+    expect(
+      inboxKeysetClause({ section: 'read', createdAt, id: 'b', readAt }),
+    ).toEqual({
+      OR: [
+        { readAt: { lt: readAt } },
+        { readAt, createdAt: { lt: createdAt } },
+        { readAt, createdAt, id: { lt: 'b' } },
+      ],
+    });
+  });
+
+  it('курсор, выданный до VED-405, по-прежнему разбирается', () => {
+    const legacy = Buffer.from(
+      'read|2026-09-19T12:00:00.000Z|b',
+      'utf8',
+    ).toString('base64url');
+    expect(parseInboxCursor(legacy)).toEqual({
       kind: 'cursor',
       cursor: {
         section: 'read',
