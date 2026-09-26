@@ -830,17 +830,42 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
-        {/* «Оплата» (коммерческая доска, VED-458) — в строке с названием
-            среды, у правого края (VED-525); «Архив» и «Пригласить» переехали
-            в конец ряда вида ниже. */}
-        <span className="ml-auto flex items-center">
+        {/* «Свернуть все» — в строке с названием среды, у правого края
+            (VED-540): поменялась местами с кнопкой «Оплата», которая ушла в
+            конец ряда вида ниже. Только на телефоне, как и стрелки у колонок:
+            шире sm колонки стоят в ряд, прятать их незачем. Одна кнопка,
+            меняющая смысл, а не пара рядом: вторая всегда была бы
+            бесполезной, а место занимала бы то же. */}
+        {board.columns.length > 1 && (
+          <button
+            type="button"
+            onClick={toggleAll}
+            aria-expanded={!allFolded}
+            aria-label={
+              allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
+            }
+            title={
+              allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
+            }
+            className={workToolbarButtonClass({ extra: "ml-auto sm:hidden" })}
+          >
+            {allFolded ? (
+              <ChevronDown aria-hidden className="size-4" />
+            ) : (
+              <ChevronUp aria-hidden className="size-4" />
+            )}
+          </button>
+        )}
+        {/* Сводка коммерческой доски (VED-458) — полосой во всю ширину под
+            названием. Кнопка «Оплата» у обычной доски стоит в ряду вида. */}
+        {board.commercial && (
           <WorkCommercialBar
             board={board}
             canManageBoard={Boolean(canManage)}
             personal={space.isPersonal}
             onChanged={setBoard}
           />
-        </span>
+        )}
         {/* Один ряд, слева направо: «Свернуть все» (только на телефоне), «По
             дате», «По важности», «Архив», «Пригласить» — порядок, которого
             просил тестировщик (VED-160, круг 3). Раньше «Архив» с
@@ -851,7 +876,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             у «Архива» и «Пригласить» текст возвращается рядом со значком от
             sm и шире, где место уже не в обрез. «По дате» и «По важности» —
             сама суть переключателя вида, их текст не прячем ни на одном
-            размере экрана.
+            размере экрана. С VED-540 «Свернуть все» стоит в строке названия,
+            а место в конце ряда заняла «Оплата» — кнопок столько же.
 
             Прикидка ширины на 360 точек (контентная область экрана — 328 при
             паддинге страницы 16 с каждой стороны): три значка по 40
@@ -876,32 +902,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             «Пригласить» в конце ряда шести кнопкам на 360 не хватало одной
             точки, и «Пригласить» уезжала строкой ниже. */}
         <div className="flex w-full flex-wrap items-center justify-start gap-0.5 min-[370px]:gap-1">
-          {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
-              стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
-              не пара рядом: вторая всегда была бы бесполезной, а место
-              занимала бы то же. Кнопка всегда значковая — на этой ширине
-              экрана текст рядом с ней никогда не появляется, полю подписи
-              взяться неоткуда. */}
-          {board.columns.length > 1 && (
-            <button
-              type="button"
-              onClick={toggleAll}
-              aria-expanded={!allFolded}
-              aria-label={
-                allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
-              }
-              title={
-                allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
-              }
-              className={workToolbarButtonClass({ extra: "sm:hidden" })}
-            >
-              {allFolded ? (
-                <ChevronDown aria-hidden className="size-4" />
-              ) : (
-                <ChevronUp aria-hidden className="size-4" />
-              )}
-            </button>
-          )}
           {/* Группировка по дате создания (VED-160) и по важности (VED-51).
               Одна пара кнопок на один режим: включив одну, вторая гаснет —
               вместе они не имеют смысла. Нажатое состояние видно не только
@@ -972,6 +972,16 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             viewerId={board.viewerId}
             onChanged={reload}
           />
+          {/* «Оплата» — последней в ряду и в его рамке (VED-540). */}
+          {!board.commercial && (
+            <WorkCommercialBar
+              board={board}
+              canManageBoard={Boolean(canManage)}
+              personal={space.isPersonal}
+              onChanged={setBoard}
+              buttonClassName={workToolbarButtonClass()}
+            />
+          )}
         </div>
       </div>
 

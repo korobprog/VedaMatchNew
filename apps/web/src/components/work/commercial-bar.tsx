@@ -62,8 +62,14 @@ export function WorkCommercialBar({
   canManageBoard,
   personal,
   onChanged,
+  buttonClassName,
 }: {
   board: WorkBoardDto;
+  /**
+   * Вид кнопки «Оплата» у обычной доски. Кнопка стоит в ряду вида доски
+   * (VED-540) и берёт его рамку, чтобы не выбиваться из соседей.
+   */
+  buttonClassName?: string;
   /** Администрация среды: может сделать обычную доску коммерческой. */
   canManageBoard: boolean;
   /** Личная среда «Мои дела»: там кнопку не показываем, это не для клиентов. */
@@ -107,9 +113,12 @@ export function WorkCommercialBar({
         <button
           type="button"
           onClick={() => setSettingsOpen(true)}
-          className="flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm text-text-1 hover:text-text-0"
+          className={
+            buttonClassName ??
+            "flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm text-text-1 hover:text-text-0"
+          }
         >
-          <Coins aria-hidden className="size-4" />
+          <Coins aria-hidden className="size-4 shrink-0" />
           <span className="hidden sm:inline">Оплата</span>
           <span className="sr-only sm:hidden">Сделать доску коммерческой</span>
         </button>
