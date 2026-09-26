@@ -54,62 +54,36 @@ describe("balanceNote", () => {
 });
 
 describe("buildInviteMessage", () => {
-  const services = [
-    { name: "Знакомства", tagline: "Совместимость — это не вайб, а расчёт" },
-    { name: "Астрология", tagline: "Ведическая карта рождения" },
-  ];
+  const text = buildInviteMessage({ link: LINK });
+  const lines = text.split("\n");
 
-  function build(patch: Partial<Parameters<typeof buildInviteMessage>[0]> = {}) {
-    return buildInviteMessage({ link: LINK, services, welcomePoints: 10, ...patch });
-  }
-
-  it("перечисляет сервисы и заканчивается ссылкой", () => {
-    const lines = build().split("\n");
-    expect(lines).toContain("• Знакомства: совместимость — это не вайб, а расчёт");
-    expect(lines).toContain("• Астрология: ведическая карта рождения");
-    // Ссылка последней строкой: превью в мессенджере цепляется за неё.
-    expect(lines[lines.length - 1]).toBe(LINK);
+  // VED-423: текст — слово в слово от заказчика.
+  it("открывается шапкой портала и списком сервисов", () => {
+    expect(lines.slice(0, 5)).toEqual([
+      "🌎 VEDAMATCH.ru",
+      "Глобальный Портал Саморазвития.",
+      "",
+      "🌄 СЕРВИСЫ ПОРТАЛА:",
+      "⦁ Общение, мессенджер;",
+    ]);
+    expect(text).toContain("⦁ Работа;\nи многое другое в будущих обновлениях.");
+    expect(text).toContain("📤 ПРИСОЕДИНЯЙСЯ и делись!");
   });
 
-  it("называет сумму из настроек и склоняет её", () => {
-    expect(build()).toContain("сразу 10 баллов на счёт");
-    expect(build({ welcomePoints: 1 })).toContain("сразу 1 балл на счёт");
-    expect(build({ welcomePoints: 22 })).toContain("сразу 22 балла на счёт");
+  // Вместо адреса сайта — личная ссылка: без реферальной метки баллы не
+  // начислятся ни приглашённому, ни пригласившему.
+  it("ставит личную ссылку сразу за строкой про регистрацию", () => {
+    const at = lines.findIndex((line) => line.startsWith("📲 Зарегистрируйся"));
+    expect(at).toBeGreaterThan(0);
+    expect(lines[at + 1]).toBe(LINK);
   });
 
-  // Обнулили приветственные баллы в админке — приглашение не должно обещать
-  // «сразу 0 баллов».
-  it("молчит про баллы, когда номинал обнулён", () => {
-    const text = build({ welcomePoints: 0 });
-    expect(text).not.toContain("балл");
-    expect(text).toContain("Моя ссылка для регистрации:");
-  });
-
-  it("не ломается на пустом каталоге", () => {
-    const text = build({ services: [] });
-    expect(text).toContain("VedaMatch");
-    expect(text.trim().endsWith(LINK)).toBe(true);
-  });
-
-  it("не сбивает регистр у названий и аббревиатур", () => {
-    const text = build({
-      services: [{ name: "Рынок", tagline: "AI-подбор товаров" }],
-    });
-    expect(text).toContain("• Рынок: AI-подбор товаров");
-  });
-
-  // Иначе получается «Общение: переписка портала: диалоги…» — список внутри
-  // списка, и глаз спотыкается на каждой такой строке.
-  it("не ставит второе двоеточие, когда оно уже есть в описании", () => {
-    const text = build({
-      services: [
-        { name: "Общение", tagline: "Переписка портала: диалоги и группы" },
-      ],
-    });
-    expect(text).toContain("• Общение — переписка портала: диалоги и группы");
+  it("заканчивается Телеграм-каналом", () => {
+    expect(lines[lines.length - 1]).toBe(
+      "👥 А также Телеграм-канал: https://t.me/vedamatch",
+    );
   });
 });
-
 describe("подписи", () => {
   // Сверяемся со списком из @vedamatch/shared: новый тип операции обязан
   // получить подпись, иначе в истории появится пустая строка.
