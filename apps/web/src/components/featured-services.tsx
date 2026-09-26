@@ -77,13 +77,13 @@ const LOOKS: Record<string, FeaturedLook> = {
   music: { Icon: Music, accent: "text-violet" },
   // Звонок начинается внутри диалога, а этот экран отвечает на другой
   // вопрос — кто звонил вчера.
-  calls: { Icon: HandsetIcon, accent: "text-gold" },
+  calls: { Icon: HandsetIcon, accent: "text-magenta" },
   union: { Icon: Heart, accent: "text-magenta" },
-  vedabase: { Icon: BookOpen, accent: "text-gold" },
+  vedabase: { Icon: BookOpen, accent: "text-violet" },
   motivation: { Icon: Sparkles, accent: "text-violet" },
   library: { Icon: GraduationCap, accent: "text-cyan" },
   astro: { Icon: MoonStar, accent: "text-violet" },
-  market: { Icon: ShoppingBag, accent: "text-gold" },
+  market: { Icon: ShoppingBag, accent: "text-magenta" },
   work: { Icon: SquareKanban, accent: "text-cyan" },
   notices: { Icon: Megaphone, accent: "text-magenta" },
   wellness: { Icon: Leaf, accent: "text-cyan" },
