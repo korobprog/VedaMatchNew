@@ -83,6 +83,11 @@ import {
   searchSummary,
 } from "./task-search";
 import { WorkTaskDialog } from "./task-dialog";
+import {
+  browserSessionStore,
+  patchBoardSession,
+  readBoardSession,
+} from "./board-session";
 import { findTaskByKey, parseFocusKey, urlWithoutFocus } from "./task-focus";
 import { BOARD_REFRESH_MS, shouldApplyBoardRefresh } from "./board-refresh";
 import { StatusMarkBadge } from "@/components/status-mark-badge";
@@ -174,9 +179,43 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
   const [composerSeed, setComposerSeed] = useState<TaskComposerDraft>(() =>
     emptyComposerDraft(""),
   );
-  const rememberComposerDraft = useCallback((draft: TaskComposerDraft) => {
-    composerDraft.current = draft;
-  }, []);
+  /** Где открыта форма новой задачи — для записи черновика (VED-520). */
+  const composerColumnRef = useRef<string | null>(null);
+  const rememberComposerDraft = useCallback(
+    (draft: TaskComposerDraft) => {
+      composerDraft.current = draft;
+      // Черновик переживает уход в другое окно портала (VED-520): файлы
+      // сохранить нельзя, текст и выбор — можно.
+      const columnId = composerColumnRef.current;
+      if (!board || !columnId) return;
+      patchBoardSession(browserSessionStore(), board.id, (session) => ({
+        ...session,
+        composer: {
+          columnId,
+          description: draft.description,
+          title: draft.title,
+          assigneeId: draft.assigneeId,
+          priority: draft.priority,
+        },
+      }));
+    },
+    [board],
+  );
+  // Открытая карточка и место формы — в память вкладки (VED-520). Закрыли
+  // карточку или форму — запись снимается: закрытое само не вернётся.
+  useEffect(() => {
+    composerColumnRef.current = composerColumn;
+    if (!board?.id) return;
+    patchBoardSession(browserSessionStore(), board.id, (session) => ({
+      ...session,
+      openTaskId,
+      composer: composerColumn
+        ? session.composer?.columnId === composerColumn
+          ? session.composer
+          : null
+        : null,
+    }));
+  }, [board?.id, openTaskId, composerColumn]);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [columnDraft, setColumnDraft] = useState<string | null>(null);
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null);
@@ -312,6 +351,36 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           loaded.board ? readWorkGroupMode(loaded.board.id) : "none",
         );
         if (focused) setOpenTaskId(focused.taskId);
+        /* Вернулись в окно портала (VED-520) — доска такая, какой её
+           оставили: открытая карточка и начатая задача. Карточку — только
+           если она ещё на доске; задачу из уведомления (`focused`) — важнее. */
+        if (loaded.board) {
+          const session = readBoardSession(
+            browserSessionStore(),
+            loaded.board.id,
+          );
+          const reopen = session.openTaskId;
+          if (
+            !focused &&
+            reopen &&
+            loaded.board.columns.some((column) =>
+              column.tasks.some((task) => task.id === reopen),
+            )
+          ) {
+            setOpenTaskId(reopen);
+          }
+          if (session.composer) {
+            const restored: TaskComposerDraft = {
+              ...emptyComposerDraft(session.composer.assigneeId),
+              description: session.composer.description,
+              title: session.composer.title,
+              priority: session.composer.priority,
+            };
+            composerDraft.current = restored;
+            setComposerSeed(restored);
+            setComposerColumn(session.composer.columnId);
+          }
+        }
         // Ключ из уведомления — разовый (VED-500): закрытая задача не должна
         // открываться снова при возврате в планировщик из истории окон.
         const clean = urlWithoutFocus(

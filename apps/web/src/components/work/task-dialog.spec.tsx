@@ -76,6 +76,9 @@ function open() {
 }
 
 beforeEach(() => {
+  // Черновики карточки живут в памяти вкладки (VED-520): тесты не должны
+  // получать правки соседнего.
+  sessionStorage.clear();
   vi.mocked(getWorkTask).mockResolvedValue(task);
   vi.mocked(updateWorkTask).mockReset();
   vi.mocked(updateWorkTask).mockImplementation((_id, body) =>
@@ -556,3 +559,30 @@ describe("WorkTaskDialog — индикатор вложений (VED-431)", () 
     expect(link).toHaveAttribute("href", "#work-task-attachments");
   });
 });
+
+describe("WorkTaskDialog — несохранённое переживает уход в другое окно (VED-520)", () => {
+  it("правка и недописанный комментарий возвращаются при новом открытии", async () => {
+    const user = userEvent.setup();
+    const props = { onClose: vi.fn(), onChanged: vi.fn() };
+    const first = render(
+      <WorkTaskDialog taskId="t1" board={board} {...props} />,
+    );
+    await screen.findByDisplayValue("Кнопка сохранить");
+    await user.selectOptions(screen.getByLabelText("Важность"), "high");
+    await user.type(
+      screen.getByLabelText("Новый комментарий"),
+      "ещё пишу",
+    );
+
+    // Ушли в другое окно портала: окно карточки снято без закрытия.
+    first.unmount();
+    render(<WorkTaskDialog taskId="t1" board={board} {...props} />);
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    expect(screen.getByLabelText("Важность")).toHaveValue("high");
+    expect(screen.getByText("Есть несохранённые правки")).toBeInTheDocument();
+    expect(screen.getByLabelText("Новый комментарий")).toHaveValue("ещё пишу");
+    expect(updateWorkTask).not.toHaveBeenCalled();
+  });
+});
+

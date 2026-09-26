@@ -47,6 +47,12 @@ import {
   type TaskDraft,
 } from "./task-edits";
 import { WorkTaskFinance } from "./task-finance";
+import {
+  browserSessionStore,
+  patchBoardSession,
+  readBoardSession,
+  without,
+} from "./board-session";
 
 /** Поле карточки: одинаковое у всех списков и у срока. */
 const FIELD_CLASS =
@@ -130,7 +136,11 @@ export function WorkTaskDialog({
       .then((loaded) => {
         if (!alive) return;
         setTask(loaded);
-        resetDraft(draftFromTask(loaded));
+        // Правки, не сохранённые до ухода в другое окно портала (VED-520),
+        // возвращаются в поля — с кнопкой «Сохранить», как были.
+        const kept = readBoardSession(browserSessionStore(), board.id)
+          .taskDrafts[loaded.id];
+        resetDraft(kept ?? draftFromTask(loaded));
       })
       .catch((cause: unknown) => {
         if (alive) {
@@ -142,7 +152,7 @@ export function WorkTaskDialog({
     return () => {
       alive = false;
     };
-  }, [taskId]);
+  }, [taskId, board.id]);
 
   // Высоту заголовка считаем после загрузки: до неё в поле пусто и оно
   // осталось бы в одну строку.
@@ -152,6 +162,21 @@ export function WorkTaskDialog({
 
   const saved = task ? draftFromTask(task) : draft;
   const dirty = Boolean(task) && hasTaskEdits(saved, draft);
+
+  // Несохранённое — в память вкладки (VED-520): уход в другое окно портала
+  // снимает окно карточки, и без этого правка пропадала. Сохранили или
+  // отменили — запись стирается.
+  useEffect(() => {
+    if (!task) return;
+    const next = { ...draft, ...latestText.current };
+    const unsaved = hasTaskEdits(draftFromTask(task), next);
+    patchBoardSession(browserSessionStore(), board.id, (session) => ({
+      ...session,
+      taskDrafts: unsaved
+        ? { ...session.taskDrafts, [task.id]: next }
+        : without(session.taskDrafts, task.id),
+    }));
+  }, [task, draft, board.id]);
   const problem = taskEditsProblem(draft);
 
   /**
@@ -196,8 +221,15 @@ export function WorkTaskDialog({
         .then(() => onChanged())
         .catch(() => undefined);
     }
+    // Правки ушли на сервер вместе с закрытием — черновик больше не нужен.
+    if (task) {
+      patchBoardSession(browserSessionStore(), board.id, (session) => ({
+        ...session,
+        taskDrafts: without(session.taskDrafts, task.id),
+      }));
+    }
     onClose();
-  }, [task, canEdit, draft, commit, onChanged, onClose]);
+  }, [task, canEdit, draft, commit, onChanged, onClose, board.id]);
 
   // Escape закрывает окно: без этого на компьютере из карточки выходят мышью,
   // а с клавиатуры — никак.
@@ -810,6 +842,19 @@ export function WorkTaskDialog({
             {canEdit && (
               <CommentForm
                 busy={busy}
+                initialBody={
+                  readBoardSession(browserSessionStore(), board.id).comments[
+                    task.id
+                  ] ?? ""
+                }
+                onBodyChange={(body) =>
+                  patchBoardSession(browserSessionStore(), board.id, (s) => ({
+                    ...s,
+                    comments: body.trim()
+                      ? { ...s.comments, [task.id]: body }
+                      : without(s.comments, task.id),
+                  }))
+                }
                 onSend={(body, clear) =>
                   void run(async () => {
                     const next = await commentWorkTask(task.id, { body });
@@ -969,12 +1014,21 @@ function ChecklistAddForm({
 /** Новый комментарий — со своим текстом, по той же причине, что и чек-лист. */
 function CommentForm({
   busy,
+  initialBody = "",
+  onBodyChange,
   onSend,
 }: {
   busy: boolean;
+  /** Недописанное до ухода в другое окно портала (VED-520). */
+  initialBody?: string;
+  onBodyChange?: (body: string) => void;
   onSend: (body: string, clear: () => void) => void;
 }) {
-  const [body, setBody] = useState("");
+  const [body, setBodyState] = useState(initialBody);
+  const setBody = (next: string) => {
+    setBodyState(next);
+    onBodyChange?.(next);
+  };
   return (
     <form
       className="mt-3 flex gap-2"
