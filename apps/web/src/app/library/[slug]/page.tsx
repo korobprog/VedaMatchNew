@@ -20,6 +20,7 @@ import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
+import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
@@ -104,6 +105,11 @@ export default async function LibraryCategoryPage({
     ru: category.titleRu,
     en: category.titleEn,
   });
+  // Страница автора (VED-521) — рубрика без подрубрик внутри раздела:
+  // «Проповедники → Ари Мардан Прабху». Фильтров и сортировки там нет,
+  // тип и язык выбираются значками в ряду действий.
+  const authorPage =
+    children.length === 0 && ancestors.length > 0 && shlokaMode === null;
 
   return (
     <div className="relative min-h-dvh bg-bg-0">
@@ -152,21 +158,38 @@ export default async function LibraryCategoryPage({
           >
             {t(locale, "nav.add")}
           </Link>
-          <div id="lineage-switch" className="ml-auto scroll-mt-24">
-            <LibraryLineageFilter
-              locale={locale}
-              applied={appliedLineage}
-              preference={preferences?.lineage ?? null}
-              iconOnly
-            />
-          </div>
-          <CategoryTitleEdit locale={locale} category={category} iconOnly />
-          {category.canMove && (
-            <LibraryOrganizeButton locale={locale} iconOnly />
+          {authorPage ? (
+            <>
+              {/* У автора справа налево (VED-521): «Тип материала»,
+                  «Редактировать», «Упорядочить», «Язык». */}
+              <div className="ml-auto">
+                <EntryFilterMenu kind="language" locale={locale} />
+              </div>
+              {category.canMove && (
+                <LibraryOrganizeButton locale={locale} iconOnly />
+              )}
+              <CategoryTitleEdit locale={locale} category={category} iconOnly />
+              <EntryFilterMenu kind="type" locale={locale} />
+            </>
+          ) : (
+            <>
+              <div id="lineage-switch" className="ml-auto scroll-mt-24">
+                <LibraryLineageFilter
+                  locale={locale}
+                  applied={appliedLineage}
+                  preference={preferences?.lineage ?? null}
+                  iconOnly
+                />
+              </div>
+              <CategoryTitleEdit locale={locale} category={category} iconOnly />
+              {category.canMove && (
+                <LibraryOrganizeButton locale={locale} iconOnly />
+              )}
+            </>
           )}
         </div>
 
-        {user && (
+        {user && !authorPage && (
           <LineagePrompt
             user={user}
             serviceName="Образования"
@@ -227,11 +250,15 @@ export default async function LibraryCategoryPage({
               <DescendantsToggle locale={locale} enabled={withDescendants} />
             )}
 
-            <EntryFilters
-              locale={locale}
-              categories={children}
-              communities={communities ?? []}
-            />
+            {/* У автора панели фильтров нет (VED-521): тип и язык — значками
+                выше, сортировка одна — «новое сверху». */}
+            {!authorPage && (
+              <EntryFilters
+                locale={locale}
+                categories={children}
+                communities={communities ?? []}
+              />
+            )}
 
             {feed && (
               <EntryList
