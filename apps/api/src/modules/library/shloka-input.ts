@@ -46,10 +46,13 @@ export interface ShlokaTextFields {
   commentary: string | null;
 }
 
-/** Код ошибки для 400 либо `null`, если поля годятся. */
+/**
+ * Код ошибки для 400 либо `null`, если поля годятся. Только длины: что
+ * обязательно, решает `shlokaRequiredError` — у блока ачарьи правила свои.
+ */
 export function shlokaFieldsError(fields: ShlokaTextFields): string | null {
-  if (!fields.text) return 'text_required';
-  if (fields.text.length > LIBRARY_SHLOKA_LIMITS.text) return 'text_too_long';
+  if (fields.text && fields.text.length > LIBRARY_SHLOKA_LIMITS.text)
+    return 'text_too_long';
   if (fields.verse && fields.verse.length > LIBRARY_SHLOKA_LIMITS.verse)
     return 'verse_too_long';
   if (
@@ -68,6 +71,15 @@ export function shlokaFieldsError(fields: ShlokaTextFields): string | null {
   )
     return 'commentary_too_long';
   return null;
+}
+
+/**
+ * Обязательные поля самой шлоки (VED-464): перевод. Оригинал стиха
+ * необязателен — переводы часто заводят раньше, чем находится текст.
+ */
+export function shlokaRequiredError(fields: ShlokaTextFields): string | null {
+  if (!fields.translation) return 'translation_required';
+  return shlokaFieldsError(fields);
 }
 
 export function sourceError(source: string | null): string | null {
@@ -124,8 +136,7 @@ export function cleanAcharyas(value: unknown): AcharyasResult {
       return { ok: false, error: 'acharya_empty' };
     const error = shlokaFieldsError({
       verse: null,
-      // Текст у блока ачарьи необязателен — проверяем только длину.
-      text: block.text ?? '-',
+      text: block.text,
       wordByWord: block.wordByWord,
       translation: block.translation,
       commentary: block.commentary,
@@ -144,7 +155,8 @@ function clip(text: string, max: number): string {
 /**
  * Заголовок материала-шлоки — для ленты, поиска, избранного и хлебных
  * крошек. Отдельного поля в форме нет: у шлоки имя — это источник и номер
- * («Бхагавад-гита 2.13»). Без номера — источник и начало первой строки.
+ * («Бхагавад-гита 2.13»). Без номера — источник и начало первой строки, а
+ * без текста стиха (VED-464) — перевода.
  */
 export function shlokaTitle(
   source: string,
@@ -153,6 +165,7 @@ export function shlokaTitle(
 ): string {
   if (verse) return clip(`${source} ${verse}`, MAX_TITLE_LENGTH);
   const firstLine = text.split('\n')[0]?.trim() ?? '';
+  if (!firstLine) return clip(source, MAX_TITLE_LENGTH);
   return clip(`${source}: ${firstLine}`, MAX_TITLE_LENGTH);
 }
 

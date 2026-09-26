@@ -163,7 +163,7 @@ export function EntryCard({
 
       {/* Шлока показывает начало самого стиха — шрифтом для санскрита,
           как в её окне (VED-386). */}
-      {entry.shloka && (
+      {entry.shloka?.text && (
         <p
           className={`${verseFontVariables} mb-2 line-clamp-2 whitespace-pre-line text-[1.05rem] leading-7 text-text-0`}
           style={{ fontFamily: VERSE_FONT_FAMILY }}

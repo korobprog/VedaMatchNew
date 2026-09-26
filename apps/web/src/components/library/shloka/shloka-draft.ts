@@ -155,7 +155,8 @@ export function imagesAfterSave(draft: ShlokaDraft): number {
  */
 export function draftError(draft: ShlokaDraft): string | null {
   if (!draft.source.trim()) return "source_required";
-  if (!draft.text.trim()) return "text_required";
+  // Обязательны источник и перевод, оригинал — нет (VED-464).
+  if (!draft.translation.trim()) return "translation_required";
   if (draft.verse.trim().length > LIBRARY_SHLOKA_LIMITS.verse)
     return "verse_too_long";
   if (draft.acharyas.length > LIBRARY_SHLOKA_LIMITS.acharyas)

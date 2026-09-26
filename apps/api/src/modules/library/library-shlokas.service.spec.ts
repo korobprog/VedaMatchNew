@@ -271,14 +271,39 @@ describe('LibraryShlokasService.create', () => {
     expect(events.emit).toHaveBeenCalledTimes(1);
   });
 
-  it('без текста шлоки и без рубрики — 400', async () => {
+  it('без оригинала: пустой текст, заголовок по началу перевода (VED-464)', async () => {
+    const { service, prisma, tx } = setup();
+    prisma.libraryEntry.findUnique.mockResolvedValue(
+      detailRow({ id: 'sh-new' }),
+    );
+
+    await service.create('author', false, {
+      categoryId: 'cat-bg',
+      source: 'Бхагавад-гита',
+      translation: 'Как воплощённая душа\nпереходит',
+    });
+
+    expect(tx.libraryEntry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          titleRu: 'Бхагавад-гита: Как воплощённая душа',
+        }),
+      }),
+    );
+  });
+
+  it('без перевода и без рубрики — 400', async () => {
     const { service, prisma } = setup();
     await expect(
-      service.create('author', false, { categoryId: 'cat-bg', text: '  ' }),
-    ).rejects.toThrow(new BadRequestException('text_required'));
+      service.create('author', false, { categoryId: 'cat-bg', text: 'стих' }),
+    ).rejects.toThrow(new BadRequestException('translation_required'));
     prisma.libraryCategory.findFirst.mockResolvedValue(null);
     await expect(
-      service.create('author', false, { categoryId: 'x', text: 'стих' }),
+      service.create('author', false, {
+        categoryId: 'x',
+        text: 'стих',
+        translation: 'перевод',
+      }),
     ).rejects.toThrow(new BadRequestException('category_not_found'));
   });
 });

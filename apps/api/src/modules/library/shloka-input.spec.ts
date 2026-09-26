@@ -9,6 +9,7 @@ import {
   cleanMultiline,
   shlokaDescription,
   shlokaFieldsError,
+  shlokaRequiredError,
   shlokaTitle,
   sourceError,
 } from './shloka-input';
@@ -47,9 +48,14 @@ describe('cleanLine', () => {
 });
 
 describe('shlokaFieldsError', () => {
-  it('текст шлоки обязателен', () => {
-    expect(shlokaFieldsError(fields({ text: null }))).toBe('text_required');
-    expect(shlokaFieldsError(fields())).toBeNull();
+  it('оригинал необязателен, перевод обязателен (VED-464)', () => {
+    expect(shlokaFieldsError(fields({ text: null }))).toBeNull();
+    expect(
+      shlokaRequiredError(fields({ text: null, translation: 'перевод' })),
+    ).toBeNull();
+    expect(shlokaRequiredError(fields({ translation: null }))).toBe(
+      'translation_required',
+    );
   });
 
   it('следит за пределами полей', () => {

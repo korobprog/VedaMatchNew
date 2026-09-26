@@ -59,7 +59,9 @@ export function ShlokaForm({
     () =>
       target.kind === "edit"
         ? draftFromShloka(target.shloka)
-        : emptyDraft(target.sourceLabel),
+        : // Источник не подставляется по разделу (VED-464): «Шлоки» в поле
+          // приходилось стирать каждый раз. Человек пишет его сам.
+          emptyDraft(""),
     [target],
   );
   const [draft, setDraft] = useState<ShlokaDraft>(initial);
@@ -184,6 +186,7 @@ export function ShlokaForm({
         required
         requiredLabel={st(locale, "form.required")}
         maxLength={300}
+        placeholder={st(locale, "form.sourcePlaceholder")}
       />
       <TextField
         label={st(locale, "form.verse")}
@@ -199,8 +202,6 @@ export function ShlokaForm({
         hint={st(locale, "form.textHint")}
         value={draft.text}
         onChange={(value) => set("text", value)}
-        required
-        requiredLabel={st(locale, "form.required")}
         rows={6}
         maxLength={LIBRARY_SHLOKA_LIMITS.text}
         verse
@@ -209,6 +210,8 @@ export function ShlokaForm({
         label={st(locale, "form.translation")}
         value={draft.translation}
         onChange={(value) => set("translation", value)}
+        required
+        requiredLabel={st(locale, "form.required")}
         rows={4}
         maxLength={LIBRARY_SHLOKA_LIMITS.translation}
       />
