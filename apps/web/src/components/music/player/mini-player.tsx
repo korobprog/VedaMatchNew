@@ -50,6 +50,7 @@ import {
 import { SeekStepGlyph } from "./seek-step-glyph";
 import { pinnedButtonCount, pinnedLayout, seekButtonLabel } from "./player-prefs";
 import { useEqualizerRoom } from "./use-equalizer-room";
+import { eqRightPadding } from "./eq-fit";
 import { seekHotkeyDirection } from "./seek-hotkeys";
 import { bookmarkSavedText } from "./player-marks";
 import { useTrackBookmarks } from "./use-track-bookmarks";
@@ -263,16 +264,24 @@ export function MiniPlayer() {
   );
 
   // Место эквалайзеру во втором ряду телефона (VED-450, круг 5) — по замеру
-  // ряда, а не по числу вынесенных кнопок. 16 — его поле справа (`pr-4`),
-  // 6 — зазор внутри пары перемотки (`gap-1.5`, круг 6): кнопки меряются
-  // по одной, и зазор между ними в их ширину не входит.
+  // ряда, а не по числу вынесенных кнопок. К ширине кнопок прибавляются его
+  // поле справа (`eqRightPadding`, круг 7) и 6 — зазор внутри пары перемотки
+  // (`gap-1.5`, круг 6): кнопки меряются по одной, и зазор между ними в их
+  // ширину не входит.
   const pinnedPrefs = player?.prefs;
+  const eqPad = eqRightPadding(
+    pinnedPrefs?.showSeek
+      ? "seek"
+      : pinnedPrefs?.showBookmark || pinnedPrefs?.showHistory
+        ? "icon"
+        : "strip",
+  );
   const {
     room: eqRoom,
     attachRow: attachPinnedRow,
     attachButtons: attachPinnedButtons,
   } = useEqualizerRoom(
-    16 + (pinnedPrefs?.showSeek ? 6 : 0),
+    eqPad + (pinnedPrefs?.showSeek ? 6 : 0),
     pinnedPrefs ? pinnedButtonCount(pinnedPrefs) <= 2 : true,
     pinnedPrefs
       ? `${pinnedPrefs.showSeek}${pinnedPrefs.showBookmark}${pinnedPrefs.showHistory}`
@@ -1067,7 +1076,7 @@ export function MiniPlayer() {
           ref={attachPinnedRow}
           role={pinned !== "none" ? "group" : undefined}
           aria-label={pinned !== "none" ? "Вынесенные кнопки" : undefined}
-          className={`order-5 ml-1 flex min-w-0 flex-1 items-center gap-0 min-[400px]:ml-2 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
+          className={`order-5 ml-1 flex min-w-0 flex-1 items-center gap-0 sm:order-10 sm:ml-0 sm:w-full sm:flex-none sm:justify-center sm:gap-2 ${
             pinned === "none"
               ? "sm:hidden"
               : pinned === "narrow"
@@ -1076,11 +1085,14 @@ export function MiniPlayer() {
           }`}
         >
           {eqRoom && (
-            /* Поля несимметричны нарочно (VED-450, круг 6): слева до
-               столбиков и так ~19 точек — поля ряда и кнопки «Дальше», —
-               справа у кнопок полей почти нет. `pr-4` без левого поля даёт
-               по ~19 с обеих сторон; с `px-3` было 31 слева и 15 справа. */
-            <span className="flex min-w-0 flex-1 pr-4 sm:hidden">
+            /* Поле только справа и по соседу (VED-450, круги 6–7): слева
+               до столбиков и так ~17 точек — поле ряда и кнопка «Дальше».
+               Замер от значка до значка: 17–18 с обеих сторон на 360, 393
+               и 412 точках при любом наборе вынесенных кнопок. */
+            <span
+              className="flex min-w-0 flex-1 sm:hidden"
+              style={{ paddingRight: eqPad }}
+            >
               <MusicPlayingBars playing={isPlaying} fill className="h-5 w-full" />
             </span>
           )}

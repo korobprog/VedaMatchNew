@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EQ_MIN_WIDTH, eqBarCount, eqFits } from "./eq-fit";
+import { EQ_MIN_WIDTH, eqBarCount, eqFits, eqRightPadding } from "./eq-fit";
 
 describe("eqBarCount (VED-450)", () => {
   it("уже порога — не рисуем", () => {
@@ -26,5 +26,14 @@ describe("eqFits (VED-450)", () => {
     expect(eqFits(200, 80, 24)).toBe(true);
     expect(eqFits(200, 200 - 24 - EQ_MIN_WIDTH, 24)).toBe(true);
     expect(eqFits(200, 200 - 24 - EQ_MIN_WIDTH + 1, 24)).toBe(false);
+  });
+});
+
+describe("eqRightPadding (VED-450, круг 7)", () => {
+  it("у перемотки значок у края — поле больше, у значковых кнопок меньше", () => {
+    expect(eqRightPadding("seek")).toBeGreaterThan(eqRightPadding("strip"));
+    expect(eqRightPadding("strip")).toBeGreaterThanOrEqual(
+      eqRightPadding("icon"),
+    );
   });
 });
