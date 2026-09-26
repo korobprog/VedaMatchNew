@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import {
   Copy,
@@ -43,6 +49,8 @@ import {
   useBlogTextFold,
 } from "./blog-post-text";
 import { blogEditedLabel, blogPostDate } from "./blog-format";
+import type { PostAction } from "./post-actions-order";
+import { usePostActionsOrder } from "./use-post-actions-order";
 
 /**
  * Кнопки под постом. Общий класс, чтобы правка встала в тот же ряд, что
@@ -170,6 +178,105 @@ export function BlogPostCard({
     }
   }
 
+  // Кнопки под постом — в порядке из настройки (VED-509): порядок меняют
+  // кнопкой рядом с «Поделиться» на странице поста, и он один на всю ленту.
+  const actionOrder = usePostActionsOrder();
+  const actions: Record<PostAction, ReactNode> = {
+    speak: <BlogSpeakButton key="speak" post={post} />,
+    copy: (
+      <button
+        key="copy"
+        type="button"
+        onClick={copy}
+        className={`${ACTION} hover:border-cyan/60`}
+      >
+        {copied ? (
+          <Check aria-hidden className="size-3.5" />
+        ) : (
+          <Copy aria-hidden className="size-3.5" />
+        )}
+        <span className={ACTION_LABEL}>
+          {copied ? "Скопировано" : "Копировать"}
+        </span>
+      </button>
+    ),
+    favorite: (
+      <button
+        key="favorite"
+        type="button"
+        onClick={toggleFavorite}
+        aria-pressed={favorited}
+        className={`${ACTION} hover:border-gold/60`}
+      >
+        <Star
+          aria-hidden
+          className={`size-3.5 ${favorited ? "fill-gold text-gold" : ""}`}
+        />
+        <span className={ACTION_LABEL}>Избранное</span>
+      </button>
+    ),
+    repost: (
+      <button
+        key="repost"
+        type="button"
+        onClick={repost}
+        disabled={pending}
+        className={`${ACTION} hover:border-cyan/60`}
+      >
+        <Repeat2 aria-hidden className="size-3.5" />
+        <span className={ACTION_LABEL}>Репост</span>
+        {post.repostCount > 0 && (
+          <span className="text-text-2">{post.repostCount}</span>
+        )}
+      </button>
+    ),
+    // Правка стоит среди тех же кнопок, где «Удалить» (VED-321): у репоста
+    // её нет вовсе — правится оригинал его автором, и сервер отвечает тем же
+    // отказом, даже если кнопку подделать.
+    edit: post.canEdit ? (
+      <button
+        key="edit"
+        ref={editButtonRef}
+        type="button"
+        onClick={() => {
+          setError(null);
+          setEditing(true);
+        }}
+        disabled={pending}
+        className={`${ACTION} hover:border-cyan/60`}
+      >
+        <Pencil aria-hidden className="size-3.5" />
+        <span className={ACTION_LABEL}>Изменить</span>
+      </button>
+    ) : null,
+    pin: post.canModerate ? (
+      <button
+        key="pin"
+        type="button"
+        onClick={togglePin}
+        disabled={pending}
+        className={`${ACTION} hover:border-gold/60`}
+      >
+        <Pin aria-hidden className="size-3.5" />
+        <span className={ACTION_LABEL}>
+          {post.pinned ? "Открепить" : "Закрепить"}
+        </span>
+      </button>
+    ) : null,
+    delete: post.canManage ? (
+      <button
+        key="delete"
+        type="button"
+        onClick={remove}
+        disabled={pending}
+        className={`${ACTION} hover:border-magenta/60`}
+      >
+        <Trash2 aria-hidden className="size-3.5" />
+        <span className={ACTION_LABEL}>Удалить</span>
+      </button>
+    ) : null,
+  };
+
   return (
     <article className="overflow-hidden rounded-2xl border border-glass-brd bg-glass">
       <header className="flex items-center gap-3 px-4 py-2">
@@ -253,87 +360,7 @@ export function BlogPostCard({
           )}
 
           <footer className="flex flex-nowrap items-center gap-1.5 px-4 pb-2 pt-2 max-sm:gap-1">
-            <BlogSpeakButton post={post} />
-            <button
-              type="button"
-              onClick={copy}
-              className={`${ACTION} hover:border-cyan/60`}
-            >
-              {copied ? (
-                <Check aria-hidden className="size-3.5" />
-              ) : (
-                <Copy aria-hidden className="size-3.5" />
-              )}
-              <span className={ACTION_LABEL}>
-                {copied ? "Скопировано" : "Копировать"}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={toggleFavorite}
-              aria-pressed={favorited}
-              className={`${ACTION} hover:border-gold/60`}
-            >
-              <Star
-                aria-hidden
-                className={`size-3.5 ${favorited ? "fill-gold text-gold" : ""}`}
-              />
-              <span className={ACTION_LABEL}>Избранное</span>
-            </button>
-            <button
-              type="button"
-              onClick={repost}
-              disabled={pending}
-              className={`${ACTION} hover:border-cyan/60`}
-            >
-              <Repeat2 aria-hidden className="size-3.5" />
-              <span className={ACTION_LABEL}>Репост</span>
-              {post.repostCount > 0 && (
-                <span className="text-text-2">{post.repostCount}</span>
-              )}
-            </button>
-            {/* Правка стоит среди тех же кнопок, где «Удалить» (VED-321):
-                у репоста её нет вовсе — правится оригинал его автором, и
-                сервер отвечает тем же отказом, даже если кнопку подделать. */}
-            {post.canEdit && (
-              <button
-                ref={editButtonRef}
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  setEditing(true);
-                }}
-                disabled={pending}
-                className={`${ACTION} hover:border-cyan/60`}
-              >
-                <Pencil aria-hidden className="size-3.5" />
-                <span className={ACTION_LABEL}>Изменить</span>
-              </button>
-            )}
-            {post.canModerate && (
-              <button
-                type="button"
-                onClick={togglePin}
-                disabled={pending}
-                className={`${ACTION} hover:border-gold/60`}
-              >
-                <Pin aria-hidden className="size-3.5" />
-                <span className={ACTION_LABEL}>
-                  {post.pinned ? "Открепить" : "Закрепить"}
-                </span>
-              </button>
-            )}
-            {post.canManage && (
-              <button
-                type="button"
-                onClick={remove}
-                disabled={pending}
-                className={`${ACTION} hover:border-magenta/60`}
-              >
-                <Trash2 aria-hidden className="size-3.5" />
-                <span className={ACTION_LABEL}>Удалить</span>
-              </button>
-            )}
+            {actionOrder.map((id) => actions[id])}
           </footer>
         </>
       )}
