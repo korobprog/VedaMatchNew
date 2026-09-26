@@ -8,7 +8,7 @@ import {
 } from "@/lib/music-admin-api";
 
 export const metadata: Metadata = {
-  title: "Лекции Музыки",
+  title: "Лекции Медиатеки",
   robots: { index: false, follow: false },
 };
 
@@ -30,7 +30,7 @@ export default async function MusicAdminLecturesPage() {
       <p className="mb-5 max-w-2xl text-sm text-text-1">
         Цикл — отдельная единица раздела «Лекции»: название, лектор, обложка и
         лекции по порядку. Лекции — записи каталога: добавьте уже загруженные
-        или загрузите новые прямо в цикл. В каталоге Музыки лекции цикла не
+        или загрузите новые прямо в цикл. В каталоге Медиатеки лекции цикла не
         показываются.
       </p>
 

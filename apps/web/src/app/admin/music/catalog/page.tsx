@@ -16,7 +16,7 @@ import {
 } from "@/lib/music-admin-api";
 
 export const metadata = {
-  title: "Справочники Музыки",
+  title: "Справочники Медиатеки",
   robots: { index: false, follow: false },
 };
 
@@ -53,7 +53,7 @@ export default async function AdminMusicCatalogPage() {
         <div className="mb-5">
           <Alert tone="error">
             Справочники не загрузились. Либо у этой учётной записи нет прав на
-            раздел «Музыка», либо API ответил ошибкой — пустые списки ниже не
+            раздел «Медиатека», либо API ответил ошибкой — пустые списки ниже не
             значат, что каталог пуст.
           </Alert>
         </div>

@@ -8,7 +8,7 @@ import {
 import { getMusicPlaylist, getMusicTracks } from "@/lib/music-api";
 
 export const metadata: Metadata = {
-  title: "Подборки Музыки",
+  title: "Подборки Медиатеки",
   robots: { index: false, follow: false },
 };
 
