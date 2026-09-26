@@ -157,7 +157,7 @@ export function MusicRail({
   // (VED-516): «Каталог», «Избранное» и «Плейлисты» обязаны влезать в экран
   // целиком, а раньше «Плейлисты» обрезались краем.
   const row =
-    "flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-2 text-[13px] font-semibold lg:h-10 lg:gap-2.5 lg:px-2.5";
+    "flex h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl px-1.5 text-[13px] font-semibold lg:h-10 lg:gap-2.5 lg:px-2.5";
 
   return (
     <nav aria-label="Своя музыка" className="w-full lg:w-56 lg:shrink-0">
@@ -167,7 +167,9 @@ export function MusicRail({
           const badge =
             item.count !== undefined && item.count > 0 ? (
               <span
-                className={`ml-1 rounded-full px-1.5 font-mono text-[11px] lg:ml-auto ${
+                // Цифра вплотную к слову (VED-516): на телефоне три первых
+                // пункта обязаны влезть в экран вместе с числами.
+                className={`rounded-full px-1 font-mono text-[11px] lg:ml-auto lg:px-1.5 ${
                   item.accentCount
                     ? "bg-gold/20 text-gold"
                     : "text-text-2"
