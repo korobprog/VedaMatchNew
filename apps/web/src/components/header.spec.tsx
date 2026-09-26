@@ -335,6 +335,26 @@ describe("Header: верхняя панель", { timeout: 20000 }, () => {
     expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
   });
 
+  /* VED-456: «Сбросить по умолчанию» — значком в заголовке настройки
+     верхней панели, возвращает шапку как была. */
+  it("сбрасывает верхнюю панель по умолчанию одним нажатием", () => {
+    renderHeader();
+    const settings = openHeaderSettings();
+    fireEvent.click(within(settings).getByRole("switch", { name: /^Поиск/ }));
+    expect(screen.getByRole("link", { name: "Поиск" })).toBeInTheDocument();
+
+    fireEvent.click(
+      within(settings).getByRole("button", {
+        name: "Сбросить верхнюю панель по умолчанию",
+      }),
+    );
+
+    expect(screen.queryByRole("link", { name: "Поиск" })).not.toBeInTheDocument();
+    expect(
+      JSON.parse(window.localStorage.getItem("vedamatch:header-toolbar")!).ids,
+    ).toEqual(["hotkeys", "bell", "avatar", "menu"]);
+  });
+
   it("колокольчик и аватар закреплены", () => {
     renderHeader();
     const settings = openHeaderSettings();

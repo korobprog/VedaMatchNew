@@ -32,6 +32,7 @@ import {
   PanelTop,
   Quote,
   Radio,
+  RotateCcw,
   Search,
   Settings2,
   Share2,
@@ -564,6 +565,20 @@ export function QuickPanel({
                       className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
                     >
                       <Menu className="size-5" />
+                    </button>
+                  )}
+                  {/* «Сбросить по умолчанию» (VED-456) — только в настройке
+                      верхней панели, значком первым в ряду: вернуть шапку
+                      как была одним нажатием, не снимая галочки по одной. */}
+                  {tuning === "header" && (
+                    <button
+                      type="button"
+                      onClick={() => saveHeader([...DEFAULT_HEADER_ITEMS])}
+                      aria-label="Сбросить верхнюю панель по умолчанию"
+                      title="Сбросить по умолчанию"
+                      className="flex size-11 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+                    >
+                      <RotateCcw className="size-5" />
                     </button>
                   )}
                   {/* Настройка верхней панели (VED-434) — там, где заказчик
