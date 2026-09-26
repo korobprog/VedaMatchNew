@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Bookmark } from "lucide-react";
 import { notFound } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import { isLineagePreference, resolveContentLineage } from "@vedamatch/shared";
@@ -21,6 +22,7 @@ import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
+import { LIBRARY_ICON_BUTTON } from "@/components/library/icon-button";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
@@ -143,8 +145,8 @@ export default async function LibraryCategoryPage({
           </p>
         </div>
 
-        {/* Ряд действий (VED-511): «Добавить», а справа значками — «Фильтры»,
-            «Редактировать», «Упорядочить», в этом порядке. Подписи у значков
+        {/* Ряд действий (VED-511): «Добавить», а справа значками — «Закладки»,
+            «Фильтры», «Редактировать», «Упорядочить», в этом порядке. Подписи у значков
             — в `aria-label` и подсказке. Кнопки — прямо в ряду, без обёртки:
             форма правки названия встаёт под ним на всю ширину. Ряд — точка
             отсчёта для меню фильтров: оно раскрывается у его правого края.
@@ -173,7 +175,18 @@ export default async function LibraryCategoryPage({
             </>
           ) : (
             <>
-              <div id="lineage-switch" className="ml-auto scroll-mt-24">
+              {/* «Закладки» (VED-511) — перед «Фильтрами»: избранные статьи,
+                  катха и остальное из Образования, та же страница, что
+                  «Избранное» на главной сервиса. */}
+              <Link
+                href="/library/favorites"
+                aria-label={t(locale, "bookmark.title")}
+                title={t(locale, "bookmark.title")}
+                className={`${LIBRARY_ICON_BUTTON} ml-auto border-glass-brd text-text-1 hover:text-text-0`}
+              >
+                <Bookmark aria-hidden className="size-4" />
+              </Link>
+              <div id="lineage-switch" className="scroll-mt-24">
                 <LibraryLineageFilter
                   locale={locale}
                   applied={appliedLineage}
