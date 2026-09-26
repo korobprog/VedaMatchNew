@@ -49,6 +49,7 @@ export function ServiceGrid({
   userId,
   extras,
   toolbarStart,
+  toolbarEnd,
 }: {
   services: ServiceCardType[];
   userId: string;
@@ -59,6 +60,11 @@ export function ServiceGrid({
    * кнопками, другая над сеткой через плеер.
    */
   toolbarStart?: ReactNode;
+  /**
+   * Правый край строки — перед переключателем вида. Туда главная перенесла
+   * «Кнопки» (VED-504), отдав левый край числу участников.
+   */
+  toolbarEnd?: ReactNode;
 }) {
   /**
    * Режим читается через `useSyncExternalStore`, а не эффектом: у него есть
@@ -249,6 +255,11 @@ export function ServiceGrid({
           из того же `gap-2`. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {toolbarStart}
+        {/* Переключатель стоит над сеткой, а не в шапке портала: он влияет
+            ровно на то, что под ним, и рядом с тем, на что влияет, его не
+            приходится искать. */}
+        <div className="ml-auto flex items-center gap-2">
+        {toolbarEnd}
         {/* Перестановка нужна редко, поэтому переключатель тихий и только
             там, где нет перетаскивания мышью. В компактном режиме её нет
             вовсе: в плитке негде стоять ни ручке, ни стрелкам. */}
@@ -272,13 +283,10 @@ export function ServiceGrid({
           </button>
         )}
 
-        {/* Переключатель стоит над сеткой, а не в шапке портала: он влияет
-            ровно на то, что под ним, и рядом с тем, на что влияет, его не
-            приходится искать. */}
         <div
           role="group"
           aria-label="Вид сервисов"
-          className="ml-auto flex rounded-xl border border-glass-brd p-0.5"
+          className="flex rounded-xl border border-glass-brd p-0.5"
         >
           {(
             [
@@ -302,6 +310,7 @@ export function ServiceGrid({
               <Icon aria-hidden className="size-4" />
             </button>
           ))}
+        </div>
         </div>
       </div>
 

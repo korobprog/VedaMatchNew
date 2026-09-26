@@ -25,6 +25,44 @@ import {
  * Строка — ссылка: за ней статистика портала и способ поддержать проект,
  * иначе число ничего не предлагает сделать.
  */
+/**
+ * «Вместе нас: N» и кнопка «Посмотреть, как мы растём» — в строке над
+ * плитками (VED-504), на месте «Кнопок». Только в компактном режиме: в
+ * подробном над сеткой уже стоит `MemberCountLine`, и дважды одно число на
+ * экране ни к чему.
+ */
+export function MemberCountToolbar({
+  userId,
+  total,
+}: {
+  userId: string;
+  total: number;
+}) {
+  const getLayout = useCallback(() => readLayout(userId), [userId]);
+  const layout = useSyncExternalStore(
+    subscribeToLayout,
+    getLayout,
+    serverLayout,
+  );
+
+  if (effectiveMode(layout) !== "compact") return null;
+
+  return (
+    <>
+      <span className="whitespace-nowrap text-xs text-text-1">
+        Вместе нас:{" "}
+        <MemberCounter total={total} className="font-semibold text-text-0" />
+      </span>
+      <Link
+        href="/stats"
+        className="whitespace-nowrap rounded-xl border border-glass-brd px-3 py-1.5 text-xs font-semibold text-text-1 transition-colors hover:text-text-0"
+      >
+        {statsCallToAction()}
+      </Link>
+    </>
+  );
+}
+
 export function MemberCountLine({
   userId,
   total,
