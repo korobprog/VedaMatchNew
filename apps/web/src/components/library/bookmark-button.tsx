@@ -20,11 +20,18 @@ export function BookmarkButton({
   entryId,
   initialBookmarked,
   initialCount,
+  compact = false,
 }: {
   locale: LibraryLocale;
   entryId: string;
   initialBookmarked: boolean;
   initialCount: number;
+  /**
+   * Значок со счётчиком — строка счётчиков на карточке ленты (VED-539). Там
+   * он раньше был только цифрой, а отметить материал можно было лишь со
+   * страницы самого материала.
+   */
+  compact?: boolean;
 }) {
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [count, setCount] = useState(initialCount);
@@ -46,6 +53,28 @@ export function BookmarkButton({
       setBookmarked(!next);
       setCount((current) => current + (next ? -1 : 1));
     }
+  }
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        disabled={pending}
+        aria-pressed={bookmarked}
+        aria-label={t(locale, bookmarked ? "bookmark.remove" : "bookmark.add")}
+        title={t(locale, bookmarked ? "bookmark.remove" : "bookmark.add")}
+        className={`-mx-1.5 inline-flex min-h-9 items-center gap-1 rounded-lg px-1.5 disabled:opacity-50 ${
+          bookmarked ? "text-text-0" : "hover:text-text-0"
+        }`}
+      >
+        <Bookmark
+          aria-hidden
+          className={`h-3.5 w-3.5 ${bookmarked ? "fill-current" : ""}`}
+        />
+        {count}
+      </button>
+    );
   }
 
   return (

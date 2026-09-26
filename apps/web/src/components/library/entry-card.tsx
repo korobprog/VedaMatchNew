@@ -1,6 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import {
-  Bookmark,
   ExternalLink,
   MessageSquare,
   Play,
@@ -12,10 +14,11 @@ import {
   lineageOption,
 } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
+import { BookmarkButton } from "./bookmark-button";
 import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
-import { EntryShareActions } from "./entry-share-actions";
+import { EntryBlogStatus, EntryShareActions } from "./entry-share-actions";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
 import { VERSE_FONT_FAMILY, verseFontVariables } from "./shloka/shloka-font";
@@ -31,6 +34,10 @@ export function EntryCard({
   /** Лента убирает карточку из уже подгруженного списка после удаления. */
   onDeleted?: () => void;
 }) {
+  const [blogShare, setBlogShare] = useState<{
+    sharedAt: string | null;
+    postId: string | null;
+  }>({ sharedAt: entry.blogSharedAt, postId: null });
   const title = pickLocalized(locale, {
     ru: entry.titleRu,
     en: entry.titleEn,
@@ -170,13 +177,15 @@ export function EntryCard({
       )}
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-text-2">
-        <span className="inline-flex items-center gap-1">
-          <Bookmark
-            aria-hidden
-            className={`h-3.5 w-3.5 ${entry.bookmarked ? "fill-current" : ""}`}
-          />
-          {entry.bookmarkCount}
-        </span>
+        {/* Закладка — кнопкой прямо здесь (VED-539): отмеченное попадает и
+            в общие закладки портала. */}
+        <BookmarkButton
+          compact
+          locale={locale}
+          entryId={entry.id}
+          initialBookmarked={entry.bookmarked}
+          initialCount={entry.bookmarkCount}
+        />
         <span className="inline-flex items-center gap-1">
           <MessageSquare aria-hidden className="h-3.5 w-3.5" />
           {entry.commentsCount}
@@ -196,6 +205,16 @@ export function EntryCard({
             })}
           </Link>
         ))}
+        {/* «В Блог-ленте · дата» — в строке рубрик (VED-539), а не между
+            кнопками: там она разрывала ряд, и «Редактировать» с «Удалить»
+            разъезжались по разным строкам. */}
+        {blogShare.sharedAt && (
+          <EntryBlogStatus
+            locale={locale}
+            sharedAt={blogShare.sharedAt}
+            postId={blogShare.postId}
+          />
+        )}
         {/* Одна ссылка, а не две под разные экраны: спрятать лишнюю классом
             значит оставить её в дереве доступности, и скринридер прочитал бы
             «Открыть» дважды подряд на каждой карточке.
@@ -229,6 +248,8 @@ export function EntryCard({
           entryId={entry.id}
           title={title}
           blogSharedAt={entry.blogSharedAt}
+          statusOutside
+          onShared={(sharedAt, postId) => setBlogShare({ sharedAt, postId })}
         />
 
         {entry.canEdit && (

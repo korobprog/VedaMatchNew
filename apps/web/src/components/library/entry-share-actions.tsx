@@ -43,6 +43,8 @@ export function EntryShareActions({
   blogSharedAt: initialSharedAt,
   compact = false,
   trailing,
+  statusOutside = false,
+  onShared,
 }: {
   locale: LibraryLocale;
   entryId: string;
@@ -55,6 +57,13 @@ export function EntryShareActions({
   compact?: boolean;
   /** Кнопка за «В Блог-ленту» в том же ряду значков — «Озвучить». */
   trailing?: ReactNode;
+  /**
+   * Отметку «В Блог-ленте» рисует сам вызывающий, в другом месте (VED-539:
+   * на карточке ленты она стоит в строке рубрик). Тогда о публикации он
+   * узнаёт через `onShared`.
+   */
+  statusOutside?: boolean;
+  onShared?: (sharedAt: string, postId: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -105,6 +114,7 @@ export function EntryShareActions({
       const done = (await res.json()) as LibraryBlogShareResponse;
       setSharedAt(done.blogSharedAt);
       setPostId(done.postId);
+      onShared?.(done.blogSharedAt, done.postId);
       setConfirming(false);
     } catch {
       setError(t(locale, "entry.toBlogFailed"));
@@ -189,30 +199,13 @@ export function EntryShareActions({
         )
       )}
 
-      {sharedAt && (
-        <span
-          className={`inline-flex items-center gap-1 text-xs text-text-2 ${
-            compact ? "basis-full justify-end" : ""
-          }`}
-        >
-          <Check aria-hidden className="h-3.5 w-3.5 text-cyan" />
-          {t(locale, "entry.inBlog")}
-          {" · "}
-          {/* Дата в поясе читателя: сервер рисует в своём, отсюда и
-              подавление предупреждения гидрации — расхождение в сутки на
-              границе дня ожидаемо и исправляется на клиенте. */}
-          <time dateTime={sharedAt} suppressHydrationWarning>
-            {shortDate(sharedAt, locale)}
-          </time>
-          {postId && (
-            <Link
-              href={`/blog/posts/${encodeURIComponent(postId)}`}
-              className="ml-1 text-cyan underline-offset-2 hover:underline"
-            >
-              {t(locale, "entry.openBlogPost")}
-            </Link>
-          )}
-        </span>
+      {sharedAt && !statusOutside && (
+        <EntryBlogStatus
+          locale={locale}
+          sharedAt={sharedAt}
+          postId={postId}
+          className={compact ? "basis-full justify-end" : ""}
+        />
       )}
 
       {error && (
@@ -221,5 +214,42 @@ export function EntryShareActions({
         </span>
       )}
     </>
+  );
+}
+
+/** Отметка «В Блог-ленте · дата» и ссылка на пост, если он только что вышел. */
+export function EntryBlogStatus({
+  locale,
+  sharedAt,
+  postId,
+  className = "",
+}: {
+  locale: LibraryLocale;
+  sharedAt: string;
+  postId: string | null;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-xs text-text-2 ${className}`}
+    >
+      <Check aria-hidden className="h-3.5 w-3.5 text-cyan" />
+      {t(locale, "entry.inBlog")}
+      {" · "}
+      {/* Дата в поясе читателя: сервер рисует в своём, отсюда и подавление
+          предупреждения гидрации — расхождение в сутки на границе дня
+          ожидаемо и исправляется на клиенте. */}
+      <time dateTime={sharedAt} suppressHydrationWarning>
+        {shortDate(sharedAt, locale)}
+      </time>
+      {postId && (
+        <Link
+          href={`/blog/posts/${encodeURIComponent(postId)}`}
+          className="ml-1 text-cyan underline-offset-2 hover:underline"
+        >
+          {t(locale, "entry.openBlogPost")}
+        </Link>
+      )}
+    </span>
   );
 }

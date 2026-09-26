@@ -1,5 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
-import { LibraryBookmarksService } from './library-bookmarks.service';
+import { PAGE_BOOKMARK_EVENT } from '@vedamatch/shared';
+import {
+  LibraryBookmarksService,
+  entryTitle,
+} from './library-bookmarks.service';
 
 function prismaMock(overrides: Record<string, unknown> = {}) {
   const libraryBookmark = {
@@ -22,10 +26,17 @@ function prismaMock(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function busMock() {
+  return { emit: jest.fn() };
+}
+
 describe('LibraryBookmarksService', () => {
   it('adds a bookmark and bumps the counter', async () => {
     const prisma = prismaMock();
-    const service = new LibraryBookmarksService(prisma as never);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
 
     await service.add('user-1', 'entry-1');
 
@@ -41,7 +52,10 @@ describe('LibraryBookmarksService', () => {
     prisma.libraryBookmark.findUnique = jest
       .fn()
       .mockResolvedValue({ entryId: 'entry-1' });
-    const service = new LibraryBookmarksService(prisma as never);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
 
     await service.add('user-1', 'entry-1');
 
@@ -52,7 +66,10 @@ describe('LibraryBookmarksService', () => {
   it('rejects bookmarking a missing entry', async () => {
     const prisma = prismaMock();
     prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue(null);
-    const service = new LibraryBookmarksService(prisma as never);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
 
     await expect(service.add('user-1', 'entry-1')).rejects.toBeInstanceOf(
       NotFoundException,
@@ -64,7 +81,10 @@ describe('LibraryBookmarksService', () => {
     prisma.libraryBookmark.deleteMany = jest
       .fn()
       .mockResolvedValue({ count: 0 });
-    const service = new LibraryBookmarksService(prisma as never);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
 
     await service.remove('user-1', 'entry-1');
 
@@ -76,7 +96,10 @@ describe('LibraryBookmarksService', () => {
     prisma.libraryBookmark.findMany = jest
       .fn()
       .mockResolvedValue([{ entryId: 'entry-2' }]);
-    const service = new LibraryBookmarksService(prisma as never);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
 
     const marked = await service.markedAmong('user-1', ['entry-1', 'entry-2']);
 
@@ -86,10 +109,57 @@ describe('LibraryBookmarksService', () => {
 
   it('skips the query for an empty page', async () => {
     const prisma = prismaMock();
-    const service = new LibraryBookmarksService(prisma as never);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
 
     await service.markedAmong('user-1', []);
 
     expect(prisma.libraryBookmark.findMany).not.toHaveBeenCalled();
+  });
+
+  it('reports a bookmark to the portal bookmarks with the entry title', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findUnique = jest.fn().mockResolvedValue({
+      status: 'published',
+      titleRu: 'Русские Веды',
+      titleEn: null,
+    });
+    const bus = busMock();
+    const service = new LibraryBookmarksService(prisma as never, bus as never);
+
+    await service.add('user-1', 'entry-1');
+
+    expect(bus.emit).toHaveBeenCalledWith(PAGE_BOOKMARK_EVENT, {
+      userId: 'user-1',
+      path: '/library/entry/entry-1',
+      title: 'Русские Веды',
+      bookmarked: true,
+    });
+  });
+
+  it('reports a removed bookmark even when there was nothing to remove', async () => {
+    const prisma = prismaMock();
+    prisma.libraryBookmark.deleteMany = jest
+      .fn()
+      .mockResolvedValue({ count: 0 });
+    const bus = busMock();
+    const service = new LibraryBookmarksService(prisma as never, bus as never);
+
+    await service.remove('user-1', 'entry-1');
+
+    expect(bus.emit).toHaveBeenCalledWith(
+      PAGE_BOOKMARK_EVENT,
+      expect.objectContaining({
+        path: '/library/entry/entry-1',
+        bookmarked: false,
+      }),
+    );
+  });
+
+  it('titles the bookmark in English when there is no Russian title', () => {
+    expect(entryTitle({ titleRu: ' ', titleEn: 'Vedas' })).toBe('Vedas');
+    expect(entryTitle({ titleRu: null, titleEn: null })).toBe('Материал');
   });
 });

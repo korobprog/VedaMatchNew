@@ -38,3 +38,23 @@ export interface CreateBookmarkRequest {
 export interface UpdateBookmarkRequest {
   title: string;
 }
+
+/**
+ * Сервис отметил свою страницу закладкой или снял отметку (VED-539): у
+ * материала Образования своя кнопка-закладка, и отмеченное должно появиться в
+ * общих закладках портала. Раздел закладок подписан на событие и заводит или
+ * убирает строку сам — сервисы в его таблицу не пишут.
+ */
+export const PAGE_BOOKMARK_EVENT = "page.bookmark.toggled";
+
+/**
+ * Самодостаточный факт: подписчик не дочитывает название из таблиц
+ * сервиса-издателя, поэтому подпись приходит здесь же.
+ */
+export interface PageBookmarkEvent {
+  userId: string;
+  /** Относительный адрес страницы, с ведущей косой чертой. */
+  path: string;
+  title: string;
+  bookmarked: boolean;
+}

@@ -194,4 +194,27 @@ describe("EntryCard", () => {
     const meta = screen.getByText("Катха").parentElement;
     expect(meta?.firstElementChild).toHaveTextContent("Катха");
   });
+
+  it("bookmarks the entry right from the card", () => {
+    render(<EntryCard entry={entry} locale="ru" />);
+
+    const bookmark = screen.getByRole("button", { name: "В избранное" });
+    expect(bookmark.getAttribute("aria-pressed")).toBe("false");
+    expect(bookmark.textContent).toBe("2");
+  });
+
+  it("puts the Blog feed mark in the category row, not between the buttons", () => {
+    const { container } = render(
+      <EntryCard
+        entry={{ ...entry, canEdit: true, blogSharedAt: "2026-09-26T10:00:00.000Z" }}
+        locale="ru"
+      />,
+    );
+
+    const mark = container.querySelector("time");
+    const category = screen.getByRole("link", { name: "Гита" });
+    expect(mark?.parentElement?.parentElement).toBe(category.parentElement);
+    const actions = container.querySelector(".border-t");
+    expect(actions?.textContent).not.toContain("В Блог-ленте ·");
+  });
 });
