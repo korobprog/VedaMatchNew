@@ -2,19 +2,17 @@
 
 import { usePathname } from "next/navigation";
 import { useGroupCalls } from "./group-call-context";
-import { groupCallBannerLabel } from "./group-call-banner-text";
+import { ownCallBanner } from "./group-call-banner-text";
 
 /**
- * Плашка «идёт групповой звонок» — она же «входящий групповой».
+ * Плавающая плашка «Вы в звонке · 2 из 4 · [Вернуться в звонок]» — путь
+ * назад к своей комнате, когда панель свёрнута, с любой страницы сайта.
  *
- * Группового дозвона с гудками на этом этапе нет намеренно: комната
- * открыта постоянно, входят и выходят по ходу, и звонить всей беседе по
- * каждому входу — это будильник, а не приглашение. Человек видит строку с
- * составом и кнопкой, как в общем голосовом чате Телеграма.
- *
- * Та же плашка возвращает к своей комнате, когда панель свёрнута, — какое
- * из двух состояний показывать и какими словами, решает чистый
- * `group-call-banner-text.ts`.
+ * Приглашение «идёт звонок, войти» здесь больше не живёт: оно стоит в
+ * потоке беседы над перепиской (`GroupCallStrip`) и карточкой в ленте
+ * (`GroupCallCard`), где не закрывает шапку и первые сообщения. По той же
+ * причине в беседе самого звонка эта плашка молчит — там её заменяет
+ * строка над перепиской с тем же текстом.
  */
 export function GroupCallBanner() {
   const pathname = usePathname();
@@ -23,14 +21,10 @@ export function GroupCallBanner() {
   if (!calls) return null;
   const own = calls.state.phase === "active" ? calls.state.call : null;
   // Свою комнату видно и так — панель развёрнута.
-  if (own && calls.expanded) return null;
+  if (!own || calls.expanded) return null;
+  if (conversationIdFromPath(pathname) === own.conversationId) return null;
 
-  const conversationId = conversationIdFromPath(pathname);
-  const inConversation = conversationId
-    ? calls.callInConversation(conversationId)
-    : null;
-  const banner = groupCallBannerLabel(own, inConversation, calls.selfId);
-  if (!banner) return null;
+  const banner = ownCallBanner(own);
 
   return (
     <div
@@ -42,22 +36,15 @@ export function GroupCallBanner() {
         aria-hidden
         className="size-2.5 shrink-0 rounded-full bg-cyan motion-safe:animate-pulse"
       />
-      {/* Не `truncate`: на 360px «Групповой звонок · 4 человека» рядом с
-          кнопкой не помещается в строку, а обрезанная подпись «4 че…»
-          хуже второй строки. */}
+      {/* Не `truncate`: на 360px «Вы в звонке · 4 из 4» рядом с кнопкой
+          не помещается в строку, а обрезанная подпись хуже второй строки. */}
       <p className="min-w-0 flex-1 text-sm font-semibold text-text-0">
         {banner.title}
       </p>
       <button
         type="button"
-        onClick={() => {
-          if (banner.kind === "own") calls.setExpanded(true);
-          else void calls.join(banner.callId);
-        }}
-        // Полная комната не даёт кнопке сработать, но текст отказа
-        // остаётся на ней: «войти нельзя» без причины — худший вариант.
-        disabled={banner.blocked}
-        className="flex h-11 shrink-0 items-center rounded-full bg-magenta px-4 text-sm font-semibold text-white hover:opacity-90 disabled:bg-glass disabled:text-text-1 disabled:opacity-100"
+        onClick={() => calls.setExpanded(true)}
+        className="flex h-11 shrink-0 items-center rounded-full bg-magenta px-4 text-sm font-semibold text-bg-0 hover:opacity-90 disabled:bg-glass disabled:text-text-1 disabled:opacity-100"
       >
         {banner.action}
       </button>
@@ -65,7 +52,7 @@ export function GroupCallBanner() {
   );
 }
 
-/** `/chat/<id>` → `<id>`. Плашку «войти» показываем только в той беседе. */
+/** `/chat/<id>` → `<id>`: в беседе своего звонка плашку заменяет строка над перепиской. */
 function conversationIdFromPath(pathname: string | null): string | null {
   const match = /^\/chat\/([^/]+)$/.exec(pathname ?? "");
   return match ? decodeURIComponent(match[1]) : null;

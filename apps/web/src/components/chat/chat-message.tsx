@@ -25,6 +25,8 @@ import { formatBytes, formatDuration, time } from "./chat-time";
 import { ChatVoicePlayer } from "./chat-voice-player";
 import { imageAspect } from "./image-frame";
 import { ChatLocalTime } from "./chat-local-time";
+import { isGroupCallCard } from "./calls/group/group-call-card";
+import { GroupCallCard } from "./calls/group/group-call-message-card";
 
 const clockOf = (iso: string) => time(new Date(iso));
 
@@ -250,7 +252,11 @@ export function ChatMessage({
                 // не хватало только воздуха.
                 <span className="mb-3 flex flex-col gap-2.5">
                   {message.attachments.map((attachment) => (
-                    <Attachment key={attachment.id} attachment={attachment} />
+                    <Attachment
+                      key={attachment.id}
+                      attachment={attachment}
+                      conversationId={message.conversationId}
+                    />
                   ))}
                 </span>
               )}
@@ -466,7 +472,13 @@ export function ChatMessage({
   );
 }
 
-function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
+function Attachment({
+  attachment,
+  conversationId,
+}: {
+  attachment: ChatAttachmentDto;
+  conversationId: string;
+}) {
   if (attachment.kind === "image") {
     /* Место под кадр — до загрузки (VED-148): без размеров картинка
        вырастала уже после того, как лента докрутилась вниз, и отправленное
@@ -537,6 +549,12 @@ function Attachment({ attachment }: { attachment: ChatAttachmentDto }) {
           </span>
         </span>
       </a>
+    );
+
+  // Групповой звонок — живая карточка с кнопкой входа, пока комната идёт.
+  if (isGroupCallCard(attachment))
+    return (
+      <GroupCallCard attachment={attachment} conversationId={conversationId} />
     );
 
   if (attachment.kind === "call")

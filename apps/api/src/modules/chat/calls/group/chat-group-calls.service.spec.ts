@@ -47,6 +47,28 @@ interface CallRow {
   notifiedAt: Date | null;
 }
 
+interface AttachmentRow {
+  id: string;
+  messageId: string;
+  kind: string;
+  title: string | null;
+  subtitle: string | null;
+  sourceService: string | null;
+  sourceId: string | null;
+  durationSec: number | null;
+  position: number;
+  waveform: number[];
+}
+
+interface MessageRow {
+  id: string;
+  conversationId: string;
+  authorId: string;
+  body: string;
+  createdAt: Date;
+  attachments: AttachmentRow[];
+}
+
 function user(id: string) {
   return {
     id,
@@ -95,7 +117,19 @@ function buildService(
   const viewing = new Set(options.viewingMembers ?? []);
   const calls: CallRow[] = [];
   const participants: ParticipantRow[] = [];
+  const messages: MessageRow[] = [];
   let seq = 0;
+
+  const messageWithIncludes = (row: MessageRow) => ({
+    ...row,
+    author: user(row.authorId),
+    replyTo: null,
+    reactions: [],
+    editedAt: null,
+    deletedAt: null,
+    viewsCount: 0,
+    forwardedFrom: null,
+  });
 
   const withIncludes = (row: CallRow) => ({
     ...row,
@@ -253,7 +287,89 @@ function buildService(
         },
       ),
     },
+    chatMessage: {
+      create: jest.fn(
+        ({
+          data,
+        }: {
+          data: {
+            conversationId: string;
+            authorId: string;
+            body: string;
+            attachments: { create: Record<string, unknown>[] };
+          };
+        }) => {
+          const id = `msg-${messages.length + 1}`;
+          const row: MessageRow = {
+            id,
+            conversationId: data.conversationId,
+            authorId: data.authorId,
+            body: data.body,
+            createdAt: new Date(),
+            attachments: data.attachments.create.map((a, index) => ({
+              id: `att-${id}-${index}`,
+              messageId: id,
+              kind: a.kind as string,
+              title: (a.title as string) ?? null,
+              subtitle: (a.subtitle as string) ?? null,
+              sourceService: (a.sourceService as string) ?? null,
+              sourceId: (a.sourceId as string) ?? null,
+              durationSec: null,
+              position: (a.position as number) ?? 0,
+              waveform: [],
+            })),
+          };
+          messages.push(row);
+          return Promise.resolve(messageWithIncludes(row));
+        },
+      ),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { body: string };
+        }) => {
+          const row = messages.find((m) => m.id === where.id)!;
+          row.body = data.body;
+          return Promise.resolve(messageWithIncludes(row));
+        },
+      ),
+    },
+    chatAttachment: {
+      findFirst: jest.fn(
+        ({ where }: { where: { sourceService: string; sourceId: string } }) => {
+          const found = messages
+            .flatMap((m) => m.attachments)
+            .find(
+              (a) =>
+                a.sourceService === where.sourceService &&
+                a.sourceId === where.sourceId,
+            );
+          return Promise.resolve(
+            found ? { id: found.id, messageId: found.messageId } : null,
+          );
+        },
+      ),
+      update: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { subtitle: string; durationSec: number };
+        }) => {
+          const found = messages
+            .flatMap((m) => m.attachments)
+            .find((a) => a.id === where.id)!;
+          Object.assign(found, data);
+          return Promise.resolve(found);
+        },
+      ),
+    },
     chatConversation: {
+      update: jest.fn(() => Promise.resolve({})),
       findUnique: jest.fn(() =>
         Promise.resolve({
           title: 'Вайшнавы Москвы',
@@ -273,6 +389,7 @@ function buildService(
       ),
     },
     chatMember: {
+      updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
       findFirst: jest.fn(({ where }: { where: { userId: string } }) =>
         Promise.resolve(memberIds.includes(where.userId) ? { id: 'm' } : null),
       ),
@@ -315,7 +432,7 @@ function buildService(
     presence as unknown as ChatPresenceService,
     bus as unknown as EventEmitter2,
   );
-  return { service, events, participants, calls, bus, presence };
+  return { service, events, participants, calls, bus, presence, messages };
 }
 
 /** Кому ушло уведомление «идёт звонок» — по порядку вызовов шины. */
@@ -827,5 +944,74 @@ describe('оповещение о групповом звонке', () => {
     await expect(
       service.start('a', { conversationId: 'conv-1' }),
     ).resolves.toMatchObject({ status: 'live' });
+  });
+});
+
+describe('карточка звонка в ленте беседы', () => {
+  it('новая комната пишет в беседу «Звонок начался» с id комнаты — всем участникам', async () => {
+    const { service, events, messages } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      conversationId: 'conv-1',
+      authorId: 'a',
+      body: 'Групповой звонок начался',
+    });
+    expect(messages[0].attachments[0]).toMatchObject({
+      kind: 'call',
+      sourceService: 'chat-group-call',
+      sourceId: room.id,
+      durationSec: null,
+    });
+    expect(events.publish).toHaveBeenCalledWith(
+      ['a', 'b', 'c', 'd', 'e'],
+      expect.objectContaining({
+        type: 'message.created',
+        conversationId: 'conv-1',
+      }),
+    );
+  });
+
+  it('вход в идущую комнату второй карточки не пишет', async () => {
+    const { service, messages } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.start('c', { conversationId: 'conv-1' });
+
+    expect(messages).toHaveLength(1);
+  });
+
+  it('комната закрылась — та же карточка становится «завершён» с длительностью', async () => {
+    const { service, events, messages } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.leave('a', room.id);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].body).toMatch(/^Групповой звонок завершён · \d+:\d{2}$/);
+    expect(messages[0].attachments[0].durationSec).toEqual(expect.any(Number));
+    const updated = events.publish.mock.calls.find(
+      ([, event]) => (event as { type: string }).type === 'message.updated',
+    ) as [string[], { message: { id: string } }] | undefined;
+    expect(updated?.[0]).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(updated?.[1].message.id).toBe(messages[0].id);
+    // Сама рассылка «комната закрыта» по-прежнему последняя: клиенту карточка
+    // приходит уже закрытой к моменту, когда гаснет плашка.
+    expect(events.publish).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ type: 'group-call.ended' }),
+    );
+  });
+
+  it('пока в комнате кто-то есть, карточку не трогают', async () => {
+    const { service, events } = buildService();
+    const room = await service.start('a', { conversationId: 'conv-1' });
+    await service.join('b', room.id);
+    await service.leave('a', room.id);
+
+    expect(events.publish).not.toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ type: 'message.updated' }),
+    );
   });
 });

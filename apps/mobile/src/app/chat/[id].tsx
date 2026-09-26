@@ -28,6 +28,7 @@ import Svg, { Path } from 'react-native-svg';
 import { AttachmentSheet } from '@/components/chat/attachment-sheet';
 import { CallHeaderButtons } from '@/components/calls/call-header-buttons';
 import { GroupCallHeaderButton } from '@/components/calls/group-call-header-button';
+import { GroupCallStrip } from '@/components/calls/group-call-strip';
 import { ConferenceHeaderButton } from '@/components/chat/conference-header-button';
 import { ChatAvatar } from '@/components/chat/chat-avatar';
 import { useStatusViewer } from '@/components/chat/statuses/use-status-viewer';
@@ -860,6 +861,11 @@ export default function ChatRoomScreen() {
         behavior="padding"
         keyboardVerticalOffset={headerHeight - insets.bottom}
       >
+        {/* Идёт групповой звонок — вход над перепиской, в потоке экрана:
+            ради него в конференцию и заходят, и он не должен закрывать ни
+            шапку, ни сообщения. */}
+        {detail ? <GroupCallStrip conversationId={detail.id} /> : null}
+
         {!detail && error ? (
           <View style={styles.center}>
             <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.info, { color: colors.text1 }]}>

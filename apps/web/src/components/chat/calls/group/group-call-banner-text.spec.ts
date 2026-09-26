@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ChatGroupCallDto } from "@vedamatch/shared";
-import { groupCallBannerLabel, peopleLabel } from "./group-call-banner-text";
+import {
+  conversationCallStrip,
+  ownCallBanner,
+  peopleLabel,
+} from "./group-call-banner-text";
 
 function room(ids: string[], over: Partial<ChatGroupCallDto> = {}): ChatGroupCallDto {
   return {
@@ -27,41 +31,71 @@ function room(ids: string[], over: Partial<ChatGroupCallDto> = {}): ChatGroupCal
 
 describe("плашка группового звонка", () => {
   it("свой звонок ведёт назад к панели, а не предлагает войти заново", () => {
-    const banner = groupCallBannerLabel(room(["a", "me"]), room(["a", "me"]), "me");
-    expect(banner).toEqual({
+    const own = room(["a", "me"]);
+    expect(conversationCallStrip("conv-1", own, own, "me", "active")).toEqual({
       kind: "own",
       callId: "room-1",
-      title: "Групповой звонок · 2 человека",
-      action: "Вернуться",
+      title: "Вы в звонке · 2 из 4",
+      action: "Вернуться в звонок",
       blocked: false,
     });
   });
 
-  it("чужой звонок в открытой беседе предлагает войти", () => {
-    const banner = groupCallBannerLabel(null, room(["a", "b"]), "me");
-    expect(banner).toMatchObject({
+  it("плавающая плашка своего звонка говорит то же самое", () => {
+    expect(ownCallBanner(room(["a", "me"]))).toMatchObject({
+      title: "Вы в звонке · 2 из 4",
+      action: "Вернуться в звонок",
+    });
+  });
+
+  it("чужой звонок в открытой беседе предлагает войти и показывает места", () => {
+    const banner = conversationCallStrip("conv-1", null, room(["a", "b"]), "me", "idle");
+    expect(banner).toEqual({
       kind: "invite",
+      callId: "room-1",
+      title: "Идёт звонок · 2 из 4",
       action: "Войти",
       blocked: false,
     });
-    expect(banner?.title).toBe("Идёт звонок · 2 человека");
   });
 
-  it("полная комната объясняет, почему войти нельзя, и гасит кнопку", () => {
-    const banner = groupCallBannerLabel(null, room(["a", "b", "c", "d"]), "me");
-    expect(banner?.action).toBe("В звонке уже 4 человека");
+  it("после выхода (фаза ended) снова предлагает войти", () => {
+    expect(
+      conversationCallStrip("conv-1", null, room(["a"]), "me", "ended")?.action,
+    ).toBe("Войти");
+  });
+
+  it("полная комната — «Мест нет», кнопка погашена", () => {
+    const banner = conversationCallStrip("conv-1", null, room(["a", "b", "c", "d"]), "me", "idle");
+    expect(banner?.title).toBe("Идёт звонок · 4 из 4");
+    expect(banner?.action).toBe("Мест нет");
     expect(banner?.blocked).toBe(true);
   });
 
-  it("мы уже числимся в комнате — плашка молчит, вход доводит провайдер", () => {
-    expect(groupCallBannerLabel(null, room(["a", "me"]), "me")).toBeNull();
+  it("пока идёт вход — «Входим…», второй раз нажать нельзя", () => {
+    expect(
+      conversationCallStrip("conv-1", null, room(["a"]), "me", "joining"),
+    ).toMatchObject({ action: "Входим…", blocked: true });
+  });
+
+  it("мы в звонке другой беседы — сюда не пускает и объясняет почему", () => {
+    const elsewhere = room(["me"], { id: "room-9", conversationId: "conv-9" });
+    expect(
+      conversationCallStrip("conv-1", elsewhere, room(["a"]), "me", "active"),
+    ).toMatchObject({ kind: "invite", action: "Вы в другом звонке", blocked: true });
+  });
+
+  it("мы числимся в комнате, но не здесь (другое устройство) — второй вход не предлагаем", () => {
+    expect(
+      conversationCallStrip("conv-1", null, room(["a", "me"]), "me", "idle"),
+    ).toMatchObject({ action: "Вы уже в звонке", blocked: true });
   });
 
   it("закончившийся и отсутствующий звонок плашки не дают", () => {
     expect(
-      groupCallBannerLabel(null, room(["a"], { status: "ended" }), "me"),
+      conversationCallStrip("conv-1", null, room(["a"], { status: "ended" }), "me", "idle"),
     ).toBeNull();
-    expect(groupCallBannerLabel(null, null, "me")).toBeNull();
+    expect(conversationCallStrip("conv-1", null, null, "me", "idle")).toBeNull();
   });
 
   it("склоняет «человек»", () => {

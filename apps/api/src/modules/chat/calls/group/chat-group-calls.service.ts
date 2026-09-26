@@ -20,14 +20,18 @@ import type {
   NotificationEvent,
   StartChatGroupCallRequest,
 } from '@vedamatch/shared';
-import { resolveDisplayName } from '@vedamatch/shared';
+import {
+  CHAT_GROUP_CALL_MESSAGE_SOURCE,
+  resolveDisplayName,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { denyWrite, WRITE_DENIAL_TEXT } from '../../chat-access';
 import { ChatConversationsService } from '../../chat-conversations.service';
-import { toUserSummary } from '../../chat-dto';
+import { toMessageDto, toUserSummary } from '../../chat-dto';
 import { ChatEventsService } from '../../chat-events.service';
 import { ChatPresenceService } from '../../chat-presence.service';
-import { chatUserSelect } from '../../chat-selects';
+import { chatMessageInclude, chatUserSelect } from '../../chat-selects';
+import { groupCallEndedText, groupCallStartedText } from './group-call-message';
 import {
   groupCallNotifyTargets,
   notifyCooldownThreshold,
@@ -210,6 +214,10 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     // Плашку видит только тот, кто в беседу смотрит. Остальных зовёт
     // уведомление — обычное, не нативный вызов.
     await this.announce(created.id, userId);
+    // Карточка «Звонок начался · [Войти в звонок]» в ленте: плашка над
+    // перепиской пропадает, стоит пролистать или открыть беседу позже, а
+    // сообщение остаётся на своём месте и ведёт в тот же вход.
+    await this.recordStartInThread(created, conversation);
     return room;
   }
 
@@ -656,6 +664,7 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     // гасятся сами — иначе на телефонах продолжает греться разговор,
     // которого правила портала больше не допускают.
     const excessVideo = videoToTurnOff(participants, now);
+    let endedHere = false;
 
     if (
       stale.length === 0 &&
@@ -695,11 +704,13 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
           hostId: null,
         },
       });
-      if (claimed.count > 0)
+      if (claimed.count > 0) {
+        endedHere = true;
         await this.signals.clearCall(
           room.id,
           room.participants.map((p) => p.userId),
         );
+      }
     } else if (room.hostId !== nextHost) {
       await this.prisma.chatGroupCall.update({
         where: { id: room.id },
@@ -707,10 +718,15 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    return this.prisma.chatGroupCall.findUniqueOrThrow({
+    const fresh = await this.prisma.chatGroupCall.findUniqueOrThrow({
       where: { id: room.id },
       include: roomInclude,
     });
+    // Закрытие комнаты проходит только здесь — и выход последнего, и
+    // обход протухших. Карточку правит тот уборщик, что выиграл гонку
+    // (`claimed.count > 0`), поэтому «завершён» пишется ровно один раз.
+    if (endedHere) await this.recordEndInThread(fresh);
+    return fresh;
   }
 
   /**
@@ -784,6 +800,119 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     });
     if (!member) throw new NotFoundException('Звонок не найден');
     return room;
+  }
+
+  /**
+   * Сообщение о начале звонка — от лица начавшего, как запись о звонке один
+   * на один (`ChatCallsService.recordInThread`). Пуша нет: беседу уже позвало
+   * `chat.group-call-started`, второе уведомление о том же было бы шумом.
+   * Никогда не бросает: без карточки звонок всё равно идёт, и вход в него
+   * есть в плашке и в шапке.
+   */
+  private async recordStartInThread(
+    room: RoomRow,
+    conversation: { members: { userId: string; leftAt: Date | null }[] },
+  ): Promise<void> {
+    try {
+      const text = groupCallStartedText();
+      const created = await this.prisma.chatMessage.create({
+        data: {
+          conversationId: room.conversationId,
+          authorId: room.startedById,
+          body: text.body,
+          attachments: {
+            create: [
+              {
+                kind: 'call',
+                title: text.title,
+                subtitle: text.subtitle,
+                sourceService: CHAT_GROUP_CALL_MESSAGE_SOURCE,
+                sourceId: room.id,
+                waveform: [],
+                position: 0,
+              },
+            ],
+          },
+        },
+        include: chatMessageInclude,
+      });
+      await this.prisma.chatConversation.update({
+        where: { id: room.conversationId },
+        data: { lastMessageAt: created.createdAt },
+      });
+      // Начавший свою карточку «прочитал»; остальным она приходит
+      // непрочитанной — это и есть приглашение, его должно быть видно в
+      // списке бесед.
+      await this.prisma.chatMember.updateMany({
+        where: {
+          conversationId: room.conversationId,
+          userId: room.startedById,
+        },
+        data: { lastReadAt: created.createdAt },
+      });
+      this.publishToConversation(conversation, {
+        type: 'message.created',
+        conversationId: room.conversationId,
+        message: toMessageDto(created, room.startedById),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Карточка группового звонка ${room.id} не попала в ленту: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Комната закрылась — та же карточка становится «Звонок завершён ·
+   * длительность». Правится существующее сообщение, а не пишется второе:
+   * две записи на один звонок раздували бы ленту, а кнопка «Войти» на
+   * старой карточке вела бы в закрытую комнату.
+   *
+   * `editedAt` не трогаем: это не правка автора, пометка «изменено» над
+   * карточкой звонка была бы враньём.
+   */
+  private async recordEndInThread(room: RoomRow): Promise<void> {
+    try {
+      // Сообщение не старше комнаты — это держит поиск в пределах свежего
+      // хвоста беседы, а не всей её истории.
+      const attachment = await this.prisma.chatAttachment.findFirst({
+        where: {
+          kind: 'call',
+          sourceService: CHAT_GROUP_CALL_MESSAGE_SOURCE,
+          sourceId: room.id,
+          message: {
+            conversationId: room.conversationId,
+            createdAt: { gte: room.createdAt },
+          },
+        },
+        select: { id: true, messageId: true },
+      });
+      if (!attachment) return;
+      const text = groupCallEndedText(room.createdAt, room.endedAt);
+      await this.prisma.chatAttachment.update({
+        where: { id: attachment.id },
+        data: { subtitle: text.subtitle, durationSec: text.durationSec },
+      });
+      const updated = await this.prisma.chatMessage.update({
+        where: { id: attachment.messageId },
+        data: { body: text.body },
+        include: chatMessageInclude,
+      });
+      const conversation = await this.prisma.chatConversation.findUnique({
+        where: { id: room.conversationId },
+        select: { members: { select: { userId: true, leftAt: true } } },
+      });
+      if (!conversation) return;
+      this.publishToConversation(conversation, {
+        type: 'message.updated',
+        conversationId: room.conversationId,
+        message: toMessageDto(updated, room.startedById),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Карточка группового звонка ${room.id} не закрыта: ${String(error)}`,
+      );
+    }
   }
 
   private publishToConversation(

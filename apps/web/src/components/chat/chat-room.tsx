@@ -33,6 +33,7 @@ import { ConferenceRoomPanel } from "./conference/conference-room-panel";
 import { ChatRoomMenu } from "./chat-room-menu";
 import { CallButtons } from "./calls/call-buttons";
 import { GroupCallButton } from "./calls/group/group-call-button";
+import { GroupCallStrip } from "./calls/group/group-call-strip";
 import { ChatMessage } from "./chat-message";
 import { firstUnreadIndex } from "./unread-divider";
 import { scrollDeltaToCenter } from "./scroll-to-message";
@@ -596,6 +597,10 @@ export function ChatRoom({
       {conversation.isConference && (
         <ConferenceRoomPanel conversationId={conversation.id} />
       )}
+
+      {/* Идёт групповой звонок — вход над перепиской, первым после шапки
+          и панели конференции: ради него в такую беседу и заходят. */}
+      <GroupCallStrip conversationId={conversation.id} />
 
       {conversation.context && (
         <ChatContextBar
