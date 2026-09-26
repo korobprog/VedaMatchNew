@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { CategoryEditForm } from "./category-edit-form";
 import { t } from "./i18n";
+import { LIBRARY_ICON_BUTTON } from "./icon-button";
 
 /**
  * Кнопка «Редактировать» на странице рубрики (VED-394).
@@ -21,9 +22,12 @@ import { t } from "./i18n";
 export function CategoryTitleEdit({
   locale,
   category,
+  iconOnly = false,
 }: {
   locale: LibraryLocale;
   category: LibraryCategoryDto;
+  /** Значком, без подписи на экране (VED-511) — ряд действий рубрики. */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -45,10 +49,19 @@ export function CategoryTitleEdit({
         onClick={() => (open ? close() : setOpen(true))}
         aria-expanded={open}
         aria-label={t(locale, "category.editTitleLabel")}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-glass-brd px-4 text-sm text-text-1 hover:text-text-0"
+        title={iconOnly ? t(locale, "category.editTitle") : undefined}
+        className={
+          iconOnly
+            ? `${LIBRARY_ICON_BUTTON} ${
+                open
+                  ? "border-magenta text-text-0"
+                  : "border-glass-brd text-text-1 hover:text-text-0"
+              }`
+            : "inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-glass-brd px-4 text-sm text-text-1 hover:text-text-0"
+        }
       >
         <Pencil aria-hidden className="h-4 w-4" />
-        {t(locale, "category.editTitle")}
+        {!iconOnly && t(locale, "category.editTitle")}
       </button>
       {open && (
         <div className="basis-full">

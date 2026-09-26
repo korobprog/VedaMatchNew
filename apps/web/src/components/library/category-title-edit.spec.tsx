@@ -60,7 +60,9 @@ describe("CategoryTitleEdit (VED-394)", () => {
     });
     fireEvent.click(button);
 
-    fireEvent.keyDown(screen.getByLabelText("Название по-русски"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByLabelText("Название по-русски"), {
+      key: "Escape",
+    });
 
     expect(screen.queryByLabelText("Название по-русски")).toBeNull();
     await waitFor(() => expect(button).toHaveFocus());
