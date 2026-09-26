@@ -39,6 +39,7 @@ import {
 } from "./task-section";
 import { workPersonLabel } from "./person-label";
 import { PRIORITY_TITLE } from "./task-priority";
+import { DUE_PRESETS, duePresetInput, type DuePreset } from "./task-due";
 import {
   draftFromTask,
   hasTaskEdits,
@@ -544,13 +545,34 @@ export function WorkTaskDialog({
                   задачи он убран. */}
               <label className="min-w-0 text-xs text-text-1">
                 Срок
-                <input
-                  type="datetime-local"
-                  value={draft.due}
-                  disabled={!canEdit}
-                  onChange={(event) => edit({ due: event.target.value })}
-                  className={FIELD_CLASS}
-                />
+                {/* Пустой срок — выбор из трёх вариантов (VED-529), а не
+                    голое поле даты: срок чаще всего «сегодня» или «завтра».
+                    Выбрали — появляется поле с датой, где её можно уточнить. */}
+                {draft.due === "" && canEdit ? (
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const preset = event.target.value as DuePreset;
+                      if (preset) edit({ due: duePresetInput(preset, new Date()) });
+                    }}
+                    className={FIELD_CLASS}
+                  >
+                    <option value="">Без срока</option>
+                    {DUE_PRESETS.map((preset) => (
+                      <option key={preset.value} value={preset.value}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="datetime-local"
+                    value={draft.due}
+                    disabled={!canEdit}
+                    onChange={(event) => edit({ due: event.target.value })}
+                    className={FIELD_CLASS}
+                  />
+                )}
               </label>
             </div>
 

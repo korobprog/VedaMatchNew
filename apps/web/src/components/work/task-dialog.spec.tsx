@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkBoardDto, WorkTaskDto } from "@vedamatch/shared";
 import { WorkTaskDialog } from "./task-dialog";
+import { duePresetInput } from "./task-due";
 import {
   attachWorkFile,
   deleteWorkTaskForever,
@@ -246,14 +247,17 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     open();
     await screen.findByDisplayValue("Кнопка сохранить");
 
-    const due = screen.getByLabelText("Срок");
-    await user.type(due, "2026-09-30T18:00");
+    // Пустой срок — выбор из вариантов (VED-529); выбранный становится
+    // полем даты, которое можно уточнить.
+    await user.selectOptions(screen.getByLabelText("Срок"), "tomorrow");
+    const expected = duePresetInput("tomorrow", new Date());
+    expect(screen.getByLabelText("Срок")).toHaveValue(expected);
 
     expect(screen.getByText("Есть несохранённые правки")).toBeInTheDocument();
     expect(updateWorkTask).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(updateWorkTask).toHaveBeenCalledWith("t1", {
-      dueAt: new Date("2026-09-30T18:00").toISOString(),
+      dueAt: new Date(expected).toISOString(),
     });
   });
 
