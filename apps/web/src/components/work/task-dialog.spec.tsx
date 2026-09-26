@@ -227,18 +227,17 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
   });
 
-  it("появляется после смены статуса; перенос уходит своим запросом", async () => {
+  it("смена статуса уходит сразу, без «Сохранить» (VED-526)", async () => {
     const user = userEvent.setup();
     const props = open();
     await screen.findByDisplayValue("Кнопка сохранить");
 
     await user.selectOptions(screen.getByLabelText("Статус"), "c2");
 
-    expect(moveWorkTask).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
     expect(updateWorkTask).not.toHaveBeenCalled();
     expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
     expect(props.onChanged).toHaveBeenCalled();
   });
 
@@ -258,19 +257,25 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     });
   });
 
-  it("правка поля и раздела вместе — оба запроса одной кнопкой", async () => {
+  it("статус уходит сразу, а несохранённая правка поля ждёт «Сохранить» (VED-526)", async () => {
     const user = userEvent.setup();
     open();
     const title = await screen.findByLabelText("Название задачи");
 
     await user.type(title, "!");
     await user.selectOptions(screen.getByLabelText("Статус"), "c2");
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
+    // Перенос ушёл один, без правки названия.
+    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
+    expect(updateWorkTask).not.toHaveBeenCalled();
+
+    const save = await screen.findByRole("button", { name: "Сохранить" });
+    await waitFor(() => expect(save).toBeEnabled());
+    await user.click(save);
     expect(updateWorkTask).toHaveBeenCalledWith("t1", {
       title: "Кнопка сохранить!",
     });
-    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
+    expect(moveWorkTask).toHaveBeenCalledTimes(1);
   });
 
   it("«Отменить правки» возвращает и списки", async () => {
@@ -479,8 +484,8 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
     expect(screen.getByLabelText("Статус")).toHaveValue("c2");
 
     await user.selectOptions(screen.getByLabelText("Раздел"), "c3");
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
+    // Уходит сразу, без «Сохранить» (VED-526).
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { sectionColumnId: "c3" });
     expect(moveWorkTask).not.toHaveBeenCalled();
   });
@@ -496,7 +501,6 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
     await screen.findByDisplayValue("Кнопка сохранить");
 
     await user.selectOptions(screen.getByLabelText("Статус"), "");
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c3" });
   });

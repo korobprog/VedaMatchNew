@@ -312,6 +312,25 @@ export function WorkTaskDialog({
     if (changed) setTextKey((key) => key + 1);
   }
 
+  /**
+   * Раздел и статус уходят сразу, без «Сохранить» (VED-526): перенос —
+   * действие, как галочка в чек-листе, а не правка текста, и кнопка после
+   * него только сбивала. Отправляется одно место — от сохранённой карточки,
+   * а не от черновика: несохранённые правки полей остаются в черновике и
+   * ждут своей кнопки.
+   */
+  function place(choice: Pick<TaskDraft, "columnId" | "sectionId">) {
+    if (!task) return;
+    // Выбор строится от черновика и несёт его поля целиком — берём из него
+    // только место.
+    const spot = { columnId: choice.columnId, sectionId: choice.sectionId };
+    setDraft((current) => ({ ...current, ...spot }));
+    void run(async () => {
+      const updated = await commit(task, { ...draftFromTask(task), ...spot });
+      return updated ?? undefined;
+    });
+  }
+
   /** «Сохранить»: все правки черновика разом. */
   function save() {
     const next = { ...draft, ...latestText.current };
@@ -429,8 +448,8 @@ export function WorkTaskDialog({
                     onChange={(event) =>
                       // Задача без статуса переезжает в выбранный раздел,
                       // задача в статусе остаётся там — меняется только
-                      // раздел. Уходит кнопкой «Сохранить».
-                      edit(chooseSection(draft, event.target.value, board.columns))
+                      // раздел. Уходит сразу (VED-526).
+                      place(chooseSection(draft, event.target.value, board.columns))
                     }
                     className={FIELD_CLASS}
                   >
@@ -456,8 +475,8 @@ export function WorkTaskDialog({
                     disabled={!canEdit}
                     onChange={(event) =>
                       // Статус — та же колонка доски: задача переезжает в
-                      // неё, а раздел остаётся прежним.
-                      edit(chooseStatus(draft, event.target.value, board.columns))
+                      // неё, а раздел остаётся прежним. Уходит сразу (VED-526).
+                      place(chooseStatus(draft, event.target.value, board.columns))
                     }
                     className={FIELD_CLASS}
                   >
