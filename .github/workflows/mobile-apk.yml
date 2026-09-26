@@ -48,6 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      # Боевой пакет com.vedamatch.app (apps/mobile/src/config/build-kind.ts).
+      # Без этой строки app.config.ts соберёт сборку разработчика
+      # com.vedamatch.app.dev — она не встанет поверх установленной с сайта.
+      APP_BUILD_KIND: release
       APP_CONTOUR: ${{ inputs.contour }}
       APP_CHANNEL: ${{ inputs.channel }}
       APP_VERSION_SHA: ${{ github.sha }}

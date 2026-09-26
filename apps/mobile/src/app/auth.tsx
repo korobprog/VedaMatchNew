@@ -2,14 +2,15 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSession } from '@/lib/auth/session';
-import { APP_AUTH_REDIRECT } from '@/lib/auth/login-flow';
+import { appAuthRedirect } from '@/config/app-variant';
 import { WebPortalButton } from '@/components/web-portal-button';
 import { useTheme } from '@/theme/theme';
 import { fonts } from '@/theme/tokens';
 import { screenErrorText } from '@/lib/api/error-text';
 
 /**
- * Приёмник возврата из браузера: `vedamatch://auth?code=…` или `?error=…`.
+ * Приёмник возврата из браузера: `vedamatch://auth?code=…` или `?error=…`
+ * (у сборки разработчика — `vedamatch-dev://auth`).
  * Роутер открывает этот экран, когда Android отдаёт ссылку переходом, а не
  * результатом openAuthSessionAsync. Экран завершает вход и уходит на нужную
  * вкладку либо на экран входа с текстом ошибки.
@@ -21,7 +22,7 @@ export default function AuthReturnScreen() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    const url = new URL(APP_AUTH_REDIRECT);
+    const url = new URL(appAuthRedirect());
     if (typeof params.code === 'string') url.searchParams.set('code', params.code);
     if (typeof params.error === 'string') url.searchParams.set('error', params.error);
     completeSignIn(url.toString())

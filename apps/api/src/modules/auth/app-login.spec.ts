@@ -25,11 +25,22 @@ describe('parseAppLoginRequest', () => {
     ).toEqual({ redirect: 'vedamatch://auth', challenge: RFC_CHALLENGE });
   });
 
+  it('принимает возврат сборки разработчика (com.vedamatch.app.dev)', () => {
+    expect(
+      parseAppLoginRequest({
+        appRedirect: 'vedamatch-dev://auth',
+        appChallenge: RFC_CHALLENGE,
+      }),
+    ).toEqual({ redirect: 'vedamatch-dev://auth', challenge: RFC_CHALLENGE });
+  });
+
   it('не отдаёт код на чужой адрес', () => {
     for (const appRedirect of [
       'vedamatch://evil',
       'https://evil.example/auth',
       'vedamatch://auth/',
+      'vedamatch-dev://evil',
+      'vedamatch-devx://auth',
     ]) {
       expect(() =>
         parseAppLoginRequest({ appRedirect, appChallenge: RFC_CHALLENGE }),

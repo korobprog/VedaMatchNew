@@ -26,6 +26,7 @@ jest.mock('expo-web-browser', () => ({
 jest.mock('@/config/app-variant', () => ({
   __esModule: true,
   appVariant: () => mockVariant,
+  appAuthRedirect: () => 'vedamatch://auth',
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

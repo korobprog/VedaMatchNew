@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ExpoConfig } from 'expo/config';
 import appConfig from '../../app.config';
 
@@ -118,5 +121,101 @@ describe('app.config', () => {
         expect.arrayContaining(['android.permission.REQUEST_INSTALL_PACKAGES']),
       );
     });
+  });
+});
+
+// Сборка разработчика — отдельный пакет рядом с боевой (Samsung A51: ручная
+// сборка `com.vedamatch.app` с versionCode 5025 не давала поставить ни одну
+// сборку с сайта). Логика — `build-kind.ts`, здесь — что `app.config.ts`
+// действительно её применяет.
+describe('пакет сборки: боевая или разработчика', () => {
+  const saved = { kind: process.env.APP_BUILD_KIND, gs: process.env.GOOGLE_SERVICES_JSON };
+  let dir: string;
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'vm-app-config-'));
+  });
+
+  afterEach(() => {
+    if (saved.kind === undefined) delete process.env.APP_BUILD_KIND;
+    else process.env.APP_BUILD_KIND = saved.kind;
+    if (saved.gs === undefined) delete process.env.GOOGLE_SERVICES_JSON;
+    else process.env.GOOGLE_SERVICES_JSON = saved.gs;
+  });
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  let fileCounter = 0;
+  function configWith(env: { kind?: string; googleServices?: unknown }): ExpoConfig {
+    if (env.kind === undefined) delete process.env.APP_BUILD_KIND;
+    else process.env.APP_BUILD_KIND = env.kind;
+    if (env.googleServices === undefined) {
+      process.env.GOOGLE_SERVICES_JSON = join(dir, 'missing.json');
+    } else {
+      fileCounter += 1;
+      const file = join(dir, `google-services-${fileCounter}.json`);
+      writeFileSync(file, JSON.stringify(env.googleServices));
+      process.env.GOOGLE_SERVICES_JSON = file;
+    }
+    return appConfig({ config: {} } as never);
+  }
+
+  const plugins = (config: ExpoConfig) =>
+    (config.plugins as PluginEntry[]).map((p) => (Array.isArray(p) ? p[0] : p));
+  const firebaseFor = (...packages: string[]) => ({
+    project_info: { project_id: 'vedamathai' },
+    client: packages.map((package_name) => ({ client_info: { android_client_info: { package_name } } })),
+  });
+
+  it('без APP_BUILD_KIND — сборка разработчика: свой пакет, имя и схема', () => {
+    const config = configWith({});
+    expect(config.android?.package).toBe('com.vedamatch.app.dev');
+    expect(config.name).toBe('VedaMatch Dev');
+    expect(config.scheme).toBe('vedamatch-dev');
+  });
+
+  it('APP_BUILD_KIND=release — боевой пакет, как у сборок с сайта и витрин', () => {
+    const config = configWith({ kind: 'release' });
+    expect(config.android?.package).toBe('com.vedamatch.app');
+    expect(config.name).toBe('VedaMatch');
+    expect(config.scheme).toBe('vedamatch');
+  });
+
+  it('опечатка в APP_BUILD_KIND роняет сборку, а не тихо даёт не тот пакет', () => {
+    expect(() => configWith({ kind: 'prod' })).toThrow(/APP_BUILD_KIND/);
+  });
+
+  it('боевой сборке файл Firebase подключается, как раньше', () => {
+    const config = configWith({ kind: 'release', googleServices: firebaseFor('com.vedamatch.app') });
+    expect(config.android?.googleServicesFile).toBeDefined();
+    expect(plugins(config)).toContain('@react-native-firebase/app');
+  });
+
+  it('сборке разработчика файл на боевой пакет не подключается — gradle не упадёт', () => {
+    const config = configWith({ googleServices: firebaseFor('com.vedamatch.app') });
+    expect(config.android?.googleServicesFile).toBeUndefined();
+    expect(plugins(config)).not.toContain('@react-native-firebase/app');
+  });
+
+  it('заведут в Firebase и dev-пакет — пуши появятся и у сборки разработчика', () => {
+    const config = configWith({ googleServices: firebaseFor('com.vedamatch.app', 'com.vedamatch.app.dev') });
+    expect(config.android?.googleServicesFile).toBeDefined();
+    expect(plugins(config)).toContain('@react-native-firebase/app');
+  });
+});
+
+// Боевые сборки обязаны явно сказать, что они боевые: иначе CI выпустит
+// «VedaMatch Dev», который не встанет поверх установленного приложения.
+describe('боевые сборки помечены APP_BUILD_KIND=release', () => {
+  const root = join(__dirname, '..', '..', '..', '..');
+
+  it('воркфлоу Mobile APK', () => {
+    const workflow = readFileSync(join(root, '.github', 'workflows', 'mobile-apk.yml'), 'utf8');
+    expect(workflow).toMatch(/^\s+APP_BUILD_KIND: release$/m);
+  });
+
+  it('веб-сборка (ios.vedamatch.com)', () => {
+    const dockerfile = readFileSync(join(root, 'apps', 'mobile', 'Dockerfile.web'), 'utf8');
+    expect(dockerfile).toMatch(/APP_BUILD_KIND=release/);
   });
 });
