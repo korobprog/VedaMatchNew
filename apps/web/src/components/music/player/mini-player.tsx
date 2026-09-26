@@ -62,7 +62,10 @@ import {
   serializePlayerView,
   type PlayerView,
 } from "./player-view";
-import { MUSIC_PLAYER_REVEAL_EVENT } from "./player-reveal";
+import {
+  MUSIC_PLAYER_REVEAL_EVENT,
+  MUSIC_PLAYER_STOW_EVENT,
+} from "./player-reveal";
 import {
   DEFAULT_PLAYBACK_MODE,
   nextPlaybackMode,
@@ -112,6 +115,12 @@ export function MiniPlayer() {
    */
   const [view, setViewState] = useState<PlayerView>("expanded");
   const collapsed = view === "collapsed";
+  /**
+   * Убрана паузой из шапки (VED-482) — до следующего запуска звука; см.
+   * `stowMusicPlayer`.
+   */
+  const [stowed, setStowed] = useState(false);
+  const stowedNow = stowed && !player?.isPlaying;
   /**
    * Выкат полосы (из пузыря или по вызову снаружи). Счётчик — ключ полосы,
    * чтобы анимация шла заново на каждый вызов; он только растёт: сброс
@@ -210,12 +219,18 @@ export function MiniPlayer() {
      трогаем: играть или нет, решает тот, кто просит. */
   useEffect(() => {
     const onReveal = () => {
+      setStowed(false);
       setEnterSeq((n) => n + 1);
       setEntering(true);
       setView("collapsed");
     };
+    const onStow = () => setStowed(true);
     window.addEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
-    return () => window.removeEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
+    window.addEventListener(MUSIC_PLAYER_STOW_EVENT, onStow);
+    return () => {
+      window.removeEventListener(MUSIC_PLAYER_REVEAL_EVENT, onReveal);
+      window.removeEventListener(MUSIC_PLAYER_STOW_EVENT, onStow);
+    };
   }, [setView]);
 
   const toggleLifted = () => {
@@ -367,7 +382,7 @@ export function MiniPlayer() {
   const radioOn = Boolean(useMusicRadio()?.active);
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
-    if (!wrap || !hasTrack || onHome || radioOn) return;
+    if (!wrap || !hasTrack || onHome || radioOn || stowedNow) return;
     const root = document.documentElement;
     const measure = () => {
       const bar = barRef.current;
@@ -389,7 +404,7 @@ export function MiniPlayer() {
       root.style.removeProperty("--vm-player-measured");
       delete wrap.dataset.measured;
     };
-  }, [view, lifted, hasTrack, onHome, radioOn]);
+  }, [view, lifted, hasTrack, onHome, radioOn, stowedNow]);
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
@@ -401,6 +416,7 @@ export function MiniPlayer() {
   // не известно.
   if (onHome) return null;
   if (radioOn) return null;
+  if (stowedNow) return null;
 
   const {
     current,

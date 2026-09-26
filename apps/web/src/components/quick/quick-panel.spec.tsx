@@ -730,11 +730,17 @@ describe("QuickPanel: кнопка «Плеер»", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("пока играет — кнопка «Пауза» и ставит на паузу (VED-438)", async () => {
+  /* VED-482: пауза из шапки убирает полосу с экрана до следующего запуска,
+     а не выкатывает её. */
+  it("пока играет — кнопка «Пауза» ставит на паузу и прячет полосу (VED-438, VED-482)", async () => {
     const player = playerStub({ id: "t1" }, true);
     music.player = player;
+    const stow = vi.fn();
+    window.addEventListener("vedamatch:music-player-stow", stow);
     const reveal = await pressPlayer(/Пауза/);
-    expect(reveal).toHaveBeenCalledTimes(1);
+    window.removeEventListener("vedamatch:music-player-stow", stow);
+    expect(reveal).not.toHaveBeenCalled();
+    expect(stow).toHaveBeenCalledTimes(1);
     expect(player.toggle).toHaveBeenCalledTimes(1);
   });
 
