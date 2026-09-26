@@ -46,12 +46,15 @@ export function MusicPositionSlider({
           />
         </span>
         {/* Метки — засечки поверх дорожки. Только для глаз: к меткам ведут
-            кнопки вкладки «Метки», у каждой — время словами. */}
+            кнопки вкладки «Метки», у каждой — время словами.
+            Крупнее дорожки и с каймой цвета фона (VED-450, круг 5): тонкая
+            засечка в 3 точки терялась и на пройденной фиолетовой части, и
+            рядом с бегунком. Над ползунком, но сквозь них он нажимается. */}
         {ticks.map((at) => (
           <span
             key={at}
             aria-hidden="true"
-            className="pointer-events-none absolute h-2.5 w-[3px] -translate-x-1/2 rounded-full bg-magenta"
+            className="pointer-events-none absolute z-[1] h-3.5 w-1 -translate-x-1/2 rounded-full bg-magenta ring-[1.5px] ring-bg-0"
             style={{ left: `${at}%` }}
           />
         ))}

@@ -588,7 +588,7 @@ function BookmarksTab({
           ))}
         </ul>
       )}
-      {items !== null && items.length > 1 && (
+      {items !== null && items.length > 0 && (
         <button
           type="button"
           onClick={() => {

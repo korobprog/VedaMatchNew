@@ -128,29 +128,14 @@ export function pinnedLayout(prefs: PlayerPrefs): PinnedLayout {
 }
 
 /**
- * Эквалайзер во втором ряду полосы на телефоне (VED-450): свободное место
- * между управлением и кнопками полосы занимает он, пока его не заняли
- * вынесенные кнопки.
- *
- * - `large` — ничего не вынесено: ряд пустой, эквалайзер во весь рост;
- * - `small` — одна-две кнопки: эквалайзер меньше, но остаётся;
- * - `none` — вынесено всё или почти всё (три-четыре кнопки): места нет.
- *
- * Перемотка — две кнопки (назад и вперёд), метка и история — по одной.
+ * Сколько кнопок вынесено: перемотка — две (назад и вперёд), метка и
+ * история — по одной. Место эквалайзеру решает замер (`eq-fit.ts`), а это
+ * число — только догадка до замера.
  */
-export type PinnedEqualizer = "large" | "small" | "none";
-
 export function pinnedButtonCount(prefs: PlayerPrefs): number {
   return (
     (prefs.showSeek ? 2 : 0) +
     (prefs.showBookmark ? 1 : 0) +
     (prefs.showHistory ? 1 : 0)
   );
-}
-
-export function pinnedEqualizer(prefs: PlayerPrefs): PinnedEqualizer {
-  const count = pinnedButtonCount(prefs);
-  if (count === 0) return "large";
-  if (count <= 2) return "small";
-  return "none";
 }
