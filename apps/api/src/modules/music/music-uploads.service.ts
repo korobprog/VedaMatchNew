@@ -60,6 +60,9 @@ const EXTENSION_BY_MIME: Record<string, string> = {
  */
 const STALE_UPLOAD_MS = 2 * 60 * 60 * 1000;
 
+/** Сколько лежит отклонённая запись, прежде чем уйти сама (`cleanupRejected`). */
+export const REJECTED_TRACK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class MusicUploadsService {
   private readonly logger = new Logger(MusicUploadsService.name);
@@ -99,10 +102,14 @@ export class MusicUploadsService {
     };
   }
 
-  async usage(userId: string): Promise<MusicStorageUsageDto> {
+  async usage(
+    userId: string,
+    viewerIsAdmin = false,
+  ): Promise<MusicStorageUsageDto> {
     return {
       usedBytes: await this.usedBytes(userId),
       quotaBytes: this.limits.accountQuotaBytes,
+      unlimited: viewerIsAdmin,
       maxUploadBytes: this.limits.maxBytes,
       acceptedMime: [...MUSIC_ACCEPTED_MIME],
     };
@@ -111,11 +118,18 @@ export class MusicUploadsService {
   /**
    * Сколько человек занимает. Считаем и записи, и незавершённые загрузки:
    * иначе квоту обходят, наоткрывав десяток заливок разом.
+   *
+   * Только неопубликованное. Опубликованная запись — уже каталог портала:
+   * снять её сам человек не может, и раньше она занимала его место навсегда.
+   * Кто активно пополнял Медиатеку, на двадцатой часовой программе упирался
+   * в «Закончилось место» и больше не мог загрузить ничего — квота наказывала
+   * самых полезных. Смысл квоты — не дать завалить очередь проверки, и
+   * считает она ровно то, что лежит на совести загрузившего.
    */
   private async usedBytes(userId: string): Promise<number> {
     const [tracks, uploads] = await Promise.all([
       this.prisma.musicTrack.aggregate({
-        where: { uploadedById: userId },
+        where: { uploadedById: userId, status: { not: 'published' } },
         _sum: { sizeBytes: true },
       }),
       this.prisma.musicUpload.aggregate({
@@ -134,7 +148,10 @@ export class MusicUploadsService {
    * Опубликованные тоже видны, но снять их самому нельзя: запись уже в общем
    * каталоге, и это ответственность портала, а не того, кто её принёс.
    */
-  async myUploads(userId: string): Promise<MyMusicUploadsDto> {
+  async myUploads(
+    userId: string,
+    viewerIsAdmin = false,
+  ): Promise<MyMusicUploadsDto> {
     const [tracks, usage] = await Promise.all([
       this.prisma.musicTrack.findMany({
         where: { uploadedById: userId },
@@ -151,7 +168,7 @@ export class MusicUploadsService {
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
-      this.usage(userId),
+      this.usage(userId, viewerIsAdmin),
     ]);
 
     return {
@@ -190,24 +207,69 @@ export class MusicUploadsService {
       );
     }
 
+    await this.removeTrack(track.id, track.storageKey);
+    return { ok: true };
+  }
+
+  /** Строка записи, её разметка и заливка — и после базы объект в бакете. */
+  private async removeTrack(trackId: string, storageKey: string) {
     await this.prisma.$transaction(async (tx) => {
       await tx.musicTrackCategory.deleteMany({ where: { trackId } });
-      await tx.musicUpload.deleteMany({
-        where: { storageKey: track.storageKey },
-      });
+      await tx.musicUpload.deleteMany({ where: { storageKey } });
       await tx.musicTrack.delete({ where: { id: trackId } });
     });
 
     // Файл убираем после базы: осиротевшая строка хуже осиротевшего объекта —
     // объект найдёт чистка, а строка будет вечно ссылаться в пустоту.
-    await this.storage.remove(track.storageKey);
+    await this.storage.remove(storageKey);
+  }
 
-    return { ok: true };
+  /**
+   * Отклонённые записи уходят сами через `REJECTED_TRACK_TTL_MS` после
+   * решения (по `updatedAt`): место в квоте освобождается без того, чтобы
+   * человек шёл в «Мои загрузки» и удалял их руками. Месяц — чтобы причину
+   * отказа успели прочесть и перезалить исправленное.
+   *
+   * Только записи людей (`uploadedById`), и только отклонённые: снятое по
+   * жалобам (`hidden`) остаётся редакции для разбора.
+   */
+  async cleanupRejected(now: Date = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - REJECTED_TRACK_TTL_MS);
+    const rows = await this.prisma.musicTrack.findMany({
+      where: {
+        status: 'rejected',
+        uploadedById: { not: null },
+        updatedAt: { lt: cutoff },
+      },
+      select: { id: true, storageKey: true },
+      take: 50,
+    });
+
+    let removed = 0;
+    for (const row of rows) {
+      try {
+        await this.removeTrack(row.id, row.storageKey);
+        removed += 1;
+      } catch (error) {
+        // Строку успели поменять (перепроверили, удалили руками) — не повод
+        // останавливать остальных.
+        this.logger.warn(
+          `Отклонённая запись ${row.id} не убрана: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+    if (removed > 0) {
+      this.logger.log(`Убрано отклонённых записей: ${removed}`);
+    }
+    return removed;
   }
 
   async createUpload(
     userId: string,
     body: CreateMusicUploadRequest,
+    viewerIsAdmin = false,
   ): Promise<CreateMusicUploadResponse> {
     if (!this.storage.configured) {
       throw new ServiceUnavailableException(
@@ -223,7 +285,10 @@ export class MusicUploadsService {
         rightsBasis: body.rightsBasis,
         usedBytes: await this.usedBytes(userId),
       },
-      this.limits,
+      // Редакция Музыки квоты не знает: она и наполняет каталог.
+      viewerIsAdmin
+        ? { ...this.limits, accountQuotaBytes: Number.POSITIVE_INFINITY }
+        : this.limits,
     );
     if (rejection) {
       throw new BadRequestException(MUSIC_UPLOAD_REJECTION_TEXT[rejection]);

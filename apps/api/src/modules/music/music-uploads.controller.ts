@@ -42,13 +42,13 @@ export class MusicUploadsController {
   /** Сколько места занято и что вообще принимается. */
   @Get('usage')
   usage(@CurrentUser() user: AccessTokenPayload) {
-    return this.uploads.usage(user.sub);
+    return this.uploads.usage(user.sub, isAdmin(user));
   }
 
   /** Свои записи со статусом и решением модератора. */
   @Get('mine')
   mine(@CurrentUser() user: AccessTokenPayload) {
-    return this.uploads.myUploads(user.sub);
+    return this.uploads.myUploads(user.sub, isAdmin(user));
   }
 
   @Post()
@@ -56,7 +56,7 @@ export class MusicUploadsController {
     @CurrentUser() user: AccessTokenPayload,
     @Body() body: CreateMusicUploadRequest,
   ) {
-    return this.uploads.createUpload(user.sub, body);
+    return this.uploads.createUpload(user.sub, body, isAdmin(user));
   }
 
   @Post(':id/complete')

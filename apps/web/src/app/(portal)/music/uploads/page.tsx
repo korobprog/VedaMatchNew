@@ -107,9 +107,12 @@ export default async function MyMusicUploadsPage({
 
       {data && (
         <p className="mt-4 font-mono text-xs text-text-2">
-          Занято {formatBytes(data.usage.usedBytes)} из{" "}
-          {formatBytes(data.usage.quotaBytes)} · один файл до{" "}
-          {formatBytes(data.usage.maxUploadBytes)}
+          {/* Опубликованное в квоту не входит: считается только то, что на
+              проверке, отклонено или не догрузилось. */}
+          {data.usage.unlimited
+            ? "Для редакции без ограничения объёма"
+            : `На проверке и отклонённое: ${formatBytes(data.usage.usedBytes)} из ${formatBytes(data.usage.quotaBytes)}`}{" "}
+          · один файл до {formatBytes(data.usage.maxUploadBytes)}
         </p>
       )}
 

@@ -126,6 +126,11 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.stage('чистка брошенных загрузок', () =>
         this.uploads.cleanupStale(),
       );
+      // Отклонённые записи людей через месяц уходят сами: место в квоте
+      // освобождается без похода в «Мои загрузки».
+      await this.stage('чистка отклонённых записей', () =>
+        this.uploads.cleanupRejected(),
+      );
       // Записи, по которым редакция не решила за неделю: не удаляем, а
       // возвращаем автору с честной причиной.
       await this.stage('разбор просроченных жалоб', () =>
