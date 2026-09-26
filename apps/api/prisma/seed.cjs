@@ -157,7 +157,7 @@ const services = [
   },
   {
     slug: 'music',
-    name: 'Медиатека',
+    name: 'Музыка',
     nameEn: 'Music',
     description:
       'Треки, лекции, аудиокниги и записи с программ',
