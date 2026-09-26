@@ -15,6 +15,7 @@ import {
 } from './work-contacts-search';
 import { assertWorkAccess } from './work-roles';
 import { WorkSpacesService } from './work-spaces.service';
+import { WorkAvatarService } from './work-avatar.service';
 
 /** Что нужно от человека, чтобы показать его строкой в приглашении. */
 interface Candidate {
@@ -22,6 +23,8 @@ interface Candidate {
   name: string;
   spiritualName: string | null;
   avatarUrl: string | null;
+  /** Загруженное фото — подписывается перед выдачей, наружу не едет (VED-492). */
+  avatarKey: string | null;
 }
 
 /**
@@ -49,6 +52,7 @@ export class WorkContactsService {
     private readonly prisma: PrismaService,
     private readonly access: PortalAccessService,
     private readonly spaces: WorkSpacesService,
+    private readonly avatars: WorkAvatarService,
   ) {}
 
   /** Сколько человек показываем: это список для приглашения, а не выдача. */
@@ -129,7 +133,13 @@ export class WorkContactsService {
         accountStatus: 'active',
         isAgent: false,
       },
-      select: { id: true, name: true, spiritualName: true, avatarUrl: true },
+      select: {
+        id: true,
+        name: true,
+        spiritualName: true,
+        avatarUrl: true,
+        avatarKey: true,
+      },
     });
     return people.filter((person) => matchesContactQuery(person, search));
   }
@@ -152,7 +162,7 @@ export class WorkContactsService {
     if (!needle) return [];
 
     return this.prisma.$queryRaw<Candidate[]>(Prisma.sql`
-      SELECT u."id", u."name", u."spiritualName", u."avatarUrl"
+      SELECT u."id", u."name", u."spiritualName", u."avatarUrl", u."avatarKey"
       FROM "User" u
       WHERE u."accountStatus" = 'active'
         AND u."isAgent" = false
@@ -196,14 +206,17 @@ export class WorkContactsService {
         .filter((id): id is string => Boolean(id)),
     );
 
-    return people
-      .map((person) => ({
-        userId: person.id,
-        name: resolveDisplayName(person),
-        avatarUrl: person.avatarUrl,
-        alreadyInvited: invitedIds.has(person.id),
-      }))
+    const shown = people
+      .map((person) => ({ person, name: resolveDisplayName(person) }))
       .sort((left, right) => left.name.localeCompare(right.name, 'ru'))
       .slice(0, WorkContactsService.LIMIT);
+    // Подписываем только тех, кто попал в выдачу, — по разу на человека.
+    await this.avatars.signAvatars(shown.map(({ person }) => person));
+    return shown.map(({ person, name }) => ({
+      userId: person.id,
+      name,
+      avatarUrl: person.avatarUrl,
+      alreadyInvited: invitedIds.has(person.id),
+    }));
   }
 }

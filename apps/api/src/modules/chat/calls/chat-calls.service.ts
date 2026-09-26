@@ -35,6 +35,7 @@ import { ChatConversationsService } from '../chat-conversations.service';
 import { toMessageDto, toUserSummary } from '../chat-dto';
 import { ChatEventsService } from '../chat-events.service';
 import { chatMessageInclude, chatUserSelect } from '../chat-selects';
+import { PeopleAvatarService } from '../people/people-avatar.service';
 import { callSummary } from './call-summary';
 import {
   BUSY_TTL_ACTIVE_MS,
@@ -141,6 +142,7 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     private readonly events: ChatEventsService,
     private readonly bus: EventEmitter2,
     private readonly config: ConfigService,
+    private readonly avatars: PeopleAvatarService,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -309,7 +311,7 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     // про поток сообщений, а вызов ждать до утра нельзя. Выключить звонки
     // человек может отдельным тумблером «Звонки» в настройках уведомлений —
     // его уважает доставка (`notifications/delivery-rule.ts`).
-    this.notifyIncoming(row);
+    await this.notifyIncoming(row);
     this.armRingTimer(row.id);
     return dtoOut;
   }
@@ -734,12 +736,16 @@ export class ChatCallsService implements OnModuleInit, OnModuleDestroy {
     return Boolean(block);
   }
 
-  private notifyIncoming(row: ChatCallRow): void {
+  private async notifyIncoming(row: ChatCallRow): Promise<void> {
     const event: NotificationEvent = {
       name: 'chat.call-incoming',
       recipientId: row.calleeId,
       callerName: resolveDisplayName(row.caller),
-      callerAvatarUrl: row.caller.avatarUrl,
+      // Экран вызова рисует фото звонящего; загруженное — подписью (VED-492).
+      callerAvatarUrl: await this.avatars.resolveAvatarUrl({
+        avatarKey: row.caller.avatarKey ?? null,
+        avatarUrl: row.caller.avatarUrl,
+      }),
       callId: row.id,
       conversationId: row.conversationId,
       callKind: row.kind,

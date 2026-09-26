@@ -39,6 +39,7 @@ import { assertWorkAccess } from './work-roles';
 import { resolveTaskStatusMark } from './work-task-status';
 import { loadWorkViewerState } from './work-viewer-state';
 import { WorkSpacesService } from './work-spaces.service';
+import { WorkAvatarService } from './work-avatar.service';
 import {
   WORK_ARCHIVE_LIMIT,
   archiveOrderBy,
@@ -61,6 +62,9 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото: `avatarUrl` у него пуст, ссылку подписываем по ключу
+  // (VED-492). Наружу ключ не едет — только подписанный `avatarUrl`.
+  avatarKey: true,
   isAgent: true,
 } satisfies Prisma.UserSelect;
 
@@ -77,6 +81,7 @@ export class WorkBoardsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly spaces: WorkSpacesService,
+    private readonly avatars: WorkAvatarService,
   ) {}
 
   /** К какой среде принадлежит доска — вопрос перед каждой проверкой прав. */
@@ -134,6 +139,7 @@ export class WorkBoardsService {
     ]);
     const prefix = space?.prefix ?? '';
     const shown = tasks.slice(0, WORK_ARCHIVE_LIMIT);
+    await this.avatars.signAvatars(shown.map((task) => task.assignee));
     const viewer = await loadWorkViewerState(this.prisma, shown, userId);
 
     return {
@@ -204,6 +210,12 @@ export class WorkBoardsService {
       },
     });
     if (!board) throw new NotFoundException('Доска не найдена');
+    await this.avatars.signAvatars([
+      ...board.space.members.map((member) => member.user),
+      ...board.columns.flatMap((column) =>
+        column.tasks.map((task) => task.assignee),
+      ),
+    ]);
     // «Чужое» и «Просмотрено» — для этого смотрящего (VED-320, VED-365).
     const viewer = await loadWorkViewerState(
       this.prisma,

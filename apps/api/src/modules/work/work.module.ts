@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { WorkAvatarService } from './work-avatar.service';
 import { WorkBoardsService } from './work-boards.service';
 import { WorkContactsService } from './work-contacts.service';
 import { WorkFinanceService } from './work-finance.service';
@@ -50,6 +51,7 @@ import {
     WorkInvitesService,
     WorkContactsService,
     WorkUploadsService,
+    WorkAvatarService,
     WorkNoticesService,
     WorkNoticeWorkerService,
     WorkPurgeListener,

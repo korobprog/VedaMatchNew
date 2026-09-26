@@ -25,6 +25,7 @@ import { toMusicTrackDto } from './music-track-dto';
 import {
   POSITION_STEP, nextPosition, positionForMove, renumber } from './playlist-order';
 import { musicCoverBaseUrl } from './music-cover-file';
+import { MusicAvatarService } from './music-avatar.service';
 
 /** Сколько плейлистов у человека имеет смысл: дальше это не список, а свалка. */
 const MAX_PLAYLISTS_PER_USER = 100;
@@ -73,6 +74,7 @@ export class MusicPlaylistsService {
     private readonly covers: MusicCoversService,
     private readonly access: PortalAccessService,
     config: ConfigService,
+    private readonly avatars: MusicAvatarService,
   ) {
     this.publicBaseUrl = musicCoverBaseUrl(config.get<string>('API_PUBLIC_URL'));
   }
@@ -149,6 +151,8 @@ export class MusicPlaylistsService {
             name: true,
             spiritualName: true,
             avatarUrl: true,
+            // Загруженное фото — подписываем по ключу, наружу не едет (VED-492).
+            avatarKey: true,
           },
         },
       },
@@ -163,6 +167,7 @@ export class MusicPlaylistsService {
     );
 
     const totals = await this.totalsOf(owned.map((row) => row.id));
+    await this.avatars.signAvatars(owned.map((row) => row.owner));
     return {
       items: owned.map((row) => ({
         ...this.toDto(row, totals),

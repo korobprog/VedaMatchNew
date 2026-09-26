@@ -29,7 +29,9 @@ describe('CommunityMembersService', () => {
     // держится порядком вызовов, а не самой транзакцией.
     $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
   };
-  const service = new CommunityMembersService(prisma);
+  const service = new CommunityMembersService(prisma, {
+    signAvatars: jest.fn(() => Promise.resolve()),
+  } as never);
 
   const membership = (over: Record<string, unknown> = {}) => ({
     id: 'm1',

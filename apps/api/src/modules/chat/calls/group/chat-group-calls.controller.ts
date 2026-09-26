@@ -7,8 +7,10 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { ChatSignedUrlsInterceptor } from '../../chat-signed-urls.interceptor';
 import type {
   AccessTokenPayload,
   ChatGroupCallDto,
@@ -30,6 +32,8 @@ import { ChatGroupCallsService } from './chat-group-calls.service';
  */
 @Controller('chat/group-calls')
 @UseGuards(AuthGuard)
+// Фото людей в звонке — загруженные подписываются здесь (VED-492).
+@UseInterceptors(ChatSignedUrlsInterceptor)
 export class ChatGroupCallsController {
   constructor(private readonly calls: ChatGroupCallsService) {}
 

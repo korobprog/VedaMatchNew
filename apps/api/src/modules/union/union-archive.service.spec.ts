@@ -12,7 +12,12 @@ function prismaStub() {
 }
 
 function service(prisma: ReturnType<typeof prismaStub>) {
-  return new UnionArchiveService(prisma as never);
+  return new UnionArchiveService(
+    prisma as never,
+    {
+      signAvatars: jest.fn(() => Promise.resolve()),
+    } as never,
+  );
 }
 
 describe('UnionArchiveService', () => {

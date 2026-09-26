@@ -26,6 +26,8 @@ export type NoticeRow = Notice & {
     name: string;
     spiritualName: string | null;
     avatarUrl: string | null;
+    /** Загруженное фото; сервис подписывает его в `avatarUrl` (VED-492). */
+    avatarKey?: string | null;
   };
   community: Pick<
     Community,
@@ -150,6 +152,9 @@ export const NOTICE_AUTHOR_SELECT = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото лежит в приватном бакете, `avatarUrl` у него пуст —
+  // ссылку подписывает сервис по ключу (VED-492). Наружу ключ не едет.
+  avatarKey: true,
 } as const;
 
 export const NOTICE_COMMUNITY_SELECT = {

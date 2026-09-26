@@ -18,6 +18,7 @@ import type {
 import { resolveDisplayName } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isWithinEditWindow, validateMessageBody } from './message-edit-window';
+import { MarketAvatarService } from './market-avatar.service';
 
 /** Переписка по сделке короткая; двести сообщений покрывают её с запасом,
  *  а бесконечная лента потребовала бы своей пагинации ради редкого случая. */
@@ -35,7 +36,14 @@ const CHAT_SELECT = {
     select: { id: true, slug: true, name: true, logoUrl: true, ownerId: true },
   },
   buyer: {
-    select: { id: true, name: true, spiritualName: true, avatarUrl: true },
+    select: {
+      id: true,
+      name: true,
+      spiritualName: true,
+      avatarUrl: true,
+      // Загруженное фото — подписываем по ключу, наружу ключ не едет (VED-492).
+      avatarKey: true,
+    },
   },
 } satisfies Prisma.MarketConversationSelect;
 
@@ -55,6 +63,7 @@ export class MarketChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly avatars: MarketAvatarService,
   ) {}
 
   async list(userId: string): Promise<MarketChatsState> {
@@ -91,6 +100,10 @@ export class MarketChatService {
       lastMessages.map((row) => [row.conversationId, preview(row.body)]),
     );
 
+    // Покупателя видит только продавец — подписываем фото лишь там.
+    await this.avatars.signAvatars(
+      rows.filter((row) => row.shop.ownerId === userId).map((row) => row.buyer),
+    );
     const chats = rows.map((row) =>
       toChatSummary(row, userId, {
         unreadCount: unreadByChat.get(row.id) ?? 0,
@@ -136,12 +149,17 @@ export class MarketChatService {
               name: true,
               spiritualName: true,
               avatarUrl: true,
+              avatarKey: true,
             },
           },
         },
       })
     ).reverse();
 
+    await this.avatars.signAvatars([
+      chat.buyer,
+      ...messages.map((message) => message.fromUser),
+    ]);
     const now = new Date();
     return {
       chat: toChatSummary(chat, userId, {
@@ -189,6 +207,7 @@ export class MarketChatService {
       select: CHAT_SELECT,
     });
     if (existing) {
+      await this.avatars.signAvatars([existing.buyer]);
       return toChatSummary(existing, userId, { unreadCount: 0, preview: null });
     }
 
@@ -201,6 +220,7 @@ export class MarketChatService {
       },
       select: CHAT_SELECT,
     });
+    await this.avatars.signAvatars([created.buyer]);
     return toChatSummary(created, userId, { unreadCount: 0, preview: null });
   }
 
@@ -235,6 +255,7 @@ export class MarketChatService {
               name: true,
               spiritualName: true,
               avatarUrl: true,
+              avatarKey: true,
             },
           },
         },
@@ -263,6 +284,7 @@ export class MarketChatService {
 
     // `now` берём после записи: createdAt проставляет Postgres внутри
     // транзакции, и метка, снятая до неё, оказалась бы раньше созданной строки.
+    await this.avatars.signAvatars([message.fromUser]);
     return toMessageDto(message, userId, new Date());
   }
 
@@ -315,10 +337,12 @@ export class MarketChatService {
             name: true,
             spiritualName: true,
             avatarUrl: true,
+            avatarKey: true,
           },
         },
       },
     });
+    await this.avatars.signAvatars([updated.fromUser]);
     return toMessageDto(updated, userId, now);
   }
 

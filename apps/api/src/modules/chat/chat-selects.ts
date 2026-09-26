@@ -11,6 +11,10 @@ export const chatUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото: `avatarUrl` у него пуст, ссылку подписывает
+  // `ChatSignedUrlsInterceptor` по ключу (VED-492). Наружу ключ не едет —
+  // `toUserSummary` прячет его в символ.
+  avatarKey: true,
   // «В сети» считается от этой отметки; без неё шапка беседы молчит о том,
   // здесь ли собеседник.
   lastSeenAt: true,

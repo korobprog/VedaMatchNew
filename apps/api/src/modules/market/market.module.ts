@@ -25,6 +25,7 @@ import { MarketReportsService } from './market-reports.service';
 import { MarketReviewsService } from './market-reviews.service';
 import { MarketSubscriptionsService } from './market-subscriptions.service';
 import { MarketChatService } from './market-chat.service';
+import { MarketAvatarService } from './market-avatar.service';
 import { MarketFavoritesService } from './market-favorites.service';
 import { MarketOrdersService } from './market-orders.service';
 import {
@@ -89,6 +90,7 @@ import { MarketStatsService } from './market-stats.service';
     MarketCartService,
     MarketOrdersService,
     MarketChatService,
+    MarketAvatarService,
     MarketReviewsService,
     MarketSubscriptionsService,
     MarketReportsService,

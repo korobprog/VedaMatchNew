@@ -3,12 +3,14 @@ import { WorkContactsService } from './work-contacts.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { PortalAccessService } from '../access/access.service';
 import type { WorkSpacesService } from './work-spaces.service';
+import type { WorkAvatarService } from './work-avatar.service';
 
 const ARTEM = {
   id: 'u-artem',
   name: 'Артём Мещеряков',
   spiritualName: null,
-  avatarUrl: null,
+  avatarUrl: null as string | null,
+  avatarKey: null as string | null,
 };
 
 /**
@@ -56,8 +58,12 @@ function createService(options: {
     roleOf: jest.fn(() => Promise.resolve('owner')),
   } as unknown as WorkSpacesService;
 
+  const avatars = {
+    signAvatars: jest.fn(() => Promise.resolve()),
+  } as unknown as WorkAvatarService;
+
   return {
-    service: new WorkContactsService(prisma, access, spaces),
+    service: new WorkContactsService(prisma, access, spaces, avatars),
     prisma,
     queries,
   };

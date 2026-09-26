@@ -7,6 +7,7 @@ import { UnionAdminController } from './union-admin.controller';
 import { UnionAdminService } from './union-admin.service';
 import { UnionArchiveController } from './union-archive.controller';
 import { UnionArchiveService } from './union-archive.service';
+import { UnionAvatarService } from './union-avatar.service';
 import { UnionFavoritesController } from './union-favorites.controller';
 import { UnionFavoritesService } from './union-favorites.service';
 import { UnionBoostController } from './union-boost.controller';
@@ -43,6 +44,7 @@ import { UnionSwipeService } from './union-swipe.service';
     UnionBoostService,
     UnionAdminService,
     UnionArchiveService,
+    UnionAvatarService,
     UnionFavoritesService,
     UnionShowcaseService,
   ],

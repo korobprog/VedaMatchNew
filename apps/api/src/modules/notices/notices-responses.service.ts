@@ -22,6 +22,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NoticesService } from './notices.service';
+import { NoticesAvatarService } from './notices-avatar.service';
 
 type ResponseRow = NoticeResponse & {
   notice: Pick<Notice, 'id' | 'titleRu' | 'titleEn' | 'authorId'>;
@@ -30,6 +31,7 @@ type ResponseRow = NoticeResponse & {
     name: string;
     spiritualName: string | null;
     avatarUrl: string | null;
+    avatarKey: string | null;
     homeLocation: unknown;
   };
 };
@@ -40,6 +42,8 @@ const RESPONSE_USER_SELECT = {
   // spiritualName обязателен рядом с любым DTO наружу — правило контракта.
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото — подписываем по ключу, наружу ключ не едет (VED-492).
+  avatarKey: true,
   homeLocation: true,
 } as const;
 
@@ -56,6 +60,7 @@ export class NoticesResponsesService {
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
     private readonly notices: NoticesService,
+    private readonly avatars: NoticesAvatarService,
   ) {}
 
   /**
@@ -125,6 +130,7 @@ export class NoticesResponsesService {
       noticeTitle: row.notice.titleRu ?? row.notice.titleEn ?? 'Объявление',
       noticeId,
     });
+    await this.avatars.signAvatars([row.user]);
     return this.toDto(row, userId, null);
   }
 
@@ -147,6 +153,7 @@ export class NoticesResponsesService {
       include: RESPONSE_INCLUDE,
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+    await this.avatars.signAvatars(rows.map((row) => row.user));
     // Автору контакты откликнувшегося раскрываются после его же согласия.
     const contacts = await this.contactsFor(
       rows.filter((row) => row.status === 'accepted').map((row) => row.userId),
@@ -165,6 +172,7 @@ export class NoticesResponsesService {
       include: RESPONSE_INCLUDE,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+    await this.avatars.signAvatars(rows.map((row) => row.user));
     // Откликнувшемуся раскрываются контакты автора — но только принятых.
     const contacts = await this.contactsFor(
       rows
@@ -215,6 +223,7 @@ export class NoticesResponsesService {
     const contacts = accept
       ? await this.contactsFor([updated.userId])
       : await this.contactsFor([]);
+    await this.avatars.signAvatars([updated.user]);
     return this.toDto(updated, userId, contacts.get(updated.userId) ?? null);
   }
 

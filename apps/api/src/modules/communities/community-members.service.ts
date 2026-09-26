@@ -17,6 +17,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toMemberDto, toMembershipDto } from './community-dto';
+import { CommunityAvatarService } from './community-avatar.service';
 import {
   canAssignRole,
   canManageCommunity,
@@ -42,12 +43,17 @@ const MEMBER_USER_SELECT = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото — подписываем по ключу, наружу ключ не едет (VED-492).
+  avatarKey: true,
   homeLocation: true,
 } as const;
 
 @Injectable()
 export class CommunityMembersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avatars: CommunityAvatarService,
+  ) {}
 
   async list(
     communityId: string,
@@ -103,6 +109,7 @@ export class CommunityMembersService {
       }),
       this.prisma.communityMember.count({ where }),
     ]);
+    await this.avatars.signAvatars(rows.map((row) => row.user));
     return { items: rows.map(toMemberDto), page, pageSize, total };
   }
 

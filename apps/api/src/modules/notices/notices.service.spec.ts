@@ -1,11 +1,32 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { NoticesService } from './notices.service';
+import { NoticesAvatarService } from './notices-avatar.service';
+
+/** Подпись фото без S3: ключ превращается в узнаваемую «подписанную» ссылку. */
+function fakeAvatars() {
+  const avatars = new NoticesAvatarService({ get: () => undefined } as never);
+  jest
+    .spyOn(avatars, 'resolveAvatarUrl')
+    .mockImplementation((user) =>
+      Promise.resolve(
+        user.avatarKey ? `https://signed/${user.avatarKey}` : user.avatarUrl,
+      ),
+    );
+  return avatars;
+}
 
 /**
  * Юнит-тесты статусных переходов: сервис создаётся с моком Prisma,
  * остальные зависимости не используются в setStatus.
  */
-function makeService(notice: Record<string, unknown>) {
+function makeService(
+  notice: Record<string, unknown>,
+  author: Record<string, unknown> = {
+    id: 'author',
+    name: 'A',
+    avatarUrl: null,
+  },
+) {
   const prisma = {
     notice: {
       findUnique: jest.fn().mockResolvedValue(notice),
@@ -38,7 +59,7 @@ function makeService(notice: Record<string, unknown>) {
         thanksCount: 0,
         viewsCount: 0,
         rubric: { id: 'r1', slug: 'help', titleRu: '', titleEn: '' },
-        author: { id: 'author', name: 'A', avatarUrl: null },
+        author,
         community: null,
         images: [],
       }),
@@ -55,6 +76,7 @@ function makeService(notice: Record<string, unknown>) {
     {} as never,
     {} as never,
     { emit: jest.fn() } as never,
+    fakeAvatars(),
   );
   // recountRubric дергает Prisma сложнее, чем нужно тесту — гасим.
   jest
@@ -73,6 +95,26 @@ const base = {
   kind: 'offer',
   expiresAt: new Date(Date.now() + 86_400_000),
 };
+
+describe('NoticesService — фото автора (VED-492)', () => {
+  it('загруженное фото автора уезжает подписанной ссылкой, без ключа', async () => {
+    const { service } = makeService(
+      { ...base, status: 'hidden' },
+      {
+        id: 'author',
+        name: 'A',
+        spiritualName: null,
+        avatarUrl: null,
+        avatarKey: 'avatars/author.webp',
+      },
+    );
+    const dto = await service.setStatus('author', false, 'n1', {
+      status: 'published',
+    });
+    expect(dto.author.avatarUrl).toBe('https://signed/avatars/author.webp');
+    expect(JSON.stringify(dto)).not.toContain('avatarKey');
+  });
+});
 
 describe('NoticesService.setStatus — блокировка модерации', () => {
   it.each(['hidden_by_reports', 'removed_by_admin', 'moved_to_market'])(
@@ -150,6 +192,7 @@ describe('NoticesService.remove', () => {
       images as never,
       {} as never,
       bus as never,
+      fakeAvatars(),
     );
     jest
       .spyOn(
@@ -243,6 +286,7 @@ describe('NoticesService.adminList — список для админки (VED-4
       {} as never,
       {} as never,
       { emit: jest.fn() } as never,
+      fakeAvatars(),
     );
     return { prisma, service };
   }

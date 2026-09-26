@@ -1,4 +1,13 @@
-import { collectStorageUrls, replaceStorageUrls } from './chat-signed-urls';
+import {
+  parseWithAvatarKeys,
+  stringifyWithAvatarKeys,
+} from './chat-avatar-key';
+import { toUserSummary } from './chat-dto';
+import {
+  collectAvatarKeys,
+  collectStorageUrls,
+  replaceStorageUrls,
+} from './chat-signed-urls';
 
 const PREFIX = 'https://s3.example/bucket/';
 
@@ -59,5 +68,63 @@ describe('replaceStorageUrls', () => {
     const at = new Date('2026-08-22T10:00:00.000Z');
     const result = replaceStorageUrls({ at }, signed) as { at: Date };
     expect(result.at).toBe(at);
+  });
+});
+
+describe('загруженные фото людей (VED-492)', () => {
+  const summary = (id: string, avatarKey: string | null) =>
+    toUserSummary({
+      id,
+      name: id,
+      spiritualName: null,
+      avatarUrl: null,
+      avatarKey,
+    });
+
+  it('ключ фото едет к перехватчику, но не в JSON', () => {
+    const dto = summary('anna', 'users/anna/avatar.webp');
+    expect(dto.avatarUrl).toBeNull();
+    expect(JSON.stringify(dto)).not.toContain('users/anna');
+  });
+
+  it('ключи собираются без повторов, на любой глубине', () => {
+    const payload = {
+      messages: [
+        { author: summary('anna', 'users/anna/avatar.webp') },
+        { author: summary('anna', 'users/anna/avatar.webp') },
+        { author: summary('boris', null) },
+      ],
+    };
+    expect(collectAvatarKeys(payload)).toEqual(['users/anna/avatar.webp']);
+  });
+
+  it('помеченный человек получает подписанную ссылку, остальные — как были', () => {
+    const payload = {
+      author: summary('anna', 'users/anna/avatar.webp'),
+      other: summary('boris', null),
+    };
+    const result = replaceStorageUrls(
+      payload,
+      new Map(),
+      new Map([['users/anna/avatar.webp', 'https://signed/anna']]),
+    ) as typeof payload;
+    expect(result.author.avatarUrl).toBe('https://signed/anna');
+    expect(result.other.avatarUrl).toBeNull();
+    // Исходный DTO не тронут — правится копия.
+    expect(payload.author.avatarUrl).toBeNull();
+  });
+
+  it('пометка переживает шину между инстансами и не видна в JSON снаружи', () => {
+    const event = { message: { author: summary('anna', 'users/anna/a.webp') } };
+    const wire = stringifyWithAvatarKeys(event);
+    const back = parseWithAvatarKeys(wire) as typeof event;
+    expect(collectAvatarKeys(back)).toEqual(['users/anna/a.webp']);
+    expect(JSON.stringify(back)).not.toContain('users/anna');
+    expect(back.message.author).toEqual({
+      id: 'anna',
+      name: 'anna',
+      avatarUrl: null,
+      lastSeenAt: null,
+    });
   });
 });

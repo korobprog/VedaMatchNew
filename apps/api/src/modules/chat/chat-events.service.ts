@@ -8,6 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { Observable, Subject, filter, map } from 'rxjs';
 import type { ChatStreamEvent } from '@vedamatch/shared';
+import {
+  parseWithAvatarKeys,
+  stringifyWithAvatarKeys,
+} from './chat-avatar-key';
 
 /**
  * Доставка событий чата подписчикам SSE.
@@ -70,7 +74,7 @@ export class ChatEventsService implements OnModuleInit, OnModuleDestroy {
         try {
           this.stream.next({
             userId,
-            event: JSON.parse(payload) as ChatStreamEvent,
+            event: parseWithAvatarKeys(payload) as ChatStreamEvent,
           });
         } catch (error) {
           this.logger.warn(`Событие чата не разобрано: ${String(error)}`);
@@ -94,7 +98,9 @@ export class ChatEventsService implements OnModuleInit, OnModuleDestroy {
   publish(userIds: string[], event: ChatStreamEvent): void {
     const unique = [...new Set(userIds)];
     if (this.publisher?.status === 'ready') {
-      const payload = JSON.stringify(event);
+      // Пометки загруженных фото (VED-492) — символы, обычный JSON их
+      // теряет; без них фото в живом потоке между инстансами пропадало бы.
+      const payload = stringifyWithAvatarKeys(event);
       for (const userId of unique)
         void this.publisher
           .publish(`${CHANNEL_PREFIX}${userId}`, payload)

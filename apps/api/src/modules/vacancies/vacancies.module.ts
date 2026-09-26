@@ -13,6 +13,7 @@ import { VacanciesAdminService } from './vacancies-admin.service';
 import { VacanciesReportsService } from './vacancies-reports.service';
 import { VacanciesResponsesService } from './vacancies-responses.service';
 import { VacanciesService } from './vacancies.service';
+import { VacanciesAvatarService } from './vacancies-avatar.service';
 
 /**
  * Сервис «Вакансии»: работа, служение и разовые задачи. Решение — VED-24.
@@ -32,6 +33,7 @@ import { VacanciesService } from './vacancies.service';
   providers: [
     VacanciesService,
     VacanciesResponsesService,
+    VacanciesAvatarService,
     VacanciesReportsService,
     VacanciesAdminService,
   ],

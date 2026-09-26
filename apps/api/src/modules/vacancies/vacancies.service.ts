@@ -40,6 +40,7 @@ import {
   type NormalizedFeedFilters,
 } from './vacancy-feed-query';
 import { coordsForPrecision } from './vacancy-geo';
+import { VacanciesAvatarService } from './vacancies-avatar.service';
 import {
   VACANCY_VALIDATION_MESSAGES,
   parseDate,
@@ -60,6 +61,7 @@ export class VacanciesService {
     private readonly events: EventEmitter2,
     private readonly communities: CommunitiesService,
     private readonly moderation: ModerationService,
+    private readonly avatars: VacanciesAvatarService,
   ) {}
 
   async feed(
@@ -87,6 +89,7 @@ export class VacanciesService {
       viewerId,
       page.map((row) => row.id),
     );
+    await this.avatars.signAvatars(page.map((row) => row.author));
     return {
       items: page.map((row) =>
         toOfferDto(row, viewer.userId, now, responses.get(row.id) ?? null),
@@ -119,6 +122,7 @@ export class VacanciesService {
         data: { viewsCount: { increment: 1 } },
       });
     const responses = await this.viewerResponses(viewerId, [id]);
+    await this.avatars.signAvatars([row.author]);
     return toOfferDto(row, viewer.userId, now, responses.get(id) ?? null);
   }
 
@@ -152,6 +156,7 @@ export class VacanciesService {
       },
       include: VACANCY_INCLUDE,
     });
+    await this.avatars.signAvatars([created.author]);
     return toOfferDto(created, userId, now);
   }
 
@@ -221,6 +226,7 @@ export class VacanciesService {
       data,
       include: VACANCY_INCLUDE,
     });
+    await this.avatars.signAvatars([updated.author]);
     return toOfferDto(updated, userId, now);
   }
 
@@ -260,6 +266,7 @@ export class VacanciesService {
       include: VACANCY_INCLUDE,
     });
     if (closing) await this.announceClosed(updated);
+    await this.avatars.signAvatars([updated.author]);
     return toOfferDto(updated, userId, now);
   }
 
@@ -287,6 +294,7 @@ export class VacanciesService {
       },
       include: VACANCY_INCLUDE,
     });
+    await this.avatars.signAvatars([updated.author]);
     return toOfferDto(updated, userId, now);
   }
 

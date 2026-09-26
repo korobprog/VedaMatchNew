@@ -26,6 +26,7 @@ import {
   memberChangeProblem,
 } from './work-roles';
 import { toWorkLabel, toWorkMember, toWorkPersonRef } from './work-dto';
+import { WorkAvatarService } from './work-avatar.service';
 import {
   normalizeWorkColor,
   optionalText,
@@ -39,12 +40,18 @@ const workUserSelect = {
   name: true,
   spiritualName: true,
   avatarUrl: true,
+  // Загруженное фото: `avatarUrl` у него пуст, ссылку подписываем по ключу
+  // (VED-492). Наружу ключ не едет — только подписанный `avatarUrl`.
+  avatarKey: true,
   isAgent: true,
 } satisfies Prisma.UserSelect;
 
 @Injectable()
 export class WorkSpacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avatars: WorkAvatarService,
+  ) {}
 
   /**
    * Роль смотрящего в среде; `null` — он здесь никто. Спрашивается перед
@@ -122,6 +129,7 @@ export class WorkSpacesService {
       },
     });
     if (!space) throw new NotFoundException('Рабочая среда не найдена');
+    await this.avatars.signAvatars(space.members.map((member) => member.user));
 
     const openTaskCount = await this.prisma.workTask.count({
       where: { spaceId, completedAt: null, archivedAt: null },

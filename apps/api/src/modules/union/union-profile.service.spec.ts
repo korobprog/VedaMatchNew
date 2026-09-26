@@ -314,7 +314,12 @@ describe('UnionProfileService', () => {
       {} as UnionConnectionService,
     ),
     new UnionBoostService(prisma as unknown as PrismaService),
-    new UnionArchiveService(prisma as unknown as PrismaService),
+    new UnionArchiveService(
+      prisma as unknown as PrismaService,
+      {
+        signAvatars: jest.fn(() => Promise.resolve()),
+      } as never,
+    ),
   );
 
   beforeEach(() => {

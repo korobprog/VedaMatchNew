@@ -6,6 +6,7 @@ import {
 } from './communities.controller';
 import { CommunitiesService } from './communities.service';
 import { CommunityMembersService } from './community-members.service';
+import { CommunityAvatarService } from './community-avatar.service';
 
 /**
  * Портальная инфраструктура наравне с `ModerationModule`: общины нужны всем
@@ -17,7 +18,11 @@ import { CommunityMembersService } from './community-members.service';
 @Module({
   imports: [AuthModule],
   controllers: [CommunitiesController, AdminCommunitiesController],
-  providers: [CommunitiesService, CommunityMembersService],
+  providers: [
+    CommunitiesService,
+    CommunityMembersService,
+    CommunityAvatarService,
+  ],
   exports: [CommunitiesService],
 })
 export class CommunitiesModule {}
