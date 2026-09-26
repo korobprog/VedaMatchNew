@@ -1,3 +1,4 @@
+import { ListFilter } from "lucide-react";
 import Link from "next/link";
 import {
   MUSIC_DEFAULT_TRACK_SORT,
@@ -145,17 +146,9 @@ export function MusicFilters({
             : "flex h-9 w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
         }
       >
-        <svg
-          viewBox="0 0 24 24"
-          className={compact ? "size-4" : "size-3.5"}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <path d="M4 6h16M7 12h10M10 18h4" />
-        </svg>
+        {/* Значок фильтров — один на весь портал (VED-517): эти три
+            полоски, `ListFilter`. */}
+        <ListFilter aria-hidden className={compact ? "size-4" : "size-3.5"} />
         <span className={compact ? "sr-only" : undefined}>Фильтры</span>
         {active > 0 && (
           <span

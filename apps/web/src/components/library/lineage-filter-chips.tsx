@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ListFilter } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   LibraryLocale,
@@ -159,7 +159,7 @@ export function LibraryLineageFilter({
             : "border-magenta text-text-0"
         }`}
       >
-        <SlidersHorizontal aria-hidden className="size-4" />
+        <ListFilter aria-hidden className="size-4" />
         {!iconOnly && t(locale, "lineage.menu")}
       </button>
       {open && (
