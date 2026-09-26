@@ -114,10 +114,7 @@ import {
 import { priorityMark } from "./task-priority";
 import { groupTasksByPriority } from "./task-grouping";
 import { recentTasks } from "./task-recent";
-import {
-  groupTasksByCreatedDate,
-  groupTasksByEditedDate,
-} from "./task-created-grouping";
+import { groupTasksByCreatedDate } from "./task-created-grouping";
 import {
   columnGroupOf,
   isStatusColumn,
@@ -837,26 +834,15 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
-        {/* Приглашения и участники — в строке с названием среды, а не в
-            панели вида (VED-421): «кнопку ссылка убери отсюда, он тут не в
-            тему и занимает место». Панель — про то, как разложить задачи;
-            состав среды — про саму среду, ему место рядом с её именем. */}
-        {/* «Архив» — в строке с названием, рядом со ссылкой-приглашением
-            (VED-485): его место в ряду вида занял вид «Последние». */}
-        <span className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setArchiveOpen(true)}
-            aria-label="Архив"
-            title="Архив"
-            className={workToolbarButtonClass()}
-          >
-            <Archive aria-hidden className="size-4 shrink-0" />
-          </button>
-          <WorkInvitePanel
-            space={space}
-            viewerId={board.viewerId}
-            onChanged={reload}
+        {/* «Оплата» (коммерческая доска, VED-458) — в строке с названием
+            среды, у правого края (VED-525); «Архив» и «Пригласить» переехали
+            в конец ряда вида ниже. */}
+        <span className="ml-auto flex items-center">
+          <WorkCommercialBar
+            board={board}
+            canManageBoard={Boolean(canManage)}
+            personal={space.isPersonal}
+            onChanged={setBoard}
           />
         </span>
         {/* Один ряд, слева направо: «Свернуть все» (только на телефоне), «По
@@ -890,15 +876,10 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             пикселей, на 320 — на 18). Прижимать вправо и одновременно ровнять
             по левому краю нельзя, поэтому ряд прижат влево на всех ширинах:
             одно правило вместо разъезжающихся по брейкпоинтам. */}
-        {/* Коммерческая доска (VED-458): клиент, норма, бюджет; у обычной —
-            кнопка «Оплата» для администрации. */}
-        <WorkCommercialBar
-          board={board}
-          canManageBoard={Boolean(canManage)}
-          personal={space.isPersonal}
-          onChanged={setBoard}
-        />
-        <div className="flex w-full flex-wrap items-center justify-start gap-1">
+        {/* Промежуток 2px уже 370 точек (VED-525): с «Архивом» и
+            «Пригласить» в конце ряда шести кнопкам на 360 не хватало одной
+            точки, и «Пригласить» уезжала строкой ниже. */}
+        <div className="flex w-full flex-wrap items-center justify-start gap-0.5 min-[370px]:gap-1">
           {/* Только на телефоне, как и стрелки у колонок: шире sm колонки
               стоят в ряд, прятать их незачем. Одна кнопка, меняющая смысл, а
               не пара рядом: вторая всегда была бы бесполезной, а место
@@ -943,24 +924,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           >
             По дате
           </button>
-          {/* «По правке» (VED-421) — сразу после «По дате», как просил
-              заказчик: задачи по времени создания и последней правки,
-              свежетронутые сверху. */}
-          <button
-            type="button"
-            aria-pressed={groupMode === "edited"}
-            onClick={() => toggleGroupMode("edited")}
-            title={
-              groupMode === "edited"
-                ? "Карточки собраны по последней правке; перетаскивание пока выключено"
-                : "Собрать карточки раздела по последней правке: свежетронутые сверху"
-            }
-            className={workToolbarButtonClass({
-              pressed: groupMode === "edited",
-            })}
-          >
-            По правке
-          </button>
           <button
             type="button"
             aria-pressed={groupMode === "priority"}
@@ -996,6 +959,23 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             <Clock aria-hidden className="size-4 shrink-0" />
             <span className="hidden sm:inline">Последние</span>
           </button>
+          {/* «Архив» и «Пригласить» — в конце ряда вида (VED-525), а не
+              отдельной строкой под названием: ряд выше освободился, и
+              кнопки встали в одну линию с видом. */}
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            aria-label="Архив"
+            title="Архив"
+            className={workToolbarButtonClass()}
+          >
+            <Archive aria-hidden className="size-4 shrink-0" />
+          </button>
+          <WorkInvitePanel
+            space={space}
+            viewerId={board.viewerId}
+            onChanged={reload}
+          />
         </div>
       </div>
 
@@ -1122,14 +1102,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           Карточки собраны по дате создания: новые сверху. Перетаскивание пока
           выключено — порядок внутри раздела задаёт время создания; перенести
           карточку в соседний раздел можно стрелками на ней.
-        </p>
-      )}
-      {groupMode === "edited" && (
-        <p className="mb-3 text-xs text-text-2">
-          Карточки собраны по последней правке: сверху те, что завели или
-          меняли недавно, — поля, перенос, комментарий, чек-лист, вложения.
-          Перетаскивание пока выключено; перенести карточку в соседний раздел
-          можно стрелками на ней.
         </p>
       )}
 
@@ -1494,19 +1466,12 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
                       );
                     })}
                   </div>
-                ) : groupMode === "date" || groupMode === "edited" ? (
+                ) : groupMode === "date" ? (
                   <div className="flex min-h-[40px] flex-col gap-3">
-                    {(groupMode === "edited"
-                      ? groupTasksByEditedDate(column.tasks, now)
-                      : groupTasksByCreatedDate(column.tasks, now)
-                    ).map((dateGroup) => (
+                    {groupTasksByCreatedDate(column.tasks, now).map((dateGroup) => (
                       <div key={dateGroup.bucket}>
                         <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-text-2">
-                          {groupMode === "edited" ? (
-                            <Pencil aria-hidden className="size-3.5" />
-                          ) : (
-                            <History aria-hidden className="size-3.5" />
-                          )}
+                          <History aria-hidden className="size-3.5" />
                           {dateGroup.title}
                           <span className="font-normal">
                             {dateGroup.tasks.length}

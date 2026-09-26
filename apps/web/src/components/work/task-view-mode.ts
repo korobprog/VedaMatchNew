@@ -17,10 +17,12 @@
  */
 
 /**
- * «По правке» (VED-421) — третий вид того же выбора, «Последние» (VED-485) —
- * четвёртый; ключ хранения прежний.
+ * «Последние» (VED-485) — третий вид того же выбора; ключ хранения прежний.
+ * «По правке» (VED-421) убран по просьбе заказчика (VED-525): сохранённое
+ * `"edited"` читается как «без группировки», иначе у включивших его доска
+ * застряла бы в виде, у которого больше нет кнопки.
  */
-export type WorkGroupMode = "none" | "priority" | "date" | "edited" | "recent";
+export type WorkGroupMode = "none" | "priority" | "date" | "recent";
 
 const STORAGE_PREFIX = "vedamatch:work-view:";
 const LEGACY_STORAGE_PREFIX = "vedamatch:work-grouped:";
@@ -40,7 +42,6 @@ export function readWorkGroupMode(boardId: string): WorkGroupMode {
     if (
       stored === "priority" ||
       stored === "date" ||
-      stored === "edited" ||
       stored === "recent"
     ) {
       return stored;
