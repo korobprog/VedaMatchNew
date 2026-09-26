@@ -16,6 +16,7 @@ import type {
   CreateMusicUploadResponse,
   MusicCoverScope,
   MusicReportResultDto,
+  MusicStorageUsageDto,
   MusicUploadRightsBasis,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -36,6 +37,14 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
     );
   }
   return (await res.json()) as T;
+}
+
+/** Сколько места занято и сколько можно (VED: квота загрузок). */
+export async function fetchMusicUploadUsage(): Promise<MusicStorageUsageDto> {
+  const res = await apiFetch(`${API_URL}/music/uploads/usage`);
+  if (!res.ok)
+    throw new Error(`Не удалось узнать свободное место (${res.status})`);
+  return (await res.json()) as MusicStorageUsageDto;
 }
 
 /**

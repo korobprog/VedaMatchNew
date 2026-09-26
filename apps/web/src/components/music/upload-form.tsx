@@ -7,7 +7,16 @@ import {
   MUSIC_ACCEPTED_EXTENSIONS,
   MUSIC_ACCEPTED_MIME,
 } from "@vedamatch/shared";
-import { uploadMusicTrack } from "@/lib/music-client-api";
+import {
+  fetchMusicUploadUsage,
+  uploadMusicTrack,
+} from "@/lib/music-client-api";
+import { formatBytes } from "@/lib/music/offline-capacity";
+import {
+  isQuotaRejection,
+  planUploadBatch,
+  quotaSummary,
+} from "./upload-batch";
 import {
   LineageSelect,
   lineageFromSelect,
@@ -63,7 +72,10 @@ export function MusicUploadForm({
    * тащить в неё синтетические идентификаторы ради красоты незачем.
    */
   const [results, setResults] = useState<
-    Record<string, { state: "ok" | "failed"; note: string; kept?: boolean }>
+    Record<
+      string,
+      { state: "ok" | "failed" | "skipped"; note: string; kept?: boolean }
+    >
   >({});
   const [currentName, setCurrentName] = useState<string | null>(null);
   /**
@@ -120,8 +132,20 @@ export function MusicUploadForm({
     setDone(null);
     setResults({});
 
+    // Место проверяем до заливки (партия против квоты): не поместившиеся
+    // файлы даже не отправляем — одно сообщение с цифрами вместо строки
+    // «Закончилось место» на каждый файл. Не узнали — решит сервер.
+    const usage = await fetchMusicUploadUsage().catch(() => null);
+    const plan = planUploadBatch(
+      files.map((file) => file.size),
+      usage,
+    );
+    let stoppedAt = plan.fits;
+    let freeBytes = plan.freeBytes;
+
     let ok = 0;
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
+      if (index >= stoppedAt) break;
       setCurrentName(file.name);
       setProgress(0);
       try {
@@ -157,24 +181,48 @@ export function MusicUploadForm({
           [file.name]: { state: "ok", note: result.title, kept },
         }));
       } catch (cause) {
+        const note =
+          cause instanceof Error ? cause.message : "Не удалось загрузить";
+        // Квота общая для партии: сервер отказал одному — откажет и всем
+        // следующим. Останавливаемся, а не собираем тридцать одинаковых
+        // отказов.
+        if (isQuotaRejection(note)) {
+          stoppedAt = index;
+          freeBytes = null;
+          break;
+        }
         setResults((was) => ({
           ...was,
-          [file.name]: {
-            state: "failed",
-            note:
-              cause instanceof Error ? cause.message : "Не удалось загрузить",
-          },
+          [file.name]: { state: "failed", note },
         }));
       }
     }
 
+    const skipped = files.slice(stoppedAt).map((file) => file.name);
+    if (skipped.length > 0) {
+      setResults((was) => ({
+        ...was,
+        ...Object.fromEntries(
+          skipped.map((name) => [
+            name,
+            { state: "skipped" as const, note: "нет места" },
+          ]),
+        ),
+      }));
+      setError(
+        quotaSummary(skipped.length, files.length, freeBytes, formatBytes),
+      );
+    }
+
     setCurrentName(null);
     setProgress(null);
-    setDone(
-      files.length === 1
-        ? "Запись ушла в очередь проверки."
-        : `Готово: ${ok} из ${files.length} ушли в очередь проверки.`,
-    );
+    if (ok > 0) {
+      setDone(
+        files.length === 1
+          ? "Запись ушла в очередь проверки."
+          : `Готово: ${ok} из ${files.length} ушли в очередь проверки.`,
+      );
+    }
     setFiles([]);
     if (inputRef.current) inputRef.current.value = "";
     router.refresh();
@@ -315,15 +363,20 @@ export function MusicUploadForm({
                     {name}
                   </span>
                   <span
+                    // Причина отказа бывает длинной — место под неё не больше
+                    // половины строки, иначе она выталкивала имя файла.
                     className={
                       result?.state === "failed"
-                        ? "shrink-0 text-magenta"
+                        ? "max-w-[55%] shrink-0 truncate text-magenta"
                         : result?.state === "ok"
                           ? "shrink-0 text-cyan"
                           : "shrink-0 text-text-2"
                     }
+                    title={
+                      result?.state === "failed" ? result.note : undefined
+                    }
                   >
-                    {result?.state === "failed"
+                    {result?.state === "failed" || result?.state === "skipped"
                       ? result.note
                       : result?.state === "ok"
                         ? result.kept
