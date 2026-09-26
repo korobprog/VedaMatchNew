@@ -120,8 +120,9 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
       title: "Кнопка «Сохранить»",
       description: "Видна после правки",
     });
-    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
     expect(props.onChanged).toHaveBeenCalled();
+    // VED-400: сохранили — окно закрывается.
+    await waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
   });
 
   it("saves with Enter in the title", async () => {
@@ -238,8 +239,12 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
     expect(updateWorkTask).not.toHaveBeenCalled();
     expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
-    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
     expect(props.onChanged).toHaveBeenCalled();
+    // VED-400: «Сохранить» есть и после того, что ушло само, — им окно и
+    // закрывают.
+    expect(props.onClose).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(props.onClose).toHaveBeenCalled();
   });
 
   it("появляется после смены срока", async () => {
