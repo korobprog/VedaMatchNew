@@ -65,6 +65,7 @@ import {
   writeCollapsedColumns,
 } from "./column-collapse";
 import { WorkArchivePanel } from "./archive-panel";
+import { BoardHint } from "./board-hint";
 import { WorkCommercialBar } from "./commercial-bar";
 import { WorkInvitePanel } from "./invite-panel";
 import { workPersonLabel, workPersonShortLabel } from "./person-label";
@@ -1102,26 +1103,27 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
 
       {/* Сказать про выключенное перетаскивание словами: иначе карточка,
           которая перестала браться пальцем, читается как поломка. */}
+      {/* Пояснения сворачиваются своей кнопкой (VED-323). */}
       {groupMode === "priority" && (
-        <p className="mb-3 text-xs text-text-2">
+        <BoardHint>
           Карточки собраны по важности. Перетаскивание пока выключено — порядок
           внутри раздела задаёт важность; перенести карточку в соседний раздел
           можно стрелками на ней.
-        </p>
+        </BoardHint>
       )}
       {groupMode === "date" && (
-        <p className="mb-3 text-xs text-text-2">
+        <BoardHint>
           Карточки собраны по дате создания: новые сверху. Перетаскивание пока
           выключено — порядок внутри раздела задаёт время создания; перенести
           карточку в соседний раздел можно стрелками на ней.
-        </p>
+        </BoardHint>
       )}
 
       {groupMode === "recent" && !searchActive && (
-        <p className="mb-3 text-xs text-text-2">
+        <BoardHint>
           Последние задачи, которые вы открывали или меняли, — свежие сверху.
           Чужие сюда не входят.
-        </p>
+        </BoardHint>
       )}
 
       {error && (
