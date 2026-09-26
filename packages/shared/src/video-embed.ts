@@ -42,15 +42,19 @@ function videoId(host: string, parsed: URL): string | null {
 /**
  * Адрес плеера для iframe.
  *
- * У YouTube берём домен без куки-трекинга: плеер работает так же, а читателей
- * библиотеки не опознают до того, как они сами нажмут «смотреть».
+ * YouTube — основной домен, а не `youtube-nocookie` (VED-536): на телефоне
+ * плеер без куки крутил загрузку и не запускался — без куки YouTube не
+ * узнаёт зрителя и при VPN требует подтвердить, что это не бот, а внутри
+ * встроенного плеера подтвердить нечем. Трекеров до нажатия всё равно нет:
+ * iframe появляется только по «смотреть» (`VideoEmbed`). `playsinline=1` —
+ * играть на месте, а не разворачиваться на весь экран сразу.
  */
 export function videoEmbedUrl(input: string): string | null {
   const source = videoSource(input);
   if (!source) return null;
   return source.provider === 'rutube'
     ? `https://rutube.ru/play/embed/${source.id}/`
-    : `https://www.youtube-nocookie.com/embed/${source.id}`;
+    : `https://www.youtube.com/embed/${source.id}?playsinline=1`;
 }
 
 /** Человекочитаемое имя источника — для подписи «смотреть на …». */
