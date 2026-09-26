@@ -4,7 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isPortalAdmin } from "@vedamatch/shared";
 import type { UserProfile } from "@vedamatch/shared";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -33,6 +41,11 @@ import {
   useSideMenu,
 } from "@/components/quick/side-menu";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import {
+  HEADER_TOOLBAR_STORAGE_KEY,
+  headerShowsAvatar,
+  parseHeaderToolbar,
+} from "@/components/quick/header-toolbar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
@@ -313,23 +326,7 @@ export function Header({ user }: { user: UserProfile }) {
                   )}
                 </>
               }
-              avatar={
-                <Link href="/profile" className="flex shrink-0 items-center gap-2">
-                  {user.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.displayName}
-                      className="h-8 w-8 shrink-0 rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
-                      {user.displayName.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </Link>
-              }
+              avatar={<ProfileAvatarLink user={user} />}
             />
           </div>
         </div>
@@ -421,6 +418,7 @@ export function Header({ user }: { user: UserProfile }) {
                   </button>
                 </div>
                 <DrawerNav
+                  avatar={<ProfileAvatarLink user={user} onClick={closeDrawer} />}
                   tuning={tuning}
                   homeLabel={navItems[0].label}
                   currentAttr={currentAttr}
@@ -555,6 +553,7 @@ export function Header({ user }: { user: UserProfile }) {
  * меню — на сервере меню не рисуется, и расхождения гидратации нет.
  */
 function DrawerNav({
+  avatar,
   tuning,
   homeLabel,
   currentAttr,
@@ -562,6 +561,8 @@ function DrawerNav({
   onOpenSheet,
   onOpenHeaderSettings,
 }: {
+  /** Аватар профиля — если в шапке его убрали (VED-480), он стоит здесь. */
+  avatar: ReactNode;
   tuning: boolean;
   homeLabel: string;
   currentAttr: (href: string) => "page" | undefined;
@@ -571,6 +572,19 @@ function DrawerNav({
 }) {
   const t = useTranslations("Header");
   const menu = useSideMenu();
+  // Меню монтируется только открытым, то есть в браузере: запись шапки
+  // читается ленивым начальным значением, как настройка самого меню.
+  const [avatarHere] = useState(() => {
+    try {
+      return !headerShowsAvatar(
+        parseHeaderToolbar(
+          window.localStorage.getItem(HEADER_TOOLBAR_STORAGE_KEY),
+        ),
+      );
+    } catch {
+      return false;
+    }
+  });
 
   if (tuning)
     return (
@@ -599,18 +613,20 @@ function DrawerNav({
 
   return (
     <nav aria-label={t("services")} className="flex flex-col gap-1">
-      <div>
+      {/* Место справа — под настройку меню и крестик: иначе подсветка
+          «Главной» уходила бы под кнопки. Аватар, убранный из шапки
+          (VED-480), — в той же строке, сразу за «Главной». */}
+      <div className="mr-[5.25rem] flex items-center gap-2">
         <Link
           href="/"
           aria-current={currentAttr("/")}
           onClick={onClose}
-          // Место справа — под настройку меню и крестик: иначе подсветка
-          // «Главной» уходила бы под кнопки.
-          className="mr-[5.25rem] flex items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0"
+          className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 rounded-xl text-text-1 hover:text-text-0 hover:bg-glass transition-colors aria-[current=page]:bg-glass aria-[current=page]:text-text-0"
         >
           <Home size={20} />
           <span className="font-medium">{homeLabel}</span>
         </Link>
+        {avatarHere && avatar}
       </div>
       <SideMenuItems
         menu={menu}
@@ -619,5 +635,40 @@ function DrawerNav({
         onOpenSheet={onOpenSheet}
       />
     </nav>
+  );
+}
+
+/**
+ * Аватар — ссылка на свой профиль. В шапке и, если там его убрали, в
+ * боковом меню (VED-480): одна и та же ссылка в обоих местах.
+ */
+function ProfileAvatarLink({
+  user,
+  onClick,
+}: {
+  user: UserProfile;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      href="/profile"
+      onClick={onClick}
+      aria-label={user.displayName}
+      className="flex shrink-0 items-center gap-2"
+    >
+      {user.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={user.avatarUrl}
+          alt={user.displayName}
+          className="h-8 w-8 shrink-0 rounded-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-glass text-sm font-semibold text-text-0">
+          {user.displayName.charAt(0).toUpperCase()}
+        </span>
+      )}
+    </Link>
   );
 }

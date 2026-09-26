@@ -11,6 +11,11 @@
  * что в панели (`quick-actions.ts`): поиском, историей, плеером, сервисом,
  * своей кнопкой из закладки.
  *
+ * Аватар с VED-480 можно убрать: «сделай возможность прятать профиль в
+ * боковое меню». Убранный, он стоит в боковом меню рядом с «Главной». В
+ * счёт трёх настраиваемых кнопок он не входит и не двигается — у него своё
+ * место у правого края.
+ *
  * «Меню» убирать можно, потому что звёздочка на месте всегда: в её панели
  * есть кнопка меню, и меню (с выходом из аккаунта, языком и темой) не
  * остаётся за одним жестом свайпа (WCAG 2.5.1).
@@ -28,7 +33,12 @@ import type { QuickActionId, QuickActionMeta } from "./quick-actions";
 
 export const HEADER_TOOLBAR_STORAGE_KEY = "vedamatch:header-toolbar";
 
-const HEADER_TOOLBAR_VERSION = 1;
+/**
+ * Вторая версия — с VED-480: в первой аватар убрать было нельзя, и запись
+ * без него — старая, до закрепления. Такой возвращаем аватар; во второй
+ * его отсутствие — выбор человека.
+ */
+const HEADER_TOOLBAR_VERSION = 2;
 
 /** Звёздочка: открывает панель горячих кнопок. */
 export const HEADER_HOTKEYS_ID = "hotkeys";
@@ -39,7 +49,6 @@ export const HEADER_AVATAR_ID = "avatar";
 export const HEADER_FIXED_IDS: readonly QuickActionId[] = [
   HEADER_HOTKEYS_ID,
   HEADER_BELL_ID,
-  HEADER_AVATAR_ID,
 ];
 
 /** Сколько кнопок, кроме закреплённых, помещается на экране 320. */
@@ -73,7 +82,7 @@ export const HEADER_OWN_ITEMS: readonly QuickActionMeta[] = [
     id: HEADER_AVATAR_ID,
     kind: "builtin",
     label: "Профиль",
-    hint: "Аватар — всегда в шапке",
+    hint: "Аватар; убранный — в боковом меню рядом с «Главной»",
     href: null,
   },
 ];
@@ -89,9 +98,31 @@ export function isHeaderFixed(id: QuickActionId): boolean {
   return HEADER_FIXED_IDS.includes(id);
 }
 
+/**
+ * Своё место в ряду: закреплённые и аватар (VED-480) — его можно убрать,
+ * но не двигать, и в счёт кнопок он не входит.
+ */
+export function hasOwnHeaderSlot(id: QuickActionId): boolean {
+  return isHeaderFixed(id) || id === HEADER_AVATAR_ID;
+}
+
+/** Аватар в шапке; нет — значит, он в боковом меню (VED-480). */
+export function headerShowsAvatar(ids: readonly QuickActionId[]): boolean {
+  return ids.includes(HEADER_AVATAR_ID);
+}
+
 /** Сколько настраиваемых кнопок стоит в шапке. */
 export function headerButtonCount(ids: readonly QuickActionId[]): number {
-  return ids.filter((id) => !isHeaderFixed(id)).length;
+  return ids.filter((id) => !hasOwnHeaderSlot(id)).length;
+}
+
+/** Вставить в конец ряда, но перед «Меню», если оно там последнее. */
+function beforeTrailingMenu(
+  ids: readonly QuickActionId[],
+  items: readonly QuickActionId[],
+): QuickActionId[] {
+  const at = ids[ids.length - 1] === "menu" ? ids.length - 1 : ids.length;
+  return [...ids.slice(0, at), ...items, ...ids.slice(at)];
 }
 
 /**
@@ -110,15 +141,19 @@ export function parseHeaderToolbar(raw: string | null): QuickActionId[] {
   if (
     !record ||
     typeof record !== "object" ||
-    record.v !== HEADER_TOOLBAR_VERSION ||
+    (record.v !== HEADER_TOOLBAR_VERSION && record.v !== 1) ||
     !Array.isArray(record.ids)
   )
     return [...DEFAULT_HEADER_ITEMS];
-  return [
+  const ids = [
     ...new Set(
       record.ids.filter((id): id is string => typeof id === "string"),
     ),
   ];
+  // Первая версия: аватар тогда был закреплён — возвращаем его на место.
+  if (record.v === 1 && !ids.includes(HEADER_AVATAR_ID))
+    return beforeTrailingMenu(ids, [HEADER_AVATAR_ID]);
+  return ids;
 }
 
 export function serializeHeaderToolbar(ids: readonly QuickActionId[]): string {
@@ -148,7 +183,7 @@ export function resolveHeaderToolbar(
   for (const id of ids) {
     if (kept.includes(id)) continue;
     if (!own.has(id) && !known.has(id)) continue;
-    if (!isHeaderFixed(id)) {
+    if (!hasOwnHeaderSlot(id)) {
       if (buttons >= MAX_HEADER_BUTTONS) continue;
       buttons += 1;
     }
@@ -157,10 +192,8 @@ export function resolveHeaderToolbar(
   const missingFixed = HEADER_FIXED_IDS.filter(
     (id) => id !== HEADER_HOTKEYS_ID && !kept.includes(id),
   );
-  if (missingFixed.length > 0) {
-    const at = kept[kept.length - 1] === "menu" ? kept.length - 1 : kept.length;
-    kept.splice(at, 0, ...missingFixed);
-  }
+  if (missingFixed.length > 0)
+    kept.splice(0, kept.length, ...beforeTrailingMenu(kept, missingFixed));
   if (!kept.includes(HEADER_HOTKEYS_ID)) kept.unshift(HEADER_HOTKEYS_ID);
   return kept;
 }
@@ -173,7 +206,7 @@ export function headerToggleBlock(
   id: QuickActionId,
 ): HeaderToggleBlock {
   if (isHeaderFixed(id)) return "fixed";
-  if (ids.includes(id)) return null;
+  if (ids.includes(id) || id === HEADER_AVATAR_ID) return null;
   return headerButtonCount(ids) >= MAX_HEADER_BUTTONS ? "full" : null;
 }
 
@@ -200,6 +233,8 @@ export function toggleHeaderItem(
 ): QuickActionId[] {
   if (headerToggleBlock(ids, id) !== null) return [...ids];
   if (ids.includes(id)) return ids.filter((item) => item !== id);
+  // Аватар возвращается на своё место — к правому краю (VED-480).
+  if (id === HEADER_AVATAR_ID) return beforeTrailingMenu(ids, [id]);
   const bell = ids.indexOf(HEADER_BELL_ID);
   const at = bell >= 0 ? bell : ids.length;
   return [...ids.slice(0, at), id, ...ids.slice(at)];
@@ -217,7 +252,8 @@ export function moveHeaderItem(
 ): QuickActionId[] {
   const at = ids.indexOf(id);
   const to = at + delta;
-  if (at < 0 || isHeaderFixed(id) || to < 0 || to >= ids.length) return [...ids];
+  if (at < 0 || hasOwnHeaderSlot(id) || to < 0 || to >= ids.length)
+    return [...ids];
   const next = [...ids];
   [next[at], next[to]] = [next[to], next[at]];
   return next;

@@ -81,6 +81,7 @@ import {
   headerCatalog,
   headerToggleBlock,
   headerToggleNote,
+  hasOwnHeaderSlot,
   isHeaderFixed,
   moveHeaderItem,
   parseHeaderToolbar,
@@ -898,8 +899,9 @@ function HeaderSettings({
   return (
     <div>
       <p className="px-1 pb-2 text-[11px] text-text-1">
-        Кнопки справа в шапке, слева направо. Звёздочка, колокольчик и аватар
-        на месте всегда, остальных — до {MAX_HEADER_BUTTONS}.
+        Кнопки справа в шапке, слева направо. Звёздочка и колокольчик на месте
+        всегда, аватар можно убрать в боковое меню, остальных — до{" "}
+        {MAX_HEADER_BUTTONS}.
       </p>
       {groups.map((group) => (
         <section key={group.key} className="mb-2 last:mb-0">
@@ -914,7 +916,7 @@ function HeaderSettings({
             {group.items.map((meta) => {
               const on = ids.includes(meta.id);
               const block = headerToggleBlock(ids, meta.id);
-              const movable = on && !isHeaderFixed(meta.id);
+              const movable = on && !hasOwnHeaderSlot(meta.id);
               return (
                 <TuneRow
                   key={meta.id}
