@@ -8,7 +8,7 @@ import {
   useState,
   type ComponentProps,
 } from "react";
-import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Pencil, Trash2, X } from "lucide-react";
 import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
 import type {
   WorkBoardDto,
@@ -108,6 +108,8 @@ export function WorkTaskDialog({
   const latestText = useRef({ title: "", description: "" });
   /** Смена ключа заново заводит поля текста — после загрузки, сохранения и отмены. */
   const [textKey, setTextKey] = useState(0);
+  /** Пункт чек-листа, который правят на месте (VED-524). */
+  const [editingItem, setEditingItem] = useState<string | null>(null);
   /** Какие длинные пункты чек-листа раскрыты кнопкой «Далее» (VED-375). */
   const [expandedItems, setExpandedItems] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -677,42 +679,72 @@ export function WorkTaskDialog({
                       кнопкой «Далее» (VED-375): лимит поднят до 2000 знаков,
                       и продолжение больше не приходится заводить отдельным
                       пунктом. */}
-                  <div className="min-w-0 flex-1">
-                    <label
-                      htmlFor={`check-${item.id}`}
-                      id={`check-text-${item.id}`}
-                      // `line-clamp-3` сам задаёт display: вместе с `block`
-                      // побеждал `block`, и свёрнутый пункт не сворачивался.
-                      className={`whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
-                        item.done ? "text-text-2 line-through" : "text-text-0"
-                      } ${
-                        isLongChecklistText(item.text) &&
-                        !expandedItems.has(item.id)
-                          ? "line-clamp-3"
-                          : "block"
-                      }`}
-                    >
-                      {item.text}
-                    </label>
-                    {isLongChecklistText(item.text) && (
-                      <button
-                        type="button"
-                        aria-expanded={expandedItems.has(item.id)}
-                        aria-controls={`check-text-${item.id}`}
-                        onClick={() =>
-                          setExpandedItems((current) => {
-                            const next = new Set(current);
-                            if (next.has(item.id)) next.delete(item.id);
-                            else next.add(item.id);
-                            return next;
-                          })
-                        }
-                        className="min-h-6 text-xs font-semibold text-text-1 underline underline-offset-2 hover:text-text-0"
+                  {editingItem === item.id ? (
+                    <ChecklistEditForm
+                      initial={item.text}
+                      busy={busy}
+                      onSave={(text) =>
+                        void run(async () => {
+                          const next = await updateWorkChecklistItem(item.id, {
+                            text,
+                          });
+                          setEditingItem(null);
+                          return next;
+                        })
+                      }
+                      onCancel={() => setEditingItem(null)}
+                    />
+                  ) : (
+                    <div className="min-w-0 flex-1">
+                      <label
+                        htmlFor={`check-${item.id}`}
+                        id={`check-text-${item.id}`}
+                        // `line-clamp-3` сам задаёт display: вместе с `block`
+                        // побеждал `block`, и свёрнутый пункт не сворачивался.
+                        className={`whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
+                          item.done ? "text-text-2 line-through" : "text-text-0"
+                        } ${
+                          isLongChecklistText(item.text) &&
+                          !expandedItems.has(item.id)
+                            ? "line-clamp-3"
+                            : "block"
+                        }`}
                       >
-                        {expandedItems.has(item.id) ? "Свернуть" : "Далее"}
-                      </button>
-                    )}
-                  </div>
+                        {item.text}
+                      </label>
+                      {isLongChecklistText(item.text) && (
+                        <button
+                          type="button"
+                          aria-expanded={expandedItems.has(item.id)}
+                          aria-controls={`check-text-${item.id}`}
+                          onClick={() =>
+                            setExpandedItems((current) => {
+                              const next = new Set(current);
+                              if (next.has(item.id)) next.delete(item.id);
+                              else next.add(item.id);
+                              return next;
+                            })
+                          }
+                          className="min-h-6 text-xs font-semibold text-text-1 underline underline-offset-2 hover:text-text-0"
+                        >
+                          {expandedItems.has(item.id) ? "Свернуть" : "Далее"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {/* «Изменить» — рядом с «Убрать» (VED-524): опечатку в
+                      пункте правят на месте, а не удаляют и заводят заново. */}
+                  {canEdit && editingItem !== item.id && (
+                    <button
+                      type="button"
+                      aria-label={`Изменить пункт «${item.text}»`}
+                      disabled={busy}
+                      onClick={() => setEditingItem(item.id)}
+                      className="text-text-2 hover:text-text-0 disabled:opacity-50"
+                    >
+                      <Pencil aria-hidden className="size-4" />
+                    </button>
+                  )}
                   {canEdit && (
                     <button
                       type="button"
@@ -1004,6 +1036,77 @@ function DraftTextarea({
  * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
  * дошёл до сервера.
  */
+/**
+ * Правка пункта чек-листа на месте (VED-524). Enter — сохранить, Shift+Enter
+ * — новая строка, Escape — отменить: только правку, окно карточки остаётся
+ * открытым.
+ */
+function ChecklistEditForm({
+  initial,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  initial: string;
+  busy: boolean;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(initial);
+  const trimmed = text.trim();
+  return (
+    <form
+      className="flex min-w-0 flex-1 flex-col gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!trimmed) return;
+        if (trimmed === initial) onCancel();
+        else onSave(trimmed);
+      }}
+    >
+      <textarea
+        value={text}
+        rows={1}
+        autoFocus
+        onChange={(event) => setText(event.target.value)}
+        onInput={(event) => growToText(event.currentTarget)}
+        onFocus={(event) => growToText(event.currentTarget)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            // Иначе Escape долетел бы до окна и закрыл карточку.
+            event.stopPropagation();
+            onCancel();
+            return;
+          }
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }
+        }}
+        maxLength={WORK_CHECKLIST_TEXT_MAX}
+        aria-label="Текст пункта чек-листа"
+        className="w-full resize-none overflow-hidden rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="min-h-9 rounded-xl px-3 text-sm text-text-1 hover:text-text-0"
+        >
+          Отменить
+        </button>
+        <button
+          type="submit"
+          disabled={busy || !trimmed}
+          className="min-h-9 rounded-xl bg-glass px-3 text-sm text-text-0 disabled:opacity-50"
+        >
+          Сохранить
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ChecklistAddForm({
   busy,
   onAdd,

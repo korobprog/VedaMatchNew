@@ -594,3 +594,46 @@ describe("WorkTaskDialog — несохранённое переживает у�
   });
 });
 
+
+describe("WorkTaskDialog — правка пункта чек-листа (VED-524)", () => {
+  const withItem = () =>
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      checklist: [{ id: "i1", text: "Опечтака", done: false, position: 0 }],
+      checklistTotal: 1,
+    } as unknown as WorkTaskDto);
+
+  it("«Изменить» рядом с «Убрать»: Enter сохраняет новый текст", async () => {
+    const user = userEvent.setup();
+    withItem();
+    vi.mocked(updateWorkChecklistItem).mockResolvedValue(task);
+    open();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Изменить пункт «Опечтака»" }),
+    );
+    const field = screen.getByLabelText("Текст пункта чек-листа");
+    await user.clear(field);
+    await user.type(field, "Опечатка{Enter}");
+
+    expect(updateWorkChecklistItem).toHaveBeenCalledWith("i1", {
+      text: "Опечатка",
+    });
+  });
+
+  it("Escape отменяет правку, а окно карточки остаётся открытым", async () => {
+    const user = userEvent.setup();
+    withItem();
+    vi.mocked(updateWorkChecklistItem).mockClear();
+    const props = open();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Изменить пункт «Опечтака»" }),
+    );
+    await user.type(screen.getByLabelText("Текст пункта чек-листа"), "{Escape}");
+
+    expect(screen.queryByLabelText("Текст пункта чек-листа")).toBeNull();
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(updateWorkChecklistItem).not.toHaveBeenCalled();
+  });
+});
