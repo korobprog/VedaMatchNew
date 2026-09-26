@@ -23,6 +23,11 @@ import {
   type ImageDraft,
   type ShlokaDraft,
 } from "./shloka-draft";
+import {
+  autosaveKey,
+  restoreDraft,
+  serializeDraft,
+} from "./shloka-autosave";
 import { VERSE_FONT_FAMILY, verseFontVariables } from "./shloka-font";
 import { shlokaHref } from "./shloka-mode";
 import { shlokaErrorText, st } from "./shloka-text";
@@ -70,6 +75,53 @@ export function ShlokaForm({
   const errorRef = useRef<HTMLParagraphElement>(null);
   const baseline = useMemo(() => draftSignature(initial), [initial]);
   const dirty = draftSignature(draft) !== baseline;
+  const storageKey = autosaveKey(
+    target.kind === "edit"
+      ? { kind: "edit", shlokaId: target.shloka.id }
+      : { kind: "create", categoryId: target.categoryId },
+  );
+  /* Черновик в браузере (VED-466): ушёл в другое окно и вернулся — поля на
+     месте. Пока не прочитали сохранённое, писать нельзя: первый проход с
+     пустой формой стёр бы его. */
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- хранилище есть только в браузере. */
+    try {
+      const next = restoreDraft(
+        initial,
+        window.localStorage.getItem(storageKey),
+        Date.now(),
+      );
+      if (next && draftSignature(next) !== baseline) {
+        setDraft(next);
+        setRestored(true);
+      }
+    } catch {
+      // Приватный режим: форма работает без черновика.
+    }
+    setHydrated(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [initial, baseline, storageKey]);
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (dirty) {
+        window.localStorage.setItem(storageKey, serializeDraft(draft, Date.now()));
+      } else {
+        window.localStorage.removeItem(storageKey);
+      }
+    } catch {
+      // Хранилище недоступно или переполнено — черновик живёт до ухода.
+    }
+  }, [draft, dirty, hydrated, storageKey]);
+  const forgetDraft = () => {
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // Нечего стирать.
+    }
+  };
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -156,6 +208,7 @@ export function ShlokaForm({
       }
       if (imagesFailed) window.alert(st(locale, "form.imagesFailed"));
 
+      forgetDraft();
       onDirtyChange?.(false);
       if (target.kind === "create") {
         router.push(shlokaHref(saved.id));
@@ -178,6 +231,33 @@ export function ShlokaForm({
       }}
       className={`${verseFontVariables} grid gap-5`}
     >
+      {/* «Сохранить» и сверху (VED-466): нижняя кнопка — за длинной формой,
+          до неё надо листать через все поля. */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {restored && (
+          <p role="status" className="mr-auto flex flex-wrap items-center gap-2 text-sm text-text-1">
+            {st(locale, "form.draftRestored")}
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(initial);
+                setRestored(false);
+                forgetDraft();
+              }}
+              className="inline-flex min-h-9 items-center rounded-xl border border-glass-brd px-3 text-sm text-text-1 hover:text-text-0"
+            >
+              {st(locale, "form.draftDiscard")}
+            </button>
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={pending}
+          className="btn-mint inline-flex min-h-11 items-center rounded-xl px-5 text-sm font-semibold disabled:opacity-60"
+        >
+          {pending ? st(locale, "form.saving") : st(locale, "form.save")}
+        </button>
+      </div>
       <TextField
         label={st(locale, "form.source")}
         hint={st(locale, "form.sourceHint")}
@@ -286,12 +366,15 @@ export function ShlokaForm({
         >
           {pending
             ? st(locale, "form.saving")
-            : st(locale, target.kind === "edit" ? "form.save" : "form.publish")}
+            : st(locale, "form.save")}
         </button>
         {onCancel && (
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => {
+              forgetDraft();
+              onCancel();
+            }}
             disabled={pending}
             className="inline-flex min-h-11 items-center rounded-xl border border-glass-brd px-5 text-sm text-text-1 hover:text-text-0"
           >
