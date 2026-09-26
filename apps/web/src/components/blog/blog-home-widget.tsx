@@ -107,7 +107,7 @@ export function BlogHomeWidget({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* «Вайшнавский календарь» (VED-489) — в свободном месте панели, у всех
-     по умолчанию; спрятать можно в меню горячей кнопки «Календарь». */
+     по умолчанию; спрятать можно в настройке горячих кнопок (VED-496). */
   const showCalendar = useSyncExternalStore(
     subscribeVcalendarButton,
     getVcalendarButtonSnapshot,
@@ -366,8 +366,8 @@ export function BlogHomeWidget({
           className="mx-1.5 mb-2 rounded-xl border border-glass-brd bg-bg-1 p-2"
         >
           <p className="px-1 pb-1 text-xs text-text-1">
-            Порядок кнопок — стрелками. Кнопку календаря можно спрятать в меню
-            горячей кнопки «Календарь».
+            Порядок кнопок — стрелками. Кнопку календаря можно спрятать в
+            настройке горячих кнопок.
           </p>
           <ol className="flex flex-col">
             {order.map((id, at) => (

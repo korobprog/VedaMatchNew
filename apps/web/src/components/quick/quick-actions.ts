@@ -22,6 +22,7 @@
  */
 
 import { SERVICE_CONTENT } from "@/lib/service-content";
+import { VCALENDAR_URL } from "@/lib/vcalendar-button";
 
 export type BuiltinQuickActionId =
   | "menu"
@@ -180,10 +181,11 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     id: "calendar",
     kind: "builtin",
     label: "Календарь",
-    hint: "Афиша портала и вайшнавский календарь",
-    // Своей страницы нет: календарей два, и выбор между ними — это
-    // маленькая шторка, а не переход.
-    href: null,
+    hint: "Вайшнавский календарь: экадаши, посты и дни явления — на vcalendar.ru",
+    // VED-496: «по нажатию сразу открывался вайшнавский календарь… Пусть
+    // эта кнопка будет чисто под вайшнавский календарь». Раньше открывалась
+    // шторка с выбором между ним и афишей портала.
+    href: VCALENDAR_URL,
   },
   {
     id: "calculator",
@@ -222,6 +224,14 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     href: "/support",
   },
 ];
+
+/**
+ * Кнопка ведёт на чужой сайт (VED-496, «Календарь»): открывается в новой
+ * вкладке с `rel="noopener noreferrer"`, а не переходом внутри портала.
+ */
+export function isExternalQuickHref(href: string): boolean {
+  return /^https?:\/\//.test(href);
+}
 
 /** Прежнее имя списка: панель и тесты звали его так с VED-118. */
 export const QUICK_ACTIONS = BUILTIN_QUICK_ACTIONS;

@@ -116,30 +116,24 @@ describe("QuickPanel", () => {
       "href",
       "/motivation?order=random",
     );
-    // Календарь — кнопка, а не ссылка: календарей два, и плитка открывает
-    // выбор между афишей портала и вайшнавским календарём.
-    expect(
-      within(panel).getByRole("button", { name: /Календарь/ }),
-    ).toBeInTheDocument();
+    // VED-496: «Календарь» сразу открывает вайшнавский календарь — чужой
+    // сайт, новой вкладкой. Без `noopener` открытая вкладка получает доступ
+    // к нашей через `window.opener`.
+    const calendar = within(panel).getByRole("link", { name: /Календарь/ });
+    expect(calendar).toHaveAttribute("href", "https://vcalendar.ru");
+    expect(calendar).toHaveAttribute("target", "_blank");
+    expect(calendar).toHaveAttribute("rel", "noopener noreferrer");
   });
 
-  it("календарь предлагает афишу портала и вайшнавский календарь", async () => {
-    await openPanel();
-    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
-    await userEvent.click(
-      within(panel).getByRole("button", { name: /Календарь/ }),
-    );
-
-    expect(
-      within(panel).getByRole("link", { name: "Афиша портала" }),
-    ).toHaveAttribute("href", "/notices/events");
-    const external = within(panel).getByRole("link", {
-      name: /Вайшнавский календарь/,
+  it("галочка кнопки календаря на Блог-ленте — в настройке панели", async () => {
+    const user = await openPanel();
+    await user.click(screen.getByRole("button", { name: "Настроить панель" }));
+    const toggle = screen.getByRole("checkbox", {
+      name: "Кнопка календаря на Блог-ленте",
     });
-    expect(external).toHaveAttribute("href", "https://vcalendar.ru");
-    // Без `noopener` открытая вкладка получает доступ к нашей через
-    // `window.opener` — на внешних ссылках это обязательно.
-    expect(external).toHaveAttribute("rel", "noopener noreferrer");
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    expect(toggle).not.toBeChecked();
   });
 
   it("помнит настроенный набор между заходами", async () => {
