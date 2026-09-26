@@ -56,11 +56,15 @@ export function authorWithStatuses(value: ChatStatusAuthorDto | null | undefined
   return value && Array.isArray(value.statuses) && value.statuses.length > 0 ? value : null;
 }
 
-/** Кружок автора; своему — все секции просмотренные (свои не «новые»). */
+/**
+ * Кружок автора. Своему — все секции зелёные (VED-494): это живые статусы,
+ * а не просмотренные чужие, и серое кольцо читалось как «погасло».
+ */
 export function ringOf(author: ChatStatusAuthorDto | null | undefined, own = false): ChatStatusRing | null {
   const ready = authorWithStatuses(author);
   if (!ready) return null;
-  return { total: ready.statuses.length, unseen: own ? 0 : Math.max(0, ready.unseen) };
+  const total = ready.statuses.length;
+  return { total, unseen: own ? total : Math.max(0, ready.unseen) };
 }
 
 /**

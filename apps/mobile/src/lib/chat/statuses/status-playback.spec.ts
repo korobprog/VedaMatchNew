@@ -95,8 +95,8 @@ describe('authorWithStatuses и ringOf', () => {
     expect(ringOf(author(3, 1))).toEqual({ total: 3, unseen: 2 });
   });
 
-  it('свой кружок — без «новых»', () => {
-    expect(ringOf(author(2), true)).toEqual({ total: 2, unseen: 0 });
+  it('свой кружок — зелёный целиком (VED-494)', () => {
+    expect(ringOf(author(2), true)).toEqual({ total: 2, unseen: 2 });
   });
 });
 
