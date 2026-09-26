@@ -496,26 +496,6 @@ export function WorkTaskDialog({
               )}
 
               <label className="min-w-0 text-xs text-text-1">
-                Исполнитель
-                <select
-                  value={draft.assigneeId ?? ""}
-                  disabled={!canEdit}
-                  onChange={(event) =>
-                    edit({ assigneeId: event.target.value || null })
-                  }
-                  className={FIELD_CLASS}
-                >
-                  {/* Пустой исполнитель сервер заменяет составившим (VED-320). */}
-                  <option value="">Кто составил</option>
-                  {board.members.map((member) => (
-                    <option key={member.userId} value={member.userId}>
-                      {workPersonLabel(member)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="min-w-0 text-xs text-text-1">
                 Важность
                 <select
                   value={draft.priority}
@@ -532,16 +512,6 @@ export function WorkTaskDialog({
                   ))}
                 </select>
               </label>
-
-              {/* Кто исполняет — в поле; кто поставил — здесь. Постановщика
-                  не выбирают: это тот, кто завёл карточку, и подменять его
-                  задним числом значит переписывать, с кого спрашивать. */}
-              <div className="min-w-0 text-xs text-text-1">
-                Задачу поставил
-                <p className="mt-1 truncate rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0">
-                  {task.createdBy?.name ?? "Неизвестно"}
-                </p>
-              </div>
 
               {/* Срок живёт здесь, в карточке (VED-378): из формы новой
                   задачи он убран. */}
@@ -576,6 +546,39 @@ export function WorkTaskDialog({
                   />
                 )}
               </label>
+
+              {/* Люди — на всю строку на телефоне и в конце сетки (VED-445):
+                  в половине строки «Станислав Санкаршан» в списке обрезался
+                  до «Станислав Санкарш», стрелка списка съедала место. */}
+              <label className="min-w-0 text-xs text-text-1 max-sm:col-span-2">
+                Исполнитель
+                <select
+                  value={draft.assigneeId ?? ""}
+                  disabled={!canEdit}
+                  onChange={(event) =>
+                    edit({ assigneeId: event.target.value || null })
+                  }
+                  className={FIELD_CLASS}
+                >
+                  {/* Пустой исполнитель сервер заменяет составившим (VED-320). */}
+                  <option value="">Кто составил</option>
+                  {board.members.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {workPersonLabel(member)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Кто исполняет — в поле; кто поставил — здесь. Постановщика
+                  не выбирают: это тот, кто завёл карточку, и подменять его
+                  задним числом значит переписывать, с кого спрашивать. */}
+              <div className="min-w-0 text-xs text-text-1 max-sm:col-span-2">
+                Задачу поставил
+                <p className="mt-1 truncate rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0">
+                  {task.createdBy?.name ?? "Неизвестно"}
+                </p>
+              </div>
             </div>
 
             <label className="mt-2 block text-xs text-text-1">
