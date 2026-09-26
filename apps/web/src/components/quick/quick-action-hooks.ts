@@ -15,6 +15,7 @@ import {
 import { getPlaybackState } from "@/lib/music-playback-api";
 import { useMusicPlayer } from "@/components/music/player/player-provider";
 import { revealMusicPlayerCollapsed } from "@/components/music/player/player-reveal";
+import { useMusicRadio } from "@/components/music/radio/radio-provider";
 import { switchPortalWindows, usePortalWindows } from "./portal-windows-store";
 import { planPlayerHotkey, restorePlan } from "./player-hotkey";
 
@@ -134,4 +135,26 @@ export function usePlayerHotkey() {
   }, [player, router]);
 
   return { run, playing: Boolean(player?.current && player.isPlaying) };
+}
+
+/**
+ * «Радио» (VED-502, VED-534): то же, что кнопка «Радио» в Медиатеке, —
+ * включает радио не уводя со страницы, второе нажатие выключает. Радио
+ * живёт в корневом layout рядом с плеером; если его там нет (тесты, окно
+ * без провайдера), кнопка ведёт в Медиатеку, где радио есть всегда.
+ */
+export function useRadioHotkey() {
+  const radio = useMusicRadio();
+  const router = useRouter();
+
+  const run = useCallback(() => {
+    if (!radio) {
+      router.push("/music");
+      return;
+    }
+    if (radio.active) radio.stop();
+    else radio.start();
+  }, [radio, router]);
+
+  return { run, active: Boolean(radio?.active) };
 }

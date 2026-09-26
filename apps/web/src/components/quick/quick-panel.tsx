@@ -28,8 +28,10 @@ import {
   Info,
   Mail,
   Menu,
+  Newspaper,
   PanelTop,
   Quote,
+  Radio,
   Search,
   Settings2,
   Share2,
@@ -66,6 +68,7 @@ import {
   useInviteCopy,
   usePlayerHotkey,
   usePortalWindowSwitch,
+  useRadioHotkey,
 } from "./quick-action-hooks";
 import {
   DEFAULT_HEADER_ITEMS,
@@ -136,6 +139,10 @@ const ICONS: Record<
   history: History,
   // VED-416: кружок «пуск», а не нота — нота уже у Медиатеки в сервисах.
   player: CirclePlay,
+  // VED-502: та же антенна, что у кнопки «Радио» в Медиатеке.
+  radio: Radio,
+  // VED-506: газета — как у «В Блог-ленту» на материалах Образования.
+  blog: Newspaper,
   app: Smartphone,
   search: Search,
   assistant: Bot,
@@ -684,6 +691,8 @@ function HeaderAction({
       );
     case "player":
       return <HeaderPlayerButton meta={meta} icon={icon} />;
+    case "radio":
+      return <HeaderRadioButton meta={meta} icon={icon} />;
     case "window":
       return <HeaderWindowButton icon={icon} onSwitch={onClose} />;
     case "invite":
@@ -745,6 +754,29 @@ function HeaderPlayerButton({
       className={headerButtonClass}
     >
       {player.playing ? <CirclePause className="size-5" /> : icon}
+    </button>
+  );
+}
+
+function HeaderRadioButton({
+  meta,
+  icon,
+}: {
+  meta: QuickActionMeta;
+  icon: ReactNode;
+}) {
+  const radio = useRadioHotkey();
+  const label = radio.active ? RADIO_STOP_LABEL : meta.label;
+  return (
+    <button
+      type="button"
+      onClick={radio.run}
+      aria-pressed={radio.active}
+      aria-label={label}
+      title={radio.active ? RADIO_STOP_LABEL : meta.hint}
+      className={headerButtonClass}
+    >
+      {icon}
     </button>
   );
 }
@@ -978,6 +1010,8 @@ function QuickTiles({
                 <InviteTile />
               ) : id === "player" ? (
                 <PlayerTile meta={meta} onRun={onClose} />
+              ) : id === "radio" ? (
+                <RadioTile meta={meta} />
               ) : meta.href ? (
                 <Link href={meta.href} onClick={onClose} className={tileClass}>
                   <QuickActionIcon meta={meta} />
@@ -1166,6 +1200,31 @@ function PlayerTile({
       )}
       <span className="line-clamp-2">
         {player.playing ? PLAYER_PAUSE_LABEL : meta.label}
+      </span>
+    </button>
+  );
+}
+
+/** Подпись нажатой кнопки «Радио»: второе нажатие выключает. */
+const RADIO_STOP_LABEL = "Выключить радио";
+
+/**
+ * «Радио» (VED-502): панель остаётся открытой — нажатие включает или
+ * выключает радио, и видно, что оно играет, по нажатой плитке.
+ */
+function RadioTile({ meta }: { meta: QuickActionMeta }) {
+  const radio = useRadioHotkey();
+  return (
+    <button
+      type="button"
+      title={radio.active ? RADIO_STOP_LABEL : meta.hint}
+      aria-pressed={radio.active}
+      onClick={radio.run}
+      className={`${tileClass} ${radio.active ? "text-text-0" : ""}`}
+    >
+      <QuickActionIcon meta={meta} />
+      <span className="line-clamp-2">
+        {radio.active ? RADIO_STOP_LABEL : meta.label}
       </span>
     </button>
   );

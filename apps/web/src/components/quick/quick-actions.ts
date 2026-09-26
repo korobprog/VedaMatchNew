@@ -29,6 +29,8 @@ export type BuiltinQuickActionId =
   | "bookmarks"
   | "history"
   | "player"
+  | "radio"
+  | "blog"
   | "app"
   | "search"
   | "assistant"
@@ -107,6 +109,23 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     label: "Плеер",
     hint: "Выкатывает плеер свёрнутым и включает звук с того места, где остановились",
     href: null,
+  },
+  {
+    id: "radio",
+    kind: "builtin",
+    // VED-502, VED-534: радио Медиатеки одной кнопкой — включает и
+    // выключает, не уводя со страницы, как кнопка «Радио» в самой Медиатеке.
+    label: "Радио",
+    hint: "Включает радио Медиатеки прямо здесь; второе нажатие выключает",
+    href: null,
+  },
+  {
+    id: "blog",
+    kind: "builtin",
+    // VED-506: лента постов — одной кнопкой.
+    label: "Блог-лента",
+    hint: "Лента постов портала: новое от авторов и из сервисов",
+    href: "/blog",
   },
   {
     id: "app",
@@ -255,8 +274,19 @@ const QUICK_ACTIONS_ADDED_IN_V6: readonly QuickActionId[] = ["player"];
  */
 const QUICK_ACTIONS_ADDED_IN_V7: readonly QuickActionId[] = ["app"];
 
-/** Всё, что приехало после шестой версии, — дописывается к старым записям. */
-const ADDED_SINCE_V6: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V7;
+/**
+ * «Радио» и «Блог-лента» приехали в восьмой версии (VED-502, VED-534,
+ * VED-506) — по тому же правилу: кнопки просили добавить в панель.
+ */
+const QUICK_ACTIONS_ADDED_IN_V8: readonly QuickActionId[] = ["radio", "blog"];
+
+/** Всё, что приехало после седьмой версии, — дописывается к старым записям. */
+const ADDED_SINCE_V7: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V8;
+/** Всё, что приехало после шестой. */
+const ADDED_SINCE_V6: readonly QuickActionId[] = [
+  ...QUICK_ACTIONS_ADDED_IN_V7,
+  ...ADDED_SINCE_V7,
+];
 /** Всё, что приехало после пятой. */
 const ADDED_SINCE_V5: readonly QuickActionId[] = [
   ...QUICK_ACTIONS_ADDED_IN_V6,
@@ -276,9 +306,10 @@ const ADDED_SINCE_V3: readonly QuickActionId[] = [
 /**
  * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
  * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392), шестая —
- * «Плеер» (VED-416), седьмая — «Приложение» (VED-448).
+ * «Плеер» (VED-416), седьмая — «Приложение» (VED-448), восьмая — «Радио» и
+ * «Блог-лента» (VED-502, VED-506).
  */
-const CONFIG_VERSION = 7;
+const CONFIG_VERSION = 8;
 
 /**
  * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
@@ -365,6 +396,8 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   "bookmarks",
   "history",
   "player",
+  "radio",
+  "blog",
   "app",
   "assistant",
   "aphorism",
@@ -502,12 +535,20 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
       const custom = parseCustom(record.custom);
       return { ids: dedupe(record.ids, custom), custom };
     }
-    // Шестая, пятая, четвёртая и третья версии: всё то же, плюс кнопки,
-    // которых тогда не было.
-    if (record.v === 6 || record.v === 5 || record.v === 4 || record.v === 3) {
+    // Седьмая, шестая, пятая, четвёртая и третья версии: всё то же, плюс
+    // кнопки, которых тогда не было.
+    if (
+      record.v === 7 ||
+      record.v === 6 ||
+      record.v === 5 ||
+      record.v === 4 ||
+      record.v === 3
+    ) {
       const custom = parseCustom(record.custom);
       const added =
-        record.v === 6
+        record.v === 7
+          ? ADDED_SINCE_V7
+          : record.v === 6
           ? ADDED_SINCE_V6
           : record.v === 5
             ? ADDED_SINCE_V5

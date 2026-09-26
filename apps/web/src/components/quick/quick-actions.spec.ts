@@ -33,7 +33,7 @@ describe("parseQuickConfig", () => {
   });
 
   it("возвращает сохранённый порядок как есть", () => {
-    expect(parseQuickConfig('{"v":7,"ids":["donate","aphorism"]}')).toEqual({
+    expect(parseQuickConfig('{"v":8,"ids":["donate","aphorism"]}')).toEqual({
       ids: ["donate", "aphorism"],
       custom: [],
     });
@@ -48,16 +48,16 @@ describe("parseQuickConfig", () => {
   it("молча выбрасывает кнопки, которых больше нет", () => {
     // В хранилище лежит набор с прошлой версии портала.
     expect(
-      parseQuickConfig('{"v":7,"ids":["donate","transits","qr"]}').ids,
+      parseQuickConfig('{"v":8,"ids":["donate","transits","qr"]}').ids,
     ).toEqual(["donate"]);
   });
 
   it("пустой набор — это выбор: панель можно опустошить", () => {
-    expect(parseQuickConfig('{"v":7,"ids":[]}').ids).toEqual([]);
+    expect(parseQuickConfig('{"v":8,"ids":[]}').ids).toEqual([]);
   });
 
   it("убирает дубли: две одинаковые кнопки — сбой, а не выбор", () => {
-    expect(parseQuickConfig('{"v":7,"ids":["donate","donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":8,"ids":["donate","donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -65,7 +65,7 @@ describe("parseQuickConfig", () => {
   it("сервисную кнопку узнаёт по слагу, а не по каталогу с сервера", () => {
     // Каталог приезжает запросом, а набор разбирается сразу при открытии.
     expect(
-      parseQuickConfig('{"v":7,"ids":["service:work","service:выдумка"]}').ids,
+      parseQuickConfig('{"v":8,"ids":["service:work","service:выдумка"]}').ids,
     ).toEqual(["service:work"]);
   });
 
@@ -83,14 +83,17 @@ describe("parseQuickConfig", () => {
       "history",
       // VED-416: «Плеер» — позже.
       "player",
-      // VED-448: «Приложение» — позже всех.
+      // VED-448: «Приложение» — позже.
       "app",
+      // VED-502, VED-506: «Радио» и «Блог-лента» — позже всех.
+      "radio",
+      "blog",
     ]);
   });
 
   it("запись второй версии дополняется: своих кнопок тогда не было", () => {
     expect(parseQuickConfig('{"v":2,"ids":["donate"]}')).toEqual({
-      ids: ["donate", "postcard", "history", "player", "app"],
+      ids: ["donate", "postcard", "history", "player", "app", "radio", "blog"],
       custom: [],
     });
   });
@@ -100,14 +103,14 @@ describe("parseQuickConfig", () => {
      до этой версии было нельзя — кнопки не существовало. */
   it("запись третьей версии получает «Открытку», «Историю», «Плеер» и «Приложение» в конец", () => {
     expect(parseQuickConfig('{"v":3,"ids":["donate","aphorism"]}')).toEqual({
-      ids: ["donate", "aphorism", "postcard", "history", "player", "app"],
+      ids: ["donate", "aphorism", "postcard", "history", "player", "app", "radio", "blog"],
       custom: [],
     });
   });
 
   it("«Открытка» не задваивается, если человек её уже включил", () => {
     expect(parseQuickConfig('{"v":3,"ids":["postcard","donate"]}').ids).toEqual(
-      ["postcard", "donate", "history", "player", "app"],
+      ["postcard", "donate", "history", "player", "app", "radio", "blog"],
     );
   });
 
@@ -120,7 +123,7 @@ describe("parseQuickConfig", () => {
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["donate", "custom:/work", "history", "player", "app"],
+      ids: ["donate", "custom:/work", "history", "player", "app", "radio", "blog"],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
@@ -135,7 +138,7 @@ describe("parseQuickConfig", () => {
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["search", "menu", "custom:/work", "aphorism", "player", "app"],
+      ids: ["search", "menu", "custom:/work", "aphorism", "player", "app", "radio", "blog"],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
@@ -147,11 +150,24 @@ describe("parseQuickConfig", () => {
     expect(parseQuickConfig('{"v":6,"ids":["donate"]}').ids).toEqual([
       "donate",
       "app",
+      "radio",
+      "blog",
     ]);
   });
 
-  it("выключенное в седьмой версии «Приложение» остаётся выключенным", () => {
+  /* VED-502, VED-534, VED-506: «Радио» и «Блог-лента» доезжают и до
+     настроенных панелей; выключенное в седьмой версии «Приложение» остаётся
+     выключенным. */
+  it("запись седьмой версии получает «Радио» и «Блог-ленту» в конец", () => {
     expect(parseQuickConfig('{"v":7,"ids":["donate"]}').ids).toEqual([
+      "donate",
+      "radio",
+      "blog",
+    ]);
+  });
+
+  it("выключенные в восьмой версии кнопки остаются выключенными", () => {
+    expect(parseQuickConfig('{"v":8,"ids":["donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -166,7 +182,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка на чужой сайт в панель не попадает", () => {
     const raw = JSON.stringify({
-      v: 7,
+      v: 8,
       ids: ["custom:https://example.com"],
       custom: [{ label: "Не наше", href: "https://example.com" }],
     });
@@ -175,7 +191,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка без подписи — сбой хранилища, а не кнопка", () => {
     const raw = JSON.stringify({
-      v: 7,
+      v: 8,
       ids: ["custom:/work"],
       custom: [{ label: "  ", href: "/work" }],
     });
@@ -423,7 +439,7 @@ describe("«Меню» живёт только в шапке", () => {
 
   it("из старой записи «Меню» уходит, остальное на месте", () => {
     const stored = parseQuickConfig(
-      '{"v":7,"ids":["search","donate","invite","menu","aphorism"]}',
+      '{"v":8,"ids":["search","donate","invite","menu","aphorism"]}',
     );
     expect(arrangeQuickActions(stored.ids, PINNED_QUICK_ACTIONS)).toEqual([
       "search",
