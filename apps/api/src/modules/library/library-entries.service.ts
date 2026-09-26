@@ -896,17 +896,33 @@ export class LibraryEntriesService {
           page.map((row) => row.id),
         )
       : new Set<string>();
+    const withText = await this.withText(page.map((row) => row.id));
 
     return {
-      items: page.map((row) =>
-        toEntryDto(row, marked.has(row.id), viewerId, viewerIsAdmin),
-      ),
+      items: page.map((row) => ({
+        ...toEntryDto(row, marked.has(row.id), viewerId, viewerIsAdmin),
+        hasText: withText.has(row.id),
+      })),
       nextCursor:
         hasMore && last
           ? encodeCursor({ publishedAt: last.publishedAt, id: last.id })
           : null,
       total,
     };
+  }
+
+  /**
+   * У каких материалов порции есть свой текст (VED-538): карточке ленты это
+   * нужно для «Содержания». Отдельный запрос только с `id` — сам текст
+   * бывает в сотни килобайт, и лента его не берёт (`ENTRY_SELECT`).
+   */
+  private async withText(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.prisma.libraryEntry.findMany({
+      where: { id: { in: ids }, body: { not: null } },
+      select: { id: true },
+    });
+    return new Set(rows.map((row) => row.id));
   }
 
   async byId(

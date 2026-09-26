@@ -27,6 +27,8 @@ import { OutsideLink } from "@/components/library/outside-link";
 import { VideoEmbed } from "@/components/library/video-embed";
 import { entryTypeLabel, pickLocalized, t } from "@/components/library/i18n";
 import { kathaParagraphs } from "@/components/library/katha-text";
+import { entryOutline } from "@/components/library/entry-outline";
+import { EntryContents } from "@/components/library/entry-contents";
 import { EntryFiles } from "@/components/library/entry-files";
 import { ShlokaView } from "@/components/library/shloka/shloka-view";
 
@@ -125,6 +127,8 @@ export default async function LibraryEntryPage({
     en: entry.titleEn,
   });
   const embedUrl = entry.url ? videoEmbedUrl(entry.url) : null;
+  const paragraphs = entry.body ? kathaParagraphs(entry.body) : [];
+  const outline = entryOutline(paragraphs);
   const provider = entry.url ? videoSource(entry.url)?.provider : undefined;
   const [comments, tree] = await Promise.all([
     getLibraryComments(entry.id),
@@ -233,13 +237,22 @@ export default async function LibraryEntryPage({
             переносы по правилам языка текста, а не интерфейса: русская
             лекция в английском интерфейсе иначе переносилась бы
             по-английски. */}
+        {/* «Содержание» (VED-538) — над текстом, если в нём есть разделы:
+            пункт ведёт к своему абзацу. */}
+        {outline.length > 0 && (
+          <EntryContents locale={locale} items={outline} />
+        )}
         {entry.body && (
           <div
             lang={entry.contentLanguage}
             className="mb-6 grid gap-4 break-words hyphens-auto text-[15px] leading-7 text-text-0"
           >
-            {kathaParagraphs(entry.body).map((paragraph, index) => (
-              <p key={index} className="whitespace-pre-line">
+            {paragraphs.map((paragraph, index) => (
+              <p
+                key={index}
+                id={`p-${index}`}
+                className="scroll-mt-24 whitespace-pre-line"
+              >
                 {paragraph}
               </p>
             ))}

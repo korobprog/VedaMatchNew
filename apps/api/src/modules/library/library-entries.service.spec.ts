@@ -634,6 +634,41 @@ describe('LibraryEntriesService.feed', () => {
     expect(result.nextCursor).not.toBeNull();
   });
 
+  it('помечает материалы со своим текстом, не забирая сам текст (VED-538)', async () => {
+    const prisma = prismaMock();
+    prisma.libraryEntry.findMany = jest
+      .fn()
+      .mockResolvedValueOnce([
+        entryRecord({ id: 'katha' }),
+        entryRecord({ id: 'link' }),
+      ])
+      .mockResolvedValueOnce([{ id: 'katha' }]);
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+
+    const result = await service.feed({});
+
+    expect(result.items.map((item) => [item.id, item.hasText])).toEqual([
+      ['katha', true],
+      ['link', false],
+    ]);
+    const textQuery = prisma.libraryEntry.findMany.mock.calls[1][0] as {
+      where: unknown;
+      select: unknown;
+    };
+    expect(textQuery.where).toEqual({
+      id: { in: ['katha', 'link'] },
+      body: { not: null },
+    });
+    expect(textQuery.select).toEqual({ id: true });
+  });
+
   it('ignores a broken cursor instead of failing', async () => {
     const prisma = prismaMock();
     const service = new LibraryEntriesService(
