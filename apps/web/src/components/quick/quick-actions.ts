@@ -211,7 +211,9 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
   {
     id: "info",
     kind: "builtin",
-    label: "Что нужно знать",
+    // VED-369: «из названия горячих кнопок исключи двухсложные» — одно
+    // слово; шторка по-прежнему называется «Что нужно знать».
+    label: "Справка",
     hint: "Коротко о портале и куда смотреть дальше",
     href: null,
   },
