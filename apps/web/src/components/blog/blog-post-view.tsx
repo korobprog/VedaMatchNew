@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Share2 } from "lucide-react";
+import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { BlogPostCard } from "./blog-post-card";
 import { PostActionsOrderButton } from "./post-actions-order-button";
@@ -19,6 +19,7 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
   const router = useRouter();
   const [post, setPost] = useState(initial);
   const [copied, setCopied] = useState(false);
+  const [editRequest, setEditRequest] = useState(0);
 
   /* «Поделиться» (VED-491) — справа от «Вся лента»: системное окно
      «Поделиться», а где его нет — ссылка в буфер обмена. */
@@ -55,6 +56,21 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
             постом переставляются отсюда для всей ленты. */}
         <div className="flex items-center gap-2">
           <PostActionsOrderButton />
+          {/* «Редактировать» и сверху (VED-495): под длинным постом до
+              нижней кнопки «слишком долго мотать». На телефоне — значком,
+              иначе ряд с «Поделиться» не влезает в 360 точек. */}
+          {post.canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditRequest((value) => value + 1)}
+              aria-label="Редактировать"
+              title="Редактировать"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60 max-sm:px-0"
+            >
+              <Pencil aria-hidden className="size-4" />
+              <span className="hidden sm:inline">Редактировать</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void share()}
@@ -72,6 +88,7 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
       <BlogPostCard
         post={post}
         expanded
+        editRequest={editRequest}
         onChanged={setPost}
         // Пост удалён — показывать больше нечего, возвращаем в ленту.
         onRemoved={() => router.replace("/blog")}
