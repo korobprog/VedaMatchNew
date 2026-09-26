@@ -457,7 +457,7 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
     ).toEqual(["РАЗНОЕ", "МУЗЫКА"]);
     expect(
       Array.from((status as HTMLSelectElement).options).map((o) => o.text),
-    ).toEqual(["Без статуса", "Тестерование"]);
+    ).toEqual(["Новое", "Тестерование"]);
     expect(section).toHaveValue("c1");
     expect(status).toHaveValue("");
   });
@@ -494,7 +494,7 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
     expect(moveWorkTask).not.toHaveBeenCalled();
   });
 
-  it("«Без статуса» возвращает задачу в её раздел", async () => {
+  it("«Новое» (без статуса) возвращает задачу в её раздел", async () => {
     const user = userEvent.setup();
     vi.mocked(getWorkTask).mockResolvedValue({
       ...task,

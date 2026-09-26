@@ -483,9 +483,10 @@ export function WorkTaskDialog({
                     }
                     className={FIELD_CLASS}
                   >
-                    {sections.length > 0 && (
-                      <option value="">Без статуса</option>
-                    )}
+                    {/* «Новое» (VED-444, было «Без статуса»): задача, которую
+                        ещё не брали в работу, — новая, и так она стоит по
+                        умолчанию. */}
+                    {sections.length > 0 && <option value="">Новое</option>}
                     {statuses.map((column) => (
                       <option key={column.id} value={column.id}>
                         {column.name}
