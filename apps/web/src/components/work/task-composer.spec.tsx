@@ -97,4 +97,28 @@ describe("composerHasContent", () => {
       composerHasContent({ ...emptyComposerDraft("me"), description: "текст" }),
     ).toBe(true);
   });
+
+  /* VED-488: ✖ в поле заголовка стирает его одним нажатием и оставляет
+     курсор в поле — писать свой. */
+  it("крестик очищает заголовок и возвращает фокус в поле", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.type(
+      screen.getByLabelText("Описание новой задачи в разделе «Разное»"),
+      "Кнопка не жмётся",
+    );
+    await user.click(screen.getByRole("button", { name: "Изменить" }));
+    const title = screen.getByLabelText("Заголовок");
+    expect(title).toHaveValue("Кнопка не жмётся");
+
+    await user.click(
+      screen.getByRole("button", { name: "Очистить заголовок" }),
+    );
+
+    expect(title).toHaveValue("");
+    expect(title).toHaveFocus();
+    expect(
+      screen.queryByRole("button", { name: "Очистить заголовок" }),
+    ).not.toBeInTheDocument();
+  });
 });

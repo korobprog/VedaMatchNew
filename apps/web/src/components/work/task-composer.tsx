@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import type { WorkMemberDto, WorkTaskPriority } from "@vedamatch/shared";
 import { MAX_FILES_AT_ONCE } from "./attach-files";
 import { deriveTaskTitle } from "./task-title";
@@ -87,6 +88,7 @@ export function TaskComposer({
      когда открыли правку, и обратно на «Изменить», когда вернулись к
      выведенному заголовку (WCAG 2.2, SC 2.4.3). */
   const editTitleRef = useRef<HTMLButtonElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const returnFocusToEditTitle = useRef(false);
 
   useEffect(() => {
@@ -198,20 +200,40 @@ export function TaskComposer({
         // прочиталась бы вместе с её текстом, а нажатие на
         // подпись уводило бы фокус в поле мимо кнопки.
         <div className="mt-1">
-          <label className="block text-xs text-text-1">
-            Заголовок
-            {/* Фокус сразу в поле: правку открыли нажатием
+          <div className="relative">
+            <label className="block text-xs text-text-1">
+              Заголовок
+              {/* Фокус сразу в поле: правку открыли нажатием
                 кнопки, которая от этого исчезла. Поле
                 появляется только по этому нажатию, поэтому
                 `autoFocus` ничего не перехватывает. */}
-            <input
-              autoFocus
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              maxLength={200}
-              className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0"
-            />
-          </label>
+              <input
+                ref={titleInputRef}
+                autoFocus
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                maxLength={200}
+                className="mt-1 block w-full rounded-lg border border-glass-brd bg-bg-1 py-1.5 pl-2 pr-11 text-sm text-text-0"
+              />
+            </label>
+            {/* ✖ — стереть заголовок одним нажатием (VED-488) и сразу
+              писать свой. Стоит поверх правого края поля, но вне
+              `label`: иначе его имя прочиталось бы в подписи поля. */}
+            {draftTitle && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftTitle("");
+                  titleInputRef.current?.focus();
+                }}
+                aria-label="Очистить заголовок"
+                title="Очистить заголовок"
+                className="absolute bottom-0.5 right-0.5 flex size-8 items-center justify-center rounded-md text-text-2 hover:text-text-0"
+              >
+                <X aria-hidden className="size-4" />
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => {
