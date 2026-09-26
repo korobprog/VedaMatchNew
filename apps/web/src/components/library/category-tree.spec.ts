@@ -3,6 +3,7 @@ import type { LibraryCategoryTreeNode } from "@vedamatch/shared";
 import {
   applyMove,
   categoryCounter,
+  headerEntriesCount,
   flattenTree,
   forbiddenTargets,
   insertIntoTree,
@@ -298,5 +299,31 @@ describe("categoryCounter", () => {
     expect(
       categoryCounter({ childrenCount: 0, entriesCount: 0 }),
     ).toEqual({ kind: "entries", value: 0 });
+  });
+});
+
+describe("headerEntriesCount (VED-396)", () => {
+  const leaf = { childrenCount: 0, entriesCount: 65 };
+
+  it("без фильтра — все материалы рубрики, как на плитке", () => {
+    expect(
+      headerEntriesCount(leaf, { active: false, feedTotal: 3 }).entriesCount,
+    ).toBe(65);
+  });
+
+  it("с фильтром — сколько нашла лента", () => {
+    expect(
+      headerEntriesCount(leaf, { active: true, feedTotal: 3 }).entriesCount,
+    ).toBe(3);
+  });
+
+  it("у раздела с подразделами и без ответа ленты — как было", () => {
+    const section = { childrenCount: 10, entriesCount: 0 };
+    expect(headerEntriesCount(section, { active: true, feedTotal: 3 })).toBe(
+      section,
+    );
+    expect(headerEntriesCount(leaf, { active: true, feedTotal: null })).toBe(
+      leaf,
+    );
   });
 });

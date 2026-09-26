@@ -17,6 +17,7 @@ import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
 import { CategoryBreadcrumbs } from "@/components/library/category-breadcrumbs";
 import { CategoryNavigator } from "@/components/library/category-navigator";
+import { headerEntriesCount } from "@/components/library/category-tree";
 import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
@@ -103,6 +104,13 @@ export default async function LibraryCategoryPage({
   // Линия — в ключе ленты: кнопка меняет настройку, а не адрес, и без неё
   // лента после router.refresh() держала бы прежнюю выдачу.
   const lineageKey = appliedLineage ?? "all";
+  // Фильтр ленты применён (VED-396) — число в шапке следует за лентой.
+  // В окне шлок лента без самих шлок, и её число шапке не годится.
+  const headerFiltered =
+    shlokaMode === null &&
+    (appliedLineage !== null ||
+      typeof query.type === "string" ||
+      typeof query.language === "string");
   const { category, ancestors, children } = page;
   const title = pickLocalized(locale, {
     ru: category.titleRu,
@@ -142,7 +150,13 @@ export default async function LibraryCategoryPage({
             {title}
           </h1>
           <p className="text-sm text-text-2">
-            {categoryPageSummary(locale, category)}
+            {categoryPageSummary(
+              locale,
+              headerEntriesCount(category, {
+                active: headerFiltered,
+                feedTotal: feed?.total ?? null,
+              }),
+            )}
           </p>
         </div>
 

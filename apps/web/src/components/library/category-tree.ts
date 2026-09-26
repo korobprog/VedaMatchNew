@@ -320,6 +320,27 @@ export function removeFromTree(
  * «4 материала» — разные вещи, и складывать их в «4» значит снова врать.
  * Поэтому наружу уходит и вид, и величина — подпись рядом называет вид.
  */
+/**
+ * Сколько материалов называть в шапке рубрики (VED-396): «считать все линии,
+ * а после применения фильтра уже согласно этому». Без фильтра — число всех
+ * материалов рубрики, как на плитке. С фильтром (линия, тип, язык) — столько,
+ * сколько лента нашла, иначе шапка обещала бы «65 материалов» над лентой из
+ * трёх. У раздела с подразделами число — подразделы, фильтр его не меняет.
+ */
+export function headerEntriesCount(
+  category: { childrenCount: number; entriesCount: number },
+  filter: { active: boolean; feedTotal: number | null },
+): { childrenCount: number; entriesCount: number } {
+  if (
+    category.childrenCount > 0 ||
+    !filter.active ||
+    filter.feedTotal === null
+  ) {
+    return category;
+  }
+  return { ...category, entriesCount: filter.feedTotal };
+}
+
 export function categoryCounter(category: {
   childrenCount: number;
   entriesCount: number;
