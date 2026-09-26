@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  ChangeEvent,
-  FormEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -33,7 +26,6 @@ import { Input, fieldClassName } from "@/components/ui/input";
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
-const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
 const socialFields: Array<[keyof ProfileSocialLinks, string, string]> = [
   ["instagram", "Instagram", "username или ссылка"],
@@ -82,21 +74,9 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
   // чтобы сохранение профиля не стирало выбранное до смены этапа.
   const [lineage, setLineage] = useState<string>(user.lineage ?? "");
   const asksLineage = profile.spiritualStage === "devotee";
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
-  const [avatarPending, setAvatarPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const avatarPreview = useMemo(
-    () => (avatarFile ? URL.createObjectURL(avatarFile) : null),
-    [avatarFile],
-  );
-
-  useEffect(() => {
-    if (!avatarPreview) return;
-    return () => URL.revokeObjectURL(avatarPreview);
-  }, [avatarPreview]);
 
   /**
    * Плашка «Указать город» на главной ведёт на `/profile#city`: без переноса
@@ -110,75 +90,6 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     input.scrollIntoView({ block: "center" });
     input.focus({ preventScroll: true });
   }, []);
-
-  function selectAvatar(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setError(null);
-    setMessage(null);
-    if (!file) {
-      setAvatarFile(null);
-      return;
-    }
-    if (!Object.keys({ "image/jpeg": true, "image/png": true, "image/webp": true }).includes(file.type)) {
-      setError("Разрешены только jpg, jpeg, png и webp");
-      event.target.value = "";
-      return;
-    }
-    if (file.size > MAX_AVATAR_SIZE) {
-      setError("Размер аватара не должен превышать 5 MB");
-      event.target.value = "";
-      return;
-    }
-    setAvatarFile(file);
-  }
-
-  async function uploadAvatar() {
-    if (!avatarFile) return;
-    setAvatarPending(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", avatarFile);
-      const res = await apiFetch(`${API_URL}/profile/avatar`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const updated = (await res.json()) as UserProfile;
-      setProfile(updated);
-      setAvatarFile(null);
-      setMessage("Аватар сохранён");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось загрузить аватар");
-    } finally {
-      setAvatarPending(false);
-    }
-  }
-
-  async function deleteAvatar() {
-    setAvatarPending(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await apiFetch(`${API_URL}/profile/avatar`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const updated = (await res.json()) as UserProfile;
-      setProfile(updated);
-      setAvatarFile(null);
-      setMessage("Аватар удалён");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось удалить аватар");
-    } finally {
-      setAvatarPending(false);
-    }
-  }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -227,63 +138,8 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
     }
   }
 
-  const avatarSrc = avatarPreview ?? profile.avatarUrl;
-
   return (
     <form onSubmit={saveProfile} className="mt-6 space-y-6">
-      <Card className="p-6">
-        <CardTitle className="mb-4 text-lg">
-          Аватар
-        </CardTitle>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          {avatarSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarSrc}
-              alt={profile.displayName}
-              className="h-24 w-24 rounded-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <span className="flex h-24 w-24 items-center justify-center rounded-full bg-glass text-3xl font-semibold text-text-0">
-              {profile.displayName.charAt(0).toUpperCase()}
-            </span>
-          )}
-          <div className="flex-1 space-y-3">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={selectAvatar}
-              className="block w-full text-sm text-text-1 file:mr-4 file:rounded-lg file:border-0 file:bg-mint file:px-4 file:py-2 file:text-sm file:font-medium file:text-on-mint"
-            />
-            <p className="text-xs text-text-2">JPG, PNG или WebP до 5 MB. Перед сохранением показывается preview.</p>
-            {!profile.avatarUrl && (
-              <p className="rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs text-text-1">
-                Без фото ваши сообщения незнакомым людям сворачиваются в
-                «Скрытый запрос» — так же, как у спам-профилей. С фото
-                сообщение видно сразу.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={uploadAvatar}
-                disabled={!avatarFile}
-                loading={avatarPending}
-              >
-                {avatarPending ? "Сохраняем..." : "Сохранить аватар"}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={deleteAvatar}
-                disabled={!profile.avatarUrl || avatarPending}
-              >
-                Удалить
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
-
       <Card className="p-6">
         <CardTitle className="mb-2 text-lg">
           Имя

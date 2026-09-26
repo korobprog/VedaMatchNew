@@ -14,6 +14,7 @@ import { ProfileEditor } from "@/components/profile-editor";
 import { TimeZoneField } from "@/components/time-zone-field";
 import { CommunityPicker } from "@/components/communities/community-picker";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { ProfileAvatarCard } from "@/components/profile-avatar-card";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
@@ -65,6 +66,7 @@ export default async function ProfilePage() {
         <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
           Профиль
         </h1>
+        <ProfileAvatarCard user={user} />
         <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
           <div className="mb-6 flex items-center gap-4">
             <UserAvatar
