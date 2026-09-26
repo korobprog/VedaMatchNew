@@ -36,9 +36,11 @@ describe("MusicArtistsSection", () => {
     expect(
       screen.getByRole("button", { name: /Списком/ }),
     ).toHaveAttribute("aria-pressed", "false");
-    // Имя видно и в сетке (у кружка), и число записей отдельным текстом.
-    expect(screen.getByText("Shanti people")).toBeInTheDocument();
-    expect(screen.getByText("1 запись")).toBeInTheDocument();
+    // Имя — под кружком, число записей — в самом кружке (VED-516); словами
+    // оно остаётся в имени ссылки для скринридера.
+    expect(
+      screen.getByRole("link", { name: /Shanti people, 3 записи/ }),
+    ).toBeInTheDocument();
   });
 
   it("переключает на список компактных строк с именем и числом записей", async () => {

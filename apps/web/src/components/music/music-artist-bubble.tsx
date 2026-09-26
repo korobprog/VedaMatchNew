@@ -22,14 +22,28 @@ export function MusicArtistBubble({ artist }: { artist: MusicArtistDto }) {
           seed={artist.id}
           alt={`Фото: ${artist.name}`}
           rounded="rounded-full"
+          placeholderLabel={
+            <span className="font-mono text-base font-bold text-text-0 sm:text-lg">
+              {artist.trackCount}
+            </span>
+          }
         />
+        {/* С обложкой число — маленькой меткой поверх неё. */}
+        {artist.coverUrl && (
+          <span
+            aria-hidden
+            className="absolute bottom-0 right-0 rounded-full bg-bg-0/85 px-1.5 font-mono text-[11px] font-bold text-text-0"
+          >
+            {artist.trackCount}
+          </span>
+        )}
       </span>
-      <span className="flex flex-col gap-0.5">
-        <span className="line-clamp-2 break-words text-xs font-semibold leading-tight text-text-0">
-          {artist.name}
-        </span>
-        <span className="font-mono text-[11px] text-text-2">
-          {artist.trackCount}{" "}
+      <span className="line-clamp-2 break-words text-xs font-semibold leading-tight text-text-0">
+        {artist.name}
+        {/* Слово «записей» под кружком убрано (VED-516): число стоит в самом
+            кружке, а скринридеру оно нужно словами. */}
+        <span className="sr-only">
+          , {artist.trackCount}{" "}
           {plural(artist.trackCount, "запись", "записи", "записей")}
         </span>
       </span>

@@ -27,13 +27,14 @@ export function MusicRadioButton({ className = "" }: { className?: string }) {
       type="button"
       onClick={active ? radio.stop : radio.start}
       aria-pressed={active}
-      className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+      // Рост и шрифт — как у вкладок «Всё / Традиционное» (VED-516).
+      className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors ${
         active
           ? "border-magenta/40 bg-magenta/10 text-text-0"
           : "border-glass-brd text-text-1 hover:text-text-0"
       } ${className}`}
     >
-      <Radio aria-hidden className="size-3.5" />
+      <Radio aria-hidden className="size-4" />
       Радио
       {listeners !== null && listeners > 0 && (
         <span className="font-mono text-[11px] text-text-2">

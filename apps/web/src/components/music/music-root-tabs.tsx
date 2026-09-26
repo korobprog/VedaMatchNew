@@ -19,6 +19,14 @@ import { musicFilterHref, type MusicFilterState } from "./music-filters";
  * менное» до первой размеченной записи значило бы, что редакция не может
  * даже проверить, как выглядит пустой раздел.
  */
+/**
+ * Кнопка раздела рядом с вкладками — «Радио», «Лекции», «Аудиокниги»
+ * (VED-516): того же роста и шрифта, что вкладки «Всё / Традиционное /
+ * Современное», чтобы два ряда читались одним блоком.
+ */
+export const MUSIC_SECTION_CHIP =
+  "flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-sm font-semibold text-text-1 transition-colors hover:text-text-0";
+
 export function MusicRootTabs({
   categories,
   state,

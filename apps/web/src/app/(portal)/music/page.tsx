@@ -32,7 +32,10 @@ import {
 } from "@/components/music/music-filters";
 import { MusicPlaylistCard } from "@/components/music/music-playlist-card";
 import { MusicRail } from "@/components/music/music-rail";
-import { MusicRootTabs } from "@/components/music/music-root-tabs";
+import {
+  MUSIC_SECTION_CHIP,
+  MusicRootTabs,
+} from "@/components/music/music-root-tabs";
 import {
   artistsInRoot,
   findRootCategory,
@@ -328,7 +331,8 @@ export default async function MusicPage({
             {catalog.totalTracks > 0 && (
               <span
                 title={`Всего записей в каталоге: ${catalog.totalTracks}`}
-                className="font-mono text-xs font-medium text-text-2"
+                // К правому краю строки (VED-516), а не вплотную к названию.
+                className="ml-auto font-mono text-xs font-medium text-text-2"
               >
                 {catalog.totalTracks}{" "}
                 {plural(catalog.totalTracks, "запись", "записи", "записей")}
@@ -378,20 +382,23 @@ export default async function MusicPage({
       </header>
 
       <div className="mt-4 flex flex-col gap-3 lg:mt-6">
+        <MusicRootTabs categories={catalog.categories} state={filterState} />
         {/* Разделы одним рядом, слева направо (VED-516): «Радио», «Лекции»,
-            «Аудиокниги». Сами аудиокниги в каталоге не показываются — их
-            «отображение находится внутри этой кнопки» (VED-237). «Фильтры»
-            переехали значком к «Исполнителям». */}
-        <div className="flex flex-wrap items-center gap-2">
+            «Аудиокниги» — под вкладками «Всё / Традиционное / Современное» и
+            того же размера, что они. Сами аудиокниги в каталоге не
+            показываются — их «отображение находится внутри этой кнопки»
+            (VED-237). «Фильтры» переехали значком к «Исполнителям». На узком
+            экране ряд листается вбок, как вкладки над ним, а не ломается. */}
+        <div className="scroll-slim flex items-center gap-1.5 overflow-x-auto pb-1">
           <MusicRadioButton />
           {/* «Лекции» (VED-437) устроены так же, как «Аудиокниги». */}
           <Link
             href="/music/lectures"
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+            className={MUSIC_SECTION_CHIP}
           >
             <svg
               viewBox="0 0 24 24"
-              className="size-3.5"
+              className="size-4"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -407,11 +414,11 @@ export default async function MusicPage({
           </Link>
           <Link
             href="/music/audiobooks"
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-glass-brd px-3 text-xs font-medium text-text-1 hover:text-text-0"
+            className={MUSIC_SECTION_CHIP}
           >
             <svg
               viewBox="0 0 24 24"
-              className="size-3.5"
+              className="size-4"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -425,7 +432,6 @@ export default async function MusicPage({
             Аудиокниги
           </Link>
         </div>
-        <MusicRootTabs categories={catalog.categories} state={filterState} />
         {/* Пока исполнителей нет, строки «Исполнители» нет — значки
             «Фильтры» и «Добавить исполнителя» стоят своим рядом. */}
         {rootArtists.length === 0 && (

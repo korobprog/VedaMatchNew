@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState, type ReactNode, type CSSProperties } from "react";
 
 /**
  * Обложка записи, альбома или подборки.
@@ -55,6 +55,7 @@ export function MusicCover({
   rounded = "rounded-2xl",
   fill = true,
   fit = "cover",
+  placeholderLabel,
 }: {
   url: string | null;
   /** Постоянный ключ записи — обычно её id. */
@@ -87,6 +88,12 @@ export function MusicCover({
    * без обложки, — не пустым белым и не прозрачным.
    */
   fit?: "cover" | "contain";
+  /**
+   * Что показать в заглушке вместо значка-ноты — у кружка исполнителя это
+   * число его записей (VED-516): обложек почти ни у кого нет, а значок в
+   * каждом кружке ничего не говорит.
+   */
+  placeholderLabel?: ReactNode;
 }) {
   const size = fill ? "h-full w-full" : "";
   /* Ссылка есть, а файл не пришёл — показываем ту же заглушку, что и у записи
@@ -119,28 +126,30 @@ export function MusicCover({
       style={placeholderStyle(seed)}
       className={`flex ${size} items-center justify-center ${rounded} ${className}`}
     >
-      <svg
-        viewBox="0 0 28 28"
-        className="h-1/3 w-1/3 max-h-12 max-w-12"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M9 3.5h10L24 14l-5 10.5H9L4 14z"
-          stroke="currentColor"
-          strokeWidth="1.1"
-          strokeLinejoin="round"
-          className="text-text-2 opacity-50"
-        />
-        <path
-          d="M11.5 18.5v-8l6-1v7.5"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-text-1"
-        />
-      </svg>
+      {placeholderLabel ?? (
+        <svg
+          viewBox="0 0 28 28"
+          className="h-1/3 w-1/3 max-h-12 max-w-12"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M9 3.5h10L24 14l-5 10.5H9L4 14z"
+            stroke="currentColor"
+            strokeWidth="1.1"
+            strokeLinejoin="round"
+            className="text-text-2 opacity-50"
+          />
+          <path
+            d="M11.5 18.5v-8l6-1v7.5"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-text-1"
+          />
+        </svg>
+      )}
     </div>
   );
 }
