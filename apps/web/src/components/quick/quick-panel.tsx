@@ -212,6 +212,19 @@ const headerButtonClass =
   "-mx-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0";
 
 /**
+ * Насколько подтянуть к краю экрана крайний справа элемент ряда (VED-439),
+ * чтобы его значок стоял от края на те же ~17 точек, что логотип слева.
+ * Кнопка 44px (`headerButtonClass`, с полями −4px) держит значок в 8px от
+ * своего края — её тянем на 10px, колокольчик — на 8px. Аватар круглый, без
+ * полей вокруг, и стоит на месте.
+ */
+function edgePull(id: string): string {
+  if (id === HEADER_AVATAR_ID) return "";
+  if (id === HEADER_BELL_ID) return "-mr-2";
+  return "-mr-2.5";
+}
+
+/**
  * Панель горячих кнопок: короткий путь к тому, за чем возвращаются каждый
  * день, из любого места портала.
  *
@@ -404,53 +417,71 @@ export function QuickPanel({
       }
     : undefined;
 
+  const lastId = toolbar[toolbar.length - 1];
+  function headerItem(id: string): ReactNode {
+    switch (id) {
+      case HEADER_HOTKEYS_ID:
+        return (
+          <button
+            key={id}
+            ref={starRef}
+            type="button"
+            data-quick-trigger=""
+            onClick={() => show("tiles")}
+            aria-expanded={view === "tiles"}
+            aria-label="Горячие кнопки"
+            className={headerButtonClass}
+          >
+            <Sparkles className="size-5" />
+          </button>
+        );
+      case HEADER_BELL_ID:
+        return bell ? <Fragment key={id}>{bell}</Fragment> : null;
+      case HEADER_AVATAR_ID:
+        return (
+          <Fragment key={id}>
+            {beforeAvatar}
+            {avatar}
+          </Fragment>
+        );
+      default: {
+        const meta = quickActionMeta(id, catalog);
+        if (!meta) return null;
+        return (
+          <HeaderAction
+            key={id}
+            meta={meta}
+            view={view}
+            menuOpen={menuOpen}
+            onShow={show}
+            onClose={close}
+            onOpenMenu={openMenu}
+          />
+        );
+      }
+    }
+  }
+
   return (
     // На телефоне ряд плотнее (VED-439: «немного уменьши расстояние»):
     // промежуток 4px вместо 8, поля нажатия 44px заходят друг на друга на
     // 4px — палец всё равно попадает в ту кнопку, над чьим значком он.
     <div className="relative flex items-center gap-1 sm:gap-2">
       {toolbar.map((id) => {
-        switch (id) {
-          case HEADER_HOTKEYS_ID:
-            return (
-              <button
-                key={id}
-                ref={starRef}
-                type="button"
-                data-quick-trigger=""
-                onClick={() => show("tiles")}
-                aria-expanded={view === "tiles"}
-                aria-label="Горячие кнопки"
-                className={headerButtonClass}
-              >
-                <Sparkles className="size-5" />
-              </button>
-            );
-          case HEADER_BELL_ID:
-            return bell ? <Fragment key={id}>{bell}</Fragment> : null;
-          case HEADER_AVATAR_ID:
-            return (
-              <Fragment key={id}>
-                {beforeAvatar}
-                {avatar}
-              </Fragment>
-            );
-          default: {
-            const meta = quickActionMeta(id, catalog);
-            if (!meta) return null;
-            return (
-              <HeaderAction
-                key={id}
-                meta={meta}
-                view={view}
-                menuOpen={menuOpen}
-                onShow={show}
-                onClose={close}
-                onOpenMenu={openMenu}
-              />
-            );
-          }
-        }
+        const node = headerItem(id);
+        // Крайний справа значок — на том же расстоянии от края экрана, что
+        // логотип слева (VED-439): у кнопки 44px значок стоит в 12px от её
+        // края, и ряд казался отодвинутым от правого поля. Отрицательное
+        // поле двигает кнопку к краю, а не уменьшает цель нажатия. Аватар
+        // своего поля не имеет — он и так на месте.
+        const pull = id === lastId ? edgePull(id) : "";
+        return pull ? (
+          <span key={id} className={`flex ${pull}`}>
+            {node}
+          </span>
+        ) : (
+          node
+        );
       })}
 
       {view && (
