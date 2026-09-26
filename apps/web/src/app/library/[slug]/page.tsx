@@ -109,56 +109,61 @@ export default async function LibraryCategoryPage({
     <div className="relative min-h-dvh bg-bg-0">
       <Header user={user} />
       <main className="mx-auto max-w-5xl px-4 py-8 pb-24">
-        <BackLink locale={locale} fallbackHref="/library" />
-        <CategoryBreadcrumbs
-          locale={locale}
-          ancestors={ancestors}
-          current={title}
-        />
-
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          {/* Число подразделов — рядом с заголовком, а не отдельной строкой
-              под кнопками (VED-511): так экран компактнее.
-
-              То же одно число, что и в плитке: раздел — свои подразделы,
-              подраздел — свои материалы. Голое «3 материалов» над лентой
-              раздела, у которого своих материалов нет, читалось как «здесь
-              три» — а все три лежали в подразделах. */}
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="font-display text-2xl font-bold text-text-0">
-              {title}
-            </h1>
-            <p className="text-sm text-text-2">
-              {categoryPageSummary(locale, category)}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/library/add?category=${encodeURIComponent(category.slug)}`}
-              className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
-            >
-              {t(locale, "nav.add")}
-            </Link>
-            <CategoryTitleEdit locale={locale} category={category} />
-          </div>
+        {/* «Назад» и путь — одной строкой (VED-511): крошки справа, без
+            последней — её имя стоит заголовком строкой ниже. */}
+        <div className="-mt-3 mb-2 flex flex-wrap items-center justify-between gap-x-3">
+          <BackLink locale={locale} fallbackHref="/library" className="" />
+          <CategoryBreadcrumbs
+            locale={locale}
+            ancestors={ancestors}
+            current={title}
+            hideCurrent
+            className=""
+          />
         </div>
-        {/* «Фильтры» и «Упорядочить» — рядом, в один ряд (VED-511), как в
-            ряду кнопок на главной Образования (VED-483). Ряд линий заменил
-            блок «Для вашей линии здесь пока ничего нет» под лентой (VED-396):
-            выбранная линия видна сразу, а не когда лента уже опустела. */}
-        <div
-          className={`mb-4 grid gap-2 sm:flex sm:flex-wrap sm:items-center ${
-            category.canMove ? "grid-cols-2" : "grid-cols-1"
-          }`}
-        >
-          <div id="lineage-switch" className="scroll-mt-24">
+
+        {/* Число подразделов — в строке заголовка, у правого края (VED-511).
+
+            То же одно число, что и в плитке: раздел — свои подразделы,
+            подраздел — свои материалы. Голое «3 материалов» над лентой
+            раздела, у которого своих материалов нет, читалось как «здесь
+            три» — а все три лежали в подразделах. */}
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h1 className="font-display text-2xl font-bold text-text-0">
+            {title}
+          </h1>
+          <p className="text-sm text-text-2">
+            {categoryPageSummary(locale, category)}
+          </p>
+        </div>
+
+        {/* Ряд действий (VED-511): «Добавить», а справа значками — «Фильтры»,
+            «Редактировать», «Упорядочить», в этом порядке. Подписи у значков
+            — в `aria-label` и подсказке. Кнопки — прямо в ряду, без обёртки:
+            форма правки названия встаёт под ним на всю ширину. Ряд — точка
+            отсчёта для меню фильтров: оно раскрывается у его правого края.
+            Кнопка линий заменила блок «Для вашей линии здесь пока ничего
+            нет» под лентой (VED-396): выбранная линия видна сразу, а не
+            когда лента уже опустела. */}
+        <div className="relative mb-4 flex flex-wrap items-center gap-2">
+          <Link
+            href={`/library/add?category=${encodeURIComponent(category.slug)}`}
+            className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
+          >
+            {t(locale, "nav.addShort")}
+          </Link>
+          <div id="lineage-switch" className="ml-auto scroll-mt-24">
             <LibraryLineageFilter
               locale={locale}
               applied={appliedLineage}
               preference={preferences?.lineage ?? null}
+              iconOnly
             />
           </div>
-          {category.canMove && <LibraryOrganizeButton locale={locale} />}
+          <CategoryTitleEdit locale={locale} category={category} iconOnly />
+          {category.canMove && (
+            <LibraryOrganizeButton locale={locale} iconOnly />
+          )}
         </div>
 
         {user && (

@@ -72,6 +72,7 @@ export function BackLink({
   locale,
   fallbackHref,
   skipHistory = false,
+  className = "-mt-3 mb-1",
 }: {
   locale: LibraryLocale;
   fallbackHref: string;
@@ -81,6 +82,8 @@ export function BackLink({
    * и «назад» возвращал человека в редакцию вместо портала.
    */
   skipHistory?: boolean;
+  /** Отступы снаружи: в ряду с крошками (VED-511) они свои. */
+  className?: string;
 }) {
   const router = useRouter();
 
@@ -100,7 +103,7 @@ export function BackLink({
       }}
       // Цель касания 44 пикселя при прежнем месте на экране: отрицательный
       // верхний отступ съедает прибавку высоты.
-      className="-mt-3 mb-1 inline-flex min-h-11 items-center gap-1.5 pr-2 text-sm text-text-2 hover:text-text-0"
+      className={`${className} inline-flex min-h-11 items-center gap-1.5 pr-2 text-sm text-text-2 hover:text-text-0`}
     >
       <ArrowLeft aria-hidden className="h-4 w-4" />
       {t(locale, "nav.back")}

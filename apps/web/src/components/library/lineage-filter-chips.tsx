@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 import { useDismissable } from "@/lib/use-dismissable";
 import { t } from "./i18n";
+import { LIBRARY_ICON_BUTTON } from "./icon-button";
 import {
   activeLineageChoice,
   hrefWithoutLineage,
@@ -40,6 +41,7 @@ export function LibraryLineageFilter({
   applied,
   preference,
   className = "",
+  iconOnly = false,
 }: {
   locale: LibraryLocale;
   /** Линия, по которой API отфильтровал выдачу, — та же, что в подписи. */
@@ -48,6 +50,12 @@ export function LibraryLineageFilter({
   preference: LineagePreference;
   /** Раскладка снаружи: в ряду кнопок Образования кнопка тянется на ячейку. */
   className?: string;
+  /**
+   * Значком, без подписи на экране (VED-511) — ряд действий рубрики. Меню
+   * тогда открывается от правого края ряда, а не от кнопки: кнопка стоит в
+   * ряду справа, и панель в 288 точек от её края уезжала бы за экран.
+   */
+  iconOnly?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -129,7 +137,9 @@ export function LibraryLineageFilter({
     }`;
 
   return (
-    <div className={`relative ${className}`}>
+    // Значком — без своей точки отсчёта: меню встаёт под рядом действий
+    // целиком, у его правого края (ряд — `relative`).
+    <div className={`${iconOnly ? "" : "relative"} ${className}`}>
       <button
         ref={triggerRef}
         type="button"
@@ -137,21 +147,27 @@ export function LibraryLineageFilter({
         aria-expanded={open}
         aria-busy={busy}
         onClick={() => setOpen((value) => !value)}
-        className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-4 text-sm transition-colors ${
+        aria-label={iconOnly ? t(locale, "lineage.menu") : undefined}
+        title={iconOnly ? t(locale, "lineage.menu") : undefined}
+        className={`${
+          iconOnly
+            ? LIBRARY_ICON_BUTTON
+            : "inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-4 text-sm transition-colors"
+        } ${
           current === "all"
             ? "border-glass-brd text-text-1 hover:text-text-0"
             : "border-magenta text-text-0"
         }`}
       >
         <SlidersHorizontal aria-hidden className="size-4" />
-        {t(locale, "lineage.menu")}
+        {!iconOnly && t(locale, "lineage.menu")}
       </button>
       {open && (
         <div
           ref={panelRef}
           role="group"
           aria-label={t(locale, "lineage.filter")}
-          className="absolute left-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
+          className={`absolute ${iconOnly ? "right-0" : "left-0"} top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg`}
         >
           {menu.map((item) =>
             item.kind === "choice" ? (

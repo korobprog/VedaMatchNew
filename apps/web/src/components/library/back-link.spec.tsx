@@ -45,9 +45,7 @@ describe("BackLink", () => {
   // VED-91: позади в истории — форма добавления, и «назад» уводил в редакцию.
   it("после публикации ведёт в раздел материала мимо истории", () => {
     window.history.pushState({}, "", "/library/entry/e1?created=1");
-    render(
-      <BackLink locale="ru" fallbackHref="/library/katha" skipHistory />,
-    );
+    render(<BackLink locale="ru" fallbackHref="/library/katha" skipHistory />);
 
     fireEvent.click(screen.getByRole("button"));
 

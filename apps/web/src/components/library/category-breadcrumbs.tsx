@@ -14,13 +14,21 @@ export function CategoryBreadcrumbs({
   locale,
   ancestors,
   current,
+  hideCurrent = false,
+  className = "mb-3",
 }: {
   locale: LibraryLocale;
   ancestors: LibraryCategoryAncestor[];
   current: string;
+  /**
+   * Без последней крошки (VED-511): на странице рубрики её имя стоит
+   * заголовком прямо под крошками, и повтор только занимал строку.
+   */
+  hideCurrent?: boolean;
+  className?: string;
 }) {
   return (
-    <nav aria-label={t(locale, "nav.breadcrumbRoot")} className="mb-3">
+    <nav aria-label={t(locale, "nav.breadcrumbRoot")} className={className}>
       <ol className="flex flex-wrap items-center gap-1 text-sm text-text-2">
         <li>
           <Link href="/library" className="hover:text-text-0">
@@ -41,10 +49,12 @@ export function CategoryBreadcrumbs({
             </Link>
           </li>
         ))}
-        <li className="flex items-center gap-1 text-text-1">
-          <ChevronRight aria-hidden className="h-3.5 w-3.5" />
-          <span aria-current="page">{current}</span>
-        </li>
+        {!hideCurrent && (
+          <li className="flex items-center gap-1 text-text-1">
+            <ChevronRight aria-hidden className="h-3.5 w-3.5" />
+            <span aria-current="page">{current}</span>
+          </li>
+        )}
       </ol>
     </nav>
   );
