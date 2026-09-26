@@ -69,7 +69,7 @@ export function MusicArtistAdminCategory({
           disabled={pending}
           className="h-8 rounded-full border border-glass-brd bg-bg-1 px-2.5 text-xs text-text-1 disabled:opacity-50"
         >
-          <option value="">Категория не выбрана</option>
+          <option value="">Всё</option>
           {roots.map((root) => (
             <option key={root.id} value={root.id}>
               {root.title}
