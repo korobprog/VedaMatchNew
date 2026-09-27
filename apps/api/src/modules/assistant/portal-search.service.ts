@@ -7,7 +7,7 @@ import { AssistantToolsService } from './assistant-tools.service';
 import { ASSISTANT_TOOLS } from './assistant-tools';
 import {
   normalizePortalQuery,
-  PORTAL_SEARCH_PER_SERVICE,
+  PORTAL_SEARCH_FETCH_PER_SERVICE,
   PORTAL_SEARCH_SOURCES,
   PORTAL_SEARCH_TIMEOUT_MS,
   portalSearchResult,
@@ -27,7 +27,14 @@ export class PortalSearchService {
     raw: unknown,
   ): Promise<PortalSearchResponse> {
     const query = normalizePortalQuery(raw);
-    if (!query) return { query: null, groups: [], unavailable: [] };
+    if (!query)
+      return {
+        query: null,
+        groups: [],
+        unavailable: [],
+        total: 0,
+        more: false,
+      };
 
     const replies = await Promise.all(
       PORTAL_SEARCH_SOURCES.map((source) => {
@@ -37,7 +44,7 @@ export class PortalSearchService {
         // ассистента, и семь строк на каждый поиск их бы перекосили.
         return this.tools.invoke(
           tool,
-          { query, limit: PORTAL_SEARCH_PER_SERVICE },
+          { query, limit: PORTAL_SEARCH_FETCH_PER_SERVICE },
           actor,
           'ru',
           { record: false, timeoutMs: PORTAL_SEARCH_TIMEOUT_MS },

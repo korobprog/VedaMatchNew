@@ -268,6 +268,11 @@ export interface PortalSearchGroup {
   /** Слаг сервиса — по нему подпись группы. */
   service: string;
   items: AssistantLinkCard[];
+  /**
+   * В сервисе нашлось больше, чем показано в `items` (VED-316): выдача —
+   * оглавление, поэтому число группы пишется как «5+».
+   */
+  more?: boolean;
 }
 
 /** Ответ `GET /assistant/search?q=` — поиск по порталу (VED-75). */
@@ -278,4 +283,12 @@ export interface PortalSearchResponse {
   groups: PortalSearchGroup[];
   /** Сервисы, которые не успели ответить: выдача может быть неполной. */
   unavailable: string[];
+  /**
+   * Сколько карточек показано во всех группах (VED-316). Точное число
+   * совпадений сервисы не считают, поэтому при `more` это нижняя граница:
+   * «Найдено: 12+».
+   */
+  total?: number;
+  /** Хотя бы в одной группе нашлось больше показанного. */
+  more?: boolean;
 }

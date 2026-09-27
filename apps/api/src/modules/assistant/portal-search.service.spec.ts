@@ -37,7 +37,8 @@ describe('PortalSearchService', () => {
       unknown,
     ][];
     for (const [, args, , locale, options] of calls) {
-      expect(args).toEqual({ query: 'гита', limit: 5 });
+      // На одну больше показываемых пяти — чтобы знать, писать ли «5+».
+      expect(args).toEqual({ query: 'гита', limit: 6 });
       expect(locale).toBe('ru');
       expect(options).toEqual({ record: false, timeoutMs: 5000 });
     }
@@ -51,6 +52,8 @@ describe('PortalSearchService', () => {
       query: null,
       groups: [],
       unavailable: [],
+      total: 0,
+      more: false,
     });
     expect(tools.invoke).not.toHaveBeenCalled();
   });
@@ -69,7 +72,10 @@ describe('PortalSearchService', () => {
       {
         service: 'music',
         items: [expect.objectContaining({ title: 'Киртан' })],
+        more: false,
       },
     ]);
+    expect(result.total).toBe(1);
+    expect(result.more).toBe(false);
   });
 });

@@ -39,6 +39,14 @@ export const PORTAL_SEARCH_MAX_QUERY = 120;
 export const PORTAL_SEARCH_PER_SERVICE = 5;
 
 /**
+ * Сколько просить у сервиса: на одну больше, чем показывается. Лишняя
+ * карточка не выводится, а только говорит, что там есть ещё (VED-316):
+ * честный счёт по каждому сервису стоил бы отдельного COUNT в каждом
+ * модуле-владельце, а выдаче достаточно «5+».
+ */
+export const PORTAL_SEARCH_FETCH_PER_SERVICE = PORTAL_SEARCH_PER_SERVICE + 1;
+
+/**
  * Сколько ждать сервис. В чате ассистента — двенадцать секунд, там человек
  * ждёт ответа модели; здесь страница выдачи, и медленный сервис не должен
  * держать остальные. Опоздавший попадает в `unavailable`.
@@ -71,6 +79,7 @@ export function portalSearchResult(
 ): PortalSearchResponse {
   const groups: PortalSearchGroup[] = [];
   const unavailable: string[] = [];
+  let total = 0;
   PORTAL_SEARCH_SOURCES.forEach((source, index) => {
     const reply = replies[index] ?? null;
     if (!reply) {
@@ -78,12 +87,17 @@ export function portalSearchResult(
       return;
     }
     if (!reply.ok) return;
-    const items = toLinkCards(
+    const cards = toLinkCards(
       source.service,
       reply.items,
-      PORTAL_SEARCH_PER_SERVICE,
+      PORTAL_SEARCH_FETCH_PER_SERVICE,
     );
-    if (items.length > 0) groups.push({ service: source.service, items });
+    if (cards.length === 0) return;
+    const items = cards.slice(0, PORTAL_SEARCH_PER_SERVICE);
+    const more = cards.length > items.length;
+    total += items.length;
+    groups.push({ service: source.service, items, more });
   });
-  return { query, groups, unavailable };
+  const more = groups.some((group) => group.more);
+  return { query, groups, unavailable, total, more };
 }
