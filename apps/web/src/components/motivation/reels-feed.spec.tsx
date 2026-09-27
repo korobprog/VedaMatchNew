@@ -122,6 +122,39 @@ describe("ReelsFeed", () => {
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
   });
 
+  /** Пункты ряда вкладок по порядку: вкладки группой, затем звёздочка (VED-581). */
+  function tabRowLabels(tabs: HTMLElement) {
+    const links = within(tabs).getByTestId("reels-tabs-links");
+    return [...links.children, ...[...tabs.children].filter((node) => node !== links)].map(
+      (node) => node.textContent,
+    );
+  }
+
+  /* VED-581: звёздочка — посередине между «Категориями» и ☰. Ряд делится на
+     две части с равными промежутками, края ряда — по значкам ← и ☰. */
+  it("звёздочка стоит отдельно от вкладок, промежутки ряда равные", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />,
+    );
+
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    expect(tabs.children).toHaveLength(2);
+    expect(tabs).toHaveClass("justify-evenly", "left-9", "right-9");
+    expect(tabs).not.toHaveClass("justify-center");
+    const links = within(tabs).getByTestId("reels-tabs-links");
+    expect(tabs.firstElementChild).toBe(links);
+    expect(within(links).getByRole("link", { name: "Категории" })).toBeInTheDocument();
+    expect(
+      within(links).queryByRole("button", { name: "Горячие кнопки" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(tabs.lastElementChild as HTMLElement).getByRole("button", {
+        name: "Горячие кнопки",
+      }),
+    ).toBeInTheDocument();
+  });
+
   // VED-252: «Для вас» переименована в «Ленту», значок фильтра встал в тот
   // же ряд между «Открытки» и «Избранное», подписи у него нет.
   it("верхний ряд — пять пунктов, вкладка называется «Лента», у значка фильтра нет подписи", () => {
@@ -131,7 +164,7 @@ describe("ReelsFeed", () => {
     );
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    const labels = [...tabs.children].map((node) => node.textContent);
+    const labels = tabRowLabels(tabs);
     // VED-387: «Избранное» и «Мои» ушли в меню ☰, на их местах —
     // «Категории» и звёздочка панели горячих кнопок.
     expect(labels).toEqual(["Лента", "Открытки", "", "Категории", ""]);
@@ -157,7 +190,7 @@ describe("ReelsFeed", () => {
     );
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    const labels = [...tabs.children].map((node) => node.textContent);
+    const labels = tabRowLabels(tabs);
     expect(labels).toEqual(["Лента", "Открытки", "Избранное", ""]);
     expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
       "aria-current",

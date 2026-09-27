@@ -5,6 +5,12 @@
  * очереди, а не пачкой разом: так карточка растёт на глазах, счётчик
  * «2 из 5» не врёт, а частотный лимит сервера (30 загрузок в минуту) не
  * срабатывает от одного выбора.
+ *
+ * Разом их не шлём и ради скорости (VED-582): вложения в карточке идут в
+ * порядке прихода на сервер, и серия скриншотов «шаг 1, шаг 2, шаг 3»
+ * перемешалась бы; а ответ последней загрузки перестал бы быть карточкой со
+ * всеми файлами. Ускоряет другое: картинка ужимается в браузере
+ * (`prepare`), и следующий файл ужимается, пока уходит текущий.
  */
 
 /** Сколько файлов берём за один выбор: с запасом под лимит сервера. */
@@ -26,20 +32,30 @@ export interface UploadInTurnResult<T> {
 /**
  * Загружает файлы по одному. Сбой одного файла не останавливает остальные:
  * из пяти скриншотов слишком большой один, а не все пять.
+ *
+ * `prepare` — подготовка файла перед отправкой (ужатие картинки). Она
+ * обязана не падать: при сбое возвращать исходный файл. Следующий файл
+ * готовится, пока отправляется текущий.
  */
 export async function uploadInTurn<T>(
   files: readonly File[],
   upload: (file: File) => Promise<T>,
   onProgress?: (done: number, total: number) => void,
+  prepare: (file: File) => Promise<File> = async (file) => file,
 ): Promise<UploadInTurnResult<T>> {
   const taken = files.slice(0, MAX_FILES_AT_ONCE);
   const failed: FailedUpload[] = [];
   let last: T | undefined;
+  const prepared: Promise<File>[] = [];
+  const ready = (index: number) =>
+    (prepared[index] ??= prepare(taken[index]).catch(() => taken[index]));
 
   for (const [index, file] of taken.entries()) {
     onProgress?.(index, taken.length);
+    const body = await ready(index);
+    if (index + 1 < taken.length) void ready(index + 1);
     try {
-      last = await upload(file);
+      last = await upload(body);
     } catch (cause) {
       failed.push({
         name: file.name,

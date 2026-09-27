@@ -746,3 +746,59 @@ describe("WorkTaskDialog — правка пункта чек-листа (VED-52
     expect(updateWorkChecklistItem).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * VED-578: «Сделай кнопку — Далее для описания задач, чтобы можно было
+ * прочитать полностью». Длинное описание пряталось под прокрутку внутри
+ * поля в четыре строки.
+ */
+describe("WorkTaskDialog — «Читать далее» у описания (VED-578)", () => {
+  function fakeHeights(scroll: number, client: number) {
+    const proto = HTMLTextAreaElement.prototype;
+    const spies = [
+      vi.spyOn(proto, "scrollHeight", "get").mockReturnValue(scroll),
+      vi.spyOn(proto, "clientHeight", "get").mockReturnValue(client),
+    ];
+    return () => spies.forEach((spy) => spy.mockRestore());
+  }
+
+  it("shows no button while the description fits", async () => {
+    const restore = fakeHeights(80, 80);
+    try {
+      open();
+      await screen.findByPlaceholderText(/Что именно нужно сделать/);
+      expect(screen.queryByRole("button", { name: "Читать далее" })).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it("expands a long description to its full height and collapses it back", async () => {
+    const restore = fakeHeights(400, 80);
+    try {
+      const user = userEvent.setup();
+      open();
+      const description = await screen.findByPlaceholderText(
+        /Что именно нужно сделать/,
+      );
+      const more = await screen.findByRole("button", { name: "Читать далее" });
+      expect(more).toHaveAttribute("aria-expanded", "false");
+      expect(more).toHaveAttribute("aria-controls", description.id);
+
+      await user.click(more);
+
+      expect(description.style.height).toBe("400px");
+      const less = screen.getByRole("button", { name: "Свернуть" });
+      expect(less).toHaveAttribute("aria-expanded", "true");
+
+      await user.click(less);
+
+      expect(description.style.height).toBe("");
+      expect(
+        screen.getByRole("button", { name: "Читать далее" }),
+      ).toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+});
