@@ -1,4 +1,5 @@
 import { isLineageId, type LineageId, type LineagePreference } from './lineage';
+import type { SpiritualStage } from './index';
 
 export type LibraryEntryType =
   | 'website'
@@ -240,6 +241,12 @@ export interface LibraryEntryDto {
    * ленте свою линию и материалы «для всех», см. `resolveContentLineage`.
    */
   lineage: LineageId | null;
+  /**
+   * Для каких ступеней самоидентификации материал (VED-575); пусто — для
+   * всех. Размечает админ кнопкой «Ступени» — право то же, что у «Линии»
+   * (`canSetLineage`). Необязательное: у старого ответа поля нет.
+   */
+  audienceStages?: SpiritualStage[];
   /** `true` — текущий пользователь добавил ссылку либо является админом. */
   canEdit: boolean;
   /**

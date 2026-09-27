@@ -20,6 +20,7 @@ import type {
   LineageId,
   LineageViewer,
   PortalActivityEvent,
+  SpiritualStage,
   UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
 import {
@@ -28,13 +29,16 @@ import {
   defaultLineageFor,
   isLineageId,
   isLineagePreference,
+  resolveAudienceStage,
   resolveContentLineage,
   resolveDisplayName,
+  toAudienceStages,
   toLineageId,
   toLineagePreference,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { lineageFeedCondition } from './lineage-feed-filter';
+import { audienceStageCondition } from './audience-stage-filter';
 import { CommunitiesService } from '../communities/communities.service';
 import {
   decodeCursor,
@@ -147,6 +151,7 @@ const ENTRY_SELECT = {
   previewIsCustom: true,
   blogSharedAt: true,
   lineage: true,
+  audienceStages: true,
   status: true,
   usefulCount: true,
   uniqueClickCount: true,
@@ -207,6 +212,22 @@ export class LibraryEntriesService {
     return user
       ? { spiritualStage: user.spiritualStage, lineage: toLineageId(user.lineage) }
       : null;
+  }
+
+  /**
+   * Ступень самоидентификации зрителя для ленты (VED-575). Из `User` — ровно
+   * `spiritualStage` и портальный переключатель `showAllStages` с главной;
+   * пишет их портал. `null` — не фильтровать.
+   */
+  private async viewerAudienceStage(
+    viewerId: string | undefined,
+  ): Promise<SpiritualStage | null> {
+    if (!viewerId) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { spiritualStage: true, showAllStages: true },
+    });
+    return resolveAudienceStage(user);
   }
 
   /**
@@ -900,11 +921,18 @@ export class LibraryEntriesService {
     // Линия (или вся группа, VED-568) плюс материалы «для всех» (`null`).
     // Через `AND`, а не `OR` напрямую — `OR` ниже занят курсором, и второй
     // перетёр бы первый.
-    const lineage = lineageFeedCondition(
-      await this.viewerLineage(viewerId, filters.lineage),
-    );
-    if (lineage) {
-      where.AND = [lineage];
+    const [lineageFilter, audienceStage] = await Promise.all([
+      this.viewerLineage(viewerId, filters.lineage),
+      this.viewerAudienceStage(viewerId),
+    ]);
+    // Ступень самоидентификации (VED-575) — туда же, в `AND`, по той же
+    // причине: у неё свой `OR` «ступень или для всех».
+    const conditions = [
+      lineageFeedCondition(lineageFilter),
+      audienceStageCondition(audienceStage),
+    ].filter((condition) => condition !== null);
+    if (conditions.length) {
+      where.AND = conditions;
     }
     // Рубрика фильтрует лентой всё своё поддерево: иначе вложение прятало бы
     // материалы — человек убирает рубрику внутрь другой и видит пустую
@@ -1174,6 +1202,7 @@ function toEntryDto(
         }
       : null,
     lineage: toLineageId(entry.lineage),
+    audienceStages: toAudienceStages(entry.audienceStages),
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
     canSetLineage: viewerIsAdmin,

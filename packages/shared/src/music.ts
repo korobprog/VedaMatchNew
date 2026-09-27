@@ -1,4 +1,5 @@
 import type { LineageId, LineagePreference } from './lineage';
+import type { SpiritualStage } from './index';
 
 // Типы сервиса «Музыка». См. docs/music-service-plan.md.
 //
@@ -244,6 +245,12 @@ export interface MusicTrackDetailDto extends MusicTrackDto {
   bitrateKbps: number | null;
   /** Решение модератора словами. Пусто — решения ещё не было. */
   moderationNote: string | null;
+  /**
+   * Для каких ступеней самоидентификации запись (VED-575); пусто — для всех.
+   * Нужна кнопке «Ступени» редакции на странице записи. Необязательное: у
+   * старого ответа поля нет.
+   */
+  audienceStages?: SpiritualStage[];
 }
 
 /** Плитка подборки портала в витрине («Утренний киртан», «Вечерняя арати»). */
@@ -416,6 +423,8 @@ export interface UpdateMusicTrackRequest {
   isLiveRecording?: boolean;
   /** Линия записи; `null` — для всех линий. */
   lineage?: LineageId | null;
+  /** Ступени самоидентификации (VED-575); `[]` — для всех. */
+  audienceStages?: SpiritualStage[];
   status?: MusicTrackStatus;
   lyrics?: string | null;
   transliteration?: string | null;

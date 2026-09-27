@@ -17,8 +17,14 @@ import type {
   LibraryCategoryAncestor,
   LineageId,
   MergeLibraryCategoryRequest,
+  SpiritualStage,
 } from '@vedamatch/shared';
-import { lineageLabel, toLineageId } from '@vedamatch/shared';
+import {
+  lineageLabel,
+  parseAudienceStages,
+  toAudienceStages,
+  toLineageId,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   authorEntriesWhere,
@@ -359,6 +365,34 @@ export class LibraryAdminService {
       select: { id: true, lineage: true },
     });
     return { id: row.id, lineage: toLineageId(row.lineage) };
+  }
+
+  /**
+   * Ступени самоидентификации материала (VED-575): от одной до четырёх,
+   * `[]` — для всех. Ставит только админ — кнопка «Ступени» на карточке и
+   * странице материала.
+   */
+  async setEntryAudienceStages(
+    id: string,
+    body: unknown,
+  ): Promise<{ id: string; audienceStages: SpiritualStage[] }> {
+    const stages = parseAudienceStages(
+      (body as { audienceStages?: unknown } | null)?.audienceStages,
+    );
+    if (!stages) {
+      throw new BadRequestException('Неизвестная ступень самоидентификации');
+    }
+    const existing = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Запись не найдена');
+    const row = await this.prisma.libraryEntry.update({
+      where: { id },
+      data: { audienceStages: stages },
+      select: { id: true, audienceStages: true },
+    });
+    return { id: row.id, audienceStages: toAudienceStages(row.audienceStages) };
   }
 
   async listEntries(

@@ -24,7 +24,11 @@ import type {
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from '@vedamatch/shared';
-import { isLineageId, toLineageId } from '@vedamatch/shared';
+import {
+  isLineageId,
+  parseAudienceStages,
+  toLineageId,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicCoversService } from './music-covers.service';
 import { MusicStorageService } from './music-storage.service';
@@ -709,6 +713,15 @@ export class MusicAdminCatalogService {
     ) {
       throw new BadRequestException('Неизвестная духовная линия');
     }
+    // Ступени самоидентификации (VED-575): известные, без повторов, в
+    // порядке пути; `[]` — для всех.
+    const audienceStages =
+      body.audienceStages === undefined
+        ? undefined
+        : parseAudienceStages(body.audienceStages);
+    if (audienceStages === null) {
+      throw new BadRequestException('Неизвестная ступень самоидентификации');
+    }
 
     // Дата публикации проставляется один раз, при первом переходе в
     // `published`: иначе повторное снятие и возврат записи поднимали бы её
@@ -746,6 +759,7 @@ export class MusicAdminCatalogService {
             ? {}
             : { isLiveRecording: body.isLiveRecording }),
           ...(body.lineage === undefined ? {} : { lineage: body.lineage }),
+          ...(audienceStages === undefined ? {} : { audienceStages }),
           ...(body.status === undefined ? {} : { status: body.status }),
           ...(becomesPublished ? { publishedAt: new Date() } : {}),
           ...(body.lyrics === undefined

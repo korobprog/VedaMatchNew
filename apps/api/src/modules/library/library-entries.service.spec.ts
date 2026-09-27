@@ -1639,6 +1639,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
       lineage: 'ipbys',
+      showAllStages: true,
     });
     const { service } = build(prisma);
 
@@ -1652,6 +1653,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'yogi',
       lineage: 'ipbys',
+      showAllStages: true,
     });
     const { service } = build(prisma);
 
@@ -1665,6 +1667,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
       lineage: 'iskcon',
+      showAllStages: true,
     });
     prisma.libraryPreference.findUnique.mockResolvedValue({
       lineage: 'sri_chaitanya_saraswat_math',
@@ -1685,13 +1688,19 @@ describe('LibraryEntriesService — духовная линия', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
       lineage: 'iskcon',
+      showAllStages: true,
     });
     const { service } = build(prisma);
 
     await service.feed({ lineage: 'all' }, 'user-1');
 
     expect(whereOf(prisma)).not.toHaveProperty('AND');
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    // В профиль ходит только ступень (VED-575), линию оттуда не берут.
+    for (const [args] of prisma.user.findUnique.mock.calls as Array<
+      [{ select: Record<string, boolean> }]
+    >) {
+      expect(args.select).not.toHaveProperty('lineage');
+    }
   });
 
   it('lineage=group:parivara фильтрует по всей группе (VED-568)', async () => {
@@ -1732,6 +1741,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
       lineage: 'ipbys',
+      showAllStages: true,
     });
     const { service } = build(prisma);
 
@@ -1892,5 +1902,99 @@ describe('LibraryEntriesService — духовная линия', () => {
     const feed = await service.feed({});
 
     expect(feed.items[0].lineage).toBe('ipbys');
+  });
+});
+
+describe('LibraryEntriesService — ступень самоидентификации (VED-575)', () => {
+  function build(prisma = prismaMock()) {
+    const service = new LibraryEntriesService(
+      prisma as never,
+      previewsMock() as never,
+      bookmarksMock() as never,
+      categoriesMock() as never,
+      communitiesMock() as never,
+      eventsMock() as never,
+    );
+    return { service, prisma };
+  }
+
+  const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
+    (prisma.libraryEntry.findMany.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    }).where;
+  const countWhereOf = (prisma: ReturnType<typeof prismaMock>) =>
+    (prisma.libraryEntry.count.mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    }).where;
+
+  it('показывает свою ступень и материалы «для всех» — и в числе тоже', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'seeker',
+      showAllStages: false,
+    });
+    const { service } = build(prisma);
+
+    await service.feed({}, 'user-1');
+
+    const stage = {
+      OR: [
+        { audienceStages: { isEmpty: true } },
+        { audienceStages: { has: 'seeker' } },
+      ],
+    };
+    expect(whereOf(prisma).AND).toEqual([stage]);
+    expect(countWhereOf(prisma).AND).toEqual([stage]);
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      select: { spiritualStage: true, showAllStages: true },
+    });
+  });
+
+  it('«Все ступени» с главной снимают фильтр', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'seeker',
+      showAllStages: true,
+    });
+    const { service } = build(prisma);
+
+    await service.feed({}, 'user-1');
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+  });
+
+  it('без самоидентификации человек видит всё', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: null,
+      showAllStages: false,
+    });
+    const { service } = build(prisma);
+
+    await service.feed({}, 'user-1');
+
+    expect(whereOf(prisma)).not.toHaveProperty('AND');
+  });
+
+  it('складывается с линией, а не перетирает её', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      showAllStages: false,
+    });
+    const { service } = build(prisma);
+
+    await service.feed({ lineage: 'iskcon' }, 'user-1');
+
+    expect(whereOf(prisma).AND).toEqual([
+      { OR: [{ lineage: 'iskcon' }, { lineage: null }] },
+      {
+        OR: [
+          { audienceStages: { isEmpty: true } },
+          { audienceStages: { has: 'devotee' } },
+        ],
+      },
+    ]);
   });
 });
