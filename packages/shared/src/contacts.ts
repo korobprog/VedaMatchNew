@@ -277,6 +277,15 @@ export interface ContactsCardDto {
     socialLinks: ProfileSocialLinks;
     messengers: ProfileMessengers;
   } | null;
+  /**
+   * Последний визит на портал (ISO), тот же `User.lastSeenAt`, что чат
+   * показывает как «в сети» / «был …». null — человек ещё не заходил после
+   * появления отметки. По нему же сортирует порядок по умолчанию `active`
+   * (VED-318). Необязательное: старый API его не присылает.
+   */
+  lastSeenAt?: string | null;
+  /** Когда человек пришёл на портал (ISO, `User.createdAt`) — метка новичка (VED-319). */
+  joinedAt?: string | null;
 }
 
 // ===== Админка Contacts =====

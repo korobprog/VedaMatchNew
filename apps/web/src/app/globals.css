@@ -53,6 +53,9 @@
   --color-mark-rework: var(--vm-mark-rework);
   --color-mark-comment: var(--vm-mark-comment);
   --color-mark-foreign: var(--vm-mark-foreign);
+  --color-newcomer-1: var(--vm-newcomer-1);
+  --color-newcomer-2: var(--vm-newcomer-2);
+  --color-newcomer-3: var(--vm-newcomer-3);
 
   /* Text colors */
   --color-text-0: var(--vm-text-0);
@@ -217,6 +220,18 @@
      «Выполнено» ни по тону, ни по рамке (у «Чужого» она пунктирная).
      Замеры — в описании PR, подпись 11px, порог AA 4,5:1. */
   --vm-mark-foreign: #2E4A6A;
+  /* Метка новичка в Справочнике (VED-319): первые сутки на портале —
+     зелёный, вторые — оранжевый, третьи — фиолетовый (цвета назвал
+     заказчик). Свои токены, а не --vm-mark-*: те означают состояние задачи.
+     Заливки нет — цвет несут рамка и слово, как у значков выше. Подпись
+     12px, порог AA 4,5:1, расчёт по --vm-bg-0 / --vm-bg-1 / --vm-bg-2
+     (стекло карточки подложку только осветляет):
+       --vm-newcomer-1  5,62 / 5,16 / 4,68
+       --vm-newcomer-2  6,14 / 5,63 / 5,11
+       --vm-newcomer-3  6,11 / 5,61 / 5,08 */
+  --vm-newcomer-1: #07734F;
+  --vm-newcomer-2: #9A4700;
+  --vm-newcomer-3: #7A3FBF;
 
   --vm-text-0: #180F2C;
   --vm-text-1: #4B3B6C;
@@ -315,6 +330,11 @@
   --vm-mark-rework: #FF8A85;
   --vm-mark-comment: #D0A6FF;
   --vm-mark-foreign: #A7BCD6;
+  /* Метка новичка (VED-319): осветлённые тона тех же красок. На --vm-bg-0 /
+     --vm-bg-2: 11,76 / 10,68 · 10,01 / 9,10 · 8,14 / 7,40. */
+  --vm-newcomer-1: #3FDFA8;
+  --vm-newcomer-2: #FFA15C;
+  --vm-newcomer-3: #C68BFF;
 
   --vm-text-0: #F6F1FF;
   --vm-text-1: #B8A9D9;
@@ -394,6 +414,9 @@
     --vm-mark-rework: #FF8A85;
     --vm-mark-comment: #D0A6FF;
     --vm-mark-foreign: #A7BCD6;
+    --vm-newcomer-1: #3FDFA8;
+    --vm-newcomer-2: #FFA15C;
+    --vm-newcomer-3: #C68BFF;
 
     --vm-text-0: #F6F1FF;
     --vm-text-1: #B8A9D9;

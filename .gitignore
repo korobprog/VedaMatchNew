@@ -38,3 +38,5 @@ apps/api/node_modules/@vedamatch/ru-client/
 # запустил дев-сервер, и иначе вечно висят в `git status`.
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+# Симлинк node_modules (worktree) — правило со слэшем его не ловит.
+node_modules

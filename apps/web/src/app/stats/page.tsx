@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookUser } from "lucide-react";
+import { BookUser, ChevronRight } from "lucide-react";
 import { Header } from "@/components/header";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
@@ -41,7 +41,12 @@ export default async function StatsPage() {
             Люди
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile label="Всего участников" value={stats.people.total} />
+            {/* Плитка ведёт в Справочник — ту же базу поимённо (VED-317). */}
+            <Tile
+              label="Всего участников"
+              value={stats.people.total}
+              href="/chat/people"
+            />
             <Tile label="Были на неделе" value={stats.people.activeLast7Days} />
             <Tile label="Пришли за месяц" value={stats.people.newLast30Days} />
             <Tile label="Общин на портале" value={stats.communities} />
@@ -175,11 +180,42 @@ export default async function StatsPage() {
   );
 }
 
-function Tile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="glass rounded-2xl border border-glass-brd p-4">
+function Tile({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: number;
+  /** С адресом плитка — ссылка целиком, с явной стрелкой «перейти». */
+  href?: string;
+}) {
+  const body = (
+    <>
       <p className="font-mono text-2xl font-semibold text-text-0">{value}</p>
-      <p className="mt-1 text-sm text-text-1">{label}</p>
-    </div>
+      <p className="mt-1 text-sm text-text-1">
+        {label}
+        {href && (
+          <ChevronRight
+            aria-hidden
+            className="ml-0.5 inline size-4 align-[-3px] text-magenta"
+          />
+        )}
+      </p>
+    </>
+  );
+  if (!href)
+    return (
+      <div className="glass rounded-2xl border border-glass-brd p-4">
+        {body}
+      </div>
+    );
+  return (
+    <Link
+      href={href}
+      className="glass block rounded-2xl border border-glass-brd p-4 transition-colors hover:border-magenta/50"
+    >
+      {body}
+    </Link>
   );
 }
