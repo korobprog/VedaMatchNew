@@ -57,6 +57,7 @@ import { bookmarkSavedText } from "./player-marks";
 import { useTrackBookmarks } from "./use-track-bookmarks";
 import { LIFTED_KEY, liftButtonLabel, parseLifted, serializeLifted } from "./player-lift";
 import {
+  PLAYER_BUBBLE_PLACEMENT,
   PLAYER_VIEW_KEY,
   parsePlayerView,
   reservedPlayerSpace,
@@ -598,11 +599,9 @@ export function MiniPlayer() {
       }`}
     >
       {view === "bubble" ? (
-        /* Плавающий пузырь (VED-366): полупрозрачный кружок с обложкой у
-           левого края, ближе к низу. Места у страницы не занимает. Высота —
-           над нижним рядом разделов (поле ввода чата, кнопки ленты
-           «Вдохновения»), чтобы не закрывать их левую кнопку. Нажатие
-           разворачивает полосу обратно. */
+        /* Плавающий пузырь (VED-366): полупрозрачный кружок с обложкой в
+           левом нижнем углу (VED-592, `PLAYER_BUBBLE_PLACEMENT`). Места у
+           страницы не занимает. Нажатие разворачивает полосу обратно. */
         <button
           ref={bubbleRef}
           type="button"
@@ -612,7 +611,7 @@ export function MiniPlayer() {
           {...bubbleDrag.handlers}
           // Долгое нажатие переносит пузырь (VED-454), отпускание после
           // переноса не разворачивает плеер — см. `usePlayerDrag`.
-          className={`player-bubble player-movable pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] left-3 flex size-14 items-center justify-center overflow-hidden rounded-full ${
+          className={`player-bubble player-movable pointer-events-auto fixed ${PLAYER_BUBBLE_PLACEMENT} flex size-14 items-center justify-center overflow-hidden rounded-full ${
             bubbleDrag.dragging ? "player-dragging" : ""
           }`}
         >

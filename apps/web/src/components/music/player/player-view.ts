@@ -18,6 +18,20 @@ export function parsePlayerView(raw: string | null | undefined): PlayerView {
   return "expanded";
 }
 
+/**
+ * Место пузыря по умолчанию: левый нижний угол (VED-592). Раньше пузырь
+ * висел на 6rem выше края — над нижним рядом разделов, — и заказчик попросил
+ * опустить его в самый угол, к краю экрана. Отступ 1rem над безопасной зоной
+ * — чтобы не сесть на системную полосу жестов. Пульт озвучки (справа под
+ * шапкой) и полоса плеера (в виде «пузырь» её нет) здесь не пересекаются;
+ * если угол занят полем ввода, пузырь переносится долгим нажатием (VED-454).
+ *
+ * Отдельной строкой, а не в разметке: её проверяет тест, и вместе с ней
+ * сдвигается сохранённое смещение — оно считается от этого места.
+ */
+export const PLAYER_BUBBLE_PLACEMENT =
+  "bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-3";
+
 export function serializePlayerView(view: PlayerView): string {
   if (view === "collapsed") return "1";
   if (view === "bubble") return "bubble";
