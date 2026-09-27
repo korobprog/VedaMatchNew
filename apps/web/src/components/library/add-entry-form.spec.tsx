@@ -253,6 +253,39 @@ describe("AddEntryForm", () => {
     });
   });
 
+  it("«Для всех линий» уезжает как lineage: null, а не строкой \"all\"", async () => {
+    // Сервер не знает линии "all" и отвечал 400 unsupported_lineage.
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ id: "entry-1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AddEntryForm locale="ru" tree={tree} />);
+
+    await userEvent.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://example.com/article",
+    );
+    await userEvent.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "О смирении",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText(/^Духовная линия материала/),
+      "Для всех линий",
+    );
+    await userEvent.click(screen.getByLabelText("Гита"));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/library/entry/entry-1?created=1");
+    });
+    const [, init] = postsTo(fetchMock, "/library/entries")[0];
+    expect(JSON.parse(String((init as RequestInit).body)).lineage).toBeNull();
+  });
+
   it("статью можно опубликовать одним текстом, без ссылки и источника", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
