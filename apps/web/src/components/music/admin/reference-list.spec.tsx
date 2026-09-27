@@ -175,11 +175,10 @@ describe("MusicReferenceList — линия исполнителя (VED-566)", (
       name: "Линия: Avantika devi dasi",
     });
     expect(select).toHaveValue("iskcon");
-    // «Без линии» — первой строкой, линии сгруппированы.
+    // «Без линии» — первой строкой, дальше линии без строк-заголовков
+    // групп (VED-288).
     expect(select.querySelector("option")).toHaveTextContent("Без линии");
-    expect(
-      select.querySelector('optgroup[label="Гаудия-матх"]'),
-    ).not.toBeNull();
+    expect(select.querySelector("optgroup")).toBeNull();
   });
 
   it("без линии у исполнителя стоит «Без линии»", () => {
