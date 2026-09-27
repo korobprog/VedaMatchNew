@@ -98,6 +98,7 @@ describe('ChatConversationsService', () => {
     community: {
       findUnique: fn(),
     },
+    chatGroupCall: { findMany: fn(() => Promise.resolve([])) },
   };
 
   const events = { publish: fn() };
@@ -126,6 +127,50 @@ describe('ChatConversationsService', () => {
     prisma.chatMessage.count.mockResolvedValue(0);
     prisma.chatMessage.findFirst.mockResolvedValue(null);
     prisma.community.findUnique.mockResolvedValue({ status: 'active' });
+  });
+
+  describe('list', () => {
+    it('просит у базы пустые беседы в конце, а не над перепиской (VED-308)', async () => {
+      prisma.chatConversation.findMany.mockResolvedValue([]);
+
+      await service.list('owner');
+
+      const args = (
+        prisma.chatConversation.findMany.mock.calls as unknown[][]
+      )[0][0] as {
+        orderBy: unknown;
+      };
+      expect(args.orderBy).toEqual([
+        { lastMessageAt: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ]);
+    });
+
+    it('свежая переписка сверху, пустые беседы ниже, закреплённое над всем', async () => {
+      const at = (iso: string | null) => (iso ? new Date(iso) : null);
+      prisma.chatConversation.findMany.mockResolvedValue([
+        conversation({ id: 'empty', lastMessageAt: null }),
+        conversation({ id: 'old', lastMessageAt: at('2026-09-20T08:00:00Z') }),
+        conversation({
+          id: 'fresh',
+          lastMessageAt: at('2026-09-21T14:06:00Z'),
+        }),
+        conversation({
+          id: 'pinned-old',
+          lastMessageAt: at('2026-09-01T08:00:00Z'),
+          members: [member('owner', { role: 'owner', pinnedAt: createdAt })],
+        }),
+      ]);
+
+      const { conversations } = await service.list('owner');
+
+      expect(conversations.map((c) => c.id)).toEqual([
+        'pinned-old',
+        'fresh',
+        'old',
+        'empty',
+      ]);
+    });
   });
 
   describe('requireConversation', () => {

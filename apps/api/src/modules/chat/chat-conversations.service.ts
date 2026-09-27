@@ -52,6 +52,7 @@ import {
 import { isPortalStaff } from '@vedamatch/shared';
 import { directKey } from './direct-key';
 import { isStorageUrl } from './chat-validate';
+import { CHAT_LIST_ORDER_BY, sortChatList } from './chat-list-order';
 
 /** Сколько сообщений отдаём одной страницей переписки. */
 const PAGE_SIZE = 40;
@@ -77,7 +78,7 @@ export class ChatConversationsService {
         members: { some: { userId, leftAt: null } },
       },
       include: chatConversationInclude(userId),
-      orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+      orderBy: CHAT_LIST_ORDER_BY,
       take: 200,
     });
 
@@ -85,17 +86,14 @@ export class ChatConversationsService {
     // на беседу: комнат в портале единицы, а бесед у человека до двухсот.
     const groupCalls = await this.liveGroupCalls(rows.map((row) => row.id));
 
-    const conversations = await Promise.all(
-      rows.map(async (row) =>
-        this.summary(row, userId, undefined, groupCalls.get(row.id) ?? null),
+    // Официальный канал VedaMatch первым, затем закреплённое человеком,
+    // внутри групп — свежее сообщение сверху, пустые беседы вниз (VED-308).
+    const conversations = sortChatList(
+      await Promise.all(
+        rows.map(async (row) =>
+          this.summary(row, userId, undefined, groupCalls.get(row.id) ?? null),
+        ),
       ),
-    );
-    // Официальный канал VedaMatch первым, затем закреплённое человеком;
-    // порядок внутри групп прежний.
-    conversations.sort(
-      (a, b) =>
-        Number(b.official) - Number(a.official) ||
-        Number(b.pinned) - Number(a.pinned),
     );
 
     const requestsCount = await this.prisma.chatConversation.count({
@@ -815,7 +813,7 @@ export class ChatConversationsService {
           : {}),
       },
       include: chatConversationInclude(userId),
-      orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+      orderBy: CHAT_LIST_ORDER_BY,
       take: 50,
     });
 
@@ -1147,7 +1145,7 @@ export class ChatConversationsService {
         members: { some: { userId, leftAt: null } },
       },
       include: { members: { include: { user: { select: chatUserSelect } } } },
-      orderBy: { lastMessageAt: 'desc' },
+      orderBy: CHAT_LIST_ORDER_BY,
       take: 100,
     });
 
