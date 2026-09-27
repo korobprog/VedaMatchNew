@@ -25,9 +25,10 @@ import {
  *
  * Вложенные рубрики — это чаще всего авторы («Проповедники → Ари Мардан
  * Прабху»), и плитка у них в одну строку (VED-528): имя, справа число.
- * Карандаша нет — имя правят на странице самого автора. Ширина плитки — по
- * имени: короткое не держит пол-экрана, и длинному соседу достаётся место
- * целиком; не влезает и в строку — многоточие, но число остаётся видно.
+ * Карандаша нет — имя правят на странице самого автора. Плитки — списком,
+ * по одной в строке и во всю ширину (VED-552): короткие имена раньше
+ * вставали по две в ряд, и список авторов читался лесенкой. Не влезает имя
+ * в строку — многоточие, но число остаётся видно.
  */
 export function CategoryStrip({
   categories,
@@ -49,7 +50,7 @@ export function CategoryStrip({
       className={
         root
           ? "mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-          : "mb-6 flex flex-wrap gap-2"
+          : "mb-6 flex flex-col gap-2"
       }
     >
       {categories.map((category) => {
@@ -62,7 +63,7 @@ export function CategoryStrip({
             className={`glass rounded-xl border px-3 text-sm transition-colors ${
               root
                 ? "flex flex-col gap-1 py-2"
-                : "flex min-h-11 max-w-full min-w-0 flex-auto items-center gap-2"
+                : "flex min-h-11 min-w-0 items-center gap-2"
             } ${active ? "border-glass-brd" : "border-transparent"}`}
           >
             {/* Название — на своей строке и во всю ширину плитки: раньше
