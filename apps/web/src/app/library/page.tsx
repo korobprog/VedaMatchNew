@@ -22,6 +22,7 @@ import { EntryFilters } from "@/components/library/entry-filters";
 import { LibraryContents } from "@/components/library/library-contents";
 import { EntryList } from "@/components/library/entry-list";
 import { LocaleSwitch } from "@/components/library/locale-switch";
+import { LibraryBookmarksDialog } from "@/components/library/bookmarks-dialog";
 import { libraryMaterialsCount, t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
@@ -110,6 +111,9 @@ export default async function LibraryPage({
             {t(locale, "bookmark.title")}
           </Link>
           <LocaleSwitch locale={locale} className="min-h-11 w-auto" />
+          {/* «Закладки» (VED-539) — справа после языка: окно со всеми
+              закладками Образования, то же, что в рубриках. */}
+          <LibraryBookmarksDialog locale={locale} />
         </div>
         <div className="mb-6 flex flex-wrap items-center gap-2">
           {/* Якорь `#lineage-switch` прежний: на него ведут «настроить» в

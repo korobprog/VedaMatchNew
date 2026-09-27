@@ -162,4 +162,41 @@ describe('LibraryBookmarksService', () => {
     expect(entryTitle({ titleRu: ' ', titleEn: 'Vedas' })).toBe('Vedas');
     expect(entryTitle({ titleRu: null, titleEn: null })).toBe('Материал');
   });
+  it('lists published bookmarks of the user, newest first', async () => {
+    const prisma = prismaMock();
+    prisma.libraryBookmark.findMany = jest.fn().mockResolvedValue([
+      {
+        createdAt: new Date('2026-09-02T00:00:00.000Z'),
+        entry: {
+          id: 'entry-2',
+          type: 'katha',
+          status: 'published',
+          titleRu: 'Катха о терпении',
+          titleEn: null,
+        },
+      },
+    ]);
+    const service = new LibraryBookmarksService(
+      prisma as never,
+      busMock() as never,
+    );
+
+    const list = await service.list('user-1');
+
+    expect(prisma.libraryBookmark.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'user-1', entry: { status: 'published' } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
+    expect(list.items).toEqual([
+      {
+        id: 'entry-2',
+        type: 'katha',
+        titleRu: 'Катха о терпении',
+        titleEn: null,
+        bookmarkedAt: '2026-09-02T00:00:00.000Z',
+      },
+    ]);
+  });
 });
