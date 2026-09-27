@@ -1,6 +1,6 @@
 "use client";
 
-import { Radio, Square } from "lucide-react";
+import { Play, Radio, Square } from "lucide-react";
 import { MusicCover } from "../music-cover";
 import { useMusicRadio } from "./radio-provider";
 import { radioHandoffTrackId } from "./radio-handoff";
@@ -22,7 +22,7 @@ import { radioItemTitle, radioListenersLabel } from "./radio-sync";
 export function MusicRadioBar() {
   const radio = useMusicRadio();
   if (!radio?.active) return null;
-  const { item, listeners, loading, error } = radio;
+  const { item, listeners, loading, error, paused } = radio;
   const title = item
     ? radioItemTitle(item)
     : loading
@@ -86,9 +86,21 @@ export function MusicRadioBar() {
             )}
           </span>
           <span className="truncate text-sm text-text-0" aria-live="polite">
-            {error ?? title}
+            {error ?? (paused ? `Пауза · ${title}` : title)}
           </span>
         </span>
+        {paused && (
+          // Пауза с экрана блокировки или звонком (VED-543): вернуться в
+          // эфир можно и отсюда, а не только из системной карточки.
+          <button
+            type="button"
+            onClick={radio.resume}
+            aria-label="Продолжить эфир"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-1 hover:text-text-0"
+          >
+            <Play aria-hidden className="size-4" fill="currentColor" />
+          </button>
+        )}
         <button
           type="button"
           onClick={radio.stop}

@@ -22,6 +22,10 @@ import {
   musicRadioHeartbeat,
 } from "@/lib/music-radio-client";
 import { rememberStreamUrl } from "@/lib/music/stream-url-cache";
+import {
+  holdMediaSessionForRadio,
+  releaseMediaSessionFromRadio,
+} from "../player/media-session";
 import { useMusicPlayer } from "../player/player-provider";
 import { revealMusicPlayerCollapsed } from "../player/player-reveal";
 import {
@@ -30,10 +34,16 @@ import {
   radioHandoffStep,
 } from "./radio-handoff";
 import {
-  radioItemAt,
-  radioMsLeft,
+  radioAfterEnd,
+  radioMediaMetadata,
+  radioNextAfter,
   radioOffsetSeconds,
+  radioPlayFailure,
   radioServerNow,
+  radioShouldPrefetch,
+  radioSlotLeftMs,
+  radioSyncPlan,
+  type RadioEntry,
 } from "./radio-sync";
 
 export interface MusicRadioApi {
@@ -45,8 +55,12 @@ export interface MusicRadioApi {
   /** Сколько слушают; `null` — ещё не спрашивали. */
   listeners: number | null;
   error: string | null;
+  /** Поставили на паузу с экрана блокировки, из наушников или звонком. */
+  paused: boolean;
   start(): void;
   stop(): void;
+  /** Снова в эфир после паузы — с той секунды, что звучит сейчас. */
+  resume(): void;
   /** Узнать счётчик слушателей, не включая радио. */
   refreshListeners(): void;
   /**
@@ -94,6 +108,44 @@ const SILENCE = (() => {
 /** Сколько ждать перед повтором, если эфир не ответил, мс. */
 const RETRY_MS = 5_000;
 
+function mediaSessionSupported(): boolean {
+  return typeof navigator !== "undefined" && "mediaSession" in navigator;
+}
+
+/** Кнопки системной карточки для эфира: без перемотки и «назад». */
+function applyRadioMediaHandlers(
+  handlers: { play(): void; pause(): void; stop(): void } | null,
+): void {
+  if (!mediaSessionSupported()) return;
+  const set = (
+    action: MediaSessionAction,
+    handler: MediaSessionActionHandler | null,
+  ) => {
+    try {
+      navigator.mediaSession.setActionHandler(action, handler);
+    } catch {
+      // Браузер может не знать конкретное действие — остальные встанут.
+    }
+  };
+  set("play", handlers ? () => handlers.play() : null);
+  set("pause", handlers ? () => handlers.pause() : null);
+  set("stop", handlers ? () => handlers.stop() : null);
+  for (const action of [
+    "nexttrack",
+    "previoustrack",
+    "seekbackward",
+    "seekforward",
+    "seekto",
+  ] as MediaSessionAction[]) {
+    set(action, null);
+  }
+}
+
+function applyRadioPlaybackState(state: MediaSessionPlaybackState): void {
+  if (!mediaSessionSupported()) return;
+  navigator.mediaSession.playbackState = state;
+}
+
 /**
  * Плеер «Радио VM» (VED-437). Живёт рядом с плеером Медиатеки в корневом
  * layout: радио, как и музыка, переживает переход между разделами.
@@ -103,9 +155,23 @@ const RETRY_MS = 5_000;
  * Два источника звука не играют разом: включили радио — плеер Медиатеки
  * встаёт на паузу; запустили запись в Медиатеке — радио выключается.
  *
+ * Переход к следующей записи (VED-543) — по `ended` и `timeupdate` того же
+ * `<audio>`, в том же обработчике, по ссылке из последнего ответа эфира.
+ * Прежде переход ждал `setTimeout` до конца записи, а с погашенным экраном
+ * Android таймеры вкладки троттлит и замораживает: запись кончалась,
+ * наступала тишина, и радио замолкало насовсем. Ссылку на следующую запись
+ * плеер получает заранее — отметка «слушаю» раз в 20 секунд и внеочередной
+ * запрос за полминуты до конца, если следующей в ответе ещё нет. Если
+ * ссылки всё же нет, `<audio>` крутит тишину, пока она не придёт: смолкший
+ * элемент браузер вправе усыпить.
+ *
  * Раз в 20 секунд плеер отмечается на сервере («слушаю») и получает свежий
  * эфир: если редакция поставила вставку «сейчас», слушатель переходит на
- * неё не позже чем через 20 секунд.
+ * неё не позже чем через 20 секунд. Вернулись на вкладку — эфир
+ * спрашивается сразу, и отставший плеер догоняет его.
+ *
+ * Системная карточка (Media Session) на время эфира — радио: название,
+ * обложка, «пауза», «играть» и «стоп» с экрана блокировки.
  */
 export function MusicRadioProvider({ children }: { children: ReactNode }) {
   const player = useMusicPlayer();
@@ -113,156 +179,304 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef<{ state: MusicRadioStateDto; at: number } | null>(
     null,
   );
-  const slotRef = useRef<string | null>(null);
+  /** Что сейчас стоит в `<audio>` (или отзвучало последним, пока тишина). */
+  const playingRef = useRef<MusicRadioItemDto | null>(null);
+  /** В `<audio>` крутится тишина: ждём ссылку на следующую запись. */
+  const bridgingRef = useRef(false);
   /** Когда элементу назначили ссылку эфира — от этого считается её срок. */
   const srcAssignedAtRef = useRef(0);
   const activeRef = useRef(false);
-  /** Идёт переход в плеер Медиатеки (VED-542), см. `radioYieldAction`. */
+  /** Идёт переход в плеер Медиатеки (VED-542), см. `radioHandoffStep`. */
   const handoffRef = useRef(false);
-  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // `sync` и `load` зовут друг друга; ссылка разрывает круг зависимостей.
-  const loadRef = useRef<() => Promise<void>>(async () => undefined);
-  const syncRef = useRef<(state: MusicRadioStateDto, at: number) => void>(
-    () => undefined,
+  const pausedRef = useRef(false);
+  /** `play()` не пустили на скрытой вкладке — повторить, когда вернутся. */
+  const resumeOnVisibleRef = useRef(false);
+  const lastFetchRef = useRef(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // `apply`, `load` и `stop` зовут друг друга; ссылки разрывают круг.
+  const loadRef = useRef<(realign?: boolean) => Promise<void>>(
+    async () => undefined,
   );
+  const stopRef = useRef<() => void>(() => undefined);
 
   const [active, setActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [item, setItem] = useState<MusicRadioItemDto | null>(null);
   const [listeners, setListeners] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const clearRetry = useCallback(() => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    retryTimer.current = null;
+  }, []);
+
+  /** Повтор запроса, когда эфир не ответил или пуст. Переход им не делается. */
+  const scheduleRetry = useCallback(() => {
+    clearRetry();
+    retryTimer.current = setTimeout(() => void loadRef.current(), RETRY_MS);
+  }, [clearRetry]);
+
+  const playSafely = useCallback((element: HTMLAudioElement) => {
+    void Promise.resolve(element.play()).catch((cause: unknown) => {
+      const hidden =
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden";
+      const verdict = radioPlayFailure(cause, hidden);
+      if (verdict === "resume-later") resumeOnVisibleRef.current = true;
+      if (verdict === "stop") {
+        stopRef.current();
+        setError("Браузер не дал включить звук — нажмите ещё раз");
+      }
+    });
+  }, []);
+
+  /** Поставить запись эфира в тот же `<audio>` и сразу играть. */
+  const enter = useCallback(
+    (entry: RadioEntry) => {
+      const element = audioRef.current;
+      if (!element || !entry.item.streamUrl) return;
+      const slotId = entry.item.slotId;
+      bridgingRef.current = false;
+      playingRef.current = entry.item;
+      setItem(entry.item);
+      element.loop = false;
+      element.src = entry.item.streamUrl;
+      srcAssignedAtRef.current = Date.now();
+      if (entry.offset > 0) {
+        element.addEventListener(
+          "loadedmetadata",
+          () => {
+            if (playingRef.current?.slotId === slotId) {
+              element.currentTime = entry.offset;
+            }
+          },
+          { once: true },
+        );
+      }
+      // `play()` — здесь же, без ожидания метаданных и сети: вызов внутри
+      // `ended` звучащего элемента браузер пускает и на скрытой вкладке.
+      playSafely(element);
+    },
+    [playSafely],
+  );
+
+  /** Ссылки на следующую нет — тишина в цикле, пока не придёт ответ эфира. */
+  const bridge = useCallback(() => {
+    const element = audioRef.current;
+    if (!element) return;
+    bridgingRef.current = true;
+    element.loop = true;
+    element.src = SILENCE;
+    playSafely(element);
+  }, [playSafely]);
+
+  /** Свежий ответ эфира: догнать его, если нужно. */
+  const apply = useCallback(
+    (state: MusicRadioStateDto, receivedAt: number, realign: boolean) => {
+      stateRef.current = { state, at: receivedAt };
+      setListeners(state.listeners);
+      if (!activeRef.current || pausedRef.current) return;
+      const element = audioRef.current;
+      if (!element) return;
+      const now = radioServerNow(state, receivedAt, Date.now());
+      const playing = playingRef.current;
+
+      if (bridgingRef.current) {
+        let entry: RadioEntry | null = null;
+        if (playing) entry = radioAfterEnd(state, playing, now);
+        else {
+          const plan = radioSyncPlan(state, null, now, false);
+          if (plan.kind === "switch") entry = plan;
+        }
+        if (entry) {
+          clearRetry();
+          enter(entry);
+        } else {
+          if (!playing) setItem(null);
+          scheduleRetry();
+        }
+        return;
+      }
+
+      const plan = radioSyncPlan(
+        state,
+        playing
+          ? { item: playing, positionSeconds: element.currentTime }
+          : null,
+        now,
+        realign,
+      );
+      if (plan.kind === "switch") {
+        clearRetry();
+        enter(plan);
+      } else if (plan.kind === "seek") {
+        element.currentTime = plan.offset;
+      } else if (plan.kind === "wait") {
+        setItem(null);
+        scheduleRetry();
+      }
+    },
+    [clearRetry, enter, scheduleRetry],
+  );
+
+  const load = useCallback(
+    async (realign = false) => {
+      lastFetchRef.current = Date.now();
+      try {
+        const state =
+          activeRef.current && !pausedRef.current
+            ? await musicRadioHeartbeat()
+            : await fetchMusicRadio();
+        setError(null);
+        apply(state, Date.now(), realign);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Эфир недоступен");
+        if (activeRef.current) scheduleRetry();
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apply, scheduleRetry],
+  );
+
+  /** Запись кончилась (`ended`) или вышел её слот: следующая — сразу. */
+  const advance = useCallback(() => {
+    const playing = playingRef.current;
+    if (!activeRef.current || bridgingRef.current || !playing) return;
+    const cached = stateRef.current;
+    const entry = cached
+      ? radioAfterEnd(
+          cached.state,
+          playing,
+          radioServerNow(cached.state, cached.at, Date.now()),
+        )
+      : null;
+    if (entry) {
+      enter(entry);
+      // Следующая пошла; заодно освежить эфир, чтобы знать, что после неё.
+      if (!cached || !radioNextAfter(cached.state, entry.item)) {
+        void loadRef.current();
+      }
+      return;
+    }
+    bridge();
+    void loadRef.current();
+  }, [bridge, enter]);
+
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
 
   const audio = useCallback(() => {
     if (!audioRef.current) {
       const element = new Audio();
       element.preload = "auto";
+      element.addEventListener("ended", () => {
+        if (!bridgingRef.current) advance();
+      });
+      element.addEventListener("timeupdate", () => {
+        const playing = playingRef.current;
+        if (!activeRef.current || bridgingRef.current || !playing) return;
+        const left = radioSlotLeftMs(playing, element.currentTime);
+        // Вставка редакции могла укоротить слот — обрываем по эфиру.
+        if (left <= 0) return advance();
+        if (
+          radioShouldPrefetch(
+            stateRef.current?.state ?? null,
+            playing,
+            left,
+            Date.now() - lastFetchRef.current,
+          )
+        ) {
+          void loadRef.current();
+        }
+      });
+      element.addEventListener("play", () => {
+        if (!activeRef.current) return;
+        applyRadioPlaybackState("playing");
+        if (pausedRef.current) {
+          pausedRef.current = false;
+          setPaused(false);
+          // Звук стоял — эфир ушёл вперёд: догнать.
+          void loadRef.current(true);
+        }
+      });
+      element.addEventListener("pause", () => {
+        // Конец файла тоже присылает `pause` — это не пауза человека.
+        if (!activeRef.current || element.ended) return;
+        pausedRef.current = true;
+        setPaused(true);
+        applyRadioPlaybackState("paused");
+      });
       audioRef.current = element;
     }
     return audioRef.current;
-  }, []);
-
-  const clearAdvance = () => {
-    if (advanceTimer.current) clearTimeout(advanceTimer.current);
-    advanceTimer.current = null;
-  };
-
-  /** Поставить в плеер то, что сейчас в эфире, с нужной секунды. */
-  const sync = useCallback(
-    (state: MusicRadioStateDto, receivedAt: number) => {
-      stateRef.current = { state, at: receivedAt };
-      setListeners(state.listeners);
-      if (!activeRef.current) return;
-
-      const now = radioServerNow(state, receivedAt, Date.now());
-      const target = radioItemAt(state, now);
-      clearAdvance();
-      if (!target || !target.streamUrl) {
-        // Эфир пуст или ответ устарел — спросим ещё раз чуть позже.
-        setItem(null);
-        advanceTimer.current = setTimeout(
-          () => void loadRef.current(),
-          RETRY_MS,
-        );
-        return;
-      }
-
-      setItem(target);
-      const element = audio();
-      if (slotRef.current !== target.slotId) {
-        slotRef.current = target.slotId;
-        element.src = target.streamUrl;
-        srcAssignedAtRef.current = Date.now();
-        const offset = radioOffsetSeconds(target, now);
-        const seekAndPlay = () => {
-          element.currentTime = offset;
-          void element.play().catch(() => {
-            setError("Браузер не дал включить звук — нажмите ещё раз");
-            setActive(false);
-            activeRef.current = false;
-          });
-        };
-        if (element.readyState >= 1) seekAndPlay();
-        else
-          element.addEventListener("loadedmetadata", seekAndPlay, {
-            once: true,
-          });
-      }
-      // Переход к следующему — по эфиру, а не по `ended`: вставка могла
-      // оборвать запись раньше конца файла.
-      advanceTimer.current = setTimeout(
-        () => {
-          const cached = stateRef.current;
-          if (!cached) return void loadRef.current();
-          const later = radioServerNow(cached.state, cached.at, Date.now());
-          // Следующее уже есть в последнем ответе — переходим без запроса.
-          if (radioItemAt(cached.state, later)) {
-            syncRef.current(cached.state, cached.at);
-          } else void loadRef.current();
-        },
-        radioMsLeft(target, now) + 50,
-      );
-    },
-    [audio],
-  );
-
-  const load = useCallback(async () => {
-    try {
-      const state = activeRef.current
-        ? await musicRadioHeartbeat()
-        : await fetchMusicRadio();
-      setError(null);
-      sync(state, Date.now());
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Эфир недоступен");
-      if (activeRef.current) {
-        clearAdvance();
-        advanceTimer.current = setTimeout(
-          () => void loadRef.current(),
-          RETRY_MS,
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [sync]);
-
-  useEffect(() => {
-    loadRef.current = load;
-    syncRef.current = sync;
-  }, [load, sync]);
+  }, [advance]);
 
   const stop = useCallback(() => {
     if (!activeRef.current) return;
     activeRef.current = false;
     handoffRef.current = false;
-    slotRef.current = null;
-    clearAdvance();
+    pausedRef.current = false;
+    bridgingRef.current = false;
+    resumeOnVisibleRef.current = false;
+    playingRef.current = null;
+    clearRetry();
     const element = audioRef.current;
     if (element) {
       element.pause();
+      element.loop = false;
       element.removeAttribute("src");
       element.load();
     }
+    applyRadioMediaHandlers(null);
+    releaseMediaSessionFromRadio();
     setActive(false);
+    setPaused(false);
     setItem(null);
     void leaveMusicRadio().catch(() => undefined);
+  }, [clearRetry]);
+
+  const resume = useCallback(() => {
+    const element = audioRef.current;
+    if (!activeRef.current || !element) return;
+    resumeOnVisibleRef.current = false;
+    // `play` у элемента снимет паузу и догонит эфир.
+    playSafely(element);
+  }, [playSafely]);
+
+  const pause = useCallback(() => {
+    if (activeRef.current) audioRef.current?.pause();
   }, []);
+
+  useEffect(() => {
+    stopRef.current = stop;
+  }, [stop]);
 
   const start = useCallback(() => {
     if (activeRef.current) return;
     // Разблокировать звук надо в том же нажатии: `play()` после сетевого
-    // запроса браузер счёл бы запуском без участия человека.
+    // запроса браузер счёл бы запуском без участия человека. Тишина
+    // крутится, пока эфир не ответит.
     const element = audio();
-    element.src = SILENCE;
-    void element.play().catch(() => undefined);
-    if (player?.isPlaying) player.toggle();
+    holdMediaSessionForRadio();
     activeRef.current = true;
     handoffRef.current = false;
+    pausedRef.current = false;
+    playingRef.current = null;
+    bridgingRef.current = true;
+    element.loop = true;
+    element.src = SILENCE;
+    void Promise.resolve(element.play()).catch(() => undefined);
+    if (player?.isPlaying) player.toggle();
+    applyRadioMediaHandlers({ play: resume, pause, stop });
     setActive(true);
+    setPaused(false);
     setLoading(true);
     setError(null);
     void loadRef.current();
-  }, [audio, player]);
+  }, [audio, player, resume, pause, stop]);
 
   const refreshListeners = useCallback(() => {
     if (activeRef.current) return;
@@ -271,7 +485,8 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined);
   }, []);
 
-  // Отметка «слушаю» и свежий эфир — пока радио включено.
+  // Отметка «слушаю» и свежий эфир — пока радио включено. Переход между
+  // записями на этот интервал не опирается.
   useEffect(() => {
     if (!active) return;
     const id = setInterval(
@@ -281,6 +496,38 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [active]);
 
+  // Карточка на экране блокировки: что звучит в эфире.
+  useEffect(() => {
+    if (!active || !mediaSessionSupported()) return;
+    if (typeof MediaMetadata !== "undefined") {
+      navigator.mediaSession.metadata = new MediaMetadata(
+        radioMediaMetadata(item),
+      );
+    }
+    // У эфира нет перемотки: ползунок основного плеера здесь лишний.
+    try {
+      navigator.mediaSession.setPositionState?.();
+    } catch {
+      // Не поддерживается — карточка останется без ползунка, как и надо.
+    }
+  }, [active, item]);
+
+  // Вернулись на вкладку — спросить эфир сразу и догнать, если отстали;
+  // звук, который браузер не пустил в фоне, запустить снова.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !activeRef.current) return;
+      const element = audioRef.current;
+      if (resumeOnVisibleRef.current && element) {
+        resumeOnVisibleRef.current = false;
+        playSafely(element);
+      }
+      void loadRef.current(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [playSafely]);
+
   /*
    * Переход в плеер (VED-542). Звук у плеера и радио в разных `<audio>`,
    * поэтому шов прячется перекрытием: плеер запускается с секунды, которую
@@ -288,12 +535,19 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
    * эффект ниже). Ссылку эфира плеер получает готовой через запас адресов:
    * это та же подписанная ссылка на тот же файл, и без неё первый звук
    * ждал бы лишний круг — запрос к порталу и редирект.
+   *
+   * Системную карточку всё это время держит радио (VED-543): эффекты
+   * плеера её не трогают, пока радио не выключится в `stop()` — тогда
+   * плеер выставляет свою запись и кнопки заново.
    */
   const handoffToPlayer = useCallback(() => {
     if (!activeRef.current || handoffRef.current || !player) return;
     const trackId = radioHandoffTrackId(item);
     if (!item || !trackId) return;
     const element = audioRef.current;
+    // В `<audio>` именно эта запись, а не тишина между записями.
+    const inElement =
+      !bridgingRef.current && playingRef.current?.slotId === item.slotId;
     const cached = stateRef.current;
     const air = cached
       ? radioOffsetSeconds(
@@ -303,10 +557,10 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
       : 0;
     const position = radioHandoffPosition(
       item,
-      element ? element.currentTime : null,
+      element && inElement ? element.currentTime : null,
       air,
     );
-    if (item.streamUrl && slotRef.current === item.slotId) {
+    if (item.streamUrl && inElement) {
       rememberStreamUrl(
         trackId,
         element?.currentSrc || item.streamUrl,
@@ -353,10 +607,14 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
 
   useEffect(
     () => () => {
-      clearAdvance();
+      clearRetry();
       audioRef.current?.pause();
+      if (activeRef.current) {
+        applyRadioMediaHandlers(null);
+        releaseMediaSessionFromRadio();
+      }
     },
-    [],
+    [clearRetry],
   );
 
   const api = useMemo<MusicRadioApi>(
@@ -366,8 +624,10 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
       item,
       listeners,
       error,
+      paused,
       start,
       stop,
+      resume,
       refreshListeners,
       handoffToPlayer,
     }),
@@ -377,8 +637,10 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
       item,
       listeners,
       error,
+      paused,
       start,
       stop,
+      resume,
       refreshListeners,
       handoffToPlayer,
     ],
