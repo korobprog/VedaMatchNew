@@ -8,8 +8,9 @@ import { EntryList } from "@/components/library/entry-list";
 import { t } from "@/components/library/i18n";
 
 export const metadata: Metadata = {
-  title: "Избранное — Образование",
-  description: "Ссылки, сохранённые вами в библиотеке VedaMatch",
+  title: "Все закладки — Образование",
+  description:
+    "Материалы, которые вы отметили закладкой в Образовании VedaMatch",
 };
 
 export default async function LibraryFavoritesPage() {

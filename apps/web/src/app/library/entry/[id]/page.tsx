@@ -75,7 +75,7 @@ export default async function LibraryEntryPage({
 
   // Шлока — своё окно: стих, стрелки по источнику, «Чтение / Правка»
   // (VED-386). Адрес общий с материалами — ссылки из ленты, поиска и
-  // избранного ведут сюда же.
+  // закладок ведут сюда же.
   if (entry.type === "shloka") {
     const [shloka, shlokaComments] = await Promise.all([
       getLibraryShloka(entry.id),

@@ -198,7 +198,7 @@ describe("EntryCard", () => {
   it("bookmarks the entry right from the card", () => {
     render(<EntryCard entry={entry} locale="ru" />);
 
-    const bookmark = screen.getByRole("button", { name: "В избранное" });
+    const bookmark = screen.getByRole("button", { name: "В Закладки" });
     expect(bookmark.getAttribute("aria-pressed")).toBe("false");
     expect(bookmark.textContent).toBe("2");
   });
@@ -216,5 +216,20 @@ describe("EntryCard", () => {
     expect(mark?.parentElement?.parentElement).toBe(category.parentElement);
     const actions = container.querySelector(".border-t");
     expect(actions?.textContent).not.toContain("В Блог-ленте ·");
+  });
+
+  it("shows the year next to the Blog feed date (VED-570)", () => {
+    const { container } = render(
+      <EntryCard
+        entry={{
+          ...entry,
+          canEdit: true,
+          blogSharedAt: "2026-09-26T10:00:00.000Z",
+        }}
+        locale="ru"
+      />,
+    );
+
+    expect(container.querySelector("time")?.textContent).toBe("26 сент. 2026");
   });
 });

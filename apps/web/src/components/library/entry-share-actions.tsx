@@ -20,11 +20,18 @@ const button =
 export const ENTRY_ICON_BUTTON =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0";
 
-function shortDate(iso: string, locale: LibraryLocale): string {
-  return new Date(iso).toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", {
-    day: "numeric",
-    month: "short",
-  });
+/**
+ * «26 сент. 2026 г.» → «26 сент. 2026»: год показываем всегда (VED-570),
+ * а хвост «г.» в строке рубрик лишний.
+ */
+export function blogShareDate(iso: string, locale: LibraryLocale): string {
+  return new Date(iso)
+    .toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+    .replace(/\s*г\.$/, "");
 }
 
 /**
@@ -249,7 +256,7 @@ export function EntryBlogStatus({
           предупреждения гидрации — расхождение в сутки на границе дня
           ожидаемо и исправляется на клиенте. */}
       <time dateTime={sharedAt} suppressHydrationWarning>
-        {shortDate(sharedAt, locale)}
+        {blogShareDate(sharedAt, locale)}
       </time>
       {postId && (
         <Link
