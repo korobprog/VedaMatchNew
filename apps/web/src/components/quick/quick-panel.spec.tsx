@@ -143,14 +143,15 @@ describe("QuickPanel", () => {
 
   /* VED-562: «Телеграм» — канал портала, тоже чужой сайт и новой вкладкой;
      на плитке — логотип мессенджера, а не подпись одна. */
-  it("«Телеграм» — ссылка на канал в новой вкладке со значком", async () => {
+  /* VED-562, второй круг: не новой вкладкой — на Android пустая вкладка
+     оставалась белым экраном, пока ссылку открывал сам Телеграм. */
+  it("«Телеграм» — ссылка на канал той же вкладкой, со значком", async () => {
     await openPanel();
 
     const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
     const telegram = within(panel).getByRole("link", { name: /Телеграм/ });
     expect(telegram).toHaveAttribute("href", "https://t.me/vedamatch");
-    expect(telegram).toHaveAttribute("target", "_blank");
-    expect(telegram).toHaveAttribute("rel", "noopener noreferrer");
+    expect(telegram).not.toHaveAttribute("target");
     const icon = telegram.querySelector('svg[data-icon="telegram"]');
     expect(icon).not.toBeNull();
     expect(icon).toHaveAttribute("aria-hidden", "true");

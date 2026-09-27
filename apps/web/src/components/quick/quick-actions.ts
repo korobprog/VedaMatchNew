@@ -246,6 +246,17 @@ export function isExternalQuickHref(href: string): boolean {
   return /^https?:\/\//.test(href);
 }
 
+/**
+ * Ссылка, которую телефон отдаёт приложению (VED-562, «Телеграм»): t.me
+ * открывается в самом Телеграме. Новой вкладкой её не открываем — Chrome на
+ * Android заводил пустую вкладку, передавал ссылку приложению, и по
+ * возвращении человек видел белый экран. Той же вкладкой ссылку перехватывает
+ * приложение, а без него открывается страница канала, откуда есть «Назад».
+ */
+export function quickHrefOpensApp(href: string): boolean {
+  return /^https:\/\/(t|telegram)\.me\//.test(href);
+}
+
 /** Прежнее имя списка: панель и тесты звали его так с VED-118. */
 export const QUICK_ACTIONS = BUILTIN_QUICK_ACTIONS;
 

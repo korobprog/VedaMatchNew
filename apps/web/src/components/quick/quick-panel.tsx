@@ -95,6 +95,7 @@ import { TelegramIcon } from "./telegram-icon";
 import {
   BUILTIN_QUICK_ACTIONS,
   isExternalQuickHref,
+  quickHrefOpensApp,
   CUSTOM_ACTION_PREFIX,
   addCustomQuickAction,
   arrangeQuickActions,
@@ -743,9 +744,13 @@ function HeaderAction({
     return (
       <a
         href={meta.href}
-        target="_blank"
+        target={quickHrefOpensApp(meta.href) ? undefined : "_blank"}
         rel="noopener noreferrer"
-        aria-label={`${meta.label} (откроется в новой вкладке)`}
+        aria-label={
+          quickHrefOpensApp(meta.href)
+            ? meta.label
+            : `${meta.label} (откроется в новой вкладке)`
+        }
         title={meta.hint}
         className={headerButtonClass}
       >
@@ -1063,7 +1068,9 @@ function QuickTiles({
               ) : meta.href && isExternalQuickHref(meta.href) ? (
                 <a
                   href={meta.href}
-                  target="_blank"
+                  target={
+                    quickHrefOpensApp(meta.href) ? undefined : "_blank"
+                  }
                   rel="noopener noreferrer"
                   onClick={onClose}
                   title={meta.hint}
