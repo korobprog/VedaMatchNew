@@ -29,7 +29,15 @@ import {
   updateWorkChecklistItem,
   updateWorkTask,
 } from "@/lib/work-api";
-import { uploadInTurn, uploadProblemMessage } from "./attach-files";
+import {
+  WORK_ATTACH_PICKER_CLASS,
+  WORK_ATTACH_REMOVE_CLASS,
+} from "./attach-button";
+import {
+  MAX_FILES_AT_ONCE,
+  uploadInTurn,
+  uploadProblemMessage,
+} from "./attach-files";
 import { isLongChecklistText } from "./checklist-text";
 import {
   chooseSection,
@@ -295,6 +303,9 @@ export function WorkTaskDialog({
    */
   function attachFiles(files: File[]) {
     if (files.length === 0) return;
+    // Состояние «Загружаю…» — в тот же кадр, что и выбор файла, а не после
+    // первого ответа сервера: иначе кажется, что нажатие не сработало.
+    setUploading({ done: 0, total: Math.min(files.length, MAX_FILES_AT_ONCE) });
     void run(async () => {
       try {
         const result = await uploadInTurn(
@@ -856,7 +867,7 @@ export function WorkTaskDialog({
                             void run(() => removeWorkAttachment(file.id))
                           }
                           aria-label={`Убрать вложение «${file.name}»`}
-                          className="absolute right-1 top-1 rounded-lg bg-bg-0/80 p-1 text-text-1 hover:text-text-0 disabled:opacity-50"
+                          className={`absolute right-0.5 top-0.5 bg-bg-0/80 ${WORK_ATTACH_REMOVE_CLASS}`}
                         >
                           <Trash2 aria-hidden className="size-4" />
                         </button>
@@ -891,7 +902,7 @@ export function WorkTaskDialog({
                           void run(() => removeWorkAttachment(file.id))
                         }
                         aria-label={`Убрать вложение «${file.name}»`}
-                        className="rounded-lg p-1 text-text-2 hover:text-text-0 disabled:opacity-50"
+                        className={WORK_ATTACH_REMOVE_CLASS}
                       >
                         <Trash2 aria-hidden className="size-4" />
                       </button>
@@ -903,18 +914,16 @@ export function WorkTaskDialog({
             {canEdit && (
               // Подпись поверх спрятанного input: системная кнопка «Выберите
               // файл» не переживает тему портала и говорит «файл не выбран»
-              // там, где выбирать нечего.
-              <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-glass px-3 py-2 text-sm text-text-0">
-                <Paperclip aria-hidden className="size-4" />
-                {uploading && uploading.total > 1
-                  ? `Прикрепляем ${Math.min(uploading.done + 1, uploading.total)} из ${uploading.total}…`
-                  : "Прикрепить картинки или файлы"}
+              // там, где выбирать нечего. Вся видимая кнопка — часть label,
+              // область не меньше 40×40, нажатие видно сразу, а загрузка
+              // пишет «Загружаю…» (VED-266, см. attach-button.ts).
+              <label className="mt-2 inline-flex">
                 {/* Несколько файлов за раз (VED-112): скриншоты к задаче
                     обычно идут пачкой, а раньше каждый выбирался заново. */}
                 <input
                   type="file"
                   multiple
-                  className="sr-only"
+                  className="peer sr-only"
                   disabled={busy}
                   accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                   onChange={(event) => {
@@ -925,6 +934,21 @@ export function WorkTaskDialog({
                     attachFiles(files);
                   }}
                 />
+                <span className={WORK_ATTACH_PICKER_CLASS}>
+                  {uploading ? (
+                    <Loader2
+                      aria-hidden
+                      className="size-4 motion-safe:animate-spin"
+                    />
+                  ) : (
+                    <Paperclip aria-hidden className="size-4" />
+                  )}
+                  {uploading
+                    ? uploading.total > 1
+                      ? `Загружаю ${Math.min(uploading.done + 1, uploading.total)} из ${uploading.total}…`
+                      : "Загружаю…"
+                    : "Прикрепить картинки или файлы"}
+                </span>
               </label>
             )}
 
