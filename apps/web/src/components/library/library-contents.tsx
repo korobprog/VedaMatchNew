@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { ListOrdered } from "lucide-react";
+import { ChevronUp, ListOrdered } from "lucide-react";
 import type {
   LibraryEntryDto,
   LibraryFeedResponse,
@@ -71,6 +71,18 @@ export function LibraryContents({
     }
   }
 
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * «Свернуть» внизу списка (VED-565): длинное оглавление иначе приходилось
+   * листать обратно к кнопке. Фокус — на кнопку «Содержание», и страница
+   * возвращается к ней же.
+   */
+  function collapse() {
+    setOpen(false);
+    toggleRef.current?.focus();
+  }
+
   function toggle() {
     const next = !open;
     setOpen(next);
@@ -81,6 +93,7 @@ export function LibraryContents({
   const button = iconOnly ? (
     <button
       type="button"
+      ref={toggleRef}
       onClick={toggle}
       aria-expanded={open}
       aria-controls="library-contents"
@@ -95,6 +108,7 @@ export function LibraryContents({
   ) : (
     <button
       type="button"
+      ref={toggleRef}
       onClick={toggle}
       aria-expanded={open}
       aria-controls="library-contents"
@@ -171,6 +185,17 @@ export function LibraryContents({
           {t(locale, "feed.more")}
         </button>
       )}
+      <div className="mt-1 flex justify-end">
+        <button
+          type="button"
+          onClick={collapse}
+          aria-label={t(locale, "contents.collapse")}
+          title={t(locale, "contents.collapse")}
+          className={`${LIBRARY_ICON_BUTTON} border-glass-brd text-text-1 hover:text-text-0`}
+        >
+          <ChevronUp aria-hidden className="size-4" />
+        </button>
+      </div>
     </div>
   );
 
