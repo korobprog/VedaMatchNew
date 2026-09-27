@@ -24,9 +24,16 @@ function prismaMock() {
         .fn()
         .mockImplementation(({ data }) => ({ id: 't1', ...data })),
       delete: jest.fn().mockResolvedValue({ id: 't1' }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     musicUpload: {
       deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    musicAlbum: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    musicArtist: {
+      delete: jest.fn().mockResolvedValue({}),
     },
   };
 
@@ -48,6 +55,7 @@ function prismaMock() {
       },
       musicAlbum: {
         findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue({}),
         create: jest
           .fn()
@@ -556,13 +564,106 @@ describe('MusicAdminCatalogService', () => {
       const mock = prismaMock();
       mock.prisma.musicArtist.findUnique.mockResolvedValue({
         id: 'a1',
+        coverKey: null,
         _count: { tracks: 0, albums: 0 },
       });
 
       await service(mock).deleteArtist(true, 'a1');
 
-      expect(mock.prisma.musicArtist.delete).toHaveBeenCalledWith({
+      expect(mock.tx.musicArtist.delete).toHaveBeenCalledWith({
         where: { id: 'a1' },
+      });
+      expect(mock.tx.musicTrack.deleteMany).not.toHaveBeenCalled();
+    });
+
+    describe('вместе с записями (VED-576)', () => {
+      function withCatalog() {
+        const mock = prismaMock();
+        mock.prisma.musicArtist.findUnique.mockResolvedValue({
+          id: 'a1',
+          coverKey: 'covers/artist/a1.jpg',
+          _count: { tracks: 2, albums: 1 },
+        });
+        mock.prisma.musicTrack.findMany.mockResolvedValue([
+          { id: 't1', storageKey: 'music/t1.mp3', coverKey: 'covers/t1.jpg' },
+          { id: 't2', storageKey: 'music/t2.mp3', coverKey: null },
+        ]);
+        mock.prisma.musicAlbum.findMany.mockResolvedValue([
+          { id: 'al1', coverKey: 'covers/album/al1.jpg' },
+        ]);
+        return mock;
+      }
+
+      it('удаляет записи, их загрузки, свои альбомы и исполнителя', async () => {
+        const mock = withCatalog();
+
+        const result = await service(mock).deleteArtist(true, 'a1', true);
+
+        expect(result).toEqual({
+          ok: true,
+          deletedTracks: 2,
+          deletedAlbums: 1,
+        });
+        expect(mock.tx.musicUpload.deleteMany).toHaveBeenCalledWith({
+          where: { storageKey: { in: ['music/t1.mp3', 'music/t2.mp3'] } },
+        });
+        expect(mock.tx.musicTrack.deleteMany).toHaveBeenCalledWith({
+          where: { id: { in: ['t1', 't2'] } },
+        });
+        expect(mock.tx.musicAlbum.deleteMany).toHaveBeenCalledWith({
+          where: { id: { in: ['al1'] } },
+        });
+        expect(mock.tx.musicArtist.delete).toHaveBeenCalledWith({
+          where: { id: 'a1' },
+        });
+      });
+
+      it('альбом с чужими записями не трогает', async () => {
+        const mock = withCatalog();
+
+        await service(mock).deleteArtist(true, 'a1', true);
+
+        expect(mock.prisma.musicAlbum.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { artistId: 'a1', tracks: { every: { artistId: 'a1' } } },
+          }),
+        );
+      });
+
+      it('файлы и обложки убирает после базы', async () => {
+        const mock = withCatalog();
+        const storage = storageService();
+        const remove = jest.spyOn(storage, 'remove').mockResolvedValue();
+
+        await service(mock, storage).deleteArtist(true, 'a1', true);
+
+        expect(remove.mock.calls.map(([key]) => key)).toEqual([
+          'music/t1.mp3',
+          'music/t2.mp3',
+          'covers/t1.jpg',
+          'covers/album/al1.jpg',
+          'covers/artist/a1.jpg',
+        ]);
+        expect(
+          mock.tx.musicArtist.delete.mock.invocationCallOrder[0],
+        ).toBeLessThan(remove.mock.invocationCallOrder[0]);
+      });
+
+      it('без подтверждения записи не трогает', async () => {
+        const mock = withCatalog();
+
+        await expect(service(mock).deleteArtist(true, 'a1')).rejects.toThrow(
+          /вместе с записями/,
+        );
+        expect(mock.tx.musicTrack.deleteMany).not.toHaveBeenCalled();
+      });
+
+      it('не администратору — отказ', async () => {
+        const mock = withCatalog();
+
+        await expect(
+          service(mock).deleteArtist(false, 'a1', true),
+        ).rejects.toThrow(ForbiddenException);
       });
     });
 

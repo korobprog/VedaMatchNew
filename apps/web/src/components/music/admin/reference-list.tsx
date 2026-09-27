@@ -56,6 +56,13 @@ export interface MusicReferenceRow {
    * не рисуется.
    */
   lineage?: LineageId | null;
+  /**
+   * Сколько записей у исполнителя (VED-576). Только для `kind === "artist"`:
+   * при ненулевом удаление спрашивает «вместе с записями» и называет число —
+   * иначе сервер отказывал бы «сначала перевесьте», и удалить исполнителя
+   * целиком было нечем.
+   */
+  trackCount?: number;
 }
 
 /** Опция выбора корневой категории — ровно то, что нужно `<select>` в строке. */
@@ -266,10 +273,13 @@ function Row({
         : updateMusicAlbum(row.id, { coverKey }),
     );
 
+  /* Исполнитель с записями уходит вместе с ними (VED-576): подтверждение
+     ниже называет их число, а сервер снимает и файлы. */
+  const withTracks = kind === "artist" && (row.trackCount ?? 0) > 0;
   const remove = () =>
     void run(() =>
       kind === "artist"
-        ? deleteMusicArtist(row.id)
+        ? deleteMusicArtist(row.id, { withTracks })
         : kind === "album"
           ? deleteMusicAlbum(row.id)
           : deleteMusicCategory(row.id),
@@ -354,9 +364,12 @@ function Row({
           </div>
         </div>
       ) : mode === "confirm" ? (
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm text-text-1">
-            Удалить «{row.primary}» безвозвратно?
+        /* С переносом: на телефоне «Отмена» уезжала за край строки. */
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 flex-1 basis-48 text-sm text-text-1">
+            {withTracks
+              ? `Удалить «${row.primary}» вместе с записями (${row.trackCount}) безвозвратно? Файлы записей тоже удалятся.`
+              : `Удалить «${row.primary}» безвозвратно?`}
           </span>
           <button
             type="button"
@@ -364,7 +377,7 @@ function Row({
             disabled={pending}
             className="h-9 shrink-0 rounded-lg border border-magenta/50 px-3 text-sm font-semibold text-magenta disabled:opacity-50"
           >
-            Удалить
+            {withTracks ? "Удалить с записями" : "Удалить"}
           </button>
           <button
             type="button"

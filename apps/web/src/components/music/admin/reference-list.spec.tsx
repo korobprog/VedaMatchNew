@@ -6,6 +6,7 @@ import {
   type MusicReferenceRow,
 } from "./reference-list";
 import {
+  deleteMusicArtist,
   setMusicArtistLineage,
   updateMusicArtist,
 } from "@/lib/music-admin-client-api";
@@ -305,5 +306,40 @@ describe("MusicReferenceList — имя исполнителя вместо «м
     expect(updateMusicArtist).toHaveBeenCalledWith("a1", {
       isAudiobook: false,
     });
+  });
+});
+
+describe("MusicReferenceList — удаление исполнителя с записями (VED-576)", () => {
+  beforeEach(() => vi.mocked(deleteMusicArtist).mockReset());
+
+  it("исполнителя с записями удаляет вместе с ними, назвав их число", async () => {
+    vi.mocked(deleteMusicArtist).mockResolvedValue({});
+    const user = userEvent.setup();
+    renderList([{ ...artist, trackCount: 19 }]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Удалить «Avantika devi dasi»" }),
+    );
+    expect(
+      screen.getByText(/вместе с записями \(19\) безвозвратно/),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Удалить с записями" }),
+    );
+
+    expect(deleteMusicArtist).toHaveBeenCalledWith("a1", { withTracks: true });
+  });
+
+  it("пустого исполнителя удаляет без записей", async () => {
+    vi.mocked(deleteMusicArtist).mockResolvedValue({});
+    const user = userEvent.setup();
+    renderList([{ ...artist, trackCount: 0 }]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Удалить «Avantika devi dasi»" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Удалить" }));
+
+    expect(deleteMusicArtist).toHaveBeenCalledWith("a1", { withTracks: false });
   });
 });

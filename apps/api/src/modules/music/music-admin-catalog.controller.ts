@@ -36,6 +36,7 @@ import { MusicArtistTagsService } from './music-artist-tags.service';
 import { MusicAdminQueueService } from './music-admin-queue.service';
 import { MusicReportsService } from './music-reports.service';
 import { isAdmin } from './is-admin';
+import { parseWithTracks } from './artist-delete-plan';
 
 /**
  * Префикс `music/admin`, а не `admin/...`: контракт сервисного модуля требует
@@ -193,8 +194,13 @@ export class MusicAdminCatalogController {
   deleteArtist(
     @CurrentUser() user: AccessTokenPayload,
     @Param('id') id: string,
+    @Query('withTracks') withTracks?: string,
   ) {
-    return this.catalog.deleteArtist(isAdmin(user), id);
+    return this.catalog.deleteArtist(
+      isAdmin(user),
+      id,
+      parseWithTracks(withTracks),
+    );
   }
 
   /**

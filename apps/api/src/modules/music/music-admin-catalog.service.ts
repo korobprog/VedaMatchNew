@@ -31,6 +31,7 @@ import { MusicStorageService } from './music-storage.service';
 import { buildMusicSlug, withMusicSlugSuffix } from './music-slug';
 import { nextPosition } from './playlist-order';
 import { BulkArtistError, planBulkArtist } from './bulk-track-artist';
+import { planArtistDelete } from './artist-delete-plan';
 
 const MAX_NAME_LENGTH = 160;
 const MAX_BIO_LENGTH = 2000;
@@ -373,33 +374,86 @@ export class MusicAdminCatalogService {
   }
 
   /**
-   * Удаление исполнителя — только когда за ним ничего не числится.
+   * Удаление исполнителя.
    *
-   * Каскада здесь нет намеренно: FK у альбома и записи `SetNull`, то есть
-   * удаление живого исполнителя не унесло бы записи, а молча обезличило их —
-   * полсотни киртанов вдруг «без исполнителя», и восстановить связь нечем.
-   * Пусть редакция сперва перевесит записи, а потом удаляет справочник.
+   * Без `withTracks` — только когда за ним ничего не числится. Молча
+   * отвязывать записи нельзя: FK у альбома и записи `SetNull`, и удаление
+   * живого исполнителя не унесло бы записи, а обезличило их — полсотни
+   * киртанов вдруг «без исполнителя», и восстановить связь нечем.
+   *
+   * С `withTracks` (VED-576) — вместе с записями: редакция подтверждает это
+   * явно, в интерфейсе названо число записей. Записи уходят так же, как по
+   * одной в `deleteTrack`: строки загрузки руками, остальное каскадом, файлы
+   * и обложки — после базы. Альбомы исполнителя уходят, только если в них не
+   * осталось чужих записей; иначе альбом остаётся (без исполнителя, `SetNull`)
+   * вместе со своей обложкой.
    */
-  async deleteArtist(viewerIsAdmin: boolean, id: string) {
+  async deleteArtist(viewerIsAdmin: boolean, id: string, withTracks = false) {
     this.assertAdmin(viewerIsAdmin);
     const existing = await this.prisma.musicArtist.findUnique({
       where: { id },
       select: {
         id: true,
+        coverKey: true,
         _count: { select: { tracks: true, albums: true } },
       },
     });
     if (!existing) throw new NotFoundException('Исполнитель не найден');
 
     const { tracks, albums } = existing._count;
-    if (tracks > 0 || albums > 0) {
+    if (!withTracks && (tracks > 0 || albums > 0)) {
       throw new ConflictException(
-        `Сначала перевесьте на другого исполнителя: записей — ${tracks}, альбомов — ${albums}`,
+        `Сначала перевесьте на другого исполнителя или удалите вместе с записями: записей — ${tracks}, альбомов — ${albums}`,
       );
     }
 
-    await this.prisma.musicArtist.delete({ where: { id } });
-    return { ok: true };
+    const [trackRows, albumRows] =
+      tracks > 0 || albums > 0
+        ? await Promise.all([
+            this.prisma.musicTrack.findMany({
+              where: { artistId: id },
+              select: { id: true, storageKey: true, coverKey: true },
+            }),
+            this.prisma.musicAlbum.findMany({
+              // `every` по пустому альбому — тоже да: пустой альбом
+              // исполнителя уходит вместе с ним.
+              where: { artistId: id, tracks: { every: { artistId: id } } },
+              select: { id: true, coverKey: true },
+            }),
+          ])
+        : [[], []];
+
+    const plan = planArtistDelete({
+      artistCoverKey: existing.coverKey,
+      tracks: trackRows,
+      albums: albumRows,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      if (plan.trackIds.length > 0) {
+        await tx.musicUpload.deleteMany({
+          where: { storageKey: { in: plan.storageKeys } },
+        });
+        await tx.musicTrack.deleteMany({
+          where: { id: { in: plan.trackIds } },
+        });
+      }
+      if (plan.albumIds.length > 0) {
+        await tx.musicAlbum.deleteMany({
+          where: { id: { in: plan.albumIds } },
+        });
+      }
+      await tx.musicArtist.delete({ where: { id } });
+    });
+
+    for (const key of plan.storageKeys) await this.storage.remove(key);
+    for (const key of plan.coverKeys) await this.covers.remove(key);
+
+    return {
+      ok: true,
+      deletedTracks: plan.trackIds.length,
+      deletedAlbums: plan.albumIds.length,
+    };
   }
 
   /** Удаление альбома — по той же причине только у пустого. */
