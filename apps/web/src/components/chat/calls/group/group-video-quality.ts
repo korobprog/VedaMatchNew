@@ -75,6 +75,41 @@ export function groupVideoEncoding(participantCount: number): VideoEncoding {
   };
 }
 
+/**
+ * Показ экрана (VED-360) — другой потолок, потому что другое содержимое.
+ *
+ * Лицо переживает и уменьшенный кадр, и 20 кадров в секунду; слайд с
+ * мелким текстом после `scaleResolutionDownBy: 2` не читается вовсе, а
+ * частота кадров ему почти не нужна — экран меняется рывками, не плавно.
+ * Поэтому здесь наоборот: сторона кадра не уменьшается НИКОГДА, а частота
+ * падает с ростом комнаты. Битрейт — тот же, что у камеры на этом составе:
+ * вверх уходит столько же потоков, и канал у показывающего тот же.
+ */
+const SCREEN_FRAMERATE: readonly number[] = [15, 15, 15, 10, 8];
+
+export function groupScreenEncoding(participantCount: number): VideoEncoding {
+  const index = clampIndex(participantCount);
+  return {
+    maxBitrate: Math.max(
+      Math.round(BASE.maxBitrate * STEPS[index].bitrate),
+      MIN_GROUP_VIDEO_BITRATE,
+    ),
+    maxFramerate: SCREEN_FRAMERATE[index],
+    scaleResolutionDownBy: 1,
+  };
+}
+
+/**
+ * Чем жертвовать, когда канал не тянет. Камере — чем угодно
+ * (`balanced`); экрану — только частотой кадров: пусть обновляется
+ * реже, но остаётся читаемым.
+ */
+export function degradationFor(
+  source: "camera" | "screen",
+): DegradationPreference {
+  return source === "screen" ? "maintain-resolution" : DEGRADATION_PREFERENCE;
+}
+
 function clampIndex(participantCount: number): number {
   if (!Number.isFinite(participantCount) || participantCount < 0) return 0;
   return Math.min(Math.floor(participantCount), STEPS.length - 1);

@@ -54,6 +54,7 @@ import {
   videoDecision,
   videoToTurnOff,
 } from './group-call-video';
+import { screenDecision, screenDenialText } from './group-call-screen';
 import { GroupCallSignalStore } from './group-call-signals.store';
 
 const roomInclude = {
@@ -241,7 +242,8 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
       where: { callId, userId, state: 'joined' },
       // Камера гасится вместе с выходом: иначе ушедший держал бы одно из
       // трёх мест под видео, пока его строку не перепишет следующий вход.
-      data: { state: 'left', leftAt: new Date(), video: false },
+      // Показ экрана — тоже: иначе он держал бы единственный экран комнаты.
+      data: { state: 'left', leftAt: new Date(), video: false, screen: false },
     });
     await this.signals.clearRecipient(callId, userId);
     return this.afterRoomChanged(callId);
@@ -267,11 +269,24 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
   async setState(
     userId: string,
     callId: string,
-    patch: { muted?: boolean; video?: boolean },
+    patch: { muted?: boolean; video?: boolean; screen?: boolean },
   ): Promise<ChatGroupCallDto> {
-    const room = await this.requireRoomForMember(callId, userId);
+    let room = await this.requireRoomForMember(callId, userId);
     if (room.status === 'ended')
       throw new ConflictException(JOIN_DENIAL_TEXT.ended);
+
+    // Экран — раньше камеры: `{screen:false, video:…}` сперва снимает
+    // показ, потом решает, вернуть ли камеру. `screen:true` сам занимает
+    // место под видео, и `video` рядом с ним не читается.
+    if (typeof patch.screen === 'boolean') {
+      if (patch.screen) room = await this.sweepRoom(room);
+      await this.applyScreen(room, userId, patch.screen);
+      if (patch.screen) patch = { ...patch, video: undefined };
+      room = await this.prisma.chatGroupCall.findUniqueOrThrow({
+        where: { id: callId },
+        include: roomInclude,
+      });
+    }
 
     if (typeof patch.video === 'boolean') {
       const decision = videoDecision(
@@ -293,7 +308,11 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
             // уже переписал другой запрос, `count` окажется нулём.
             video: !decision.video,
           },
-          data: { video: decision.video, lastSeenAt: new Date() },
+          // Погасшее видео гасит и показ экрана: экран едет в том же
+          // отправителе, без видео показывать нечего.
+          data: decision.video
+            ? { video: true, lastSeenAt: new Date() }
+            : { video: false, screen: false, lastSeenAt: new Date() },
         });
         if (claimed.count === 0 && decision.video)
           throw new ConflictException(VIDEO_DENIAL_TEXT['video-full']);
@@ -310,6 +329,67 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return this.afterRoomChanged(callId);
+  }
+
+  /**
+   * Начать или закончить показ экрана (VED-360). Правило — в
+   * `group-call-screen.ts`; здесь запись и две гонки.
+   *
+   * - Место под видео занимается тем же условным `updateMany` по прежнему
+   *   значению, что и у камеры.
+   * - Второй показ одновременно с первым ловит частичный уникальный индекс
+   *   `ChatGroupCallParticipant_one_screen_per_call`: проигравший получает
+   *   тот же 409 «экран уже показывает …», что и опоздавший.
+   *
+   * Перед началом показа комната прибирается (`sweepRoom` в вызывающем):
+   * показ уехавшего в тоннель иначе упёрся бы в индекс, хотя по правилу
+   * он уже никому не мешает.
+   */
+  private async applyScreen(
+    room: RoomRow,
+    userId: string,
+    wantScreen: boolean,
+  ): Promise<void> {
+    const decision = screenDecision(
+      toRoomParticipants(room),
+      userId,
+      wantScreen,
+      Date.now(),
+      room.status,
+    );
+    const holderName = (holderId?: string) =>
+      holderId
+        ? (room.participants.find((p) => p.userId === holderId)?.user ?? null)
+        : null;
+    if (decision.kind === 'deny') {
+      const holder = holderName(decision.holderId);
+      throw new ConflictException(
+        screenDenialText(
+          decision.reason,
+          holder ? toUserSummary(holder).name : null,
+        ),
+      );
+    }
+    if (decision.kind === 'noop') return;
+    if (!decision.screen) {
+      await this.prisma.chatGroupCallParticipant.updateMany({
+        where: { callId: room.id, userId, state: 'joined' },
+        data: { screen: false, lastSeenAt: new Date() },
+      });
+      return;
+    }
+    let claimed: { count: number };
+    try {
+      claimed = await this.prisma.chatGroupCallParticipant.updateMany({
+        where: { callId: room.id, userId, state: 'joined', screen: false },
+        data: { screen: true, video: true, lastSeenAt: new Date() },
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      throw new ConflictException(screenDenialText('screen-busy'));
+    }
+    if (claimed.count === 0)
+      throw new ConflictException(screenDenialText('not-in-room'));
   }
 
   /**
@@ -491,6 +571,8 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
         // выпрашивается отдельным `POST /state`, и наследовать его от
         // прошлого захода нельзя — за это время его мог занять другой.
         video: false,
+        // Показ экрана — тем более: он один на комнату.
+        screen: false,
       },
     });
     // Очередь сигналов прошлого захода — не наследство нового: offer оттуда
@@ -677,7 +759,7 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
     if (excessVideo.length > 0)
       await this.prisma.chatGroupCallParticipant.updateMany({
         where: { callId: room.id, userId: { in: excessVideo } },
-        data: { video: false },
+        data: { video: false, screen: false },
       });
 
     if (stale.length > 0)
@@ -688,8 +770,14 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
           userId: { in: stale.map((p) => p.userId) },
         },
         // Уехавший в тоннель освобождает и место в комнате, и место под
-        // видео — по той же причине, что и вышедший сам (см. `leave`).
-        data: { state: 'left', leftAt: new Date(), video: false },
+        // видео, и показ экрана — по той же причине, что и вышедший сам
+        // (см. `leave`).
+        data: {
+          state: 'left',
+          leftAt: new Date(),
+          video: false,
+          screen: false,
+        },
       });
 
     if (ending) {
@@ -947,6 +1035,7 @@ export class ChatGroupCallsService implements OnModuleInit, OnModuleDestroy {
         joinedAt: new Date(p.joinedAt).toISOString(),
         muted: p.muted,
         video: p.video,
+        screen: p.screen ?? false,
         host: p.userId === host,
       })),
     };
@@ -963,6 +1052,7 @@ function toRoomParticipants(room: RoomRow): RoomParticipant[] {
       lastSeenAt: p.lastSeenAt.getTime(),
       muted: p.muted,
       video: p.video,
+      screen: p.screen,
     }));
 }
 

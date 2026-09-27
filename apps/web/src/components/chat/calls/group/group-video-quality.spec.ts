@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  degradationFor,
   encodingChanged,
+  groupScreenEncoding,
   groupVideoEncoding,
   MIN_GROUP_VIDEO_BITRATE,
   withVideoEncoding,
@@ -128,5 +130,30 @@ describe("наложение потолка на параметры отправ
   it("пустой encodings — накладывать не на что, а не выдумать свой", () => {
     const params = { encodings: [] } as unknown as RTCRtpSendParameters;
     expect(withVideoEncoding(params, target)).toBeNull();
+  });
+});
+
+describe("показ экрана", () => {
+  it("кадр не уменьшается ни на каком составе — текст должен читаться", () => {
+    for (let n = 0; n < 6; n += 1)
+      expect(groupScreenEncoding(n).scaleResolutionDownBy).toBe(1);
+  });
+
+  it("частота кадров падает с ростом комнаты", () => {
+    expect(groupScreenEncoding(4).maxFramerate).toBeLessThan(
+      groupScreenEncoding(2).maxFramerate,
+    );
+  });
+
+  it("битрейт — как у камеры на том же составе", () => {
+    for (let n = 2; n < 5; n += 1)
+      expect(groupScreenEncoding(n).maxBitrate).toBe(
+        groupVideoEncoding(n).maxBitrate,
+      );
+  });
+
+  it("экран жертвует частотой, камера — чем угодно", () => {
+    expect(degradationFor("screen")).toBe("maintain-resolution");
+    expect(degradationFor("camera")).toBe("balanced");
   });
 });

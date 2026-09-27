@@ -56,6 +56,32 @@ export function shouldSendGroupVideo({
   return !videoDimmedByBackground(hidden);
 }
 
+/**
+ * Что уходит в наш видео-отправитель (VED-360): экран, камера или ничего.
+ *
+ * Экран и камера делят ОДИН отправитель — показ подменяет камеру через
+ * `replaceTrack`, без новой видеосекции и пересогласования. Поэтому ответ
+ * один, а не два флага: одновременно уйти они не могут физически.
+ *
+ * Экран сильнее камеры: нажавший «показать экран» хочет, чтобы видели
+ * экран, а камера вернётся сама, когда показ кончится.
+ *
+ * Скрытая вкладка гасит камеру, но НЕ экран: показывают обычно другое окно
+ * или вкладку, и собственная вкладка портала при этом как раз скрыта.
+ * Погасить показ ровно тогда, когда человек перешёл к тому, что хотел
+ * показать, — значит сломать показ целиком.
+ */
+export function outgoingVideo({
+  phase,
+  cameraOn,
+  screenOn,
+  hidden,
+}: GroupVideoSendInput & { screenOn: boolean }): "screen" | "camera" | null {
+  if (phase !== "active") return null;
+  if (screenOn) return "screen";
+  return shouldSendGroupVideo({ phase, cameraOn, hidden }) ? "camera" : null;
+}
+
 /** Что в плитке участника. */
 export type TileView =
   /** Живая картинка. */
@@ -67,13 +93,20 @@ export interface Tile {
   userId: string;
   view: TileView;
   isSelf: boolean;
+  /**
+   * В плитке экран, а не лицо (VED-360): показывать целиком (`contain`),
+   * крупно и без зеркала — зеркальный текст не прочитать.
+   */
+  screen: boolean;
 }
 
 export interface TilesInput {
   call: Pick<ChatGroupCallDto, 'participants'> | null;
   selfId: string;
-  /** Реально ли уходит НАША картинка (`shouldSendGroupVideo`). */
+  /** Реально ли уходит НАША картинка (`outgoingVideo` не `null`). */
   sendingVideo: boolean;
+  /** Уходит НАШ экран, а не камера. Необязательно: по умолчанию — нет. */
+  sharingScreen?: boolean;
   /** От кого пришёл поток с живой видеодорожкой. */
   remoteStreams: ReadonlySet<string>;
   /**
@@ -114,13 +147,19 @@ export function videoTiles({
   call,
   selfId,
   sendingVideo,
+  sharingScreen = false,
   remoteStreams,
   remoteVideoOff,
 }: TilesInput): Tile[] {
   return (call?.participants ?? []).map((participant) => {
     const isSelf = participant.user.id === selfId;
     if (isSelf)
-      return { userId: selfId, isSelf, view: sendingVideo ? "video" : "avatar" };
+      return {
+        userId: selfId,
+        isSelf,
+        view: sendingVideo ? "video" : "avatar",
+        screen: sendingVideo && sharingScreen,
+      };
     // Чужая плитка показывает картинку, только когда СОШЛИСЬ три условия:
     // сервер отдал ему место под видео, к нам доехал поток, и сам он не
     // сказал, что сейчас не снимает. Каждое закрывает свой случай:
@@ -134,7 +173,14 @@ export function videoTiles({
       !remoteVideoOff.has(participant.user.id)
         ? "video"
         : "avatar";
-    return { userId: participant.user.id, isSelf, view };
+    // Признак экрана — с сервера, как и место под видео: по потоку экран
+    // от камеры не отличить.
+    return {
+      userId: participant.user.id,
+      isSelf,
+      view,
+      screen: Boolean(participant.screen),
+    };
   });
 }
 
