@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { normalizeUrl } from "@/lib/normalize-url";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import type {
   MotivationAudienceTrack,
@@ -143,7 +144,7 @@ export function ManualPostForm({
         author: form.author.trim(),
         work: form.work.trim() || undefined,
         locator: form.locator.trim() || undefined,
-        sourceUrl: form.sourceUrl.trim() || undefined,
+        sourceUrl: normalizeUrl(form.sourceUrl) || undefined,
         contextExcerpt: form.contextExcerpt.trim() || undefined,
         contentDate: form.contentDate || undefined,
         category: category || undefined,
@@ -260,10 +261,19 @@ export function ManualPostForm({
                 <label className={`${labelClass} sm:col-span-2`}>
                   <span>Ссылка на источник</span>
                   <input
-                    type="url"
+                    // Не `type="url"`: браузер не пускал «example.com» без схемы,
+                    // а https:// дописывается сам (VED-189).
+                    type="text"
+                    inputMode="url"
                     aria-label="Ссылка на источник"
                     value={form.sourceUrl}
                     onChange={update("sourceUrl")}
+                    onBlur={() =>
+                      setForm((current) => ({
+                        ...current,
+                        sourceUrl: normalizeUrl(current.sourceUrl),
+                      }))
+                    }
                     placeholder="https://..."
                     className={`mt-2 ${fieldClass}`}
                   />

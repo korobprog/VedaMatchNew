@@ -316,13 +316,30 @@ function normalizeUrl(value: unknown): string | null {
       `Слишком длинная ссылка: максимум ${MAX_URL_LENGTH} символов`,
     );
   }
+  // «github.com/you» без схемы — тоже адрес: https:// дописываем сами
+  // (VED-189). Но с дописанной схемой любое слово стало бы «хостом», поэтому
+  // такой адрес без точки в имени сайта не принимаем.
+  const withScheme = withSiteScheme(raw);
   try {
-    const url = new URL(raw);
+    const url = new URL(withScheme);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       throw new Error('unsupported protocol');
+    }
+    if (withScheme !== raw && !url.hostname.includes('.')) {
+      throw new Error('not a site');
     }
   } catch {
     throw new BadRequestException('Некорректная ссылка на портфолио');
   }
-  return raw;
+  return withScheme;
+}
+
+/**
+ * Схема к адресу, набранному без неё. Схему (`https:`, `mailto:`,
+ * `javascript:`) не трогаем — чужую отвергнет проверка протокола; порт
+ * («example.com:8080») схемой не считаем.
+ */
+function withSiteScheme(value: string): string {
+  if (value.startsWith('//')) return `https:${value}`;
+  return /^[a-z][a-z\d+.-]*:(?!\d)/i.test(value) ? value : `https://${value}`;
 }

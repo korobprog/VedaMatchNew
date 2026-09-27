@@ -4,6 +4,7 @@ import type {
   LibraryLocale,
 } from "@vedamatch/shared";
 import { lineageFromSelect } from "@/components/lineage-picker";
+import { normalizeUrl } from "@/lib/normalize-url";
 import { t, type LibraryTextKey } from "./i18n";
 
 /**
@@ -223,7 +224,10 @@ export function locatorForType(
  */
 function locatorError(draft: LibraryEntryDraft): LibraryTextKey | null {
   if (draft.locator === "url") {
-    const url = draft.url.trim();
+    // «sampradaya.ru» без https:// — тоже адрес: схему дописываем сами
+    // (VED-189), как и сервер (VED-90). Слову без точки normalizeUrl схему
+    // не дописывает, и оно отсеивается здесь же.
+    const url = normalizeUrl(draft.url);
     if (url.length > MAX_URL_LENGTH) return "add.urlTooLong";
     if (!URL_PATTERN.test(url)) return "add.unsupportedUrl";
     return null;
@@ -297,7 +301,7 @@ export function buildCreateEntryBody(
   return {
     // Уезжает только выбранное: иначе поле, заполненное до переключения,
     // молча попало бы в запись вместе с тем, что человек выбрал в итоге.
-    url: draft.locator === "url" ? draft.url.trim() : null,
+    url: draft.locator === "url" ? normalizeUrl(draft.url) : null,
     // У катхи источник — необязательная подпись к тексту, поэтому пустой
     // уезжает как `null`, а не как пустая строка.
     source: draft.locator === "url" ? null : draft.source.trim() || null,

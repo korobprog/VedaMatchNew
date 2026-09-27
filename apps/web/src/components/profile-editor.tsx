@@ -24,6 +24,7 @@ import { Button, buttonClassName } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, fieldClassName } from "@/components/ui/input";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 
@@ -110,7 +111,10 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
           birthDate: birthDate || null,
           gender: gender || null,
           homeLocation,
-          socialLinks,
+          // Личный сайт можно набрать без https:// — дописываем сами (VED-189).
+          socialLinks: socialLinks.website
+            ? { ...socialLinks, website: normalizeUrl(socialLinks.website) }
+            : socialLinks,
           messengers,
           ...(asksLineage ? { lineage: lineage || null } : {}),
         }),
@@ -387,6 +391,17 @@ export function ProfileEditor({ user }: { user: UserProfile }) {
               placeholder={placeholder}
               value={socialLinks[key] ?? ""}
               onChange={(value) => setSocialLinks({ ...socialLinks, [key]: value })}
+              inputMode={key === "website" ? "url" : undefined}
+              onBlur={
+                key === "website"
+                  ? () =>
+                      setSocialLinks((current) =>
+                        current.website
+                          ? { ...current, website: normalizeUrl(current.website) }
+                          : current,
+                      )
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -429,22 +444,27 @@ function TextField({
   label,
   placeholder,
   type = "text",
+  inputMode,
   value,
   onChange,
+  onBlur,
 }: {
   label: string;
   placeholder: string;
   type?: "text" | "tel";
+  inputMode?: "url";
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
 }) {
   return (
     <Input
       label={label}
       type={type}
-      inputMode={type === "tel" ? "tel" : undefined}
+      inputMode={type === "tel" ? "tel" : inputMode}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       className="py-3"
     />

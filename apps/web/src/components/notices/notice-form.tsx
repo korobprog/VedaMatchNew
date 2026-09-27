@@ -32,6 +32,7 @@ import {
 } from "./notice-labels";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 
@@ -152,7 +153,7 @@ export function NoticeForm() {
         timeZone: startsAt ? timeZone : null,
         venueName: venueName || null,
         isOnline,
-        onlineUrl: onlineUrl || null,
+        onlineUrl: normalizeUrl(onlineUrl) || null,
         repeat: kind === "event" ? repeat : "none",
         repeatUntil:
           kind === "event" && repeat !== "none" && repeatUntil
@@ -415,6 +416,9 @@ export function NoticeForm() {
           <input
             value={onlineUrl}
             onChange={(event) => setOnlineUrl(event.target.value)}
+            // https:// дописывается сам, набирать его не нужно (VED-189).
+            onBlur={() => setOnlineUrl((current) => normalizeUrl(current))}
+            inputMode="url"
             placeholder="https://…"
             className="mt-2 w-full rounded-xl border border-glass-brd bg-transparent px-3 py-2 text-sm text-text-0 placeholder:text-text-2"
           />

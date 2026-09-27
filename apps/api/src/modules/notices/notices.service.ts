@@ -78,6 +78,7 @@ import {
   NOTICE_VALIDATION_MESSAGES,
   parseDate,
   validateNotice,
+  withSiteScheme,
 } from './notice-validate';
 
 /**
@@ -450,6 +451,7 @@ export class NoticesService {
   // ===== Создание и правка =====
 
   async create(userId: string, body: CreateNoticeRequest): Promise<NoticeDto> {
+    body = { ...body, onlineUrl: withSiteScheme(body.onlineUrl) };
     this.assertValid(body, true);
     const rubric = await this.requireRubric(body.rubricSlug);
     await this.assertCommunityRight(userId, body.communityId ?? null);
@@ -531,6 +533,8 @@ export class NoticesService {
     id: string,
     body: UpdateNoticeRequest,
   ): Promise<NoticeDto> {
+    if (body.onlineUrl !== undefined)
+      body = { ...body, onlineUrl: withSiteScheme(body.onlineUrl) };
     this.assertValid(body, false);
     const notice = await this.requireOwn(id, userId, isAdmin);
     const rubric = body.rubricSlug

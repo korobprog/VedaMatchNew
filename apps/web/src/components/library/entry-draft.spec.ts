@@ -47,8 +47,24 @@ describe("validateEntryDraft", () => {
     expect(validateEntryDraft(draft())).toBeNull();
   });
 
-  it("требует абсолютный адрес", () => {
-    expect(validateEntryDraft(draft({ url: "example.com" }))).toBe(
+  it("пропускает адрес без https:// и дописывает схему сам (VED-189)", () => {
+    expect(validateEntryDraft(draft({ url: "example.com/kirtan" }))).toBeNull();
+    expect(buildCreateEntryBody(draft({ url: " example.com/kirtan " })).url).toBe(
+      "https://example.com/kirtan",
+    );
+  });
+
+  it("слово без точки адресом не считает, даже с дописанной схемой", () => {
+    expect(validateEntryDraft(draft({ url: "битая" }))).toBe(
+      "add.unsupportedUrl",
+    );
+    expect(validateEntryDraft(draft({ url: "localhost:3000" }))).toBe(
+      "add.unsupportedUrl",
+    );
+  });
+
+  it("не принимает чужие схемы", () => {
+    expect(validateEntryDraft(draft({ url: "javascript:alert(1)" }))).toBe(
       "add.unsupportedUrl",
     );
   });
