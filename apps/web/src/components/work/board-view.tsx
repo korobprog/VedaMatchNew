@@ -104,6 +104,7 @@ import {
   uploadInTurn,
   uploadProblemMessage,
 } from "./attach-files";
+import { shrinkImageForUpload } from "./attach-image-canvas";
 import { taskFromDraft } from "./task-title";
 import {
   TaskComposer,
@@ -592,8 +593,11 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         priority: draft.priority,
       });
       if (files.length > 0) {
-        const result = await uploadInTurn(files, (file) =>
-          attachWorkFile(task.id, file),
+        const result = await uploadInTurn(
+          files,
+          (file) => attachWorkFile(task.id, file),
+          undefined,
+          shrinkImageForUpload,
         );
         const problem = uploadProblemMessage(result);
         setError(problem ? `${task.key}: ${problem}` : null);

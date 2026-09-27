@@ -40,6 +40,7 @@ import {
   uploadInTurn,
   uploadProblemMessage,
 } from "./attach-files";
+import { shrinkImageForUpload } from "./attach-image-canvas";
 import { isLongChecklistText } from "./checklist-text";
 import {
   chooseSection,
@@ -330,6 +331,7 @@ export function WorkTaskDialog({
           files,
           (file) => attachWorkFile(taskId, file),
           (done, total) => setUploading({ done, total }),
+          shrinkImageForUpload,
         );
         const message = uploadProblemMessage(result);
         if (!message) return result.last;

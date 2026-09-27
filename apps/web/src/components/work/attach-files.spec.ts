@@ -10,6 +10,64 @@ function png(name: string) {
 }
 
 describe("uploadInTurn", () => {
+  it("отправляет подготовленный файл, а не исходный (VED-582)", async () => {
+    const sent: string[] = [];
+    await uploadInTurn(
+      [png("a.png"), png("b.png")],
+      async (file) => {
+        sent.push(file.name);
+      },
+      undefined,
+      async (file) => new File(["y"], file.name.replace(".png", ".webp")),
+    );
+    expect(sent).toEqual(["a.webp", "b.webp"]);
+  });
+
+  it("готовит следующий файл, пока уходит текущий, и держит порядок", async () => {
+    const events: string[] = [];
+    let release: () => void = () => {};
+    const firstUpload = new Promise<void>((resolve) => (release = resolve));
+    const done = uploadInTurn(
+      [png("1.png"), png("2.png"), png("3.png")],
+      async (file) => {
+        events.push(`upload ${file.name}`);
+        if (file.name === "1.png") await firstUpload;
+      },
+      undefined,
+      async (file) => {
+        events.push(`prepare ${file.name}`);
+        return file;
+      },
+    );
+    await vi.waitFor(() => expect(events).toContain("prepare 2.png"));
+    // Второй файл готов, но не ушёл: отправка по одному.
+    expect(events).not.toContain("upload 2.png");
+    release();
+    await done;
+    expect(events.filter((e) => e.startsWith("upload"))).toEqual([
+      "upload 1.png",
+      "upload 2.png",
+      "upload 3.png",
+    ]);
+  });
+
+  it("сбой подготовки — уходит исходный файл", async () => {
+    const sent: string[] = [];
+    const result = await uploadInTurn(
+      [png("a.png")],
+      async (file) => {
+        sent.push(file.name);
+        return "ok";
+      },
+      undefined,
+      async () => {
+        throw new Error("canvas");
+      },
+    );
+    expect(sent).toEqual(["a.png"]);
+    expect(result.failed).toEqual([]);
+  });
+
   it("грузит файлы по одному и в порядке выбора", async () => {
     const order: string[] = [];
     let inFlight = 0;
