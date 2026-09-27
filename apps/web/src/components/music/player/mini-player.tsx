@@ -63,6 +63,15 @@ import {
   type PlayerView,
 } from "./player-view";
 import {
+  NO_POSITIONS,
+  PLAYER_POSITION_KEY,
+  parsePlayerPositions,
+  serializePlayerPositions,
+  type PlayerOffset,
+  type PlayerPositions,
+} from "./player-drag";
+import { usePlayerDrag } from "./use-player-drag";
+import {
   MUSIC_PLAYER_REVEAL_EVENT,
   MUSIC_PLAYER_STOW_EVENT,
 } from "./player-reveal";
@@ -137,6 +146,11 @@ export function MiniPlayer() {
   const toBubbleRef = useRef<HTMLButtonElement | null>(null);
   const focusAfterViewRef = useRef<"bubble" | "toBubble" | null>(null);
   const [lifted, setLifted] = useState(false);
+  /**
+   * Откреплённые полоса и пузырь (VED-454): сдвиг от их места, `null` — на
+   * месте. Помним на устройстве, как вид и подъём.
+   */
+  const [positions, setPositionsState] = useState<PlayerPositions>(NO_POSITIONS);
   /** Открытая вкладка панели «Плеер» (VED-388); `null` — панель закрыта. */
   const [panelTab, setPanelTab] = useState<PlayerPanelTab | null>(null);
   /** Кнопка, открывшая панель: туда вернётся фокус после закрытия. */
@@ -167,6 +181,9 @@ export function MiniPlayer() {
       if (parseLifted(window.localStorage.getItem(LIFTED_KEY))) {
         setLifted(true);
       }
+      setPositionsState(
+        parsePlayerPositions(window.localStorage.getItem(PLAYER_POSITION_KEY)),
+      );
     } catch {
       // Приватный режим и запрет хранилища — не повод не работать.
     }
@@ -184,6 +201,22 @@ export function MiniPlayer() {
       return value;
     });
   }, []);
+
+  const setPositions = useCallback(
+    (next: (was: PlayerPositions) => PlayerPositions) => {
+      setPositionsState((was) => {
+        const value = next(was);
+        try {
+          window.localStorage.setItem(PLAYER_POSITION_KEY, serializePlayerPositions(value));
+        } catch {
+          // см. выше
+        }
+        return value;
+      });
+    },
+    [],
+  );
+  const detached = view !== "bubble" && positions.bar !== null;
 
   const toggleCollapsed = () =>
     setView((was) => (was === "collapsed" ? "expanded" : "collapsed"));
@@ -245,6 +278,22 @@ export function MiniPlayer() {
     });
   };
 
+  /* Перетаскивание (VED-454) — до ранних возвратов, как и всё с хуками.
+     Полоса одна на свёрнутый и развёрнутый вид: отнесённая к шапке, она
+     остаётся там и после «Развернуть». */
+  const commitBar = useCallback(
+    (offset: PlayerOffset | null) => setPositions((was) => ({ ...was, bar: offset })),
+    [setPositions],
+  );
+  const commitBubble = useCallback(
+    (offset: PlayerOffset | null) => setPositions((was) => ({ ...was, bubble: offset })),
+    [setPositions],
+  );
+  /** «Вернуть вниз»: и полоса, и пузырь — на свои места. */
+  const resetPosition = useCallback(() => {
+    setPositions(() => NO_POSITIONS);
+    announce("Плеер возвращён к нижнему краю");
+  }, [setPositions, announce]);
   /* Перемотка удержанием — до всех ранних возвратов: порядок хуков не
      зависит от того, есть ли что играть. Обёртка вокруг `player.skip`
      нужна потому, что провайдер может быть ещё пуст, а хук объявляется
@@ -389,7 +438,7 @@ export function MiniPlayer() {
       const top = bar
         ? wrap.getBoundingClientRect().top + bar.offsetTop
         : window.innerHeight;
-      const space = reservedPlayerSpace(view, top, window.innerHeight);
+      const space = reservedPlayerSpace(view, top, window.innerHeight, detached);
       root.style.setProperty("--vm-player-measured", `${space}px`);
       wrap.dataset.measured = "true";
     };
@@ -404,7 +453,45 @@ export function MiniPlayer() {
       root.style.removeProperty("--vm-player-measured");
       delete wrap.dataset.measured;
     };
-  }, [view, lifted, hasTrack, onHome, radioOn, stowedNow]);
+  }, [view, lifted, detached, hasTrack, onHome, radioOn, stowedNow]);
+
+  // Ключ узла: полоса появляется не сразу (нет записи, главная, радио), и
+  // слушатели жеста надо вешать, когда она есть.
+  const barShown = hasTrack && !onHome && !radioOn && !stowedNow;
+  const barDrag = usePlayerDrag({
+    elementRef: barRef,
+    wrapRef,
+    offset: view === "bubble" ? null : positions.bar,
+    onCommit: commitBar,
+    onDoubleTap: detached ? resetPosition : undefined,
+    popovers: true,
+    nodeKey: `${barShown}-${view}-${enterSeq}-${lifted}`,
+  });
+  const bubbleDrag = usePlayerDrag({
+    elementRef: bubbleRef,
+    wrapRef,
+    offset: view === "bubble" ? positions.bubble : null,
+    onCommit: commitBubble,
+    axes: "both",
+    nodeKey: `${barShown}-${view}-${enterSeq}`,
+  });
+  const moveBar = (direction: "up" | "down") => {
+    const result = barDrag.nudge(direction);
+    if (!result) return;
+    setPositions((was) => ({ ...was, bar: result.offset }));
+    announce(
+      !result.moved
+        ? direction === "up"
+          ? "Плеер уже у верхнего края"
+          : "Плеер уже у нижнего края"
+        : result.offset === null
+          ? "Плеер у нижнего края"
+          : direction === "up"
+            ? "Плеер выше"
+            : "Плеер ниже",
+    );
+  };
+
 
   // Полосы нет ни у гостя, ни когда слушать нечего.
   if (!player?.current) return null;
@@ -466,8 +553,9 @@ export function MiniPlayer() {
      скруглением только сверху. Отступ от полосы жестов — внутри полосы
      (`env(safe-area-inset-bottom)`): фон уходит под неё, а кнопки — нет.
      Поднятая полоса (VED-194) висит над нижним рядом раздела и остаётся
-     плавающей карточкой с полями — прилипать ей не к чему. */
-  const docked = !lifted;
+     плавающей карточкой с полями — прилипать ей не к чему. Откреплённая
+     (VED-454) — тем более. */
+  const docked = !lifted && !detached;
   const dockBar = docked
     ? "max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0"
     : "";
@@ -495,6 +583,9 @@ export function MiniPlayer() {
       // Поднятая полоса (VED-194) стоит выше на `--vm-player-lift`, и отступ
       // страницы растёт вместе с ней — правило там же, в globals.css.
       data-lifted={lifted ? "true" : "false"}
+      // Откреплена и перенесена (VED-454): места внизу страницы не берёт,
+      // панели открывает туда, где есть место (`data-popovers`).
+      data-detached={detached ? "true" : "false"}
       // Строка вынесенных кнопок (VED-388) добавляет полосе высоты от `sm`
       // (на телефоне кнопки встают в ряд управления, VED-410) — отступ
       // страницы растёт вместе с ней, правило в globals.css.
@@ -515,9 +606,14 @@ export function MiniPlayer() {
           ref={bubbleRef}
           type="button"
           aria-label={`Развернуть плеер: ${current.title}${isPlaying ? ", играет" : ", на паузе"}`}
-          title="Развернуть плеер"
+          title="Развернуть плеер. Удержать — перетащить"
           onClick={fromBubble}
-          className="player-bubble pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] left-3 flex size-14 items-center justify-center overflow-hidden rounded-full"
+          {...bubbleDrag.handlers}
+          // Долгое нажатие переносит пузырь (VED-454), отпускание после
+          // переноса не разворачивает плеер — см. `usePlayerDrag`.
+          className={`player-bubble player-movable pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom)+6rem)] left-3 flex size-14 items-center justify-center overflow-hidden rounded-full ${
+            bubbleDrag.dragging ? "player-dragging" : ""
+          }`}
         >
           <span aria-hidden="true" className="absolute inset-1 overflow-hidden rounded-full opacity-70">
             <MusicCover url={current.coverUrl} seed={current.id} alt="" rounded="rounded-full" />
@@ -545,17 +641,22 @@ export function MiniPlayer() {
            (VED-368). Всё остальное — в развёрнутом виде и на странице записи.
            Смысл ровно один: «не мешай, но играй», поэтому здесь нет ни
            дорожки, ни перемотки кнопками. Зазоры ужаты, чтобы «назад» и
-           «вперёд» встали без потери названия. */
+           «вперёд» встали без потери названия.
+
+           Разворачивает нажатие на название (VED-454): на месте стрелки
+           теперь «в пузырь». Долгое нажатие на название или на свободное
+           место — перенос полосы. */
         <section
           ref={barRef}
           key={`collapsed-${enterSeq}`}
           aria-label="Плеер, свёрнут"
           onAnimationEnd={endEnter}
-          className={`player-bar pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-1 rounded-2xl px-2 min-[400px]:gap-1.5 min-[400px]:px-2.5 ${
+          {...barDrag.handlers}
+          className={`player-bar player-movable player-drag-zone pointer-events-auto mx-auto flex h-12 max-w-5xl items-center gap-1 rounded-2xl px-2 min-[400px]:gap-1.5 min-[400px]:px-2.5 ${
             docked
               ? "max-sm:h-[calc(3rem+env(safe-area-inset-bottom))] max-sm:pb-[env(safe-area-inset-bottom)]"
               : ""
-          } ${dockBar} ${enterClass}`}
+          } ${dockBar} ${enterClass} ${barDrag.dragging ? "player-dragging" : ""}`}
         >
           <Link
             href={`/music/tracks/${current.id}`}
@@ -574,11 +675,21 @@ export function MiniPlayer() {
             />
           </Link>
 
-          <MusicMarqueeText
-            key={current.id}
-            text={current.title}
-            className="ml-1 min-w-0 flex-1 text-[13px] font-semibold text-text-0"
-          />
+          <button
+            type="button"
+            data-player-drag=""
+            aria-label={`Развернуть плеер: ${current.title}`}
+            title="Развернуть плеер"
+            aria-expanded={false}
+            onClick={toggleCollapsed}
+            className="ml-1 flex h-10 min-w-0 flex-1 items-center rounded-lg text-left"
+          >
+            <MusicMarqueeText
+              key={current.id}
+              text={current.title}
+              className="min-w-0 flex-1 text-[13px] font-semibold text-text-0"
+            />
+          </button>
 
           <MusicPlayingBars
             playing={isPlaying}
@@ -606,16 +717,17 @@ export function MiniPlayer() {
             className={`${ctrl} h-10 w-9`}
           />
 
+          {/* «В пузырь» вместо стрелки «Развернуть» (VED-454):
+              разворачивает теперь нажатие на название. */}
           <button
+            ref={toBubbleRef}
             type="button"
-            aria-label="Развернуть плеер"
-            aria-expanded={false}
-            onClick={toggleCollapsed}
-            className={`${ctrl} h-10 w-8`}
+            aria-label="Свернуть плеер в плавающую кнопку"
+            title="Свернуть в плавающую кнопку"
+            onClick={toBubble}
+            className={`${ctrl} h-10 w-8 text-text-2`}
           >
-            <svg {...icon} className="size-4">
-              <path d="M18 15l-6-6-6 6" />
-            </svg>
+            <PictureInPicture2 aria-hidden className="size-4" />
           </button>
 
           <LiftButton
@@ -641,6 +753,9 @@ export function MiniPlayer() {
         key={`expanded-${enterSeq}`}
         aria-label="Плеер"
         onAnimationEnd={endEnter}
+        // Долгое нажатие на свободное место или на название — перенос
+        // полосы (VED-454).
+        {...barDrag.handlers}
         // На телефоне полоса в три строки (VED-410): название с кнопками
         // записи и полосы; управление с вынесенными кнопками; дорожка. Все
         // кнопки встают в эти три строки, и вынесенные в настройках кнопки
@@ -658,9 +773,9 @@ export function MiniPlayer() {
         //
         // С вынесенными кнопками (VED-388) полоса `sm`–`lg` переносит
         // строку: кнопки встают второй строкой, а не сжимают середину.
-        className={`player-bar pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-0 gap-y-1 rounded-2xl px-3 py-2 sm:gap-3 sm:px-[18px] lg:gap-5 ${
+        className={`player-bar player-movable player-drag-zone pointer-events-auto relative mx-auto flex max-w-5xl flex-wrap items-center gap-x-0 gap-y-1 rounded-2xl px-3 py-2 sm:gap-3 sm:px-[18px] lg:gap-5 ${
           docked ? "max-sm:pb-[calc(0.5rem+env(safe-area-inset-bottom))]" : ""
-        } ${dockBar} ${enterClass} ${
+        } ${dockBar} ${enterClass} ${barDrag.dragging ? "player-dragging" : ""} ${
           pinned === "all"
             ? "sm:gap-y-2 sm:py-2"
             : pinned === "narrow"
@@ -675,6 +790,7 @@ export function MiniPlayer() {
         <Link
           href={`/music/tracks/${current.id}`}
           aria-label={`Открыть запись: ${current.title}`}
+          data-player-drag=""
           className="order-1 flex min-w-0 flex-1 items-center gap-2 rounded-[10px] min-[400px]:gap-3 sm:order-none sm:w-40 sm:flex-none lg:w-48"
         >
           <span className="h-10 w-10 shrink-0 overflow-hidden rounded-[10px] max-[399px]:hidden sm:block">
@@ -927,7 +1043,10 @@ export function MiniPlayer() {
                   правого края прилипала к краю экрана. С `sm` опоры нет
                   (`contents`), панель якорится от обёртки кнопки. */}
               {queueOpen && (
-                <div className="pointer-events-none absolute inset-x-3 bottom-full sm:contents">
+                <div
+                  data-player-popover-anchor=""
+                  className="pointer-events-none absolute inset-x-3 bottom-full sm:contents"
+                >
                   <MusicQueuePanel onClose={() => setQueueOpen(false)} />
                 </div>
               )}
@@ -1166,6 +1285,11 @@ export function MiniPlayer() {
             onClose={closePanel}
             onAnnounce={announce}
             bookmarks={bookmarks}
+            placement={{
+              detached: detached || positions.bubble !== null,
+              onMove: moveBar,
+              onReset: resetPosition,
+            }}
           />
         )}
       </section>

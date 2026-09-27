@@ -80,6 +80,7 @@ export function MusicLyricsPanel({
       // 26rem (текст бхаджана длиннее названия записи, у очереди уже).
       // Прокручивается текст внутри, а не всё окно (VED-478): рядом с ним —
       // свой бегунок для пальца (`ScrollScrubber`), кнопки сверху на месте.
+      data-player-popover=""
       className="player-bar pointer-events-auto absolute inset-x-3 bottom-full mb-2 flex max-h-[60vh] flex-col rounded-2xl sm:inset-x-auto sm:right-3 sm:w-[min(26rem,calc(100vw-1.5rem))]"
     >
       <div className="flex shrink-0 items-center justify-end gap-1 px-4 pt-4">

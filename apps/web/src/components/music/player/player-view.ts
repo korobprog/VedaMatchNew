@@ -30,13 +30,16 @@ export function serializePlayerView(view: PlayerView): string {
  * вынесенных кнопок и подъёма, и каждое число в globals.css рано или поздно
  * расходилось с полосой — последние ~18 точек страницы уходили под неё
  * (замечание к PR #500). Пузырь места не занимает: он плавает поверх.
+ * Откреплённая полоса (VED-454) — тоже: она висит там, куда её отнесли, и
+ * поле внизу страницы под ней было бы пустой дырой.
  */
 export function reservedPlayerSpace(
   view: PlayerView,
   barTop: number,
   viewportHeight: number,
+  detached = false,
 ): number {
-  if (view === "bubble") return 0;
+  if (view === "bubble" || detached) return 0;
   if (!Number.isFinite(barTop) || !Number.isFinite(viewportHeight)) return 0;
   return Math.max(0, Math.ceil(viewportHeight - barTop));
 }

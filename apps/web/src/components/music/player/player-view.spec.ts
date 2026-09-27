@@ -46,6 +46,11 @@ describe("reservedPlayerSpace", () => {
     expect(reservedPlayerSpace("bubble", 700, 780)).toBe(0);
   });
 
+  it("откреплённая полоса (VED-454) места не занимает ни в каком виде", () => {
+    expect(reservedPlayerSpace("expanded", 618, 780, true)).toBe(0);
+    expect(reservedPlayerSpace("collapsed", 731, 780, true)).toBe(0);
+  });
+
   it("мусор в замере не даёт отрицательного или бесконечного отступа", () => {
     expect(reservedPlayerSpace("expanded", 900, 780)).toBe(0);
     expect(reservedPlayerSpace("expanded", Number.NaN, 780)).toBe(0);

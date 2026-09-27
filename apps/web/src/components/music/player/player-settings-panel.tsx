@@ -9,7 +9,7 @@ import type {
 import Link from "next/link";
 import type { MusicListenDto } from "@vedamatch/shared";
 import { MUSIC_BOOKMARK_LABEL_MAX, MUSIC_SEEK_STEPS } from "@vedamatch/shared";
-import { Pencil, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, X } from "lucide-react";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { formatListenedAt } from "@/lib/music-listened-at";
 import { getListenHistory } from "@/lib/music-playback-api";
@@ -41,6 +41,17 @@ import { SeekStepGlyph } from "./seek-step-glyph";
 
 export type PlayerPanelTab = "settings" | "bookmarks" | "history";
 
+/**
+ * Положение полосы (VED-454): кнопочная замена перетаскивания долгим
+ * нажатием — жест не всем доступен (WCAG 2.5.7).
+ */
+export type PlayerPlacement = {
+  /** Полоса или пузырь сдвинуты со своего места. */
+  detached: boolean;
+  onMove: (direction: "up" | "down") => void;
+  onReset: () => void;
+};
+
 const TABS: { id: PlayerPanelTab; label: string }[] = [
   { id: "settings", label: "Настройки" },
   { id: "bookmarks", label: "Метки" },
@@ -56,12 +67,14 @@ export function MusicPlayerSettingsPanel({
   onClose,
   onAnnounce,
   bookmarks,
+  placement,
 }: {
   tab: PlayerPanelTab;
   onTab: (tab: PlayerPanelTab) => void;
   onClose: () => void;
   onAnnounce: (text: string) => void;
   bookmarks: TrackBookmarks;
+  placement?: PlayerPlacement;
 }) {
   const player = useMusicPlayer();
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -130,6 +143,9 @@ export function MusicPlayerSettingsPanel({
       aria-modal="true"
       aria-labelledby={titleId}
       onKeyDown={trapTab}
+      // Откреплённая у шапки полоса (VED-454) открывает панель вниз —
+      // правило `[data-popovers]` в globals.css.
+      data-player-popover=""
       // Якорь — вся полоса (`relative` у секции), как у панели текста: от
       // узкой кнопки в середине ряда панель уезжала бы за левый край.
       //
@@ -201,6 +217,7 @@ export function MusicPlayerSettingsPanel({
               requestAnimationFrame(() => tabRefs.current[next]?.focus());
             }}
             bookmarks={bookmarks}
+            placement={placement}
           />
         )}
         {tab === "bookmarks" && (
@@ -218,10 +235,12 @@ function SettingsTab({
   onAnnounce,
   onOpenTab,
   bookmarks,
+  placement,
 }: {
   onAnnounce: (text: string) => void;
   onOpenTab: (tab: PlayerPanelTab) => void;
   bookmarks: TrackBookmarks;
+  placement?: PlayerPlacement;
 }) {
   const player = useMusicPlayer();
   const [error, setError] = useState<string | null>(null);
@@ -322,6 +341,33 @@ function SettingsTab({
           onChange={(value) => save({ showHistory: value })}
         />
       </section>
+
+      {placement && (
+        <section aria-labelledby="player-place-title" className="flex flex-col gap-2.5">
+          <h3 id="player-place-title" className="text-[13px] font-semibold text-text-0">
+            Положение
+          </h3>
+          <div className="flex gap-2">
+            <PanelAction label="Поднять плеер выше" onClick={() => placement.onMove("up")}>
+              <ArrowUp aria-hidden className="size-4" />
+              <span aria-hidden="true">Выше</span>
+            </PanelAction>
+            <PanelAction label="Опустить плеер ниже" onClick={() => placement.onMove("down")}>
+              <ArrowDown aria-hidden className="size-4" />
+              <span aria-hidden="true">Ниже</span>
+            </PanelAction>
+          </div>
+          {placement.detached && (
+            <PanelAction label="Вернуть плеер к нижнему краю" onClick={placement.onReset}>
+              <span aria-hidden="true">Вернуть вниз</span>
+            </PanelAction>
+          )}
+          <p className="text-[11px] text-text-2">
+            Или удерживайте полосу за свободное место и перетащите. Двойное нажатие —
+            обратно вниз. Пузырь переносится так же.
+          </p>
+        </section>
+      )}
 
       {error && (
         <p role="alert" className="text-[12px] text-text-0">

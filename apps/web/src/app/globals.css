@@ -1313,6 +1313,66 @@ body:has([data-music-player][data-measured="true"]) {
   box-shadow: 0 4px 18px var(--vm-player-shadow);
 }
 
+/* Перенос плеера долгим нажатием (VED-454).
+ *
+ * Сдвиг рисуется свойством `translate` (его пишет `use-player-drag.ts`), и
+ * возврат на место или зажим после поворота экрана — плавный. Пока полосу
+ * тащат, переход снят: она обязана идти за пальцем без запаздывания.
+ * Схваченная полоса обводится `--vm-violet` (6.1:1 и 8.1:1 на `--vm-bg-0`,
+ * как рамка пузыря) — видно, что жест сработал и можно вести.
+ *
+ * Выделение текста и системное меню долгого нажатия спорили бы с жестом,
+ * поэтому на полосе они сняты; в панелях полосы (очередь, текст,
+ * настройки) текст выделяется как обычно.
+ */
+.player-movable {
+  transition: translate 180ms ease-out;
+}
+
+.player-movable.player-dragging {
+  transition: none;
+  cursor: grabbing;
+  box-shadow: 0 8px 32px var(--vm-player-shadow), 0 0 0 2px var(--vm-violet);
+}
+
+.player-drag-zone {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.player-drag-zone [data-player-popover] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-movable {
+    transition: none;
+  }
+}
+
+/* Откреплённая полоса открывает панели туда, где больше места: у шапки —
+ * вниз. Высоту панелям задаёт место до края (`--vm-player-room` пишет
+ * `use-player-drag.ts`), а не `--vm-player-space`: откреплённая полоса
+ * места внизу страницы не берёт, и та переменная там 0. */
+[data-music-player][data-popovers="below"] [data-player-popover-anchor] {
+  top: 100%;
+  bottom: auto;
+}
+
+[data-music-player][data-popovers="below"] [data-player-popover] {
+  top: 100%;
+  bottom: auto;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+}
+
+[data-music-player][data-detached="true"] [data-player-popover] {
+  max-height: min(34rem, calc(var(--vm-player-room, 60vh) - 0.5rem));
+}
+
 /* Выкат полосы снизу: из пузыря и по вызову плитки «Плеер» (VED-416). */
 @keyframes vm-player-in {
   from { transform: translateY(100%); opacity: 0; }
