@@ -465,12 +465,19 @@ export function LibraryTreeOrganizer({
           здесь ровно по 48 пикселей, по ним считается жест перетаскивания, и
           раскрывшаяся посреди списка форма сбила бы прицел у соседних. Там
           же, где живёт шторка «Переместить в…». */}
+      {/* Фокус сразу в поле (VED-551): на телефоне дерево длиннее экрана, и
+          форма под ним открывалась за его краем — карандаш казался
+          сломанным. Фокус прокручивает к полю сам. `key` — по рубрике:
+          поля формы заводятся от пропа один раз, и без него переход к
+          карандашу соседней строки оставлял в поле прежнее название. */}
       {renamingRow && (
         <div className="mt-2 flex justify-center">
           <CategoryEditForm
+            key={renamingRow.id}
             locale={locale}
             category={renamingRow.node}
             open
+            autoFocus
             onClose={() => setRenaming(null)}
             onSaved={(updated) => {
               setRenaming(null);

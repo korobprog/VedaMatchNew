@@ -416,6 +416,37 @@ describe("LibraryTreeOrganizer — переименование", () => {
     ).toBeInTheDocument();
   });
 
+  /* VED-551: на телефоне форма под длинным деревом открывалась за краем
+     экрана — фокус в поле прокручивает к ней. */
+  it("карандаш ставит фокус в поле названия", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(
+      screen.getByRole("button", { name: "Редактировать категорию: Музыка" }),
+    );
+
+    expect(screen.getByLabelText("Название по-русски")).toHaveFocus();
+  });
+
+  it("карандаш соседней строки открывает её название, а не прежнее", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(
+      screen.getByRole("button", { name: "Редактировать категорию: Музыка" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Редактировать категорию: Философия",
+      }),
+    );
+
+    expect(screen.getByLabelText("Название по-русски")).toHaveValue(
+      "Философия",
+    );
+  });
+
   it("переименованная строка обновляется, не дожидаясь перезагрузки", async () => {
     const user = userEvent.setup();
     const [, music] = tree();
