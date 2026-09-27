@@ -141,6 +141,21 @@ describe("QuickPanel", () => {
     expect(calendar).toHaveAttribute("rel", "noopener noreferrer");
   });
 
+  /* VED-562: «Телеграм» — канал портала, тоже чужой сайт и новой вкладкой;
+     на плитке — логотип мессенджера, а не подпись одна. */
+  it("«Телеграм» — ссылка на канал в новой вкладке со значком", async () => {
+    await openPanel();
+
+    const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
+    const telegram = within(panel).getByRole("link", { name: /Телеграм/ });
+    expect(telegram).toHaveAttribute("href", "https://t.me/vedamatch");
+    expect(telegram).toHaveAttribute("target", "_blank");
+    expect(telegram).toHaveAttribute("rel", "noopener noreferrer");
+    const icon = telegram.querySelector('svg[data-icon="telegram"]');
+    expect(icon).not.toBeNull();
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("галочка кнопки календаря на Блог-ленте — в настройке панели", async () => {
     const user = await openPanel();
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
@@ -213,13 +228,14 @@ describe("QuickPanel", () => {
       "app",
       "radio",
       "blog",
+      "telegram",
     ]);
   });
 
   /* VED-502, VED-534, VED-506: «Радио» включает радио на месте, «Блог-лента»
      ведёт в ленту постов. */
   it("«Радио» — кнопка на месте, «Блог-лента» — ссылка на ленту", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":8,"ids":["radio","blog"]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":9,"ids":["radio","blog"]}');
     await openPanel({ admin: true });
 
     expect(screen.getByRole("button", { name: "Радио" })).toHaveAttribute(
@@ -233,7 +249,7 @@ describe("QuickPanel", () => {
   });
 
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":8,"ids":[]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":9,"ids":[]}');
     // Опустошить панель может только админ: у остальных три кнопки
     // закреплены (VED-326), и пустой она не бывает.
     await openPanel({ admin: true });
@@ -658,7 +674,7 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
   it("в настройке панели «Меню» нет, а старая запись его теряет", async () => {
     window.localStorage.setItem(
       STORAGE_KEY,
-      '{"v":8,"ids":["search","donate","invite","menu","info"]}',
+      '{"v":9,"ids":["search","donate","invite","menu","info"]}',
     );
     const user = renderPanel({ onOpenMenu: vi.fn() });
     await user.click(screen.getByRole("button", { name: "Горячие кнопки" }));

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BUILTIN_QUICK_ACTIONS,
   DEFAULT_QUICK_ACTIONS,
+  isExternalQuickHref,
   PINNED_QUICK_ACTIONS,
   HEADER_ONLY_QUICK_ACTIONS,
   panelQuickActionCatalog,
@@ -33,7 +34,7 @@ describe("parseQuickConfig", () => {
   });
 
   it("возвращает сохранённый порядок как есть", () => {
-    expect(parseQuickConfig('{"v":8,"ids":["donate","aphorism"]}')).toEqual({
+    expect(parseQuickConfig('{"v":9,"ids":["donate","aphorism"]}')).toEqual({
       ids: ["donate", "aphorism"],
       custom: [],
     });
@@ -48,16 +49,16 @@ describe("parseQuickConfig", () => {
   it("молча выбрасывает кнопки, которых больше нет", () => {
     // В хранилище лежит набор с прошлой версии портала.
     expect(
-      parseQuickConfig('{"v":8,"ids":["donate","transits","qr"]}').ids,
+      parseQuickConfig('{"v":9,"ids":["donate","transits","qr"]}').ids,
     ).toEqual(["donate"]);
   });
 
   it("пустой набор — это выбор: панель можно опустошить", () => {
-    expect(parseQuickConfig('{"v":8,"ids":[]}').ids).toEqual([]);
+    expect(parseQuickConfig('{"v":9,"ids":[]}').ids).toEqual([]);
   });
 
   it("убирает дубли: две одинаковые кнопки — сбой, а не выбор", () => {
-    expect(parseQuickConfig('{"v":8,"ids":["donate","donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":9,"ids":["donate","donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -65,7 +66,7 @@ describe("parseQuickConfig", () => {
   it("сервисную кнопку узнаёт по слагу, а не по каталогу с сервера", () => {
     // Каталог приезжает запросом, а набор разбирается сразу при открытии.
     expect(
-      parseQuickConfig('{"v":8,"ids":["service:work","service:выдумка"]}').ids,
+      parseQuickConfig('{"v":9,"ids":["service:work","service:выдумка"]}').ids,
     ).toEqual(["service:work"]);
   });
 
@@ -85,15 +86,26 @@ describe("parseQuickConfig", () => {
       "player",
       // VED-448: «Приложение» — позже.
       "app",
-      // VED-502, VED-506: «Радио» и «Блог-лента» — позже всех.
+      // VED-502, VED-506: «Радио» и «Блог-лента» — позже.
       "radio",
       "blog",
+      // VED-562: «Телеграм» — позже всех.
+      "telegram",
     ]);
   });
 
   it("запись второй версии дополняется: своих кнопок тогда не было", () => {
     expect(parseQuickConfig('{"v":2,"ids":["donate"]}')).toEqual({
-      ids: ["donate", "postcard", "history", "player", "app", "radio", "blog"],
+      ids: [
+        "donate",
+        "postcard",
+        "history",
+        "player",
+        "app",
+        "radio",
+        "blog",
+        "telegram",
+      ],
       custom: [],
     });
   });
@@ -103,14 +115,33 @@ describe("parseQuickConfig", () => {
      до этой версии было нельзя — кнопки не существовало. */
   it("запись третьей версии получает «Открытку», «Историю», «Плеер» и «Приложение» в конец", () => {
     expect(parseQuickConfig('{"v":3,"ids":["donate","aphorism"]}')).toEqual({
-      ids: ["donate", "aphorism", "postcard", "history", "player", "app", "radio", "blog"],
+      ids: [
+        "donate",
+        "aphorism",
+        "postcard",
+        "history",
+        "player",
+        "app",
+        "radio",
+        "blog",
+        "telegram",
+      ],
       custom: [],
     });
   });
 
   it("«Открытка» не задваивается, если человек её уже включил", () => {
     expect(parseQuickConfig('{"v":3,"ids":["postcard","donate"]}').ids).toEqual(
-      ["postcard", "donate", "history", "player", "app", "radio", "blog"],
+      [
+        "postcard",
+        "donate",
+        "history",
+        "player",
+        "app",
+        "radio",
+        "blog",
+        "telegram",
+      ],
     );
   });
 
@@ -123,7 +154,16 @@ describe("parseQuickConfig", () => {
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["donate", "custom:/work", "history", "player", "app", "radio", "blog"],
+      ids: [
+        "donate",
+        "custom:/work",
+        "history",
+        "player",
+        "app",
+        "radio",
+        "blog",
+        "telegram",
+      ],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
@@ -138,7 +178,17 @@ describe("parseQuickConfig", () => {
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["search", "menu", "custom:/work", "aphorism", "player", "app", "radio", "blog"],
+      ids: [
+        "search",
+        "menu",
+        "custom:/work",
+        "aphorism",
+        "player",
+        "app",
+        "radio",
+        "blog",
+        "telegram",
+      ],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
@@ -152,6 +202,7 @@ describe("parseQuickConfig", () => {
       "app",
       "radio",
       "blog",
+      "telegram",
     ]);
   });
 
@@ -163,11 +214,33 @@ describe("parseQuickConfig", () => {
       "donate",
       "radio",
       "blog",
+      "telegram",
     ]);
   });
 
-  it("выключенные в восьмой версии кнопки остаются выключенными", () => {
-    expect(parseQuickConfig('{"v":8,"ids":["donate"]}').ids).toEqual([
+  /* VED-562: «Добавь горячую кнопку Телеграм» — доезжает и до настроенных
+     панелей; выключенные в восьмой версии «Радио» и «Блог-лента» остаются
+     выключенными, свои кнопки целы. */
+  it("запись восьмой версии получает «Телеграм» в конец", () => {
+    const raw = JSON.stringify({
+      v: 8,
+      ids: ["donate", "custom:/work", "calendar"],
+      custom: [{ label: "Работа", href: "/work" }],
+    });
+    expect(parseQuickConfig(raw)).toEqual({
+      ids: ["donate", "custom:/work", "calendar", "telegram"],
+      custom: [{ label: "Работа", href: "/work" }],
+    });
+  });
+
+  it("«Телеграм» не задваивается, если он уже стоит в записи восьмой версии", () => {
+    expect(parseQuickConfig('{"v":8,"ids":["telegram","donate"]}').ids).toEqual(
+      ["telegram", "donate"],
+    );
+  });
+
+  it("выключенные в девятой версии кнопки остаются выключенными", () => {
+    expect(parseQuickConfig('{"v":9,"ids":["donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -182,7 +255,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка на чужой сайт в панель не попадает", () => {
     const raw = JSON.stringify({
-      v: 8,
+      v: 9,
       ids: ["custom:https://example.com"],
       custom: [{ label: "Не наше", href: "https://example.com" }],
     });
@@ -191,7 +264,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка без подписи — сбой хранилища, а не кнопка", () => {
     const raw = JSON.stringify({
-      v: 8,
+      v: 9,
       ids: ["custom:/work"],
       custom: [{ label: "  ", href: "/work" }],
     });
@@ -371,6 +444,15 @@ describe("каталог кнопок", () => {
     );
     expect(quickActionMeta("aphorism")?.href).toBe("/motivation?order=random");
   });
+
+  it("«Телеграм» ведёт в канал VedaMatch и стоит за «Календарём» (VED-562)", () => {
+    const meta = quickActionMeta("telegram");
+    expect(meta?.label).toBe("Телеграм");
+    expect(meta?.href).toBe("https://t.me/vedamatch");
+    expect(isExternalQuickHref(meta!.href!)).toBe(true);
+    const at = DEFAULT_QUICK_ACTIONS.indexOf("calendar");
+    expect(DEFAULT_QUICK_ACTIONS[at + 1]).toBe("telegram");
+  });
 });
 
 // VED-326, п. 6: три кнопки, которые человек не выключает.
@@ -439,7 +521,7 @@ describe("«Меню» живёт только в шапке", () => {
 
   it("из старой записи «Меню» уходит, остальное на месте", () => {
     const stored = parseQuickConfig(
-      '{"v":8,"ids":["search","donate","invite","menu","aphorism"]}',
+      '{"v":9,"ids":["search","donate","invite","menu","aphorism"]}',
     );
     expect(arrangeQuickActions(stored.ids, PINNED_QUICK_ACTIONS)).toEqual([
       "search",
