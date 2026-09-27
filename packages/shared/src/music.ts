@@ -209,6 +209,13 @@ export interface MusicTrackDto {
   lineage: LineageId | null;
   playCount: number;
   publishedAt: string | null;
+  /**
+   * Есть ли у записи текст — оригинал, перевод или транслитерация (VED-594).
+   * Сам текст в карточке списка не ездит (до 20 000 знаков на запись), а
+   * значок «Текст» в строке рисуется по этому признаку. Необязателен: в
+   * офлайн-копиях, сохранённых до него, поля нет — значка там просто нет.
+   */
+  hasLyrics?: boolean;
 }
 
 export interface MusicAlbumRefDto {

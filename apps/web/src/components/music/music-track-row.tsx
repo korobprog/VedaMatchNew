@@ -14,7 +14,8 @@ import { MusicFavoriteButton } from "./favorites-provider";
  * чтобы слушать подряд, и лишний переход на каждой записи ломал ровно это.
  * Карточка осталась — компактным значком справа.
  *
- * Справа — сердце, значок карточки и время (VED-531). Сердце вернулось:
+ * Справа — «Текст», если он есть (VED-594), сердце, значок карточки и время
+ * (VED-531). Сердце вернулось:
  * заказчик попросил отмечать прямо из списка. Время при этом осталось крайним
  * справа и не ужалось — по нему отличают короткий бхаджан от часовой
  * программы (VED-113); место под сердце отдано названию, а полное название
@@ -49,7 +50,11 @@ export function MusicTrackRow({
         // своего содержимого, длинное название вылезает за строку и наезжает
         // на значки справа, а титры не включаются — им кажется, что места
         // хватает.
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-2 pr-28 text-left transition-colors hover:bg-glass"
+        // Правый отступ — под ряд значков справа; значок «Текст» (VED-594)
+        // добавляет ему ещё одну кнопку, и название уступает ей место.
+        className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl py-2 pl-2 text-left transition-colors hover:bg-glass ${
+          track.hasLyrics ? "pr-36" : "pr-28"
+        }`}
       >
         {position !== undefined && (
           <span className="w-6 shrink-0 text-right font-mono text-xs text-text-2 in-data-current:text-violet">
@@ -93,6 +98,30 @@ export function MusicTrackRow({
           области нажатия по 32 точки заходят друг на друга на 6, сам значок
           остаётся в центре своей области. */}
       <span className="pointer-events-none absolute right-2 flex items-center">
+        {/* «Текст» (VED-594) — только у записей, где он есть: ведёт прямо к
+            тексту в карточке записи, минуя её верх. */}
+        {track.hasLyrics && (
+          <Link
+            href={`/music/tracks/${track.id}#music-lyrics`}
+            aria-label={`Текст: ${track.title}`}
+            title="Текст"
+            className="pointer-events-auto -mr-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:text-text-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M7 3h8l4 4v14H7z" />
+              <path d="M10 11h6M10 15h4" />
+            </svg>
+          </Link>
+        )}
         <MusicFavoriteButton
           trackId={track.id}
           title={track.title}
