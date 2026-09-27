@@ -270,7 +270,9 @@ export function BlogPostCard({
         <span className={ACTION_LABEL}>Избранное</span>
       </button>
     ),
-    repost: (
+    // Репост — только админам (VED-544), как и «Закрепить»: у участников
+    // ряд короче на две кнопки.
+    repost: post.canModerate ? (
       <button
         key="repost"
         type="button"
@@ -284,7 +286,7 @@ export function BlogPostCard({
           <span className="text-text-2">{post.repostCount}</span>
         )}
       </button>
-    ),
+    ) : null,
     // Правка стоит среди тех же кнопок, где «Удалить» (VED-321): у репоста
     // её нет вовсе — правится оригинал его автором, и сервер отвечает тем же
     // отказом, даже если кнопку подделать.
