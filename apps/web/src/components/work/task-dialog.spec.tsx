@@ -137,6 +137,36 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     });
   });
 
+  it("✖ стирает заголовок, оставляет описание и ставит курсор в поле (VED-488)", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+    const description = screen.getByPlaceholderText(
+      /Что именно нужно сделать/,
+    );
+    await user.type(description, " и новое");
+
+    await user.click(
+      screen.getByRole("button", { name: "Очистить заголовок" }),
+    );
+
+    const title = screen.getByLabelText("Название задачи");
+    expect(title).toHaveValue("");
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(description).toHaveValue("Старое описание и новое");
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Очистить заголовок" }),
+      ).toBeNull(),
+    );
+
+    await user.type(title, "Свой заголовок{Enter}");
+    expect(updateWorkTask).toHaveBeenCalledWith("t1", {
+      title: "Свой заголовок",
+      description: "Старое описание и новое",
+    });
+  });
+
   it("puts the saved text back on «Отменить правки»", async () => {
     const user = userEvent.setup();
     open();

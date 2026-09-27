@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -55,6 +55,19 @@ describe("пульт озвучки (VED-569)", () => {
     const region = screen.getByRole("region", { name: "Озвучка" });
     expect(region).toHaveTextContent("Блог-лента");
     expect(region).toHaveTextContent("Принятие санньясы");
+  });
+
+  it("пульт — две кнопки, название только для скринридера", () => {
+    render(<SpeechDock />);
+    act(() => fakeDictor().report("speaking"));
+    const region = screen.getByRole("region", { name: "Озвучка" });
+    // Заказчик обвёл на скриншоте только «Паузу» и «Стоп»: плашка с текстом
+    // закрывала заголовок страницы.
+    expect(within(region).getAllByRole("button")).toHaveLength(2);
+    expect(within(region).getByText(/Принятие санньясы/)).toHaveClass(
+      "sr-only",
+    );
+    expect(region).toHaveAttribute("title", "Блог-лента: Принятие санньясы");
   });
 
   it("якорь чужого чтения пульт не прячет", () => {

@@ -116,6 +116,8 @@ export function WorkTaskDialog({
   const latestText = useRef({ title: "", description: "" });
   /** Смена ключа заново заводит поля текста — после загрузки, сохранения и отмены. */
   const [textKey, setTextKey] = useState(0);
+  /** Смена ключа заводит заново только заголовок — после ✖ (VED-488). */
+  const [titleKey, setTitleKey] = useState(0);
   /** Пункт чек-листа, который правят на месте (VED-524). */
   const [editingItem, setEditingItem] = useState<string | null>(null);
   /** Какие длинные пункты чек-листа раскрыты кнопкой «Далее» (VED-375). */
@@ -170,6 +172,20 @@ export function WorkTaskDialog({
   useEffect(() => {
     if (titleRef.current) growToText(titleRef.current);
   }, [textKey]);
+
+  // ✖ стёр заголовок — поле заведено заново пустым, курсор сразу в нём:
+  // человек нажал крестик, чтобы писать свой.
+  useEffect(() => {
+    if (titleKey === 0 || !titleRef.current) return;
+    growToText(titleRef.current);
+    titleRef.current.focus();
+  }, [titleKey]);
+
+  /** ✖ в заголовке (VED-488): стереть одним нажатием, описание не трогать. */
+  function clearTitle() {
+    editText("title", "");
+    setTitleKey((key) => key + 1);
+  }
 
   const saved = task ? draftFromTask(task) : draft;
   const dirty = Boolean(task) && hasTaskEdits(saved, draft);
@@ -429,28 +445,46 @@ export function WorkTaskDialog({
                   длинное название обрывалось на середине слова, и карточка
                   открывалась так, будто текста в ней нет. Поле растёт под текст
                   и обведено — иначе заголовок не читается как правимый. */}
-              <DraftTextarea
-                key={`title-${textKey}`}
-                ref={titleRef}
-                initialValue={latestText.current.title}
-                onValueChange={(value) => editText("title", value)}
-                readOnly={!canEdit}
-                rows={1}
-                maxLength={200}
-                aria-label="Название задачи"
-                onInput={(event) => growToText(event.currentTarget)}
-                onKeyDown={(event) => {
-                  // Enter в заголовке — это «готово»: сохранить, а не новая
-                  // строка.
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    save();
-                  }
-                }}
-                className={`min-w-0 flex-1 resize-none overflow-hidden rounded-lg px-2 py-1 font-display text-lg font-bold text-text-0 ${
-                  canEdit ? "border border-glass-brd bg-bg-1" : "bg-transparent"
-                }`}
-              />
+              {/* ✖ — стереть заголовок одним нажатием (VED-488), как в поле
+                  «Заголовок» новой задачи. Кнопка поверх правого верхнего
+                  угла поля, вне его: поле растёт вниз под длинный текст. */}
+              <div className="relative min-w-0 flex-1">
+                <DraftTextarea
+                  key={`title-${textKey}-${titleKey}`}
+                  ref={titleRef}
+                  initialValue={latestText.current.title}
+                  onValueChange={(value) => editText("title", value)}
+                  readOnly={!canEdit}
+                  rows={1}
+                  maxLength={200}
+                  aria-label="Название задачи"
+                  onInput={(event) => growToText(event.currentTarget)}
+                  onKeyDown={(event) => {
+                    // Enter в заголовке — это «готово»: сохранить, а не новая
+                    // строка.
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      save();
+                    }
+                  }}
+                  className={`block w-full resize-none overflow-hidden rounded-lg py-1 pl-2 font-display text-lg font-bold text-text-0 ${
+                    canEdit
+                      ? "border border-glass-brd bg-bg-1 pr-10"
+                      : "bg-transparent pr-2"
+                  }`}
+                />
+                {canEdit && draft.title && (
+                  <button
+                    type="button"
+                    onClick={clearTitle}
+                    aria-label="Очистить заголовок"
+                    title="Очистить заголовок"
+                    className="absolute right-0.5 top-0.5 flex size-8 items-center justify-center rounded-md text-text-2 hover:text-text-0"
+                  >
+                    <X aria-hidden className="size-4" />
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={requestClose}
