@@ -14,6 +14,7 @@ import { MusicListenButton } from "@/components/music/player/listen-button";
 import { MusicQueueActions } from "@/components/music/player/queue-actions";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicDownloadButton } from "@/components/music/download-button";
+import { MusicShareTrackButton } from "@/components/music/share-track-button";
 import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicAdminArtists } from "@/lib/music-admin-api";
@@ -113,6 +114,15 @@ export default async function MusicTrackPage({
               trackId={track.id}
               title={track.title}
               className="shrink-0 border border-glass-brd"
+            />
+            {/* «Поделиться» (VED-281) — рядом с сердцем. */}
+            <MusicShareTrackButton
+              track={{
+                id: track.id,
+                title: track.title,
+                artist: track.artist ? { name: track.artist.name } : null,
+              }}
+              className="border border-glass-brd"
             />
             {/* «Линия» — только редакции Музыки (VED-561). */}
             <MusicTrackLineageButton

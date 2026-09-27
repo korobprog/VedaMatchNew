@@ -46,7 +46,10 @@ const player = {
   isMusicEditor: false,
 } as unknown as MusicPlayerApi;
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/music" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/music",
+  useRouter: () => ({ push: vi.fn() }),
+}));
 vi.mock("./player-provider", () => ({ useMusicPlayer: () => player }));
 vi.mock("../radio/radio-provider", () => ({ useMusicRadio: () => null }));
 vi.mock("./use-track-lyrics", () => ({
