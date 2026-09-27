@@ -126,6 +126,13 @@ describe('AstroTransitService', () => {
     expect(digest).not.toBeNull();
     expect(digest!.text).toBeNull();
     expect(digest!.moonRashi).toBeGreaterThanOrEqual(1);
+    // Градусы Луны — такой же факт, как знак: без ИИ они никуда не деваются.
+    expect(digest!.moonDegreeInRashi).toBeGreaterThanOrEqual(0);
+    expect(digest!.moonDegreeInRashi).toBeLessThan(30);
+    expect(digest!.moonLongitude).toBeCloseTo(
+      (digest!.moonRashi - 1) * 30 + digest!.moonDegreeInRashi!,
+      9,
+    );
     expect(generation.generateTransitPhrase).not.toHaveBeenCalled();
   });
 

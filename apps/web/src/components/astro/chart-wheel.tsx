@@ -3,7 +3,11 @@ import {
   RASHI_NAMES,
   type VedicChart,
 } from "@vedamatch/shared";
+import { formatDegrees } from "@/lib/astro-degrees";
 import { CHART_CELLS, bhavaOf, grahasByRashi } from "./chart-layout";
+
+// Формат градусов живёт в lib: им же пользуется карточка на главной.
+export { formatDegrees };
 
 /**
  * Южноиндийская карта на чистом SVG, без библиотек: сетка 4×4 с закреплёнными
@@ -136,11 +140,4 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
       </text>
     </svg>
   );
-}
-
-/** Градусы в привычный астрологу вид: 23°40′. */
-export function formatDegrees(value: number): string {
-  const degrees = Math.floor(value);
-  const minutes = Math.floor((value - degrees) * 60);
-  return `${degrees}°${String(minutes).padStart(2, "0")}′`;
 }

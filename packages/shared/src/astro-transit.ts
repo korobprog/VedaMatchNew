@@ -11,6 +11,13 @@ export interface AstroTodayDto {
   moonBhava: number;
   moonRashi: RashiIndex;
   moonNakshatra: NakshatraIndex;
+  /**
+   * Сидерическая (Лахири) долгота транзитной Луны, [0, 360). Необязательна:
+   * старый API её не отдаёт, клиент без неё показывает Луну без градусов.
+   */
+  moonLongitude?: number;
+  /** Градусы Луны внутри её знака, [0, 30): «Вришабха 15°23′». */
+  moonDegreeInRashi?: number;
   currentMahadasha: { lord: GrahaId };
   currentAntardasha: { lord: GrahaId };
   /** Готовая фраза; null — ещё не сгенерирована (при недоступном ИИ). */

@@ -4,6 +4,7 @@ import {
   RASHI_NAMES,
   type AstroTodayDto,
 } from "@vedamatch/shared";
+import { formatDegrees } from "./astro-degrees";
 
 /**
  * Данные карточки «Астрологии» на главной: где сегодня Луна и какая даша.
@@ -15,7 +16,10 @@ import {
  * той же причине, что остальные `*-quick-access`.
  */
 export interface AstroQuickAccessData {
-  /** «Луна в Рохини (Вришабха), 4-й дом»; null — данных рождения нет. */
+  /**
+   * «Луна в Рохини (Вришабха 15°23′), 4-й дом»; без градусов, если API их
+   * не прислал; null — данных рождения нет.
+   */
   moonLine: string | null;
   /** «Даша Гуру / Шани». */
   dashaLine: string | null;
@@ -48,10 +52,22 @@ export function buildAstroQuickAccess(
   // «Луна в undefined».
   if (!nakshatra || !rashi) return { moonLine: null, dashaLine: null };
 
-  const moonLine = `Луна в ${nakshatra} (${rashi})${house ? `, ${house} дом` : ""}`;
+  const degree = moonDegreeText(today.moonDegreeInRashi);
+  const moonLine = `Луна в ${nakshatra} (${rashi}${degree ? ` ${degree}` : ""})${house ? `, ${house} дом` : ""}`;
   const maha = GRAHA_NAMES[today.currentMahadasha.lord];
   const antar = GRAHA_NAMES[today.currentAntardasha.lord];
   const dashaLine = maha && antar ? `Даша ${maha} / ${antar}` : null;
 
   return { moonLine, dashaLine };
+}
+
+/**
+ * Градус Луны в знаке или null. Поле необязательное (старый API его не
+ * отдаёт), а значение вне [0, 30) — сломанные данные: знак рядом уже назван,
+ * «Вришабха 45°» было бы враньём.
+ */
+function moonDegreeText(degree: number | undefined): string | null {
+  if (typeof degree !== "number" || !Number.isFinite(degree)) return null;
+  if (degree < 0 || degree >= 30) return null;
+  return formatDegrees(degree);
 }
