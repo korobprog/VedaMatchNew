@@ -6,6 +6,7 @@ import type { MusicTrackLyricsDto } from "@vedamatch/shared";
 import { MusicTrackLyrics } from "@/components/music/music-track-lyrics";
 import { useMusicPlayer } from "./player-provider";
 import { buildTrackLyricsEditHref } from "./lyrics-edit-link";
+import { ScrollScrubber } from "./scroll-scrubber";
 
 /**
  * Текст бхаджана текущей записи — всплывающая панель над полосой плеера, по
@@ -50,6 +51,7 @@ export function MusicLyricsPanel({
 }) {
   const player = useMusicPlayer();
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Фокус переходит в панель: иначе Tab уводит по странице под ней, и
   // закрыть её с клавиатуры не получится.
@@ -76,9 +78,11 @@ export function MusicLyricsPanel({
       // `fixed inset-x-0 px-3`) — значит и панель не может. С `sm` — обратно
       // компактная, у правого края полосы, ширина по месту, но не шире
       // 26rem (текст бхаджана длиннее названия записи, у очереди уже).
-      className="player-bar pointer-events-auto absolute inset-x-3 bottom-full mb-2 max-h-[60vh] overflow-y-auto rounded-2xl p-4 sm:inset-x-auto sm:right-3 sm:w-[min(26rem,calc(100vw-1.5rem))]"
+      // Прокручивается текст внутри, а не всё окно (VED-478): рядом с ним —
+      // свой бегунок для пальца (`ScrollScrubber`), кнопки сверху на месте.
+      className="player-bar pointer-events-auto absolute inset-x-3 bottom-full mb-2 flex max-h-[60vh] flex-col rounded-2xl sm:inset-x-auto sm:right-3 sm:w-[min(26rem,calc(100vw-1.5rem))]"
     >
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex shrink-0 items-center justify-end gap-1 px-4 pt-4">
         {player?.isMusicEditor && (
           <Link
             href={buildTrackLyricsEditHref(trackId)}
@@ -125,7 +129,17 @@ export function MusicLyricsPanel({
           </svg>
         </button>
       </div>
-      <MusicTrackLyrics lyrics={lyrics} headingId="music-lyrics-player" compact />
+      <div
+        ref={scrollRef}
+        className="scroll-slim min-h-0 flex-1 overflow-y-auto px-4 pb-4 pr-9"
+      >
+        <MusicTrackLyrics
+          lyrics={lyrics}
+          headingId="music-lyrics-player"
+          compact
+        />
+      </div>
+      <ScrollScrubber target={scrollRef} />
     </div>
   );
 }
