@@ -157,7 +157,7 @@ describe("QuickPanel", () => {
     await openPanel();
 
     const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
-    expect(within(panel).getByRole("button", { name: /Что нужно знать/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Справка/ })).toBeInTheDocument();
     expect(within(panel).queryByRole("link", { name: /Календарь/ })).not.toBeInTheDocument();
   });
 
@@ -665,7 +665,7 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
 
     expect(screen.queryByRole("switch", { name: /^Меню/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Выше: Что нужно знать" }));
+    await user.click(screen.getByRole("button", { name: "Выше: Справка" }));
     const ids = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids;
     expect(ids).not.toContain("menu");
   });
