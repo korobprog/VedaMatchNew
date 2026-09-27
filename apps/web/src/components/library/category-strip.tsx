@@ -30,8 +30,9 @@ import {
  * по одной в строке и во всю ширину (VED-552): короткие имена раньше
  * вставали по две в ряд, и список авторов читался лесенкой. Не влезает имя
  * в строку — многоточие, но число остаётся видно.
- * Между именем и числом — «i» с контактами, биографией, ресурсами и
- * расписанием автора (VED-553); у читателя — только когда есть что читать.
+ * «i» с контактами, биографией, ресурсами и расписанием автора (VED-553)
+ * стоит у правого края, вплотную перед числом — так просил заказчик по
+ * скриншоту; у читателя — только когда есть что читать.
  */
 export function CategoryStrip({
   categories,
@@ -106,12 +107,6 @@ export function CategoryStrip({
                 en: category.titleEn,
               })}
             </Link>
-            {/* «i» — между именем и числом, соседом ссылки, а не внутри
-                неё (VED-553). Только у авторов: верхний уровень — рубрики
-                портала, рассказывать о них нечего. */}
-            {!root && (
-              <CategoryInfoButton locale={locale} category={category} />
-            )}
             {root ? (
               /* Число словами, а не значком с цифрой: значок убран по просьбе
                  освободить плитку, а «4» без него одинаково читается и как
@@ -126,18 +121,25 @@ export function CategoryStrip({
                  стоит вплотную к числу: он и есть единица измерения. Папка —
                  подразделы, лист — материалы; полная подпись уходит в
                  `aria-label` и во всплывающую. */
-              <span
-                aria-label={counterLabel}
-                title={counterLabel}
-                className="ml-auto flex shrink-0 items-center gap-1 font-mono text-xs text-text-2"
-              >
-                {counter.kind === "children" ? (
-                  <FolderTree aria-hidden className="h-3.5 w-3.5" />
-                ) : (
-                  <FileText aria-hidden className="h-3.5 w-3.5" />
-                )}
-                {counter.value}
-              </span>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {/* «i» — у правого края, перед числом (VED-553, по
+                    скриншоту заказчика), соседом ссылки, а не внутри неё.
+                    Только у авторов: верхний уровень — рубрики портала,
+                    рассказывать о них нечего. */}
+                <CategoryInfoButton locale={locale} category={category} />
+                <span
+                  aria-label={counterLabel}
+                  title={counterLabel}
+                  className="flex items-center gap-1 font-mono text-xs text-text-2"
+                >
+                  {counter.kind === "children" ? (
+                    <FolderTree aria-hidden className="h-3.5 w-3.5" />
+                  ) : (
+                    <FileText aria-hidden className="h-3.5 w-3.5" />
+                  )}
+                  {counter.value}
+                </span>
+              </div>
             )}
           </div>
         );

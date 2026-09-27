@@ -11,7 +11,7 @@ import { LineageBadge } from "@/components/lineage-badge";
 import { TimeZoneField } from "@/components/time-zone-field";
 import { CommunityPicker } from "@/components/communities/community-picker";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { ProfileAvatarCard } from "@/components/profile-avatar-card";
+import { ProfileAvatarButton } from "@/components/profile-avatar-button";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { LogoutButton } from "@/components/logout-button";
@@ -63,7 +63,6 @@ export default async function ProfilePage() {
         <h1 className="mb-6 font-display text-2xl font-bold text-text-0">
           Профиль
         </h1>
-        <ProfileAvatarCard user={user} />
         <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
           <div className="mb-6 flex items-center gap-4">
             <UserAvatar
@@ -84,6 +83,7 @@ export default async function ProfilePage() {
                 <p className="text-sm text-cyan">{user.statusLine}</p>
               )}
               <p className="text-sm text-text-2">{user.email}</p>
+              <ProfileAvatarButton hasAvatar={Boolean(user.avatarUrl)} />
             </div>
           </div>
           <dl className="space-y-3 text-sm">

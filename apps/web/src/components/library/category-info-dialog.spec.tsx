@@ -50,7 +50,7 @@ describe("CategoryInfoButton", () => {
     expect(screen.queryByRole("button", { name: LABEL })).toBeNull();
   });
 
-  it("показывает читателю только заполненные разделы, ссылки кликабельны", async () => {
+  it("показывает читателю все четыре раздела, пустые — «Пока не заполнено», ссылки кликабельны", async () => {
     render(
       <CategoryInfoButton
         locale="ru"
@@ -71,14 +71,41 @@ describe("CategoryInfoButton", () => {
     expect(
       screen.getByRole("heading", { name: "Расписание" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Биография" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Ресурсы" })).toBeNull();
+    // Незаполненные тоже видны (VED-553): иначе казалось, что их нет.
+    expect(
+      screen.getByRole("heading", { name: "Биография" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Ресурсы" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Пока не заполнено")).toHaveLength(2);
 
     const link = screen.getByRole("link", { name: "https://example.org" });
     expect(link.getAttribute("href")).toBe("https://example.org");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toContain("noopener");
     expect(screen.queryByRole("button", { name: "Изменить" })).toBeNull();
+  });
+
+  it("окно — в body, а не в плитке, и на сплошном фоне (VED-553)", async () => {
+    const { container } = render(
+      <div className="glass">
+        <CategoryInfoButton
+          locale="ru"
+          category={category({ infoBio: "Текст" })}
+        />
+      </div>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: LABEL }));
+
+    const dialog = screen.getByRole("dialog");
+    // `.glass` с backdrop-filter держит `position: fixed` внутри себя —
+    // окно обязано жить вне плитки.
+    expect(container).not.toContainElement(dialog);
+    expect(document.body).toContainElement(dialog);
+    expect(dialog.className).toContain("bg-bg-1");
+    expect(dialog.classList.contains("glass")).toBe(false);
   });
 
   it("Esc закрывает окно и возвращает фокус на «i»", async () => {
@@ -119,7 +146,7 @@ describe("CategoryInfoButton", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: LABEL }));
-    expect(screen.getByText(/Здесь пока пусто/)).toBeInTheDocument();
+    expect(screen.getAllByText("Пока не заполнено")).toHaveLength(4);
     await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
 
     const bio = screen.getByRole("textbox", { name: /Биография/ });

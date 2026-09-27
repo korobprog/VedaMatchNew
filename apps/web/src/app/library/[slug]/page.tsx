@@ -19,13 +19,17 @@ import { BackLink } from "@/components/library/back-link";
 import { LibraryBookmarksDialog } from "@/components/library/bookmarks-dialog";
 import { CategoryBreadcrumbs } from "@/components/library/category-breadcrumbs";
 import { CategoryNavigator } from "@/components/library/category-navigator";
+import { CategoryOrderMenu } from "@/components/library/category-order-menu";
+import {
+  CATEGORY_ORDER_PARAM,
+  isAlphabeticalOrder,
+  sortCategoriesForView,
+} from "@/components/library/category-order";
 import { headerEntriesCount } from "@/components/library/category-tree";
-import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
-import { EntrySortMenu } from "@/components/library/entry-sort-menu";
 import { LibraryContents } from "@/components/library/library-contents";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
@@ -63,7 +67,13 @@ export default async function LibraryCategoryPage({
   }
 
   const { slug } = await params;
-  const query = await searchParams;
+  const rawQuery = await searchParams;
+  // Порядок плиток подрубрик (VED-573) — дело страницы, а не ленты: в запрос
+  // материалов он не уходит и ленту не пересобирает.
+  const alphabetical = isAlphabeticalOrder(rawQuery[CATEGORY_ORDER_PARAM]);
+  const query = Object.fromEntries(
+    Object.entries(rawQuery).filter(([key]) => key !== CATEGORY_ORDER_PARAM),
+  );
   // Материалы вложенных рубрик показываем по умолчанию: иначе вложение
   // прятало бы контент — рубрику убрали внутрь, и лента родителя опустела.
   const withDescendants = query.withDescendants !== "false";
@@ -140,8 +150,8 @@ export default async function LibraryCategoryPage({
   });
   // Страница автора (VED-521) — рубрика без подрубрик внутри раздела:
   // «Проповедники → Ари Мардан Прабху». Панели фильтров там нет: тип
-  // материала и порядок («Свой порядок» / «По алфавиту», VED-573) —
-  // значками в ряду действий.
+  // материала — значком в ряду действий. «Упорядочить» у автора убрано
+  // (VED-573): порядок выбирают в списке авторов, а не в ленте одного.
   const authorPage =
     children.length === 0 && ancestors.length > 0 && shlokaMode === null;
 
@@ -207,9 +217,8 @@ export default async function LibraryCategoryPage({
                   «Язык» с подписью «Все» убран (VED-573): на телефоне он
                   один переносился на вторую строку и отодвигал ленту вниз.
 
-                  «Упорядочить» — порядок ленты для всех, админов тоже
-                  (VED-573), а не админское перетаскивание рубрик: у автора
-                  подрубрик нет, и режим показывал чужое дерево целиком. */}
+                  «Упорядочить» здесь нет (VED-573): заказчик просил его в
+                  списке всех авторов, а у отдельного автора — убрать. */}
               <div className="ml-auto" />
               <LibraryContents
                 locale={locale}
@@ -217,7 +226,6 @@ export default async function LibraryCategoryPage({
                 iconOnly
               />
               <EntryFilterMenu kind="type" locale={locale} />
-              <EntrySortMenu locale={locale} />
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
             </>
           ) : (
@@ -236,8 +244,14 @@ export default async function LibraryCategoryPage({
                 />
               </div>
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
-              {category.canMove && (
-                <LibraryOrganizeButton locale={locale} iconOnly />
+              {/* «Упорядочить» (VED-573) — меню для всех: «Свой порядок»
+                  или «По алфавиту». У админа в нём же «Редактировать
+                  порядок» — прежнее перетаскивание дерева. */}
+              {(children.length > 1 || category.canMove) && (
+                <CategoryOrderMenu
+                  locale={locale}
+                  canOrganize={category.canMove}
+                />
               )}
             </>
           )}
@@ -261,7 +275,7 @@ export default async function LibraryCategoryPage({
         ) : (
           <CategoryNavigator
             locale={locale}
-            categories={children}
+            categories={sortCategoriesForView(children, locale, alphabetical)}
             tree={tree ?? []}
             activeSlug={category.slug}
             canOrganize={category.canMove && !authorPage}

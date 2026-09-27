@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   lineageDetailOptions,
+  lineageDetailValue,
   lineageFirstStepPick,
   lineageFirstStepValue,
   lineageGroupHasDetail,
@@ -43,42 +44,48 @@ describe("выбор линии в два шага (VED-568)", () => {
   });
 
   it("ISKCON, «пусто» и «все» выбираются сразу", () => {
-    expect(lineageFirstStepPick("iskcon", "ipbys", false)).toEqual({
+    expect(lineageFirstStepPick("iskcon", "ipbys")).toEqual({
       value: "iskcon",
     });
-    expect(lineageFirstStepPick("", "ipbys", false)).toEqual({ value: "" });
-    expect(lineageFirstStepPick("all", "ipbys", false)).toEqual({
+    expect(lineageFirstStepPick("", "ipbys")).toEqual({ value: "" });
+    expect(lineageFirstStepPick("all", "ipbys")).toEqual({
       value: "all",
     });
   });
 
-  it("линия материала: группа только открывает второй шаг", () => {
-    expect(lineageFirstStepPick("gaudiya_math", "iskcon", false)).toEqual({
+  it("группа только открывает второй шаг — целиком её не выбрать", () => {
+    expect(lineageFirstStepPick("gaudiya_math", "iskcon")).toEqual({
       pending: "gaudiya_math",
     });
+    expect(lineageFirstStepPick("parivara", "")).toEqual({
+      pending: "parivara",
+    });
     // Та же группа, что уже стоит, — линия выбрана, ждать нечего.
-    expect(lineageFirstStepPick("gaudiya_math", "ipbys", false)).toBeNull();
-  });
-
-  it("фильтр: группа выбирается целиком", () => {
-    expect(lineageFirstStepPick("parivara", "", true)).toEqual({
-      value: "group:parivara",
+    expect(lineageFirstStepPick("gaudiya_math", "ipbys")).toBeNull();
+    // Сохранённая раньше группа целиком — линия ещё не выбрана.
+    expect(lineageFirstStepPick("parivara", "group:parivara")).toEqual({
+      pending: "parivara",
     });
   });
 
-  it("второй шаг — линии группы, в фильтре первым «любой»", () => {
+  it("второй шаг: линия значения, иначе — ещё не уточнено", () => {
+    expect(lineageDetailValue("ipbys", null)).toBe("ipbys");
+    expect(lineageDetailValue("ipbys", "parivara")).toBe("");
+    expect(lineageDetailValue("group:gaudiya_math", null)).toBe("");
+    expect(lineageDetailValue("", null)).toBe("");
+  });
+
+  it("второй шаг — только линии группы, без «любого» (VED-568)", () => {
     expect(lineageDetailOptions("gaudiya_math").map((o) => o.value)).toEqual([
       "sri_chaitanya_gaudiya_math",
       "sri_chaitanya_saraswat_math",
       "sri_gopinath_gaudiya_math",
       "ipbys",
     ]);
-    const filter = lineageDetailOptions("parivara", { allowGroup: true });
-    expect(filter[0]).toMatchObject({
-      value: "group:parivara",
-      label: "Любой паривар",
-    });
-    expect(filter).toHaveLength(6);
+    const parivara = lineageDetailOptions("parivara");
+    expect(parivara).toHaveLength(5);
+    expect(parivara.some((o) => o.value.startsWith("group:"))).toBe(false);
+    expect(parivara.some((o) => o.label.startsWith("Любой"))).toBe(false);
     expect(
       lineageDetailOptions("gaudiya_math", { compact: true }).find(
         (o) => o.value === "ipbys",

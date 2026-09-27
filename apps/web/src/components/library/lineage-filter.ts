@@ -2,7 +2,6 @@ import {
   LINEAGE_ALL,
   LINEAGE_GROUPS,
   LINEAGES,
-  lineageGroupFilter,
   lineageGroupFromFilter,
   lineageGroupOf,
   type LineageFilterValue,
@@ -20,7 +19,11 @@ import {
  * `@vedamatch/shared`, свой список сервис не заводит.
  */
 
-/** Кнопка ряда: одна линия, вся группа (VED-568) или «все линии». */
+/**
+ * Кнопка ряда: одна линия или «все линии». Вся группа (`group:<группа>`) в
+ * меню больше не предлагается (VED-568), но сохранённая раньше настройка
+ * остаётся рабочей: API её понимает, а меню подсвечивает её группу.
+ */
 export type LineageChoice = LineageFilterValue | typeof LINEAGE_ALL;
 
 export interface LineageFilterOption {
@@ -49,9 +52,9 @@ export function lineageFilterOptions(allLabel: string): LineageFilterOption[] {
 /**
  * Меню кнопки «Фильтры» (VED-449): вместо ряда из одиннадцати кнопок — одна
  * кнопка и четыре пункта: «Всё», ISKCON, «Гаудия-матх», «Паривары». Группа
- * из одной линии (ISKCON) — сразу выбор; группа из нескольких раскрывается,
- * и внутри неё первым пунктом — вся группа (`group:gaudiya_math`, VED-568),
- * дальше линии по одной.
+ * из одной линии (ISKCON) — сразу выбор; группа из нескольких раскрывается
+ * в свои линии. Пункта «Любой Гаудия-матх» нет — заказчик убрал его
+ * (VED-568).
  */
 export type LineageMenuItem =
   | { kind: "choice"; option: LineageFilterOption }
@@ -65,8 +68,6 @@ export type LineageMenuItem =
 export function lineageFilterMenu(labels: {
   all: string;
   groups: Record<LineageGroup, string>;
-  /** Пункт «вся группа» внутри раскрывающейся группы. */
-  anyInGroup?: Partial<Record<LineageGroup, string>>;
 }): LineageMenuItem[] {
   const [all, ...lineages] = lineageFilterOptions(labels.all);
   const items: LineageMenuItem[] = [{ kind: "choice", option: all }];
@@ -82,21 +83,20 @@ export function lineageFilterMenu(labels: {
       });
       continue;
     }
-    const anyLabel = labels.anyInGroup?.[group] ?? labels.groups[group];
     items.push({
       kind: "group",
       group,
       label: labels.groups[group],
-      options: [
-        { value: lineageGroupFilter(group), label: anyLabel, title: anyLabel },
-        ...options,
-      ],
+      options,
     });
   }
   return items;
 }
 
-/** Группа выбранной линии или группы — её меню раскрывает сразу. */
+/**
+ * Группа выбранной линии или сохранённой раньше группы целиком — её шапка в
+ * меню подсвечена.
+ */
 export function lineageChoiceGroup(choice: LineageChoice): LineageGroup | null {
   if (choice === LINEAGE_ALL) return null;
   return lineageGroupOf(choice) ?? lineageGroupFromFilter(choice);

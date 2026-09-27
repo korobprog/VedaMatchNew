@@ -246,8 +246,6 @@ const ui = {
     "lineage.group.iskcon": "ИСККОН",
     "lineage.group.gaudiya_math": "Гаудия-матх",
     "lineage.group.parivara": "Паривары",
-    "lineage.any.gaudiya_math": "Любой Гаудия-матх",
-    "lineage.any.parivara": "Любой паривар",
     "lineage.filter": "Духовная линия материалов",
     "lineage.filterFailed": "Не удалось переключить линию, попробуйте ещё раз",
     "lineage.badgeAll": "Для всех линий",
@@ -311,6 +309,7 @@ const ui = {
     "category.deleteDone": "Рубрика удалена",
     "tree.organize": "Упорядочить",
     "tree.done": "Готово",
+    "tree.editOrder": "Редактировать порядок",
     "tree.hint":
       "Тяните вверх-вниз, чтобы переставить, и вправо-влево, чтобы вложить или вынести",
     "tree.keyboardHint":
@@ -337,8 +336,7 @@ const ui = {
     "info.resources": "Ресурсы",
     "info.schedule": "Расписание",
     "info.edit": "Изменить",
-    "info.empty":
-      "Здесь пока пусто. Нажмите «Изменить», чтобы добавить контакты, биографию, ресурсы или расписание.",
+    "info.notFilled": "Пока не заполнено",
     "info.tooLong": "Раздел длиннее 5000 символов — сократите его",
     "info.failed": "Не удалось сохранить, попробуйте позже",
   },
@@ -582,8 +580,6 @@ const ui = {
     "lineage.group.iskcon": "ISKCON",
     "lineage.group.gaudiya_math": "Gaudiya Math",
     "lineage.group.parivara": "Parivaras",
-    "lineage.any.gaudiya_math": "Any Gaudiya Math",
-    "lineage.any.parivara": "Any Parivara",
     "lineage.filter": "Spiritual lineage of materials",
     "lineage.filterFailed": "Could not switch the lineage, please try again",
     "lineage.badgeAll": "For all lineages",
@@ -643,6 +639,7 @@ const ui = {
     "category.deleteDone": "Category deleted",
     "tree.organize": "Organise",
     "tree.done": "Done",
+    "tree.editOrder": "Edit order",
     "tree.hint":
       "Drag up and down to reorder, left and right to nest or unnest",
     "tree.keyboardHint":
@@ -669,8 +666,7 @@ const ui = {
     "info.resources": "Resources",
     "info.schedule": "Schedule",
     "info.edit": "Edit",
-    "info.empty":
-      "Nothing here yet. Press “Edit” to add contacts, a biography, resources or a schedule.",
+    "info.notFilled": "Not filled in yet",
     "info.tooLong":
       "A section is longer than 5000 characters — please shorten it",
     "info.failed": "Could not save, please try again later",

@@ -136,8 +136,7 @@ export function MusicSettingsForm({
           </legend>
           <p className="mt-1 text-xs text-text-2">
             По умолчанию слышен весь каталог — все линии. Выберите линию, если
-            хотите слушать только её — или всю группу, например любой
-            Гаудия-матх: над каталогом тогда появится
+            хотите слушать только её: над каталогом тогда появится
             напоминание, что он отфильтрован. Профиль от этого не меняется.
           </p>
           <div className="mt-4">
@@ -153,7 +152,6 @@ export function MusicSettingsForm({
                 })
               }
               emptyLabel="Все линии — весь каталог"
-              allowGroup
               className="h-9 w-full rounded-lg border border-glass-brd bg-bg-1 px-2.5 text-sm text-text-0"
             />
           </div>
