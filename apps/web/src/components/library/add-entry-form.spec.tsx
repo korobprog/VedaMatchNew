@@ -130,6 +130,27 @@ describe("AddEntryForm", () => {
     });
   });
 
+  it("подставляет линию автора-рубрики, пока линию не выбрали руками (VED-548)", async () => {
+    const authorTree: LibraryCategoryTreeNode[] = [
+      { ...tree[0], lineage: "sri_chaitanya_saraswat_math" },
+    ];
+
+    render(<AddEntryForm locale="ru" tree={authorTree} />);
+    const select = screen.getByLabelText(
+      /Духовная линия материала/,
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("iskcon");
+
+    // «Гита» своей линии не имеет — берётся линия автора-родителя.
+    await userEvent.click(screen.getByLabelText("Гита"));
+    expect(select.value).toBe("sri_chaitanya_saraswat_math");
+
+    // Ручной выбор сильнее: снятие рубрики его уже не двигает.
+    await userEvent.selectOptions(select, "ipbys");
+    await userEvent.click(screen.getByLabelText("Гита"));
+    expect(select.value).toBe("ipbys");
+  });
+
   it("отличает ошибку сервера от «попробуйте позже» и показывает код", async () => {
     // Скриншот тестировщика от 2026-09-07: на шаге «Проверка» единственная
     // строка «Не удалось добавить ссылку, попробуйте позже» одинакова для

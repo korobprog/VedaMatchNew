@@ -18,6 +18,7 @@ import { BookmarkButton } from "./bookmark-button";
 import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
+import { EntryLineageButton } from "./entry-lineage-button";
 import { EntryBlogStatus, EntryShareActions } from "./entry-share-actions";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -38,6 +39,9 @@ export function EntryCard({
     sharedAt: string | null;
     postId: string | null;
   }>({ sharedAt: entry.blogSharedAt, postId: null });
+  // Линия меняется кнопкой «Линия» прямо в ленте (VED-561): чип обновляется
+  // сразу, без перечитывания всей ленты.
+  const [lineage, setLineage] = useState(entry.lineage);
   const title = pickLocalized(locale, {
     ru: entry.titleRu,
     en: entry.titleEn,
@@ -122,8 +126,7 @@ export function EntryCard({
         {/* Линия материала: коротко, чипом. Читателю — почему это здесь,
             редактору — правильно ли подписано. */}
         <span className="rounded-full border border-glass-brd px-2 py-0.5">
-          {lineageOption(entry.lineage)?.shortLabel ??
-            t(locale, "lineage.badgeAll")}
+          {lineageOption(lineage)?.shortLabel ?? t(locale, "lineage.badgeAll")}
         </span>
       </div>
 
@@ -267,6 +270,15 @@ export function EntryCard({
             />
           </>
         )}
+        {/* «Линия» — только администратору Образования (VED-561), крайней
+            справа: меню раскрывается влево и не уходит за экран. */}
+        <EntryLineageButton
+          entryId={entry.id}
+          lineage={lineage}
+          canSetLineage={entry.canSetLineage}
+          onChanged={setLineage}
+          className="ml-auto"
+        />
       </div>
     </article>
   );

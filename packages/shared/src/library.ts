@@ -1,4 +1,4 @@
-import type { LineageId, LineagePreference } from './lineage';
+import { isLineageId, type LineageId, type LineagePreference } from './lineage';
 
 export type LibraryEntryType =
   | 'website'
@@ -79,6 +79,61 @@ export interface LibraryCategoryDto {
   infoBio?: string | null;
   infoResources?: string | null;
   infoSchedule?: string | null;
+  /**
+   * Линия автора (VED-548): у рубрики-автора — ISKCON, матх или паривар, к
+   * которому он относится. Ставит администрация Образования; новые материалы
+   * этой рубрики и её подрубрик получают её по умолчанию, см.
+   * `authorLineageFor`. `null` — не задана. Поле необязательное: старые
+   * клиенты и ответы без него читаются как «не задана».
+   */
+  lineage?: LineageId | null;
+}
+
+/**
+ * Линия автора для нового материала (VED-548): у первой из выбранных рубрик,
+ * где она задана у самой рубрики или у ближайшего предка. `null` — ни у
+ * одной не задана, и тогда действует обычное умолчание (`defaultLineageFor`).
+ *
+ * Одна функция на сервер и на формы: форма предзаполняет ровно то, что
+ * подставит сервер, если поле не придёт.
+ *
+ * `lookup` отдаёт рубрику по id — из дерева на вебе, из выборки на сервере.
+ * Предки ищутся по `parentId`; защита от цикла — счётчик шагов, а не доверие
+ * данным.
+ */
+export function authorLineageFor(
+  selectedIds: readonly string[],
+  lookup: (
+    id: string,
+  ) => { parentId: string | null; lineage?: string | null } | undefined,
+): LineageId | null {
+  for (const selectedId of selectedIds) {
+    let id: string | null = selectedId;
+    for (let step = 0; id && step <= LIBRARY_MAX_DEPTH + 1; step += 1) {
+      const node = lookup(id);
+      if (!node) break;
+      if (isLineageId(node.lineage)) return node.lineage;
+      id = node.parentId;
+    }
+  }
+  return null;
+}
+
+/** Линия автора: `null` снимает её, новые материалы берут обычное умолчание. */
+export interface SetLibraryCategoryLineageRequest {
+  lineage: LineageId | null;
+}
+
+/** Итог «Применить ко всем материалам автора». */
+export interface ApplyLibraryAuthorLineageResponse {
+  lineage: LineageId;
+  /** Сколько материалов получили линию. Уже подписанные ею не считаются. */
+  updated: number;
+}
+
+/** Линия материала из меню «Линия» (VED-561); `null` — для всех линий. */
+export interface SetLibraryEntryLineageRequest {
+  lineage: LineageId | null;
 }
 
 /**
@@ -187,6 +242,12 @@ export interface LibraryEntryDto {
   lineage: LineageId | null;
   /** `true` — текущий пользователь добавил ссылку либо является админом. */
   canEdit: boolean;
+  /**
+   * `true` — зрителю доступна кнопка «Линия» (VED-561): только администратору
+   * Образования. Автор линию правит в форме, а кнопка — быстрый путь
+   * редакции разметить каталог. Необязательное: без поля кнопки нет.
+   */
+  canSetLineage?: boolean;
   /** `true` — обложка загружена вручную, а не взята автоматически с сайта-источника. */
   hasCustomPreview: boolean;
   /**

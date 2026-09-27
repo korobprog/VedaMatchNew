@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -12,6 +13,8 @@ import type {
   AccessTokenPayload,
   LibraryAdminEntryQuery,
   MergeLibraryCategoryRequest,
+  SetLibraryCategoryLineageRequest,
+  SetLibraryEntryLineageRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { isAdmin } from './is-admin';
@@ -55,6 +58,38 @@ export class LibraryAdminController {
   ) {
     this.assertAdmin(user);
     return this.admin.mergeCategory(user.sub, id, body);
+  }
+
+  /** Линия автора (VED-548): запоминается у рубрики, материалы не трогает. */
+  @Patch('categories/:id/lineage')
+  setCategoryLineage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: SetLibraryCategoryLineageRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.setCategoryLineage(id, body);
+  }
+
+  /** «Применить ко всем материалам автора» — массовая правка, в журнал. */
+  @Post('categories/:id/lineage/apply')
+  applyAuthorLineage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.applyAuthorLineage(user.sub, id);
+  }
+
+  /** Кнопка «Линия» на карточке и странице материала (VED-561). */
+  @Patch('entries/:id/lineage')
+  setEntryLineage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: SetLibraryEntryLineageRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.setEntryLineage(id, body);
   }
 
   @Get('entries')

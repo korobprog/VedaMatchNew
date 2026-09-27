@@ -18,6 +18,7 @@ import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicAdminArtists } from "@/lib/music-admin-api";
 import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
+import { MusicTrackLineageButton } from "@/components/music/track-lineage-button";
 
 export async function generateMetadata({
   params,
@@ -112,6 +113,13 @@ export default async function MusicTrackPage({
               trackId={track.id}
               title={track.title}
               className="shrink-0 border border-glass-brd"
+            />
+            {/* «Линия» — только редакции Музыки (VED-561). */}
+            <MusicTrackLineageButton
+              trackId={track.id}
+              lineage={track.lineage}
+              canEdit={canEdit}
+              className="shrink-0"
             />
           </div>
 

@@ -42,6 +42,7 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'library.category-merged': 'Слиты категории Образования',
   'library.entry-removed': 'Запись Образования снята с публикации',
   'library.entry-restored': 'Запись Образования возвращена',
+  'library.author-lineage-applied': 'Линия автора проставлена его материалам',
   'contacts.tag-created': 'Добавлен тег справочника',
   'contacts.tag-updated': 'Изменён тег справочника',
   'contacts.tag-deleted': 'Удалён тег справочника',

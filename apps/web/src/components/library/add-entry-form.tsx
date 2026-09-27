@@ -19,6 +19,7 @@ import { CoverField } from "./cover-field";
 import { uploadEntryCover } from "./cover-upload";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
+import { suggestedEntryLineage } from "./author-lineage";
 import { insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -79,8 +80,11 @@ export function AddEntryForm({
   const [contentLanguage, setContentLanguage] = useState("ru");
   /** От имени какой общины. Пустая строка — от себя лично. */
   const [communityId, setCommunityId] = useState("");
-  /** Духовная линия материала. Пустая строка — для всех линий. */
-  const [lineage, setLineage] = useState<string>(defaultLineage);
+  /**
+   * Духовная линия, выбранная руками. `null` — не выбирали, и линия следует
+   * за рубриками: у автора-рубрики своя (VED-548), иначе `defaultLineage`.
+   */
+  const [lineageChoice, setLineageChoice] = useState<string | null>(null);
   const [titleRu, setTitleRu] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [descriptionRu, setDescriptionRu] = useState("");
@@ -95,6 +99,13 @@ export function AddEntryForm({
   const [coverFile, setCoverFile] = useState<File | null>(null);
 
   const locatorChoices = locatorOptions(type);
+  const lineage =
+    lineageChoice ??
+    suggestedEntryLineage(
+      categories,
+      selected.map((item) => item.id),
+      defaultLineage,
+    );
 
   function toggleCategory(category: LibraryCategoryDto) {
     setSelected((current) =>
@@ -451,7 +462,7 @@ export function AddEntryForm({
 
       <LineageSelect
         value={lineage}
-        onChange={setLineage}
+        onChange={setLineageChoice}
         allLabel={t(locale, "add.lineageAll")}
         label={t(locale, "add.lineage")}
         hint={t(locale, "add.lineageHint")}
