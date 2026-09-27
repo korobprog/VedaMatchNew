@@ -5,8 +5,8 @@ import { ChevronDown, ListFilter } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   LibraryLocale,
+  LineageFilterValue,
   LineageGroup,
-  LineageId,
   LineagePreference,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
@@ -31,7 +31,8 @@ const API_URL = apiBase();
  * Сначала это был ряд из одиннадцати кнопок (VED-395), но на телефоне он
  * уезжал вбок и занимал строку над рубриками. Заказчик попросил одну кнопку
  * «Фильтры» и внутри четыре позиции — «Всё», ИСККОН, «Гаудия-матх»,
- * «Паривары»; матхи и паривары — внутри своих групп.
+ * «Паривары»; матхи и паривары — внутри своих групп, и первым пунктом в
+ * группе — она вся (VED-568).
  *
  * Выбор сохраняет настройку Образования, поэтому линия держится и в
  * рубриках, и при следующем заходе, а не живёт в одном адресе.
@@ -44,8 +45,11 @@ export function LibraryLineageFilter({
   iconOnly = false,
 }: {
   locale: LibraryLocale;
-  /** Линия, по которой API отфильтровал выдачу, — та же, что в подписи. */
-  applied: LineageId | null;
+  /**
+   * Линия или группа (`group:<группа>`, VED-568), по которой API
+   * отфильтровал выдачу, — та же, что в подписи.
+   */
+  applied: LineageFilterValue | null;
   /** Сохранённая настройка Образования. */
   preference: LineagePreference;
   /** Раскладка снаружи: в ряду кнопок Образования кнопка тянется на ячейку. */
@@ -84,6 +88,10 @@ export function LibraryLineageFilter({
       iskcon: t(locale, "lineage.group.iskcon"),
       gaudiya_math: t(locale, "lineage.group.gaudiya_math"),
       parivara: t(locale, "lineage.group.parivara"),
+    },
+    anyInGroup: {
+      gaudiya_math: t(locale, "lineage.any.gaudiya_math"),
+      parivara: t(locale, "lineage.any.parivara"),
     },
   });
   // Группы свёрнуты (VED-483): «шапка Гаудия-матх должна быть свёрнута,

@@ -28,6 +28,12 @@ describe('normalizeMusicTrackQuery', () => {
       'ipbys',
     );
     expect(normalizeMusicTrackQuery({ lineage: 'all' }).lineage).toBe('all');
+    expect(
+      normalizeMusicTrackQuery({ lineage: 'group:gaudiya_math' }).lineage,
+    ).toBe('group:gaudiya_math');
+    expect(
+      normalizeMusicTrackQuery({ lineage: 'group:hare' }).lineage,
+    ).toBeNull();
     expect(normalizeMusicTrackQuery({ lineage: 'hare' }).lineage).toBeNull();
     expect(normalizeMusicTrackQuery({ lineage: '' }).lineage).toBeNull();
   });

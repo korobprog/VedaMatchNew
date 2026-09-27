@@ -31,8 +31,9 @@ describe("activeLineageChoice", () => {
   it("без фильтра нажата «все линии»", () => {
     expect(activeLineageChoice(null)).toBe("all");
   });
-  it("с фильтром — кнопка этой линии", () => {
+  it("с фильтром — кнопка этой линии или группы", () => {
     expect(activeLineageChoice("ipbys")).toBe("ipbys");
+    expect(activeLineageChoice("group:gaudiya_math")).toBe("group:gaudiya_math");
   });
 });
 
@@ -46,6 +47,7 @@ describe("preferenceForChoice (VED-483)", () => {
     expect(preferenceForChoice("sri_chaitanya_gaudiya_math")).toBe(
       "sri_chaitanya_gaudiya_math",
     );
+    expect(preferenceForChoice("group:parivara")).toBe("group:parivara");
   });
 });
 
@@ -79,15 +81,33 @@ describe("lineageFilterMenu (VED-449)", () => {
   });
 
   it("в группах — все линии справочника, ни одна не потеряна", () => {
-    const inGroups = menu.flatMap((item) =>
-      item.kind === "group" ? item.options.map((option) => option.value) : [item.option.value],
-    );
+    const inGroups = menu
+      .flatMap((item) =>
+        item.kind === "group" ? item.options.map((option) => option.value) : [item.option.value],
+      )
+      .filter((value) => !value.startsWith("group:"));
     expect(inGroups).toHaveLength(11);
     expect(inGroups).toContain("ipbys");
     expect(inGroups).toContain("shyamananda_parivara");
   });
 
+  it("первый пункт раскрывающейся группы — она вся (VED-568)", () => {
+    const labelled = lineageFilterMenu({
+      all: "Всё",
+      groups: { iskcon: "ИСККОН", gaudiya_math: "Гаудия-матх", parivara: "Паривары" },
+      anyInGroup: { gaudiya_math: "Любой Гаудия-матх", parivara: "Любой паривар" },
+    });
+    const firsts = labelled.flatMap((item) =>
+      item.kind === "group" ? [item.options[0]] : [],
+    );
+    expect(firsts.map((option) => [option.value, option.label])).toEqual([
+      ["group:gaudiya_math", "Любой Гаудия-матх"],
+      ["group:parivara", "Любой паривар"],
+    ]);
+  });
+
   it("группа выбранной линии", () => {
+    expect(lineageChoiceGroup("group:parivara")).toBe("parivara");
     expect(lineageChoiceGroup("all")).toBeNull();
     expect(lineageChoiceGroup("iskcon")).toBe("iskcon");
     expect(lineageChoiceGroup("ipbys")).toBe("gaudiya_math");

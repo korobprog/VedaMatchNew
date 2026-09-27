@@ -3,27 +3,43 @@ import { LINEAGES } from "@vedamatch/shared";
 import {
   LINEAGE_MENU_NONE,
   lineageButtonLabel,
-  lineageMenuGroups,
+  lineageMenuItems,
+  lineageMenuOpenGroup,
 } from "./lineage-menu";
 
-describe("lineageMenuGroups", () => {
+describe("lineageMenuItems", () => {
   it("«без линии» первым, затем ISKCON, Гаудия-матх и Паривары", () => {
-    const groups = lineageMenuGroups();
+    const items = lineageMenuItems();
 
-    expect(groups.map((group) => group.label)).toEqual([
-      null,
-      "ISKCON",
-      "Гаудия-матх",
-      "Паривары",
-    ]);
-    expect(groups[0].options).toEqual([
-      { value: null, label: LINEAGE_MENU_NONE },
-    ]);
+    expect(
+      items.map((item) =>
+        item.kind === "choice" ? item.option.label : item.label,
+      ),
+    ).toEqual([LINEAGE_MENU_NONE, "ISKCON", "Гаудия-матх", "Паривары"]);
+    expect(items[0]).toEqual({
+      kind: "choice",
+      option: { value: null, label: LINEAGE_MENU_NONE },
+    });
+  });
+
+  it("ISKCON — один пункт, без заголовка группы над ним (VED-568)", () => {
+    const labels = lineageMenuItems().flatMap((item) =>
+      item.kind === "choice"
+        ? [item.option.label]
+        : [item.label, ...item.options.map((option) => option.label)],
+    );
+    expect(labels.filter((label) => label === "ISKCON")).toHaveLength(1);
+    expect(lineageMenuItems()[1]).toEqual({
+      kind: "choice",
+      option: { value: "iskcon", label: "ISKCON" },
+    });
   });
 
   it("перечисляет весь справочник ровно по разу", () => {
-    const values = lineageMenuGroups()
-      .flatMap((group) => group.options)
+    const values = lineageMenuItems()
+      .flatMap((item) =>
+        item.kind === "choice" ? [item.option] : item.options,
+      )
       .map((option) => option.value)
       .filter((value) => value !== null);
 
@@ -31,10 +47,19 @@ describe("lineageMenuGroups", () => {
   });
 });
 
+describe("lineageMenuOpenGroup", () => {
+  it("раскрывает группу текущей линии, если в ней есть что выбирать", () => {
+    expect(lineageMenuOpenGroup("ipbys")).toBe("gaudiya_math");
+    expect(lineageMenuOpenGroup("advaita_vamsha")).toBe("parivara");
+    expect(lineageMenuOpenGroup("iskcon")).toBeNull();
+    expect(lineageMenuOpenGroup(null)).toBeNull();
+  });
+});
+
 describe("lineageButtonLabel", () => {
-  it("называет текущую линию", () => {
+  it("называет группу и текущую линию", () => {
     expect(lineageButtonLabel("iskcon")).toBe("Линия: ISKCON");
-    expect(lineageButtonLabel("ipbys")).toBe("Линия: IPBYS");
+    expect(lineageButtonLabel("ipbys")).toBe("Линия: Гаудия-матх — IPBYS");
   });
 
   it("без линии — «для всех линий»", () => {

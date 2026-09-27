@@ -1,14 +1,23 @@
 "use client";
 
 import { useCallback, useId, useRef, useState } from "react";
-import { Landmark } from "lucide-react";
-import type { LineageId } from "@vedamatch/shared";
+import { ChevronDown, Landmark } from "lucide-react";
+import {
+  lineageGroupOf,
+  type LineageGroup,
+  type LineageId,
+} from "@vedamatch/shared";
 import { useDismissable } from "@/lib/use-dismissable";
-import { lineageButtonLabel, lineageMenuGroups } from "@/lib/lineage-menu";
+import {
+  lineageButtonLabel,
+  lineageMenuItems,
+  lineageMenuOpenGroup,
+} from "@/lib/lineage-menu";
 
 /**
  * Кнопка-значок «Линия» с меню выбора (VED-561): ISKCON, матхи, паривары
- * или «без линии». Портальный компонент, как и `lineage-picker`: линия — одна
+ * или «без линии». Выбор в два шага, как везде (VED-568): Гаудия-матх и
+ * Паривары раскрываются, и линия выбирается внутри группы. Портальный компонент, как и `lineage-picker`: линия — одна
  * на Образование и Медиатеку, а куда её сохранить, решает сервис через
  * `onSelect`. Показывать ли кнопку (только админам сервиса), тоже решает
  * сервис — здесь проверки прав нет.
@@ -33,6 +42,9 @@ export function LineageMenuButton({
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  // Раскрыта группа текущей линии: что выбрано, видно сразу.
+  const [expanded, setExpanded] = useState<LineageGroup | null>(null);
+  const currentGroup = lineageGroupOf(value);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -76,7 +88,10 @@ export function LineageMenuButton({
         aria-controls={open ? panelId : undefined}
         aria-label={label}
         title={label}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (!open) setExpanded(lineageMenuOpenGroup(value));
+          setOpen(!open);
+        }}
         className="inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0"
       >
         <Landmark aria-hidden className="size-4" />
@@ -90,35 +105,71 @@ export function LineageMenuButton({
           aria-busy={pending}
           className="absolute right-0 top-full z-30 mt-2 max-h-[60vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
-          {lineageMenuGroups().map((group) => (
-            <div
-              key={group.key}
-              role={group.label ? "group" : undefined}
-              aria-label={group.label ?? undefined}
-              className="py-1"
-            >
-              {group.label && (
-                <p
-                  aria-hidden
-                  className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-text-2"
-                >
-                  {group.label}
-                </p>
-              )}
-              {group.options.map((option) => (
+          {lineageMenuItems().map((item) =>
+            item.kind === "choice" ? (
+              <button
+                key={item.option.value ?? "none"}
+                type="button"
+                disabled={pending}
+                aria-pressed={item.option.value === value}
+                onClick={() => void choose(item.option.value)}
+                className={optionClass(item.option.value === value)}
+              >
+                {item.option.label}
+              </button>
+            ) : (
+              <div key={item.group}>
                 <button
-                  key={option.value ?? "none"}
                   type="button"
-                  disabled={pending}
-                  aria-pressed={option.value === value}
-                  onClick={() => void choose(option.value)}
-                  className={optionClass(option.value === value)}
+                  aria-expanded={expanded === item.group}
+                  onClick={() =>
+                    setExpanded((current) =>
+                      current === item.group ? null : item.group,
+                    )
+                  }
+                  className={`${optionClass(currentGroup === item.group)} justify-between`}
                 >
-                  {option.label}
+                  <span className="min-w-0">
+                    {item.label}
+                    {currentGroup === item.group && expanded !== item.group && (
+                      <span className="block truncate text-xs font-normal text-text-1">
+                        {
+                          item.options.find((option) => option.value === value)
+                            ?.label
+                        }
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    aria-hidden
+                    className={`size-4 shrink-0 transition-transform ${
+                      expanded === item.group ? "rotate-180" : ""
+                    }`}
+                  />
                 </button>
-              ))}
-            </div>
-          ))}
+                {expanded === item.group && (
+                  <div
+                    role="group"
+                    aria-label={item.label}
+                    className="ml-3 border-l border-glass-brd pl-2"
+                  >
+                    {item.options.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={pending}
+                        aria-pressed={option.value === value}
+                        onClick={() => void choose(option.value)}
+                        className={optionClass(option.value === value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ),
+          )}
           {error && (
             <p role="alert" className="px-3 pt-1 text-xs text-magenta">
               {error}

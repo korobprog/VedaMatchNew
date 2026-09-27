@@ -23,7 +23,13 @@ describe("LibraryLineageFilter (VED-449)", () => {
     apiFetch.mockReset().mockResolvedValue({ ok: true });
   });
 
-  function open(applied: "iskcon" | "sri_chaitanya_saraswat_math" | null = "iskcon") {
+  function open(
+    applied:
+      | "iskcon"
+      | "sri_chaitanya_saraswat_math"
+      | "group:parivara"
+      | null = "iskcon",
+  ) {
     render(
       <LibraryLineageFilter locale="ru" applied={applied} preference={null} />,
     );
@@ -80,6 +86,20 @@ describe("LibraryLineageFilter (VED-449)", () => {
     expect(
       screen.getByRole("button", { name: "Шри Чайтанья Сарасват Матх" }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("«Любой паривар» фильтрует всю группу (VED-568)", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Паривары" }));
+    await userEvent.click(screen.getByRole("button", { name: "Любой паривар" }));
+    const [, init] = apiFetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ lineage: "group:parivara" });
+  });
+
+  it("применённая группа видна в шапке группы", async () => {
+    await open("group:parivara");
+    const group = screen.getByRole("button", { name: /^Паривары/ });
+    expect(group).toHaveTextContent("Любой паривар");
   });
 
   it("выбранная позиция — ничего не делает", async () => {

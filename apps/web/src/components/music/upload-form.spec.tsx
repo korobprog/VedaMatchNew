@@ -65,8 +65,13 @@ describe("MusicUploadForm — матх записи", () => {
     render(<MusicUploadForm />);
 
     await fillForm(user);
+    // Два шага (VED-568): группа, затем конкретный матх.
     await user.selectOptions(
       screen.getByLabelText(/Матх или линия записи/i),
+      "gaudiya_math",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Какой именно матх"),
       "sri_chaitanya_saraswat_math",
     );
     await user.click(screen.getByRole("button", { name: /Загрузить/i }));

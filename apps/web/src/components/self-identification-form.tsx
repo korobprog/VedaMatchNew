@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   detectSpiritualStage,
-  lineageLabel,
   type LineageId,
   type SelfIdentificationAnswers,
   type SelfIdentificationState,
@@ -16,6 +15,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { fieldClassName } from "@/components/ui/input";
+import { LineageBadge } from "./lineage-badge";
 import { LineageCards } from "./lineage-picker";
 import {
   DEFAULT_ANSWERS,
@@ -192,7 +192,10 @@ export function SelfIdentificationForm({
           {currentStage === "devotee" && (
             <p className="mt-2 text-sm text-text-1">
               Духовная линия:{" "}
-              {lineageLabel(savedLineage) ?? "не указана — выберите выше"}
+              <LineageBadge
+                lineage={savedLineage}
+                fallback="не указана — выберите выше"
+              />
             </p>
           )}
           {mentorLink && currentStatus !== "confirmed" && (

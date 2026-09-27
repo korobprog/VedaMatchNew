@@ -67,6 +67,12 @@ describe("EntryLineageButton", () => {
     expect(
       screen.getByRole("button", { name: "ISKCON", pressed: true }),
     ).toBeDefined();
+    // ISKCON в меню один раз; паривары — внутри своей группы (VED-568).
+    expect(screen.getAllByRole("button", { name: "ISKCON" })).toHaveLength(1);
+    const parivaras = screen.getByRole("button", { name: "Паривары" });
+    expect(parivaras.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(parivaras);
+    expect(parivaras.getAttribute("aria-expanded")).toBe("true");
     await userEvent.click(
       screen.getByRole("button", { name: "Нитьянанда-вамша" }),
     );
@@ -99,6 +105,24 @@ describe("EntryLineageButton", () => {
     expect(setLibraryEntryLineage).toHaveBeenCalledWith("entry-1", null);
   });
 
+  it("группа текущей линии раскрыта сразу, линия в ней нажата", async () => {
+    render(
+      <EntryLineageButton entryId="entry-1" lineage="ipbys" canSetLineage />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Линия: Гаудия-матх — IPBYS" }),
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Гаудия-матх" })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "IPBYS", pressed: true }),
+    ).toBeDefined();
+  });
+
   it("ошибка сохранения видна в меню, меню не закрывается", async () => {
     setLibraryEntryLineage.mockRejectedValue(new Error("403"));
     render(
@@ -108,6 +132,7 @@ describe("EntryLineageButton", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Линия: для всех линий" }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
     await userEvent.click(screen.getByRole("button", { name: "IPBYS" }));
 
     expect((await screen.findByRole("alert")).textContent).toBe(

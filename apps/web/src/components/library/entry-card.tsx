@@ -8,12 +8,9 @@ import {
   Play,
   Users,
 } from "lucide-react";
-import {
-  type LibraryEntryDto,
-  type LibraryLocale,
-  lineageOption,
-} from "@vedamatch/shared";
+import { type LibraryEntryDto, type LibraryLocale } from "@vedamatch/shared";
 import { videoEmbedUrl } from "@vedamatch/shared";
+import { LineageBadge } from "@/components/lineage-badge";
 import { BookmarkButton } from "./bookmark-button";
 import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
@@ -134,11 +131,20 @@ export function EntryCard({
             {t(locale, "entry.customPreview")}
           </span>
         )}
-        {/* Линия материала: коротко, чипом. Читателю — почему это здесь,
-            редактору — правильно ли подписано. */}
-        <span className="rounded-full border border-glass-brd px-2 py-0.5">
-          {lineageOption(lineage)?.shortLabel ?? t(locale, "lineage.badgeAll")}
-        </span>
+        {/* Линия материала: чипом группы — «ISKCON», «Гаудия-матх»,
+            «Паривары» (VED-568); какой именно матх или паривар, раскрывает
+            нажатие. Читателю — почему это здесь, редактору — правильно ли
+            подписано. */}
+        <LineageBadge
+          lineage={lineage}
+          fallback={t(locale, "lineage.badgeAll")}
+          groupLabels={{
+            iskcon: t(locale, "lineage.group.iskcon"),
+            gaudiya_math: t(locale, "lineage.group.gaudiya_math"),
+            parivara: t(locale, "lineage.group.parivara"),
+          }}
+          className="rounded-full border border-glass-brd px-2 py-0.5"
+        />
       </div>
 
       <div className="mb-1 flex items-start justify-between gap-2">

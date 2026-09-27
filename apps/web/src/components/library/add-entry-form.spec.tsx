@@ -141,14 +141,18 @@ describe("AddEntryForm", () => {
     ) as HTMLSelectElement;
     expect(select.value).toBe("iskcon");
 
-    // «Гита» своей линии не имеет — берётся линия автора-родителя.
+    // «Гита» своей линии не имеет — берётся линия автора-родителя. Выбор
+    // в два шага (VED-568): группа и конкретный матх вторым списком.
     await userEvent.click(screen.getByLabelText("Гита"));
-    expect(select.value).toBe("sri_chaitanya_saraswat_math");
+    expect(select.value).toBe("gaudiya_math");
+    const detail = () =>
+      screen.getByLabelText("Какой именно матх") as HTMLSelectElement;
+    expect(detail().value).toBe("sri_chaitanya_saraswat_math");
 
     // Ручной выбор сильнее: снятие рубрики его уже не двигает.
-    await userEvent.selectOptions(select, "ipbys");
+    await userEvent.selectOptions(detail(), "ipbys");
     await userEvent.click(screen.getByLabelText("Гита"));
-    expect(select.value).toBe("ipbys");
+    expect(detail().value).toBe("ipbys");
   });
 
   it("отличает ошибку сервера от «попробуйте позже» и показывает код", async () => {

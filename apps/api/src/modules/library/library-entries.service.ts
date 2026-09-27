@@ -16,6 +16,7 @@ import type {
   LibraryEntryDto,
   LibraryEntryType,
   LibraryFeedResponse,
+  LineageFilterValue,
   LineageId,
   LineageViewer,
   PortalActivityEvent,
@@ -33,6 +34,7 @@ import {
   toLineagePreference,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { lineageFeedCondition } from './lineage-feed-filter';
 import { CommunitiesService } from '../communities/communities.service';
 import {
   decodeCursor,
@@ -215,7 +217,7 @@ export class LibraryEntriesService {
   private async viewerLineage(
     viewerId: string | undefined,
     explicit: string | undefined,
-  ): Promise<LineageId | null> {
+  ): Promise<LineageFilterValue | null> {
     if (explicit !== undefined && isLineagePreference(explicit) && explicit) {
       return resolveContentLineage(null, explicit);
     }
@@ -895,11 +897,14 @@ export class LibraryEntriesService {
     if (filters.communityId) {
       where.communityId = filters.communityId;
     }
-    // Линия: своя плюс материалы «для всех» (`null`). Через `AND`, а не
-    // `OR` напрямую — `OR` ниже занят курсором, и второй перетёр бы первый.
-    const lineage = await this.viewerLineage(viewerId, filters.lineage);
+    // Линия (или вся группа, VED-568) плюс материалы «для всех» (`null`).
+    // Через `AND`, а не `OR` напрямую — `OR` ниже занят курсором, и второй
+    // перетёр бы первый.
+    const lineage = lineageFeedCondition(
+      await this.viewerLineage(viewerId, filters.lineage),
+    );
     if (lineage) {
-      where.AND = [{ OR: [{ lineage }, { lineage: null }] }];
+      where.AND = [lineage];
     }
     // Рубрика фильтрует лентой всё своё поддерево: иначе вложение прятало бы
     // материалы — человек убирает рубрику внутрь другой и видит пустую

@@ -155,7 +155,9 @@ describe("MusicTrackList", () => {
     // переехала на исполнителя; остаётся один селект, стиль.
     expect(screen.queryByLabelText("Корневая")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Стиль")).toHaveValue("c1");
-    expect(screen.getByLabelText("Духовная линия")).toHaveValue(
+    // Линия в два шага (VED-568): группа и матх вторым списком.
+    expect(screen.getByLabelText("Духовная линия")).toHaveValue("gaudiya_math");
+    expect(screen.getByLabelText("Какой именно матх")).toHaveValue(
       "sri_chaitanya_gaudiya_math",
     );
   });

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
-  LineageId,
+  LineageFilterValue,
   LineagePreference,
   MusicAlbumPageDto,
   MusicArtistPageDto,
@@ -11,7 +11,11 @@ import type {
   MusicTrackDetailDto,
   MusicTrackListDto,
 } from '@vedamatch/shared';
-import { resolveContentLineage, toLineagePreference } from '@vedamatch/shared';
+import {
+  lineageFilterIds,
+  resolveContentLineage,
+  toLineagePreference,
+} from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { NormalizedMusicTrackQuery } from './music-catalog-query';
 import {
@@ -62,17 +66,23 @@ const TRACK_CARD_INCLUDE = {
  * (VED-165) — двумя разными ключами `categories` в одном объекте их не
  * сложить, второй спред молча стёр бы первый.
  */
-function lineageAndConditions(lineage: LineageId | null) {
-  return lineage ? [{ OR: [{ lineage }, { lineage: null }] }] : [];
+function lineageAndConditions(lineage: LineageFilterValue | null) {
+  const ids = lineageFilterIds(lineage);
+  if (!ids) return [];
+  // Одна линия — прежнее равенство; группа (VED-568) — `in` по её линиям.
+  const match =
+    ids.length === 1 ? { lineage: ids[0] } : { lineage: { in: ids } };
+  return [{ OR: [match, { lineage: null }] }];
 }
 
 /**
- * Условие по линии: своя плюс записи «для всех» (`null`). Завёрнуто в
+ * Условие по линии: своя (или любая линия группы, `group:<группа>`) плюс
+ * записи «для всех» (`null`). Завёрнуто в
  * `AND`, а не положено в `where` как `OR`: `OR` в поиске уже занят словом
  * (название или исполнитель), и второй `OR` молча перетёр бы первый. Пустой
  * объект, когда фильтра нет.
  */
-export function lineageCondition(lineage: LineageId | null) {
+export function lineageCondition(lineage: LineageFilterValue | null) {
   const and = lineageAndConditions(lineage);
   return and.length ? { AND: and } : {};
 }
@@ -303,7 +313,7 @@ export class MusicCatalogService {
   private async viewerLineage(
     viewerId: string | null,
     explicit: LineagePreference,
-  ): Promise<LineageId | null> {
+  ): Promise<LineageFilterValue | null> {
     if (explicit) return resolveContentLineage(null, explicit);
     if (!viewerId) return null;
     const settings = await this.prisma.musicSettings.findUnique({

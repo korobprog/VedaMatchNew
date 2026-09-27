@@ -37,6 +37,19 @@ describe('LibraryPreferencesService', () => {
     ).rejects.toMatchObject({ response: { message: 'unsupported_lineage' } });
   });
 
+  it('stores a whole lineage group as the filter (VED-568)', async () => {
+    const prisma = prismaMock();
+    const service = new LibraryPreferencesService(prisma as never);
+
+    const group = await service.update('user-1', {
+      lineage: 'group:gaudiya_math',
+    });
+    expect(group.lineage).toBe('group:gaudiya_math');
+    await expect(
+      service.update('user-1', { lineage: 'group:hare' as never }),
+    ).rejects.toMatchObject({ response: { message: 'unsupported_lineage' } });
+  });
+
   it('stores "all" and a concrete lineage, and reads garbage back as null', async () => {
     const prisma = prismaMock();
     const service = new LibraryPreferencesService(prisma as never);

@@ -1694,6 +1694,31 @@ describe('LibraryEntriesService — духовная линия', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
+  it('lineage=group:parivara фильтрует по всей группе (VED-568)', async () => {
+    const { service, prisma } = build();
+
+    await service.feed({ lineage: 'group:parivara' });
+
+    expect(whereOf(prisma).AND).toEqual([
+      {
+        OR: [
+          {
+            lineage: {
+              in: [
+                'nityananda_vamsha',
+                'advaita_vamsha',
+                'gadadhara_parivara',
+                'narottama_parivara',
+                'shyamananda_parivara',
+              ],
+            },
+          },
+          { lineage: null },
+        ],
+      },
+    ]);
+  });
+
   it('незнакомую линию в запросе игнорирует, а не отдаёт пустую ленту', async () => {
     const { service, prisma } = build();
 

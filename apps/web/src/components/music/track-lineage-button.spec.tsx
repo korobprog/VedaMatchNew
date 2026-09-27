@@ -34,6 +34,8 @@ describe("MusicTrackLineageButton", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Линия: для всех линий" }),
     );
+    // Два шага, как везде (VED-568): группа, затем матх внутри неё.
+    await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Шри Чайтанья Сарасват Матх" }),
     );
