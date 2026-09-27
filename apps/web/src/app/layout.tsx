@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Unbounded, Manrope, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { cookies } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
@@ -18,28 +18,37 @@ import { getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
 
-const unbounded = Unbounded({
-  subsets: ["cyrillic", "latin"],
-  weight: ["700", "800", "900"],
+// Шрифты лежат в репозитории (src/app/fonts, собирает scripts/build-fonts.sh),
+// а не тянутся next/font/google на сборке: без ответа fonts.googleapis.com
+// падал `next build` в CI. Кириллица и латиница склеены в один файл.
+// Unbounded и Manrope вариативные, как их раздаёт Google, — один файл на все веса.
+const unbounded = localFont({
+  src: "./fonts/unbounded-700-900.woff2",
+  weight: "700 900",
   variable: "--font-unbounded",
   display: "swap",
   preload: false,
 });
 
-const manrope = Manrope({
-  subsets: ["cyrillic", "latin"],
-  weight: ["400", "500", "600", "700"],
+const manrope = localFont({
+  src: "./fonts/manrope-400-700.woff2",
+  weight: "400 700",
   variable: "--font-manrope",
   display: "swap",
   preload: false,
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ["cyrillic", "latin"],
-  weight: ["400", "500"],
+const ibmPlexMono = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-mono-400.woff2", weight: "400" },
+    { path: "./fonts/ibm-plex-mono-500.woff2", weight: "500" },
+  ],
   variable: "--font-mono",
   display: "swap",
   preload: false,
+  // У next/font/google метрик для Plex Mono не было, подменного шрифта он не
+  // заводил. Arial-подмена под моноширинный только исказила бы метрики.
+  adjustFontFallback: false,
 });
 
 // Абсолютный адрес нужен превью в мессенджерах: og:image обязан быть полным URL.
