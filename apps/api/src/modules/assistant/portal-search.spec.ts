@@ -89,6 +89,46 @@ describe('portalSearchResult', () => {
     );
   });
 
+  it('считает показанные карточки и отмечает группы, где нашлось больше', () => {
+    const six = Array.from({ length: 6 }, (_, index) =>
+      item(`Материал ${index}`),
+    );
+    const result = portalSearchResult(
+      'гита',
+      replies({
+        library: { ok: true, items: six },
+        music: { ok: true, items: [item('Киртан', '/music/tracks/1')] },
+      }),
+    );
+
+    expect(result.groups).toMatchObject([
+      { service: 'library', more: true },
+      { service: 'music', more: false },
+    ]);
+    expect(result.total).toBe(PORTAL_SEARCH_PER_SERVICE + 1);
+    expect(result.more).toBe(true);
+  });
+
+  it('ровно пять находок — без «+»', () => {
+    const five = Array.from({ length: 5 }, (_, index) =>
+      item(`Материал ${index}`),
+    );
+    const result = portalSearchResult(
+      'гита',
+      replies({ library: { ok: true, items: five } }),
+    );
+
+    expect(result.total).toBe(5);
+    expect(result.more).toBe(false);
+    expect(result.groups[0].more).toBe(false);
+  });
+
+  it('пустая выдача — ноль', () => {
+    const result = portalSearchResult('гита', replies({}));
+    expect(result.total).toBe(0);
+    expect(result.more).toBe(false);
+  });
+
   it('возвращает сам запрос — страница выдачи показывает, что искали', () => {
     expect(portalSearchResult('гита', replies({})).query).toBe('гита');
   });

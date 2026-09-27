@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import type { PortalSearchResponse } from "@vedamatch/shared";
 import { Header } from "@/components/header";
 import { PortalSearchField } from "@/components/portal-search-field";
+import {
+  PortalSearchGroupCount,
+  PortalSearchTotal,
+} from "@/components/portal-search-count";
 import { AssistantLinkCardView } from "@/components/assistant/assistant-cards";
 import { serviceLabel } from "@/components/assistant/assistant-share";
 import { getProfile } from "@/lib/api";
@@ -112,17 +116,26 @@ function SearchResults({
 
   return (
     <div className="grid gap-8">
+      {/* «Найдено: N» (VED-316): общее число над выдачей и число раздела
+          у его заголовка. */}
+      <PortalSearchTotal result={result} className="-mb-4" />
       {result.groups.map((group) => (
         <section
           key={group.service}
           aria-labelledby={`search-group-${group.service}`}
         >
-          <h2
-            id={`search-group-${group.service}`}
-            className="mb-3 font-display text-lg font-semibold text-text-0"
-          >
-            {serviceLabel(group.service)}
-          </h2>
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2
+              id={`search-group-${group.service}`}
+              className="font-display text-lg font-semibold text-text-0"
+            >
+              {serviceLabel(group.service)}
+            </h2>
+            <PortalSearchGroupCount
+              count={group.items.length}
+              more={group.more}
+            />
+          </div>
           <div className="grid gap-3">
             {group.items.map((card, index) => (
               <AssistantLinkCardView
