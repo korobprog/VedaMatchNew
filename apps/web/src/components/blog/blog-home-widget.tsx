@@ -42,7 +42,11 @@ import {
 } from "@/lib/vcalendar-button";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
 import { BlogFitImage } from "./blog-fit-image";
-import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
+import {
+  BLOG_HOME_MAX_ASPECT,
+  blogHomeSlide,
+  type BlogHomeSlide,
+} from "./blog-media-list";
 import {
   buildSpokenPost,
   canSpeak,
@@ -477,6 +481,7 @@ function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
             slide.coverAspect ? Math.round(slide.coverAspect * 1000) : null
           }
           height={slide.coverAspect ? 1000 : null}
+          maxAspect={BLOG_HOME_MAX_ASPECT}
         >
           {slide.isVideo && <VideoMark />}
         </BlogFitImage>

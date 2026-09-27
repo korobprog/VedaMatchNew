@@ -191,4 +191,9 @@ describe("blogFrameFit (VED-527)", () => {
   it("размеров нет — квадрат до загрузки, заполненный целиком", () => {
     expect(blogFrameFit(null)).toEqual({ aspect: 1, crop: true });
   });
+
+  it("свой предел ширины: баннер 2:1 на главной — целиком (VED-556)", () => {
+    expect(blogFrameFit(2, 3)).toEqual({ aspect: 2, crop: false });
+    expect(blogFrameFit(4, 3)).toEqual({ aspect: 3, crop: true });
+  });
 });
