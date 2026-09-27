@@ -2,16 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { MusicCategoryKind } from "@vedamatch/shared";
+import {
+  lineageOption,
+  type LineageId,
+  type MusicCategoryKind,
+} from "@vedamatch/shared";
 import {
   deleteMusicAlbum,
   deleteMusicArtist,
   deleteMusicCategory,
+  setMusicArtistLineage,
   updateMusicAlbum,
   updateMusicArtist,
   updateMusicCategory,
 } from "@/lib/music-admin-client-api";
 import { Alert } from "@/components/ui/alert";
+import { LineageSelect } from "@/components/lineage-picker";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicCoverField } from "@/components/music/cover-field";
 
@@ -43,6 +49,13 @@ export interface MusicReferenceRow {
    * будущие.
    */
   isAudiobook?: boolean;
+  /**
+   * Духовная линия исполнителя (VED-566). Только для `kind === "artist"`:
+   * выбор в строке сохраняется у исполнителя и сразу проставляется всем его
+   * записям, а новые записи получают её по умолчанию. `undefined` — селект
+   * не рисуется.
+   */
+  lineage?: LineageId | null;
 }
 
 /** Опция выбора корневой категории — ровно то, что нужно `<select>` в строке. */
@@ -147,6 +160,12 @@ function Row({
   const [coverTouched, setCoverTouched] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Выбранная линия до того, как `router.refresh()` принесёт новую строку:
+     без неё селект на время запроса отскакивал бы к старому значению. */
+  const [lineage, setLineageValue] = useState<LineageId | null | undefined>(
+    undefined,
+  );
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function run(action: () => Promise<unknown>) {
     setPending(true);
@@ -199,6 +218,34 @@ function Row({
     void run(() =>
       updateMusicArtist(row.id, { rootCategoryId: rootCategoryId || null }),
     );
+
+  /**
+   * Линия исполнителя (VED-566): «чтобы все его треки после этого
+   * автоматически определялись по этой принадлежности». Один запрос —
+   * линия у исполнителя и у всех его записей; сколько записей тронуто,
+   * говорим словами, иначе действие над всем каталогом исполнителя прошло бы
+   * молча. «Без линии» снимает её только у исполнителя.
+   */
+  const setLineage = (value: string) => {
+    const next = value ? (value as LineageId) : null;
+    const previous = lineage;
+    setLineageValue(next);
+    setNotice(null);
+    void run(async () => {
+      try {
+        const result = await setMusicArtistLineage(row.id, { lineage: next });
+        const option = lineageOption(result.artist.lineage);
+        setNotice(
+          option
+            ? `Линия «${option.shortLabel}» проставлена записям исполнителя: ${result.updatedTracks}`
+            : "Линия снята у исполнителя, его записи не менялись",
+        );
+      } catch (cause) {
+        setLineageValue(previous);
+        throw cause;
+      }
+    });
+  };
 
   /**
    * Отметка «это аудиокниги» (VED-237) — тем же приёмом, что корневая
@@ -331,7 +378,7 @@ function Row({
           </button>
         </div>
       ) : (
-        <div className="flex items-baseline gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 sm:flex-nowrap">
           {onToggleSelected && (
             // Цель 32×32 вокруг галочки 16 — та же, что у списка записей:
             // мельче 24×24 не проходит по WCAG 2.5.8.
@@ -366,26 +413,47 @@ function Row({
               {row.badge}
             </span>
           )}
-          {kind === "artist" && rootCategories && rootCategories.length > 0 && (
-            <label className="shrink-0 self-center">
-              <span className="sr-only">
-                Корневая категория «{row.primary}»
+          {kind === "artist" &&
+            ((rootCategories && rootCategories.length > 0) ||
+              row.lineage !== undefined) && (
+              /* На телефоне селекты уходят второй строкой под имя: в одну
+                 строку с обложкой, именем и кнопками они её разрывали. */
+              <span className="order-last flex basis-full flex-wrap items-center gap-1.5 self-center sm:order-none sm:basis-auto sm:flex-nowrap">
+                {rootCategories && rootCategories.length > 0 && (
+                  <label className="min-w-0 shrink-0">
+                    <span className="sr-only">
+                      Корневая категория «{row.primary}»
+                    </span>
+                    <select
+                      value={row.rootCategoryId ?? ""}
+                      onChange={(event) => setRootCategory(event.target.value)}
+                      disabled={pending}
+                      className="h-7 max-w-full rounded-full border border-glass-brd bg-bg-1 px-2 text-[11px] text-text-1 disabled:opacity-50"
+                    >
+                      <option value="">Без категории</option>
+                      {rootCategories.map((root) => (
+                        <option key={root.id} value={root.id}>
+                          {root.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {row.lineage !== undefined && (
+                  <LineageSelect
+                    value={
+                      (lineage === undefined ? row.lineage : lineage) ?? ""
+                    }
+                    onChange={setLineage}
+                    emptyLabel="Без линии"
+                    ariaLabel={`Линия: ${row.primary}`}
+                    disabled={pending}
+                    compact
+                    className="h-7 min-w-0 max-w-full rounded-full border border-glass-brd bg-bg-1 px-2 text-[11px] text-text-1 disabled:opacity-50 sm:max-w-44"
+                  />
+                )}
               </span>
-              <select
-                value={row.rootCategoryId ?? ""}
-                onChange={(event) => setRootCategory(event.target.value)}
-                disabled={pending}
-                className="h-7 rounded-full border border-glass-brd bg-bg-1 px-2 text-[11px] text-text-1 disabled:opacity-50"
-              >
-                <option value="">Без категории</option>
-                {rootCategories.map((root) => (
-                  <option key={root.id} value={root.id}>
-                    {root.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+            )}
           {kind === "artist" && row.isAudiobook !== undefined && (
             <button
               type="button"
@@ -494,6 +562,13 @@ function Row({
         </div>
       )}
 
+      {/* Живая область стоит всегда: объявляется то, что в неё пришло, а
+          не сам её приход. Пустая не занимает места. */}
+      {kind === "artist" && (
+        <p role="status" className="mt-1 px-1 text-xs text-text-1 empty:hidden">
+          {notice}
+        </p>
+      )}
       {error && (
         <div className="mt-1.5">
           <Alert tone="error">{error}</Alert>

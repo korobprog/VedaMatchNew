@@ -46,6 +46,7 @@ import {
   resolveDurationSeconds,
 } from './music-duration-estimate';
 import { initialStatusFor } from './music-publish-policy';
+import { trackLineageWithArtistDefault } from './artist-lineage';
 
 /** Расширение по типу: имя файла от браузера может быть любым. */
 const EXTENSION_BY_MIME: Record<string, string> = {
@@ -441,16 +442,24 @@ export class MusicUploadsService {
        Пустое значение означает «слышат все» и остаётся таким: это честнее
        угаданного. Поправить может модератор в очереди и редакция в форме
        правки каталога. */
-    const lineage = this.uploadLineage(requestedLineage);
+    const explicitLineage = this.uploadLineage(requestedLineage);
     const audiobook = await this.uploadAudiobook(
       requestedAudiobookId,
       canAssignArtist,
     );
     // Глава без явного исполнителя получает чтеца книги: иначе в плеере под
     // главой стояло бы «Исполнитель не указан».
-    const artistId = await this.uploadArtist(
+    const artist = await this.uploadArtist(
       requestedArtistId ?? audiobook?.readerId,
       canAssignArtist,
+    );
+    const artistId = artist?.id ?? null;
+    // Линия не выбрана, но запись подписана исполнителем с линией (VED-566):
+    // берём её. Это не угадывание по загрузившему — линию исполнителю
+    // выставила редакция, и она утверждение о его записях.
+    const lineage = trackLineageWithArtistDefault(
+      explicitLineage,
+      artist?.lineage,
     );
     const coverKey = embeddedCover
       ? await this.storeEmbeddedCover(userId, embeddedCover)
@@ -550,13 +559,13 @@ export class MusicUploadsService {
   private async uploadArtist(
     requested: string | null | undefined,
     allowed: boolean,
-  ): Promise<string | null> {
+  ): Promise<{ id: string; lineage: string | null } | null> {
     if (!requested || !allowed) return null;
     const artist = await this.prisma.musicArtist.findUnique({
       where: { id: requested },
-      select: { id: true },
+      select: { id: true, lineage: true },
     });
-    return artist?.id ?? null;
+    return artist ?? null;
   }
 
   /**

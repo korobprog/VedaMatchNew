@@ -151,6 +151,12 @@ export interface MusicArtistDto {
    * записи вне Медиатеки, пока редакция не разложит их по книгам.
    */
   isAudiobook: boolean;
+  /**
+   * Духовная линия исполнителя (VED-566). Выбор в админке проставляется всем
+   * его записям, а новые записи без явной линии получают её по умолчанию.
+   * `null` — не задана.
+   */
+  lineage: LineageId | null;
 }
 
 export interface MusicAlbumDto {
@@ -464,6 +470,22 @@ export interface MusicBulkArtistAudiobookRequest {
 export interface MusicBulkArtistAudiobookResult {
   /** Сколько исполнителей поменялось. */
   updated: number;
+}
+
+/**
+ * Линия исполнителя (VED-566): `PATCH music/admin/catalog/artists/:id/lineage`.
+ * Линия сохраняется у исполнителя и тем же запросом проставляется всем его
+ * записям. `null` снимает линию только у исполнителя: записи остаются как
+ * были — случайный выбор «Без линии» не должен стирать разметку каталога.
+ */
+export interface MusicArtistLineageRequest {
+  lineage: LineageId | null;
+}
+
+export interface MusicArtistLineageResult {
+  artist: { id: string; name: string; lineage: LineageId | null };
+  /** Скольким записям исполнителя проставлена линия. */
+  updatedTracks: number;
 }
 
 /**

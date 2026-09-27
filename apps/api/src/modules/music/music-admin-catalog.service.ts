@@ -10,6 +10,8 @@ import type {
   CreateMusicArtistRequest,
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
+  MusicArtistLineageRequest,
+  MusicArtistLineageResult,
   MusicBulkArtistAudiobookRequest,
   MusicBulkArtistAudiobookResult,
   MusicBulkArtistRootCategoryRequest,
@@ -22,7 +24,7 @@ import type {
   UpdateMusicPlaylistRequest,
   UpdateMusicTrackRequest,
 } from '@vedamatch/shared';
-import { isLineageId } from '@vedamatch/shared';
+import { isLineageId, toLineageId } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MusicCoversService } from './music-covers.service';
 import { MusicStorageService } from './music-storage.service';
@@ -870,6 +872,60 @@ export class MusicAdminCatalogService {
     });
 
     return { updated: count };
+  }
+
+  /**
+   * Линия исполнителя (VED-566): «чтобы все его треки после этого
+   * автоматически определялись по этой принадлежности».
+   *
+   * Линия сохраняется у исполнителя и в той же транзакции одним `updateMany`
+   * проставляется всем его записям — независимо от статуса: черновик и
+   * снятая запись, вернувшись в каталог, иначе вынесли бы старую линию.
+   * Новые записи берут её сами (`trackLineageWithArtistDefault`).
+   *
+   * `null` снимает линию только у исполнителя, записи не трогает: случайный
+   * выбор «Без линии» в списке не должен стирать разметку всего каталога
+   * исполнителя. Сделать записи «для всех» можно правкой записи.
+   */
+  async setArtistLineage(
+    viewerIsAdmin: boolean,
+    id: string,
+    body: MusicArtistLineageRequest,
+  ): Promise<MusicArtistLineageResult> {
+    this.assertAdmin(viewerIsAdmin);
+    const lineage = body?.lineage ?? null;
+    if (lineage !== null && !isLineageId(lineage)) {
+      throw new BadRequestException('Неизвестная духовная линия');
+    }
+    const existing = await this.prisma.musicArtist.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Исполнитель не найден');
+
+    return this.prisma.$transaction(async (tx) => {
+      const artist = await tx.musicArtist.update({
+        where: { id },
+        data: { lineage },
+        select: { id: true, name: true, lineage: true },
+      });
+      const updatedTracks = lineage
+        ? (
+            await tx.musicTrack.updateMany({
+              where: { artistId: id },
+              data: { lineage },
+            })
+          ).count
+        : 0;
+      return {
+        artist: {
+          id: artist.id,
+          name: artist.name,
+          lineage: toLineageId(artist.lineage),
+        },
+        updatedTracks,
+      };
+    });
   }
 
   private async replaceCategories(

@@ -16,6 +16,8 @@ import type {
   CreateMusicCategoryRequest,
   CreateMusicPlaylistRequest,
   CreateMusicIngestBatchRequest,
+  MusicArtistLineageRequest,
+  MusicArtistLineageResult,
   MusicArtistsFromTagsRequest,
   MusicArtistsFromTagsResult,
   MusicBulkArtistAudiobookRequest,
@@ -160,6 +162,20 @@ export const updateMusicArtist = (id: string, body: UpdateMusicArtistRequest) =>
     method: "PATCH",
     body: JSON.stringify(body),
   });
+
+/**
+ * Линия исполнителя (VED-566): сохраняется у него и тем же запросом
+ * проставляется всем его записям. `lineage: null` снимает её только у
+ * исполнителя — записи остаются как были.
+ */
+export const setMusicArtistLineage = (
+  id: string,
+  body: MusicArtistLineageRequest,
+) =>
+  send<MusicArtistLineageResult>(
+    `/music/admin/catalog/artists/${encodeURIComponent(id)}/lineage`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
 
 export const deleteMusicArtist = (id: string) =>
   send<unknown>(`/music/admin/catalog/artists/${encodeURIComponent(id)}`, {

@@ -10,6 +10,7 @@ import {
 } from './ingest-process-rules';
 import { batchStatusFor, isItemStale } from './ingest-state';
 import { MusicArtistTagsService } from './music-artist-tags.service';
+import { resolveTrackLineage } from './artist-lineage';
 import { ingestArchiveBreakNotice } from './ingest-fetch-limits';
 import {
   IngestFetchError,
@@ -518,6 +519,19 @@ export class MusicIngestProcessService {
     const { artistId, title } = item.batch.artistId
       ? { artistId: item.batch.artistId, title: fileTitle }
       : await this.artistTags.resolveForIngest(metadata.artist, fileTitle);
+    // Линия партии сильнее; у партии её нет — линия исполнителя (VED-566),
+    // чтобы новая запись размеченного исполнителя не выпадала из его линии.
+    const lineage = await resolveTrackLineage(
+      item.batch.lineage,
+      artistId,
+      async (id) =>
+        (
+          await this.prisma.musicArtist.findUnique({
+            where: { id },
+            select: { lineage: true },
+          })
+        )?.lineage,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       const track = await tx.musicTrack.create({
@@ -536,7 +550,7 @@ export class MusicIngestProcessService {
           artistId,
           albumId: item.batch.albumId,
           isLiveRecording: item.batch.isLiveRecording,
-          lineage: item.batch.lineage,
+          lineage,
           // Черновик, а не публикация: партия выходит в каталог целиком и
           // только по кнопке, после того как админ прошёл таблицу глазами.
           status: 'draft',

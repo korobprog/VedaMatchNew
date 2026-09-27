@@ -40,6 +40,9 @@ export interface MusicArtistRow extends MusicCoverSource {
    * (строка исполнителя, вложенная в карточку записи, о разделе не знает);
    * тогда наружу уходит `false`. */
   isAudiobook?: boolean;
+  /** Линия исполнителя (VED-566). `undefined` — поле не выбрано; тогда
+   * наружу уходит `null`. */
+  lineage?: string | null;
 }
 
 export interface MusicAlbumRow extends MusicCoverSource {
@@ -177,6 +180,7 @@ export function toMusicArtistDto(
     trackCount,
     rootCategoryId: row.rootCategoryId ?? null,
     isAudiobook: row.isAudiobook ?? false,
+    lineage: toLineageId(row.lineage),
   };
 }
 

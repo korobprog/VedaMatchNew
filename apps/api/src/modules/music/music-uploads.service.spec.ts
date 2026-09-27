@@ -77,7 +77,9 @@ function prismaMock() {
       // Справочник исполнителей: по умолчанию исполнитель есть.
       musicArtist: {
         findUnique: jest.fn((args: { where: { id: string } }) =>
-          Promise.resolve<{ id: string } | null>({ id: args.where.id }),
+          Promise.resolve<{ id: string; lineage?: string | null } | null>({
+            id: args.where.id,
+          }),
         ),
       },
       // Книги (VED-297): по умолчанию книги нет.
@@ -356,6 +358,55 @@ describe('MusicUploadsService.completeUpload', () => {
 
     expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ artistId: 'artist-avantika' }),
+    });
+  });
+
+  it('линия не выбрана — запись берёт линию исполнителя (VED-566)', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.musicArtist.findUnique.mockResolvedValueOnce({
+      id: 'artist-avantika',
+      lineage: 'sri_chaitanya_saraswat_math',
+    });
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      null,
+      'artist-avantika',
+      true,
+    );
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        artistId: 'artist-avantika',
+        lineage: 'sri_chaitanya_saraswat_math',
+      }),
+    });
+  });
+
+  it('явно выбранная линия сильнее линии исполнителя (VED-566)', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(pending);
+    prisma.prisma.musicArtist.findUnique.mockResolvedValueOnce({
+      id: 'artist-avantika',
+      lineage: 'iskcon',
+    });
+
+    await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'gaura.mp3',
+      'ipbys',
+      'artist-avantika',
+      true,
+    );
+
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ lineage: 'ipbys' }),
     });
   });
 

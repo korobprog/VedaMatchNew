@@ -204,6 +204,7 @@ describe('toMusicArtistDto', () => {
       trackCount: 7,
       rootCategoryId: null,
       isAudiobook: false,
+      lineage: null,
     });
   });
 
@@ -214,6 +215,17 @@ describe('toMusicArtistDto', () => {
     expect(
       toMusicArtistDto({ ...artist, rootCategoryId: 'root-1' }, 0, BASE),
     ).toMatchObject({ rootCategoryId: 'root-1' });
+  });
+
+  // VED-566: без линии в DTO селект в админке показывал бы «Без линии» у
+  // размеченного исполнителя; мусор из базы наружу не уходит.
+  it('прокидывает линию из справочника, мусор читает как null', () => {
+    expect(
+      toMusicArtistDto({ ...artist, lineage: 'iskcon' }, 0, BASE),
+    ).toMatchObject({ lineage: 'iskcon' });
+    expect(
+      toMusicArtistDto({ ...artist, lineage: 'matha' }, 0, BASE),
+    ).toMatchObject({ lineage: null });
   });
 });
 

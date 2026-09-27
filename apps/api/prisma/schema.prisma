@@ -4947,6 +4947,12 @@ model MusicArtist {
   /// каталоге такие записи не показываются — «отображение всех аудиокниг
   /// находится внутри кнопки», как и просили в карточке.
   isAudiobook    Boolean         @default(false)
+  /// Духовная линия исполнителя (VED-566): ISKCON, матх или паривар из
+  /// справочника `@vedamatch/shared/lineage`. Выбор в админке сразу
+  /// проставляется всем записям исполнителя, а новые записи без явной линии
+  /// получают её по умолчанию. Строка, а не enum, — как `MusicTrack.lineage`.
+  /// `null` — линия не задана, записи размечаются по одной.
+  lineage        String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 

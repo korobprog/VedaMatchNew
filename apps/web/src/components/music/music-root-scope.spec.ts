@@ -30,6 +30,7 @@ function artist(patch: Partial<MusicArtistDto>): MusicArtistDto {
     trackCount: 0,
     rootCategoryId: null,
     isAudiobook: false,
+    lineage: null,
     ...patch,
   };
 }
