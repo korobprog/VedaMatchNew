@@ -16,6 +16,7 @@ function artist(over: Partial<MusicArtistDto> = {}): MusicArtistDto {
     trackCount: 3,
     rootCategoryId: null,
     isAudiobook: false,
+    lineage: null,
     ...over,
   };
 }

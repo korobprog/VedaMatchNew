@@ -48,6 +48,7 @@ export function MusicArtistCatalogPanel({
     coverUrl: artist.coverUrl,
     rootCategoryId: artist.rootCategoryId,
     isAudiobook: artist.isAudiobook,
+    lineage: artist.lineage ?? null,
   }));
 
   return (

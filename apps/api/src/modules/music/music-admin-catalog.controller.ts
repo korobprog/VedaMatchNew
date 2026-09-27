@@ -18,6 +18,7 @@ import type {
   CreateMusicPlaylistRequest,
   UpdateMusicAlbumRequest,
   UpdateMusicArtistRequest,
+  MusicArtistLineageRequest,
   MusicArtistsFromTagsRequest,
   MusicBulkArtistAudiobookRequest,
   MusicBulkArtistRootCategoryRequest,
@@ -171,6 +172,21 @@ export class MusicAdminCatalogController {
     @Body() body: UpdateMusicArtistRequest,
   ) {
     return this.catalog.updateArtist(isAdmin(user), id, body);
+  }
+
+  /**
+   * Линия исполнителя (VED-566): сохраняется у него и тем же запросом
+   * проставляется всем его записям. Отдельный маршрут, а не поле общего
+   * `PATCH artists/:id`: у действия побочный эффект на весь каталог
+   * исполнителя, и ответ несёт число тронутых записей.
+   */
+  @Patch('artists/:id/lineage')
+  setArtistLineage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: MusicArtistLineageRequest,
+  ) {
+    return this.catalog.setArtistLineage(isAdmin(user), id, body);
   }
 
   @Delete('artists/:id')

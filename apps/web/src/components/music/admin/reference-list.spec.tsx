@@ -5,13 +5,17 @@ import {
   MusicReferenceList,
   type MusicReferenceRow,
 } from "./reference-list";
-import { updateMusicArtist } from "@/lib/music-admin-client-api";
+import {
+  setMusicArtistLineage,
+  updateMusicArtist,
+} from "@/lib/music-admin-client-api";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/lib/music-admin-client-api", () => ({
   deleteMusicAlbum: vi.fn(),
   deleteMusicArtist: vi.fn(),
   deleteMusicCategory: vi.fn(),
+  setMusicArtistLineage: vi.fn(),
   updateMusicAlbum: vi.fn(),
   updateMusicArtist: vi.fn(),
   updateMusicCategory: vi.fn(),
@@ -154,5 +158,108 @@ describe("MusicReferenceList — вид раздела (VED-165)", () => {
     );
 
     expect(screen.queryByRole("button", { name: /сейчас:/ })).toBeNull();
+  });
+});
+
+describe("MusicReferenceList — линия исполнителя (VED-566)", () => {
+  // В скобках: стрелка, вернувшая мок, стала бы для vitest уборкой после
+  // теста — и он позвал бы отказывающий мок ещё раз, уже без обработчика.
+  beforeEach(() => {
+    vi.mocked(setMusicArtistLineage).mockReset();
+  });
+
+  it("показывает текущую линию исполнителя в селекте с именем в подписи", () => {
+    renderList([{ ...artist, lineage: "iskcon" }]);
+
+    const select = screen.getByRole("combobox", {
+      name: "Линия: Avantika devi dasi",
+    });
+    expect(select).toHaveValue("iskcon");
+    // «Без линии» — первой строкой, линии сгруппированы.
+    expect(select.querySelector("option")).toHaveTextContent("Без линии");
+    expect(
+      select.querySelector('optgroup[label="Гаудия-матх"]'),
+    ).not.toBeNull();
+  });
+
+  it("без линии у исполнителя стоит «Без линии»", () => {
+    renderList([{ ...artist, lineage: null }]);
+
+    expect(
+      screen.getByRole("combobox", { name: "Линия: Avantika devi dasi" }),
+    ).toHaveValue("");
+  });
+
+  it("выбор уходит на сервер и говорит, скольким записям проставлена линия", async () => {
+    vi.mocked(setMusicArtistLineage).mockResolvedValue({
+      artist: {
+        id: "a1",
+        name: "Avantika devi dasi",
+        lineage: "sri_chaitanya_saraswat_math",
+      },
+      updatedTracks: 19,
+    });
+    const user = userEvent.setup();
+    renderList([{ ...artist, lineage: null }]);
+
+    const select = screen.getByRole("combobox", {
+      name: "Линия: Avantika devi dasi",
+    });
+    await user.selectOptions(select, "sri_chaitanya_saraswat_math");
+
+    expect(setMusicArtistLineage).toHaveBeenCalledWith("a1", {
+      lineage: "sri_chaitanya_saraswat_math",
+    });
+    expect(select).toHaveValue("sri_chaitanya_saraswat_math");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "проставлена записям исполнителя: 19",
+    );
+    // Общая правка исполнителя этим выбором не зовётся.
+    expect(updateMusicArtist).not.toHaveBeenCalled();
+  });
+
+  it("«Без линии» уходит как null", async () => {
+    vi.mocked(setMusicArtistLineage).mockResolvedValue({
+      artist: { id: "a1", name: "Avantika devi dasi", lineage: null },
+      updatedTracks: 0,
+    });
+    const user = userEvent.setup();
+    renderList([{ ...artist, lineage: "iskcon" }]);
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Линия: Avantika devi dasi" }),
+      "",
+    );
+
+    expect(setMusicArtistLineage).toHaveBeenCalledWith("a1", { lineage: null });
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "записи не менялись",
+    );
+  });
+
+  it("сервер отказал — селект возвращается к прежней линии и показана ошибка", async () => {
+    vi.mocked(setMusicArtistLineage).mockRejectedValue(
+      new Error("Доступ только для администратора сервиса"),
+    );
+    const user = userEvent.setup();
+    renderList([{ ...artist, lineage: "iskcon" }]);
+
+    const select = screen.getByRole("combobox", {
+      name: "Линия: Avantika devi dasi",
+    });
+    await user.selectOptions(select, "ipbys");
+
+    expect(
+      await screen.findByText("Доступ только для администратора сервиса"),
+    ).toBeInTheDocument();
+    expect(select).toHaveValue("iskcon");
+  });
+
+  it("без поля lineage у строки селекта нет", () => {
+    renderList();
+
+    expect(
+      screen.queryByRole("combobox", { name: "Линия: Avantika devi dasi" }),
+    ).toBeNull();
   });
 });
