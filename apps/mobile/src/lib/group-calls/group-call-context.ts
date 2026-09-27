@@ -40,6 +40,17 @@ export interface GroupCallsApi {
   toggleCamera: () => Promise<void>;
   /** Передняя/задняя камера. */
   switchCamera: () => void;
+  /**
+   * Телефон умеет показ экрана (`canShareScreen`: Android 10+). В
+   * веб-сборке приложения кнопки нет, смотреть чужой экран можно везде.
+   */
+  screenSupported: boolean;
+  /** Мы сейчас показываем экран (VED-360). */
+  screenOn: boolean;
+  /** Начать/остановить показ. Может закончиться отказом сервера. */
+  toggleScreenShare: () => Promise<void>;
+  /** Свой экран — пока показываем. Живым превью не рисуется, см. экран звонка. */
+  localScreenStream: MediaStream | null;
   /** Потоки собеседников — из них экран берёт картинку. */
   remoteStreams: Record<string, MediaStream>;
   /** Кто сообщил, что сейчас не снимает (свернул приложение, выключил камеру). */

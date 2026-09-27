@@ -1,0 +1,252 @@
+diff --git a/android/src/main/AndroidManifest.xml b/android/src/main/AndroidManifest.xml
+index 3213151145170d8304a1d67287aed4b927b4c2b9..31d0999d71b42c6f853c41137426ed79f2eebd29 100644
+--- a/android/src/main/AndroidManifest.xml
++++ b/android/src/main/AndroidManifest.xml
+@@ -3,9 +3,14 @@
+           xmlns:tools="http://schemas.android.com/tools"
+     >
+     <application>
++        <!-- VedaMatch (VED-360): mediaProjection|microphone. Показывающий экран
++             уходит из приложения к тому, что показывает, а разговор идёт
++             дальше: без типа microphone Android 11+ глушит микрофон
++             приложения в фоне. -->
+         <service
+                 android:name=".MediaProjectionService"
+-                android:foregroundServiceType="mediaProjection">
++                android:exported="false"
++                android:foregroundServiceType="mediaProjection|microphone">
+         </service>
+     </application>
+ </manifest>
+diff --git a/android/src/main/java/com/oney/WebRTCModule/MediaProjectionNotification.java b/android/src/main/java/com/oney/WebRTCModule/MediaProjectionNotification.java
+index e09aa007580941692d6cd3c537996f5c33b33f81..c8ae704a1cbb8e1f688571ffc31731d3e0adf529 100644
+--- a/android/src/main/java/com/oney/WebRTCModule/MediaProjectionNotification.java
++++ b/android/src/main/java/com/oney/WebRTCModule/MediaProjectionNotification.java
+@@ -3,8 +3,10 @@ package com.oney.WebRTCModule;
+ import android.app.Notification;
+ import android.app.NotificationChannel;
+ import android.app.NotificationManager;
++import android.app.PendingIntent;
+ import android.app.Service;
+ import android.content.Context;
++import android.content.Intent;
+ import android.os.Build;
+ import android.util.Log;
+ 
+@@ -52,19 +54,55 @@ class MediaProjectionNotification {
+     static Notification buildMediaProjectionNotification(Context context) {
+         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, ONGOING_CONFERENCE_CHANNEL_ID);
+ 
++        // VedaMatch (VED-360): «Остановить показ» прямо из шторки — та же
++        // служба с действием STOP (MediaProjectionService.onStartCommand).
++        Intent stopIntent = new Intent(context, MediaProjectionService.class)
++                .setAction(MediaProjectionService.ACTION_STOP);
++        PendingIntent stopPending = PendingIntent.getService(
++                context, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
++
+         builder.setCategory(NotificationCompat.CATEGORY_CALL)
+                 .setContentTitle(context.getString(R.string.media_projection_notification_title))
+                 .setContentText(context.getString(R.string.media_projection_notification_text))
+                 .setPriority(NotificationCompat.PRIORITY_LOW)
+-                .setOngoing(false)
++                // VedaMatch: пока идёт показ, уведомление не смахивается —
++                // иначе пропадает и кнопка «Остановить».
++                .setOngoing(true)
+                 .setUsesChronometer(false)
+-                .setAutoCancel(true)
++                .setAutoCancel(false)
+                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                 .setOnlyAlertOnce(true)
+-                .setSmallIcon(
+-                        context.getResources().getIdentifier("ic_notification", "drawable", context.getPackageName()))
++                .setSmallIcon(smallIcon(context))
++                .addAction(0, context.getString(R.string.media_projection_notification_stop), stopPending)
+                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+ 
++        // VedaMatch: нажатие на уведомление возвращает в приложение, к звонку.
++        Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
++        if (launch != null) {
++            launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
++            builder.setContentIntent(PendingIntent.getActivity(
++                    context, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
++        }
++
+         return builder.build();
+     }
++
++    /**
++     * VedaMatch (VED-360): у приложения нет drawable ic_notification — его
++     * иконка шторки называется notification_icon (expo-notifications).
++     * Без действующей иконки startForeground() роняет процесс
++     * («Invalid notification: no valid small icon»), поэтому есть и
++     * системная иконка на крайний случай.
++     */
++    private static int smallIcon(Context context) {
++        String pkg = context.getPackageName();
++        int id = context.getResources().getIdentifier("ic_notification", "drawable", pkg);
++        if (id == 0) {
++            id = context.getResources().getIdentifier("notification_icon", "drawable", pkg);
++        }
++        if (id == 0) {
++            id = android.R.drawable.ic_menu_share;
++        }
++        return id;
++    }
+ }
+diff --git a/android/src/main/java/com/oney/WebRTCModule/MediaProjectionService.java b/android/src/main/java/com/oney/WebRTCModule/MediaProjectionService.java
+index 60e547b5eb9c2196f6c441cd9b3ff64feb6ee53f..27011d607b3b5cef5a642ca75f7b93b899d4c45e 100644
+--- a/android/src/main/java/com/oney/WebRTCModule/MediaProjectionService.java
++++ b/android/src/main/java/com/oney/WebRTCModule/MediaProjectionService.java
+@@ -25,6 +25,9 @@ public class MediaProjectionService extends Service {
+ 
+     static final int NOTIFICATION_ID = new Random().nextInt(99999) + 10000;
+ 
++    /** VedaMatch (VED-360): «Остановить показ» из уведомления в шторке. */
++    static final String ACTION_STOP = "com.oney.WebRTCModule.MediaProjectionService.STOP";
++
+     private static volatile CompletableFuture<Void> startFuture;
+ 
+     public static CompletableFuture<Void> launch(Context context) {
+@@ -83,9 +86,34 @@ public class MediaProjectionService extends Service {
+ 
+     @Override
+     public int onStartCommand(Intent intent, int flags, int startId) {
++        // VedaMatch (VED-360): кнопка «Остановить показ» в уведомлении.
++        // Останавливаем захват здесь же, нативно, — JS получит обычное
++        // событие конца дорожки (как при остановке из системного интерфейса)
++        // и сам отпустит её, а с ней и эту службу.
++        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
++            // Захвата уже нет (уведомление пережило его) — служба не нужна.
++            if (!ScreenCaptureController.stopActive()) {
++                stopSelf();
++            }
++            return START_NOT_STICKY;
++        }
++
+         Notification notification = MediaProjectionNotification.buildMediaProjectionNotification(this);
+ 
+-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            // VedaMatch (VED-360): вместе с экраном идёт разговор, и микрофон
++            // в фоне без типа microphone Android 11+ заглушает. Если система
++            // тип microphone не дала (нет RECORD_AUDIO и т.п.), показ всё
++            // равно важнее — повторяем с одним mediaProjection.
++            try {
++                startForeground(NOTIFICATION_ID, notification,
++                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
++                                | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
++            } catch (RuntimeException e) {
++                Log.w(TAG, "Foreground service without microphone type", e);
++                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
++            }
++        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+         } else {
+             startForeground(NOTIFICATION_ID, notification);
+diff --git a/android/src/main/java/com/oney/WebRTCModule/ScreenCaptureController.java b/android/src/main/java/com/oney/WebRTCModule/ScreenCaptureController.java
+index 554739d2c8d7eb65564f15eb7affd3271cfa6c9f..d5da8ecf9869977359f6f00781b495e890469742 100644
+--- a/android/src/main/java/com/oney/WebRTCModule/ScreenCaptureController.java
++++ b/android/src/main/java/com/oney/WebRTCModule/ScreenCaptureController.java
+@@ -8,6 +8,8 @@ import android.util.DisplayMetrics;
+ import android.util.Log;
+ import android.view.OrientationEventListener;
+ 
++import java.lang.ref.WeakReference;
++
+ import org.webrtc.ScreenCapturerAndroid;
+ import org.webrtc.VideoCapturer;
+ 
+@@ -25,6 +27,41 @@ public class ScreenCaptureController extends AbstractVideoCaptureController {
+ 
+     private final Context context;
+ 
++    /**
++     * VedaMatch (VED-360): идущий захват экрана — чтобы кнопка «Остановить
++     * показ» в уведомлении могла его остановить. Захват в приложении один:
++     * новый просто вытесняет ссылку на старый.
++     */
++    private static volatile WeakReference<ScreenCaptureController> active = new WeakReference<>(null);
++
++    /**
++     * VedaMatch (VED-360): остановить идущий захват так же, как его
++     * останавливает система (MediaProjection.Callback#onStop): JS получает
++     * событие конца дорожки и сам её отпускает.
++     */
++    static boolean stopActive() {
++        ScreenCaptureController controller = active.get();
++        if (controller == null) {
++            return false;
++        }
++        ThreadUtils.runOnExecutor(controller::endFromOutside);
++        return true;
++    }
++
++    private void endFromOutside() {
++        if (active.get() != this) {
++            return;
++        }
++        active = new WeakReference<>(null);
++        orientationListener.disable();
++        if (videoCapturer != null) {
++            stopCapture();
++        }
++        if (capturerEventsListener != null) {
++            capturerEventsListener.onCapturerEnded();
++        }
++    }
++
+     public ScreenCaptureController(Context context, int width, int height, Intent mediaProjectionPermissionResultData, float resolutionScale) {
+         super((int)(width * resolutionScale), (int)(height * resolutionScale), DEFAULT_FPS);
+ 
+@@ -64,17 +101,25 @@ public class ScreenCaptureController extends AbstractVideoCaptureController {
+ 
+     @Override
+     public void dispose() {
++        if (active.get() == this) {
++            active = new WeakReference<>(null);
++        }
++        orientationListener.disable();
+         MediaProjectionService.abort(context);
+         super.dispose();
+     }
+ 
+     @Override
+     protected VideoCapturer createVideoCapturer() {
++        active = new WeakReference<>(this);
+         VideoCapturer videoCapturer =
+                 new ScreenCapturerAndroid(mediaProjectionPermissionResultData, new MediaProjection.Callback() {
+                     @Override
+                     public void onStop() {
+                         Log.w(TAG, "Media projection stopped.");
++                        if (active.get() == ScreenCaptureController.this) {
++                            active = new WeakReference<>(null);
++                        }
+                         orientationListener.disable();
+                         stopCapture();
+ 
+diff --git a/android/src/main/java/com/oney/WebRTCModule/WebRTCModuleOptions.java b/android/src/main/java/com/oney/WebRTCModule/WebRTCModuleOptions.java
+index 01d31d7b10f4906ebf51fc1d946670a75d85f840..ff13a8674cc73d33de15412a9d3ade1d20fc4fb9 100644
+--- a/android/src/main/java/com/oney/WebRTCModule/WebRTCModuleOptions.java
++++ b/android/src/main/java/com/oney/WebRTCModule/WebRTCModuleOptions.java
+@@ -15,7 +15,10 @@ public class WebRTCModuleOptions {
+     public Loggable injectableLogger;
+     public Logging.Severity loggingSeverity;
+     public String fieldTrials;
+-    public boolean enableMediaProjectionService;
++    // VedaMatch (VED-360): служба включена по умолчанию. Без неё на
++    // Android 10+ getMediaProjection() бросает SecurityException — экран
++    // нельзя захватывать без foreground-службы типа mediaProjection.
++    public boolean enableMediaProjectionService = true;
+ 
+     public static WebRTCModuleOptions getInstance() {
+         if (instance == null) {
+diff --git a/android/src/main/res/values/strings.xml b/android/src/main/res/values/strings.xml
+index 3c2b3152279d7f04fc6456f3d53350cc9db5dc35..f15125b39d07bd6b91a06cab5f5b88fa9ca407f3 100644
+--- a/android/src/main/res/values/strings.xml
++++ b/android/src/main/res/values/strings.xml
+@@ -2,4 +2,5 @@
+     <string name="media_projection_notification_title">Screen sharing</string>
+     <string name="media_projection_notification_text">You are currently sharing your screen.</string>
+     <string name="ongoing_notification_channel_name">Screen Sharing Notifications</string>
++    <string name="media_projection_notification_stop">Stop sharing</string>
+ </resources>

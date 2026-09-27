@@ -59,6 +59,21 @@ export function createGroupCallsApi(api: ApiClient) {
         body: { video },
       }),
 
+    /**
+     * Начать или закончить показ экрана (VED-360). Начало, как и камера, —
+     * просьба: 409 приходит, когда мест под видео нет или экран уже
+     * показывает другой. Конец шлёт рядом `video` — вернуть камеру или
+     * отдать место (`screenStopPatch`), одним запросом.
+     */
+    setScreen: (
+      callId: string,
+      patch: { screen: true } | { screen: false; video: boolean },
+    ) =>
+      api.request<ChatGroupCallDto>(`/chat/group-calls/${callId}/state`, {
+        method: 'POST',
+        body: patch,
+      }),
+
     /** «Я ещё здесь» — и заодно свежий состав комнаты. */
     heartbeat: (callId: string) =>
       api.request<ChatGroupCallDto>(`/chat/group-calls/${callId}/heartbeat`, {
