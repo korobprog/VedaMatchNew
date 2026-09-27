@@ -10,17 +10,122 @@
  * кнопка первого гаснет сама (подписка через `useSyncExternalStore`).
  */
 
-/** Что читать: заголовок и текст, пустые части выпадают. */
+/**
+ * Адреса в тексте (VED-550): `https://…`, `www.…` и голые домены вида
+ * `site.ru/путь`; точка или запятая за адресом остаётся тексту. Голосом
+ * ссылку не читают — её не набрать на слух, а пост, присланный из
+ * Образования, озвучивался одной ссылкой. Зона домена — только строчными
+ * латинскими буквами или «рф»: так «Бхагавад-гита 2.13» и «т. е.» не
+ * считаются адресами, а опечатка «конец.Начало» не съедает слова.
+ */
+const URL_PATTERN = /\b(?:https?:\/\/|www\.)\S*[^\s.,;:!?)\]»"'…]/gi;
+const BARE_DOMAIN_PATTERN =
+  /(?<![\p{L}\p{N}@.\-/])(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-z]{2,24}|(?:[а-яёА-ЯЁ0-9](?:[а-яёА-ЯЁ0-9-]*[а-яёА-ЯЁ0-9])?\.)+рф)(?::\d+)?(?:\/(?:\S*[^\s.,;:!?)\]»"'…])?)?(?![\p{L}\p{N}])/gu;
+
+/** Текст без адресов; хвосты вроде «Подробнее: » остаются без пустоты. */
+export function stripUrls(text: string): string {
+  return text
+    .replace(URL_PATTERN, " ")
+    .replace(BARE_DOMAIN_PATTERN, " ")
+    .replace(/\(\s*\)/g, " ")
+    .replace(/[ \t]+([.,;:!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Склейка частей для голоса: без адресов, пустые и одни знаки выпадают. */
+function joinSpoken(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => stripUrls(part ?? ""))
+    .filter((part) => /[\p{L}\p{N}]/u.test(part))
+    .join(". ")
+    .replace(/([.!?…])\.\s/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Что читать: заголовок и текст, без ссылок; пустые части выпадают. */
 export function buildSpokenPost(post: {
   title?: string | null;
   text?: string | null;
 }): string {
-  return [post.title?.trim(), post.text?.trim()]
-    .filter((part): part is string => Boolean(part))
-    .join(". ")
-    .replace(/https?:\/\/\S+/g, "ссылка")
-    .replace(/\s+/g, " ")
-    .trim();
+  return joinSpoken([post.title, post.text]);
+}
+
+/**
+ * Пост, отправленный из Образования кнопкой «В Блог-ленту» (VED-490), несёт
+ * в тексте только описание, а то и один адрес. Читать нужно сам материал
+ * (VED-550): его id берём из ссылки поста `/library/entry/<id>` — путь на
+ * портале или полный адрес.
+ */
+export function libraryEntryIdOf(post: {
+  link?: { url: string } | null;
+}): string | null {
+  const url = post.link?.url;
+  if (!url) return null;
+  let path = url;
+  try {
+    path = new URL(url, "https://vedamatch.local").pathname;
+  } catch {
+    return null;
+  }
+  const match = /^\/library\/entry\/([^/?#]+)\/?$/.exec(path);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]) || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Материал Образования, как его отдаёт `GET /library/entries/:id`. */
+export interface SpokenLibraryEntry {
+  titleRu?: string | null;
+  titleEn?: string | null;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+  body?: string | null;
+}
+
+/**
+ * Что читать у материала: заголовок и основной текст — у катхи и статьи это
+ * `body`, у ссылки на чужой сайт основного текста нет, тогда описание.
+ * Служебного (источник, тип, домен) голос не читает.
+ */
+export function buildSpokenLibraryEntry(entry: SpokenLibraryEntry): string {
+  const title = entry.titleRu?.trim() || entry.titleEn?.trim() || null;
+  const main =
+    entry.body?.trim() ||
+    entry.descriptionRu?.trim() ||
+    entry.descriptionEn?.trim() ||
+    null;
+  return joinSpoken([title, main]);
+}
+
+/**
+ * Текст для кнопки «Озвучить» у поста: у присланного из Образования — сам
+ * материал (подгружает `loadEntry`), иначе и при любой неудаче — заголовок
+ * и текст поста без ссылок.
+ */
+export async function resolveSpokenPostText(
+  post: {
+    title?: string | null;
+    text?: string | null;
+    link?: { url: string } | null;
+  },
+  loadEntry: (id: string) => Promise<SpokenLibraryEntry | null>,
+): Promise<string> {
+  const entryId = libraryEntryIdOf(post);
+  if (entryId) {
+    try {
+      const entry = await loadEntry(entryId);
+      const text = entry ? buildSpokenLibraryEntry(entry) : "";
+      if (text) return text;
+    } catch {
+      // Материал удалён или сеть подвела — прочитаем сам пост.
+    }
+  }
+  return buildSpokenPost(post);
 }
 
 /**

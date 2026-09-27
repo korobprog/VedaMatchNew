@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Copy,
@@ -17,8 +11,6 @@ import {
   Trash2,
   Pin,
   Star,
-  Square,
-  Volume2,
 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { copyText } from "@/lib/copy-text";
@@ -33,15 +25,7 @@ import {
 } from "@/lib/blog-client-api";
 import { BlogMedia } from "./blog-media";
 import { BlogPostLinkButton, BlogPostLinkCover } from "./blog-post-link";
-import {
-  buildSpokenPost,
-  canSpeak,
-  getBlogSpeakingId,
-  getBlogSpeakingServerId,
-  speakBlogPost,
-  stopBlogSpeech,
-  subscribeBlogSpeech,
-} from "./blog-speech";
+import { BlogSpeakButton } from "./blog-speak-button";
 import { postMedia } from "./blog-media-list";
 import { BlogLifetimeControl } from "./blog-lifetime-control";
 import { BlogPostEditor } from "./blog-post-editor";
@@ -237,7 +221,15 @@ export function BlogPostCard({
         {likeCount > 0 && <span className="text-text-2">{likeCount}</span>}
       </button>
     ),
-    speak: <BlogSpeakButton key="speak" post={post} />,
+    speak: (
+      <BlogSpeakButton
+        key="speak"
+        postId={post.id}
+        source={source ?? post}
+        className={`${ACTION} hover:border-cyan/60`}
+        labelClassName={ACTION_LABEL}
+      />
+    ),
     copy: (
       <button
         key="copy"
@@ -498,54 +490,5 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
     >
       {name.slice(0, 1)}
     </span>
-  );
-}
-
-const subscribeNothing = () => () => {};
-
-/**
- * «Слушать» (VED-476): пост читает голос браузера. Кнопки нет, где синтеза
- * речи нет, и у поста без текста. Нажатие во время чтения — «Стоп».
- */
-function BlogSpeakButton({ post }: { post: BlogPostDto }) {
-  const speakingId = useSyncExternalStore(
-    subscribeBlogSpeech,
-    getBlogSpeakingId,
-    getBlogSpeakingServerId,
-  );
-  const available = useSyncExternalStore(
-    subscribeNothing,
-    canSpeak,
-    () => false,
-  );
-  const speaking = speakingId === post.id;
-
-  // Карточка ушла со страницы — голос не должен читать в пустоту.
-  useEffect(
-    () => () => {
-      if (getBlogSpeakingId() === post.id) stopBlogSpeech();
-    },
-    [post.id],
-  );
-
-  const text = buildSpokenPost(post);
-  if (!available || !text) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={() =>
-        speaking ? stopBlogSpeech() : speakBlogPost(post.id, text)
-      }
-      aria-pressed={speaking}
-      className={`${ACTION} hover:border-cyan/60 ${speaking ? "border-cyan" : ""}`}
-    >
-      {speaking ? (
-        <Square aria-hidden className="size-3.5" fill="currentColor" />
-      ) : (
-        <Volume2 aria-hidden className="size-3.5" />
-      )}
-      <span className={ACTION_LABEL}>{speaking ? "Стоп" : "Слушать"}</span>
-    </button>
   );
 }
