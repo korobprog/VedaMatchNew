@@ -34,6 +34,7 @@ import {
   hasBackgroundAudio,
   nextAudioIndex,
 } from "./background-audio";
+import { useSpeechAnchor } from "@/lib/speech-dock";
 import { buildSpokenQuote, canSpeak } from "./speak-quote";
 import {
   getQuotePausedId,
@@ -41,6 +42,7 @@ import {
   getQuoteSpeechServerSnapshot,
   pauseQuoteSpeech,
   resumeQuoteSpeech,
+  SPEECH_SOURCE,
   speakButtonAction,
   speakQuote,
   stopQuoteSpeech,
@@ -312,13 +314,10 @@ export function ReelsFeed({
     else speakQuote(post.id, buildSpokenQuote(post));
   }
 
-  /* Уход со страницы не должен оставлять голос говорить в пустоту, а паузу —
-     ждать кнопки, которой больше нет. Эффект не зависит от тождества
-     функций — иначе он снимался бы и ставился заново на каждом рендере,
-     обрывая чтение на полуслове. */
-  useEffect(() => {
-    return () => stopQuoteSpeech();
-  }, []);
+  /* Уход со страницы чтение не обрывает (VED-569): паузу и стоп человек
+     найдёт в плавающем пульте озвучки поверх любой страницы. Пока лента с
+     кнопкой открыта, пульт спрятан — якорь держит активная публикация. */
+  useSpeechAnchor(SPEECH_SOURCE, items[activeIndex]?.id ?? null);
 
   // Просмотр: активный слайд, продержавшийся положенное время. Один раз на
   // пост за сессию — повторные пролистывания сервер и так не учитывает.

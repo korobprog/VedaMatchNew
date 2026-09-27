@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   useTransition,
@@ -150,7 +151,8 @@ export function BlogHomeWidget({
     : null;
   /* Пост из Образования читается текстом материала, а не ссылкой (VED-550):
      источник выбирает `useBlogSpeech`. */
-  const speech = useBlogSpeech(currentPost?.id ?? null, spokenSource);
+  const speakRef = useRef<HTMLButtonElement>(null);
+  const speech = useBlogSpeech(currentPost?.id ?? null, spokenSource, speakRef);
   const { speaking, paused } = speech;
 
   const [order, setOrder] = useState<HomePanelButton[]>(() => [
@@ -272,6 +274,7 @@ export function BlogHomeWidget({
     ),
     speak: speech.available ? (
       <button
+        ref={speakRef}
         type="button"
         onClick={() => void speech.toggle()}
         disabled={speech.loading}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { Pause, Play, Volume2 } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
+import { useSpeechAnchor } from "@/lib/speech-dock";
 import {
   canSpeak,
   getEntryPausedId,
@@ -11,9 +12,9 @@ import {
   getEntrySpeakingServerId,
   pauseEntrySpeech,
   resumeEntrySpeech,
+  SPEECH_SOURCE,
   speakButtonAction,
   speakEntry,
-  stopEntrySpeech,
   subscribeEntrySpeech,
 } from "./entry-speech";
 import { t } from "./i18n";
@@ -55,16 +56,10 @@ export function EntrySpeakButton({
   const speaking = speakingId === entryId;
   const paused = pausedId === entryId;
 
-  // Ушли со страницы — голос не должен читать в пустоту, а пауза — ждать
-  // кнопки, которой больше нет.
-  useEffect(
-    () => () => {
-      if (getEntrySpeakingId() === entryId || getEntryPausedId() === entryId) {
-        stopEntrySpeech();
-      }
-    },
-    [entryId],
-  );
+  // Ушли со страницы — чтение не обрывается (VED-569): паузу и стоп человек
+  // найдёт в плавающем пульте озвучки. Пока кнопка на экране, пульт спрятан.
+  const ref = useRef<HTMLButtonElement>(null);
+  useSpeechAnchor(SPEECH_SOURCE, entryId, ref);
 
   if (!available || !text) return null;
   const label = t(
@@ -85,6 +80,7 @@ export function EntrySpeakButton({
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={toggle}
       aria-pressed={speaking}

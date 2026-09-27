@@ -8,6 +8,7 @@
  * скопировано из озвучки Блог-ленты, а не импортировано: сервисы портала
  * друг друга не импортируют.
  */
+import { clearSpeech, reportSpeech, speechTitle } from "@/lib/speech-dock";
 import { canSpeak, spokenLanguage } from "./speak-quote";
 
 /**
@@ -60,10 +61,41 @@ let currentChunk = 0;
 /** Поколение чтения: обработчики отменённых фраз не трогают новое. */
 let generation = 0;
 
+/** Slug для портального пульта озвучки (VED-569). */
+export const SPEECH_SOURCE = "motivation";
+
 function emit(next: string | null) {
   speakingId = next;
   for (const listener of listeners) listener();
+  reportToDock();
 }
+
+/**
+ * Портальный пульт (VED-569): уйдя со страницы, человек ставит паузу и
+ * останавливает чтение плавающим доком. Пульт получает факт и команды этого
+ * диктора. Чужих дикторов сервис не импортирует — только портальный `lib`.
+ */
+function reportToDock() {
+  const id = speakingId ?? paused?.id ?? null;
+  if (!id) {
+    clearSpeech(SPEECH_SOURCE);
+    return;
+  }
+  reportSpeech({
+    source: SPEECH_SOURCE,
+    id,
+    service: "Вдохновение",
+    title: speechTitle(speakingId ? currentText : (paused?.text ?? "")),
+    status: speakingId ? "speaking" : "paused",
+    controls: dockControls,
+  });
+}
+
+const dockControls = {
+  pause: () => pauseQuoteSpeech(),
+  resume: () => void resumeQuoteSpeech(),
+  stop: () => stopQuoteSpeech(),
+};
 
 export function subscribeQuoteSpeech(listener: () => void): () => void {
   listeners.push(listener);
