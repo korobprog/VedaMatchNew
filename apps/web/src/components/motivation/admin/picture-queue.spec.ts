@@ -4,7 +4,11 @@ import {
   addPictures,
   pictureSummary,
   picturesToSend,
+  pictureSelectable,
   removePicture,
+  setAllPicturesSelected,
+  stepPreview,
+  togglePictureSelected,
   updatePicture,
   type PictureItem,
 } from "./picture-queue";
@@ -57,10 +61,9 @@ describe("addPictures", () => {
 describe("picturesToSend", () => {
   it("sends waiting files and retries the ones the server failed", () => {
     const make = ids();
-    let queue: PictureItem[] = addPictures(
-      [],
-      [file("a.jpg"), file("b.jpg"), file("c.jpg")],
-      make,
+    let queue: PictureItem[] = setAllPicturesSelected(
+      addPictures([], [file("a.jpg"), file("b.jpg"), file("c.jpg")], make),
+      true,
     );
     queue = updatePicture(queue, "p1", { status: "done", slug: "picture-1" });
     queue = updatePicture(queue, "p2", {
@@ -85,11 +88,56 @@ describe("pictureSummary", () => {
   });
 
   it("counts what went out and what did not", () => {
-    let queue = addPictures([], [file("a.jpg"), file("b.jpg"), file("c.jpg")], ids());
+    let queue = setAllPicturesSelected(
+      addPictures([], [file("a.jpg"), file("b.jpg"), file("c.jpg")], ids()),
+      true,
+    );
     queue = updatePicture(queue, "p1", { status: "done" });
     queue = updatePicture(queue, "p2", { status: "done" });
     expect(pictureSummary(queue)).toBe("Опубликовано 2 из 3");
     queue = updatePicture(queue, "p3", { status: "error" });
     expect(pictureSummary(queue)).toBe("Опубликовано 2 из 3, не загрузилось: 1");
+  });
+});
+
+// VED-302: картинку сначала смотрят, а берут рамочкой в углу.
+describe("выбор картинок", () => {
+  it("добавленный файл ещё не выбран и не уходит по кнопке", () => {
+    const queue = addPictures([], [file("a.jpg"), file("b.jpg")], ids());
+    expect(queue.every((item) => !item.selected)).toBe(true);
+    expect(picturesToSend(queue)).toEqual([]);
+  });
+
+  it("рамочка отмечает и снимает отметку, несколько сразу", () => {
+    let queue = addPictures([], [file("a.jpg"), file("b.jpg"), file("c.jpg")], ids());
+    queue = togglePictureSelected(queue, "p1");
+    queue = togglePictureSelected(queue, "p3");
+    expect(picturesToSend(queue).map((item) => item.id)).toEqual(["p1", "p3"]);
+    queue = togglePictureSelected(queue, "p1");
+    expect(picturesToSend(queue).map((item) => item.id)).toEqual(["p3"]);
+  });
+
+  it("отвергнутый на входе файл не отмечается", () => {
+    let queue = addPictures([], [file("a.gif", "image/gif")], ids());
+    expect(pictureSelectable(queue[0])).toBe(false);
+    queue = togglePictureSelected(queue, "p1");
+    queue = setAllPicturesSelected(queue, true);
+    expect(queue[0].selected).toBe(false);
+  });
+
+  it("итог не считает неотмеченные", () => {
+    let queue = addPictures([], [file("a.jpg"), file("b.jpg")], ids());
+    queue = togglePictureSelected(queue, "p1");
+    queue = updatePicture(queue, "p1", { status: "done" });
+    expect(pictureSummary(queue)).toBe("Опубликовано 1 из 1");
+  });
+});
+
+describe("stepPreview", () => {
+  it("листает по кругу", () => {
+    expect(stepPreview(0, 1, 3)).toBe(1);
+    expect(stepPreview(2, 1, 3)).toBe(0);
+    expect(stepPreview(0, -1, 3)).toBe(2);
+    expect(stepPreview(0, 1, 0)).toBe(0);
   });
 });

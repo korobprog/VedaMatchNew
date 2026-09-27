@@ -27,6 +27,12 @@ export interface PictureItem {
   retriable: boolean;
   /** Слаг опубликованного поста — для ссылки «Открыть». */
   slug: string | null;
+  /**
+   * Отмечена ли к публикации (VED-302). Файл сначала смотрят во весь экран
+   * кликом по картинке, а берут — рамочкой в углу; поэтому добавленный файл
+   * ещё не выбран, и кнопка шлёт только отмеченные.
+   */
+  selected: boolean;
 }
 
 /** Совпадает с сервером (`PICTURE_TEXT_MAX`): лишнее он всё равно отвергнет. */
@@ -50,6 +56,7 @@ export function addPictures(
       message: rejection,
       retriable: !rejection,
       slug: null,
+      selected: false,
     };
   });
   return [...queue, ...added];
@@ -70,12 +77,50 @@ export function removePicture(
   return queue.filter((item) => item.id !== id);
 }
 
-/** Что уйдёт по кнопке: ждущие и те, что упали на сервере. */
-export function picturesToSend(queue: readonly PictureItem[]): PictureItem[] {
-  return queue.filter(
-    (item) =>
-      item.status === "waiting" || (item.status === "error" && item.retriable),
+/**
+ * Можно ли отметить файл: ждущий или упавший на сервере. Отвергнутый на входе
+ * и уже опубликованный отмечать незачем — отправлять нечего.
+ */
+export function pictureSelectable(item: PictureItem): boolean {
+  return (
+    item.status === "waiting" || (item.status === "error" && item.retriable)
   );
+}
+
+/** Клик по рамочке: отметить или снять отметку. Неподходящий не трогаем. */
+export function togglePictureSelected(
+  queue: readonly PictureItem[],
+  id: string,
+): PictureItem[] {
+  return queue.map((item) =>
+    item.id === id && pictureSelectable(item)
+      ? { ...item, selected: !item.selected }
+      : item,
+  );
+}
+
+/** «Выбрать все» / «Снять выбор» — для пачки из тридцати открыток. */
+export function setAllPicturesSelected(
+  queue: readonly PictureItem[],
+  selected: boolean,
+): PictureItem[] {
+  return queue.map((item) =>
+    pictureSelectable(item) ? { ...item, selected } : item,
+  );
+}
+
+/** Что уйдёт по кнопке: отмеченные ждущие и упавшие на сервере. */
+export function picturesToSend(queue: readonly PictureItem[]): PictureItem[] {
+  return queue.filter((item) => item.selected && pictureSelectable(item));
+}
+
+/**
+ * Соседняя картинка при листании просмотра стрелками — по кругу, чтобы с
+ * последней можно было вернуться к первой.
+ */
+export function stepPreview(index: number, delta: number, length: number) {
+  if (length <= 0) return 0;
+  return (((index + delta) % length) + length) % length;
 }
 
 /** «Опубликовано 3 из 4, не загрузилось: 1» — итог после отправки. */
@@ -83,7 +128,11 @@ export function pictureSummary(queue: readonly PictureItem[]): string | null {
   const done = queue.filter((item) => item.status === "done").length;
   const failed = queue.filter((item) => item.status === "error").length;
   if (done === 0 && failed === 0) return null;
-  const head = `Опубликовано ${done} из ${queue.length}`;
+  // Неотмеченные ждущие в итог не входят: их и не собирались публиковать.
+  const total = queue.filter(
+    (item) => item.selected || item.status !== "waiting",
+  ).length;
+  const head = `Опубликовано ${done} из ${total}`;
   if (failed === 0) return head;
   return `${head}, не загрузилось: ${failed}`;
 }
