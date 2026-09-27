@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   MUSIC_RADIO_HEARTBEAT_MS,
+  MUSIC_STREAM_URL_TTL_SECONDS,
   type MusicRadioItemDto,
   type MusicRadioStateDto,
 } from "@vedamatch/shared";
@@ -20,7 +21,14 @@ import {
   leaveMusicRadio,
   musicRadioHeartbeat,
 } from "@/lib/music-radio-client";
+import { rememberStreamUrl } from "@/lib/music/stream-url-cache";
 import { useMusicPlayer } from "../player/player-provider";
+import { revealMusicPlayerCollapsed } from "../player/player-reveal";
+import {
+  radioHandoffPosition,
+  radioHandoffTrackId,
+  radioHandoffStep,
+} from "./radio-handoff";
 import {
   radioItemAt,
   radioMsLeft,
@@ -41,6 +49,12 @@ export interface MusicRadioApi {
   stop(): void;
   /** Узнать счётчик слушателей, не включая радио. */
   refreshListeners(): void;
+  /**
+   * Продолжить звучащую запись в плеере Медиатеки с той же секунды
+   * (VED-542). Радио замолкает, когда плеер зазвучит сам, — не раньше.
+   * Во вставке и в пустом эфире ничего не делает.
+   */
+  handoffToPlayer(): void;
 }
 
 const RadioContext = createContext<MusicRadioApi | null>(null);
@@ -100,7 +114,11 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
     null,
   );
   const slotRef = useRef<string | null>(null);
+  /** Когда элементу назначили ссылку эфира — от этого считается её срок. */
+  const srcAssignedAtRef = useRef(0);
   const activeRef = useRef(false);
+  /** Идёт переход в плеер Медиатеки (VED-542), см. `radioYieldAction`. */
+  const handoffRef = useRef(false);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // `sync` и `load` зовут друг друга; ссылка разрывает круг зависимостей.
   const loadRef = useRef<() => Promise<void>>(async () => undefined);
@@ -153,6 +171,7 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
       if (slotRef.current !== target.slotId) {
         slotRef.current = target.slotId;
         element.src = target.streamUrl;
+        srcAssignedAtRef.current = Date.now();
         const offset = radioOffsetSeconds(target, now);
         const seekAndPlay = () => {
           element.currentTime = offset;
@@ -215,6 +234,7 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => {
     if (!activeRef.current) return;
     activeRef.current = false;
+    handoffRef.current = false;
     slotRef.current = null;
     clearAdvance();
     const element = audioRef.current;
@@ -237,6 +257,7 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
     void element.play().catch(() => undefined);
     if (player?.isPlaying) player.toggle();
     activeRef.current = true;
+    handoffRef.current = false;
     setActive(true);
     setLoading(true);
     setError(null);
@@ -260,11 +281,66 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [active]);
 
-  // Запустили запись в Медиатеке — радио уступает.
+  /*
+   * Переход в плеер (VED-542). Звук у плеера и радио в разных `<audio>`,
+   * поэтому шов прячется перекрытием: плеер запускается с секунды, которую
+   * сейчас слышно в эфире, а радио играет, пока плеер не зазвучит (см.
+   * эффект ниже). Ссылку эфира плеер получает готовой через запас адресов:
+   * это та же подписанная ссылка на тот же файл, и без неё первый звук
+   * ждал бы лишний круг — запрос к порталу и редирект.
+   */
+  const handoffToPlayer = useCallback(() => {
+    if (!activeRef.current || handoffRef.current || !player) return;
+    const trackId = radioHandoffTrackId(item);
+    if (!item || !trackId) return;
+    const element = audioRef.current;
+    const cached = stateRef.current;
+    const air = cached
+      ? radioOffsetSeconds(
+          item,
+          radioServerNow(cached.state, cached.at, Date.now()),
+        )
+      : 0;
+    const position = radioHandoffPosition(
+      item,
+      element ? element.currentTime : null,
+      air,
+    );
+    if (item.streamUrl && slotRef.current === item.slotId) {
+      rememberStreamUrl(
+        trackId,
+        element?.currentSrc || item.streamUrl,
+        MUSIC_STREAM_URL_TTL_SECONDS,
+        srcAssignedAtRef.current,
+      );
+    }
+    handoffRef.current = true;
+    player.play(trackId, [trackId], position);
+  }, [item, player]);
+
+  // Запустили запись в Медиатеке — радио уступает. Кроме перехода в
+  // плеер: там плеер «играет» раньше, чем зазвучал, — см. эффект ниже.
   const mainPlaying = Boolean(player?.isPlaying);
   useEffect(() => {
-    if (mainPlaying && activeRef.current) stop();
+    if (mainPlaying && activeRef.current && !handoffRef.current) stop();
   }, [mainPlaying, stop]);
+
+  const mainLoading = Boolean(player?.isLoading);
+  const mainError = player?.loadError ?? null;
+  useEffect(() => {
+    if (!activeRef.current || !handoffRef.current) return;
+    const step = radioHandoffStep({
+      isPlaying: mainPlaying,
+      isLoading: mainLoading,
+      loadError: mainError,
+    });
+    if (step === "cancel") handoffRef.current = false;
+    if (step !== "finish") return;
+    stop();
+    // Полоса плеера встаёт на место полосы эфира — свёрнутой, как по
+    // горячей кнопке «Плеер», даже если её прятали в пузырь или паузой.
+    revealMusicPlayerCollapsed();
+  }, [mainPlaying, mainLoading, mainError, stop]);
 
   // Закрыли вкладку — уходим из счётчика сразу.
   useEffect(() => {
@@ -293,8 +369,19 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
       start,
       stop,
       refreshListeners,
+      handoffToPlayer,
     }),
-    [active, loading, item, listeners, error, start, stop, refreshListeners],
+    [
+      active,
+      loading,
+      item,
+      listeners,
+      error,
+      start,
+      stop,
+      refreshListeners,
+      handoffToPlayer,
+    ],
   );
 
   return <RadioContext.Provider value={api}>{children}</RadioContext.Provider>;
