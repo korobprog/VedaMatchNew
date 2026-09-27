@@ -6,8 +6,7 @@ import { BlogHomeStrip } from './blog-home-strip';
 import { pressable, screenText } from './blog-test-helpers';
 
 const mockHome = jest.fn<Promise<BlogHomeFeedResponse>, []>();
-const mockRead = jest.fn<Promise<boolean>, [string]>();
-const mockWrite = jest.fn<Promise<void>, [string, boolean]>(async () => undefined);
+const mockSetSection = jest.fn<Promise<void>, [string, boolean]>(async () => undefined);
 const mockOpenPost = jest.fn();
 const mockOpenFeed = jest.fn();
 const mockOpenComposer = jest.fn();
@@ -23,10 +22,9 @@ jest.mock('@/theme/theme', () => ({
 const fakeSession = { api: {}, user: { id: 'u-1' } };
 jest.mock('@/lib/auth/session', () => ({ __esModule: true, useSession: () => fakeSession }));
 jest.mock('@/lib/blog/blog-api', () => ({ __esModule: true, createBlogApi: () => ({ home: () => mockHome() }) }));
-jest.mock('@/lib/blog/blog-home-visibility', () => ({
+jest.mock('@/lib/home/home-sections-store', () => ({
   __esModule: true,
-  readBlogHomeVisible: (userId: string) => mockRead(userId),
-  writeBlogHomeVisible: (userId: string, visible: boolean) => mockWrite(userId, visible),
+  homeSectionsStore: { set: (key: string, shown: boolean) => mockSetSection(key, shown) },
 }));
 jest.mock('@/lib/blog/blog-routes', () => ({
   __esModule: true,
@@ -54,7 +52,6 @@ afterEach(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   resetBlogChanges();
-  mockRead.mockResolvedValue(true);
 });
 
 describe('полоса блог-ленты в «Чатах»', () => {
@@ -79,19 +76,12 @@ describe('полоса блог-ленты в «Чатах»', () => {
     expect(mockOpenComposer).toHaveBeenCalled();
   });
 
-  it('скрытая полоса не рисует ничего и не ходит на сервер — «Чаты» как до ленты', async () => {
-    mockRead.mockResolvedValue(false);
-    const renderer = await render();
-    expect(renderer.toJSON()).toBeNull();
-    expect(mockHome).not.toHaveBeenCalled();
-  });
-
-  it('«Скрыть» убирает полосу сразу и запоминает выбор этого человека', async () => {
+  it('«Скрыть» снимает галочку «Блог-лента» в «Настройках» — отдельного флага у полосы нет', async () => {
     mockHome.mockResolvedValue({ posts: [blogPost('a')], total: 1 });
     const renderer = await render();
     await act(async () => pressable(renderer, 'Скрыть').props.onPress());
-    expect(renderer.toJSON()).toBeNull();
-    expect(mockWrite).toHaveBeenCalledWith('u-1', false);
+    expect(mockSetSection).toHaveBeenCalledWith('blog', false);
+    expect(pressable(renderer, 'Скрыть').props.accessibilityHint).toContain('«Настройках»');
   });
 
   it('сервис упал — полоса молча уходит, переписке она не мешает', async () => {

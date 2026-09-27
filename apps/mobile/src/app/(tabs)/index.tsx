@@ -14,6 +14,8 @@ import { createChatApi } from '@/lib/chat/chat-api';
 import { applyListEvent, sortConversations } from '@/lib/chat/chat-list-state';
 import { useChatStream } from '@/lib/chat/chat-stream';
 import { createStatusApi } from '@/lib/chat/status-api';
+import { shownHomeSections } from '@/lib/home/home-sections';
+import { useHomeSections } from '@/lib/home/home-sections-store';
 import { directCompanionKey } from '@/lib/chat/statuses/status-playback';
 import { createInboxApi } from '@/lib/notifications/inbox-api';
 import { setUnreadCount } from '@/lib/notifications/unread-store';
@@ -43,6 +45,10 @@ export default function ChatsScreen() {
   const [requestsCount, setRequestsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Что стоит над беседами — галочки «Настроек» (`lib/home/home-sections.ts`).
+  // Вкладки рисуются только после чтения хранилища, так что первый кадр уже
+  // с нужными блоками, без мигания.
+  const shownSections = new Set(shownHomeSections(useHomeSections(), { hasUser: Boolean(user) }));
 
   const load = useCallback(async () => {
     try {
@@ -186,10 +192,10 @@ export default function ChatsScreen() {
       {/* Быстрая конференция (VED-360) — строкой под заголовком, а не
           значком в ряду: у неё есть что сказать словами, включая потолок
           в четыре человека, а значок этого не скажет. */}
-      <QuickConferenceRow />
+      {shownSections.has('quickConference') ? <QuickConferenceRow /> : null}
       {/* Полоса статусов (VED-129) — как на сайте, над беседами: первым
           «Мой статус», дальше люди, непросмотренные впереди. */}
-      {user ? (
+      {user && shownSections.has('statuses') ? (
         <StatusStrip
           statusApi={statusApi}
           me={{ id: user.id, name: user.displayName, avatarUrl: user.avatarUrl }}
@@ -197,10 +203,10 @@ export default function ChatsScreen() {
           onChanged={bumpStatuses}
         />
       ) : null}
-      {/* Блог-лента (VED-334): первое, что видно на главной сайта, — здесь
-          начало ленты полосой над беседами. Почему в «Чатах», а не шестой
-          вкладкой, — у компонента. Скрытая полоса не оставляет ничего. */}
-      <BlogHomeStrip />
+      {/* Блог-лента (VED-334): по умолчанию выключена — пользователь
+          попросил убрать её из чатов, но оставить галочкой в «Настройках».
+          Выключенная не оставляет ни заголовка, ни пустого места. */}
+      {shownSections.has('blog') ? <BlogHomeStrip /> : null}
       {requestsCount > 0 ? (
         <Pressable
           accessibilityRole="button"

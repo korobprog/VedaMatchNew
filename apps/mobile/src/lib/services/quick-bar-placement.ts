@@ -20,7 +20,7 @@
  */
 
 /** Вкладки, на которых панель есть. Совпадает с файлами `app/(tabs)/`. */
-export const QUICK_BAR_TABS = ['index', 'calls', 'people', 'communities', 'services'] as const;
+export const QUICK_BAR_TABS = ['index', 'calls', 'services', 'people', 'communities'] as const;
 
 /** Экраны, где панели заведомо нет, — с причиной. */
 export const QUICK_BAR_HIDDEN: readonly { route: string; why: string }[] = [

@@ -8,8 +8,10 @@ import { pressable, pressables, screenText } from '@/components/blog/blog-test-h
 import BlogFeedScreen from './index';
 
 const mockFeed = jest.fn<Promise<BlogFeedResponse>, [string, string | null | undefined]>();
-const mockRead = jest.fn<Promise<boolean>, [string]>();
-const mockWrite = jest.fn<Promise<void>, [string, boolean]>(async () => undefined);
+// Настоящее хранилище галочек главной поверх памяти — новое на каждый тест.
+type HomeStoreModule = typeof import('@/lib/home/home-sections-store');
+let mockStored: string | null = null;
+let mockHomeStore: ReturnType<HomeStoreModule['createHomeSectionsStore']>;
 
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual('react');
@@ -40,11 +42,17 @@ jest.mock('@/lib/blog/blog-api', () => ({
     remove: jest.fn(),
   }),
 }));
-jest.mock('@/lib/blog/blog-home-visibility', () => ({
-  __esModule: true,
-  readBlogHomeVisible: (userId: string) => mockRead(userId),
-  writeBlogHomeVisible: (userId: string, visible: boolean) => mockWrite(userId, visible),
-}));
+jest.mock('expo-secure-store', () => ({ __esModule: true, getItemAsync: jest.fn(), setItemAsync: jest.fn() }));
+jest.mock('@/lib/home/home-sections-store', () => {
+  const actual: HomeStoreModule = jest.requireActual('@/lib/home/home-sections-store');
+  return {
+    __esModule: true,
+    get homeSectionsStore() {
+      return mockHomeStore;
+    },
+    useHomeSections: () => actual.useHomeSections(mockHomeStore),
+  };
+});
 
 const mounted: ReactTestRenderer[] = [];
 
@@ -64,7 +72,14 @@ async function scrollToEnd(renderer: ReactTestRenderer) {
 beforeEach(() => {
   jest.clearAllMocks();
   resetBlogChanges();
-  mockRead.mockResolvedValue(true);
+  mockStored = null;
+  const actual: HomeStoreModule = jest.requireActual('@/lib/home/home-sections-store');
+  mockHomeStore = actual.createHomeSectionsStore({
+    getItem: async () => mockStored,
+    setItem: async (_key, value) => {
+      mockStored = value;
+    },
+  });
 });
 afterEach(() => {
   for (const renderer of mounted.splice(0)) act(() => renderer.unmount());
@@ -142,13 +157,20 @@ describe('экран блог-ленты', () => {
     expect(mockFeed).toHaveBeenCalledTimes(1);
   });
 
-  it('полосу, убранную из «Чатов», возвращают отсюда', async () => {
-    mockRead.mockResolvedValue(false);
+  it('лента в «Чатах» выключена (по умолчанию) — включают отсюда той же галочкой, что в «Настройках»', async () => {
     mockFeed.mockResolvedValue({ posts: [], nextCursor: null });
     const renderer = await render();
-    expect(screenText(renderer)).toContain('Лента убрана из «Чатов».');
-    await act(async () => pressable(renderer, 'Вернуть ленту в «Чаты»').props.onPress());
-    expect(mockWrite).toHaveBeenCalledWith('u-1', true);
-    expect(pressables(renderer, 'Вернуть ленту')).toHaveLength(0);
+    expect(screenText(renderer)).toContain('В «Чатах» лента не показывается.');
+    await act(async () => pressable(renderer, 'Показывать ленту в «Чатах»').props.onPress());
+    expect(mockHomeStore.get().blog).toBe(true);
+    expect(JSON.parse(mockStored ?? '{}')).toMatchObject({ blog: true });
+    expect(pressables(renderer, 'Показывать ленту')).toHaveLength(0);
+  });
+
+  it('лента в «Чатах» включена — предложения включить нет', async () => {
+    mockStored = '{"blog":true}';
+    mockFeed.mockResolvedValue({ posts: [], nextCursor: null });
+    const renderer = await render();
+    expect(screenText(renderer)).not.toContain('лента не показывается');
   });
 });

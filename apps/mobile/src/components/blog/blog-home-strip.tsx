@@ -7,8 +7,8 @@ import { useSession } from '@/lib/auth/session';
 import { createBlogApi } from '@/lib/blog/blog-api';
 import { applyBlogChange, subscribeBlogChanges } from '@/lib/blog/blog-changes';
 import { blogRestLabel, blogTileTitle, shownContent } from '@/lib/blog/blog-feed-state';
-import { readBlogHomeVisible, writeBlogHomeVisible } from '@/lib/blog/blog-home-visibility';
 import { openBlogComposer, openBlogFeed, openBlogPost } from '@/lib/blog/blog-routes';
+import { homeSectionsStore } from '@/lib/home/home-sections-store';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -34,41 +34,38 @@ const keyOf = (post: BlogPostDto) => post.id;
  * Вид — по чек-листу заказчика для главной: «картинка, заголовок. Всё».
  * Нажатие на плитку открывает ЭТОТ пост, «Вся лента» — всю ленту.
  *
- * Полосу можно убрать («Скрыть»), и тогда «Чаты» выглядят как до ленты —
- * ни заголовка, ни пустого места. Вернуть — кнопкой в самой ленте, как на
- * сайте. Сбой сервиса полосу молча убирает: упавшая лента не должна мешать
- * переписке, ради которой открыты «Чаты».
+ * Показывать ли полосу, решает не она, а галочка «Блог-лента» в
+ * «Настройках» (`lib/home/home-sections.ts`): по умолчанию выключена, и
+ * «Чаты» выглядят как до ленты — ни заголовка, ни пустого места. Кнопка
+ * «Скрыть» здесь снимает ту же галочку, «Вернуть» на экране ленты — ставит;
+ * отдельного флага у полосы нет. Сбой сервиса полосу молча убирает: упавшая
+ * лента не должна мешать переписке, ради которой открыты «Чаты».
  */
 export function BlogHomeStrip() {
   const { colors } = useTheme();
   const { api, user } = useSession();
   const blogApi = useMemo(() => createBlogApi(api), [api]);
-  const [visible, setVisible] = useState<boolean | null>(null);
   const [posts, setPosts] = useState<BlogPostDto[] | null>(null);
   const [total, setTotal] = useState(0);
   const [failed, setFailed] = useState(false);
   const userId = user?.id ?? null;
 
-  // На каждом возврате на «Чаты»: ленту могли вернуть с её экрана, а посты
-  // за это время — опубликовать.
+  // На каждом возврате на «Чаты»: посты за это время могли опубликовать.
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
       let alive = true;
-      void readBlogHomeVisible(userId).then(async (shown) => {
-        if (!alive) return;
-        setVisible(shown);
-        if (!shown) return;
-        try {
-          const home = await blogApi.home();
+      void blogApi
+        .home()
+        .then((home) => {
           if (!alive) return;
           setPosts(home.posts);
           setTotal(home.total);
           setFailed(false);
-        } catch {
+        })
+        .catch(() => {
           if (alive) setFailed(true);
-        }
-      });
+        });
       return () => {
         alive = false;
       };
@@ -86,15 +83,12 @@ export function BlogHomeStrip() {
     [],
   );
 
-  const hide = useCallback(() => {
-    if (!userId) return;
-    setVisible(false);
-    void writeBlogHomeVisible(userId, false).catch(() => setVisible(true));
-  }, [userId]);
+  // Та же галочка, что в «Настройках»: полоса исчезает, как только она снята.
+  const hide = useCallback(() => void homeSectionsStore.set('blog', false), []);
 
   const renderItem = useCallback<ListRenderItem<BlogPostDto>>(({ item }) => <BlogTile post={item} />, []);
 
-  if (visible !== true || failed) return null;
+  if (failed) return null;
 
   return (
     <View style={styles.root}>
@@ -103,7 +97,7 @@ export function BlogHomeStrip() {
           Блог-лента
         </Text>
         <HeadButton label="Написать" hint="Открывает форму нового поста" onPress={openBlogComposer} />
-        <HeadButton label="Скрыть" hint="Убирает ленту из «Чатов». Вернуть её можно на экране ленты" onPress={hide} />
+        <HeadButton label="Скрыть" hint="Убирает ленту из «Чатов». Вернуть её можно в «Настройках» во вкладке «Сервисы» или на экране ленты" onPress={hide} />
       </View>
 
       {posts === null ? (
