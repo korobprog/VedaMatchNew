@@ -13,6 +13,7 @@ import {
   completeIngestFile,
 } from "@/lib/music-admin-client-api";
 import { Alert } from "@/components/ui/alert";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 type Tab = "files" | "urls" | "zip";
 
@@ -212,7 +213,8 @@ function UrlsTab({ batchId }: { batchId: string }) {
   async function submit(): Promise<void> {
     const urls = text
       .split("\n")
-      .map((line) => line.trim())
+      // Адрес без https:// тоже годится: схему дописываем сами (VED-189).
+      .map((line) => normalizeUrl(line))
       .filter(Boolean);
     if (urls.length === 0) return;
     setBusy(true);

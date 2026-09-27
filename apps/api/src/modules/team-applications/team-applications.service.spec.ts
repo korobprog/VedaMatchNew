@@ -91,6 +91,32 @@ describe('TeamApplicationsService.create', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('дописывает https:// к ссылке на портфолио без схемы (VED-189)', async () => {
+    const { service, created } = createService();
+    await service.create({
+      role: 'design',
+      message: 'Текст',
+      contactEmail: 'a@example.com',
+      portfolioUrl: ' github.com/you ',
+    });
+    expect(created[0]).toMatchObject({
+      portfolioUrl: 'https://github.com/you',
+    });
+  });
+
+  it('не трогает ссылку на портфолио со схемой', async () => {
+    const { service, created } = createService();
+    await service.create({
+      role: 'design',
+      message: 'Текст',
+      contactEmail: 'a@example.com',
+      portfolioUrl: 'http://example.com/me',
+    });
+    expect(created[0]).toMatchObject({
+      portfolioUrl: 'http://example.com/me',
+    });
+  });
+
   it('уведомляет активных админов о новой заявке', async () => {
     const { service, events, prisma } = createService();
     (prisma.user.findMany as jest.Mock).mockResolvedValue([

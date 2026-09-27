@@ -74,7 +74,21 @@ describe("AddEntryWizard", () => {
     expect(screen.getByRole("button", { name: "Далее" })).toBeEnabled();
   });
 
-  it("не пускает со второго шага, пока адрес не абсолютный", async () => {
+  it("не пускает со второго шага, пока в поле не адрес", async () => {
+    const user = userEvent.setup();
+    setup();
+    await pickType(user, "video");
+
+    await user.type(screen.getByLabelText("Адрес ссылки"), "битая");
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "Как проходит киртан",
+    );
+
+    expect(screen.getByRole("button", { name: "Далее" })).toBeDisabled();
+  });
+
+  it("адрес без https:// дописывает сам и пускает дальше (VED-189)", async () => {
     const user = userEvent.setup();
     setup();
     await pickType(user, "video");
@@ -85,7 +99,10 @@ describe("AddEntryWizard", () => {
       "Как проходит киртан",
     );
 
-    expect(screen.getByRole("button", { name: "Далее" })).toBeDisabled();
+    expect(screen.getByLabelText("Адрес ссылки")).toHaveValue(
+      "https://example.com",
+    );
+    expect(screen.getByRole("button", { name: "Далее" })).toBeEnabled();
   });
 
   it("для книги сразу предлагает источник вместо ссылки", async () => {

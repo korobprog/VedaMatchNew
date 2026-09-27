@@ -48,6 +48,7 @@ import {
   type LibraryEntryDraft,
 } from "./entry-draft";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 
@@ -380,6 +381,9 @@ export function AddEntryWizard({
                   <input
                     value={draft.url}
                     onChange={(event) => patch({ url: event.target.value })}
+                    // https:// дописывается сам, набирать его не нужно (VED-189).
+                    onBlur={() => patch({ url: normalizeUrl(draft.url) })}
+                    inputMode="url"
                     placeholder="https://"
                     maxLength={MAX_URL_LENGTH}
                     aria-describedby="wizard-url-hint"

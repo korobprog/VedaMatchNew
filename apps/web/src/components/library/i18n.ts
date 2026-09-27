@@ -106,7 +106,7 @@ const ui = {
       "Описание попадает в поиск — карточку находят по смыслу, а не только по названию",
     "add.proWhyCategories":
       "Несколько категорий — материал попадает сразу в несколько подборок",
-    "add.hintUrl": "Полный адрес вместе с https://",
+    "add.hintUrl": "Можно без https:// — допишем сами",
     "add.hintTitle": "Коротко и по делу — так, как назвали бы полку",
     "add.hintDescription": "Пара предложений: о чём материал и кому пригодится",
     "add.stepWhat": "Что добавляем",
@@ -444,7 +444,7 @@ const ui = {
       "The description feeds search — the card is found by meaning, not just by title",
     "add.proWhyCategories":
       "Several categories put the material into several collections at once",
-    "add.hintUrl": "The full address including https://",
+    "add.hintUrl": "https:// is optional — we add it for you",
     "add.hintTitle": "Short and to the point — the way you would name a shelf",
     "add.hintDescription":
       "A couple of sentences: what it is about and who it helps",

@@ -25,6 +25,7 @@ import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import { MAX_BODY_LENGTH, supportsBody } from "./entry-draft";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 const MAX_URL_LENGTH = 2000;
@@ -310,7 +311,7 @@ function EntryFieldsForm({
     const body: UpdateLibraryEntryRequest = {
       // Адрес отправляем всегда: сервер сам сверит его с нынешним и не
       // тронет ни обогащение, ни обложку, когда ссылка не изменилась.
-      url: url.trim() || null,
+      url: normalizeUrl(url) || null,
       // Текст — только когда его поле на экране: иначе сохранение обычной
       // ссылки слало бы `body: null` по полю, которого человек не видел.
       ...(showBody ? { body: text.trim() || null } : {}),
@@ -376,7 +377,9 @@ function EntryFieldsForm({
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           // Не `type="url"`: браузер не пускал «sampradaya.ru» без https://
-          // и молча не отправлял форму (VED-90). Схему дописывает сервер.
+          // и молча не отправлял форму (VED-90). Схему дописывает сервер, а
+          // с VED-189 — и само поле, чтобы человек видел, что уедет.
+          onBlur={() => setUrl((current) => normalizeUrl(current))}
           inputMode="url"
           maxLength={MAX_URL_LENGTH}
           placeholder="https://"

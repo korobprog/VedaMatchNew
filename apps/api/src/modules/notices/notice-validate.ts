@@ -161,6 +161,30 @@ export function parseDate(value: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * Ссылка на онлайн-встречу без обязательного «https://» (VED-189): человек
+ * пишет «zoom.us/j/1», сохраняется «https://zoom.us/j/1». Пустое и
+ * `undefined` (поле не трогали при правке) проходят как есть. Схему
+ * (`https:`, `http:`, `javascript:`) не трогаем — чужую отвергнет
+ * `validateNotice`; порт («example.com:8080») схемой не считаем. Слову без
+ * точки в имени сайта и тексту с пробелами схему не дописываем: с ней
+ * «потом» стало бы годным адресом «https://потом».
+ */
+export function withSiteScheme<T extends string | null | undefined>(
+  value: T,
+): T {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) return value;
+  const bare = trimmed.startsWith('//') ? trimmed.slice(2) : trimmed;
+  if (bare === trimmed && /^[a-z][a-z\d+.-]*:(?!\d)/i.test(trimmed)) {
+    return value;
+  }
+  const host = bare.split(/[/?#:]/)[0] ?? '';
+  if (!host.includes('.')) return value;
+  return `https://${bare}` as T;
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);

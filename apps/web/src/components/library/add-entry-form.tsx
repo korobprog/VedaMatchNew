@@ -46,6 +46,7 @@ import {
   type LibraryEntryDraft,
 } from "./entry-draft";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 
@@ -273,6 +274,9 @@ export function AddEntryForm({
             <input
               value={url}
               onChange={(event) => setUrl(event.target.value)}
+              // https:// дописывается сам, набирать его не нужно (VED-189).
+              onBlur={() => setUrl((current) => normalizeUrl(current))}
+              inputMode="url"
               className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
               placeholder="https://"
               maxLength={MAX_URL_LENGTH}

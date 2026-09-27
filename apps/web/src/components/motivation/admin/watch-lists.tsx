@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { normalizeUrl } from "@/lib/normalize-url";
 import type {
   MotivationAuthorWatchDto,
   MotivationSourceWatchDto,
@@ -171,7 +172,7 @@ export function SourceWatchList({
   const [label, setLabel] = useState("");
 
   function addSource() {
-    const trimmed = url.trim();
+    const trimmed = normalizeUrl(url);
     if (!trimmed) return;
     void run("add", "add", {
       path: "/admin/motivation/sources",
@@ -189,9 +190,12 @@ export function SourceWatchList({
       </p>
       <div className="mt-4 grid gap-2 sm:grid-cols-[2fr_1fr_auto]">
         <input
-          type="url"
+          // Не `type="url"`: https:// дописывается сам (VED-189).
+          type="text"
+          inputMode="url"
           value={url}
           onChange={(event) => setUrl(event.target.value)}
+          onBlur={() => setUrl((current) => normalizeUrl(current))}
           placeholder="https://..."
           aria-label="Ссылка на источник"
           className={fieldClass}

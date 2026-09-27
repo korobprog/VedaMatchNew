@@ -2,7 +2,11 @@ import {
   NOTICE_DESCRIPTION_MAX_LENGTH,
   NOTICE_TITLE_MAX_LENGTH,
 } from '@vedamatch/shared';
-import { NOTICE_VALIDATION_MESSAGES, validateNotice } from './notice-validate';
+import {
+  NOTICE_VALIDATION_MESSAGES,
+  validateNotice,
+  withSiteScheme,
+} from './notice-validate';
 
 const offer = {
   kind: 'offer' as const,
@@ -153,6 +157,26 @@ describe('validateNotice: онлайн и видимость', () => {
         create,
       ),
     ).toBe('location_invalid');
+  });
+});
+
+describe('withSiteScheme', () => {
+  it('дописывает https:// к адресу без схемы (VED-189)', () => {
+    expect(withSiteScheme('zoom.us/j/1')).toBe('https://zoom.us/j/1');
+    expect(withSiteScheme(' meet.example/x ')).toBe('https://meet.example/x');
+    expect(withSiteScheme('example.com:8080')).toBe('https://example.com:8080');
+    expect(withSiteScheme('//example.com')).toBe('https://example.com');
+  });
+
+  it('не трогает пустое, схему и текст с пробелами', () => {
+    expect(withSiteScheme(undefined)).toBeUndefined();
+    expect(withSiteScheme(null)).toBeNull();
+    expect(withSiteScheme('')).toBe('');
+    expect(withSiteScheme('http://example.com')).toBe('http://example.com');
+    expect(withSiteScheme('https://example.com')).toBe('https://example.com');
+    expect(withSiteScheme('javascript:alert(1)')).toBe('javascript:alert(1)');
+    expect(withSiteScheme('ссылка потом')).toBe('ссылка потом');
+    expect(withSiteScheme('потом')).toBe('потом');
   });
 });
 

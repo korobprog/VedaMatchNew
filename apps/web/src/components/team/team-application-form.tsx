@@ -8,6 +8,7 @@ import type {
 import { teamRoleLabels, teamRoles } from "@/lib/team-labels";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 
@@ -52,7 +53,7 @@ export function TeamApplicationForm() {
           contactEmail: contactEmail.trim() || null,
           contactTelegram: contactTelegram.trim() || null,
           message,
-          portfolioUrl: portfolioUrl.trim() || null,
+          portfolioUrl: normalizeUrl(portfolioUrl) || null,
         }),
       });
       const payload = (await res.json().catch(() => null)) as
@@ -141,9 +142,13 @@ export function TeamApplicationForm() {
           Портфолио или профиль (необязательно)
         </span>
         <input
-          type="url"
+          // Не `type="url"`: браузер не пускал «github.com/you» без схемы,
+          // а https:// дописывается сам (VED-189).
+          type="text"
+          inputMode="url"
           value={portfolioUrl}
           onChange={(event) => setPortfolioUrl(event.target.value)}
+          onBlur={() => setPortfolioUrl((current) => normalizeUrl(current))}
           maxLength={300}
           placeholder="https://github.com/you"
           className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"

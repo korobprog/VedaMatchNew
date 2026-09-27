@@ -10,6 +10,7 @@ import {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 const API_URL = apiBase();
 
@@ -50,7 +51,14 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, text, requisites: rows }),
+        body: JSON.stringify({
+          enabled,
+          text,
+          // Ссылку можно набрать без https:// — схему дописываем сами (VED-189).
+          requisites: rows.map((row) =>
+            row.kind === "link" ? { ...row, value: normalizeUrl(row.value) } : row,
+          ),
+        }),
       });
       if (!res.ok) throw new Error(await readError(res));
       setSaved(true);
@@ -125,6 +133,10 @@ export function AdminDonationForm({ initial }: { initial: DonationSettingsDto })
               aria-label={`Значение реквизита ${index + 1}`}
               value={row.value}
               onChange={(e) => updateRow(index, { value: e.target.value })}
+              onBlur={() => {
+                if (row.kind === "link") updateRow(index, { value: normalizeUrl(row.value) });
+              }}
+              inputMode={row.kind === "link" ? "url" : undefined}
               placeholder={row.kind === "link" ? "https://…" : "Номер, адрес или телефон"}
               maxLength={200}
               className="col-span-2 col-start-1 row-start-2 min-w-0 rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 font-mono text-sm text-text-0"
