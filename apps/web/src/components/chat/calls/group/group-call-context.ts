@@ -40,6 +40,17 @@ export interface GroupCallsApi {
   toggleCamera: () => Promise<void>;
   /** Своя картинка — для плитки «вы». `null`, когда камера не снимает. */
   localVideoStream: MediaStream | null;
+  /**
+   * Браузер умеет показ экрана (`canShareScreen`): на телефоне кнопки нет
+   * вовсе, смотреть чужой экран при этом можно.
+   */
+  screenSupported: boolean;
+  /** Мы сейчас показываем экран (VED-360). */
+  screenOn: boolean;
+  /** Начать/остановить показ. Может закончиться отказом сервера. */
+  toggleScreenShare: () => Promise<void>;
+  /** Свой экран — для своей плитки, пока показываем. */
+  localScreenStream: MediaStream | null;
   /** Потоки собеседников: из них берутся и звук, и картинка. */
   remoteStreams: Record<string, MediaStream>;
   /** Кто сообщил, что сейчас не снимает (скрыл вкладку, выключил камеру). */

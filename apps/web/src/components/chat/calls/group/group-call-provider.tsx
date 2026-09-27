@@ -7,6 +7,7 @@ import {
   useReducer,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import type {
@@ -26,9 +27,11 @@ import {
   leaveGroupCall,
   sendGroupCallSignal,
   setGroupCallMuted,
+  setGroupCallScreen,
   setGroupCallVideo,
   startGroupCall,
 } from "@/lib/chat-group-calls-client";
+import { ApiError } from "@/lib/http-client";
 import { subscribeToChat, subscribeToChatReconnect } from "@/lib/chat-stream";
 import {
   admitCallSignal,
@@ -51,11 +54,22 @@ import {
   shouldAnnounceMedia,
 } from "./media-state-signal";
 import {
+  degradationFor,
   encodingChanged,
+  groupScreenEncoding,
   groupVideoEncoding,
+  type DegradationPreference,
   type VideoEncoding,
 } from "./group-video-quality";
-import { shouldSendGroupVideo } from "./group-video-state";
+import { outgoingVideo } from "./group-video-state";
+import {
+  cameraToggleNeedsServer,
+  canShareScreen,
+  describeScreenShareError,
+  screenButtonState,
+  screenFlagStale,
+  screenStopPatch,
+} from "./screen-share";
 import {
   IDLE_GROUP_CALL_STATE,
   reduceGroupCall,
@@ -143,8 +157,26 @@ export function GroupCallProvider({
   const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(
     null,
   );
-  /** Человек хочет камеру включённой. Что реально уходит — `shouldSendGroupVideo`. */
+  /** Человек хочет камеру включённой. Что реально уходит — `outgoingVideo`. */
   const [cameraOn, setCameraOn] = useState(false);
+  /**
+   * Показ экрана (VED-360): экран подменяет камеру в том же отправителе.
+   * `cameraOn` при этом не трогается — это то, вернётся ли камера, когда
+   * показ кончится.
+   */
+  const [screenOn, setScreenOn] = useState(false);
+  /** Свой экран — для своей плитки. `null`, пока не показываем. */
+  const [localScreenStream, setLocalScreenStream] =
+    useState<MediaStream | null>(null);
+  /**
+   * Умеет ли браузер показ. На сервере — «нет»: там нет ни `navigator`, ни
+   * экрана, а кнопка, мигнувшая при гидратации, хуже появившейся следом.
+   */
+  const screenSupported = useSyncExternalStore(
+    subscribeNever,
+    readScreenSupport,
+    () => false,
+  );
   /** Кто сообщил `{kind:"media"}`, что сейчас не снимает. */
   const [remoteVideoOff, setRemoteVideoOff] = useState<
     Record<string, boolean>
@@ -159,30 +191,55 @@ export function GroupCallProvider({
   const speaking = useRef<SpeakingState>(EMPTY_SPEAKING_STATE);
   const heartbeatFailures = useRef(0);
   const cameraTrack = useRef<MediaStreamTrack | null>(null);
+  const screenTrack = useRef<MediaStreamTrack | null>(null);
+  /** Идёт запрос начала показа — `screenFlagStale` в это окно не чинит. */
+  const screenPending = useRef(false);
   /** Последнее применённое качество — чтобы не звать `setParameters` впустую. */
   const appliedEncoding = useRef<VideoEncoding | null>(null);
+  const appliedDegradation = useRef<DegradationPreference | null>(null);
+  /** Сколько людей в комнате — потолок качества пересчитывается и по нему. */
+  const participantCount = useRef(0);
   /** Что мы в последний раз сообщили о своей камере каждому собеседнику. */
   const announcedMedia = useRef(new Map<string, boolean>());
 
   /**
-   * Уходит ли наша картинка — решает чистый `shouldSendGroupVideo`
-   * (`group-video-state.ts`), а не разбросанные по провайдеру условия.
-   * `ref` рядом нужен обработчикам вне рендера (соединение, поднятое из
-   * пришедшего offer).
+   * Что уходит в видео-отправитель — экран, камера или ничего — решает
+   * чистый `outgoingVideo` (`group-video-state.ts`), а не разбросанные по
+   * провайдеру условия. `ref` рядом нужен обработчикам вне рендера
+   * (соединение, поднятое из пришедшего offer).
    */
-  const sendingVideo = shouldSendGroupVideo({
+  const outgoing = outgoingVideo({
     phase: state.phase,
     cameraOn,
+    screenOn,
     hidden: tabHidden,
   });
+  const sendingVideo = outgoing !== null;
+  const outgoingRef = useRef(outgoing);
   const sendingVideoRef = useRef(sendingVideo);
+  const cameraOnRef = useRef(cameraOn);
+  const screenOnRef = useRef(screenOn);
   // Через эффект, а не прямо в теле: запись в `ref` во время отрисовки —
   // та же ошибка, из-за которой рядом так же синхронизируется `stateRef`.
-  // Читают этот `ref` только обработчики вне отрисовки (соединение,
+  // Читают эти `ref` только обработчики вне отрисовки (соединение,
   // поднятое из пришедшего offer), и они срабатывают уже после эффекта.
   useEffect(() => {
+    outgoingRef.current = outgoing;
     sendingVideoRef.current = sendingVideo;
-  }, [sendingVideo]);
+    cameraOnRef.current = cameraOn;
+    screenOnRef.current = screenOn;
+  }, [cameraOn, outgoing, screenOn, sendingVideo]);
+
+  /** Дорожка, которая сейчас должна стоять в отправителях. */
+  const currentVideoTrack = useCallback(
+    (): MediaStreamTrack | null =>
+      outgoingRef.current === "screen"
+        ? screenTrack.current
+        : outgoingRef.current === "camera"
+          ? cameraTrack.current
+          : null,
+    [],
+  );
 
   // ---------- сигналинг ----------
 
@@ -207,12 +264,25 @@ export function GroupCallProvider({
    * дважды, а разошлись — картинка обязана вернуться, а не доживать
    * разговор на 360p.
    */
-  const applyVideoQuality = useCallback((participantCount: number) => {
-    const target = groupVideoEncoding(participantCount);
-    if (!encodingChanged(appliedEncoding.current, target)) return;
+  const applyVideoQuality = useCallback((count: number) => {
+    participantCount.current = count;
+    // Экрану — свой потолок: кадр не уменьшается, падает частота
+    // (`groupScreenEncoding`). Пересчёт идёт и на смену источника.
+    const source = outgoingRef.current === "screen" ? "screen" : "camera";
+    const target =
+      source === "screen"
+        ? groupScreenEncoding(count)
+        : groupVideoEncoding(count);
+    const degradation = degradationFor(source);
+    if (
+      !encodingChanged(appliedEncoding.current, target) &&
+      appliedDegradation.current === degradation
+    )
+      return;
     appliedEncoding.current = target;
+    appliedDegradation.current = degradation;
     for (const link of links.current.values())
-      void link.applyVideoEncoding(target);
+      void link.applyVideoEncoding(target, degradation);
   }, []);
 
   const linkFor = useCallback(
@@ -248,17 +318,18 @@ export function GroupCallProvider({
         },
       );
       links.current.set(peerId, link);
-      // Новому соединению сразу отдаём и камеру, и потолок качества: без
-      // этого вошедший четвёртым видел бы пустые плитки до первого
-      // изменения состава.
-      void link.setVideoTrack(
-        sendingVideoRef.current ? cameraTrack.current : null,
-      );
+      // Новому соединению сразу отдаём и картинку (камеру или экран), и
+      // потолок качества: без этого вошедший четвёртым видел бы пустые
+      // плитки до первого изменения состава.
+      void link.setVideoTrack(currentVideoTrack());
       if (appliedEncoding.current)
-        void link.applyVideoEncoding(appliedEncoding.current);
+        void link.applyVideoEncoding(
+          appliedEncoding.current,
+          appliedDegradation.current ?? undefined,
+        );
       return link;
     },
-    [sendSignal],
+    [currentVideoTrack, sendSignal],
   );
 
   const closeLink = useCallback((peerId: string) => {
@@ -372,8 +443,17 @@ export function GroupCallProvider({
     cameraTrack.current = null;
     setLocalVideoStream(null);
     setCameraOn(false);
+    // Показ экрана кончается вместе со звонком: иначе браузер продолжал бы
+    // показывать полоску «идёт запись экрана» после выхода.
+    screenTrack.current?.stop();
+    screenTrack.current = null;
+    screenOnRef.current = false;
+    screenPending.current = false;
+    setLocalScreenStream(null);
+    setScreenOn(false);
     announcedMedia.current.clear();
     appliedEncoding.current = null;
+    appliedDegradation.current = null;
     speaking.current = EMPTY_SPEAKING_STATE;
     seqState.current = INITIAL_SIGNAL_SEQ_STATE;
     sendQueue.current = new SignalSendQueue();
@@ -520,6 +600,15 @@ export function GroupCallProvider({
     if (!call || stateRef.current.phase !== "active") return;
     const next = !cameraOn;
 
+    // Во время показа экрана место под видео держит экран, а камера в
+    // отправитель не попадёт до конца показа. Нажатие решает только,
+    // вернётся ли она потом, — сервер узнает об этом вместе с концом
+    // показа (`screenStopPatch`). `{video:false}` сейчас погасил бы показ.
+    if (!cameraToggleNeedsServer(screenOnRef.current)) {
+      setCameraOn(next);
+      return;
+    }
+
     if (!next) {
       setCameraOn(false);
       void setGroupCallVideo(call.id, false).catch(() => {
@@ -544,19 +633,24 @@ export function GroupCallProvider({
   }, [cameraOn]);
 
   /**
-   * Привести камеру в соответствие решению `shouldSendGroupVideo`:
-   * захватить её, раздать во все соединения и сообщить об этом
-   * собеседникам — либо остановить.
+   * Привести отправитель в соответствие решению `outgoingVideo`: захватить
+   * камеру и раздать её во все соединения, либо раздать экран, либо
+   * ничего, — и сообщить собеседникам, идёт ли картинка.
    *
-   * Дорожка именно ОСТАНАВЛИВАЕТСЯ, а не глушится `enabled = false`:
-   * выключенная камера обязана отпустить железо (во вкладке гаснет
-   * индикатор), иначе экономии, ради которой всё затевалось, не будет.
+   * Камера именно ОСТАНАВЛИВАЕТСЯ, а не глушится `enabled = false`, в том
+   * числе на время показа экрана: выключенная камера обязана отпустить
+   * железо (во вкладке гаснет индикатор), иначе экономии, ради которой всё
+   * затевалось, не будет. После показа она захватывается заново.
    */
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (sendingVideo) {
+      if (outgoing === "camera") {
         if (!cameraTrack.current) {
+          // Пока камера захватывается, в отправителе не должно остаться
+          // остановленного экрана — у собеседников замёрз бы его кадр.
+          for (const link of links.current.values())
+            void link.setVideoTrack(null);
           try {
             const media = await navigator.mediaDevices.getUserMedia({
               audio: false,
@@ -587,18 +681,141 @@ export function GroupCallProvider({
         for (const link of links.current.values())
           void link.setVideoTrack(cameraTrack.current);
       } else {
-        for (const link of links.current.values())
-          void link.setVideoTrack(null);
         cameraTrack.current?.stop();
         cameraTrack.current = null;
         setLocalVideoStream(null);
+        const track = outgoing === "screen" ? screenTrack.current : null;
+        for (const link of links.current.values())
+          void link.setVideoTrack(track);
       }
+      // Источник сменился — потолок качества тоже: экрану нужен полный
+      // кадр, камере — лестница по составу.
+      applyVideoQuality(participantCount.current);
       announceMedia();
     })();
     return () => {
       cancelled = true;
     };
-  }, [announceMedia, sendingVideo]);
+  }, [announceMedia, applyVideoQuality, outgoing]);
+
+  // ---------- показ экрана ----------
+
+  /**
+   * Закончить показ — кнопкой, системной «Прекратить доступ» браузера или
+   * выходом. Камера возвращается, если была включена, иначе видео гаснет и
+   * место под него отдаётся: серверу — одним запросом (`screenStopPatch`).
+   *
+   * Запрос повторяется при сбое: потерянный конец показа держал бы у всех
+   * крупную плитку и не давал показать никому другому. Если и повторы не
+   * дошли, чинит подтверждение присутствия (`screenFlagStale`).
+   */
+  const stopScreenShare = useCallback(() => {
+    const track = screenTrack.current;
+    if (!track && !screenOnRef.current) return;
+    screenTrack.current = null;
+    track?.stop();
+    setLocalScreenStream(null);
+    setScreenOn(false);
+    // Отправитель переключит эффект выше, как только `outgoing` сменится;
+    // `ref` правим сразу, чтобы соединение, поднятое в этот промежуток, не
+    // получило остановленный экран.
+    screenOnRef.current = false;
+    const call = stateRef.current.call;
+    if (!call || stateRef.current.phase !== "active") return;
+    const patch = screenStopPatch(cameraOnRef.current);
+    void sendWithRetry(() =>
+      setGroupCallScreen(call.id, patch).then(() => undefined),
+    );
+  }, []);
+
+  /**
+   * Начать показ. Порядок обратный камере — сперва системное окно выбора,
+   * потом разрешение сервера, — и это не прихоть: `getDisplayMedia`
+   * браузер открывает только в ответ на нажатие, а ожидание сети это
+   * право съедает (Safari — сразу, Chrome — через несколько секунд).
+   * Остальные при этом ничего лишнего не видят: в отправитель экран
+   * попадает только после ответа сервера, а при отказе захват сразу
+   * останавливается.
+   */
+  const toggleScreenShare = useCallback(async () => {
+    const call = stateRef.current.call;
+    if (!call || stateRef.current.phase !== "active") return;
+    if (screenOnRef.current) {
+      stopScreenShare();
+      return;
+    }
+    if (screenPending.current) return;
+    // Заведомый отказ (показывает другой, мест нет) объясняем сразу, не
+    // открывая окно выбора: выбрать окно и только потом услышать «нельзя»
+    // обиднее. Решает всё равно сервер — это только подсказка.
+    const hint = screenButtonState(call, userId, {
+      sharing: false,
+      supported: true,
+    });
+    if (hint.blocked) {
+      if (hint.blockedReason)
+        dispatch({ type: "failed-action", error: hint.blockedReason });
+      return;
+    }
+    screenPending.current = true;
+    let media: MediaStream | null = null;
+    try {
+      media = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 15, max: 30 } },
+        audio: false,
+      });
+      const [track] = media.getVideoTracks();
+      if (!track) throw new Error("Не удалось показать экран");
+      await setGroupCallScreen(call.id, { screen: true });
+      if (
+        stateRef.current.phase !== "active" ||
+        stateRef.current.call?.id !== call.id
+      ) {
+        // Пока ждали ответа, звонок кончился — показ отпускаем.
+        for (const t of media.getTracks()) t.stop();
+        return;
+      }
+      // Подсказка кодеру: это текст и линии, а не лицо — держать резкость.
+      track.contentHint = "detail";
+      // Системная «Прекратить доступ» браузера и закрытие показываемого
+      // окна заканчивают показ так же, как наша кнопка.
+      track.addEventListener("ended", stopScreenShare, { once: true });
+      screenTrack.current = track;
+      screenOnRef.current = true;
+      setLocalScreenStream(media);
+      setScreenOn(true);
+    } catch (error) {
+      for (const t of media?.getTracks() ?? []) t.stop();
+      const message = describeScreenShareError(
+        error,
+        (e): e is Error => e instanceof ApiError,
+      );
+      if (message) dispatch({ type: "failed-action", error: message });
+    } finally {
+      screenPending.current = false;
+    }
+  }, [stopScreenShare, userId]);
+
+  /**
+   * Свежий состав говорит, что мы показываем, а мы уже нет — конец показа
+   * до сервера не дошёл. Повторяем его (`screenFlagStale`).
+   */
+  const resyncScreenFlag = useCallback(
+    (call: ChatGroupCallDto) => {
+      if (
+        !screenFlagStale(call, userId, {
+          sharing: screenOnRef.current,
+          pending: screenPending.current,
+        })
+      )
+        return;
+      void setGroupCallScreen(
+        call.id,
+        screenStopPatch(cameraOnRef.current),
+      ).catch(() => undefined);
+    },
+    [userId],
+  );
 
   /**
    * Вкладку увели — камеру гасим (`group-video-state.ts`). Звук при этом
@@ -688,6 +905,7 @@ export function GroupCallProvider({
             selfId: userId,
           });
           reconcilePeers(fresh);
+          resyncScreenFlag(fresh);
         })
         .catch(() => {
           heartbeatFailures.current += 1;
@@ -699,7 +917,14 @@ export function GroupCallProvider({
         });
     }, GROUP_CALL_HEARTBEAT_MS);
     return () => clearInterval(timer);
-  }, [reconcilePeers, state.call, state.phase, teardown, userId]);
+  }, [
+    reconcilePeers,
+    resyncScreenFlag,
+    state.call,
+    state.phase,
+    teardown,
+    userId,
+  ]);
 
   // ---------- кто говорит ----------
 
@@ -810,6 +1035,10 @@ export function GroupCallProvider({
       sendingVideo,
       toggleCamera,
       localVideoStream,
+      screenSupported,
+      screenOn,
+      toggleScreenShare,
+      localScreenStream,
       remoteStreams,
       remoteVideoOff,
       clearActionError,
@@ -824,14 +1053,18 @@ export function GroupCallProvider({
       expanded,
       join,
       leave,
+      localScreenStream,
       localVideoStream,
       remoteStreams,
       remoteVideoOff,
+      screenOn,
+      screenSupported,
       sendingVideo,
       startOrJoin,
       state,
       toggleCamera,
       toggleMute,
+      toggleScreenShare,
       userId,
       watchConversation,
     ],
@@ -845,6 +1078,20 @@ export function GroupCallProvider({
       <GroupCallOverlay />
     </GroupCallsContext.Provider>
   );
+}
+
+/** Умение браузера не меняется за жизнь вкладки — подписываться не на что. */
+function subscribeNever(): () => void {
+  return () => undefined;
+}
+
+function readScreenSupport(): boolean {
+  return canShareScreen({
+    hasGetDisplayMedia:
+      typeof navigator.mediaDevices?.getDisplayMedia === "function",
+    userAgent: navigator.userAgent,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+  });
 }
 
 function isGroupCallEvent(

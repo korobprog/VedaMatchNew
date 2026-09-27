@@ -70,6 +70,11 @@ export interface Tile {
   userId: string;
   view: TileView;
   isSelf: boolean;
+  /**
+   * В плитке экран, а не лицо (VED-360): показывать целиком (`contain`),
+   * крупно и без зеркала — зеркальный текст не прочитать.
+   */
+  screen: boolean;
 }
 
 export interface TilesInput {
@@ -77,6 +82,8 @@ export interface TilesInput {
   selfId: string;
   /** Реально ли уходит НАША картинка (`shouldSendGroupVideo`). */
   sendingVideo: boolean;
+  /** Уходит НАШ экран, а не камера. Необязательно: по умолчанию — нет. */
+  sharingScreen?: boolean;
   /** От кого пришёл поток с живой видеодорожкой. */
   remoteStreams: ReadonlySet<string>;
   /**
@@ -117,13 +124,19 @@ export function videoTiles({
   call,
   selfId,
   sendingVideo,
+  sharingScreen = false,
   remoteStreams,
   remoteVideoOff,
 }: TilesInput): Tile[] {
   return (call?.participants ?? []).map((participant) => {
     const isSelf = participant.user.id === selfId;
     if (isSelf)
-      return { userId: selfId, isSelf, view: sendingVideo ? 'video' : 'avatar' };
+      return {
+        userId: selfId,
+        isSelf,
+        view: sendingVideo ? 'video' : 'avatar',
+        screen: sendingVideo && sharingScreen,
+      };
     // Чужая плитка показывает картинку, только когда СОШЛИСЬ три условия:
     // сервер отдал ему место под видео, к нам доехал поток, и сам он не
     // сказал, что сейчас не снимает. Каждое закрывает свой случай:
@@ -137,7 +150,14 @@ export function videoTiles({
       !remoteVideoOff.has(participant.user.id)
         ? 'video'
         : 'avatar';
-    return { userId: participant.user.id, isSelf, view };
+    // Признак экрана — с сервера, как и место под видео: по потоку экран
+    // от камеры не отличить.
+    return {
+      userId: participant.user.id,
+      isSelf,
+      view,
+      screen: Boolean(participant.screen),
+    };
   });
 }
 
@@ -185,6 +205,18 @@ export function cameraButtonState(
       blockedReason: 'В групповом видео могут участвовать трое',
     };
   return { willEnable: true, blocked: false, blockedReason: null };
+}
+
+/**
+ * Кто показывает экран (VED-360), `null` — никто. Для подписи «… показывает
+ * экран» над сеткой: крупная плитка сама по себе скринридеру ничего не
+ * скажет. Признак — с сервера; порядок — порядок комнаты.
+ */
+export function screenSharer(
+  call: Pick<ChatGroupCallDto, 'participants'> | null,
+): { id: string; name: string } | null {
+  const found = call?.participants.find((p) => p.screen);
+  return found ? { id: found.user.id, name: found.user.name } : null;
 }
 
 /**

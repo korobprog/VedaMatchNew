@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { tileFraction, videoGridLayout } from "./video-grid";
+import {
+  splitStage,
+  stageStrip,
+  tileFraction,
+  videoGridLayout,
+} from "./video-grid";
 
 /**
  * Раскладка решается таблицей, а не на глаз. Спека — копия приложения: если
@@ -79,5 +84,43 @@ describe('доля плитки', () => {
   it('четверо — четверть площади', () => {
     const { width, height } = tileFraction(videoGridLayout(4, false));
     expect(width * height).toBeCloseTo(0.25);
+  });
+});
+
+describe('сцена при показе экрана', () => {
+  const tile = (userId: string, isSelf = false, screen = false) => ({
+    userId,
+    isSelf,
+    screen,
+  });
+
+  it('без показа сцены нет — обычная сетка', () => {
+    const tiles = [tile('me', true), tile('b'), tile('c')];
+    expect(splitStage(tiles)).toEqual({ stage: null, strip: tiles });
+  });
+
+  it('чужой экран — на сцену, остальные полосой в прежнем порядке', () => {
+    const tiles = [tile('me', true), tile('b', false, true), tile('c')];
+    const { stage, strip } = splitStage(tiles);
+    expect(stage?.userId).toBe('b');
+    expect(strip.map((t) => t.userId)).toEqual(['me', 'c']);
+  });
+
+  it('свой экран на сцену не идёт — коридор отражений', () => {
+    const tiles = [tile('me', true, true), tile('b')];
+    expect(splitStage(tiles).stage).toBeNull();
+  });
+
+  it('два экрана по старому составу — второй в полосе, а не пропал', () => {
+    const tiles = [tile('b', false, true), tile('c', false, true), tile('me', true)];
+    const { stage, strip } = splitStage(tiles);
+    expect(stage?.userId).toBe('b');
+    expect(strip.map((t) => t.userId)).toEqual(['c', 'me']);
+  });
+
+  it('полоса сбоку на широком, снизу на вертикальном, нет — если пусто', () => {
+    expect(stageStrip(2, true)).toBe('side');
+    expect(stageStrip(2, false)).toBe('bottom');
+    expect(stageStrip(0, false)).toBe('none');
   });
 });

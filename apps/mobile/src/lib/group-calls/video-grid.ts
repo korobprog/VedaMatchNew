@@ -25,6 +25,11 @@
  * Все плитки равны по размеру. «Говорящего крупнее» здесь нет намеренно:
  * хозяин комнаты особых прав не имеет (`group-call-room.ts`), и делать
  * кого-то главным на экране значило бы завести эти права с чёрного хода.
+ *
+ * Исключение одно — показ экрана (VED-360), и оно не про человека, а про
+ * содержимое: слайд или таблицу в плитке на четверть экрана не прочитать.
+ * Тогда раскладка другая — «сцена»: экран крупно, остальные полосой
+ * (`splitStage`, `stageStrip`).
  */
 
 export interface GridLayout {
@@ -54,4 +59,38 @@ export function tileFraction(layout: GridLayout): {
   if (layout.columns === 0 || layout.rows === 0)
     return { width: 0, height: 0 };
   return { width: 1 / layout.columns, height: 1 / layout.rows };
+}
+
+/**
+ * Разделить плитки на «сцену» и полосу (VED-360).
+ *
+ * На сцену идёт ЧУЖОЙ экран. Свой — нет, он остаётся обычной плиткой в
+ * сетке: свой экран у человека и так перед глазами, а крупная копия
+ * показываемого экрана на том же экране даёт бесконечный коридор
+ * отражений. `null` — сцены нет, раскладка обычная (`videoGridLayout`).
+ *
+ * Экран на сцене один: сервер не даёт показывать двоим. Если по старому
+ * составу их всё же двое, берётся первый по порядку комнаты — второй
+ * остаётся в полосе, а не пропадает.
+ */
+export function splitStage<
+  T extends { userId: string; isSelf: boolean; screen: boolean },
+>(tiles: readonly T[]): { stage: T | null; strip: T[] } {
+  const stage = tiles.find((tile) => tile.screen && !tile.isSelf) ?? null;
+  if (!stage) return { stage: null, strip: [...tiles] };
+  return { stage, strip: tiles.filter((tile) => tile !== stage) };
+}
+
+/**
+ * Где полоса остальных при сцене: сбоку на широком экране (ширины лишней,
+ * а экран обычно шире, чем высок), снизу на вертикальном телефоне.
+ * Пустая полоса не рисуется вовсе — в живой комнате её не бывает (своя
+ * плитка всегда в полосе), но раскладка не должна на это полагаться.
+ */
+export function stageStrip(
+  stripCount: number,
+  wide: boolean,
+): 'side' | 'bottom' | 'none' {
+  if (!Number.isFinite(stripCount) || stripCount <= 0) return 'none';
+  return wide ? 'side' : 'bottom';
 }

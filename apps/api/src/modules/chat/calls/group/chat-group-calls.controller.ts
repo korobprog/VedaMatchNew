@@ -85,7 +85,8 @@ export class ChatGroupCallsController {
    * кнопка камеры попутно включала бы микрофон.
    *
    * Включение камеры может вернуть 409 — мест под видео в комнате три, и
-   * решает это сервер (`group-call-video.ts`).
+   * решает это сервер (`group-call-video.ts`). Показ экрана (`screen`)
+   * занимает такое же место и один на комнату (`group-call-screen.ts`).
    */
   @Post(':id/state')
   @HttpCode(200)
@@ -97,6 +98,7 @@ export class ChatGroupCallsController {
     return this.calls.setState(user.sub, id, {
       muted: typeof body?.muted === 'boolean' ? body.muted : undefined,
       video: typeof body?.video === 'boolean' ? body.video : undefined,
+      screen: typeof body?.screen === 'boolean' ? body.screen : undefined,
     });
   }
 

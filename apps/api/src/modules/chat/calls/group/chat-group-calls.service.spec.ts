@@ -31,6 +31,7 @@ interface ParticipantRow {
   lastSeenAt: Date;
   muted: boolean;
   video: boolean;
+  screen: boolean;
 }
 
 interface CallRow {
@@ -170,6 +171,7 @@ function buildService(
             lastSeenAt: new Date(),
             muted: false,
             video: false,
+            screen: false,
           });
         return Promise.resolve(withIncludes(row));
       }),
@@ -267,6 +269,7 @@ function buildService(
               lastSeenAt: (create.lastSeenAt as Date) ?? new Date(),
               muted: false,
               video: false,
+              screen: false,
             });
           return Promise.resolve({});
         },
@@ -282,6 +285,21 @@ function buildService(
           const rows = participants.filter((p) =>
             matches(p as unknown as Record<string, unknown>, where),
           );
+          // Частичный уникальный индекс «один экран на комнату»
+          // (`ChatGroupCallParticipant_one_screen_per_call`): Postgres
+          // отвечает на второй показ P2002, и мок обязан так же.
+          if (
+            data.screen === true &&
+            rows.some((row) =>
+              participants.some(
+                (other) =>
+                  other !== row && other.callId === row.callId && other.screen,
+              ),
+            )
+          )
+            return Promise.reject(
+              Object.assign(new Error('unique'), { code: 'P2002' }),
+            );
           rows.forEach((row) => Object.assign(row, data));
           return Promise.resolve({ count: rows.length });
         },
@@ -746,6 +764,164 @@ describe('камера', () => {
     await expect(
       service.setState('a', room.id, { video: true }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe('показ экрана', () => {
+  async function room(cameras: string[] = []) {
+    const built = buildService();
+    const created = await built.service.start('a', {
+      conversationId: 'conv-1',
+    });
+    for (const userId of ['b', 'c', 'd'])
+      await built.service.join(userId, created.id);
+    for (const userId of cameras)
+      await built.service.setState(userId, created.id, { video: true });
+    return { ...built, room: created };
+  }
+
+  it('показ виден остальным признаком и занимает место под видео', async () => {
+    const { service, room: r } = await room();
+    await service.setState('b', r.id, { screen: true });
+    const state = await service.heartbeat('a', r.id);
+    const b = state.participants.find((p) => p.user.id === 'b')!;
+    expect(b).toMatchObject({ screen: true, video: true });
+    expect(
+      state.participants
+        .filter((p) => p.user.id !== 'b')
+        .every((p) => !p.screen),
+    ).toBe(true);
+  });
+
+  it('второй показ — отказ с именем показывающего', async () => {
+    const { service, room: r } = await room();
+    await service.setState('b', r.id, { screen: true });
+    await expect(service.setState('c', r.id, { screen: true })).rejects.toThrow(
+      /Экран уже показывает b/,
+    );
+  });
+
+  it('отказ индекса — тот же 409 «экран занят», а не 500', async () => {
+    // Правило видит только живых из `joined`, индекс в базе — любую строку
+    // с `screen = true`. Разъехаться они могут в гонке двух инстансов или
+    // после ручной правки строк; здесь — второе, потому что гонку в одном
+    // процессе не воспроизвести. Проверяется именно перевод P2002 в 409.
+    const { service, room: r, participants } = await room();
+    await service.leave('b', r.id);
+    participants.find((p) => p.userId === 'b')!.screen = true;
+    await expect(service.setState('c', r.id, { screen: true })).rejects.toThrow(
+      /Экран уже показывает/,
+    );
+    expect(participants.find((p) => p.userId === 'c')!.screen).toBe(false);
+  });
+
+  it('своя камера отдаёт место экрану, даже когда мест нет', async () => {
+    const { service, room: r } = await room(['a', 'b', 'c']);
+    const after = await service.setState('a', r.id, { screen: true });
+    expect(after.participants.filter((p) => p.video)).toHaveLength(3);
+    expect(after.participants.find((p) => p.user.id === 'a')!.screen).toBe(
+      true,
+    );
+  });
+
+  it('без камеры и без мест — отказ, как у камеры', async () => {
+    const { service, room: r } = await room(['a', 'b', 'c']);
+    await expect(service.setState('d', r.id, { screen: true })).rejects.toThrow(
+      /все 3 места под видео заняты/,
+    );
+  });
+
+  it('конец показа с камерой — видео остаётся, экран снят', async () => {
+    const { service, room: r } = await room(['b']);
+    await service.setState('b', r.id, { screen: true });
+    const after = await service.setState('b', r.id, {
+      screen: false,
+      video: true,
+    });
+    expect(after.participants.find((p) => p.user.id === 'b')).toMatchObject({
+      screen: false,
+      video: true,
+    });
+  });
+
+  it('конец показа без камеры — место освобождается', async () => {
+    const { service, room: r } = await room();
+    await service.setState('b', r.id, { screen: true });
+    const after = await service.setState('b', r.id, {
+      screen: false,
+      video: false,
+    });
+    expect(after.participants.find((p) => p.user.id === 'b')).toMatchObject({
+      screen: false,
+      video: false,
+    });
+  });
+
+  it('`video:false` без `screen` гасит и показ', async () => {
+    const { service, room: r } = await room();
+    await service.setState('b', r.id, { screen: true });
+    const after = await service.setState('b', r.id, { video: false });
+    expect(after.participants.find((p) => p.user.id === 'b')!.screen).toBe(
+      false,
+    );
+  });
+
+  it('`video` рядом со `screen:true` не читается', async () => {
+    const { service, room: r } = await room();
+    const after = await service.setState('b', r.id, {
+      screen: true,
+      video: false,
+    });
+    expect(after.participants.find((p) => p.user.id === 'b')).toMatchObject({
+      screen: true,
+      video: true,
+    });
+  });
+
+  it('выход снимает показ в самой строке, и следующий может показать', async () => {
+    const { service, room: r, participants } = await room();
+    await service.setState('b', r.id, { screen: true });
+    await service.leave('b', r.id);
+    expect(participants.find((p) => p.userId === 'b')!.screen).toBe(false);
+    const after = await service.setState('c', r.id, { screen: true });
+    expect(after.participants.find((p) => p.user.id === 'c')!.screen).toBe(
+      true,
+    );
+  });
+
+  it('уехавший в тоннель показ не держит', async () => {
+    const { service, room: r, participants } = await room();
+    await service.setState('b', r.id, { screen: true });
+    participants
+      .filter((p) => p.userId === 'b')
+      .forEach((p) => {
+        p.lastSeenAt = new Date(
+          Date.now() - GROUP_CALL_PARTICIPANT_TTL_MS - 1000,
+        );
+      });
+    const after = await service.setState('c', r.id, { screen: true });
+    expect(after.participants.find((p) => p.user.id === 'c')!.screen).toBe(
+      true,
+    );
+    expect(participants.find((p) => p.userId === 'b')!.screen).toBe(false);
+  });
+
+  it('вернувшийся не наследует показ', async () => {
+    const { service, room: r, participants } = await room();
+    await service.leave('b', r.id);
+    participants.find((p) => p.userId === 'b')!.screen = true;
+    await service.join('b', r.id);
+    expect(participants.find((p) => p.userId === 'b')!.screen).toBe(false);
+  });
+
+  it('микрофон показ не трогает', async () => {
+    const { service, room: r } = await room();
+    await service.setState('b', r.id, { screen: true });
+    const after = await service.setState('b', r.id, { muted: true });
+    expect(after.participants.find((p) => p.user.id === 'b')).toMatchObject({
+      screen: true,
+      muted: true,
+    });
   });
 });
 

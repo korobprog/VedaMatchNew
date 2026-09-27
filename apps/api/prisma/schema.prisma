@@ -7291,6 +7291,13 @@ model ChatGroupCallParticipant {
   /// сбрасывает: иначе ушедший держал бы место до истечения TTL.
   video Boolean @default(false)
 
+  /// Вместо камеры идёт экран (VED-360). Всегда вместе с `video`: экран
+  /// занимает то же место под видео. Один на комнату — это держит частичный
+  /// уникальный индекс `ChatGroupCallParticipant_one_screen_per_call`,
+  /// заведённый сырым SQL (Prisma таких не выражает), см.
+  /// docs/prisma-raw-sql-objects.md. Выход и уборка поле сбрасывают.
+  screen Boolean @default(false)
+
   @@unique([callId, userId])
   @@index([callId, state])
   @@index([state, lastSeenAt])

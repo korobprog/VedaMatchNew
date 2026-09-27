@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatGroupCallParticipantDto } from "@vedamatch/shared";
 import { ChatAvatar } from "../../chat-avatar";
 import { useGroupCalls, type GroupCallsApi } from "./group-call-context";
@@ -10,8 +10,10 @@ import {
   cameraButtonState,
   camerasOn,
   videoTiles,
+  type Tile,
 } from "./group-video-state";
-import { videoGridLayout } from "./video-grid";
+import { screenButtonState, screenSharer } from "./screen-share";
+import { splitStage, stageStrip, videoGridLayout } from "./video-grid";
 
 /**
  * Панель группового звонка: состав комнаты, кто говорит, микрофон, выход.
@@ -34,6 +36,11 @@ import { videoGridLayout } from "./video-grid";
  * Кнопка «камера» гаснет, когда мест под видео не осталось, но остаётся
  * нажимаемой и объясняет причину словами. Настоящее решение — за сервером
  * (`group-call-video.ts`), он же присылает текст отказа.
+ *
+ * Показ экрана (VED-360): кнопка есть только там, где браузер умеет
+ * `getDisplayMedia` (не на телефоне). Чужой экран встаёт на «сцену» —
+ * крупно, целиком (`object-contain`), остальные полосой; нажатие на
+ * «Во весь экран» разворачивает его на весь монитор.
  */
 
 /** Сколько итог висит сам, прежде чем уйти. Отказ так не исчезает. */
@@ -71,6 +78,11 @@ function GroupCallScreen() {
   const elapsed = useElapsed(state.phase === "active" ? state.joinedAt : null);
   const showsGrid = !ended && !joining && camerasOn(state.call) > 0;
   const camera = cameraButtonState(state.call, calls.selfId, calls.cameraOn);
+  const screen = screenButtonState(state.call, calls.selfId, {
+    sharing: calls.screenOn,
+    supported: calls.screenSupported,
+  });
+  const sharer = screenSharer(state.call);
   const wide = useWideViewport();
 
   return (
@@ -98,6 +110,15 @@ function GroupCallScreen() {
               {`Пока не больше ${state.call.maxParticipants} человек — звук идёт напрямую между собеседниками`}
             </p>
           )}
+          {/* Начало и конец чужого показа проговариваются: плитка на сцене
+              сама по себе скринридеру ничего не скажет. */}
+          <p aria-live="polite" className="mt-1 text-sm text-text-1">
+            {!joining && !ended && sharer
+              ? sharer.id === calls.selfId
+                ? "Вы показываете экран"
+                : `${sharer.name} показывает экран`
+              : ""}
+          </p>
         </div>
         {state.phase === "active" && (
           <button
@@ -157,6 +178,21 @@ function GroupCallScreen() {
         )}
       </div>
 
+      {calls.screenOn && !ended && (
+        <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 pb-2">
+          <p className="min-w-0 flex-1 text-sm text-text-0">
+            Остальные видят ваш экран
+          </p>
+          <button
+            type="button"
+            onClick={() => void calls.toggleScreenShare()}
+            className="flex h-11 shrink-0 items-center rounded-full border-2 border-magenta bg-bg-1 px-4 text-sm font-semibold text-text-0 hover:bg-bg-2"
+          >
+            Остановить показ
+          </button>
+        </div>
+      )}
+
       {state.actionError && (
         <div className="mx-auto w-full max-w-2xl px-4 pb-2">
           <button
@@ -206,11 +242,17 @@ function GroupCallScreen() {
             <button
               type="button"
               aria-label={
-                camera.blocked
-                  ? `Включить камеру нельзя: ${camera.blockedReason}`
-                  : calls.cameraOn
-                    ? "Выключить камеру"
-                    : "Включить камеру"
+                // Во время показа экрана кнопка решает, вернётся ли камера
+                // после него: в отправителе сейчас экран.
+                calls.screenOn
+                  ? calls.cameraOn
+                    ? "Не включать камеру после показа экрана"
+                    : "Включить камеру после показа экрана"
+                  : camera.blocked
+                    ? `Включить камеру нельзя: ${camera.blockedReason}`
+                    : calls.cameraOn
+                      ? "Выключить камеру"
+                      : "Включить камеру"
               }
               aria-pressed={calls.cameraOn}
               onClick={() => void calls.toggleCamera()}
@@ -220,6 +262,30 @@ function GroupCallScreen() {
             >
               <CameraIcon off={!calls.cameraOn} />
             </button>
+
+            {/* Как и камера, погашенная кнопка остаётся нажимаемой и
+                объясняет причину, — но окно выбора экрана при этом не
+                открывается: выбрать окно и только потом услышать «нельзя»
+                обиднее, чем услышать сразу. */}
+            {screen.visible && (
+              <button
+                type="button"
+                aria-label={
+                  screen.blocked
+                    ? `Показать экран нельзя: ${screen.blockedReason}`
+                    : calls.screenOn
+                      ? "Остановить показ экрана"
+                      : "Показать экран"
+                }
+                aria-pressed={calls.screenOn}
+                onClick={() => void calls.toggleScreenShare()}
+                className={`flex size-14 items-center justify-center rounded-full border border-glass-brd text-text-0 hover:bg-bg-2 ${
+                  calls.screenOn ? "bg-bg-2" : "bg-glass"
+                } ${screen.blocked ? "opacity-60" : ""}`}
+              >
+                <ScreenIcon active={calls.screenOn} />
+              </button>
+            )}
 
             <button
               type="button"
@@ -243,6 +309,9 @@ function GroupCallScreen() {
  * другого компонента, он пересоздавался бы на каждую отрисовку, и React
  * сбрасывал бы состояние каждой плитки — то есть `<video>` терял бы
  * `srcObject` и картинка моргала бы на каждое событие комнаты.
+ *
+ * Когда кто-то показывает экран, раскладка — «сцена» (`splitStage`):
+ * экран крупно, остальные полосой сбоку или снизу (`stageStrip`).
  */
 function VideoGrid({
   calls,
@@ -258,6 +327,7 @@ function VideoGrid({
     call: state.call,
     selfId: calls.selfId,
     sendingVideo: calls.sendingVideo,
+    sharingScreen: calls.screenOn,
     remoteStreams: new Set(Object.keys(calls.remoteStreams)),
     remoteVideoOff: new Set(
       Object.entries(calls.remoteVideoOff)
@@ -265,9 +335,48 @@ function VideoGrid({
         .map(([userId]) => userId),
     ),
   });
-  const layout = videoGridLayout(tiles.length, wide);
   const byId = new Map(participants.map((p) => [p.user.id, p]));
+  const { stage, strip } = splitStage(tiles);
 
+  if (stage) {
+    const stripAt = stageStrip(strip.length, wide);
+    return (
+      <div
+        className={`flex flex-1 gap-2 ${
+          stripAt === "side" ? "flex-row" : "flex-col"
+        }`}
+      >
+        <StageTile
+          calls={calls}
+          tile={stage}
+          participant={byId.get(stage.userId)}
+        />
+        {stripAt !== "none" && (
+          <ul
+            aria-label="Остальные в звонке"
+            className={`flex shrink-0 gap-2 ${
+              stripAt === "side"
+                ? "w-44 flex-col lg:w-56"
+                : "h-28 flex-row sm:h-32"
+            }`}
+          >
+            {strip.map((tile) => (
+              <ParticipantTile
+                key={tile.userId}
+                calls={calls}
+                tile={tile}
+                participant={byId.get(tile.userId)}
+                compact
+                className="min-h-0 min-w-0 flex-1"
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  const layout = videoGridLayout(tiles.length, wide);
   return (
     <ul
       aria-label="Кто в звонке"
@@ -277,60 +386,243 @@ function VideoGrid({
         gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))`,
       }}
     >
-      {tiles.map((tile) => {
-        const participant = byId.get(tile.userId);
-        if (!participant) return null;
-        const muted = tile.isSelf ? state.muted : participant.muted;
-        const stream = tile.isSelf
-          ? calls.localVideoStream
-          : (calls.remoteStreams[tile.userId] ?? null);
-        const speaking = state.speaking.includes(tile.userId);
-        return (
-          <li
-            key={tile.userId}
-            aria-label={spokenLabel({
-              participant,
-              isSelf: tile.isSelf,
-              muted,
-              speaking,
-              statusLine: tile.isSelf
-                ? null
-                : peerStateLabel(state.peerStates[tile.userId]),
-              cameraOff: tile.view === "avatar",
-            })}
-            className={`relative flex min-h-32 items-end overflow-hidden rounded-2xl border bg-bg-1 ${
-              speaking ? "border-cyan" : "border-glass-brd"
-            }`}
-          >
-            {tile.view === "video" && stream ? (
-              <VideoTile stream={stream} mirrored={tile.isSelf} />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <ChatAvatar
-                  kind="direct"
-                  user={participant.user}
-                  title={participant.user.name}
-                  size={layout.rows > 1 ? 56 : 72}
-                />
-              </div>
-            )}
-            <p className="relative flex w-full items-center gap-1.5 bg-glass px-3 py-1.5 text-xs font-semibold text-text-0">
-              <span className="truncate">
-                {tile.isSelf
-                  ? `${participant.user.name} (вы)`
-                  : participant.user.name}
-              </span>
-              {muted && (
-                <span aria-hidden className="shrink-0 text-text-1">
-                  <MicIcon off size={16} />
-                </span>
-              )}
-            </p>
-          </li>
-        );
-      })}
+      {tiles.map((tile) => (
+        <ParticipantTile
+          key={tile.userId}
+          calls={calls}
+          tile={tile}
+          participant={byId.get(tile.userId)}
+          compact={layout.rows > 1}
+          className="min-h-32"
+        />
+      ))}
     </ul>
   );
+}
+
+/** Одна плитка: картинка или аватар, подпись с именем и микрофоном. */
+function ParticipantTile({
+  calls,
+  tile,
+  participant,
+  compact,
+  className,
+}: {
+  calls: GroupCallsApi;
+  tile: Tile;
+  participant: ChatGroupCallParticipantDto | undefined;
+  compact: boolean;
+  className: string;
+}) {
+  const { state } = calls;
+  if (!participant) return null;
+  const muted = tile.isSelf ? state.muted : participant.muted;
+  const stream = tileStream(calls, tile);
+  const speaking = state.speaking.includes(tile.userId);
+  return (
+    <li
+      aria-label={spokenLabel({
+        participant,
+        isSelf: tile.isSelf,
+        muted,
+        speaking,
+        statusLine: tile.isSelf
+          ? null
+          : peerStateLabel(state.peerStates[tile.userId]),
+        cameraOff: tile.view === "avatar",
+        screen: tile.screen,
+      })}
+      className={`relative flex items-end overflow-hidden rounded-2xl border bg-bg-1 ${
+        speaking ? "border-cyan" : "border-glass-brd"
+      } ${className}`}
+    >
+      {tile.view === "video" && stream ? (
+        <VideoTile
+          stream={stream}
+          mirrored={tile.isSelf && !tile.screen}
+          fit={tile.screen ? "contain" : "cover"}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <ChatAvatar
+            kind="direct"
+            user={participant.user}
+            title={participant.user.name}
+            size={compact ? 56 : 72}
+          />
+        </div>
+      )}
+      <TileCaption
+        name={
+          tile.isSelf
+            ? `${participant.user.name} (вы)`
+            : participant.user.name
+        }
+        muted={muted}
+        screen={tile.screen}
+      />
+    </li>
+  );
+}
+
+/**
+ * Чужой экран на сцене: целиком (`contain`), без зеркала, с кнопкой
+ * «Во весь экран».
+ *
+ * Во весь экран — через Fullscreen API на самой плитке: так экран
+ * разворачивается на весь монитор, а не на окно браузера, и выход — та же
+ * клавиша Esc, что везде. Где API нет или он отказал (встроенный
+ * просмотрщик, политика страницы), плитка разворачивается на всё окно
+ * поверх панели, и из этого режима выводят та же кнопка и Esc.
+ *
+ * Показ кончился, пока плитка развёрнута, — плитка пропадает, а с ней и
+ * полноэкранный режим: браузер сам выходит из него, когда развёрнутый
+ * элемент убирают со страницы, а запасной режим живёт в её же состоянии.
+ */
+function StageTile({
+  calls,
+  tile,
+  participant,
+}: {
+  calls: GroupCallsApi;
+  tile: Tile;
+  participant: ChatGroupCallParticipantDto | undefined;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [native, setNative] = useState(false);
+  const [fallback, setFallback] = useState(false);
+  const expanded = native || fallback;
+
+  useEffect(() => {
+    const read = () => setNative(document.fullscreenElement === ref.current);
+    document.addEventListener("fullscreenchange", read);
+    return () => document.removeEventListener("fullscreenchange", read);
+  }, []);
+
+  useEffect(() => {
+    if (!fallback) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFallback(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [fallback]);
+
+  const toggle = useCallback(() => {
+    if (native) {
+      void document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    if (fallback) {
+      setFallback(false);
+      return;
+    }
+    const element = ref.current;
+    if (element && document.fullscreenEnabled && element.requestFullscreen)
+      void element.requestFullscreen().catch(() => setFallback(true));
+    else setFallback(true);
+  }, [fallback, native]);
+
+  if (!participant) return null;
+  const stream = tileStream(calls, tile);
+  const name = participant.user.name;
+  const muted = participant.muted;
+  const speaking = calls.state.speaking.includes(tile.userId);
+
+  return (
+    <div
+      ref={ref}
+      role="group"
+      aria-label={spokenLabel({
+        participant,
+        isSelf: false,
+        muted,
+        speaking,
+        statusLine: peerStateLabel(calls.state.peerStates[tile.userId]),
+        cameraOff: tile.view === "avatar",
+        screen: true,
+      })}
+      className={`flex min-h-48 flex-1 flex-col overflow-hidden bg-bg-1 ${
+        fallback
+          ? "fixed inset-0 z-[80]"
+          : native
+            ? ""
+            : `relative rounded-2xl border ${
+                speaking ? "border-cyan" : "border-glass-brd"
+              }`
+      }`}
+    >
+      <div className="relative min-h-0 flex-1">
+        {tile.view === "video" && stream ? (
+          <VideoTile
+            stream={stream}
+            mirrored={false}
+            fit="contain"
+            onDoubleClick={toggle}
+          />
+        ) : (
+          // Поток ещё не доехал — аватар с подписью, а не чёрное поле.
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 text-center">
+            <ChatAvatar
+              kind="direct"
+              user={participant.user}
+              title={name}
+              size={72}
+            />
+            <p className="text-sm text-text-1">Готовим показ экрана…</p>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={
+            expanded
+              ? "Свернуть экран"
+              : `Развернуть экран, который показывает ${name}, во весь экран`
+          }
+          className="absolute right-2 top-2 flex h-11 items-center gap-1.5 rounded-full border border-glass-brd bg-bg-1 px-3 text-sm font-semibold text-text-0 hover:bg-bg-2"
+        >
+          <ExpandIcon collapse={expanded} />
+          <span className="hidden sm:inline">
+            {expanded ? "Свернуть" : "Во весь экран"}
+          </span>
+        </button>
+      </div>
+      <TileCaption name={name} muted={muted} screen />
+    </div>
+  );
+}
+
+function TileCaption({
+  name,
+  muted,
+  screen,
+}: {
+  name: string;
+  muted: boolean;
+  screen: boolean;
+}) {
+  return (
+    <p className="relative flex w-full items-center gap-1.5 bg-glass px-3 py-1.5 text-xs font-semibold text-text-0">
+      {screen && (
+        <span aria-hidden className="shrink-0 text-text-1">
+          <ScreenIcon active={false} size={16} />
+        </span>
+      )}
+      <span className="truncate">{screen ? `Экран · ${name}` : name}</span>
+      {muted && (
+        <span aria-hidden className="shrink-0 text-text-1">
+          <MicIcon off size={16} />
+        </span>
+      )}
+    </p>
+  );
+}
+
+/** Какой поток показывать в плитке: свой экран, свою камеру или чужой. */
+function tileStream(calls: GroupCallsApi, tile: Tile): MediaStream | null {
+  if (!tile.isSelf) return calls.remoteStreams[tile.userId] ?? null;
+  return tile.screen ? calls.localScreenStream : calls.localVideoStream;
 }
 
 /**
@@ -342,13 +634,20 @@ function VideoGrid({
  * панели). Без `muted` каждый голос звучал бы дважды, а своя плитка ещё и
  * дала бы эхо. `playsInline` — чтобы Safari на телефоне не разворачивал
  * видео на весь экран поверх панели.
+ *
+ * `fit`: лицо — `cover` (плитка заполнена, края обрезаны), экран —
+ * `contain` (виден целиком: обрезанный край слайда — потерянный текст).
  */
 function VideoTile({
   stream,
   mirrored,
+  fit = "cover",
+  onDoubleClick,
 }: {
   stream: MediaStream;
   mirrored: boolean;
+  fit?: "cover" | "contain";
+  onDoubleClick?: () => void;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -368,9 +667,11 @@ function VideoTile({
       autoPlay
       playsInline
       aria-hidden
+      onDoubleClick={onDoubleClick}
       // Свою камеру показываем зеркально: человек привык видеть себя
-      // таким, каким его показывает зеркало.
-      className={`absolute inset-0 size-full object-cover ${mirrored ? "-scale-x-100" : ""}`}
+      // таким, каким его показывает зеркало. Экран — никогда: зеркальный
+      // текст не прочитать.
+      className={`absolute inset-0 size-full ${fit === "contain" ? "object-contain" : "object-cover"} ${mirrored ? "-scale-x-100" : ""}`}
     />
   );
 }
@@ -387,6 +688,7 @@ function spokenLabel({
   speaking,
   statusLine,
   cameraOff,
+  screen = false,
 }: {
   participant: ChatGroupCallParticipantDto;
   isSelf: boolean;
@@ -394,11 +696,12 @@ function spokenLabel({
   speaking: boolean;
   statusLine: string | null;
   cameraOff: boolean;
+  screen?: boolean;
 }): string {
   return [
     isSelf ? `${participant.user.name} (вы)` : participant.user.name,
     participant.host ? "хозяин звонка" : null,
-    cameraOff ? "камера выключена" : null,
+    screen ? "показывает экран" : cameraOff ? "камера выключена" : null,
     muted ? "микрофон выключен" : null,
     speaking ? "говорит" : null,
     statusLine,
@@ -515,6 +818,52 @@ function useElapsed(since: number | null): string {
   const s = total % 60;
   const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
+
+function ScreenIcon({ active, size = 24 }: { active: boolean; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2.5" y="4" width="19" height="13" rx="2.5" />
+      <path d="M8 21h8M12 17v4" />
+      {active ? (
+        <path d="M9.5 8.5l5 5M14.5 8.5l-5 5" />
+      ) : (
+        <path d="M12 14V8m-2.5 2.5L12 8l2.5 2.5" />
+      )}
+    </svg>
+  );
+}
+
+function ExpandIcon({ collapse = false }: { collapse?: boolean }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {collapse ? (
+        <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+      ) : (
+        <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+      )}
+    </svg>
+  );
 }
 
 function CameraIcon({ off, size = 24 }: { off: boolean; size?: number }) {

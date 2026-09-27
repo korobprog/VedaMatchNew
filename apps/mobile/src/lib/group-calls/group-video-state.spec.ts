@@ -2,6 +2,7 @@ import type { ChatGroupCallDto, ChatGroupCallParticipantDto } from '@vedamatch/s
 import {
   cameraButtonState,
   camerasOn,
+  screenSharer,
   shouldSendGroupVideo,
   videoDimmedByBackground,
   videoTiles,
@@ -272,5 +273,64 @@ describe('сколько камер включено', () => {
 
   it('вне звонка — ноль', () => {
     expect(camerasOn(null)).toBe(0);
+  });
+});
+
+describe('показ экрана (VED-360)', () => {
+  function sharing(id: string): ChatGroupCallParticipantDto {
+    return { ...participant(id, true), screen: true };
+  }
+
+  it('чужой экран помечен по признаку с сервера', () => {
+    const tiles = videoTiles({
+      call: call([participant('me'), sharing('b')]),
+      selfId: 'me',
+      sendingVideo: false,
+      remoteStreams: new Set(['b']),
+      remoteVideoOff: new Set(),
+    });
+    expect(tiles.find((t) => t.userId === 'b')).toMatchObject({
+      view: 'video',
+      screen: true,
+    });
+  });
+
+  it('камера — не экран', () => {
+    const tiles = videoTiles({
+      call: call([participant('me'), participant('b', true)]),
+      selfId: 'me',
+      sendingVideo: false,
+      remoteStreams: new Set(['b']),
+      remoteVideoOff: new Set(),
+    });
+    expect(tiles.find((t) => t.userId === 'b')?.screen).toBe(false);
+  });
+
+  it('старый сервер без поля — не экран', () => {
+    const tiles = videoTiles({
+      call: call([participant('me'), participant('b', true)]),
+      selfId: 'me',
+      sendingVideo: false,
+      remoteStreams: new Set(['b']),
+      remoteVideoOff: new Set(),
+    });
+    expect(tiles.every((t) => t.screen === false)).toBe(true);
+  });
+
+  it('своя плитка — экран, только пока картинка реально уходит', () => {
+    const input = {
+      call: call([sharing('me')]),
+      selfId: 'me',
+      remoteStreams: new Set<string>(),
+      remoteVideoOff: new Set<string>(),
+    };
+    expect(videoTiles({ ...input, sendingVideo: true, sharingScreen: true })[0].screen).toBe(true);
+    expect(videoTiles({ ...input, sendingVideo: false, sharingScreen: true })[0].screen).toBe(false);
+  });
+
+  it('кто показывает — для подписи над сеткой', () => {
+    expect(screenSharer(call([participant('me'), sharing('b')]))).toEqual({ id: 'b', name: 'b' });
+    expect(screenSharer(call([participant('me')]))).toBeNull();
+    expect(screenSharer(null)).toBeNull();
   });
 });

@@ -8,7 +8,9 @@ import {
   type StatsEntry,
 } from "./speaking-state";
 import {
+  DEGRADATION_PREFERENCE,
   withVideoEncoding,
+  type DegradationPreference,
   type VideoEncoding,
 } from "./group-video-quality";
 import type { PeerConnectionState } from "./group-call-state";
@@ -83,6 +85,7 @@ export class GroupPeerLink {
    */
   private wantedVideoTrack: MediaStreamTrack | null = null;
   private wantedEncoding: VideoEncoding | null = null;
+  private wantedDegradation: DegradationPreference = DEGRADATION_PREFERENCE;
   /** Чужие дорожки, из которых собран поток собеседника (`mergeRemoteTrack`). */
   private remoteTracks: MediaStreamTrack[] = [];
 
@@ -184,7 +187,8 @@ export class GroupPeerLink {
     // Камеру и потолок качества провайдер отдал, когда отправителя ещё не
     // было, — применяем запомненное.
     void this.pushVideoTrack();
-    if (this.wantedEncoding) void this.applyVideoEncoding(this.wantedEncoding);
+    if (this.wantedEncoding)
+      void this.applyVideoEncoding(this.wantedEncoding, this.wantedDegradation);
   }
 
   /** Инициатор пары: собрать и отправить offer. */
@@ -286,11 +290,19 @@ export class GroupPeerLink {
    * меняет параметры кодера без пересогласования — собеседнику ничего не
    * приходит.
    */
-  async applyVideoEncoding(target: VideoEncoding): Promise<void> {
+  async applyVideoEncoding(
+    target: VideoEncoding,
+    degradation: DegradationPreference = DEGRADATION_PREFERENCE,
+  ): Promise<void> {
     this.wantedEncoding = target;
+    this.wantedDegradation = degradation;
     if (this.closed || !this.videoSender) return;
     try {
-      const next = withVideoEncoding(this.videoSender.getParameters(), target);
+      const next = withVideoEncoding(
+        this.videoSender.getParameters(),
+        target,
+        degradation,
+      );
       if (!next) return;
       await this.videoSender.setParameters(next);
     } catch {
