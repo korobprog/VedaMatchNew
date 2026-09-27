@@ -101,10 +101,13 @@ export function MusicFavoriteButton({
   trackId,
   title,
   className = "",
+  size = "size-9",
 }: {
   trackId: string;
   title: string;
   className?: string;
+  /** Размер круга; на странице записи — 44, как «Линия» рядом (VED-595). */
+  size?: string;
 }) {
   const favorites = useMusicFavorites();
   if (!favorites?.ready) return null;
@@ -123,7 +126,7 @@ export function MusicFavoriteButton({
         event.stopPropagation();
         favorites.toggle(trackId);
       }}
-      className={`flex size-9 items-center justify-center rounded-full transition-colors ${
+      className={`flex ${size} items-center justify-center rounded-full transition-colors ${
         marked ? "text-magenta" : "text-text-2 hover:text-text-0"
       } ${className}`}
     >
