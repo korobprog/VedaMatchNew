@@ -21,10 +21,10 @@ describe("BookmarkButton", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /В избранное/ }));
+    await userEvent.click(screen.getByRole("button", { name: /В Закладки/ }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /В избранном/ })).toBeDefined();
+      expect(screen.getByRole("button", { name: /В Закладках/ })).toBeDefined();
     });
     expect(screen.getByText("3")).toBeDefined();
     expect(fetchMock.mock.calls[0][1].method).toBe("POST");
@@ -42,10 +42,10 @@ describe("BookmarkButton", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /В избранное/ }));
+    await userEvent.click(screen.getByRole("button", { name: /В Закладки/ }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /В избранное/ })).toBeDefined();
+      expect(screen.getByRole("button", { name: /В Закладки/ })).toBeDefined();
     });
     expect(screen.getByText("2")).toBeDefined();
   });
@@ -63,7 +63,7 @@ describe("BookmarkButton", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /В избранном/ }));
+    await userEvent.click(screen.getByRole("button", { name: /В Закладках/ }));
 
     await waitFor(() => {
       expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");

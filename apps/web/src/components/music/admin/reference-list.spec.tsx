@@ -262,3 +262,35 @@ describe("MusicReferenceList — линия исполнителя (VED-566)", (
     ).toBeNull();
   });
 });
+
+describe("MusicReferenceList — имя исполнителя вместо «медиатека» (VED-572)", () => {
+  it("у исполнителя в каталоге Медиатеки подписи «медиатека» нет", () => {
+    renderList([{ ...artist, isAudiobook: false }]);
+
+    expect(screen.queryByText("медиатека")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Медиатеки/ })).toBeNull();
+  });
+
+  it("имя не обрезается в одну строку, полное — в подсказке", () => {
+    renderList([{ ...artist, isAudiobook: false }]);
+
+    const name = screen.getByText("Avantika devi dasi");
+    expect(name).toHaveAttribute("title", "Avantika devi dasi");
+    expect(name).not.toHaveClass("truncate");
+    expect(name).toHaveClass("line-clamp-2");
+  });
+
+  it("чтеца видно, и нажатие возвращает его в каталог", async () => {
+    vi.mocked(updateMusicArtist).mockResolvedValue(
+      {} as Awaited<ReturnType<typeof updateMusicArtist>>,
+    );
+    renderList([{ ...artist, isAudiobook: true }]);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Avantika devi dasi».*чтец/ }),
+    );
+    expect(updateMusicArtist).toHaveBeenCalledWith("a1", {
+      isAudiobook: false,
+    });
+  });
+});
