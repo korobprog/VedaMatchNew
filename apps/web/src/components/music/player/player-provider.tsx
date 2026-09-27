@@ -62,6 +62,8 @@ import {
   applyMediaPlaybackState,
   applyMediaPosition,
   clearMediaSession,
+  mediaSessionHeldByRadio,
+  setMediaSessionRestorer,
 } from "./media-session";
 import {
   PLAYER_RATE_MAX,
@@ -1222,24 +1224,35 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
 
   // ---------- Media Session ----------
 
+  // Пока играет радио, карточка его (VED-543): эффекты ниже её не трогают,
+  // а когда радио её отпускает, счётчик заставляет их выставить всё заново.
+  const [mediaSessionEpoch, setMediaSessionEpoch] = useState(0);
+  useEffect(() => {
+    setMediaSessionRestorer(() => setMediaSessionEpoch((n) => n + 1));
+    return () => setMediaSessionRestorer(null);
+  }, []);
+
   // Карточка в системе: обложка и название на экране блокировки.
   useEffect(() => {
+    if (mediaSessionHeldByRadio()) return;
     if (!current) {
       clearMediaSession();
       return;
     }
     applyMediaMetadata(current);
-  }, [current]);
+  }, [current, mediaSessionEpoch]);
 
   useEffect(() => {
+    if (mediaSessionHeldByRadio()) return;
     applyMediaPlaybackState(isPlaying);
-  }, [isPlaying]);
+  }, [isPlaying, mediaSessionEpoch]);
 
   // Положение на дорожке: без него перемотка с экрана блокировки не работает,
   // а ползунок в системной карточке стоит на нуле.
   useEffect(() => {
+    if (mediaSessionHeldByRadio()) return;
     applyMediaPosition(positionSeconds, durationSeconds, rate);
-  }, [positionSeconds, durationSeconds, rate]);
+  }, [positionSeconds, durationSeconds, rate, mediaSessionEpoch]);
 
   // ---------- Команды ----------
 
@@ -1510,6 +1523,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
    * они обязаны ссылаться на актуальные функции.
    */
   useEffect(() => {
+    if (mediaSessionHeldByRadio()) return;
     const audio = audioRef.current;
     applyMediaHandlers(
       {
@@ -1529,7 +1543,15 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       // Шаги из настроек плеера (VED-388): те же, что у кнопок на полосе.
       { back: prefs.seekBackSeconds, forward: prefs.seekForwardSeconds },
     );
-  }, [next, prev, seek, skip, prefs.seekBackSeconds, prefs.seekForwardSeconds]);
+  }, [
+    next,
+    prev,
+    seek,
+    skip,
+    prefs.seekBackSeconds,
+    prefs.seekForwardSeconds,
+    mediaSessionEpoch,
+  ]);
 
   const value = useMemo<MusicPlayerApi>(
     () => ({
