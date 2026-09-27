@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import {
   Bookmark,
+  BookMarked,
   Bot,
   Calculator,
   CalendarDays,
@@ -138,7 +139,9 @@ const ICONS: Record<
   // и ищут.
   menu: Menu,
   window: Columns2,
-  bookmarks: Bookmark,
+  // VED-381: книга с закладкой, а не голый флажок — флажком нарисованы
+  // сами кнопки из закладок, и «Закладки» среди них терялись.
+  bookmarks: BookMarked,
   history: History,
   // VED-416: кружок «пуск», а не нота — нота уже у Медиатеки в сервисах.
   player: CirclePlay,
