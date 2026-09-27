@@ -81,6 +81,14 @@ export function loadAttributions(
   return request;
 }
 
+/**
+ * Забыть привезённые списки: администратор переложил автора в папку
+ * (VED-584), и следующее открытие окна должно спросить сервер заново.
+ */
+export function forgetAttributions(): void {
+  data.clear();
+}
+
 /** Только для тестов: вкладка живёт с одним кэшем, тесты — нет. */
 export function resetAttributionsCache(): void {
   data.clear();

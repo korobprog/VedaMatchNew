@@ -1,3 +1,9 @@
+import { BadRequestException } from '@nestjs/common';
+import type {
+  MotivationSpeakerFolder,
+  MotivationSpeakerFolderInput,
+} from '@vedamatch/shared';
+
 /**
  * Фильтр ленты по автору и источнику (VED-206).
  *
@@ -144,4 +150,41 @@ export function buildAttributionOptions(
   return [...groups.values()]
     .map((group) => ({ label: group.best, count: group.total }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ru'));
+}
+
+const SPEAKER_FOLDERS: readonly MotivationSpeakerFolder[] = [
+  'world_wisdom',
+  'vedas',
+];
+
+/**
+ * Папки авторов (VED-584) на пунктах списка. Папка привязана к ключу
+ * автора, а не к написанию: все варианты одного автора — в одной папке.
+ */
+export function withSpeakerFolders<T extends AttributionOption>(
+  options: readonly T[],
+  folders: ReadonlyMap<string, MotivationSpeakerFolder>,
+): (T & { folder: MotivationSpeakerFolder | null })[] {
+  return options.map((option) => ({
+    ...option,
+    folder: folders.get(attributionKey(option.label)) ?? null,
+  }));
+}
+
+/** Тело «разложить автора по папке»: ключ автора и папка или `null`. */
+export function parseSpeakerFolderInput(body: unknown): {
+  speakerKey: string;
+  folder: MotivationSpeakerFolder | null;
+} {
+  const input = (body ?? {}) as Partial<MotivationSpeakerFolderInput>;
+  const speakerKey =
+    typeof input.speaker === 'string' &&
+    input.speaker.trim().length <= MAX_ATTRIBUTION_FILTER_LENGTH
+      ? attributionKey(input.speaker)
+      : '';
+  if (!speakerKey) throw new BadRequestException('Не указан автор');
+  const folder = input.folder ?? null;
+  if (folder !== null && !SPEAKER_FOLDERS.includes(folder))
+    throw new BadRequestException('Нет такой папки');
+  return { speakerKey, folder };
 }

@@ -4,7 +4,9 @@ import {
   attributionKey,
   buildAttributionOptions,
   matchingVariants,
+  parseSpeakerFolderInput,
   splitWorkLocator,
+  withSpeakerFolders,
   workKey,
 } from './feed-attribution';
 
@@ -195,5 +197,59 @@ describe('splitWorkLocator (номер стиха записан в источн
       { label: 'Бхагавад-гита', count: 3 },
       { label: 'Путь к совершенству.', count: 3 },
     ]);
+  });
+});
+
+describe('папки авторов (VED-584)', () => {
+  it('папка находится по ключу автора, а не по написанию', () => {
+    const folders = new Map([
+      [attributionKey('Конфуций'), 'world_wisdom' as const],
+    ]);
+    expect(
+      withSpeakerFolders(
+        [
+          { label: 'конфуций ', count: 2 },
+          { label: 'Лао-Цзы', count: 1 },
+        ],
+        folders,
+      ),
+    ).toEqual([
+      { label: 'конфуций ', count: 2, folder: 'world_wisdom' },
+      { label: 'Лао-Цзы', count: 1, folder: null },
+    ]);
+  });
+
+  it('тело запроса: ключ автора и папка, null — в общий список', () => {
+    expect(
+      parseSpeakerFolderInput({ speaker: ' Конфуций ', folder: 'vedas' }),
+    ).toEqual({
+      speakerKey: 'конфуций',
+      folder: 'vedas',
+    });
+    expect(
+      parseSpeakerFolderInput({ speaker: 'Конфуций', folder: null }),
+    ).toEqual({
+      speakerKey: 'конфуций',
+      folder: null,
+    });
+    expect(parseSpeakerFolderInput({ speaker: 'Конфуций' }).folder).toBeNull();
+  });
+
+  it('без автора и с чужой папкой — ошибка', () => {
+    expect(() => parseSpeakerFolderInput({ folder: 'vedas' })).toThrow(
+      'Не указан автор',
+    );
+    expect(() =>
+      parseSpeakerFolderInput({ speaker: '  ', folder: 'vedas' }),
+    ).toThrow();
+    expect(() =>
+      parseSpeakerFolderInput({
+        speaker: 'x'.repeat(MAX_ATTRIBUTION_FILTER_LENGTH + 1),
+      }),
+    ).toThrow();
+    expect(() =>
+      parseSpeakerFolderInput({ speaker: 'Конфуций', folder: 'пураны' }),
+    ).toThrow('Нет такой папки');
+    expect(() => parseSpeakerFolderInput(null)).toThrow();
   });
 });

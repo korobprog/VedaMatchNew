@@ -48,6 +48,14 @@ export class TtlMemo<T> {
     return request;
   }
 
+  /**
+   * Забыть всё посчитанное: ответ поменялся не от времени, а от правки
+   * (папки авторов, VED-584). Идущие расчёты досчитаются и запомнятся.
+   */
+  clear(): void {
+    this.data.clear();
+  }
+
   get size(): number {
     return this.data.size;
   }

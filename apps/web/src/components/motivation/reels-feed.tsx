@@ -482,7 +482,7 @@ export function ReelsFeed({
             `absolute`, из потока `flex-col` исключён), а отдельной строкой,
             поэтому вариант `"chip"` — самостоятельная пилюля с подписью,
             а не голый значок без опоры (см. JSDoc FeedAttributionFilter). */}
-        <FeedAttributionFilter state={filterState} variant="chip" />
+        <FeedAttributionFilter state={filterState} variant="chip" isAdmin={isAdmin} />
         {categoryNav()}
         <p className="font-display text-lg">
           {tab === "saved"
@@ -666,7 +666,13 @@ export function ReelsFeed({
       </div>
       {/* Значок фильтра по автору и источнику (VED-206) — в самом ряду
           вкладок (VED-252), а не отдельной строкой под ним. */}
-      <Tabs tab={tab} order={order} category={category} filterState={filterState} />
+      <Tabs
+        tab={tab}
+        order={order}
+        category={category}
+        filterState={filterState}
+        isAdmin={isAdmin}
+      />
       {/* Лента открыта с места, где человек остановился, или с цитаты с
           главной (VED-432). Листать можно только вперёд, поэтому на первой
           картинке — дорога к началу ленты. Дальше не мешает кадру. */}
@@ -837,12 +843,15 @@ function Tabs({
   order,
   category,
   filterState,
+  isAdmin = false,
 }: {
   tab: ReelsTab;
   order?: "random";
   category?: string;
   /** Значок фильтра встаёт между «Открытки» и «Избранное» (VED-252). */
   filterState?: FeedFilterState;
+  /** Администратор раскладывает авторов фильтра по папкам (VED-584). */
+  isAdmin?: boolean;
 }) {
   const link = (key: ReelsTab | "collections", href: string, label: string) => (
     <Link
@@ -907,7 +916,7 @@ function Tabs({
           пословицами. */}
       {link("forYou", reelsHref({ order, category }), "Лента")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
-      {filterState && <FeedAttributionFilter state={filterState} />}
+      {filterState && <FeedAttributionFilter state={filterState} isAdmin={isAdmin} />}
       {/* VED-387: «Избранное» и «Мои» ушли в меню ☰ (там «Избранное» и
           «Мои · Студия»), на их местах — «Категории» той ленты, что открыта,
           и звёздочка панели горячих кнопок: у полноэкранной ленты нет шапки

@@ -368,6 +368,11 @@ describe('MotivationService feed tiers', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockResolvedValue({}),
       },
+      motivationSpeakerFolder: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
     const service = new MotivationService(
       prisma as never,
@@ -824,7 +829,7 @@ describe('MotivationService feed tiers', () => {
     });
 
     expect(result).toEqual({
-      speakers: [{ label: 'Шрила Прабхупада', count: 3 }],
+      speakers: [{ label: 'Шрила Прабхупада', count: 3, folder: null }],
       works: [
         { label: 'Бхагавад-гита', count: 5 },
         { label: 'Упанишады', count: 2 },
@@ -863,6 +868,58 @@ describe('MotivationService feed tiers', () => {
     expect(groupBy).toHaveBeenCalledTimes(2);
 
     await service.feedAttributions({ category: 'praktika' });
+    expect(groupBy).toHaveBeenCalledTimes(4);
+  });
+
+  // VED-584: папка автора едет в списке, а правка папки сбрасывает память.
+  it('puts speakers into folders and recounts after an admin change', async () => {
+    const { service, prisma, motivationPost } = build(day(10), []);
+    const groupBy = jest.fn((args: { by: string[] }) =>
+      Promise.resolve(
+        args.by[0] === 'attributionSpeaker'
+          ? [
+              { attributionSpeaker: 'Конфуций', _count: { _all: 1 } },
+              { attributionSpeaker: 'Прабхупада', _count: { _all: 4 } },
+            ]
+          : [],
+      ),
+    );
+    Object.assign(motivationPost, { groupBy });
+    prisma.motivationSpeakerFolder.findMany.mockResolvedValue([
+      { speakerKey: 'конфуций', folder: 'world_wisdom' },
+    ]);
+
+    const first = await service.feedAttributions({});
+    expect(first.speakers).toEqual([
+      { label: 'Прабхупада', count: 4, folder: null },
+      { label: 'Конфуций', count: 1, folder: 'world_wisdom' },
+    ]);
+
+    const admin = { sub: 'a', role: 'admin' } as never;
+    await expect(
+      service.setSpeakerFolder({ sub: 'u', role: 'user' } as never, {
+        speaker: 'Прабхупада',
+        folder: 'vedas',
+      }),
+    ).rejects.toThrow();
+    await service.setSpeakerFolder(admin, {
+      speaker: ' Прабхупада',
+      folder: 'vedas',
+    });
+    expect(prisma.motivationSpeakerFolder.upsert).toHaveBeenCalledWith({
+      where: { speakerKey: 'прабхупада' },
+      create: { speakerKey: 'прабхупада', folder: 'vedas' },
+      update: { folder: 'vedas' },
+    });
+    await service.setSpeakerFolder(admin, {
+      speaker: 'Конфуций',
+      folder: null,
+    });
+    expect(prisma.motivationSpeakerFolder.deleteMany).toHaveBeenCalledWith({
+      where: { speakerKey: 'конфуций' },
+    });
+
+    await service.feedAttributions({});
     expect(groupBy).toHaveBeenCalledTimes(4);
   });
 

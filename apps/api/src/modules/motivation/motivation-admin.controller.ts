@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -84,6 +85,14 @@ export class MotivationAdminController {
   @Get('health')
   health() {
     return this.health_.health();
+  }
+  /** Папка автора в фильтре ленты (VED-584): `{ speaker, folder }`. */
+  @Put('speaker-folders')
+  setSpeakerFolder(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: unknown,
+  ) {
+    return this.service.setSpeakerFolder(user, body);
   }
   @Get('posts')
   adminList(@CurrentUser() user: AccessTokenPayload) {
