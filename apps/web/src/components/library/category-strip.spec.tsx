@@ -68,7 +68,7 @@ describe("CategoryStrip", () => {
     expect(tile).toContainElement(screen.getByLabelText("Материалов: 1"));
   });
 
-  it("«i» — между именем и числом, соседом ссылки, а не внутри неё (VED-553)", () => {
+  it("«i» — у правого края вплотную перед числом, не внутри ссылки (VED-553)", () => {
     render(
       <CategoryStrip
         locale="ru"
@@ -83,7 +83,10 @@ describe("CategoryStrip", () => {
       name: "Информация: Аиндра Прабху",
     });
     expect(link).not.toContainElement(info);
-    expect(link.nextElementSibling).toBe(info);
+    // «i» и число — одна группа, прижатая к правому краю плитки.
+    const group = link.nextElementSibling!;
+    expect(group.className).toContain("ml-auto");
+    expect(group.firstElementChild).toBe(info);
     expect(info.nextElementSibling).toBe(
       screen.getByLabelText("Материалов: 4"),
     );

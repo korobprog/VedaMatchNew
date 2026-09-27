@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CATEGORY_INFO_MAX_LENGTH,
   categoryInfo,
+  infoSectionsForView,
   linkifyInfoText,
   showCategoryInfoButton,
   tooLongInfoField,
@@ -27,6 +28,19 @@ describe("visibleInfoSections", () => {
 
   it("пустой рубрике показывать нечего", () => {
     expect(visibleInfoSections(categoryInfo({}))).toEqual([]);
+  });
+});
+
+describe("infoSectionsForView (VED-553)", () => {
+  it("всегда все четыре раздела, незаполненные — с пустым текстом", () => {
+    expect(
+      infoSectionsForView(categoryInfo({ infoBio: " Родился в Москве " })),
+    ).toEqual([
+      { field: "infoContacts", label: "info.contacts", text: "" },
+      { field: "infoBio", label: "info.bio", text: "Родился в Москве" },
+      { field: "infoResources", label: "info.resources", text: "" },
+      { field: "infoSchedule", label: "info.schedule", text: "" },
+    ]);
   });
 });
 

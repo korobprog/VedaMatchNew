@@ -338,8 +338,7 @@ const ui = {
     "info.resources": "Ресурсы",
     "info.schedule": "Расписание",
     "info.edit": "Изменить",
-    "info.empty":
-      "Здесь пока пусто. Нажмите «Изменить», чтобы добавить контакты, биографию, ресурсы или расписание.",
+    "info.notFilled": "Пока не заполнено",
     "info.tooLong": "Раздел длиннее 5000 символов — сократите его",
     "info.failed": "Не удалось сохранить, попробуйте позже",
   },
@@ -671,8 +670,7 @@ const ui = {
     "info.resources": "Resources",
     "info.schedule": "Schedule",
     "info.edit": "Edit",
-    "info.empty":
-      "Nothing here yet. Press “Edit” to add contacts, a biography, resources or a schedule.",
+    "info.notFilled": "Not filled in yet",
     "info.tooLong":
       "A section is longer than 5000 characters — please shorten it",
     "info.failed": "Could not save, please try again later",

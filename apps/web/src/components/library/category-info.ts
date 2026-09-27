@@ -49,6 +49,24 @@ export function visibleInfoSections(info: CategoryInfo): Array<{
 }
 
 /**
+ * Разделы окна (VED-553, доработка): всегда все четыре, в порядке показа.
+ * Незаполненный — с пустым `text`: окно подписывает его «Пока не
+ * заполнено». Раньше читатель видел только заполненные, и у автора с одним
+ * разделом окно выглядело так, будто остальных рубрик нет вовсе.
+ */
+export function infoSectionsForView(info: CategoryInfo): Array<{
+  field: LibraryCategoryInfoField;
+  label: LibraryTextKey;
+  text: string;
+}> {
+  return CATEGORY_INFO_SECTIONS.map(({ field, label }) => ({
+    field,
+    label,
+    text: info[field].trim(),
+  }));
+}
+
+/**
  * Кнопку видят все, когда заполнен хотя бы один раздел, а тот, кто может
  * править рубрику, — всегда: иначе заполнить первый раздел было бы негде.
  */
