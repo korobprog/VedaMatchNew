@@ -57,3 +57,21 @@ describe("BlogPostView", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+/* VED-544: «Убери две кнопки отмеченные галочкой из меню всех участников
+   кроме админов» — «Репост» и «Закрепить». */
+describe("ряд действий поста: только для админов", () => {
+  it("участник не видит ни «Репост», ни «Закрепить»", () => {
+    render(<BlogPostView initial={makePost()} />);
+    expect(screen.queryByRole("button", { name: "Репост" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Закрепить" })).toBeNull();
+  });
+
+  it("админ видит обе", () => {
+    render(<BlogPostView initial={makePost({ canModerate: true })} />);
+    expect(screen.getByRole("button", { name: "Репост" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Закрепить" }),
+    ).toBeInTheDocument();
+  });
+});

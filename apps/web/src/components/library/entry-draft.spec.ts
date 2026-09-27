@@ -139,6 +139,9 @@ describe("buildCreateEntryBody", () => {
     expect(buildCreateEntryBody(draft()).communityId).toBeNull();
     // Пустая линия — «для всех», а не пустая строка в базе.
     expect(buildCreateEntryBody(draft({ lineage: "" })).lineage).toBeNull();
+    // «Для всех линий» в селекте — значение "all"; серверу это не линия,
+    // он отвечал 400 unsupported_lineage.
+    expect(buildCreateEntryBody(draft({ lineage: "all" })).lineage).toBeNull();
     expect(buildCreateEntryBody(draft({ lineage: "ipbys" })).lineage).toBe(
       "ipbys",
     );

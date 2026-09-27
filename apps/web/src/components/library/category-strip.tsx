@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText, FolderTree } from "lucide-react";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { categoryCounter } from "./category-tree";
+import { CategoryInfoButton } from "./category-info-dialog";
 import {
   categoryCountLabel,
   categoryPageSummary,
@@ -25,9 +26,12 @@ import {
  *
  * Вложенные рубрики — это чаще всего авторы («Проповедники → Ари Мардан
  * Прабху»), и плитка у них в одну строку (VED-528): имя, справа число.
- * Карандаша нет — имя правят на странице самого автора. Ширина плитки — по
- * имени: короткое не держит пол-экрана, и длинному соседу достаётся место
- * целиком; не влезает и в строку — многоточие, но число остаётся видно.
+ * Карандаша нет — имя правят на странице самого автора. Плитки — списком,
+ * по одной в строке и во всю ширину (VED-552): короткие имена раньше
+ * вставали по две в ряд, и список авторов читался лесенкой. Не влезает имя
+ * в строку — многоточие, но число остаётся видно.
+ * Между именем и числом — «i» с контактами, биографией, ресурсами и
+ * расписанием автора (VED-553); у читателя — только когда есть что читать.
  */
 export function CategoryStrip({
   categories,
@@ -49,7 +53,7 @@ export function CategoryStrip({
       className={
         root
           ? "mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-          : "mb-6 flex flex-wrap gap-2"
+          : "mb-6 flex flex-col gap-2"
       }
     >
       {categories.map((category) => {
@@ -62,7 +66,7 @@ export function CategoryStrip({
             className={`glass rounded-xl border px-3 text-sm transition-colors ${
               root
                 ? "flex flex-col gap-1 py-2"
-                : "flex min-h-11 max-w-full min-w-0 flex-auto items-center gap-2"
+                : "flex min-h-11 min-w-0 items-center gap-2"
             } ${active ? "border-glass-brd" : "border-transparent"}`}
           >
             {/* Название — на своей строке и во всю ширину плитки: раньше
@@ -102,6 +106,12 @@ export function CategoryStrip({
                 en: category.titleEn,
               })}
             </Link>
+            {/* «i» — между именем и числом, соседом ссылки, а не внутри
+                неё (VED-553). Только у авторов: верхний уровень — рубрики
+                портала, рассказывать о них нечего. */}
+            {!root && (
+              <CategoryInfoButton locale={locale} category={category} />
+            )}
             {root ? (
               /* Число словами, а не значком с цифрой: значок убран по просьбе
                  освободить плитку, а «4» без него одинаково читается и как

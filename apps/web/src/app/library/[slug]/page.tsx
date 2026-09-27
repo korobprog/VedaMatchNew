@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Bookmark } from "lucide-react";
 import { notFound } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import { isLineagePreference, resolveContentLineage } from "@vedamatch/shared";
@@ -15,6 +14,7 @@ import {
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
+import { LibraryBookmarksDialog } from "@/components/library/bookmarks-dialog";
 import { CategoryBreadcrumbs } from "@/components/library/category-breadcrumbs";
 import { CategoryNavigator } from "@/components/library/category-navigator";
 import { headerEntriesCount } from "@/components/library/category-tree";
@@ -24,7 +24,6 @@ import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
 import { LibraryContents } from "@/components/library/library-contents";
-import { LIBRARY_ICON_BUTTON } from "@/components/library/icon-button";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
@@ -177,30 +176,30 @@ export default async function LibraryCategoryPage({
           </Link>
           {authorPage ? (
             <>
-              {/* У автора справа налево (VED-521): «Тип материала»,
-                  «Редактировать», «Упорядочить», «Язык». */}
-              <div className="ml-auto">
-                <EntryFilterMenu kind="language" locale={locale} />
-              </div>
+              {/* У автора слева направо (VED-521, второй круг): «Содержание»
+                  значком, «Тип материала», «Упорядочить», «Редактировать»,
+                  «Язык» — тип и язык поменялись местами по стрелкам. Список
+                  «Содержания» раскрывается под рядом (VED-538). */}
+              <div className="ml-auto" />
+              <LibraryContents
+                locale={locale}
+                categorySlug={category.slug}
+                iconOnly
+              />
+              <EntryFilterMenu kind="type" locale={locale} />
               {category.canMove && (
                 <LibraryOrganizeButton locale={locale} iconOnly />
               )}
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
-              <EntryFilterMenu kind="type" locale={locale} />
+              <EntryFilterMenu kind="language" locale={locale} />
             </>
           ) : (
             <>
-              {/* «Закладки» (VED-511) — перед «Фильтрами»: избранные статьи,
-                  катха и остальное из Образования, та же страница, что
-                  «Избранное» на главной сервиса. */}
-              <Link
-                href="/library/favorites"
-                aria-label={t(locale, "bookmark.title")}
-                title={t(locale, "bookmark.title")}
-                className={`${LIBRARY_ICON_BUTTON} ml-auto border-glass-brd text-text-1 hover:text-text-0`}
-              >
-                <Bookmark aria-hidden className="size-4" />
-              </Link>
+              {/* «Закладки» (VED-511) — перед «Фильтрами». Раньше вела на
+                  страницу «Избранное» — ту же ленту карточек; теперь
+                  открывает окно со списком названий всех закладок
+                  Образования (VED-539). */}
+              <LibraryBookmarksDialog locale={locale} className="ml-auto" />
               <div id="lineage-switch" className="scroll-mt-24">
                 <LibraryLineageFilter
                   locale={locale}
@@ -216,12 +215,6 @@ export default async function LibraryCategoryPage({
             </>
           )}
         </div>
-
-        {/* «Содержание» автора (VED-538) — оглавление его текстовых
-            материалов. */}
-        {authorPage && (
-          <LibraryContents locale={locale} categorySlug={category.slug} />
-        )}
 
         {user && !authorPage && (
           <LineagePrompt

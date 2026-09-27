@@ -15,7 +15,10 @@ import {
 } from "@/lib/portal-windows";
 import { getPlaybackState } from "@/lib/music-playback-api";
 import { useMusicPlayer } from "@/components/music/player/player-provider";
-import { revealMusicPlayerCollapsed } from "@/components/music/player/player-reveal";
+import {
+  revealMusicPlayerCollapsed,
+  stowMusicPlayer,
+} from "@/components/music/player/player-reveal";
 import { useMusicRadio } from "@/components/music/radio/radio-provider";
 import { switchPortalWindows, usePortalWindows } from "./portal-windows-store";
 import { planPlayerHotkey, restorePlan } from "./player-hotkey";
@@ -118,13 +121,19 @@ export function usePlayerHotkey() {
   const router = useRouter();
 
   const run = useCallback(async () => {
-    revealMusicPlayerCollapsed();
     const step = planPlayerHotkey(
       player
         ? { hasTrack: Boolean(player.current), isPlaying: player.isPlaying }
         : null,
     );
-    if (step === "pause" || step === "resume") {
+    // Пауза из шапки убирает полосу с экрана до следующего запуска (VED-482).
+    if (step === "pause") {
+      player?.toggle();
+      stowMusicPlayer();
+      return;
+    }
+    revealMusicPlayerCollapsed();
+    if (step === "resume") {
       player?.toggle();
       return;
     }

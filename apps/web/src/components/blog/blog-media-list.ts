@@ -22,6 +22,13 @@ export const BLOG_MEDIA_MIN_ASPECT = 4 / 5;
 export const BLOG_MEDIA_MAX_ASPECT = 1.91;
 
 /**
+ * Предел ширины рамки в виджете главной (VED-556): баннеры материалов из
+ * Образования бывают 2:1 и шире и при 1,91 срезались по краям — вместе с
+ * надписями на них. До 3:1 картинка встаёт целиком.
+ */
+export const BLOG_HOME_MAX_ASPECT = 3;
+
+/**
  * Вложения в порядке карусели. `media` приходит от сервера с роликами; если
  * его нет (ответ старого API во время выкладки), собираем из фотографий —
  * лента не должна пустеть из-за порядка перезапуска контейнеров.
@@ -58,18 +65,21 @@ export function blogMediaAspect(
  * рамка не повторяет (иначе панорама становится полоской, а вертикаль —
  * простынёй на экран), и тогда он обрезается по краям (`crop`), а не
  * обрастает полями: поля заказчик просил убрать везде.
+ *
+ * `maxAspect` — свой предел ширины: на главной баннер Образования шире 1,91
+ * терял края (VED-556), а там картинка обязана помещаться целиком.
  */
-export function blogFrameFit(raw: number | null): {
+export function blogFrameFit(
+  raw: number | null,
+  maxAspect: number = BLOG_MEDIA_MAX_ASPECT,
+): {
   aspect: number;
   crop: boolean;
 } {
   if (raw === null || !Number.isFinite(raw) || raw <= 0) {
     return { aspect: 1, crop: true };
   }
-  const aspect = Math.min(
-    BLOG_MEDIA_MAX_ASPECT,
-    Math.max(BLOG_MEDIA_MIN_ASPECT, raw),
-  );
+  const aspect = Math.min(maxAspect, Math.max(BLOG_MEDIA_MIN_ASPECT, raw));
   return { aspect, crop: aspect !== raw };
 }
 

@@ -42,20 +42,12 @@ import {
 } from "@/lib/vcalendar-button";
 import { BlogCarousel, BlogFrame } from "./blog-carousel";
 import { BlogFitImage } from "./blog-fit-image";
-import { blogHomeSlide, type BlogHomeSlide } from "./blog-media-list";
 import {
-  buildSpokenPost,
-  canSpeak,
-  getBlogPausedId,
-  getBlogPausedServerId,
-  getBlogSpeakingId,
-  getBlogSpeakingServerId,
-  pauseBlogSpeech,
-  resumeBlogSpeech,
-  speakBlogPost,
-  speakButtonAction,
-  subscribeBlogSpeech,
-} from "./blog-speech";
+  BLOG_HOME_MAX_ASPECT,
+  blogHomeSlide,
+  type BlogHomeSlide,
+} from "./blog-media-list";
+import { useBlogSpeech } from "./blog-speak-button";
 import {
   HOME_PANEL_DEFAULT_ORDER,
   HOME_PANEL_LABELS,
@@ -64,8 +56,6 @@ import {
   writePanelOrder,
   type HomePanelButton,
 } from "./home-panel-order";
-
-const subscribeNothing = () => () => {};
 
 /**
  * Блог-лента на главной (VED-238) — на месте, где раньше стояли карточка
@@ -158,25 +148,10 @@ export function BlogHomeWidget({
   const spokenSource = currentPost
     ? (currentPost.repostOf ?? currentPost)
     : null;
-  const spokenText = spokenSource ? buildSpokenPost(spokenSource) : "";
-
-  const speakingId = useSyncExternalStore(
-    subscribeBlogSpeech,
-    getBlogSpeakingId,
-    getBlogSpeakingServerId,
-  );
-  const canSpeakHere = useSyncExternalStore(
-    subscribeNothing,
-    canSpeak,
-    () => false,
-  );
-  const pausedId = useSyncExternalStore(
-    subscribeBlogSpeech,
-    getBlogPausedId,
-    getBlogPausedServerId,
-  );
-  const speaking = currentPost !== null && speakingId === currentPost.id;
-  const paused = currentPost !== null && pausedId === currentPost.id;
+  /* Пост из Образования читается текстом материала, а не ссылкой (VED-550):
+     источник выбирает `useBlogSpeech`. */
+  const speech = useBlogSpeech(currentPost?.id ?? null, spokenSource);
+  const { speaking, paused } = speech;
 
   const [order, setOrder] = useState<HomePanelButton[]>(() => [
     ...HOME_PANEL_DEFAULT_ORDER,
@@ -214,13 +189,6 @@ export function BlogHomeWidget({
 
   /* Второе нажатие — пауза, а не «стоп» (VED-514): третье продолжает с того
      же места, а не читает пост сначала. */
-  function toggleSpeak() {
-    if (!currentPost) return;
-    const action = speakButtonAction({ speaking, paused });
-    if (action === "pause") pauseBlogSpeech();
-    else if (action === "resume") resumeBlogSpeech();
-    else speakBlogPost(currentPost.id, spokenText);
-  }
   const speakLabel = speaking
     ? "Пауза"
     : paused
@@ -302,25 +270,26 @@ export function BlogHomeWidget({
         )}
       </button>
     ),
-    speak:
-      canSpeakHere && spokenText ? (
-        <button
-          type="button"
-          onClick={toggleSpeak}
-          aria-pressed={speaking}
-          aria-label={speakLabel}
-          title={speakLabel}
-          className={`${iconButton} hover:border-cyan/60 ${speaking || paused ? "border-cyan" : ""}`}
-        >
-          {speaking ? (
-            <Pause aria-hidden className="size-4" fill="currentColor" />
-          ) : paused ? (
-            <Play aria-hidden className="size-4" fill="currentColor" />
-          ) : (
-            <Volume2 aria-hidden className="size-4" />
-          )}
-        </button>
-      ) : null,
+    speak: speech.available ? (
+      <button
+        type="button"
+        onClick={() => void speech.toggle()}
+        disabled={speech.loading}
+        aria-busy={speech.loading}
+        aria-pressed={speaking}
+        aria-label={speakLabel}
+        title={speakLabel}
+        className={`${iconButton} hover:border-cyan/60 ${speaking || paused ? "border-cyan" : ""}`}
+      >
+        {speaking ? (
+          <Pause aria-hidden className="size-4" fill="currentColor" />
+        ) : paused ? (
+          <Play aria-hidden className="size-4" fill="currentColor" />
+        ) : (
+          <Volume2 aria-hidden className="size-4" />
+        )}
+      </button>
+    ) : null,
     hide: (
       <button
         type="button"
@@ -477,6 +446,7 @@ function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
             slide.coverAspect ? Math.round(slide.coverAspect * 1000) : null
           }
           height={slide.coverAspect ? 1000 : null}
+          maxAspect={BLOG_HOME_MAX_ASPECT}
         >
           {slide.isVideo && <VideoMark />}
         </BlogFitImage>

@@ -3,12 +3,14 @@ import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSession } from '@/lib/auth/session';
 import { createBlogApi } from '@/lib/blog/blog-api';
 import { applyBlogChange, subscribeBlogChanges } from '@/lib/blog/blog-changes';
-import { blogRestLabel, blogTileTitle, shownContent } from '@/lib/blog/blog-feed-state';
-import { readBlogHomeVisible, writeBlogHomeVisible } from '@/lib/blog/blog-home-visibility';
+import { blogRestLabel } from '@/lib/blog/blog-feed-state';
+import { blogHomeTile, blogHomeTileLabel } from '@/lib/blog/blog-home-tile';
 import { openBlogComposer, openBlogFeed, openBlogPost } from '@/lib/blog/blog-routes';
+import { homeSectionsStore } from '@/lib/home/home-sections-store';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -34,41 +36,38 @@ const keyOf = (post: BlogPostDto) => post.id;
  * Вид — по чек-листу заказчика для главной: «картинка, заголовок. Всё».
  * Нажатие на плитку открывает ЭТОТ пост, «Вся лента» — всю ленту.
  *
- * Полосу можно убрать («Скрыть»), и тогда «Чаты» выглядят как до ленты —
- * ни заголовка, ни пустого места. Вернуть — кнопкой в самой ленте, как на
- * сайте. Сбой сервиса полосу молча убирает: упавшая лента не должна мешать
- * переписке, ради которой открыты «Чаты».
+ * Показывать ли полосу, решает не она, а галочка «Блог-лента» в
+ * «Настройках» (`lib/home/home-sections.ts`): по умолчанию выключена, и
+ * «Чаты» выглядят как до ленты — ни заголовка, ни пустого места. Кнопка
+ * «Скрыть» здесь снимает ту же галочку, «Вернуть» на экране ленты — ставит;
+ * отдельного флага у полосы нет. Сбой сервиса полосу молча убирает: упавшая
+ * лента не должна мешать переписке, ради которой открыты «Чаты».
  */
 export function BlogHomeStrip() {
   const { colors } = useTheme();
   const { api, user } = useSession();
   const blogApi = useMemo(() => createBlogApi(api), [api]);
-  const [visible, setVisible] = useState<boolean | null>(null);
   const [posts, setPosts] = useState<BlogPostDto[] | null>(null);
   const [total, setTotal] = useState(0);
   const [failed, setFailed] = useState(false);
   const userId = user?.id ?? null;
 
-  // На каждом возврате на «Чаты»: ленту могли вернуть с её экрана, а посты
-  // за это время — опубликовать.
+  // На каждом возврате на «Чаты»: посты за это время могли опубликовать.
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
       let alive = true;
-      void readBlogHomeVisible(userId).then(async (shown) => {
-        if (!alive) return;
-        setVisible(shown);
-        if (!shown) return;
-        try {
-          const home = await blogApi.home();
+      void blogApi
+        .home()
+        .then((home) => {
           if (!alive) return;
           setPosts(home.posts);
           setTotal(home.total);
           setFailed(false);
-        } catch {
+        })
+        .catch(() => {
           if (alive) setFailed(true);
-        }
-      });
+        });
       return () => {
         alive = false;
       };
@@ -86,15 +85,12 @@ export function BlogHomeStrip() {
     [],
   );
 
-  const hide = useCallback(() => {
-    if (!userId) return;
-    setVisible(false);
-    void writeBlogHomeVisible(userId, false).catch(() => setVisible(true));
-  }, [userId]);
+  // Та же галочка, что в «Настройках»: полоса исчезает, как только она снята.
+  const hide = useCallback(() => void homeSectionsStore.set('blog', false), []);
 
   const renderItem = useCallback<ListRenderItem<BlogPostDto>>(({ item }) => <BlogTile post={item} />, []);
 
-  if (visible !== true || failed) return null;
+  if (failed) return null;
 
   return (
     <View style={styles.root}>
@@ -103,7 +99,7 @@ export function BlogHomeStrip() {
           Блог-лента
         </Text>
         <HeadButton label="Написать" hint="Открывает форму нового поста" onPress={openBlogComposer} />
-        <HeadButton label="Скрыть" hint="Убирает ленту из «Чатов». Вернуть её можно на экране ленты" onPress={hide} />
+        <HeadButton label="Скрыть" hint="Убирает ленту из «Чатов». Вернуть её можно в «Настройках» во вкладке «Сервисы» или на экране ленты" onPress={hide} />
       </View>
 
       {posts === null ? (
@@ -158,39 +154,66 @@ export function BlogHomeStrip() {
 
 function BlogTile({ post }: { post: BlogPostDto }) {
   const { colors } = useTheme();
-  const shown = shownContent(post);
-  const cover = shown.images[0];
-  const title = blogTileTitle(post);
+  // Обложка и подпись — по правилам виджета главной сайта (`blog-home-tile.ts`):
+  // у ролика — его обложка, у материала из Образования — обложка материала.
+  const tile = blogHomeTile(post);
   return (
     <Pressable
       accessibilityRole="link"
-      accessibilityLabel={`${title}. ${post.author.name}. Открыть пост`}
+      accessibilityLabel={blogHomeTileLabel(tile, post.author.name)}
       onPress={() => openBlogPost(post.id)}
       android_ripple={ripple(colors.glassBorder)}
       style={({ pressed }) => [styles.tile, { borderColor: colors.glassBorder, backgroundColor: colors.glass }, pressedStyle(pressed)]}
     >
-      {cover ? (
-        <Image
-          source={{ uri: cover.url }}
-          style={[styles.cover, { backgroundColor: colors.bg2 }]}
-          contentFit="cover"
-          transition={150}
-          cachePolicy="memory-disk"
-          recyclingKey={cover.url}
-        />
+      {tile.coverUrl ? (
+        <View>
+          <Image
+            source={{ uri: tile.coverUrl }}
+            style={[styles.cover, { backgroundColor: colors.bg2 }]}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={tile.coverUrl}
+          />
+          {tile.isVideo ? <VideoMark /> : null}
+        </View>
       ) : (
-        // Пост без картинки: начало текста на месте обложки — плитки в ряд
-        // одной высоты, и видно, что это слова, а не пустая рамка.
+        // Пост без картинки: слова на месте обложки — плитки в ряд одной
+        // высоты, и видно, что это слова, а не пустая рамка.
         <View style={[styles.cover, styles.textCover, { backgroundColor: colors.bg2 }]}>
           <Text numberOfLines={5} style={[styles.coverText, { color: colors.text0 }]}>
-            {shown.text.trim() || title}
+            {tile.frameText}
           </Text>
         </View>
       )}
-      <Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text0 }]}>
-        {title}
-      </Text>
+      {tile.title ? (
+        <Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text0 }]}>
+          {tile.title}
+        </Text>
+      ) : null}
     </Pressable>
+  );
+}
+
+/**
+ * Отметка ролика поверх обложки — кружок с треугольником, как `VideoMark`
+ * на сайте. Декоративная: слово «ролик» уже в подписи плитки для скринридера.
+ */
+function VideoMark() {
+  const { colors } = useTheme();
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={styles.videoMarkLayer}
+    >
+      <View style={[styles.videoMark, { backgroundColor: colors.bg0 }]}>
+        <Svg width={22} height={22} viewBox="0 0 24 24">
+          <Path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill={colors.text0} />
+        </Svg>
+      </View>
+    </View>
   );
 }
 
@@ -231,6 +254,10 @@ const styles = StyleSheet.create({
   cover: { width: '100%', aspectRatio: 1 },
   textCover: { padding: 10, justifyContent: 'center' },
   coverText: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
+  videoMarkLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
+  // Подложка — непрозрачный фон темы (у сайта `bg-bg-0/85`): значок цвета
+  // текста на ней читается на любой обложке, светлой или тёмной.
+  videoMark: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   tileTitle: { fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 18, minHeight: 44, paddingHorizontal: 8, paddingVertical: 4 },
   empty: { borderWidth: 1, borderRadius: radius.sm, padding: 16, minHeight: hitTarget, overflow: 'hidden' },
   emptyText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },

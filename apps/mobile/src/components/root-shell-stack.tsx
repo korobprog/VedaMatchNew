@@ -8,6 +8,7 @@ import { OfflineBannerFrame } from '@/components/startup/offline-banner';
 import { StartupOfflineScreen } from '@/components/startup/startup-offline-screen';
 import { useSession } from '@/lib/auth/session';
 import { OnboardingGateProvider, useOnboardingGate } from '@/lib/onboarding/onboarding-gate';
+import { homeSectionsStore } from '@/lib/home/home-sections-store';
 import { PushBridge } from '@/lib/push/push-bridge';
 import { quickPinsStore } from '@/lib/services/quick-pins-store';
 import { useConnectivity, usePreviousConnectivity } from '@/lib/startup/connectivity';
@@ -78,8 +79,11 @@ function RootStackInner() {
   // Закреплённое для панели быстрого доступа (VED-385) читается вместе с
   // восстановлением сессии, а не когда откроются вкладки: вкладки ждут этого
   // чтения, чтобы первый кадр сразу встал с панелью (`(tabs)/_layout.tsx`).
+  // Галочки главной («Настройки») — по той же причине: «Чаты» не должны
+  // встать с умолчаниями и через кадр перестроиться.
   useEffect(() => {
     void quickPinsStore.load();
+    void homeSectionsStore.load();
   }, []);
 
   // «Повторить» на экране «Нет соединения»: кнопка занята, пока не пройдёт
@@ -139,6 +143,10 @@ function RootStackInner() {
               двух мест — карточкой сверху «Аккаунта» и своей карточкой в
               справочнике людей. */}
           <Stack.Screen name="profile" />
+          {/* «Настройки» приложения — что показывать на главной. Маршрут
+              корневого стека, вход — строкой во вкладке «Сервисы» рядом с
+              «Аккаунтом». Хранятся на телефоне (`lib/home/`). */}
+          <Stack.Screen name="settings" />
           {/* Поиск по порталу (VED-337) — маршрут корневого стека: выдача на
               весь экран поверх вкладок, вход — полем в шапке «Сервисов». */}
           <Stack.Screen name="search" />
@@ -231,6 +239,10 @@ function RootStackInner() {
           <Stack.Screen name="union/location" />
           <Stack.Screen name="union/collections" />
           <Stack.Screen name="union/hidden" />
+          {/* «Персональный день» Астрологии — единственный экран сервиса в
+              приложении: сюда ведёт уведомление о дне (пуш и карточка в
+              ленте). Остальная Астрология и плитка каталога — на сайте. */}
+          <Stack.Screen name="astro/today" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />

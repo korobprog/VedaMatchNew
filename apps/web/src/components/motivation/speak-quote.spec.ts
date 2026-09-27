@@ -33,6 +33,19 @@ describe("buildSpokenQuote", () => {
     expect(bare).toBe("Душа не рождается и не умирает.");
   });
 
+  it("ссылки голосом не читает (VED-550)", () => {
+    const spoken = buildSpokenQuote(
+      post({
+        text: "Душа вечна. Подробнее: https://vedabase.io/bg/2/13",
+        attributionSpeaker: null,
+        attributionWork: null,
+        attributionLocator: null,
+      }),
+    );
+    expect(spoken).toBe("Душа вечна. Подробнее:");
+    expect(spoken).not.toContain("vedabase");
+  });
+
   it("не спотыкается на пустом тексте", () => {
     expect(
       buildSpokenQuote(

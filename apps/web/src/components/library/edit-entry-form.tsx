@@ -9,14 +9,17 @@ import type {
   LibraryEntryType,
   LibraryLocale,
   UpdateLibraryEntryRequest,
-  LineageId,
 } from "@vedamatch/shared";
 import { BodyBlankLinesTool } from "./body-blank-lines-tool";
 import { CategoryPicker } from "./category-picker";
 import { LibraryCommunitySelect } from "./community-select";
 import { COVER_IMAGE_ACCEPT } from "./cover-image";
 import { CoverPicture } from "./cover-picture";
-import { LineageSelect } from "@/components/lineage-picker";
+import {
+  LineageSelect,
+  lineageFromSelect,
+  lineageToSelect,
+} from "@/components/lineage-picker";
 import { flattenTree, insertIntoTree, renameInTree } from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -220,8 +223,14 @@ function EntryFieldsForm({
   // оказывался бы вне досягаемости формы.
   const showBody = supportsBody(type) || Boolean(entry.body);
   const [communityId, setCommunityId] = useState(entry.community?.id ?? "");
-  /** Пустая строка — для всех линий. */
-  const [lineage, setLineage] = useState<string>(entry.lineage ?? "");
+  /**
+   * Значение селекта: `"all"` — для всех линий. Пустой строки в списке нет,
+   * и `null` из базы показываем как «для всех», а не как несуществующий
+   * вариант.
+   */
+  const [lineage, setLineage] = useState<string>(
+    lineageToSelect(entry.lineage),
+  );
   const [categories, setCategories] = useState(tree);
   // Рубрики материала берём из него самого: в дереве они лежат вперемешку по
   // веткам, и искать их обходом ради того же результата незачем.
@@ -316,7 +325,7 @@ function EntryFieldsForm({
       // писать от имени общины на каждой правке, и молча оставленное поле
       // продолжало бы говорить от её имени после снятия роли.
       communityId: communityId || null,
-      lineage: lineage ? (lineage as LineageId) : null,
+      lineage: lineageFromSelect(lineage),
     };
 
     setPending(true);

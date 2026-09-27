@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PAGE_BOOKMARK_EVENT, type PageBookmarkEvent } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  BOOKMARK_LIST_LIMIT,
+  toBookmarkList,
+  type LibraryBookmarkListResponse,
+} from './bookmark-list';
 
 /**
  * Избранное пользователя.
@@ -70,6 +75,31 @@ export class LibraryBookmarksService {
       select: { entryId: true },
     });
     return rows.map((row) => row.entryId);
+  }
+
+  /**
+   * Окно «Закладки» (VED-539): все отмеченные материалы с названиями,
+   * свежие сверху. Только опубликованные — на остальные ссылка вела бы в 404.
+   */
+  async list(userId: string): Promise<LibraryBookmarkListResponse> {
+    const rows = await this.prisma.libraryBookmark.findMany({
+      where: { userId, entry: { status: 'published' } },
+      orderBy: { createdAt: 'desc' },
+      take: BOOKMARK_LIST_LIMIT,
+      select: {
+        createdAt: true,
+        entry: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            titleRu: true,
+            titleEn: true,
+          },
+        },
+      },
+    });
+    return toBookmarkList(rows);
   }
 
   private emit(

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  buildSpokenLibraryEntry,
   buildSpokenPost,
+  libraryEntryIdOf,
+  resolveSpokenPostText,
+  stripUrls,
   getBlogPausedId,
   getBlogSpeakingId,
   pauseBlogSpeech,
@@ -13,13 +17,17 @@ import {
 } from "./blog-speech";
 
 describe("озвучка поста (VED-476)", () => {
-  it("читает заголовок и текст, ссылки — словом", () => {
+  it("читает заголовок и текст, ссылки не читает (VED-550)", () => {
     expect(
       buildSpokenPost({
         title: "Экадаши",
         text: "Подробнее:  https://vcalendar.ru\n\nХаре Кришна",
       }),
-    ).toBe("Экадаши. Подробнее: ссылка Харе Кришна");
+    ).toBe("Экадаши. Подробнее: Харе Кришна");
+    // Пост из одного заголовка и ссылки — читается заголовок.
+    expect(
+      buildSpokenPost({ title: "Катха о Гите", text: "sampradaya.ru/katha/1" }),
+    ).toBe("Катха о Гите");
     expect(buildSpokenPost({ title: null, text: "  " })).toBe("");
   });
 
@@ -44,6 +52,88 @@ describe("озвучка поста (VED-476)", () => {
     const chunks = speechChunks(text, 40);
     expect(chunks.every((chunk) => chunk.length <= 40)).toBe(true);
     expect(chunks.join(" ")).toBe(text);
+  });
+});
+
+describe("ссылки голосом не читаются (VED-550)", () => {
+  it("вырезает http, www и голые домены", () => {
+    expect(stripUrls("См. https://a.ru/x?y=1 и www.b.com/путь.")).toBe(
+      "См. и.",
+    );
+    expect(stripUrls("Сайт vedamatch.ru/library/entry/42 — там всё")).toBe(
+      "Сайт — там всё",
+    );
+    expect(stripUrls("Портал сайт.рф (http://x.org)")).toBe("Портал");
+  });
+
+  it("не трогает стихи, сокращения и обычный текст", () => {
+    expect(stripUrls("Бхагавад-гита 2.13, т. е. душа")).toBe(
+      "Бхагавад-гита 2.13, т. е. душа",
+    );
+    expect(stripUrls("Конец.Начало")).toBe("Конец.Начало");
+    expect(stripUrls("kṛṣṇa is God")).toBe("kṛṣṇa is God");
+  });
+});
+
+describe("пост из Образования читается текстом материала (VED-550)", () => {
+  const fromLibrary = {
+    title: "Катха о Гите",
+    text: "https://vedamatch.ru/library/entry/abc",
+    link: { url: "/library/entry/abc" },
+  };
+
+  it("id материала — из ссылки поста, путь или полный адрес", () => {
+    expect(libraryEntryIdOf(fromLibrary)).toBe("abc");
+    expect(
+      libraryEntryIdOf({
+        link: { url: "https://vedamatch.com/library/entry/x%201" },
+      }),
+    ).toBe("x 1");
+    expect(libraryEntryIdOf({ link: { url: "/music/track/1" } })).toBeNull();
+    expect(libraryEntryIdOf({ link: null })).toBeNull();
+    expect(libraryEntryIdOf({})).toBeNull();
+  });
+
+  it("у материала — заголовок и основной текст, без ссылок", () => {
+    expect(
+      buildSpokenLibraryEntry({
+        titleRu: "Катха",
+        descriptionRu: "Краткое описание",
+        body: "Текст катхи. Подробнее на https://site.ru",
+      }),
+    ).toBe("Катха. Текст катхи. Подробнее на");
+    // Основного текста нет — описание.
+    expect(
+      buildSpokenLibraryEntry({
+        titleRu: null,
+        titleEn: "Talk",
+        descriptionRu: null,
+        descriptionEn: "About the soul",
+      }),
+    ).toBe("Talk. About the soul");
+  });
+
+  it("выбирает источник: материал, а при неудаче — сам пост", async () => {
+    const load = vi.fn(async () => ({ titleRu: "Катха", body: "О душе." }));
+    await expect(resolveSpokenPostText(fromLibrary, load)).resolves.toBe(
+      "Катха. О душе.",
+    );
+    expect(load).toHaveBeenCalledWith("abc");
+
+    await expect(
+      resolveSpokenPostText(fromLibrary, async () => null),
+    ).resolves.toBe("Катха о Гите");
+    await expect(
+      resolveSpokenPostText(fromLibrary, async () => {
+        throw new Error("offline");
+      }),
+    ).resolves.toBe("Катха о Гите");
+
+    const plain = vi.fn();
+    await expect(
+      resolveSpokenPostText({ title: "Пост", text: "Текст" }, plain),
+    ).resolves.toBe("Пост. Текст");
+    expect(plain).not.toHaveBeenCalled();
   });
 });
 

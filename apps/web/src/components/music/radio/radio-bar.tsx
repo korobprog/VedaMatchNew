@@ -1,8 +1,9 @@
 "use client";
 
-import { Radio, Square } from "lucide-react";
+import { Play, Radio, Square } from "lucide-react";
 import { MusicCover } from "../music-cover";
 import { useMusicRadio } from "./radio-provider";
+import { radioHandoffTrackId } from "./radio-handoff";
 import { radioItemTitle, radioListenersLabel } from "./radio-sync";
 
 /**
@@ -10,18 +11,24 @@ import { radioItemTitle, radioListenersLabel } from "./radio-sync";
  * радио: у эфира нет перемотки и очереди, поэтому и полоса проще — что
  * звучит, сколько слушают и «Выключить».
  *
+ * Обложка записи — кнопка «Слушать в плеере» (VED-542): запись продолжает
+ * играть в плеере Медиатеки с той же секунды, а полоса эфира уступает место
+ * полосе плеера. У вставки и пустого эфира переносить нечего — там обложка
+ * остаётся картинкой.
+ *
  * `data-music-radio` — зацепка для отступа страницы снизу в globals.css,
  * как у полосы плеера.
  */
 export function MusicRadioBar() {
   const radio = useMusicRadio();
   if (!radio?.active) return null;
-  const { item, listeners, loading, error } = radio;
+  const { item, listeners, loading, error, paused } = radio;
   const title = item
     ? radioItemTitle(item)
     : loading
       ? "Подключаемся к эфиру…"
       : "Эфир";
+  const canHandoff = radioHandoffTrackId(item) !== null;
 
   return (
     <div
@@ -32,20 +39,39 @@ export function MusicRadioBar() {
         aria-label="Радио VM"
         className="pointer-events-auto mx-auto bg-bg-1 shadow-lg flex max-w-3xl items-center gap-3 rounded-t-2xl border border-glass-brd px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:pb-2.5"
       >
-        <span className="relative size-11 shrink-0 overflow-hidden rounded-xl">
-          {item?.track ? (
-            <MusicCover
-              url={item.track.coverUrl}
-              seed={item.track.id}
-              alt=""
-              rounded="rounded-xl"
-            />
-          ) : (
-            <span className="flex size-full items-center justify-center bg-magenta/15 text-magenta">
-              <Radio aria-hidden className="size-5" />
+        {canHandoff && item?.track ? (
+          <button
+            type="button"
+            onClick={radio.handoffToPlayer}
+            aria-label="Слушать в плеере"
+            title="Слушать в плеере"
+            className="relative size-11 shrink-0 rounded-xl motion-safe:transition-transform motion-safe:hover:scale-105 motion-safe:active:scale-95"
+          >
+            <span className="block size-full overflow-hidden rounded-xl">
+              <MusicCover
+                url={item.track.coverUrl}
+                seed={item.track.id}
+                alt=""
+                rounded="rounded-xl"
+              />
             </span>
-          )}
-        </span>
+          </button>
+        ) : (
+          <span className="relative size-11 shrink-0 overflow-hidden rounded-xl">
+            {item?.track ? (
+              <MusicCover
+                url={item.track.coverUrl}
+                seed={item.track.id}
+                alt=""
+                rounded="rounded-xl"
+              />
+            ) : (
+              <span className="flex size-full items-center justify-center bg-magenta/15 text-magenta">
+                <Radio aria-hidden className="size-5" />
+              </span>
+            )}
+          </span>
+        )}
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-magenta">
             <span
@@ -60,9 +86,21 @@ export function MusicRadioBar() {
             )}
           </span>
           <span className="truncate text-sm text-text-0" aria-live="polite">
-            {error ?? title}
+            {error ?? (paused ? `Пауза · ${title}` : title)}
           </span>
         </span>
+        {paused && (
+          // Пауза с экрана блокировки или звонком (VED-543): вернуться в
+          // эфир можно и отсюда, а не только из системной карточки.
+          <button
+            type="button"
+            onClick={radio.resume}
+            aria-label="Продолжить эфир"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-1 hover:text-text-0"
+          >
+            <Play aria-hidden className="size-4" fill="currentColor" />
+          </button>
+        )}
         <button
           type="button"
           onClick={radio.stop}

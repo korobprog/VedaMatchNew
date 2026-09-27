@@ -31,6 +31,7 @@ import {
   planMove,
   type TreeRow,
 } from './category-tree';
+import { isCategoryInfoRejection, pickCategoryInfo } from './category-info';
 
 /** Выше этого сходства создание требует явного подтверждения пользователем. */
 export const SIMILARITY_BLOCK_THRESHOLD = 0.75;
@@ -63,6 +64,10 @@ type CategoryRow = TreeRow & {
   entriesCount: number;
   createdAt: Date;
   createdById: string | null;
+  infoContacts: string | null;
+  infoBio: string | null;
+  infoResources: string | null;
+  infoSchedule: string | null;
 };
 
 const CATEGORY_SELECT = {
@@ -79,6 +84,10 @@ const CATEGORY_SELECT = {
   entriesCount: true,
   createdAt: true,
   createdById: true,
+  infoContacts: true,
+  infoBio: true,
+  infoResources: true,
+  infoSchedule: true,
 } satisfies Prisma.LibraryCategorySelect;
 
 @Injectable()
@@ -162,7 +171,12 @@ export class LibraryCategoriesService {
     return {
       category: toDto(target),
       ancestors,
-      children: childrenOf(target.id).map(toDto),
+      // «Информацию» (VED-553) показывает плитка автора — то есть ребёнок
+      // на странице рубрики. В дереве и у самой рубрики она лишний груз.
+      children: childrenOf(target.id).map((row) => ({
+        ...toDto(row),
+        ...infoOf(row),
+      })),
     };
   }
 
@@ -299,7 +313,8 @@ export class LibraryCategoriesService {
   }
 
   /**
-   * Автор рубрики и админ могут поправить название и описание. Слаг при
+   * Автор рубрики и админ могут поправить название, описание и
+   * «Информацию» (VED-553) — у неё те же права, что у имени. Слаг при
    * этом не пересчитывается — на него уже могли сослаться извне. Место в
    * дереве меняет `move()`, а не эта операция.
    */
@@ -318,7 +333,9 @@ export class LibraryCategoriesService {
       throw new ForbiddenException('not_category_owner');
     }
 
-    const data: Prisma.LibraryCategoryUpdateInput = {};
+    const info = pickCategoryInfo(body as Record<string, unknown>);
+    if (isCategoryInfoRejection(info)) throw new BadRequestException(info);
+    const data: Prisma.LibraryCategoryUpdateInput = { ...info };
 
     if (body.titleRu !== undefined || body.titleEn !== undefined) {
       const titleRu =
@@ -371,13 +388,16 @@ export class LibraryCategoriesService {
       where: { parentId: id, status: 'active' },
     });
 
-    return toCategoryDto(updated, {
-      subtreeEntriesCount: updated.entriesCount,
-      childrenCount,
-      viewerId: userId,
-      viewerCanMove: viewerIsAdmin,
-      viewerIsAdmin,
-    });
+    return {
+      ...toCategoryDto(updated, {
+        subtreeEntriesCount: updated.entriesCount,
+        childrenCount,
+        viewerId: userId,
+        viewerCanMove: viewerIsAdmin,
+        viewerIsAdmin,
+      }),
+      ...infoOf(updated),
+    };
   }
 
   /**
@@ -564,6 +584,23 @@ export class LibraryCategoriesService {
 function trimOrNull(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function infoOf(
+  row: Pick<
+    CategoryRow,
+    'infoContacts' | 'infoBio' | 'infoResources' | 'infoSchedule'
+  >,
+): Pick<
+  LibraryCategoryDto,
+  'infoContacts' | 'infoBio' | 'infoResources' | 'infoSchedule'
+> {
+  return {
+    infoContacts: row.infoContacts,
+    infoBio: row.infoBio,
+    infoResources: row.infoResources,
+    infoSchedule: row.infoSchedule,
+  };
 }
 
 function toAncestor(row: CategoryRow): LibraryCategoryAncestor {

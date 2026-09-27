@@ -28,14 +28,8 @@ export function MotivationHomeButtons({ buttons }: { buttons: HomeButtons }) {
 
   return (
     <div role="group" aria-label="Быстрые ленты Вдохновения" className="flex shrink-0 gap-2">
-      <Link
-        href={buttons.source.href}
-        aria-label={sourceName}
-        title={sourceName}
-        className={cell}
-      >
-        <BookOpen aria-hidden className="size-[18px]" />
-      </Link>
+      {/* Открытки — первыми, лента источника — второй (VED-457: «поменяй
+          местами кнопки»). */}
       {buttons.cards && cardsName && (
         <Link
           href={buttons.cards.href}
@@ -46,6 +40,14 @@ export function MotivationHomeButtons({ buttons }: { buttons: HomeButtons }) {
           <Images aria-hidden className="size-[18px]" />
         </Link>
       )}
+      <Link
+        href={buttons.source.href}
+        aria-label={sourceName}
+        title={sourceName}
+        className={cell}
+      >
+        <BookOpen aria-hidden className="size-[18px]" />
+      </Link>
     </div>
   );
 }

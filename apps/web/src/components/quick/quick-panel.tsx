@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import {
   Bookmark,
+  BookMarked,
   Bot,
   Calculator,
   CalendarDays,
@@ -138,7 +139,9 @@ const ICONS: Record<
   // и ищут.
   menu: Menu,
   window: Columns2,
-  bookmarks: Bookmark,
+  // VED-381: книга с закладкой, а не голый флажок — флажком нарисованы
+  // сами кнопки из закладок, и «Закладки» среди них терялись.
+  bookmarks: BookMarked,
   history: History,
   // VED-416: кружок «пуск», а не нота — нота уже у Медиатеки в сервисах.
   player: CirclePlay,
@@ -264,9 +267,16 @@ export function QuickPanel({
   bell,
   avatar,
   beforeAvatar,
+  starOnly = false,
   ref,
 }: {
   admin?: boolean;
+  /**
+   * Только звёздочка, без остального ряда шапки (VED-472): лента
+   * Вдохновения ставит кнопку панели в свой ряд вкладок, и «История»,
+   * «Плеер» и другие кнопки шапки там лишние — их там и не просили.
+   */
+  starOnly?: boolean;
   /** `trigger` — кнопка, на которую вернуть фокус, когда меню закроют. */
   onOpenMenu?: (trigger: HTMLElement | null) => void;
   menuOpen?: boolean;
@@ -329,11 +339,13 @@ export function QuickPanel({
   const toolbarCatalog = useMemo(() => headerCatalog(catalog), [catalog]);
   const toolbar = useMemo(
     () =>
-      resolveHeaderToolbar(
-        headerIds,
-        new Set(catalog.map((meta) => meta.id)),
-      ),
-    [headerIds, catalog],
+      starOnly
+        ? [HEADER_HOTKEYS_ID]
+        : resolveHeaderToolbar(
+            headerIds,
+            new Set(catalog.map((meta) => meta.id)),
+          ),
+    [starOnly, headerIds, catalog],
   );
 
   /* Читаем эффектом: на сервере `localStorage` нет, и ленивый `useState` дал

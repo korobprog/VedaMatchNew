@@ -52,7 +52,7 @@ describe("CategoryStrip", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("число — в одной строке с именем, плитка по ширине имени (VED-528)", () => {
+  it("число — в одной строке с именем, авторы — по одному в строке (VED-528, VED-552)", () => {
     render(
       <CategoryStrip
         locale="ru"
@@ -62,10 +62,39 @@ describe("CategoryStrip", () => {
 
     const link = screen.getByRole("link", { name: "Аиндра Прабху" });
     const tile = link.parentElement!;
-    expect(tile.className).toContain("flex-auto");
     expect(tile.className).not.toContain("flex-col");
+    expect(tile.parentElement!.className).toContain("flex-col");
     expect(link.className).toContain("truncate");
     expect(tile).toContainElement(screen.getByLabelText("Материалов: 1"));
+  });
+
+  it("«i» — между именем и числом, соседом ссылки, а не внутри неё (VED-553)", () => {
+    render(
+      <CategoryStrip
+        locale="ru"
+        categories={[
+          category({ titleRu: "Аиндра Прабху", infoBio: "Биография" }),
+        ]}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "Аиндра Прабху" });
+    const info = screen.getByRole("button", {
+      name: "Информация: Аиндра Прабху",
+    });
+    expect(link).not.toContainElement(info);
+    expect(link.nextElementSibling).toBe(info);
+    expect(info.nextElementSibling).toBe(
+      screen.getByLabelText("Материалов: 4"),
+    );
+  });
+
+  it("без заполненных разделов читатель «i» не видит (VED-553)", () => {
+    render(<CategoryStrip locale="ru" categories={[category({})]} />);
+
+    expect(
+      screen.queryByRole("button", { name: /^Информация/ }),
+    ).not.toBeInTheDocument();
   });
 
   describe("верхний уровень", () => {

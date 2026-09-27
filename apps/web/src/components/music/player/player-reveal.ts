@@ -17,3 +17,18 @@ export function revealMusicPlayerCollapsed(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(MUSIC_PLAYER_REVEAL_EVENT));
 }
+
+/**
+ * Попросить полосу плеера уйти с экрана до следующего запуска звука
+ * (VED-482): «когда нажимаешь паузу плеера на верхней панели, плеер в
+ * свёрнутом виде исчезает с экрана и появляется, только когда нажмёшь
+ * плей. Если нажимаешь паузу на самом плеере, он не должен исчезать».
+ * Поэтому просит только горячая кнопка «Плеер»; полоса прячется, пока звук
+ * стоит, и возвращается при любом запуске или по `revealMusicPlayerCollapsed`.
+ */
+export const MUSIC_PLAYER_STOW_EVENT = "vedamatch:music-player-stow";
+
+export function stowMusicPlayer(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(MUSIC_PLAYER_STOW_EVENT));
+}

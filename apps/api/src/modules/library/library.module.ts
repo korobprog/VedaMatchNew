@@ -8,6 +8,7 @@ import { LibrarySectionRequestsService } from './library-section-requests.servic
 import { LibraryAdminService } from './library-admin.service';
 import { LibraryCategoriesController } from './library-categories.controller';
 import { LibraryCategoriesService } from './library-categories.service';
+import { LibraryBookmarksController } from './library-bookmarks.controller';
 import { LibraryBookmarksService } from './library-bookmarks.service';
 import { LibraryCommentsService } from './library-comments.service';
 import {
@@ -20,6 +21,7 @@ import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
 import { LibraryBookStorageService } from './library-book-storage.service';
 import { LibraryFilesService } from './library-files.service';
+import { LibraryLikesService } from './library-likes.service';
 import { LibraryShlokasController } from './library-shlokas.controller';
 import { LibraryShlokasService } from './library-shlokas.service';
 
@@ -33,6 +35,7 @@ import { LibraryShlokasService } from './library-shlokas.service';
     LibraryEntriesController,
     LibraryCommentsController,
     LibraryPreferencesController,
+    LibraryBookmarksController,
     LibraryAdminController,
     LibrarySectionRequestsController,
     LibraryShlokasController,
@@ -45,6 +48,7 @@ import { LibraryShlokasService } from './library-shlokas.service';
     LibraryBookStorageService,
     LibraryFilesService,
     LibraryBookmarksService,
+    LibraryLikesService,
     LibraryCommentsService,
     LibraryAdminService,
     LibrarySectionRequestsService,

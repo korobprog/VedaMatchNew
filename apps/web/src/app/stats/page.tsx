@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BookUser } from "lucide-react";
 import { Header } from "@/components/header";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
@@ -69,6 +70,15 @@ export default async function StatsPage() {
               </li>
             ))}
           </ul>
+          {/* «Справочник» (VED-554) — те же люди поимённо: профили
+              участников и написать им, как в Общении. */}
+          <Link
+            href="/chat/people"
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 text-sm font-semibold text-text-1 hover:text-text-0"
+          >
+            <BookUser aria-hidden className="size-4" />
+            Справочник
+          </Link>
         </section>
 
         <section className="mb-10" aria-labelledby="cities">

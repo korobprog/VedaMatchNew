@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localDay, shouldNudgeRail } from "./rail-nudge";
+import { localDay, railNudgeDistance, shouldNudgeRail } from "./rail-nudge";
 
 describe("shouldNudgeRail (VED-535)", () => {
   const now = new Date(2026, 8, 26, 9, 30);
@@ -25,5 +25,18 @@ describe("shouldNudgeRail (VED-535)", () => {
 
   it("день — местный, с ведущими нулями", () => {
     expect(localDay(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+  });
+});
+
+describe("railNudgeDistance (VED-535)", () => {
+  it("сдвиг — на всю прокручиваемую длину, до последнего пункта", () => {
+    expect(railNudgeDistance({ scrollWidth: 980.6, clientWidth: 342 })).toBe(
+      638,
+    );
+  });
+
+  it("ряд влез целиком — ехать некуда", () => {
+    expect(railNudgeDistance({ scrollWidth: 342, clientWidth: 342 })).toBe(0);
+    expect(railNudgeDistance({ scrollWidth: 300, clientWidth: 342 })).toBe(0);
   });
 });

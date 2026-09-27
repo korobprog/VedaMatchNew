@@ -355,6 +355,7 @@ model User {
   librarySectionRequestsDecided      LibrarySectionRequest[]       @relation("LibrarySectionRequestsDecided")
   libraryPreference                  LibraryPreference?
   libraryBookmarks                   LibraryBookmark[]
+  libraryEntryLikes                  LibraryEntryLike[]
   libraryComments                    LibraryComment[]
   astroTransitDigests                AstroTransitDigest[]
   astroTransitPreference             AstroTransitPreference?
@@ -1914,6 +1915,14 @@ model LibraryCategory {
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 
+  /// «Информация» об авторе-рубрике (VED-553): четыре раздела простым
+  /// текстом, без разметки, до 5000 символов каждый. Лимит держит сервис,
+  /// а не колонка: текст правят те же, кто правит название рубрики.
+  infoContacts  String?
+  infoBio       String?
+  infoResources String?
+  infoSchedule  String?
+
   entries LibraryEntryCategory[]
 
   @@index([parentId, position])
@@ -1985,6 +1994,8 @@ model LibraryEntry {
   uniqueClickCount Int                      @default(0)
   bookmarkCount    Int                      @default(0)
   commentsCount    Int                      @default(0)
+  /// «Нравится» (VED-549): денормализованный счётчик `LibraryEntryLike`.
+  likeCount        Int                      @default(0)
   openReportsCount Int                      @default(0)
   rankScore        Float                    @default(0)
   /// Generated column, создаётся SQL-миграцией. Prisma её не пишет.
@@ -1998,6 +2009,7 @@ model LibraryEntry {
 
   categories LibraryEntryCategory[]
   bookmarks  LibraryBookmark[]
+  likes      LibraryEntryLike[]
   comments   LibraryComment[]
   files      LibraryEntryFile[]
   /// Есть только у материала типа `shloka`.
@@ -2059,6 +2071,20 @@ model LibraryBookmark {
   @@id([userId, entryId])
   @@index([entryId])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+/// «Нравится» у материала (VED-549): сердечко на странице материала, как у
+/// постов Блог-ленты. Одна строка на человека и материал; число — в
+/// LibraryEntry.likeCount.
+model LibraryEntryLike {
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entryId   String
+  entry     LibraryEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@id([userId, entryId])
+  @@index([entryId])
 }
 
 enum LibraryCommentStatus {

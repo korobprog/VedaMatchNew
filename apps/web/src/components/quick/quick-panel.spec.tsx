@@ -108,6 +108,22 @@ describe("QuickPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  /* VED-472: в ленте Вдохновения — только звёздочка, без остального ряда
+     шапки, даже если человек поставил туда «Историю» и «Плеер». */
+  it("starOnly рисует только звёздочку", () => {
+    window.localStorage.setItem(
+      "vedamatch:header-toolbar",
+      JSON.stringify({ v: 1, ids: ["hotkeys", "history", "player", "bell", "avatar"] }),
+    );
+    render(
+      <NextIntlClientProvider locale="ru" messages={ru}>
+        <QuickPanel starOnly />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Горячие кнопки" })).toBeInTheDocument();
+  });
+
   it("показывает набор по умолчанию", async () => {
     await openPanel();
 
@@ -141,7 +157,7 @@ describe("QuickPanel", () => {
     await openPanel();
 
     const panel = screen.getByRole("dialog", { name: "Горячие кнопки" });
-    expect(within(panel).getByRole("button", { name: /Что нужно знать/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Справка/ })).toBeInTheDocument();
     expect(within(panel).queryByRole("link", { name: /Календарь/ })).not.toBeInTheDocument();
   });
 
@@ -649,7 +665,7 @@ describe("QuickPanel: «История» в шапке и плитка «Мен�
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
 
     expect(screen.queryByRole("switch", { name: /^Меню/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Выше: Что нужно знать" }));
+    await user.click(screen.getByRole("button", { name: "Выше: Справка" }));
     const ids = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids;
     expect(ids).not.toContain("menu");
   });
@@ -714,11 +730,17 @@ describe("QuickPanel: кнопка «Плеер»", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("пока играет — кнопка «Пауза» и ставит на паузу (VED-438)", async () => {
+  /* VED-482: пауза из шапки убирает полосу с экрана до следующего запуска,
+     а не выкатывает её. */
+  it("пока играет — кнопка «Пауза» ставит на паузу и прячет полосу (VED-438, VED-482)", async () => {
     const player = playerStub({ id: "t1" }, true);
     music.player = player;
+    const stow = vi.fn();
+    window.addEventListener("vedamatch:music-player-stow", stow);
     const reveal = await pressPlayer(/Пауза/);
-    expect(reveal).toHaveBeenCalledTimes(1);
+    window.removeEventListener("vedamatch:music-player-stow", stow);
+    expect(reveal).not.toHaveBeenCalled();
+    expect(stow).toHaveBeenCalledTimes(1);
     expect(player.toggle).toHaveBeenCalledTimes(1);
   });
 

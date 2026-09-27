@@ -200,3 +200,38 @@ export function clearMediaSession(): void {
   navigator.mediaSession.metadata = null;
   navigator.mediaSession.playbackState = "none";
 }
+
+/*
+ * Кто хозяин системной карточки (VED-543). Она у вкладки одна, а звучат
+ * в Медиатеке два плеера: основной и «Радио VM». Пока играет радио,
+ * карточка и её кнопки — его: иначе «play» с экрана блокировки или из
+ * наушников запускал запись основного плеера, и радио выключалось, а
+ * основной плеер своими эффектами ставил «пауза» поверх звучащего эфира.
+ * Отпуская карточку, радио зовёт восстановитель основного плеера — тот
+ * заново выставляет свою запись и кнопки.
+ */
+let heldByRadio = false;
+let restorer: (() => void) | null = null;
+
+/** Радио забирает карточку: эффекты основного плеера её не трогают. */
+export function holdMediaSessionForRadio(): void {
+  heldByRadio = true;
+}
+
+/** Держит ли карточку радио. Основной плеер проверяет перед каждой записью в неё. */
+export function mediaSessionHeldByRadio(): boolean {
+  return heldByRadio;
+}
+
+/** Радио выключили: убираем его карточку и отдаём её основному плееру. */
+export function releaseMediaSessionFromRadio(): void {
+  if (!heldByRadio) return;
+  heldByRadio = false;
+  clearMediaSession();
+  restorer?.();
+}
+
+/** Основной плеер сообщает, как вернуть свою карточку; `null` — снять. */
+export function setMediaSessionRestorer(fn: (() => void) | null): void {
+  restorer = fn;
+}

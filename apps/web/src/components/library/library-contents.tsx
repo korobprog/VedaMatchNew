@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 import { buildLibraryQuery } from "@/lib/library-query";
 import { EntryShareActions } from "./entry-share-actions";
+import { LIBRARY_ICON_BUTTON } from "./icon-button";
 import { pickLocalized, t } from "./i18n";
 
 const API_URL = apiBase();
@@ -25,14 +26,21 @@ const API_URL = apiBase();
  *
  * Список грузится по нажатию, а не вместе со страницей: оглавление нужно не
  * каждому, а материалов в нём могут быть сотни.
+ *
+ * `iconOnly` (VED-521) — кнопка значком прямо в ряду действий автора. Тогда
+ * компонент отдаёт кнопку и список соседями, без обёртки: список —
+ * `order-last w-full` и в переносящемся ряду встаёт своей строкой под ним.
  */
 export function LibraryContents({
   locale,
   categorySlug,
+  iconOnly = false,
 }: {
   locale: LibraryLocale;
   /** Рубрика или автор; без неё — всё Образование. */
   categorySlug?: string;
+  /** Значком в чужом переносящемся ряду, см. выше. */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<LibraryEntryDto[] | null>(null);
@@ -69,85 +77,114 @@ export function LibraryContents({
     if (next && items === null && !pending) void load(null);
   }
 
+  const label = t(locale, "entry.contents");
+  const button = iconOnly ? (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-expanded={open}
+      aria-controls="library-contents"
+      aria-label={label}
+      title={label}
+      className={`${LIBRARY_ICON_BUTTON} ${
+        open ? "border-cyan text-text-0" : "border-glass-brd text-text-1"
+      } hover:text-text-0`}
+    >
+      <ListOrdered aria-hidden className="size-4" />
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-expanded={open}
+      aria-controls="library-contents"
+      className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 text-sm font-semibold text-text-1 hover:text-text-0"
+    >
+      <ListOrdered aria-hidden className="size-4" />
+      {label}
+    </button>
+  );
+  const panel = open && (
+    <div
+      id="library-contents"
+      className={`rounded-2xl border border-glass-brd bg-bg-1 p-2 ${
+        iconOnly ? "order-last w-full" : "mt-2"
+      }`}
+    >
+      {items === null ? (
+        <p className="px-2 py-3 text-sm text-text-2">
+          {failed
+            ? t(locale, "contents.failed")
+            : t(locale, "contents.loading")}
+        </p>
+      ) : items.length === 0 ? (
+        <p className="px-2 py-3 text-sm text-text-2">
+          {t(locale, "contents.empty")}
+        </p>
+      ) : (
+        <ol className="flex flex-col divide-y divide-glass-brd">
+          {items.map((entry, index) => {
+            const title = pickLocalized(locale, {
+              ru: entry.titleRu,
+              en: entry.titleEn,
+            });
+            return (
+              <li key={entry.id} className="flex flex-col gap-2 px-2 py-3">
+                <Link
+                  href={`/library/entry/${entry.id}`}
+                  className="text-sm font-semibold text-text-0 hover:underline"
+                >
+                  <span className="mr-1.5 font-mono text-xs text-text-2">
+                    {index + 1}.
+                  </span>
+                  {title}
+                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/library/entry/${entry.id}`}
+                    className="inline-flex min-h-9 items-center rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0"
+                  >
+                    {t(locale, "entry.open")}
+                  </Link>
+                  {/* Значками (VED-515): с подписями кнопки пункта
+                          уходили на вторую строку. */}
+                  <EntryShareActions
+                    locale={locale}
+                    entryId={entry.id}
+                    title={title}
+                    blogSharedAt={entry.blogSharedAt}
+                    compact
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {cursor && (
+        <button
+          type="button"
+          onClick={() => void load(cursor)}
+          disabled={pending}
+          className="mt-1 min-h-11 w-full rounded-xl text-sm text-text-1 hover:bg-glass hover:text-text-0 disabled:opacity-50"
+        >
+          {t(locale, "feed.more")}
+        </button>
+      )}
+    </div>
+  );
+
+  if (iconOnly)
+    return (
+      <>
+        {button}
+        {panel}
+      </>
+    );
   return (
     <div className="mb-4">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        aria-controls="library-contents"
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 text-sm font-semibold text-text-1 hover:text-text-0"
-      >
-        <ListOrdered aria-hidden className="size-4" />
-        {t(locale, "entry.contents")}
-      </button>
-      {open && (
-        <div
-          id="library-contents"
-          className="mt-2 rounded-2xl border border-glass-brd bg-bg-1 p-2"
-        >
-          {items === null ? (
-            <p className="px-2 py-3 text-sm text-text-2">
-              {failed
-                ? t(locale, "contents.failed")
-                : t(locale, "contents.loading")}
-            </p>
-          ) : items.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-text-2">
-              {t(locale, "contents.empty")}
-            </p>
-          ) : (
-            <ol className="flex flex-col divide-y divide-glass-brd">
-              {items.map((entry, index) => {
-                const title = pickLocalized(locale, {
-                  ru: entry.titleRu,
-                  en: entry.titleEn,
-                });
-                return (
-                  <li key={entry.id} className="flex flex-col gap-2 px-2 py-3">
-                    <Link
-                      href={`/library/entry/${entry.id}`}
-                      className="text-sm font-semibold text-text-0 hover:underline"
-                    >
-                      <span className="mr-1.5 font-mono text-xs text-text-2">
-                        {index + 1}.
-                      </span>
-                      {title}
-                    </Link>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/library/entry/${entry.id}`}
-                        className="inline-flex min-h-9 items-center rounded-xl border border-glass-brd px-3 py-1.5 text-sm text-text-2 hover:text-text-0"
-                      >
-                        {t(locale, "entry.open")}
-                      </Link>
-                      {/* Значками (VED-515): с подписями кнопки пункта
-                          уходили на вторую строку. */}
-                      <EntryShareActions
-                        locale={locale}
-                        entryId={entry.id}
-                        title={title}
-                        blogSharedAt={entry.blogSharedAt}
-                        compact
-                      />
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-          {cursor && (
-            <button
-              type="button"
-              onClick={() => void load(cursor)}
-              disabled={pending}
-              className="mt-1 min-h-11 w-full rounded-xl text-sm text-text-1 hover:bg-glass hover:text-text-0 disabled:opacity-50"
-            >
-              {t(locale, "feed.more")}
-            </button>
-          )}
-        </div>
-      )}
+      {button}
+      {panel}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { motion } from "framer-motion";
-import { LayoutGrid, Pin, Rows3 } from "lucide-react";
+import { ChevronsUpDown, LayoutGrid, Pin, Rows3 } from "lucide-react";
 import type { ServiceCard as ServiceCardType } from "@vedamatch/shared";
 import { ServiceCard } from "@/components/service-card";
 import { ServiceTile } from "@/components/service-tile";
@@ -273,13 +273,21 @@ export function ServiceGrid({
                ряд при спрятанной ленте переносился уже на 375 (VED-383). */
             aria-label={reordering ? "Готово" : "Изменить порядок"}
             title={reordering ? "Готово" : "Изменить порядок и закрепить"}
-            className={`whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`flex min-h-8 min-w-8 items-center justify-center whitespace-nowrap rounded-xl border px-2 py-1.5 text-xs font-semibold transition-colors ${
               reordering
                 ? "border-cyan/40 bg-cyan/10 text-cyan"
                 : "border-glass-brd text-text-2 hover:text-text-0"
             }`}
           >
-            {reordering ? "Готово" : "Порядок"}
+            {/* Значком — две стрелки вверх и вниз (VED-363): «превратить
+                надпись Изменить порядок в третью кнопку справа». В режиме
+                перестановки — снова словом «Готово»: выход из режима должен
+                читаться сразу. */}
+            {reordering ? (
+              "Готово"
+            ) : (
+              <ChevronsUpDown aria-hidden className="size-4" />
+            )}
           </button>
         )}
 

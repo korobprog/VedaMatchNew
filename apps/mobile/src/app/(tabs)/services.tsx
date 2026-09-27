@@ -228,6 +228,20 @@ export default function ServicesScreen() {
             в бандл витрины код самообновления не попадает вообще. */}
         {appCapabilities().selfUpdate ? <SelfUpdateSection /> : null}
 
+        {/* «Настройки» приложения: что показывать на главной — блог-ленту
+            (по умолчанию выключена), статусы, быструю конференцию. Первой
+            строкой: её ищут, когда хотят вернуть ленту в «Чаты». */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="Что показывать на главной: блог-лента, статусы, быстрая конференция"
+          onPress={() => router.push('/settings')}
+          android_ripple={ripple(colors.glassBorder)}
+          style={({ pressed }) => [styles.accountLink, { borderColor: colors.glassBorder, backgroundColor: colors.glass }, pressedStyle(pressed)]}
+        >
+          <Text style={[styles.accountLinkText, { color: colors.text0 }]}>Настройки</Text>
+          <Text style={[styles.accountLinkArrow, { color: colors.text1 }]}>›</Text>
+        </Pressable>
+
         {/* Экран «Аккаунт и способы входа» (VED-379, веха 3): список
             привязанных Google/Яндекс/Telegram, привязка и отвязка. */}
         <Pressable
