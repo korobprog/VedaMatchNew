@@ -4,6 +4,8 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentProps,
@@ -648,30 +650,13 @@ export function WorkTaskDialog({
               </div>
             </div>
 
-            <label className="mt-2 block text-xs text-text-1">
-              Описание
-              <DraftTextarea
-                key={`description-${textKey}`}
-                initialValue={latestText.current.description}
-                onValueChange={(value) => editText("description", value)}
-                readOnly={!canEdit}
-                rows={4}
-                maxLength={10000}
-                placeholder="Что именно нужно сделать и что считать готовым"
-                onKeyDown={(event) => {
-                  // Ctrl+Enter (⌘+Enter) — сохранить, не отрывая рук от
-                  // клавиатуры: простой Enter в описании — новая строка.
-                  if (
-                    event.key === "Enter" &&
-                    (event.ctrlKey || event.metaKey)
-                  ) {
-                    event.preventDefault();
-                    save();
-                  }
-                }}
-                className="mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
-              />
-            </label>
+            <DescriptionField
+              key={`description-${textKey}`}
+              initialValue={latestText.current.description}
+              onValueChange={(value) => editText("description", value)}
+              readOnly={!canEdit}
+              onSave={save}
+            />
 
             {/* Кнопка «Сохранить» (VED-56). Видна после любой правки полей
                 карточки — от названия до срока — и прилипает к низу окна:
@@ -1123,6 +1108,92 @@ function DraftTextarea({
         onValueChange(event.target.value);
       }}
     />
+  );
+}
+
+/**
+ * Описание карточки с кнопкой «Читать далее» (VED-578).
+ *
+ * Поле описания — четыре строки, остальное пряталось под прокрутку внутри
+ * поля: на телефоне это узкая полоска, которую не видно и не пролистать,
+ * не задев окно карточки. Длинный текст теперь разворачивается кнопкой
+ * целиком — поле растёт под текст и продолжает расти при наборе, — и
+ * сворачивается обратно. Кнопка видна, только когда текст правда не
+ * помещается: меряем поле, а не считаем буквы, ширина у экранов разная.
+ */
+function DescriptionField({
+  initialValue,
+  onValueChange,
+  readOnly,
+  onSave,
+}: {
+  initialValue: string;
+  onValueChange: (value: string) => void;
+  readOnly: boolean;
+  onSave: () => void;
+}) {
+  const id = useId();
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  const measure = useCallback(() => {
+    const element = ref.current;
+    if (!element) return;
+    if (expanded) growToText(element);
+    else setOverflows(element.scrollHeight > element.clientHeight + 1);
+  }, [expanded]);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element && !expanded) element.style.height = "";
+    measure();
+  }, [expanded, measure]);
+
+  useEffect(() => {
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+
+  return (
+    <div className="mt-2">
+      <label htmlFor={id} className="block text-xs text-text-1">
+        Описание
+      </label>
+      <DraftTextarea
+        id={id}
+        ref={ref}
+        initialValue={initialValue}
+        onValueChange={onValueChange}
+        onInput={measure}
+        readOnly={readOnly}
+        rows={4}
+        maxLength={10000}
+        placeholder="Что именно нужно сделать и что считать готовым"
+        onKeyDown={(event) => {
+          // Ctrl+Enter (⌘+Enter) — сохранить, не отрывая рук от
+          // клавиатуры: простой Enter в описании — новая строка.
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            onSave();
+          }
+        }}
+        className={`mt-1 block w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0 ${
+          expanded ? "resize-none overflow-hidden" : ""
+        }`}
+      />
+      {(expanded || overflows) && (
+        <button
+          type="button"
+          aria-controls={id}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-1 inline-flex min-h-9 items-center rounded-lg px-1 text-sm font-semibold text-magenta hover:underline"
+        >
+          {expanded ? "Свернуть" : "Читать далее"}
+        </button>
+      )}
+    </div>
   );
 }
 
