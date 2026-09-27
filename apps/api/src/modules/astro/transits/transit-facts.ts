@@ -1,7 +1,12 @@
 import type { RashiIndex } from '@vedamatch/shared';
 import type { EphemerisProvider } from '../ephemeris/ephemeris-provider';
 import { jdeFromDate, lahiriAyanamsa, toSidereal } from '../vedic/ayanamsa';
-import { nakshatraOf, rashiOf, wholeSignBhava } from '../vedic/rashi';
+import {
+  degreeInRashi,
+  nakshatraOf,
+  rashiOf,
+  wholeSignBhava,
+} from '../vedic/rashi';
 
 /**
  * Транзитные факты дня. Единственный сигнал, который реально меняется день ото
@@ -12,6 +17,10 @@ import { nakshatraOf, rashiOf, wholeSignBhava } from '../vedic/rashi';
 export interface TransitFacts {
   moonRashi: RashiIndex;
   moonNakshatra: number;
+  /** Сидерическая долгота Луны, [0, 360). */
+  moonLongitude: number;
+  /** Градусы Луны внутри знака, [0, 30). */
+  moonDegreeInRashi: number;
   /** Бхава транзитной Луны относительно НАТАЛЬНОЙ лагны, 1..12. */
   moonBhava: number;
 }
@@ -29,6 +38,8 @@ export function computeTransitFacts(
   return {
     moonRashi: rashi,
     moonNakshatra: nakshatraOf(siderealLongitude),
+    moonLongitude: siderealLongitude,
+    moonDegreeInRashi: degreeInRashi(siderealLongitude),
     moonBhava: wholeSignBhava(rashi, natalLagnaRashi),
   };
 }

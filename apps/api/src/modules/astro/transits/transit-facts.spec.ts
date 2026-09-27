@@ -34,6 +34,26 @@ describe('computeTransitFacts', () => {
     expect(facts.moonRashi).toBe(natalMoon.rashi);
     expect(facts.moonNakshatra).toBe(natalMoon.nakshatra);
     expect(facts.moonBhava).toBe(natalMoon.bhava);
+    expect(facts.moonLongitude).toBeCloseTo(natalMoon.longitude, 9);
+    expect(facts.moonDegreeInRashi).toBeCloseTo(natalMoon.degreeInRashi, 9);
+  });
+
+  it('градус в знаке согласован с долготой и знаком Луны', () => {
+    for (const iso of [
+      '2000-01-01T00:00:00Z',
+      '2026-08-10T12:00:00Z',
+      '2030-06-15T18:00:00Z',
+    ]) {
+      const facts = computeTransitFacts(ephemeris, new Date(iso), 5);
+      expect(facts.moonLongitude).toBeGreaterThanOrEqual(0);
+      expect(facts.moonLongitude).toBeLessThan(360);
+      expect(facts.moonDegreeInRashi).toBeGreaterThanOrEqual(0);
+      expect(facts.moonDegreeInRashi).toBeLessThan(30);
+      expect((facts.moonRashi - 1) * 30 + facts.moonDegreeInRashi).toBeCloseTo(
+        facts.moonLongitude,
+        9,
+      );
+    }
   });
 
   it('бхава остаётся в диапазоне 1..12 в любой день', () => {

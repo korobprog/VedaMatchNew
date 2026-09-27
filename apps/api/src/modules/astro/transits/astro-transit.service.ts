@@ -70,6 +70,8 @@ export class AstroTransitService {
       moonBhava: facts.moonBhava,
       moonRashi: facts.moonRashi,
       moonNakshatra: facts.moonNakshatra,
+      moonLongitude: facts.moonLongitude,
+      moonDegreeInRashi: facts.moonDegreeInRashi,
       currentMahadasha: { lord: chart.dasha.currentMahadasha.lord },
       currentAntardasha: { lord: chart.dasha.currentAntardasha.lord },
       text,

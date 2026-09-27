@@ -25,6 +25,18 @@ describe("buildAstroQuickAccess", () => {
     });
   });
 
+  it("с градусом Луны в знаке — градусы и минуты рядом со знаком", () => {
+    expect(
+      buildAstroQuickAccess(today({ moonDegreeInRashi: 15 + 23 / 60 })).moonLine,
+    ).toBe("Луна в Рохини (Вришабха 15°23′), 4-й дом");
+  });
+
+  it("градус вне знака — строка без градусов, а не «Вришабха 45°»", () => {
+    expect(buildAstroQuickAccess(today({ moonDegreeInRashi: 45 })).moonLine).toBe(
+      "Луна в Рохини (Вришабха), 4-й дом",
+    );
+  });
+
   it("не зависит от фразы ИИ: она может быть пустой", () => {
     expect(buildAstroQuickAccess(today({ text: null })).moonLine).not.toBeNull();
   });
