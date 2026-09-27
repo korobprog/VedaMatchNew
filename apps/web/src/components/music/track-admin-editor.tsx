@@ -8,6 +8,7 @@ import {
   buildTrackEditPatch,
   type MusicTrackEditState,
 } from "@/lib/music-track-edit";
+import { MusicBlankLinesTool } from "./music-blank-lines-tool";
 import { MusicCoverField } from "./cover-field";
 import {
   MUSIC_LYRICS_EDIT_PARAM,
@@ -228,19 +229,28 @@ export function MusicTrackAdminEditor({
             ["translation", "Перевод"],
           ] as const
         ).map(([key, label]) => (
-          <label key={key} className="block">
-            <span className="mb-1 block text-xs text-text-2">{label}</span>
-            <textarea
-              // Только у «Текст бхаджана»: сюда докручивает и ставит фокус
-              // переход по ссылке из панели плеера — остальные два поля
-              // этой ссылкой не адресуются.
-              ref={key === "lyrics" ? lyricsFieldRef : undefined}
+          <div key={key}>
+            <label className="block">
+              <span className="mb-1 block text-xs text-text-2">{label}</span>
+              <textarea
+                // Только у «Текст бхаджана»: сюда докручивает и ставит фокус
+                // переход по ссылке из панели плеера — остальные два поля
+                // этой ссылкой не адресуются.
+                ref={key === "lyrics" ? lyricsFieldRef : undefined}
+                value={draft[key]}
+                onChange={(event) => set(key, event.target.value)}
+                rows={8}
+                className={`${fieldClass} py-2 font-body leading-relaxed`}
+              />
+            </label>
+            {/* Уборка пустых строк (VED-477) — под каждым полем. */}
+            <MusicBlankLinesTool
+              label={label}
               value={draft[key]}
-              onChange={(event) => set(key, event.target.value)}
-              rows={8}
-              className={`${fieldClass} py-2 font-body leading-relaxed`}
+              onChange={(next) => set(key, next)}
+              disabled={pending}
             />
-          </label>
+          </div>
         ))}
       </div>
 
