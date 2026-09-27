@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { FolderOpen, ImagePlus, X } from "lucide-react";
+import { Check, FolderOpen, ImagePlus, X } from "lucide-react";
 import type {
   MotivationCategoryDto,
   MotivationPictureResult,
@@ -22,12 +22,16 @@ import {
 import {
   PICTURE_TEXT_MAX,
   addPictures,
+  pictureSelectable,
   pictureSummary,
   picturesToSend,
   removePicture,
+  setAllPicturesSelected,
+  togglePictureSelected,
   updatePicture,
   type PictureItem,
 } from "./picture-queue";
+import { PicturePreviewDialog } from "./picture-preview-dialog";
 import { fieldClass, labelClass, primaryButton, secondaryButton } from "./ui";
 import { apiBase } from "@/lib/api-base";
 
@@ -69,6 +73,9 @@ export function PictureUploadForm({
   const [queue, setQueue] = useState<PictureItem[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
+  // Открытая во весь экран картинка — индекс в `queue` (VED-302).
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const thumbRefs = useRef(new Map<string, HTMLButtonElement>());
 
   function addFiles(files: File[]) {
     if (sending || files.length === 0) return;
@@ -82,6 +89,17 @@ export function PictureUploadForm({
     );
     setQueue(next);
     setPreviews((current) => ({ ...current, ...urls }));
+  }
+
+  function toggle(id: string) {
+    setQueue((current) => togglePictureSelected(current, id));
+  }
+
+  function closePreview() {
+    const id = previewIndex === null ? null : queue[previewIndex]?.id;
+    setPreviewIndex(null);
+    // Фокус — на миниатюру картинки, что была открыта последней.
+    if (id) thumbRefs.current.get(id)?.focus();
   }
 
   function remove(id: string) {
@@ -129,6 +147,9 @@ export function PictureUploadForm({
   }, []);
 
   const toSend = picturesToSend(queue);
+  const selectable = queue.filter(pictureSelectable);
+  const allSelected =
+    selectable.length > 0 && selectable.every((item) => item.selected);
   const summary = pictureSummary(queue);
   const categoryTitle =
     categories.find((item) => item.slug === category)?.title ?? category;
@@ -270,19 +291,83 @@ export function PictureUploadForm({
       </div>
 
       {queue.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-text-2">
+            Клик по картинке — посмотреть её целиком, рамочка в углу — выбрать
+            к публикации.
+          </p>
+          {selectable.length > 1 && (
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() =>
+                setQueue((current) =>
+                  setAllPicturesSelected(current, !allSelected),
+                )
+              }
+              className={secondaryButton}
+            >
+              {allSelected ? "Снять выбор" : "Выбрать все"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {queue.length > 0 && (
         <ul className="space-y-3" aria-label="Картинки к публикации">
-          {queue.map((item) => (
+          {queue.map((item, index) => (
             <li
               key={item.id}
-              className="flex gap-3 rounded-xl border border-glass-brd p-3"
+              className={`flex gap-3 rounded-xl border p-3 ${
+                item.selected && pictureSelectable(item)
+                  ? "border-magenta"
+                  : "border-glass-brd"
+              }`}
             >
               {previews[item.id] && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previews[item.id]}
-                  alt=""
-                  className="h-24 w-20 shrink-0 rounded-lg bg-bg-2 object-contain"
-                />
+                <div className="relative h-32 w-28 shrink-0">
+                  <button
+                    type="button"
+                    ref={(node) => {
+                      if (node) thumbRefs.current.set(item.id, node);
+                      else thumbRefs.current.delete(item.id);
+                    }}
+                    onClick={() => setPreviewIndex(index)}
+                    aria-haspopup="dialog"
+                    aria-label={`Посмотреть картинку ${index + 1}: ${item.file.name}`}
+                    className="block h-full w-full overflow-hidden rounded-lg bg-bg-2"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previews[item.id]}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  </button>
+                  {pictureSelectable(item) && (
+                    // Рамочка в нижнем левом углу: область нажатия 40×40,
+                    // сама рамка меньше, чтобы не закрывать картинку.
+                    <button
+                      type="button"
+                      disabled={sending}
+                      aria-pressed={item.selected}
+                      aria-label={`Выбрать картинку ${index + 1}`}
+                      onClick={() => toggle(item.id)}
+                      className="absolute bottom-0 left-0 flex h-10 w-10 items-center justify-center rounded-lg"
+                    >
+                      <span
+                        aria-hidden
+                        className={`flex h-6 w-6 items-center justify-center rounded-md border-2 ${
+                          item.selected
+                            ? "border-magenta bg-magenta text-white"
+                            : "border-text-0 bg-bg-0/80"
+                        }`}
+                      >
+                        {item.selected && <Check className="h-4 w-4" />}
+                      </span>
+                    </button>
+                  )}
+                </div>
               )}
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="truncate text-xs text-text-2">
@@ -321,6 +406,22 @@ export function PictureUploadForm({
             </li>
           ))}
         </ul>
+      )}
+
+      {previewIndex !== null && queue[previewIndex] && (
+        <PicturePreviewDialog
+          pictures={queue.map((item) => ({
+            id: item.id,
+            src: previews[item.id] ?? "",
+            name: item.file.name,
+            selected: item.selected,
+            selectable: pictureSelectable(item) && !sending,
+          }))}
+          index={previewIndex}
+          onIndexChange={setPreviewIndex}
+          onToggle={toggle}
+          onClose={closePreview}
+        />
       )}
 
       <p className="text-xs text-text-2">

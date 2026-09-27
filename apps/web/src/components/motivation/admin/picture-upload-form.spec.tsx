@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationCategoryDto } from "@vedamatch/shared";
 import { PictureUploadForm } from "./picture-upload-form";
 import { apiFetch } from "@/lib/http-client";
@@ -22,6 +22,17 @@ function ok(slug: string) {
     { status: 201, headers: { "content-type": "application/json" } },
   );
 }
+
+// jsdom не реализует showModal: без заглушки просмотр не открывается.
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function showModal() {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close() {
+    this.open = false;
+    this.dispatchEvent(new Event("close"));
+  };
+});
 
 beforeEach(() => {
   // jsdom не умеет blob-ссылки: превью здесь — просто строка.
@@ -50,6 +61,7 @@ describe("PictureUploadForm", () => {
       "Кто видит меня везде",
     );
     await user.type(screen.getByLabelText(/^Автор цитаты/), "Кришна");
+    await user.click(screen.getByRole("button", { name: "Выбрать все" }));
     await user.click(
       screen.getByRole("button", { name: "Опубликовать в «Шастры»: 2" }),
     );
@@ -90,6 +102,7 @@ describe("PictureUploadForm", () => {
       picture("small.jpg"),
       picture("fine.jpg"),
     ]);
+    await user.click(screen.getByRole("button", { name: "Выбрать все" }));
     await user.click(
       screen.getByRole("button", { name: "Опубликовать в «Каждый день»: 2" }),
     );
@@ -133,6 +146,7 @@ describe("PictureUploadForm — файлы и категории открыто�
     expect(files).not.toHaveAttribute("accept");
     await user.upload(files, [new File(["x"], "otkrytka.webp", { type: "" })]);
     expect(screen.getByText(/otkrytka\.webp/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Выбрать картинку 1" }));
     expect(
       screen.getByRole("button", { name: "Опубликовать в «Каждый день»: 1" }),
     ).toBeEnabled();
@@ -158,5 +172,88 @@ describe("PictureUploadForm — файлы и категории открыто�
       screen.queryByRole("option", { name: "Только иллюстрации" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Шастры" })).toBeInTheDocument();
+  });
+});
+
+// VED-302: картинку сначала смотрят кликом, а выбирают рамочкой в углу.
+describe("PictureUploadForm — посмотреть и выбрать", () => {
+  async function withTwo() {
+    const user = userEvent.setup();
+    render(<PictureUploadForm categories={CATEGORIES} />);
+    await user.upload(screen.getByLabelText("Картинки с афоризмами"), [
+      picture("a.jpg"),
+      picture("b.jpg"),
+    ]);
+    return user;
+  }
+
+  it("клик по картинке открывает просмотр и не выбирает её", async () => {
+    const user = await withTwo();
+    await user.click(
+      screen.getByRole("button", { name: "Посмотреть картинку 1: a.jpg" }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Просмотр картинки 1 из 2",
+    });
+    expect(dialog).toHaveAttribute("open");
+    expect(within(dialog).getByRole("img")).toHaveAccessibleName(
+      "Картинка 1: a.jpg",
+    );
+    expect(
+      screen.getByRole("button", { name: "Выбрать картинку 1", hidden: true }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "Опубликовать", hidden: true }),
+    ).toBeDisabled();
+  });
+
+  it("стрелка листает к соседней, Esc закрывает и возвращает фокус", async () => {
+    const user = await withTwo();
+    const thumb = screen.getByRole("button", {
+      name: "Посмотреть картинку 1: a.jpg",
+    });
+    await user.click(thumb);
+    await user.keyboard("{ArrowRight}");
+    expect(
+      screen.getByRole("dialog", { name: "Просмотр картинки 2 из 2" }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Посмотреть картинку 2: b.jpg" }),
+    ).toHaveFocus();
+  });
+
+  it("крестик закрывает просмотр", async () => {
+    const user = await withTwo();
+    await user.click(
+      screen.getByRole("button", { name: "Посмотреть картинку 2: b.jpg" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Закрыть просмотр" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("клик по рамочке выбирает, отправляются только выбранные", async () => {
+    vi.mocked(apiFetch).mockResolvedValueOnce(ok("picture-2"));
+    const user = await withTwo();
+    const frame = screen.getByRole("button", { name: "Выбрать картинку 2" });
+    expect(frame).toHaveAttribute("aria-pressed", "false");
+    await user.click(frame);
+    expect(frame).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: "Опубликовать в «Каждый день»: 1" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Опубликовано 1 из 1"),
+    );
+    const calls = vi.mocked(apiFetch).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(((calls[0][1]?.body as FormData).get("file") as File).name).toBe(
+      "b.jpg",
+    );
   });
 });
