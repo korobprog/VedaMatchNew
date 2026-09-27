@@ -43,4 +43,20 @@ describe("LibraryContents", () => {
       screen.getByRole("button", { name: "Содержание" }).textContent,
     ).toContain("Содержание");
   });
+
+  /* VED-565: «Свернуть» внизу раскрытого списка — не листать обратно. */
+  it("кнопка «Свернуть содержание» внизу закрывает список и возвращает фокус", () => {
+    stubFeed();
+    const { container } = render(<LibraryContents locale="ru" />);
+    const toggle = screen.getByRole("button", { name: "Содержание" });
+    fireEvent.click(toggle);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Свернуть содержание" }),
+    );
+
+    expect(container.querySelector("#library-contents")).toBeNull();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
+  });
 });
