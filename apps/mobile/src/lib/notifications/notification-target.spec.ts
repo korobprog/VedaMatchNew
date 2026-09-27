@@ -299,3 +299,29 @@ describe('Знакомства: пуш «Новая заявка» и ссылк
     });
   });
 });
+
+describe('Астрология: пуш «Персональный день»', () => {
+  // `notification-copy.ts` на сервере: `astro.transit.digest-ready` → `/astro/chart`.
+  it('`/astro/chart` — свой экран персонального дня, а не сайт гостем', () => {
+    expect(resolveNotificationTarget('/astro/chart')).toEqual({ kind: 'astro-today' });
+    expect(resolveNotificationTarget('/astro/chart/')).toEqual({ kind: 'astro-today' });
+    expect(resolveNotificationTarget('/astro/chart?from=push')).toEqual({ kind: 'astro-today' });
+    expect(routeOfTarget({ kind: 'astro-today' })).toEqual({ kind: 'route', pathname: '/astro/today' });
+  });
+
+  it('пуш открывает экран дня, а не ленту', () => {
+    expect(pushDestination('/astro/chart')).toEqual({ kind: 'route', pathname: '/astro/today' });
+  });
+
+  it('карточка в ленте — тоже экран дня, а не вкладка браузера', () => {
+    expect(inboxDestination('/astro/chart')).toEqual({ kind: 'route', pathname: '/astro/today' });
+  });
+
+  it('остальная Астрология своего экрана не имеет и остаётся сайтом', () => {
+    // `/astro` на сайте — форма данных рождения, а не персональный день.
+    expect(resolveNotificationTarget('/astro')).toEqual({ kind: 'site', path: '/astro' });
+    expect(inboxDestination('/astro/compatibility')).toEqual({ kind: 'site', path: '/astro/compatibility' });
+    expect(resolveNotificationTarget('/astro/chart/extra')).toEqual({ kind: 'site', path: '/astro/chart/extra' });
+    expect(pushDestination('/astro/compatibility')).toEqual({ kind: 'route', pathname: '/notifications' });
+  });
+});

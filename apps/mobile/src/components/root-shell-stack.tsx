@@ -239,6 +239,10 @@ function RootStackInner() {
           <Stack.Screen name="union/location" />
           <Stack.Screen name="union/collections" />
           <Stack.Screen name="union/hidden" />
+          {/* «Персональный день» Астрологии — единственный экран сервиса в
+              приложении: сюда ведёт уведомление о дне (пуш и карточка в
+              ленте). Остальная Астрология и плитка каталога — на сайте. */}
+          <Stack.Screen name="astro/today" />
           <Stack.Screen name="people/[id]" />
           <Stack.Screen name="communities/[id]" />
           <Stack.Screen name="communities/new" />
