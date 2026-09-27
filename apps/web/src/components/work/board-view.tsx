@@ -837,32 +837,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
-        {/* «Свернуть все» — в строке с названием среды, у правого края
-            (VED-540): поменялась местами с кнопкой «Оплата», которая ушла в
-            конец ряда вида ниже. Только на телефоне, как и стрелки у колонок:
-            шире sm колонки стоят в ряд, прятать их незачем. Одна кнопка,
-            меняющая смысл, а не пара рядом: вторая всегда была бы
-            бесполезной, а место занимала бы то же. */}
-        {board.columns.length > 1 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            aria-expanded={!allFolded}
-            aria-label={
-              allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
-            }
-            title={
-              allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
-            }
-            className={workToolbarButtonClass({ extra: "ml-auto sm:hidden" })}
-          >
-            {allFolded ? (
-              <ChevronDown aria-hidden className="size-4" />
-            ) : (
-              <ChevronUp aria-hidden className="size-4" />
-            )}
-          </button>
-        )}
         {/* Сводка коммерческой доски (VED-458) — полосой во всю ширину под
             названием. Кнопка «Оплата» у обычной доски стоит в ряду вида. */}
         {board.commercial && (
@@ -883,8 +857,9 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             у «Архива» и «Пригласить» текст возвращается рядом со значком от
             sm и шире, где место уже не в обрез. «По дате» и «По важности» —
             сама суть переключателя вида, их текст не прячем ни на одном
-            размере экрана. С VED-540 «Свернуть все» стоит в строке названия,
-            а место в конце ряда заняла «Оплата» — кнопок столько же.
+            размере экрана. С VED-540 «Свернуть все» снова первая в ряду, а в
+            конце ряда — «Оплата»: семь кнопок встают в строку от 390 точек, на
+            360 «Оплата» переносится строкой ниже.
 
             Прикидка ширины на 360 точек (контентная область экрана — 328 при
             паддинге страницы 16 с каждой стороны): три значка по 40
@@ -914,6 +889,30 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               вместе они не имеют смысла. Нажатое состояние видно не только
               рамкой — его называет `aria-pressed`. «По дате» стоит первой —
               так попросил тестировщик. */}
+          {/* «Свернуть все» — первой в ряду вида, перед «По дате» (VED-540,
+              второй круг): из строки названия её попросили перенести сюда.
+              Только на телефоне, как и стрелки у колонок: шире sm колонки
+              стоят в ряд, прятать их незачем. */}
+          {board.columns.length > 1 && (
+            <button
+              type="button"
+              onClick={toggleAll}
+              aria-expanded={!allFolded}
+              aria-label={
+                allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
+              }
+              title={
+                allFolded ? "Развернуть все разделы" : "Свернуть все разделы"
+              }
+              className={workToolbarButtonClass({ extra: "sm:hidden" })}
+            >
+              {allFolded ? (
+                <ChevronDown aria-hidden className="size-4" />
+              ) : (
+                <ChevronUp aria-hidden className="size-4" />
+              )}
+            </button>
+          )}
           <button
             type="button"
             aria-pressed={groupMode === "date"}
