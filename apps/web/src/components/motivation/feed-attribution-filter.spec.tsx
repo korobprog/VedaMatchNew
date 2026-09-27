@@ -231,4 +231,85 @@ describe("FeedAttributionFilter", () => {
     // Неудача не запоминается: за списком сходили снова.
     expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
   });
+
+  // VED-584: авторы разложены по папкам «Мудрость мира» и «Веды».
+  const folderResponse = () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      works: [],
+      speakers: [
+        { label: "Прабхупада", count: 4, folder: "vedas" },
+        { label: "Конфуций", count: 2, folder: "world_wisdom" },
+        { label: "Наполеон", count: 1, folder: null },
+      ],
+    }),
+  });
+
+  it("папки авторов свёрнуты и раскрываются, автор без папки — на виду", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(folderResponse()));
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} />);
+    await user.click(screen.getByRole("button", { name: "Фильтр по автору и источнику" }));
+    const dialog = await screen.findByRole("dialog", { name: "Автор и источник" });
+
+    const folder = await within(dialog).findByRole("button", { name: /Мудрость мира/ });
+    expect(folder).toHaveAttribute("aria-expanded", "false");
+    expect(within(dialog).getByRole("button", { name: /Веды/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: /Наполеон/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("link", { name: /Конфуций/ })).toBeNull();
+    // Читателю выбора папки нет.
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
+
+    await user.click(folder);
+    expect(folder).toHaveAttribute("aria-expanded", "true");
+    expect(within(dialog).getByRole("link", { name: /Конфуций/ })).toBeInTheDocument();
+  });
+
+  it("папка с выбранным автором открыта сразу", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(folderResponse()));
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou", speaker: "прабхупада" }} />);
+    await user.click(screen.getByRole("button", { name: /Фильтр включён/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Автор и источник" });
+
+    expect(await within(dialog).findByRole("button", { name: /Веды/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(within(dialog).getByRole("link", { name: /Прабхупада/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+  });
+
+  it("администратор перекладывает автора в папку", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes("speaker-folders")
+            ? { ok: true, status: 200, json: async () => ({ folder: "vedas" }) }
+            : folderResponse(),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<FeedAttributionFilter state={{ tab: "forYou" }} isAdmin />);
+    await user.click(screen.getByRole("button", { name: "Фильтр по автору и источнику" }));
+    const dialog = await screen.findByRole("dialog", { name: "Автор и источник" });
+
+    await user.selectOptions(
+      await within(dialog).findByRole("combobox", { name: "Папка автора: Наполеон" }),
+      "vedas",
+    );
+
+    const save = fetchMock.mock.calls.find(([url]) => String(url).includes("speaker-folders"));
+    expect(save?.[1]).toMatchObject({ method: "PUT" });
+    expect(JSON.parse(String(save?.[1].body))).toEqual({ speaker: "Наполеон", folder: "vedas" });
+    // Автор ушёл из общего списка в папку.
+    expect(within(dialog).queryByRole("link", { name: /Наполеон/ })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: /Веды/ }));
+    expect(within(dialog).getByRole("link", { name: /Наполеон/ })).toBeInTheDocument();
+  });
 });

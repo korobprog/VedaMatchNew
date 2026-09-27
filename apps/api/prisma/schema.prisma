@@ -7778,3 +7778,20 @@ model MusicRadioListener {
 
   @@index([lastSeenAt])
 }
+
+/// Папки авторов в фильтре ленты Вдохновения (VED-584). Две и навсегда —
+/// «Мудрость мира» и «Веды», поэтому энум, а не таблица папок.
+enum MotivationSpeakerFolderKind {
+  world_wisdom
+  vedas
+}
+
+/// В какую папку фильтра администратор убрал автора афоризмов (VED-584).
+/// Автор на посте — свободная строка, поэтому ключ — её нормализованный вид
+/// (`attributionKey`): «Конфуций» и «конфуций » — один автор и одна папка.
+/// Автора без строки здесь нет — он показывается в общем списке.
+model MotivationSpeakerFolder {
+  speakerKey String                      @id
+  folder     MotivationSpeakerFolderKind
+  updatedAt  DateTime                    @updatedAt
+}

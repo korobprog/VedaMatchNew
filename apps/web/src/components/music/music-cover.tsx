@@ -55,6 +55,7 @@ export function MusicCover({
   rounded = "rounded-2xl",
   fill = true,
   fit = "cover",
+  natural = false,
   placeholderLabel,
 }: {
   url: string | null;
@@ -89,18 +90,37 @@ export function MusicCover({
    */
   fit?: "cover" | "contain";
   /**
+   * Картинка во всю ширину родителя в своих пропорциях, без полей (VED-595):
+   * рамку задаёт сам файл, поэтому ни резать, ни подкладывать нечего.
+   * Заглушка при этом квадратная — у неё своих пропорций нет. `fill` и
+   * `fit` тогда не действуют.
+   */
+  natural?: boolean;
+  /**
    * Что показать в заглушке вместо значка-ноты — у кружка исполнителя это
    * число его записей (VED-516): обложек почти ни у кого нет, а значок в
    * каждом кружке ничего не говорит.
    */
   placeholderLabel?: ReactNode;
 }) {
-  const size = fill ? "h-full w-full" : "";
+  const size = natural ? "" : fill ? "h-full w-full" : "";
   /* Ссылка есть, а файл не пришёл — показываем ту же заглушку, что и у записи
      без обложки. Битый значок с подписью «Обложка: …» выглядит поломкой
      портала, хотя причина снаружи: хранилище может не отдать файл (403), а
      объект — потеряться. Заглушка честнее: обложки просто нет. */
   const [failed, setFailed] = useState(false);
+
+  if (url && !failed && natural) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- обложка в нашем S3
+      <img
+        src={url}
+        alt={alt}
+        onError={() => setFailed(true)}
+        className={`block h-auto w-full ${rounded} ${className}`}
+      />
+    );
+  }
 
   if (url && !failed) {
     return (
@@ -124,7 +144,7 @@ export function MusicCover({
       // для скринридера значит читать одно и то же дважды.
       aria-hidden="true"
       style={placeholderStyle(seed)}
-      className={`flex ${size} items-center justify-center ${rounded} ${className}`}
+      className={`flex ${natural ? "aspect-square w-full" : size} items-center justify-center ${rounded} ${className}`}
     >
       {placeholderLabel ?? (
         <svg

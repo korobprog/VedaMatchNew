@@ -1,6 +1,8 @@
 import type {
+  MusicArtistPageDto,
   MusicRadioInsertsDto,
   MusicRadioStateDto,
+  MusicTrackDto,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 
@@ -63,4 +65,21 @@ export function deleteMusicRadioInsert(id: string): Promise<unknown> {
   return call(`/music/admin/radio/inserts/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+/**
+ * Записи исполнителя — очередь плеера после перехода из эфира (VED-585).
+ * Та же страница исполнителя, что рисует сервер; `null` — не удалось.
+ */
+export async function fetchMusicArtistTracks(
+  slug: string,
+): Promise<MusicTrackDto[] | null> {
+  try {
+    const page = await call<MusicArtistPageDto>(
+      `/music/artists/${encodeURIComponent(slug)}`,
+    );
+    return page.tracks;
+  } catch {
+    return null;
+  }
 }

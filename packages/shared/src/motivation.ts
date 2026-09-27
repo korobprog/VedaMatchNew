@@ -337,6 +337,27 @@ export interface MotivationFeedPositionUpdate {
 export interface MotivationAttributionOptionDto {
   label: string;
   count: number;
+  /**
+   * Папка автора в фильтре (VED-584): администратор раскладывает авторов по
+   * «Мудрости мира» и «Ведам». `null` — автор в общем списке. У источников
+   * папок нет, и поля там нет.
+   */
+  folder?: MotivationSpeakerFolder | null;
+}
+/** Папки авторов в фильтре ленты (VED-584). Две и навсегда. */
+export type MotivationSpeakerFolder = "world_wisdom" | "vedas";
+/** Порядок и подписи папок авторов — как их назвал заказчик. */
+export const MOTIVATION_SPEAKER_FOLDERS: readonly {
+  id: MotivationSpeakerFolder;
+  label: string;
+}[] = [
+  { id: "world_wisdom", label: "Мудрость мира" },
+  { id: "vedas", label: "Веды" },
+];
+/** Разложить автора по папке; `folder: null` — вернуть в общий список. */
+export interface MotivationSpeakerFolderInput {
+  speaker: string;
+  folder: MotivationSpeakerFolder | null;
 }
 /** Авторы и источники, по которым можно отфильтровать ленту. */
 export interface MotivationFeedAttributionsDto {

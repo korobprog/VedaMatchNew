@@ -61,4 +61,14 @@ describe('TtlMemo', () => {
     // «a» вытеснен третьим ключом — посчитан второй раз.
     expect(compute.mock.calls.filter(([key]) => key === 'a')).toHaveLength(2);
   });
+
+  it('после clear считает заново до истечения срока (VED-584)', async () => {
+    const memo = new TtlMemo<number>(1000, 10, () => 0);
+    const compute = jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+
+    expect(await memo.get('k', compute)).toBe(1);
+    memo.clear();
+    expect(memo.size).toBe(0);
+    expect(await memo.get('k', compute)).toBe(2);
+  });
 });

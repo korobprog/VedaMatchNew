@@ -63,4 +63,29 @@ describe("MusicCover", () => {
     expect(img).not.toHaveClass("object-cover");
     expect(img.style.backgroundImage).not.toBe("");
   });
+
+  // VED-595: на странице записи картинка во всю ширину в своих пропорциях —
+  // без цветных полей `contain` и без обрезки `cover`.
+  it("natural — во всю ширину, без полей и обрезки", () => {
+    render(
+      <MusicCover
+        url="https://cdn.test/a.jpg"
+        seed="t1"
+        alt="Обложка: Киртан"
+        natural
+      />,
+    );
+    const img = screen.getByAltText("Обложка: Киртан");
+    expect(img).toHaveClass("w-full", "h-auto");
+    expect(img).not.toHaveClass("object-contain");
+    expect(img).not.toHaveClass("object-cover");
+    expect(img.style.backgroundImage).toBe("");
+  });
+
+  it("natural без обложки — квадратная заглушка во всю ширину", () => {
+    const { container } = render(
+      <MusicCover url={null} seed="t1" alt="Обложка: Киртан" natural />,
+    );
+    expect(container.firstElementChild).toHaveClass("aspect-square", "w-full");
+  });
 });

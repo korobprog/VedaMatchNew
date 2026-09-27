@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PLAYER_BUBBLE_PLACEMENT,
   parsePlayerView,
   reservedPlayerSpace,
   serializePlayerView,
@@ -54,5 +55,18 @@ describe("reservedPlayerSpace", () => {
   it("мусор в замере не даёт отрицательного или бесконечного отступа", () => {
     expect(reservedPlayerSpace("expanded", 900, 780)).toBe(0);
     expect(reservedPlayerSpace("expanded", Number.NaN, 780)).toBe(0);
+  });
+});
+
+describe("PLAYER_BUBBLE_PLACEMENT (VED-592)", () => {
+  it("пузырь — в левом нижнем углу, у самого края", () => {
+    expect(PLAYER_BUBBLE_PLACEMENT).toContain("left-3");
+    expect(PLAYER_BUBBLE_PLACEMENT).toContain(
+      "bottom-[calc(env(safe-area-inset-bottom)+1rem)]",
+    );
+  });
+
+  it("не у верхнего и не у правого края — там пульт озвучки", () => {
+    expect(PLAYER_BUBBLE_PLACEMENT).not.toMatch(/\b(top|right)-/);
   });
 });

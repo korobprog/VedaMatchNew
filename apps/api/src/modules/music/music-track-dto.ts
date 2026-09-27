@@ -74,6 +74,15 @@ export interface MusicTrackRow extends MusicCoverSource {
   artist: MusicArtistRow | null;
   album: MusicAlbumRow | null;
   categories: { category: MusicCategoryRow }[];
+  /**
+   * Тексты (VED-594). Карточки каталога читаются через `include`, и Prisma
+   * отдаёт все скалярные поля записи — эти три приходят без правки выборок.
+   * Необязательны: там, где запись выбрана `select`-ом без них, признак
+   * «есть текст» честно даёт «нет».
+   */
+  lyrics?: string | null;
+  transliteration?: string | null;
+  translation?: string | null;
 }
 
 export interface MusicTrackDetailRow extends MusicTrackRow {
@@ -112,6 +121,17 @@ export function resolveTrackCoverKey(row: MusicTrackRow): string | null {
   return row.coverKey ?? row.album?.coverKey ?? row.artist?.coverKey ?? null;
 }
 
+/** Есть ли у записи хоть один непустой текст (VED-594). */
+export function hasTrackLyrics(
+  row: Pick<MusicTrackRow, 'lyrics' | 'transliteration' | 'translation'>,
+): boolean {
+  return Boolean(
+    row.lyrics?.trim() ||
+    row.transliteration?.trim() ||
+    row.translation?.trim(),
+  );
+}
+
 function toArtistRef(artist: MusicArtistRow | null) {
   if (!artist) return null;
   return { id: artist.id, slug: artist.slug, name: artist.name };
@@ -143,6 +163,7 @@ export function toMusicTrackDto(
     lineage: toLineageId(row.lineage),
     playCount: row.playCount,
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    hasLyrics: hasTrackLyrics(row),
   };
 }
 

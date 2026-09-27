@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MusicRadioItemDto, MusicTrackDto } from "@vedamatch/shared";
 import {
   radioHandoffPosition,
+  radioHandoffQueue,
   radioHandoffStep,
   radioHandoffTrackId,
 } from "./radio-handoff";
@@ -76,5 +77,24 @@ describe("radioHandoffStep", () => {
         loadError: "Запись не открывается",
       }),
     ).toBe("cancel");
+  });
+});
+
+describe("radioHandoffQueue (VED-585)", () => {
+  const t = (id: string, title: string) => ({ id, title }) as MusicTrackDto;
+
+  it("папка исполнителя по алфавиту, как на его странице", () => {
+    expect(
+      radioHandoffQueue("b", [
+        t("c", "Вишну"),
+        t("b", "Бхаджан"),
+        t("a", "Ахам"),
+      ]),
+    ).toEqual(["a", "b", "c"]);
+  });
+
+  it("записи нет в папке или папка не пришла — только она сама", () => {
+    expect(radioHandoffQueue("x", [t("a", "Ахам")])).toEqual(["x"]);
+    expect(radioHandoffQueue("x", null)).toEqual(["x"]);
   });
 });

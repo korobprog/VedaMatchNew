@@ -1,5 +1,6 @@
 import {
   buildCoverUrl,
+  hasTrackLyrics,
   resolveTrackCoverKey,
   toMusicAlbumDto,
   toMusicArtistDto,
@@ -136,7 +137,19 @@ describe('toMusicTrackDto', () => {
       lineage: 'iskcon',
       playCount: 12,
       publishedAt: '2026-08-27T10:00:00.000Z',
+      hasLyrics: false,
     });
+  });
+
+  it('признак текста — без самого текста (VED-594)', () => {
+    const dto = toMusicTrackDto(
+      { ...track, lyrics: 'jaya radha-madhava', translation: null },
+      BASE,
+    );
+
+    expect(dto.hasLyrics).toBe(true);
+    expect(dto).not.toHaveProperty('lyrics');
+    expect(dto).not.toHaveProperty('translation');
   });
 
   it('не выносит наружу ключ объекта в бакете', () => {
@@ -276,5 +289,18 @@ describe('toMusicCategoryDto', () => {
         0,
       ).kind,
     ).toBe('style');
+  });
+});
+
+describe('hasTrackLyrics (VED-594)', () => {
+  it.each([
+    [{ lyrics: 'text' }, true],
+    [{ translation: 'перевод' }, true],
+    [{ transliteration: 'jaya' }, true],
+    [{ lyrics: '   \n', translation: '' }, false],
+    [{ lyrics: null, transliteration: null, translation: null }, false],
+    [{}, false],
+  ])('%j → %s', (row, expected) => {
+    expect(hasTrackLyrics(row)).toBe(expected);
   });
 });

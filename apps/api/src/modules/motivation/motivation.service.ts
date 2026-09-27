@@ -70,7 +70,9 @@ import {
   attributionKey,
   buildAttributionOptions,
   matchingVariants,
+  parseSpeakerFolderInput,
   splitWorkLocator,
+  withSpeakerFolders,
   workKey as sourceKey,
 } from './feed-attribution';
 import { orderTieredWithinSlots, sortByLocator } from './locator-order';
@@ -858,11 +860,42 @@ export class MotivationService {
           ? (value) => splitWorkLocator(value).work
           : undefined,
       );
-    const [speakers, works] = await Promise.all([
+    const [speakers, works, folders] = await Promise.all([
       count('attributionSpeaker', bySpeaker),
       count('attributionWork', byWork),
+      this.prisma.motivationSpeakerFolder.findMany({
+        select: { speakerKey: true, folder: true },
+      }),
     ]);
-    return { speakers, works };
+    return {
+      speakers: withSpeakerFolders(
+        speakers,
+        new Map(folders.map((row) => [row.speakerKey, row.folder])),
+      ),
+      works,
+    };
+  }
+
+  /**
+   * Убрать автора в папку фильтра или вернуть в общий список (VED-584).
+   * Списки фильтра общие у всех и живут в памяти — после правки они
+   * считаются заново, иначе администратор минуту не увидел бы свою папку.
+   */
+  async setSpeakerFolder(user: AccessTokenPayload, body: unknown) {
+    this.admin(user);
+    const { speakerKey, folder } = parseSpeakerFolderInput(body);
+    if (folder)
+      await this.prisma.motivationSpeakerFolder.upsert({
+        where: { speakerKey },
+        create: { speakerKey, folder },
+        update: { folder },
+      });
+    else
+      await this.prisma.motivationSpeakerFolder.deleteMany({
+        where: { speakerKey },
+      });
+    this.attributionsMemo.clear();
+    return { folder };
   }
 
   /**

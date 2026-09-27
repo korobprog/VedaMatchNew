@@ -80,58 +80,63 @@ export default async function MusicTrackPage({
   ];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
+    // Сверху меньше воздуха (VED-595): «Каталог» поднят к шапке.
+    <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:py-10">
       <Link
         href="/music"
-        className="inline-flex items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
+        className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
       >
         <span aria-hidden="true">←</span> Каталог
       </Link>
 
-      <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:gap-7">
-        <div className="h-48 w-48 shrink-0 overflow-hidden rounded-2xl sm:h-56 sm:w-56">
-          {/* `contain`, а не `cover` (VED-248): обложка здесь не плитка в
-              сетке каталога, а сама себе витрина — обрезать её край
-              значило бы показать не то, что загрузил редактор (широкий
-              баннер терял текст, урезанный до квадрата). */}
-          <MusicCover
-            url={track.coverUrl}
-            seed={track.id}
-            alt={`Обложка: ${track.title}`}
-            fit="contain"
-          />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-3">
-          {/* Сердце — здесь, рядом с названием (VED-113): из строк списков его
-              убрали ради времени записи, и карточка стала местом, где запись
-              отмечают. */}
-          <div className="flex items-start gap-2">
-            <h1 className="min-w-0 flex-1 font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
-              {track.title}
-            </h1>
-            <MusicFavoriteButton
-              trackId={track.id}
-              title={track.title}
-              className="shrink-0 border border-glass-brd"
+      <div className="mt-2 flex flex-col gap-6 sm:mt-5 sm:flex-row sm:gap-7">
+        {/* Обложка и кнопки одним рядом (VED-595): картинка во всю ширину
+            в своих пропорциях — без цветных полей вокруг, что давал
+            `contain` в квадрате (VED-248: обрезать её по-прежнему нельзя),
+            — а «Линия», «Поделиться» и сердце столбиком вдоль правого края,
+            одного размера. Рядом с названием кнопки наезжали на длинный
+            заголовок. */}
+        <div className="flex items-start gap-3 sm:shrink-0">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-2xl sm:w-72 sm:flex-none">
+            <MusicCover
+              url={track.coverUrl}
+              seed={track.id}
+              alt={`Обложка: ${track.title}`}
+              natural
             />
-            {/* «Поделиться» (VED-281) — рядом с сердцем. */}
+          </div>
+          <div className="flex shrink-0 flex-col gap-2">
+            {/* «Линия» — только редакции Музыки (VED-561). */}
+            <MusicTrackLineageButton
+              trackId={track.id}
+              lineage={track.lineage}
+              canEdit={canEdit}
+            />
+            {/* «Поделиться» (VED-281). */}
             <MusicShareTrackButton
               track={{
                 id: track.id,
                 title: track.title,
                 artist: track.artist ? { name: track.artist.name } : null,
               }}
+              size="size-11"
               className="border border-glass-brd"
             />
-            {/* «Линия» — только редакции Музыки (VED-561). */}
-            <MusicTrackLineageButton
+            {/* Сердце (VED-113): из строк списков его убрали ради времени
+                записи, и карточка стала местом, где запись отмечают. */}
+            <MusicFavoriteButton
               trackId={track.id}
-              lineage={track.lineage}
-              canEdit={canEdit}
-              className="shrink-0"
+              title={track.title}
+              size="size-11"
+              className="shrink-0 border border-glass-brd"
             />
           </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-3">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
+            {track.title}
+          </h1>
 
           {track.artist && (
             <Link

@@ -261,6 +261,18 @@ describe("MiniPlayer — перенос долгим нажатием (VED-454)"
     expect(target.style.translate).toBe("");
   });
 
+  it("пузырь по умолчанию — в левом нижнем углу (VED-592)", () => {
+    window.localStorage.setItem(PLAYER_VIEW_KEY, "bubble");
+    render(<MiniPlayer />);
+
+    const bubble = screen.getByRole("button", { name: /^Развернуть плеер:/ });
+    expect(bubble).toHaveClass(
+      "fixed",
+      "left-3",
+      "bottom-[calc(env(safe-area-inset-bottom)+1rem)]",
+    );
+  });
+
   it("пузырь тоже переносится, и отпускание его не разворачивает", () => {
     window.localStorage.setItem(PLAYER_VIEW_KEY, "bubble");
     render(<MiniPlayer />);

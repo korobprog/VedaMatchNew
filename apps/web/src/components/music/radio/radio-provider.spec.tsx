@@ -7,6 +7,7 @@ import type {
   MusicTrackDto,
 } from "@vedamatch/shared";
 import {
+  fetchMusicArtistTracks,
   fetchMusicRadio,
   leaveMusicRadio,
   musicRadioHeartbeat,
@@ -23,6 +24,7 @@ import {
 
 vi.mock("../player/player-provider", () => ({ useMusicPlayer: vi.fn() }));
 vi.mock("@/lib/music-radio-client", () => ({
+  fetchMusicArtistTracks: vi.fn(),
   fetchMusicRadio: vi.fn(),
   musicRadioHeartbeat: vi.fn(),
   leaveMusicRadio: vi.fn(() => Promise.resolve()),
@@ -50,6 +52,7 @@ interface PlayerMock {
   isLoading: boolean;
   loadError: string | null;
   play: ReturnType<typeof vi.fn>;
+  adoptQueue: ReturnType<typeof vi.fn>;
   toggle: ReturnType<typeof vi.fn>;
 }
 
@@ -104,6 +107,7 @@ beforeEach(() => {
     isLoading: false,
     loadError: null,
     play: vi.fn(),
+    adoptQueue: vi.fn(),
     toggle: vi.fn(),
   };
   vi.mocked(useMusicPlayer).mockReturnValue(player as never);
@@ -172,6 +176,35 @@ describe("MusicRadioProvider — переход в плеер (VED-542)", () => 
     );
     expect(radio().active).toBe(true);
     expect(leaveMusicRadio).not.toHaveBeenCalled();
+  });
+
+  it("очередь плеера — папка исполнителя записи (VED-585)", async () => {
+    vi.mocked(musicRadioHeartbeat).mockResolvedValue({
+      ...state,
+      current: {
+        ...state.current!,
+        track: {
+          id: "t1",
+          title: "Бхаджан",
+          artist: { id: "a1", slug: "uma", name: "Uma" },
+        } as MusicTrackDto,
+      },
+    });
+    vi.mocked(fetchMusicArtistTracks).mockResolvedValue([
+      { id: "t2", title: "Вишну" } as MusicTrackDto,
+      { id: "t1", title: "Бхаджан" } as MusicTrackDto,
+      { id: "t0", title: "Ахам" } as MusicTrackDto,
+    ]);
+    await startRadio();
+    await act(async () => {
+      radio().handoffToPlayer();
+      await Promise.resolve();
+    });
+    // Звук не ждёт папку: запись стартует сразу одна…
+    expect(player.play).toHaveBeenCalledWith("t1", ["t1"], 30);
+    // …а очередь подменяется вокруг неё, когда папка пришла.
+    expect(fetchMusicArtistTracks).toHaveBeenCalledWith("uma");
+    expect(player.adoptQueue).toHaveBeenCalledWith("t1", ["t0", "t1", "t2"]);
   });
 
   it("повторное нажатие в переходе не запускает плеер второй раз", async () => {

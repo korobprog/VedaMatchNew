@@ -12,6 +12,7 @@ import {
 } from "react";
 import { FileText, Loader2, Paperclip, Pencil, Trash2, X } from "lucide-react";
 import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
+import { CompactSoundButton } from "@/components/quick/compact-sound-button";
 import type {
   WorkBoardDto,
   WorkTaskDto,
@@ -489,6 +490,9 @@ export function WorkTaskDialog({
                   </button>
                 )}
               </div>
+              {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
+                  нажать: пуск и пауза — здесь же, у крестика (VED-577). */}
+              <CompactSoundButton className="-my-1.5" />
               <button
                 type="button"
                 onClick={requestClose}

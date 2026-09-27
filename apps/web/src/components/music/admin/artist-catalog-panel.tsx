@@ -44,6 +44,7 @@ export function MusicArtistCatalogPanel({
     id: artist.id,
     primary: artist.name,
     secondary: countLabel(artist.trackCount),
+    trackCount: artist.trackCount,
     badge: artist.isVerified ? "проверен" : null,
     coverUrl: artist.coverUrl,
     rootCategoryId: artist.rootCategoryId,

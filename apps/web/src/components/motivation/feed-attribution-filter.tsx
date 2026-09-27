@@ -3,10 +3,13 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { ListFilter } from "lucide-react";
-import type {
-  MotivationAttributionOptionDto,
-  MotivationFeedAttributionsDto,
+import { ChevronDown, Folder, ListFilter } from "lucide-react";
+import {
+  MOTIVATION_SPEAKER_FOLDERS,
+  type MotivationAttributionOptionDto,
+  type MotivationFeedAttributionsDto,
+  type MotivationSpeakerFolder,
+  type MotivationSpeakerFolderInput,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -18,7 +21,12 @@ import {
   sameAttribution,
   type FeedFilterState,
 } from "./attribution-filter";
-import { cachedAttributions, loadAttributions } from "./attribution-options-cache";
+import {
+  cachedAttributions,
+  forgetAttributions,
+  loadAttributions,
+} from "./attribution-options-cache";
+import { groupSpeakersByFolder } from "./speaker-folders";
 
 /**
  * Запрос списка к порталу. Вынесен из окна: тот же запрос уходит заранее —
@@ -31,6 +39,17 @@ async function fetchAttributions(query: string): Promise<MotivationFeedAttributi
   });
   if (!response.ok) throw new Error(String(response.status));
   return (await response.json()) as MotivationFeedAttributionsDto;
+}
+
+/** Разложить автора по папке (VED-584) — только администратору. */
+async function saveSpeakerFolder(input: MotivationSpeakerFolderInput): Promise<void> {
+  const response = await apiFetch(`${apiBase()}/admin/motivation/speaker-folders`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error(String(response.status));
 }
 
 /**
@@ -98,9 +117,12 @@ function whenIdle(task: () => void): () => void {
 export function FeedAttributionFilter({
   state,
   variant = "inline",
+  isAdmin = false,
 }: {
   state: FeedFilterState;
   variant?: "inline" | "chip";
+  /** Администратор раскладывает авторов по папкам прямо в окне (VED-584). */
+  isAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -165,7 +187,10 @@ export function FeedAttributionFilter({
     </>
   );
   const dialog =
-    open && createPortal(<FilterSheet state={state} onClose={close} />, document.body);
+    open && createPortal(
+      <FilterSheet state={state} isAdmin={isAdmin} onClose={close} />,
+      document.body,
+    );
 
   if (variant === "chip") {
     // Пилюля сама по себе объясняет, что это фильтр, даже без соседнего
@@ -231,7 +256,15 @@ export function FeedAttributionFilter({
   );
 }
 
-function FilterSheet({ state, onClose }: { state: FeedFilterState; onClose: () => void }) {
+function FilterSheet({
+  state,
+  isAdmin,
+  onClose,
+}: {
+  state: FeedFilterState;
+  isAdmin: boolean;
+  onClose: () => void;
+}) {
   const query = attributionsQuery(state);
   /* Список окно не хранит, а читает из памяти вкладки прямо на рисовании:
      уже привезённый (второе открытие или успевшая предзагрузка по
@@ -346,6 +379,8 @@ function FilterSheet({ state, onClose }: { state: FeedFilterState; onClose: () =
                 empty="Авторов здесь пока нет"
                 hrefFor={(speaker) => filterHref(state, { speaker })}
                 onPick={onClose}
+                folders
+                isAdmin={isAdmin}
               />
             </>
           )}
@@ -363,6 +398,8 @@ function OptionList({
   empty,
   hrefFor,
   onPick,
+  folders = false,
+  isAdmin = false,
 }: {
   title: string;
   icon: string;
@@ -372,7 +409,29 @@ function OptionList({
   /** `null` — сбросить это измерение. */
   hrefFor: (value: string | null) => string;
   onPick: () => void;
+  /** Авторы по папкам «Мудрость мира» и «Веды» (VED-584). */
+  folders?: boolean;
+  isAdmin?: boolean;
 }) {
+  /* Свежие правки администратора: список в окне перестраивается сразу, а
+     память вкладки забывается, чтобы следующее открытие спросило сервер. */
+  const [overrides, setOverrides] = useState<Record<string, MotivationSpeakerFolder | null>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /* Раскрытые папки. Папка с выбранным автором раскрыта с самого начала:
+     иначе выбранное пряталось бы в свёрнутой папке. */
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
+  async function moveSpeaker(label: string, folder: MotivationSpeakerFolder | null) {
+    const before = overrides;
+    setOverrides({ ...overrides, [label]: folder });
+    setSaveError(null);
+    try {
+      await saveSpeakerFolder({ speaker: label, folder });
+      forgetAttributions();
+    } catch {
+      setOverrides(before);
+      setSaveError(`Не удалось переложить «${label}». Попробуйте ещё раз.`);
+    }
+  }
   const item = (active: boolean) =>
     `flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
       active
@@ -380,6 +439,50 @@ function OptionList({
         : "border-white/15 bg-white/5 text-white hover:bg-white/15"
     }`;
   const titleId = `feed-filter-${icon === "📖" ? "work" : "speaker"}`;
+  const grouped = folders ? groupSpeakersByFolder(options, current, overrides) : null;
+  const row = (option: MotivationAttributionOptionDto) => {
+    const active = sameAttribution(option.label, current);
+    const link = (
+      <Link
+        href={hrefFor(option.label)}
+        onClick={onPick}
+        aria-current={active ? "true" : undefined}
+        className={`${item(active)} ${isAdmin && folders ? "min-w-0 flex-1" : ""}`}
+      >
+        <span className="min-w-0 break-words">{option.label}</span>
+        <span
+          className={`shrink-0 font-mono text-xs ${active ? "text-[#0A0614]/70" : "text-white/70"}`}
+        >
+          {option.count}
+        </span>
+      </Link>
+    );
+    if (!isAdmin || !folders) return <li key={option.label}>{link}</li>;
+    // Администратору — выбор папки рядом с автором (VED-584).
+    return (
+      <li key={option.label} className="flex items-center gap-1.5">
+        {link}
+        <select
+          value={option.folder ?? ""}
+          onChange={(event) =>
+            void moveSpeaker(
+              option.label,
+              (event.target.value || null) as MotivationSpeakerFolder | null,
+            )
+          }
+          aria-label={`Папка автора: ${option.label}`}
+          className="min-h-10 w-28 shrink-0 rounded-xl border border-white/15 bg-[#1B0F2E] px-2 text-xs text-white"
+        >
+          <option value="">Без папки</option>
+          {MOTIVATION_SPEAKER_FOLDERS.map((folder) => (
+            <option key={folder.id} value={folder.id}>
+              {folder.label}
+            </option>
+          ))}
+        </select>
+      </li>
+    );
+  };
   return (
     <section aria-labelledby={titleId}>
       <h3 id={titleId} className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/70">
@@ -400,27 +503,45 @@ function OptionList({
               <span>Все</span>
             </Link>
           </li>
-          {options.map((option) => {
-            const active = sameAttribution(option.label, current);
+          {grouped?.folders.map((folder) => {
+            const expanded = openFolders[folder.id] ?? folder.containsCurrent;
+            const listId = `feed-filter-folder-${folder.id}`;
             return (
-              <li key={option.label}>
-                <Link
-                  href={hrefFor(option.label)}
-                  onClick={onPick}
-                  aria-current={active ? "true" : undefined}
-                  className={item(active)}
+              <li key={folder.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenFolders({ ...openFolders, [folder.id]: !expanded })}
+                  aria-expanded={expanded}
+                  aria-controls={listId}
+                  className={item(false)}
                 >
-                  <span className="min-w-0 break-words">{option.label}</span>
-                  <span
-                    className={`shrink-0 font-mono text-xs ${active ? "text-[#0A0614]/70" : "text-white/70"}`}
-                  >
-                    {option.count}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Folder aria-hidden className="size-4 shrink-0 text-white/70" />
+                    <span className="min-w-0 break-words font-semibold">{folder.label}</span>
                   </span>
-                </Link>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="font-mono text-xs text-white/70">{folder.count}</span>
+                    <ChevronDown
+                      aria-hidden
+                      className={`size-4 text-white/70 transition-transform ${expanded ? "rotate-180" : ""}`}
+                    />
+                  </span>
+                </button>
+                {expanded && (
+                  <ul id={listId} aria-label={folder.label} className="mt-1.5 space-y-1.5 pl-4">
+                    {folder.options.map(row)}
+                  </ul>
+                )}
               </li>
             );
           })}
+          {(grouped ? grouped.loose : options).map(row)}
         </ul>
+      )}
+      {saveError && (
+        <p role="alert" className="mt-2 text-[#FFB4D9]">
+          {saveError}
+        </p>
       )}
     </section>
   );

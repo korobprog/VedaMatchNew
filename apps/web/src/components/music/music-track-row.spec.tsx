@@ -33,6 +33,40 @@ describe("MusicTrackRow", () => {
     ).toHaveAttribute("href", "/music/tracks/t1");
   });
 
+  describe("значок «Текст» (VED-594)", () => {
+    it("есть у записи с текстом и ведёт к тексту в карточке", () => {
+      render(<MusicTrackRow track={{ ...track, hasLyrics: true }} />);
+
+      expect(
+        screen.getByRole("link", { name: "Текст: Maha Mantra" }),
+      ).toHaveAttribute("href", "/music/tracks/t1#music-lyrics");
+    });
+
+    it("стоит перед сердцем и значком карточки", () => {
+      render(<MusicTrackRow track={{ ...track, hasLyrics: true }} />);
+
+      const lyrics = screen.getByRole("link", { name: "Текст: Maha Mantra" });
+      const card = screen.getByRole("link", {
+        name: "Карточка записи: Maha Mantra",
+      });
+      expect(
+        lyrics.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it("у записи без текста значка нет", () => {
+      render(<MusicTrackRow track={{ ...track, hasLyrics: false }} />);
+
+      expect(screen.queryByRole("link", { name: /^Текст:/ })).toBeNull();
+    });
+
+    it("и в старой офлайн-копии без признака — тоже нет", () => {
+      render(<MusicTrackRow track={track} />);
+
+      expect(screen.queryByRole("link", { name: /^Текст:/ })).toBeNull();
+    });
+  });
+
   // VED-141: играющую строку в длинном списке искали глазами.
   describe("текущая запись", () => {
     afterEach(() => {

@@ -177,10 +177,21 @@ export const setMusicArtistLineage = (
     { method: "PATCH", body: JSON.stringify(body) },
   );
 
-export const deleteMusicArtist = (id: string) =>
-  send<unknown>(`/music/admin/catalog/artists/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
+/**
+ * Удаление исполнителя. `withTracks` (VED-576) уносит вместе с ним его
+ * записи с файлами и альбомы без чужих записей; без него сервер удалит
+ * только пустого.
+ */
+export const deleteMusicArtist = (
+  id: string,
+  options: { withTracks?: boolean } = {},
+) =>
+  send<unknown>(
+    `/music/admin/catalog/artists/${encodeURIComponent(id)}${
+      options.withTracks ? "?withTracks=1" : ""
+    }`,
+    { method: "DELETE" },
+  );
 
 export const updateMusicAlbum = (id: string, body: UpdateMusicAlbumRequest) =>
   send<unknown>(`/music/admin/catalog/albums/${encodeURIComponent(id)}`, {

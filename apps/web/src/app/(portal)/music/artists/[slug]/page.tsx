@@ -9,6 +9,7 @@ import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
 import { MusicArtistPlayback } from "@/components/music/music-artist-playback";
 import { MusicAudiobookCard } from "@/components/music/audiobook-card";
 import { MusicCover } from "@/components/music/music-cover";
+import { MusicCatalogBackLink } from "@/components/music/catalog-back-link";
 import { plural } from "@/lib/plural";
 
 const KIND_LABELS: Record<string, string> = {
@@ -68,15 +69,8 @@ export default async function MusicArtistPage({
 
   return (
     <main className="relative mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
-      {/* «← Каталог» — в правом верхнем углу, над строкой имени (VED-535):
-          своей строки у него нет, как и раньше (VED-530), но и имя он больше
-          не теснит. */}
-      <Link
-        href="/music"
-        className="absolute right-2 top-0 inline-flex min-h-9 items-center gap-1.5 px-2 text-sm text-text-2 hover:text-text-0 md:right-4"
-      >
-        <span aria-hidden="true">←</span> Каталог
-      </Link>
+      {/* «← Каталог» — в левом поле над строкой имени (VED-588). */}
+      <MusicCatalogBackLink />
       <header className="flex items-center gap-5">
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full">
           <MusicCover
