@@ -40,7 +40,7 @@ import {
   getVcalendarButtonSnapshot,
   subscribeVcalendarButton,
 } from "@/lib/vcalendar-button";
-import { BlogCarousel, BlogFrame } from "./blog-carousel";
+import { BlogCarousel } from "./blog-carousel";
 import { BlogFitImage } from "./blog-fit-image";
 import {
   BLOG_HOME_MAX_ASPECT,
@@ -451,11 +451,11 @@ function HomeSlide({ slide }: { slide: BlogHomeSlide }) {
           {slide.isVideo && <VideoMark />}
         </BlogFitImage>
       ) : (
-        <BlogFrame aspect={1}>
-          <span className="flex size-full items-center justify-center px-6 text-center text-sm leading-6 text-text-1">
-            {slide.frameText}
-          </span>
-        </BlogFrame>
+        /* Пост без картинки — по высоте текста, а не квадратом (VED-564):
+           в квадрате короткий текст стоял посреди огромных пустых полей. */
+        <span className="block bg-bg-2 px-6 py-5 text-center text-sm leading-6 text-text-1">
+          {slide.frameText}
+        </span>
       )}
       {slide.title && (
         <span className="flex min-h-14 items-center px-3 py-2">
