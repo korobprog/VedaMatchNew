@@ -48,6 +48,29 @@ export class LibraryShlokasController {
     return this.shlokas.list(category ?? '', query, offset);
   }
 
+  /** Папки-источники рубрики «Шлоки» (VED-465): `?category=<slug>`. */
+  @Get('sources')
+  @Throttle({ default: { ttl: 60_000, limit: 120 } })
+  sources(@Query('category') category: string | undefined) {
+    return this.shlokas.sources(category ?? '');
+  }
+
+  /** Шлоки одной папки одной строкой: `?category=<slug>&key=<ключ>`. */
+  @Get('source')
+  @Throttle({ default: { ttl: 60_000, limit: 120 } })
+  sourceLines(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('category') category: string | undefined,
+    @Query('key') key: string | undefined,
+  ) {
+    return this.shlokas.sourceLines(
+      category ?? '',
+      key,
+      user.sub,
+      isAdmin(user),
+    );
+  }
+
   @Get(':id')
   byId(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.shlokas.byId(id, user.sub, isAdmin(user));

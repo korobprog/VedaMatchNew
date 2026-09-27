@@ -3,8 +3,9 @@ import { isLibraryShlokaTitle } from "@vedamatch/shared";
 /**
  * Как показывать страницу рубрики, если она про шлоки (VED-386).
  *
- * - `root` — сама рубрика «Шлоки»: внутри разделы-источники, и здесь их
- *   заводят;
+ * - `root` — сама рубрика «Шлоки»: папки по источнику (VED-465) и
+ *   разделы-источники, которые здесь же заводят. Шлоки, добавленные прямо
+ *   в рубрику, её корнем быть не перестают — они разложены по папкам;
  * - `source` — раздел-источник («Бхагавад-гита» внутри «Шлок») или любая
  *   рубрика, где шлоки уже есть: список по порядку стихов, поиск и
  *   «Добавить шлоку» с источником, проставленным по рубрике;
@@ -27,9 +28,9 @@ export function shlokaSectionMode(input: {
   /** Сколько шлок лежит прямо в рубрике. */
   shlokaTotal: number;
 }): ShlokaSectionMode {
-  if (input.shlokaTotal > 0) return "source";
   if (input.ancestors.some(titled)) return "source";
   if (titled(input.category)) return "root";
+  if (input.shlokaTotal > 0) return "source";
   return null;
 }
 

@@ -22,9 +22,9 @@ import { st } from "@/components/library/shloka/shloka-text";
 export default async function LibraryAddShlokaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; source?: string }>;
 }) {
-  const { category: slug } = await searchParams;
+  const { category: slug, source: folderSource } = await searchParams;
   const user = await getProfile();
   if (!user)
     redirectToLogin(
@@ -105,6 +105,11 @@ export default async function LibraryAddShlokaPage({
               kind: "create",
               categoryId: page.category.id,
               sourceLabel: list.sourceLabel,
+              // Из папки-источника (VED-465) — её источник уже вписан.
+              initialSource:
+                typeof folderSource === "string"
+                  ? folderSource.trim().slice(0, 300)
+                  : undefined,
             }}
           />
         </section>

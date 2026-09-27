@@ -14,6 +14,8 @@ import type {
   LibraryShlokaDto,
   LibraryShlokaImageDto,
   LibraryShlokaListResponse,
+  LibraryShlokaSourceLinesResponse,
+  LibraryShlokaSourcesResponse,
   PortalActivityEvent,
   UpdateLibraryShlokaRequest,
 } from '@vedamatch/shared';
@@ -39,6 +41,13 @@ import {
   type ShlokaTextFields,
 } from './shloka-input';
 import { neighborsOf, sortByVerse } from './shloka-order';
+import {
+  groupBySource,
+  shlokaFirstLine,
+  shlokaSourceKey,
+  sortFolder,
+} from './shloka-source';
+import { childPath } from './category-tree';
 
 /** Строк в окне источника за раз: Гита целиком — 700 стихов. */
 const LIST_PAGE_SIZE = 60;
@@ -213,6 +222,84 @@ export class LibraryShlokasService {
         offset + LIST_PAGE_SIZE < ordered.length
           ? offset + LIST_PAGE_SIZE
           : null,
+    };
+  }
+
+  /**
+   * Папки-источники рубрики «Шлоки» (VED-465): шлоки рубрики и её
+   * подрубрик, сгруппированные по строке источника.
+   */
+  async sources(slug: string): Promise<LibraryShlokaSourcesResponse> {
+    const { category, ids } = await this.subtree(slug);
+    const rows = await this.prisma.libraryEntry.findMany({
+      where: subtreeShlokasWhere(ids),
+      select: { id: true, source: true, publishedAt: true },
+    });
+    return {
+      category: toAncestor(category),
+      folders: groupBySource(rows),
+      total: rows.length,
+    };
+  }
+
+  /**
+   * Все шлоки одной папки одним списком: номер и первая строка стиха, по
+   * порядку стихов. Без страниц — строка короткая, а читать папку
+   * кусками по шестьдесят неудобно.
+   */
+  async sourceLines(
+    slug: string,
+    keyRaw: string | undefined,
+    viewerId: string,
+    viewerIsAdmin: boolean,
+  ): Promise<LibraryShlokaSourceLinesResponse> {
+    const key = keyRaw?.trim() ?? '';
+    if (!key) throw new BadRequestException('source_required');
+    const { category, ids } = await this.subtree(slug);
+    const rows = await this.prisma.libraryEntry.findMany({
+      where: subtreeShlokasWhere(ids),
+      select: { id: true, source: true, publishedAt: true, addedById: true },
+    });
+    const inFolder = rows.filter((row) => shlokaSourceKey(row.source) === key);
+    const folder = groupBySource(inFolder)[0];
+    if (!folder) throw new NotFoundException('source_not_found');
+
+    const details = await this.prisma.libraryShloka.findMany({
+      where: { entryId: { in: inFolder.map((row) => row.id) } },
+      select: {
+        entryId: true,
+        verse: true,
+        text: true,
+        translation: true,
+      },
+    });
+    const byId = new Map(details.map((row) => [row.entryId, row]));
+    const ordered = sortFolder(
+      inFolder.map((row) => ({
+        id: row.id,
+        publishedAt: row.publishedAt,
+        addedById: row.addedById,
+        verse: byId.get(row.id)?.verse ?? null,
+      })),
+    );
+
+    return {
+      category: toAncestor(category),
+      folder,
+      items: ordered.flatMap(({ id, addedById }) => {
+        const row = byId.get(id);
+        if (!row) return [];
+        const first = shlokaFirstLine(row.text, row.translation);
+        return [
+          {
+            id,
+            verse: row.verse,
+            line: first.line,
+            lineFrom: first.from,
+            canEdit: viewerIsAdmin || addedById === viewerId,
+          },
+        ];
+      }),
     };
   }
 
@@ -639,6 +726,29 @@ export class LibraryShlokasService {
     return { ...row, shloka: row.shloka };
   }
 
+  /** Рубрика и id всего её поддерева — папки собирают шлоки и подрубрик. */
+  private async subtree(slug: string) {
+    const category = await this.prisma.libraryCategory.findFirst({
+      where: { slug, status: 'active' },
+      select: {
+        id: true,
+        slug: true,
+        titleRu: true,
+        titleEn: true,
+        path: true,
+      },
+    });
+    if (!category) throw new NotFoundException('category_not_found');
+    const descendants = await this.prisma.libraryCategory.findMany({
+      where: { status: 'active', path: { startsWith: childPath(category) } },
+      select: { id: true },
+    });
+    return {
+      category,
+      ids: [category.id, ...descendants.map((row) => row.id)],
+    };
+  }
+
   /** Предки рубрики от корня — по материализованному пути. */
   private async ancestorsOf(path: string): Promise<LibraryCategoryAncestor[]> {
     const ids = path.split('.').filter(Boolean);
@@ -712,6 +822,15 @@ export function searchWhere(
         },
       },
     ],
+  };
+}
+
+/** Опубликованные шлоки, лежащие хотя бы в одной рубрике поддерева. */
+function subtreeShlokasWhere(ids: string[]): Prisma.LibraryEntryWhereInput {
+  return {
+    type: 'shloka',
+    status: 'published',
+    categories: { some: { categoryId: { in: ids } } },
   };
 }
 

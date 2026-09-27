@@ -730,6 +730,41 @@ export interface LibraryShlokaListResponse {
   nextOffset: number | null;
 }
 
+/**
+ * Папка-источник раздела «Шлоки» (VED-465): все шлоки с одним источником,
+ * без оглядки на регистр и пробелы.
+ */
+export interface LibraryShlokaSourceFolder {
+  /** Ключ папки — передаётся обратно в `GET library/shlokas/source`. */
+  key: string;
+  /** Самое частое написание источника; `null` — папка «Без источника». */
+  label: string | null;
+  count: number;
+}
+
+export interface LibraryShlokaSourcesResponse {
+  category: LibraryCategoryAncestor;
+  folders: LibraryShlokaSourceFolder[];
+  /** Всего шлок в рубрике и её подрубриках. */
+  total: number;
+}
+
+/** Строка списка папки: номер и первая строка стиха (или перевода). */
+export interface LibraryShlokaLine {
+  id: string;
+  verse: string | null;
+  line: string;
+  /** Откуда строка: оригинала у шлоки может не быть (VED-464). */
+  lineFrom: 'text' | 'translation';
+  canEdit: boolean;
+}
+
+export interface LibraryShlokaSourceLinesResponse {
+  category: LibraryCategoryAncestor;
+  folder: LibraryShlokaSourceFolder;
+  items: LibraryShlokaLine[];
+}
+
 /** Блок «другого ачарьи» в запросе. С `id` — правка существующего. */
 export interface LibraryShlokaAcharyaInput {
   id?: string;

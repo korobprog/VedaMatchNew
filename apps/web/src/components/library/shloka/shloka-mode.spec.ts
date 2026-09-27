@@ -27,6 +27,12 @@ describe("shlokaSectionMode", () => {
     ).toBe("root");
   });
 
+  it("рубрика «Шлоки» со своими шлоками — всё равно корень с папками (VED-465)", () => {
+    expect(
+      shlokaSectionMode({ category: node("Шлоки"), ancestors: [], shlokaTotal: 12 }),
+    ).toBe("root");
+  });
+
   it("раздел внутри «Шлок» — источник, даже пустой", () => {
     expect(
       shlokaSectionMode({

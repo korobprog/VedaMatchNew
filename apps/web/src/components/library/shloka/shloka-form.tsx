@@ -38,7 +38,13 @@ const FIELD =
   "mt-1 block min-h-11 w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-base text-text-0";
 
 export type ShlokaFormTarget =
-  | { kind: "create"; categoryId: string; sourceLabel: string }
+  | {
+      kind: "create";
+      categoryId: string;
+      sourceLabel: string;
+      /** Источник папки, из которой пришли (VED-465); иначе поле пустое. */
+      initialSource?: string;
+    }
   | { kind: "edit"; shloka: LibraryShlokaDto };
 
 /**
@@ -65,8 +71,9 @@ export function ShlokaForm({
       target.kind === "edit"
         ? draftFromShloka(target.shloka)
         : // Источник не подставляется по разделу (VED-464): «Шлоки» в поле
-          // приходилось стирать каждый раз. Человек пишет его сам.
-          emptyDraft(""),
+          // приходилось стирать каждый раз. Человек пишет его сам — кроме
+          // случая, когда пришёл из папки источника (VED-465).
+          emptyDraft(target.initialSource ?? ""),
     [target],
   );
   const [draft, setDraft] = useState<ShlokaDraft>(initial);
