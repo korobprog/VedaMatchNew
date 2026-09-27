@@ -145,7 +145,7 @@ describe('Линия исполнителя (VED-566)', () => {
       });
     });
 
-    it('«Без линии» снимает её только у исполнителя, записи не трогает', async () => {
+    it('«Без линии» снимает её и у исполнителя, и у всех его записей', async () => {
       const { service, tx } = build();
 
       const result = await service.setArtistLineage(true, 'a1', {
@@ -155,8 +155,11 @@ describe('Линия исполнителя (VED-566)', () => {
       expect(tx.musicArtist.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { lineage: null } }),
       );
-      expect(tx.musicTrack.updateMany).not.toHaveBeenCalled();
-      expect(result.updatedTracks).toBe(0);
+      expect(tx.musicTrack.updateMany).toHaveBeenCalledWith({
+        where: { artistId: 'a1' },
+        data: { lineage: null },
+      });
+      expect(result.updatedTracks).toBe(12);
       expect(result.artist.lineage).toBeNull();
     });
 

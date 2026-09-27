@@ -883,9 +883,8 @@ export class MusicAdminCatalogService {
    * снятая запись, вернувшись в каталог, иначе вынесли бы старую линию.
    * Новые записи берут её сами (`trackLineageWithArtistDefault`).
    *
-   * `null` снимает линию только у исполнителя, записи не трогает: случайный
-   * выбор «Без линии» в списке не должен стирать разметку всего каталога
-   * исполнителя. Сделать записи «для всех» можно правкой записи.
+   * `null` («Без линии») снимает её и у исполнителя, и у всех его записей:
+   * так попросил заказчик в VED-566 — записи становятся «для всех».
    */
   async setArtistLineage(
     viewerIsAdmin: boolean,
@@ -909,14 +908,10 @@ export class MusicAdminCatalogService {
         data: { lineage },
         select: { id: true, name: true, lineage: true },
       });
-      const updatedTracks = lineage
-        ? (
-            await tx.musicTrack.updateMany({
-              where: { artistId: id },
-              data: { lineage },
-            })
-          ).count
-        : 0;
+      const { count: updatedTracks } = await tx.musicTrack.updateMany({
+        where: { artistId: id },
+        data: { lineage },
+      });
       return {
         artist: {
           id: artist.id,
