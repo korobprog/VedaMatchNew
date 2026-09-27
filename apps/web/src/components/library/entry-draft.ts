@@ -2,8 +2,8 @@ import type {
   CreateLibraryEntryRequest,
   LibraryEntryType,
   LibraryLocale,
-  LineageId,
 } from "@vedamatch/shared";
+import { lineageFromSelect } from "@/components/lineage-picker";
 import { t, type LibraryTextKey } from "./i18n";
 
 /**
@@ -148,7 +148,10 @@ export interface LibraryEntryDraft {
   categoryIds: string[];
   /** От имени какой общины. Пустая строка — от себя лично. */
   communityId: string;
-  /** Духовная линия материала. Пустая строка — для всех линий. */
+  /**
+   * Духовная линия материала — значение селекта: `"all"` (или пустая
+   * строка) — для всех линий, в запрос уходит `null`.
+   */
   lineage: string;
 }
 
@@ -311,7 +314,9 @@ export function buildCreateEntryBody(
     descriptionEn: draft.descriptionEn.trim() || null,
     categoryIds: draft.categoryIds,
     communityId: draft.communityId || null,
-    lineage: draft.lineage ? (draft.lineage as LineageId) : null,
+    // «Для всех линий» в селекте — `"all"`: серверу это не линия, и
+    // отправленное как есть оно возвращалось 400 unsupported_lineage.
+    lineage: lineageFromSelect(draft.lineage),
   };
 }
 
