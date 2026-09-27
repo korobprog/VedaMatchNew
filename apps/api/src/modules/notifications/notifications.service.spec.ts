@@ -491,7 +491,9 @@ describe('NotificationsService: колокольчик', () => {
    * VED-153: прочитанное оседает свежим кверху. Старое уведомление, открытое
    * только что, не должно всплывать над свежим, прочитанным давно.
    */
-  it('прочитанное идёт свежим сверху, а не по времени прочтения', async () => {
+  /* VED-405: «только что прочитанные уведомления должны уезжать в самый
+     верх ленты просмотренных» — прочитанное идёт по времени прочтения. */
+  it('только что прочитанное — наверху прочитанного', async () => {
     const { service, store } = createService();
     await service.addToInbox('user-1', { ...draft, title: 'Старое' });
     await service.addToInbox('user-1', { ...draft, title: 'Свежее' });
@@ -504,7 +506,7 @@ describe('NotificationsService: колокольчик', () => {
 
     const inbox = await service.listInbox('user-1');
 
-    expect(inbox.items.map((item) => item.title)).toEqual(['Свежее', 'Старое']);
+    expect(inbox.items.map((item) => item.title)).toEqual(['Старое', 'Свежее']);
   });
 
   it('непрочитанное стоит выше прочитанного, даже если прочитанное свежее', async () => {

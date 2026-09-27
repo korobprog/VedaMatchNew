@@ -84,6 +84,12 @@ export interface InboxCursor {
   readonly section: InboxSection;
   readonly createdAt: Date;
   readonly id: string;
+  /**
+   * Время прочтения последней строки — у потока прочитанного (VED-405: он
+   * идёт по времени прочтения). У курсоров, выданных до этой правки, его
+   * нет — такие продолжают по времени прихода.
+   */
+  readonly readAt?: Date;
 }
 
 /** Итог разбора курсора из запроса. `invalid` — не то же, что `none`:
@@ -103,6 +109,7 @@ export function encodeInboxCursor(cursor: InboxCursor): string {
     cursor.section,
     cursor.createdAt.toISOString(),
     cursor.id,
+    ...(cursor.readAt ? [cursor.readAt.toISOString()] : []),
   ].join(CURSOR_SEPARATOR);
   return Buffer.from(plain, 'utf8').toString('base64url');
 }
@@ -120,13 +127,17 @@ export function parseInboxCursor(raw: unknown): InboxCursorParse {
     return { kind: 'invalid' };
   }
   const parts = plain.split(CURSOR_SEPARATOR);
-  if (parts.length !== 3) return { kind: 'invalid' };
-  const [section, iso, id] = parts;
+  if (parts.length !== 3 && parts.length !== 4) return { kind: 'invalid' };
+  const [section, iso, id, readIso] = parts;
   if (section !== 'unread' && section !== 'read') return { kind: 'invalid' };
   if (id.length === 0) return { kind: 'invalid' };
   const createdAt = new Date(iso);
   if (Number.isNaN(createdAt.getTime())) return { kind: 'invalid' };
-  return { kind: 'cursor', cursor: { section, createdAt, id } };
+  if (readIso === undefined)
+    return { kind: 'cursor', cursor: { section, createdAt, id } };
+  const readAt = new Date(readIso);
+  if (Number.isNaN(readAt.getTime())) return { kind: 'invalid' };
+  return { kind: 'cursor', cursor: { section, createdAt, id, readAt } };
 }
 
 /** Сколько строк просить у базы, чтобы попутно узнать, есть ли продолжение. */
@@ -161,12 +172,22 @@ export interface InboxWhere {
 
 /** Keyset: строго дальше той строки, на которой остановились. */
 export function inboxKeysetClause(cursor: InboxCursor): object {
-  return {
-    OR: [
-      { createdAt: { lt: cursor.createdAt } },
-      { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-    ],
-  };
+  const byCreated = [
+    { createdAt: { lt: cursor.createdAt } },
+    { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+  ];
+  // Прочитанное — сначала по времени прочтения (VED-405), при равном (одна
+  // «Отметить все прочитанными») — по времени прихода.
+  if (cursor.section === 'read' && cursor.readAt) {
+    const readAt = cursor.readAt;
+    return {
+      OR: [
+        { readAt: { lt: readAt } },
+        ...byCreated.map((clause) => ({ readAt, ...clause })),
+      ],
+    };
+  }
+  return { OR: byCreated };
 }
 
 /**
@@ -201,6 +222,22 @@ export const INBOX_ORDER_BY = [
   { id: 'desc' as const },
 ];
 
+/**
+ * Прочитанное — по времени прочтения, свежее сверху (VED-405): «только что
+ * прочитанные уведомления должны уезжать в самый верх ленты просмотренных».
+ * По времени прихода старое, открытое сейчас, проваливалось далеко вниз.
+ */
+export const INBOX_READ_ORDER_BY = [
+  { readAt: 'desc' as const },
+  { createdAt: 'desc' as const },
+  { id: 'desc' as const },
+];
+
+/** Порядок выборки потока. */
+export function inboxOrderBy(section: InboxSection) {
+  return section === 'read' ? INBOX_READ_ORDER_BY : INBOX_ORDER_BY;
+}
+
 /** Строка, из которой собирается курсор следующей страницы. */
 export interface InboxPageRow {
   id: string;
@@ -234,6 +271,7 @@ export function sliceInboxPage<T extends InboxPageRow>(
         ? encodeInboxCursor({
             section: last.readAt === null ? 'unread' : 'read',
             createdAt: last.createdAt,
+            ...(last.readAt ? { readAt: last.readAt } : {}),
             id: last.id,
           })
         : null,

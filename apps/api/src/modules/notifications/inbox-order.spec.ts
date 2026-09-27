@@ -23,7 +23,8 @@ describe('sortInboxRows', () => {
    * возраста. Старое уведомление открыли только что, свежее — давно; старый
    * `orderBy` по `readAt asc` поднял бы старое наверх.
    */
-  it('внутри прочитанного свежее сверху, а не то, что открыли раньше', () => {
+  // VED-405: только что прочитанное — наверху прочитанного.
+  it('внутри прочитанного сверху то, что прочитали последним', () => {
     const oldPostReadNow = {
       createdAt: at('2026-09-01T08:00:00Z'),
       readAt: at('2026-09-20T18:00:00Z'),
@@ -32,9 +33,9 @@ describe('sortInboxRows', () => {
       createdAt: at('2026-09-19T08:00:00Z'),
       readAt: at('2026-09-19T08:05:00Z'),
     };
-    expect(sortInboxRows([oldPostReadNow, freshPostReadLongAgo])).toEqual([
-      freshPostReadLongAgo,
+    expect(sortInboxRows([freshPostReadLongAgo, oldPostReadNow])).toEqual([
       oldPostReadNow,
+      freshPostReadLongAgo,
     ]);
   });
 

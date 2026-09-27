@@ -29,7 +29,7 @@ import {
   inboxFetchSize,
   inboxSections,
   isPaginationRequested,
-  INBOX_ORDER_BY,
+  inboxOrderBy,
   LEGACY_INBOX_LIMIT,
   parseInboxCursor,
   sliceInboxPage,
@@ -550,7 +550,7 @@ export class NotificationsService {
       if (remaining <= 0) break;
       const chunk = await this.prisma.notificationItem.findMany({
         where: buildInboxWhere({ userId, section, cursor, searchClauses }),
-        orderBy: INBOX_ORDER_BY,
+        orderBy: inboxOrderBy(section),
         take: remaining,
         select: {
           id: true,
