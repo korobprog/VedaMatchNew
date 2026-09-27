@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
   Archive,
-  ArrowLeft,
   CalendarClock,
   Check,
   Clock,
@@ -66,6 +64,7 @@ import {
 } from "./column-collapse";
 import { WorkArchivePanel } from "./archive-panel";
 import { BoardHint } from "./board-hint";
+import { WorkBoardTitleRow } from "./board-title-row";
 import { WorkCommercialBar } from "./commercial-bar";
 import { WorkInvitePanel } from "./invite-panel";
 import { workPersonLabel, workPersonShortLabel } from "./person-label";
@@ -820,40 +819,26 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
     <div>
       {/* gap-2 и заголовок text-lg на телефоне (VED-421): в строку названия
           переехала кнопка «Пригласить», и на 360 точках «Все среды»,
-          название, префикс и кнопка должны встать в одну строку. */}
+          название и кнопка должны встать в одну строку; префикс оттуда
+          убран (VED-589). */}
       <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-3">
-        {/* «Назад» (VED-493, было «Все среды») — ступенью вверх, к списку
-            сред, а не шагом по истории браузера: из доски, куда пришли по
-            ссылке из уведомления или из окна задачи, человек обязан уйти
-            наверх, а не обратно в правку. Дальше вверх — «Работа», потом
-            главная портала. */}
-        <Link
-          href="/work/planner"
-          title="К списку рабочих сред"
-          className="flex items-center gap-1 text-sm text-text-1 hover:text-text-0"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Назад
-        </Link>
-        <h1 className="font-display text-lg font-bold text-text-0 sm:text-2xl">
-          {space.name}
-        </h1>
-        <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
-          {space.prefix}
-        </span>
         {/* «Оплата» — в строке названия, у правого края (VED-563): в конце
-            ряда вида она на телефоне уезжала отдельной строкой. */}
-        {!board.commercial && (
-          <div className="ml-auto">
-            <WorkCommercialBar
-              board={board}
-              canManageBoard={Boolean(canManage)}
-              personal={space.isPersonal}
-              onChanged={setBoard}
-              buttonClassName={workToolbarButtonClass()}
-            />
-          </div>
-        )}
+            ряда вида она на телефоне уезжала отдельной строкой. Название
+            посередине строки, без префикса (VED-589). */}
+        <WorkBoardTitleRow
+          name={space.name}
+          end={
+            !board.commercial && (
+              <WorkCommercialBar
+                board={board}
+                canManageBoard={Boolean(canManage)}
+                personal={space.isPersonal}
+                onChanged={setBoard}
+                buttonClassName={workToolbarButtonClass()}
+              />
+            )
+          }
+        />
         {/* Сводка коммерческой доски (VED-458) — полосой во всю ширину под
             названием. Кнопка «Оплата» у обычной доски стоит в ряду вида. */}
         {board.commercial && (
