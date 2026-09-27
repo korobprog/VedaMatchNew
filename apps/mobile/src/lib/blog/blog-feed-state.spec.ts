@@ -11,7 +11,6 @@ import {
   blogRepostLabel,
   blogRestLabel,
   blogSourceMetaLine,
-  blogTileTitle,
   countRepost,
   mergeBlogPages,
   prependBlogPost,
@@ -96,19 +95,6 @@ describe('что показывать', () => {
     expect(shownContent(repost)).toBe(source);
     const plain = blogPost('p');
     expect(shownContent(plain)).toBe(plain);
-  });
-
-  it('подпись плитки: заголовок, без него — начало текста, без текста — «Фотография»', () => {
-    expect(blogTileTitle(blogPost('a', { title: 'Киртан в субботу' }))).toBe('Киртан в субботу');
-    expect(blogTileTitle(blogPost('b', { title: null, text: 'Слова\n\nпоста' }))).toBe('Слова поста');
-    expect(blogTileTitle(blogPost('c', { title: null, text: '' }))).toBe('Фотография');
-    expect(blogTileTitle(repost)).toBe('Оригинал');
-  });
-
-  it('длинное начало текста обрезано многоточием', () => {
-    const title = blogTileTitle(blogPost('d', { title: null, text: 'а '.repeat(100) }));
-    expect(title.length).toBeLessThanOrEqual(60);
-    expect(title.endsWith('…')).toBe(true);
   });
 
   it('в строке автора — отображаемое имя из ответа сервера, а не что-то своё', () => {

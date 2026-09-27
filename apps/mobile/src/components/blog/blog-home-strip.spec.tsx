@@ -84,6 +84,25 @@ describe('полоса блог-ленты в «Чатах»', () => {
     expect(pressable(renderer, 'Скрыть').props.accessibilityHint).toContain('«Настройках»');
   });
 
+  it('пост с одним роликом — обложка ролика, а не слова в рамке, как на главной сайта', async () => {
+    const video = {
+      id: 'm1',
+      url: 'https://cdn/v.mp4',
+      width: 720,
+      height: 1280,
+      kind: 'video' as const,
+      posterUrl: 'https://cdn/v.webp',
+      durationSec: 12,
+    };
+    mockHome.mockResolvedValue({ posts: [blogPost('v', { title: 'Киртан', text: 'Слова', images: [], media: [video] })], total: 1 });
+    const renderer = await render();
+    const covers = renderer.root.findAll((node) => node.props?.source?.uri === 'https://cdn/v.webp');
+    expect(covers.length).toBeGreaterThan(0);
+    expect(pressable(renderer, 'Киртан, ролик. Маму Тхакур дас. Открыть пост')).toBeTruthy();
+    // Слова поста — в развороте, на плитке их нет: картинка есть.
+    expect(screenText(renderer)).not.toContain('Слова');
+  });
+
   it('сервис упал — полоса молча уходит, переписке она не мешает', async () => {
     mockHome.mockRejectedValue(new Error('502'));
     const renderer = await render();
