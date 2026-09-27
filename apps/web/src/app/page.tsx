@@ -12,6 +12,7 @@ import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
 import { FeaturedServices } from "@/components/featured-services";
 import { FeaturedServicesEditor } from "@/components/featured-services-editor";
+import { StageScopeToggle } from "@/components/stage-scope-toggle";
 import {
   HOME_FEATURED_COOKIE,
   homeFeaturedOptions,
@@ -405,14 +406,23 @@ export default async function Home({
             </>
           }
           toolbarEnd={
-            <FeaturedServicesEditor
-              userId={user.id}
-              current={featured.map((item) => item.key)}
-              options={featuredOptions.map(({ key, name }) => ({
-                key,
-                name,
-              }))}
-            />
+            <>
+              {/* «Моя ступень / Все ступени» (VED-575) — первой в правой
+                  группе, перед «Кнопками»: открывает в Образовании и
+                  Медиатеке материалы других ступеней самоидентификации. */}
+              <StageScopeToggle
+                stage={user.spiritualStage}
+                showAll={user.showAllStages ?? false}
+              />
+              <FeaturedServicesEditor
+                userId={user.id}
+                current={featured.map((item) => item.key)}
+                options={featuredOptions.map(({ key, name }) => ({
+                  key,
+                  name,
+                }))}
+              />
+            </>
           }
         />
         {/* Подвал главной, под сеткой: действия людей, которые открыли
