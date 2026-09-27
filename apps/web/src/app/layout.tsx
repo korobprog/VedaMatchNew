@@ -14,7 +14,8 @@ import { MiniPlayer } from "@/components/music/player/mini-player";
 import { MusicRadioBar } from "@/components/music/radio/radio-bar";
 import { MusicRadioProvider } from "@/components/music/radio/radio-provider";
 import { PortalWindowsTracker } from "@/components/quick/portal-windows-tracker";
-import { getPublicServices } from "@/lib/api";
+import { PortalCallProviders } from "@/components/chat/calls/portal-call-providers";
+import { getProfile, getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
 
@@ -110,6 +111,12 @@ export default async function RootLayout({
   // Названия сервисов приходят из каталога, а не из копирайта в коде:
   // так правка имени в админке доезжает и до лендинга, и до шапки.
   const services = (await getPublicServices()) ?? [];
+  // Кто вошёл — ради звонков (VED-231): провайдеру нужен id, а он должен
+  // стоять над всеми страницами, не только над группой (portal). getProfile
+  // под React.cache, так что страница и layout группы получают тот же ответ
+  // без второго запроса. Сбой API не должен ронять всякую страницу — тогда
+  // просто без звонков.
+  const me = hasSession ? await getProfile().catch(() => null) : null;
 
   return (
     <html
@@ -174,7 +181,12 @@ export default async function RootLayout({
                   {/* «Радио VM» (VED-437) — рядом с плеером и тоже на весь
                       портал: эфир переживает переход между разделами. */}
                   <MusicRadioProvider>
-                    {children}
+                    {/* Звонки (VED-231) — на всех страницах вошедшего: окно
+                        «Входящий звонок» и рингтон не должны зависеть от
+                        того, в какой группе маршрутов лежит страница. */}
+                    <PortalCallProviders userId={me?.id}>
+                      {children}
+                    </PortalCallProviders>
                     <MiniPlayer />
                     <MusicRadioBar />
                   </MusicRadioProvider>

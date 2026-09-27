@@ -5,8 +5,6 @@ import { requireUser } from "@/lib/require-user";
 import { InstallEnvironmentBeacon } from "@/components/pwa/install-environment-beacon";
 import { MusicOfflineIdentity } from "@/components/music/player/offline-identity";
 import { MusicEditorIdentity } from "@/components/music/player/editor-identity";
-import { ChatCallProvider } from "@/components/chat/calls/call-provider";
-import { GroupCallProvider } from "@/components/chat/calls/group/group-call-provider";
 
 /**
  * Приватные разделы портала: один guard и одна шапка на всех вместо
@@ -36,16 +34,10 @@ export default async function PortalLayout({
           видна только редакции Музыки — права тоже известны только
           здесь. */}
       <MusicEditorIdentity canEdit={canEditMusic} />
-      {/* Звонки — поверх любого раздела: входящий должен догнать человека
-          и в Мотивации, и на Рынке, а не только в открытой беседе. */}
-      {/* Групповой звонок — отдельным провайдером рядом, а не веткой
-          внутри: у комнаты своё состояние и до шести соединений, и
-          мешать его с «один звонок, две роли» значит ломать работающее.
-          Плашка «идёт звонок» тоже должна находить человека в любом
-          разделе, поэтому он здесь, а не в беседе. */}
-      <ChatCallProvider userId={user.id}>
-        <GroupCallProvider userId={user.id}>{children}</GroupCallProvider>
-      </ChatCallProvider>
+      {/* Звонки (ChatCallProvider и групповой) — в корневом layout
+          (VED-231): входящий должен догнать человека и на страницах вне
+          этой группы. Второй провайдер здесь дал бы двойной рингтон. */}
+      {children}
     </div>
   );
 }
