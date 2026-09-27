@@ -6,6 +6,7 @@ import {
   headerEntriesCount,
   flattenTree,
   forbiddenTargets,
+  initialSelectedCategories,
   insertIntoTree,
   isNoopMove,
   projectDrop,
@@ -325,5 +326,23 @@ describe("headerEntriesCount (VED-396)", () => {
     expect(headerEntriesCount(leaf, { active: true, feedTotal: null })).toBe(
       leaf,
     );
+  });
+});
+
+describe("initialSelectedCategories (VED-192)", () => {
+  it("отмечает рубрику, со страницы которой пришли, на любой глубине", () => {
+    expect(
+      initialSelectedCategories(tree(), "lectures").map((item) => item.id),
+    ).toEqual(["lectures"]);
+    expect(
+      initialSelectedCategories(tree(), "music").map((item) => item.id),
+    ).toEqual(["music"]);
+  });
+
+  it("без рубрики или с неизвестной — ничего не отмечено", () => {
+    expect(initialSelectedCategories(tree(), undefined)).toEqual([]);
+    expect(initialSelectedCategories(tree(), "")).toEqual([]);
+    expect(initialSelectedCategories(tree(), "  ")).toEqual([]);
+    expect(initialSelectedCategories(tree(), "deleted")).toEqual([]);
   });
 });

@@ -20,7 +20,11 @@ import { uploadEntryCover } from "./cover-upload";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
 import { suggestedEntryLineage } from "./author-lineage";
-import { insertIntoTree, renameInTree } from "./category-tree";
+import {
+  initialSelectedCategories,
+  insertIntoTree,
+  renameInTree,
+} from "./category-tree";
 import { entryTypeLabel, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
 import {
@@ -61,7 +65,10 @@ export function AddEntryForm({
 }: {
   locale: LibraryLocale;
   tree: LibraryCategoryTreeNode[];
-  /** Рубрика, с которой пришли: её и предлагаем родителем для новой. */
+  /**
+   * Рубрика, с которой пришли: она сразу отмечена, и её же предлагаем
+   * родителем для новой.
+   */
   initialCategorySlug?: string;
   canCreateRoot?: boolean;
   /** Линия автора, если он преданный, иначе ISKCON — см. defaultLineageFor. */
@@ -90,7 +97,10 @@ export function AddEntryForm({
   const [descriptionRu, setDescriptionRu] = useState("");
   const [descriptionEn, setDescriptionEn] = useState("");
   const [categories, setCategories] = useState(tree);
-  const [selected, setSelected] = useState<LibraryCategoryDto[]>([]);
+  // Пришли со страницы рубрики — она уже отмечена (VED-192).
+  const [selected, setSelected] = useState<LibraryCategoryDto[]>(() =>
+    initialSelectedCategories(tree, initialCategorySlug),
+  );
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);

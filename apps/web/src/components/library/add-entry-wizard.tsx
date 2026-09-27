@@ -19,7 +19,11 @@ import { uploadEntryCover } from "./cover-upload";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
 import { suggestedEntryLineage } from "./author-lineage";
-import { insertIntoTree, renameInTree } from "./category-tree";
+import {
+  initialSelectedCategories,
+  insertIntoTree,
+  renameInTree,
+} from "./category-tree";
 import { SectionRequestForm } from "./section-request-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
 import { apiFetch } from "@/lib/http-client";
@@ -87,7 +91,13 @@ export function AddEntryWizard({
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [categories, setCategories] = useState(tree);
-  const [selected, setSelected] = useState<LibraryCategoryDto[]>([]);
+  // Пришли со страницы рубрики — она уже отмечена (VED-192), и линия
+  // черновика сразу следует за ней, как при ручном выборе.
+  const [initialSelected] = useState(() =>
+    initialSelectedCategories(tree, initialCategorySlug),
+  );
+  const [selected, setSelected] =
+    useState<LibraryCategoryDto[]>(initialSelected);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
@@ -112,9 +122,13 @@ export function AddEntryWizard({
     titleEn: "",
     descriptionRu: "",
     descriptionEn: "",
-    categoryIds: [],
+    categoryIds: initialSelected.map((item) => item.id),
     communityId: "",
-    lineage: defaultLineage,
+    lineage: suggestedEntryLineage(
+      tree,
+      initialSelected.map((item) => item.id),
+      defaultLineage,
+    ),
   });
 
   function patch(next: Partial<LibraryEntryDraft>) {
