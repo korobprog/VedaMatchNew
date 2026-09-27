@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Prisma } from '@prisma/client';
 import type {
   AdminAuditEvent,
+  ApplyLibraryAuthorLineageResponse,
   LibraryAdminCategoryDto,
   LibraryAdminDuplicateGroup,
   LibraryAdminEntryDto,
@@ -14,9 +15,16 @@ import type {
   LibraryAdminEntryQuery,
   LibraryAdminStats,
   LibraryCategoryAncestor,
+  LineageId,
   MergeLibraryCategoryRequest,
 } from '@vedamatch/shared';
+import { lineageLabel, toLineageId } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  authorEntriesWhere,
+  authorSubtreeWhere,
+  parseLineageInput,
+} from './author-lineage';
 import { buildEntryWhere, groupDuplicates } from './library-admin-query';
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -243,6 +251,114 @@ export class LibraryAdminService {
       select: categorySelect,
     });
     return toCategoryDto(row, await this.ancestorsFor([row]));
+  }
+
+  // ---------- Линия автора (VED-548) и материала (VED-561) ----------
+
+  /**
+   * Линия автора. Только запоминается у рубрики: новые материалы её и её
+   * подрубрик получают линию по умолчанию. Уже выложенные не трогаются —
+   * для них отдельное явное действие `applyAuthorLineage`.
+   */
+  async setCategoryLineage(
+    id: string,
+    body: unknown,
+  ): Promise<{ id: string; lineage: LineageId | null }> {
+    const lineage = parseLineageInput(body);
+    if (lineage === undefined) {
+      throw new BadRequestException('Неизвестная духовная линия');
+    }
+    const category = await this.prisma.libraryCategory.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!category || category.status !== 'active') {
+      throw new NotFoundException('Категория не найдена');
+    }
+    const row = await this.prisma.libraryCategory.update({
+      where: { id },
+      data: { lineage },
+      select: { id: true, lineage: true },
+    });
+    return { id: row.id, lineage: toLineageId(row.lineage) };
+  }
+
+  /**
+   * «Применить ко всем материалам автора»: линия рубрики проставляется
+   * каждому материалу её поддерева. Явное действие с подтверждением в
+   * интерфейсе — оно перезаписывает линию, которую мог выбрать сам автор
+   * материала, поэтому пишется в журнал админки.
+   */
+  async applyAuthorLineage(
+    adminId: string,
+    id: string,
+  ): Promise<ApplyLibraryAuthorLineageResponse> {
+    const category = await this.prisma.libraryCategory.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        lineage: true,
+        titleRu: true,
+        slug: true,
+      },
+    });
+    if (!category || category.status !== 'active') {
+      throw new NotFoundException('Категория не найдена');
+    }
+    const lineage = toLineageId(category.lineage);
+    if (!lineage) {
+      throw new BadRequestException('У автора не выбрана линия');
+    }
+
+    const subtree = await this.prisma.libraryCategory.findMany({
+      where: authorSubtreeWhere(id),
+      select: { id: true },
+    });
+    const { count } = await this.prisma.libraryEntry.updateMany({
+      where: authorEntriesWhere(
+        subtree.map((row) => row.id),
+        lineage,
+      ),
+      data: { lineage },
+    });
+
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: 'library.author-lineage-applied',
+      targetType: 'platform',
+      targetId: id,
+      details: {
+        author: category.titleRu ?? category.slug,
+        lineage: lineageLabel(lineage) ?? lineage,
+        updated: count,
+      },
+    };
+    this.events.emit('admin.action', event);
+
+    return { lineage, updated: count };
+  }
+
+  /** Линия одного материала — кнопка «Линия» на карточке (VED-561). */
+  async setEntryLineage(
+    id: string,
+    body: unknown,
+  ): Promise<{ id: string; lineage: LineageId | null }> {
+    const lineage = parseLineageInput(body);
+    if (lineage === undefined) {
+      throw new BadRequestException('Неизвестная духовная линия');
+    }
+    const existing = await this.prisma.libraryEntry.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Запись не найдена');
+    const row = await this.prisma.libraryEntry.update({
+      where: { id },
+      data: { lineage },
+      select: { id: true, lineage: true },
+    });
+    return { id: row.id, lineage: toLineageId(row.lineage) };
   }
 
   async listEntries(

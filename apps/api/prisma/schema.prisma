@@ -1912,6 +1912,11 @@ model LibraryCategory {
   followersCount   Int                   @default(0)
   openReportsCount Int                   @default(0)
   needsReview      Boolean               @default(false)
+  /// Линия автора (`LINEAGES`, VED-548): у рубрики-автора — ISKCON, матх или
+  /// паривар. Новые материалы рубрики и её подрубрик получают её по
+  /// умолчанию (`authorLineageFor`). `null` — не задана. Строка, а не enum:
+  /// справочник пополняется без миграции.
+  lineage          String?
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 

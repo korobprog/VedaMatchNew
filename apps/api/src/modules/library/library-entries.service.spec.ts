@@ -1748,6 +1748,80 @@ describe('LibraryEntriesService — духовная линия', () => {
     expect(create.data.lineage).toBe('iskcon');
   });
 
+  it('линия автора-рубрики сильнее линии добавившего (VED-548)', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'nityananda_vamsha',
+    });
+    prisma.libraryCategory.findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'category-1',
+        parentId: null,
+        path: '',
+        lineage: 'sri_chaitanya_saraswat_math',
+      },
+    ]);
+    const { service } = build(prisma);
+
+    await service.create('user-1', validBody() as never);
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('sri_chaitanya_saraswat_math');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('подрубрика автора наследует его линию через путь (VED-548)', async () => {
+    const prisma = prismaMock();
+    prisma.libraryCategory.findMany = jest
+      .fn()
+      // Выбранная подрубрика «Лекции» без своей линии…
+      .mockResolvedValueOnce([
+        {
+          id: 'category-1',
+          parentId: 'author-1',
+          path: '.root-1.author-1.',
+          lineage: null,
+        },
+      ])
+      // …и её предки, дочитанные по пути.
+      .mockResolvedValueOnce([
+        { id: 'root-1', parentId: null, lineage: null },
+        { id: 'author-1', parentId: 'root-1', lineage: 'ipbys' },
+      ]);
+    const { service } = build(prisma);
+
+    await service.create('user-1', validBody() as never);
+
+    expect(prisma.libraryCategory.findMany).toHaveBeenNthCalledWith(2, {
+      where: { id: { in: ['root-1', 'author-1'] } },
+      select: { id: true, parentId: true, lineage: true },
+    });
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('ipbys');
+  });
+
+  it('явная линия из формы сильнее линии автора', async () => {
+    const prisma = prismaMock();
+    prisma.libraryCategory.findMany = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'category-1', parentId: null, path: '', lineage: 'ipbys' },
+      ]);
+    const { service } = build(prisma);
+
+    await service.create('user-1', validBody({ lineage: 'iskcon' }) as never);
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('iskcon');
+  });
+
   it('явный null — «для всех линий» — сохраняется как есть', async () => {
     const { service, prisma } = build();
 

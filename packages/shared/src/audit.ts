@@ -42,6 +42,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   'library.category-merged',
   'library.entry-removed',
   'library.entry-restored',
+  'library.author-lineage-applied',
   'contacts.tag-created',
   'contacts.tag-updated',
   'contacts.tag-deleted',

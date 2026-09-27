@@ -51,6 +51,7 @@ const ACTION_SERVICE: Record<AdminAuditAction, AdminServiceSlug | null> = {
   'library.category-merged': 'library',
   'library.entry-removed': 'library',
   'library.entry-restored': 'library',
+  'library.author-lineage-applied': 'library',
   'contacts.tag-created': 'chat',
   'contacts.tag-updated': 'chat',
   'contacts.tag-deleted': 'chat',

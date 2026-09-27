@@ -15,6 +15,7 @@ import { BookmarkButton } from "@/components/library/bookmark-button";
 import { CoverPicture } from "@/components/library/cover-picture";
 import { CoverViewer } from "@/components/library/cover-viewer";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
+import { EntryLineageButton } from "@/components/library/entry-lineage-button";
 import {
   ENTRY_ICON_BUTTON,
   EntryShareActions,
@@ -169,19 +170,27 @@ export default async function LibraryEntryPage({
               />
             }
             trailing={
-              <EntrySpeakButton
-                locale={locale}
-                entryId={entry.id}
-                text={buildSpokenEntry({
-                  title,
-                  description: pickLocalized(locale, {
-                    ru: entry.descriptionRu,
-                    en: entry.descriptionEn,
-                  }),
-                  body: entry.body,
-                })}
-                className={ENTRY_ICON_BUTTON}
-              />
+              <>
+                <EntrySpeakButton
+                  locale={locale}
+                  entryId={entry.id}
+                  text={buildSpokenEntry({
+                    title,
+                    description: pickLocalized(locale, {
+                      ru: entry.descriptionRu,
+                      en: entry.descriptionEn,
+                    }),
+                    body: entry.body,
+                  })}
+                  className={ENTRY_ICON_BUTTON}
+                />
+                {/* «Линия» — только администратору Образования (VED-561). */}
+                <EntryLineageButton
+                  entryId={entry.id}
+                  lineage={entry.lineage}
+                  canSetLineage={entry.canSetLineage}
+                />
+              </>
             }
           />
         </div>

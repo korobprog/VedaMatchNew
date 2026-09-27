@@ -23,6 +23,7 @@ import type {
 } from '@vedamatch/shared';
 import {
   PORTAL_ACTIVITY_EVENTS,
+  authorLineageFor,
   defaultLineageFor,
   isLineageId,
   isLineagePreference,
@@ -243,6 +244,47 @@ export class LibraryEntriesService {
     if (!allowed) throw new ForbiddenException('community_not_allowed');
   }
 
+  /**
+   * Линия автора для выбранных рубрик (VED-548): у самой рубрики или у
+   * ближайшего предка. Предков дочитываем по материализованному пути одним
+   * запросом — их не больше двух на рубрику.
+   */
+  private async authorLineage(
+    categoryIds: string[],
+    selected: Array<{
+      id: string;
+      parentId?: string | null;
+      path?: string | null;
+      lineage?: string | null;
+    }>,
+  ): Promise<LineageId | null> {
+    const byId = new Map<
+      string,
+      { parentId: string | null; lineage?: string | null }
+    >();
+    for (const row of selected) {
+      byId.set(row.id, {
+        parentId: row.parentId ?? null,
+        lineage: row.lineage,
+      });
+    }
+    const missing = [
+      ...new Set(
+        selected.flatMap((row) => (row.path ?? '').split('.').filter(Boolean)),
+      ),
+    ].filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      const ancestors = await this.prisma.libraryCategory.findMany({
+        where: { id: { in: missing } },
+        select: { id: true, parentId: true, lineage: true },
+      });
+      for (const row of ancestors) {
+        byId.set(row.id, { parentId: row.parentId, lineage: row.lineage });
+      }
+    }
+    return authorLineageFor(categoryIds, (id) => byId.get(id));
+  }
+
   async create(
     userId: string,
     body: CreateLibraryEntryRequest,
@@ -327,7 +369,7 @@ export class LibraryEntriesService {
 
     const categories = await this.prisma.libraryCategory.findMany({
       where: { id: { in: categoryIds }, status: 'active' },
-      select: { id: true },
+      select: { id: true, parentId: true, path: true, lineage: true },
     });
     if (categories.length !== categoryIds.length) {
       throw new BadRequestException('category_not_found');
@@ -336,11 +378,13 @@ export class LibraryEntriesService {
     const communityId = body.communityId?.trim() || null;
     await this.assertCommunityRight(userId, communityId);
 
-    // Линия по умолчанию — автора, если он преданный, иначе ISKCON. Формы
+    // Линия по умолчанию — автора-рубрики, если администрация её задала
+    // (VED-548), затем добавившего, если он преданный, иначе ISKCON. Формы
     // предзаполняют то же самое, но старый клиент поля не шлёт вовсе.
     const lineage =
       body.lineage === undefined
-        ? defaultLineageFor(await this.lineageViewer(userId))
+        ? ((await this.authorLineage(categoryIds, categories)) ??
+          defaultLineageFor(await this.lineageViewer(userId)))
         : body.lineage;
     if (lineage !== null && !isLineageId(lineage)) {
       throw new BadRequestException('unsupported_lineage');
@@ -1120,6 +1164,7 @@ function toEntryDto(
     lineage: toLineageId(entry.lineage),
     canEdit:
       viewerIsAdmin || (Boolean(viewerId) && entry.addedBy?.id === viewerId),
+    canSetLineage: viewerIsAdmin,
     hasCustomPreview: entry.previewIsCustom,
     blogSharedAt: entry.blogSharedAt ? entry.blogSharedAt.toISOString() : null,
     // Только у шлоки: у остальных ключа нет вовсе, а не `null`.

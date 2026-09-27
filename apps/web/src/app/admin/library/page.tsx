@@ -1,4 +1,5 @@
 import { LibraryAdminTabs } from "@/components/library/admin/admin-tabs";
+import { LibraryAuthorLineageManager } from "@/components/library/admin/author-lineage-manager";
 import { LibraryDuplicateMerge } from "@/components/library/admin/duplicate-merge";
 import { LibraryTaxonomyManager } from "@/components/library/admin/taxonomy-manager";
 import { LibrarySectionRequests } from "@/components/library/admin/section-requests";
@@ -37,6 +38,8 @@ export default async function AdminLibraryPage() {
       )}
 
       <LibraryTaxonomyManager initialTree={tree ?? []} />
+
+      <LibraryAuthorLineageManager initialTree={tree ?? []} />
 
       <h2 className="mb-2 font-display text-lg font-semibold text-text-0">
         Заявки на рубрики верхнего уровня

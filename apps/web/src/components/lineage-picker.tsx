@@ -114,6 +114,7 @@ export function LineageSelect({
   id,
   className,
   compact = false,
+  ariaLabel,
 }: {
   /** `""`, `"all"` или идентификатор линии. */
   value: string;
@@ -137,11 +138,16 @@ export function LineageSelect({
    * всю строку.
    */
   compact?: boolean;
+  /**
+   * Имя поля для скринридера, когда видимой подписи нет: в списке из многих
+   * одинаковых полей «Духовная линия» не различить.
+   */
+  ariaLabel?: string;
 }) {
   const select = (
     <select
       id={id}
-      aria-label={label ? undefined : "Духовная линия"}
+      aria-label={label ? undefined : (ariaLabel ?? "Духовная линия")}
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}

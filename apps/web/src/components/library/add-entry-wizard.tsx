@@ -18,6 +18,7 @@ import { CoverField } from "./cover-field";
 import { uploadEntryCover } from "./cover-upload";
 import { LibraryCommunitySelect } from "./community-select";
 import { LineageSelect } from "@/components/lineage-picker";
+import { suggestedEntryLineage } from "./author-lineage";
 import { insertIntoTree, renameInTree } from "./category-tree";
 import { SectionRequestForm } from "./section-request-form";
 import { entryTypeLabel, pickLocalized, t, type LibraryTextKey } from "./i18n";
@@ -94,6 +95,11 @@ export function AddEntryWizard({
   const [requestOpen, setRequestOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  /**
+   * Линию выбирали руками. Пока нет — она следует за рубриками: у
+   * автора-рубрики своя (VED-548), иначе `defaultLineage`.
+   */
+  const [lineageTouched, setLineageTouched] = useState(false);
 
   const [draft, setDraft] = useState<LibraryEntryDraft>({
     url: "",
@@ -134,12 +140,28 @@ export function AddEntryWizard({
     patch({ locator });
   }
 
+  /** Новые рубрики черновика; линия за ними, пока её не выбрали руками. */
+  function patchCategories(
+    next: LibraryCategoryDto[],
+    tree: LibraryCategoryTreeNode[] = categories,
+  ) {
+    const categoryIds = next.map((item) => item.id);
+    patch(
+      lineageTouched
+        ? { categoryIds }
+        : {
+            categoryIds,
+            lineage: suggestedEntryLineage(tree, categoryIds, defaultLineage),
+          },
+    );
+  }
+
   function toggleCategory(category: LibraryCategoryDto) {
     setSelected((current) => {
       const next = current.some((item) => item.id === category.id)
         ? current.filter((item) => item.id !== category.id)
         : [...current, category];
-      patch({ categoryIds: next.map((item) => item.id) });
+      patchCategories(next);
       return next;
     });
   }
@@ -157,7 +179,9 @@ export function AddEntryWizard({
     setSelected((current) => {
       if (current.some((item) => item.id === category.id)) return current;
       const next = [...current, category];
-      patch({ categoryIds: next.map((item) => item.id) });
+      // Дерево в состоянии ещё старое: новая рубрика наследует линию
+      // автора-родителя, и искать её надо в дереве уже с ней.
+      patchCategories(next, insertIntoTree(categories, category));
       return next;
     });
     setNotice(t(locale, "add.categoryCreated"));
@@ -478,7 +502,10 @@ export function AddEntryWizard({
 
             <LineageSelect
               value={draft.lineage}
-              onChange={(lineage) => patch({ lineage })}
+              onChange={(lineage) => {
+                setLineageTouched(true);
+                patch({ lineage });
+              }}
               allLabel={t(locale, "add.lineageAll")}
               label={t(locale, "add.lineage")}
               hint={t(locale, "add.lineageHint")}

@@ -18,6 +18,7 @@ import type {
   MoveLibraryCategoryRequest,
   UpdateLibraryCategoryRequest,
 } from '@vedamatch/shared';
+import { toLineageId } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   buildCategorySlug,
@@ -61,6 +62,7 @@ type CategoryRow = TreeRow & {
   descriptionRu: string | null;
   descriptionEn: string | null;
   iconKey: string | null;
+  lineage: string | null;
   entriesCount: number;
   createdAt: Date;
   createdById: string | null;
@@ -81,6 +83,7 @@ const CATEGORY_SELECT = {
   descriptionRu: true,
   descriptionEn: true,
   iconKey: true,
+  lineage: true,
   entriesCount: true,
   createdAt: true,
   createdById: true,
@@ -643,5 +646,6 @@ function toCategoryDto(
         category.createdById === context.viewerId),
     canMove: context.viewerCanMove,
     canDelete: context.viewerIsAdmin,
+    lineage: toLineageId(category.lineage),
   };
 }
