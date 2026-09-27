@@ -214,6 +214,10 @@ function categoryRecord(overrides: Record<string, unknown> = {}) {
     entriesCount: 3,
     createdById: 'author-1',
     createdAt: new Date('2026-07-29T10:00:00.000Z'),
+    infoContacts: null,
+    infoBio: null,
+    infoResources: null,
+    infoSchedule: null,
     ...overrides,
   };
 }
@@ -281,6 +285,134 @@ describe('LibraryCategoriesService.update', () => {
     await expect(
       service.update('author-1', false, 'missing', { titleRu: 'x' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('LibraryCategoriesService.update — «Информация» (VED-553)', () => {
+  it('lets the author fill the sections, trimmed, with line breaks kept', async () => {
+    const prisma = updateMock();
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const result = await service.update('author-1', false, 'category-1', {
+      infoContacts: '  Тел. +7 900 000-00-00\r\nt.me/prabhu  ',
+      infoSchedule: 'Пн 19:00\nСр 19:00',
+    });
+
+    expect(prisma.libraryCategory.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          infoContacts: 'Тел. +7 900 000-00-00\nt.me/prabhu',
+          infoSchedule: 'Пн 19:00\nСр 19:00',
+        },
+      }),
+    );
+    expect(result).toMatchObject({
+      infoContacts: 'Тел. +7 900 000-00-00\nt.me/prabhu',
+      infoSchedule: 'Пн 19:00\nСр 19:00',
+    });
+  });
+
+  it('lets an admin fill someone else’s rubric', async () => {
+    const service = new LibraryCategoriesService(updateMock() as never);
+
+    await expect(
+      service.update('admin-1', true, 'category-1', { infoBio: 'Родился…' }),
+    ).resolves.toMatchObject({ infoBio: 'Родился…' });
+  });
+
+  it('refuses a member who may not rename the rubric', async () => {
+    const prisma = updateMock();
+    const service = new LibraryCategoriesService(prisma as never);
+
+    await expect(
+      service.update('other-user', false, 'category-1', { infoBio: 'x' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.libraryCategory.update).not.toHaveBeenCalled();
+  });
+
+  it('turns an empty section into null', async () => {
+    const prisma = updateMock(categoryRecord({ infoResources: 'старое' }));
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const result = await service.update('author-1', false, 'category-1', {
+      infoResources: '   ',
+      infoBio: '',
+    });
+
+    expect(prisma.libraryCategory.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { infoResources: null, infoBio: null },
+      }),
+    );
+    expect(result.infoResources).toBeNull();
+  });
+
+  it('leaves sections that were not sent alone', async () => {
+    const prisma = updateMock(categoryRecord({ infoBio: 'Биография' }));
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const result = await service.update('author-1', false, 'category-1', {
+      titleRu: 'Новое имя',
+    });
+
+    const [[call]] = prisma.libraryCategory.update.mock.calls as Array<
+      [{ data: Record<string, unknown> }]
+    >;
+    expect(Object.keys(call.data)).not.toContain('infoBio');
+    expect(result.infoBio).toBe('Биография');
+  });
+
+  it('rejects a section longer than 5000 characters and writes nothing', async () => {
+    const prisma = updateMock();
+    const service = new LibraryCategoriesService(prisma as never);
+
+    await expect(
+      service.update('author-1', false, 'category-1', {
+        infoBio: 'я'.repeat(5001),
+      }),
+    ).rejects.toThrow(new BadRequestException('info_too_long'));
+    expect(prisma.libraryCategory.update).not.toHaveBeenCalled();
+
+    await expect(
+      service.update('author-1', false, 'category-1', {
+        infoBio: 'я'.repeat(5000),
+      }),
+    ).resolves.toMatchObject({ infoBio: 'я'.repeat(5000) });
+  });
+});
+
+describe('LibraryCategoriesService.page — «Информация» (VED-553)', () => {
+  it('gives the children their info sections', async () => {
+    const prisma = prismaMock();
+    prisma.libraryCategory.findMany = jest.fn().mockResolvedValue([
+      categoryRecord({
+        id: 'root-1',
+        parentId: null,
+        path: '',
+        slug: 'preachers',
+      }),
+      categoryRecord({
+        id: 'author-a',
+        parentId: 'root-1',
+        path: '.root-1.',
+        slug: 'ari-mardan',
+        infoContacts: 'https://example.org',
+        infoBio: null,
+        infoResources: null,
+        infoSchedule: 'Пн 19:00',
+      }),
+    ]);
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const page = await service.page('preachers', 'viewer-1');
+
+    expect(page.children[0]).toMatchObject({
+      slug: 'ari-mardan',
+      infoContacts: 'https://example.org',
+      infoBio: null,
+      infoSchedule: 'Пн 19:00',
+      canEdit: false,
+    });
   });
 });
 

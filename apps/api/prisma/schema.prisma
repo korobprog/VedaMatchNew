@@ -1915,6 +1915,14 @@ model LibraryCategory {
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 
+  /// «Информация» об авторе-рубрике (VED-553): четыре раздела простым
+  /// текстом, без разметки, до 5000 символов каждый. Лимит держит сервис,
+  /// а не колонка: текст правят те же, кто правит название рубрики.
+  infoContacts  String?
+  infoBio       String?
+  infoResources String?
+  infoSchedule  String?
+
   entries LibraryEntryCategory[]
 
   @@index([parentId, position])

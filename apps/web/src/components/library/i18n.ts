@@ -322,6 +322,17 @@ const ui = {
     "nav.withDescendants": "Со вложенными",
     "nav.onlyHere": "Только здесь",
     "nav.breadcrumbRoot": "Все рубрики",
+    "info.open": "Информация",
+    "info.close": "Закрыть",
+    "info.contacts": "Контакты",
+    "info.bio": "Биография",
+    "info.resources": "Ресурсы",
+    "info.schedule": "Расписание",
+    "info.edit": "Изменить",
+    "info.empty":
+      "Здесь пока пусто. Нажмите «Изменить», чтобы добавить контакты, биографию, ресурсы или расписание.",
+    "info.tooLong": "Раздел длиннее 5000 символов — сократите его",
+    "info.failed": "Не удалось сохранить, попробуйте позже",
   },
   en: {
     "service.title": "Education",
@@ -638,6 +649,18 @@ const ui = {
     "nav.withDescendants": "Including nested",
     "nav.onlyHere": "Only here",
     "nav.breadcrumbRoot": "All categories",
+    "info.open": "Information",
+    "info.close": "Close",
+    "info.contacts": "Contacts",
+    "info.bio": "Biography",
+    "info.resources": "Resources",
+    "info.schedule": "Schedule",
+    "info.edit": "Edit",
+    "info.empty":
+      "Nothing here yet. Press “Edit” to add contacts, a biography, resources or a schedule.",
+    "info.tooLong":
+      "A section is longer than 5000 characters — please shorten it",
+    "info.failed": "Could not save, please try again later",
   },
 } as const;
 
