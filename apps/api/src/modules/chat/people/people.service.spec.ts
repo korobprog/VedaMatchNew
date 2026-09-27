@@ -475,6 +475,31 @@ describe('PeopleService', () => {
         }),
       );
     });
+
+    it('отдаёт последний визит и дату прихода на портал (VED-318, VED-319)', async () => {
+      prisma.contactsProfile.findUnique.mockResolvedValue(
+        profile({
+          user: owner({
+            lastSeenAt: new Date('2026-08-13T09:58:00.000Z'),
+            createdAt: new Date('2026-08-12T15:00:00.000Z'),
+          }),
+        }),
+      );
+
+      const card = await service.getCard('viewer', 'owner', now);
+
+      expect(card.lastSeenAt).toBe('2026-08-13T09:58:00.000Z');
+      expect(card.joinedAt).toBe('2026-08-12T15:00:00.000Z');
+    });
+
+    it('null, когда отметки визита нет', async () => {
+      prisma.contactsProfile.findUnique.mockResolvedValue(profile());
+
+      const card = await service.getCard('viewer', 'owner', now);
+
+      expect(card.lastSeenAt).toBeNull();
+      expect(card.joinedAt).toBeNull();
+    });
   });
 
   describe('upsertProfile', () => {

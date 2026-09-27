@@ -84,6 +84,9 @@ interface CardUser {
   spiritualStage: SpiritualStage | null;
   devoteeVerificationStatus: DevoteeVerificationStatus | null;
   photoVerifiedAt: Date | null;
+  /** Последний визит и дата прихода — «был в сети» и метка новичка. */
+  lastSeenAt?: Date | null;
+  createdAt?: Date | null;
   socialLinks?: unknown;
   messengers?: unknown;
 }
@@ -722,6 +725,10 @@ export class PeopleService {
       // Контакты приходят сюда уже решённым значением: null везде, кроме
       // карточки, открытой действующим раскрытием именно этому зрителю.
       contacts,
+      // Настройки «скрывать время визита» на портале нет: чат отдаёт ту же
+      // отметку любому собеседнику, справочник не раскрывает сверх него.
+      lastSeenAt: owner.lastSeenAt?.toISOString() ?? null,
+      joinedAt: owner.createdAt?.toISOString() ?? null,
     };
   }
 
