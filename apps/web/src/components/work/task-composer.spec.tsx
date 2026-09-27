@@ -121,4 +121,14 @@ describe("composerHasContent", () => {
       screen.queryByRole("button", { name: "Очистить заголовок" }),
     ).not.toBeInTheDocument();
   });
+
+  /* VED-376: кнопка выбора файлов — «Выбрать», без слова «файлы». */
+  it("кнопка выбора файлов подписана «Выбрать», поле названо подписью", () => {
+    setup();
+    expect(screen.getByText("Выбрать")).toBeInTheDocument();
+    expect(screen.getByLabelText("Скриншоты и файлы")).toHaveAttribute(
+      "type",
+      "file",
+    );
+  });
 });
