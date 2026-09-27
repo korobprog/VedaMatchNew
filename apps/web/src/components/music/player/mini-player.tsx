@@ -21,6 +21,7 @@ import {
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicMarqueeText } from "@/components/music/marquee-text";
+import { MusicShareTrackButton } from "@/components/music/share-track-button";
 import { MusicPositionSlider } from "@/components/music/player/position-slider";
 import { MusicPlayingBars } from "./playing-bars";
 import { useMusicPlayer } from "./player-provider";
@@ -1142,6 +1143,12 @@ export function MiniPlayer() {
               записи и четыре полосы. С `sm` — все четыре последними в
               правой колонке. */}
           <div className="contents">
+            {/* «Поделиться» записью (VED-281) — в первой строке, перед
+                «Свернуть»: место, отмеченное на скриншоте карточки. */}
+            <MusicShareTrackButton
+              track={current}
+              className="order-2 text-text-2 sm:order-none"
+            />
             <button
               type="button"
               aria-label="Свернуть плеер"
