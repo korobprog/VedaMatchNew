@@ -1,31 +1,48 @@
 "use client";
 
+import { useId, useState } from "react";
 import {
   LINEAGE_ALL,
+  LINEAGE_GROUP_LABELS,
+  LINEAGE_GROUPS,
   lineageOption,
-  lineagesByGroup,
+  lineagesOfGroup,
+  type LineageGroup,
   type LineageId,
 } from "@vedamatch/shared";
 import { fieldClassName } from "@/components/ui/input";
+import {
+  lineageDetailOptions,
+  lineageDetailPrompt,
+  lineageFirstStepPick,
+  lineageFirstStepValue,
+  lineageGroupHasDetail,
+  lineageGroupOptions,
+  lineageValueGroup,
+} from "@/lib/lineage-steps";
 
 /**
  * Выбор духовной линии. Портальный компонент: линия — поле `User`, и
  * спрашивают её в мастере приветствия, в анкете, в профиле и в настройках
  * Образования и Музыки. Список один, из `LINEAGES`; сервисы его не копируют.
  *
+ * Выбор в два шага (VED-568): сначала группа — ISKCON, Гаудия-матх,
+ * Паривары; у группы из нескольких линий следом появляется второй шаг —
+ * какой именно матх или паривар. ISKCON — одна линия, и надпись «ISKCON»
+ * в списке одна. Арифметика шагов — `lib/lineage-steps.ts`, её же зовут
+ * меню «Линия» и фильтр Образования.
+ *
  * Две формы одного вопроса:
- * - `LineageCards` — карточки по группам, для первого выбора: человек видит
- *   все варианты разом и понимает, что ISKCON, матхи и паривары — разные
- *   ветви одного древа;
- * - `LineageSelect` — плоский выпадающий список в том же порядке, для форм,
- *   где линия одно из десяти полей. Без `<optgroup>`: Android рисует
- *   заголовки групп отдельными строками, похожими на варианты, а названия
- *   линий («…Матх», «…-вамша», «…-паривара») и так говорят, чья это ветвь
- *   (VED-288).
+ * - `LineageCards` — карточки, для первого выбора: сначала три группы,
+ *   затем линии выбранной;
+ * - `LineageSelect` — выпадающий список группы и второй список линии, для
+ *   форм, где линия одно из десяти полей. Без `<optgroup>`: Android рисует
+ *   заголовки групп отдельными строками, похожими на варианты (VED-288).
  *
  * Значение — строка, чтобы `<select>` и радио были контролируемыми без
  * жонглирования `null`: `""` означает «не выбрано» либо «как в профиле» (что
- * именно — говорит подпись у пустого варианта), `"all"` — все линии.
+ * именно — говорит подпись у пустого варианта), `"all"` — все линии,
+ * `group:<группа>` — вся группа (только в фильтрах, `allowGroup`).
  */
 
 const NONE = "";
@@ -53,6 +70,24 @@ export function lineageToSelect(lineage: LineageId | null | undefined): string {
   return lineage ?? LINEAGE_ALL;
 }
 
+/**
+ * Группа, выбранная на первом шаге, пока не выбрана линия. Привязана к
+ * значению, при котором её выбрали: сменилось значение снаружи — черновик
+ * сам перестаёт действовать, без эффекта-сброса.
+ */
+function usePendingGroup(value: string) {
+  const [pending, setPending] = useState<{
+    group: LineageGroup;
+    forValue: string;
+  } | null>(null);
+  const group = pending && pending.forValue === value ? pending.group : null;
+  return [
+    group,
+    (next: LineageGroup | null) =>
+      setPending(next ? { group: next, forValue: value } : null),
+  ] as const;
+}
+
 export function LineageCards({
   value,
   onChange,
@@ -64,44 +99,88 @@ export function LineageCards({
   name?: string;
   disabled?: boolean;
 }) {
+  const [pending, setPending] = usePendingGroup(value);
+  const group = pending ?? lineageValueGroup(value);
+  const groupsId = useId();
+
+  const cardClass = (checked: boolean) =>
+    `cursor-pointer rounded-xl border px-4 py-2 text-sm transition ${
+      checked
+        ? "border-magenta bg-magenta/10 text-text-0"
+        : "border-glass-brd text-text-1 hover:text-text-0"
+    } ${disabled ? "opacity-60" : ""}`;
+
+  function pickGroup(picked: LineageGroup) {
+    const next = lineageFirstStepPick(picked, value, false);
+    if (!next) return setPending(null);
+    if ("pending" in next) return setPending(next.pending);
+    setPending(null);
+    onChange(next.value as LineageId);
+  }
+
   return (
     <div className="space-y-4">
-      {lineagesByGroup().map((group) => (
-        <fieldset key={group.group}>
+      <fieldset>
+        <legend className="sr-only">Духовная линия</legend>
+        <div className="flex flex-wrap gap-2">
+          {LINEAGE_GROUPS.map((option) => {
+            const checked = group === option;
+            const sole = lineagesOfGroup(option);
+            const hint = sole.length === 1 ? sole[0].hint : undefined;
+            return (
+              <label key={option} className={cardClass(checked)}>
+                <input
+                  type="radio"
+                  name={`${name}-group-${groupsId}`}
+                  value={option}
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => pickGroup(option)}
+                  className="sr-only"
+                />
+                {LINEAGE_GROUP_LABELS[option]}
+                {hint && (
+                  <span className="block text-xs text-text-2">{hint}</span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+      {group && lineageGroupHasDetail(group) && (
+        <fieldset>
           <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2">
-            {group.label}
+            {lineageDetailPrompt(group)}
           </legend>
           <div className="flex flex-wrap gap-2">
-            {group.items.map((item) => {
+            {lineagesOfGroup(group).map((item) => {
               const checked = value === item.id;
               return (
-                <label
-                  key={item.id}
-                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm transition ${
-                    checked
-                      ? "border-magenta bg-magenta/10 text-text-0"
-                      : "border-glass-brd text-text-1 hover:text-text-0"
-                  } ${disabled ? "opacity-60" : ""}`}
-                >
+                <label key={item.id} className={cardClass(checked)}>
                   <input
                     type="radio"
                     name={name}
                     value={item.id}
                     checked={checked}
                     disabled={disabled}
-                    onChange={() => onChange(item.id)}
+                    onChange={() => {
+                      setPending(null);
+                      onChange(item.id);
+                    }}
                     className="sr-only"
                   />
                   {item.label}
                   {item.hint && (
-                    <span className="block text-xs text-text-2">{item.hint}</span>
+                    <span className="block text-xs text-text-2">
+                      {item.hint}
+                    </span>
                   )}
                 </label>
               );
             })}
           </div>
         </fieldset>
-      ))}
+      )}
     </div>
   );
 }
@@ -118,8 +197,9 @@ export function LineageSelect({
   className,
   compact = false,
   ariaLabel,
+  allowGroup = false,
 }: {
-  /** `""`, `"all"` или идентификатор линии. */
+  /** `""`, `"all"`, идентификатор линии или (в фильтре) `group:<группа>`. */
   value: string;
   onChange: (value: string) => void;
   /**
@@ -146,38 +226,113 @@ export function LineageSelect({
    * одинаковых полей «Духовная линия» не различить.
    */
   ariaLabel?: string;
+  /**
+   * Фильтр, а не линия материала: группу можно выбрать целиком
+   * (`group:gaudiya_math`), второй шаг лишь уточняет её. Без флага значение
+   * всегда конкретная линия, и группа только открывает второй шаг.
+   */
+  allowGroup?: boolean;
 }) {
-  const select = (
+  const [pending, setPending] = usePendingGroup(value);
+  const first = lineageFirstStepValue(value, pending);
+  const group = pending ?? lineageValueGroup(value);
+  const fieldClass = className ?? fieldClassName;
+  const autoId = useId();
+  const selectId = id ?? autoId;
+  const name = label ? undefined : (ariaLabel ?? "Духовная линия");
+
+  function pickFirst(picked: string) {
+    const next = lineageFirstStepPick(picked, value, allowGroup);
+    if (!next) return setPending(null);
+    if ("pending" in next) return setPending(next.pending);
+    setPending(null);
+    onChange(next.value);
+  }
+
+  const groupSelect = (
     <select
-      id={id}
-      aria-label={label ? undefined : (ariaLabel ?? "Духовная линия")}
-      value={value}
+      id={selectId}
+      aria-label={name}
+      value={first}
       disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}
-      className={className ?? fieldClassName}
+      onChange={(event) => pickFirst(event.target.value)}
+      className={fieldClass}
     >
-      {emptyLabel !== undefined && <option value={NONE}>{emptyLabel}</option>}
+      {emptyLabel !== undefined ? (
+        <option value={NONE}>{emptyLabel}</option>
+      ) : (
+        first === NONE && (
+          <option value={NONE} disabled>
+            Выберите линию
+          </option>
+        )
+      )}
       {allLabel !== undefined && (
         <option value={LINEAGE_ALL}>{allLabel}</option>
       )}
-      {lineagesByGroup()
-        .flatMap((group) => group.items)
-        .map((item) => (
-          <option key={item.id} value={item.id}>
-            {compact ? item.shortLabel : item.label}
-            {!compact && item.hint ? ` — ${item.hint}` : ""}
-          </option>
-        ))}
+      {lineageGroupOptions(compact).map((option) => (
+        <option key={option.value} value={option.value} title={option.title}>
+          {option.label}
+        </option>
+      ))}
     </select>
   );
 
-  if (!label) return select;
+  // Второй шаг — только у группы из нескольких линий: какой именно матх или
+  // паривар. Пока линия не выбрана, значение поля прежнее — сохранить
+  // «просто Гаудия-матх» в материал нельзя, хранится конкретная линия.
+  const detailSelect =
+    group && lineageGroupHasDetail(group) ? (
+      <select
+        aria-label={
+          name
+            ? `${name}: ${lineageDetailPrompt(group).toLowerCase()}`
+            : lineageDetailPrompt(group)
+        }
+        aria-invalid={pending ? true : undefined}
+        value={pending ? NONE : value}
+        disabled={disabled}
+        onChange={(event) => {
+          setPending(null);
+          onChange(event.target.value);
+        }}
+        className={fieldClass}
+      >
+        {pending && (
+          <option value={NONE} disabled>
+            {lineageDetailPrompt(group)}…
+          </option>
+        )}
+        {lineageDetailOptions(group, { allowGroup, compact }).map((option) => (
+          <option key={option.value} value={option.value} title={option.title}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ) : null;
+
+  const steps = (
+    <span
+      className={
+        compact
+          ? "inline-flex max-w-full flex-wrap gap-1"
+          : "flex flex-col gap-2"
+      }
+    >
+      {groupSelect}
+      {detailSelect}
+    </span>
+  );
+
+  if (!label) return steps;
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs text-text-2">{label}</span>
-      {select}
+    <div className="block">
+      <label htmlFor={selectId} className="mb-1 block text-xs text-text-2">
+        {label}
+      </label>
+      {steps}
       {hint && <span className="mt-1 block text-xs text-text-2">{hint}</span>}
-    </label>
+    </div>
   );
 }
 

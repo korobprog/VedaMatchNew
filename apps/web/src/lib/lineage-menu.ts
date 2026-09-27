@@ -1,12 +1,21 @@
 import {
-  lineageOption,
-  lineagesByGroup,
+  LINEAGE_GROUP_LABELS,
+  LINEAGE_GROUPS,
+  lineageFilterLabel,
+  lineageGroupOf,
+  lineagesOfGroup,
+  type LineageGroup,
   type LineageId,
 } from "@vedamatch/shared";
 
 /**
  * Меню «Линия» у материала (VED-561): выбор ISKCON, матха, паривара или
  * «без линии». Логика отдельно от кнопки — её проверяют тесты без DOM.
+ *
+ * Устроено как выбор линии везде (VED-568): сначала группа, затем линия
+ * внутри неё. ISKCON — одна линия, поэтому пункт один, без заголовка
+ * группы над ним: раньше «ISKCON» стояло в меню дважды. Гаудия-матх и
+ * Паривары — раскрывающиеся пункты с линиями внутри.
  */
 
 /** Подпись варианта «без линии»: материал виден преданным всех линий. */
@@ -17,30 +26,40 @@ export interface LineageMenuOption {
   label: string;
 }
 
-export interface LineageMenuGroup {
-  /** Ключ для React и подпись группы; у «без линии» подписи нет. */
-  key: string;
-  label: string | null;
-  options: LineageMenuOption[];
-}
+export type LineageMenuItem =
+  | { kind: "choice"; option: LineageMenuOption }
+  | {
+      kind: "group";
+      group: LineageGroup;
+      label: string;
+      options: LineageMenuOption[];
+    };
 
 /** «Без линии» первым, затем ISKCON, Гаудия-матх и Паривары по справочнику. */
-export function lineageMenuGroups(): LineageMenuGroup[] {
+export function lineageMenuItems(): LineageMenuItem[] {
   return [
-    {
-      key: "none",
-      label: null,
-      options: [{ value: null, label: LINEAGE_MENU_NONE }],
-    },
-    ...lineagesByGroup().map((group) => ({
-      key: group.group,
-      label: group.label,
-      options: group.items.map((item) => ({
+    { kind: "choice", option: { value: null, label: LINEAGE_MENU_NONE } },
+    ...LINEAGE_GROUPS.map((group): LineageMenuItem => {
+      const options = lineagesOfGroup(group).map((item) => ({
         value: item.id,
         label: item.label,
-      })),
-    })),
+      }));
+      return options.length === 1
+        ? {
+            kind: "choice",
+            option: { ...options[0], label: LINEAGE_GROUP_LABELS[group] },
+          }
+        : { kind: "group", group, label: LINEAGE_GROUP_LABELS[group], options };
+    }),
   ];
+}
+
+/** Группа, раскрытая при открытии меню: та, где лежит текущая линия. */
+export function lineageMenuOpenGroup(
+  value: LineageId | null,
+): LineageGroup | null {
+  const group = lineageGroupOf(value);
+  return group && lineagesOfGroup(group).length > 1 ? group : null;
 }
 
 /**
@@ -48,6 +67,5 @@ export function lineageMenuGroups(): LineageMenuGroup[] {
  * сразу, чтобы не открывать меню ради «что стоит сейчас».
  */
 export function lineageButtonLabel(value: LineageId | null): string {
-  const option = lineageOption(value);
-  return `Линия: ${option ? option.label : "для всех линий"}`;
+  return `Линия: ${lineageFilterLabel(value) ?? "для всех линий"}`;
 }

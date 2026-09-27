@@ -74,8 +74,16 @@ describe("LibraryAuthorLineageManager", () => {
     })[1];
     expect((apply as HTMLButtonElement).disabled).toBe(true);
 
+    // Два шага (VED-568): группа сама ничего не сохраняет, матх — да.
     await userEvent.selectOptions(
       screen.getByLabelText("Линия автора: Ари Мардан Прабху"),
+      "gaudiya_math",
+    );
+    expect(setLibraryCategoryLineage).not.toHaveBeenCalled();
+    await userEvent.selectOptions(
+      screen.getByLabelText(
+        "Линия автора: Ари Мардан Прабху: какой именно матх",
+      ),
       "ipbys",
     );
 

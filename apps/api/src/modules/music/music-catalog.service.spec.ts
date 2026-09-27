@@ -80,6 +80,29 @@ describe('lineageCondition', () => {
       AND: [{ OR: [{ lineage: 'ipbys' }, { lineage: null }] }],
     });
   });
+
+  it('группа берёт любую свою линию и записи «для всех» (VED-568)', () => {
+    expect(lineageCondition('group:parivara')).toEqual({
+      AND: [
+        {
+          OR: [
+            {
+              lineage: {
+                in: [
+                  'nityananda_vamsha',
+                  'advaita_vamsha',
+                  'gadadhara_parivara',
+                  'narottama_parivara',
+                  'shyamananda_parivara',
+                ],
+              },
+            },
+            { lineage: null },
+          ],
+        },
+      ],
+    });
+  });
 });
 
 describe('MusicCatalogService — линия слушателя', () => {

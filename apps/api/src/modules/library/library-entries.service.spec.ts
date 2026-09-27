@@ -1694,6 +1694,31 @@ describe('LibraryEntriesService — духовная линия', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
+  it('lineage=group:parivara фильтрует по всей группе (VED-568)', async () => {
+    const { service, prisma } = build();
+
+    await service.feed({ lineage: 'group:parivara' });
+
+    expect(whereOf(prisma).AND).toEqual([
+      {
+        OR: [
+          {
+            lineage: {
+              in: [
+                'nityananda_vamsha',
+                'advaita_vamsha',
+                'gadadhara_parivara',
+                'narottama_parivara',
+                'shyamananda_parivara',
+              ],
+            },
+          },
+          { lineage: null },
+        ],
+      },
+    ]);
+  });
+
   it('незнакомую линию в запросе игнорирует, а не отдаёт пустую ленту', async () => {
     const { service, prisma } = build();
 
@@ -1735,6 +1760,20 @@ describe('LibraryEntriesService — духовная линия', () => {
       data: { lineage: string | null };
     };
     expect(create.data.lineage).toBe('nityananda_vamsha');
+  });
+
+  it('принимает линию Шри Гопинатх Гаудия-матха из справочника (VED-567)', async () => {
+    const { service, prisma } = build();
+
+    await service.create(
+      'user-1',
+      validBody({ lineage: 'sri_gopinath_gaudiya_math' }) as never,
+    );
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('sri_gopinath_gaudiya_math');
   });
 
   it('у автора без линии материал подписывается ISKCON', async () => {

@@ -204,12 +204,19 @@ describe("MusicReferenceList — линия исполнителя (VED-566)", (
     const select = screen.getByRole("combobox", {
       name: "Линия: Avantika devi dasi",
     });
-    await user.selectOptions(select, "sri_chaitanya_saraswat_math");
+    // Два шага (VED-568): группа, затем матх — сохраняется только он.
+    await user.selectOptions(select, "gaudiya_math");
+    expect(setMusicArtistLineage).not.toHaveBeenCalled();
+    const detail = screen.getByRole("combobox", {
+      name: "Линия: Avantika devi dasi: какой именно матх",
+    });
+    await user.selectOptions(detail, "sri_chaitanya_saraswat_math");
 
     expect(setMusicArtistLineage).toHaveBeenCalledWith("a1", {
       lineage: "sri_chaitanya_saraswat_math",
     });
-    expect(select).toHaveValue("sri_chaitanya_saraswat_math");
+    expect(select).toHaveValue("gaudiya_math");
+    expect(detail).toHaveValue("sri_chaitanya_saraswat_math");
     expect(await screen.findByRole("status")).toHaveTextContent(
       "проставлена записям исполнителя: 19",
     );
@@ -246,7 +253,13 @@ describe("MusicReferenceList — линия исполнителя (VED-566)", (
     const select = screen.getByRole("combobox", {
       name: "Линия: Avantika devi dasi",
     });
-    await user.selectOptions(select, "ipbys");
+    await user.selectOptions(select, "gaudiya_math");
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "Линия: Avantika devi dasi: какой именно матх",
+      }),
+      "ipbys",
+    );
 
     expect(
       await screen.findByText("Доступ только для администратора сервиса"),

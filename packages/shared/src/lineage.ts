@@ -50,6 +50,24 @@ export const LINEAGE_GROUP_LABELS: Record<LineageGroup, string> = {
   parivara: 'Паривары',
 };
 
+/** Порядок групп — порядок в списках выбора и в меню. */
+export const LINEAGE_GROUPS: readonly LineageGroup[] = [
+  'iskcon',
+  'gaudiya_math',
+  'parivara',
+];
+
+/**
+ * Как спросить конкретную линию внутри группы — подпись второго шага выбора
+ * (VED-568): сначала группа, затем, если в ней больше одной линии, какая
+ * именно.
+ */
+export const LINEAGE_GROUP_DETAIL_PROMPTS: Record<LineageGroup, string> = {
+  iskcon: 'Какая именно линия',
+  gaudiya_math: 'Какой именно матх',
+  parivara: 'Какой именно паривар',
+};
+
 /** Порядок групп и строк внутри них — это порядок в списках выбора. */
 export const LINEAGES: readonly LineageOption[] = [
   {
@@ -130,14 +148,27 @@ export const LINEAGE_IDS: readonly LineageId[] = LINEAGES.map((item) => item.id)
 export const DEFAULT_CONTENT_LINEAGE: LineageId = 'iskcon';
 
 /**
+ * Фильтр «вся группа» (VED-568): `group:gaudiya_math` — материалы любого
+ * Гаудия-матха. Хранится у материала всегда конкретная линия; группа бывает
+ * только в фильтре и в настройке сервиса.
+ */
+export type LineageGroupFilter = `group:${LineageGroup}`;
+
+/** Чем фильтровать выдачу: одна линия или группа целиком. */
+export type LineageFilterValue = LineageId | LineageGroupFilter;
+
+const GROUP_FILTER_PREFIX = 'group:';
+
+/**
  * Настройка сервиса поверх портального профиля.
  *
  * - `null` — как в профиле: линия из настроек при регистрации;
  * - идентификатор — смотреть эту линию в данном сервисе, что бы ни было в
  *   профиле (преданный ISKCON слушает бхаджаны Сарасват Матха);
+ * - `group:<группа>` — смотреть всю группу: любой Гаудия-матх, любой паривар;
  * - `'all'` — не фильтровать вовсе.
  */
-export type LineagePreference = LineageId | 'all' | null;
+export type LineagePreference = LineageFilterValue | 'all' | null;
 
 export const LINEAGE_ALL = 'all' as const;
 
@@ -158,7 +189,94 @@ export function toLineagePreference(value: unknown): LineagePreference {
 }
 
 export function isLineagePreference(value: unknown): value is LineagePreference {
-  return value === null || value === LINEAGE_ALL || isLineageId(value);
+  return value === null || value === LINEAGE_ALL || isLineageFilterValue(value);
+}
+
+export function isLineageGroup(value: unknown): value is LineageGroup {
+  return (
+    typeof value === 'string' &&
+    (LINEAGE_GROUPS as readonly string[]).includes(value)
+  );
+}
+
+/** Значение фильтра для всей группы: `group:gaudiya_math`. */
+export function lineageGroupFilter(group: LineageGroup): LineageGroupFilter {
+  return `${GROUP_FILTER_PREFIX}${group}`;
+}
+
+/** Группа из `group:<группа>`; для всего остального — `null`. */
+export function lineageGroupFromFilter(value: unknown): LineageGroup | null {
+  if (typeof value !== 'string' || !value.startsWith(GROUP_FILTER_PREFIX)) {
+    return null;
+  }
+  const group = value.slice(GROUP_FILTER_PREFIX.length);
+  return isLineageGroup(group) ? group : null;
+}
+
+export function isLineageFilterValue(value: unknown): value is LineageFilterValue {
+  return isLineageId(value) || lineageGroupFromFilter(value) !== null;
+}
+
+/**
+ * Какие линии пропускает фильтр: одну, все линии группы или `null`, если
+ * значение не фильтр (пусто, `'all'`, мусор). Каждый сервис строит свой
+ * `where` из этого списка — сам разбор общий.
+ */
+export function lineageFilterIds(value: unknown): LineageId[] | null {
+  if (isLineageId(value)) return [value];
+  const group = lineageGroupFromFilter(value);
+  return group ? lineagesOfGroup(group).map((item) => item.id) : null;
+}
+
+/** Группа линии или `null`, если линии нет либо она не из справочника. */
+export function lineageGroupOf(id: string | null | undefined): LineageGroup | null {
+  return lineageOption(id)?.group ?? null;
+}
+
+/** Линии группы в порядке справочника. */
+export function lineagesOfGroup(group: LineageGroup): LineageOption[] {
+  return LINEAGES.filter((item) => item.group === group);
+}
+
+/**
+ * Единственная линия группы (ISKCON) или `null`, если в группе их несколько.
+ * Такой группе второй шаг выбора не нужен: выбрать группу и есть выбрать
+ * линию, и надпись «ISKCON» не повторяется дважды (VED-568).
+ */
+export function soleLineageOfGroup(group: LineageGroup): LineageId | null {
+  const items = lineagesOfGroup(group);
+  return items.length === 1 ? items[0].id : null;
+}
+
+/**
+ * Метка линии на карточках (VED-568): везде видна только группа — «ISKCON»,
+ * «Гаудия-матх», «Паривары», а какой именно матх или паривар, раскрывается
+ * по нажатию. `detail` — `null`, когда раскрывать нечего (в группе одна
+ * линия).
+ */
+export function lineageBadge(
+  id: string | null | undefined,
+): { group: LineageGroup; label: string; detail: string | null } | null {
+  const option = lineageOption(id);
+  if (!option) return null;
+  return {
+    group: option.group,
+    label: LINEAGE_GROUP_LABELS[option.group],
+    detail: soleLineageOfGroup(option.group) ? null : option.label,
+  };
+}
+
+/**
+ * Подпись фильтра: «Гаудия-матх» для всей группы, «Гаудия-матх — Шри
+ * Чайтанья Сарасват Матх» для одной линии, «ISKCON» для группы из одной
+ * линии. `null` — фильтра нет.
+ */
+export function lineageFilterLabel(value: unknown): string | null {
+  const group = lineageGroupFromFilter(value);
+  if (group) return LINEAGE_GROUP_LABELS[group];
+  const badge = lineageBadge(typeof value === 'string' ? value : null);
+  if (!badge) return null;
+  return badge.detail ? `${badge.label} — ${badge.detail}` : badge.label;
 }
 
 export function lineageOption(id: string | null | undefined): LineageOption | null {
@@ -171,17 +289,16 @@ export function lineageLabel(id: string | null | undefined): string | null {
   return lineageOption(id)?.label ?? null;
 }
 
-/** Строки одной группы — для `<optgroup>` и раскладки карточек выбора. */
+/** Строки по группам — для раскладки выбора и меню по группам. */
 export function lineagesByGroup(): Array<{
   group: LineageGroup;
   label: string;
   items: LineageOption[];
 }> {
-  const groups: LineageGroup[] = ['iskcon', 'gaudiya_math', 'parivara'];
-  return groups.map((group) => ({
+  return LINEAGE_GROUPS.map((group) => ({
     group,
     label: LINEAGE_GROUP_LABELS[group],
-    items: LINEAGES.filter((item) => item.group === group),
+    items: lineagesOfGroup(group),
   }));
 }
 
@@ -202,7 +319,9 @@ export function isDevotee(viewer: LineageViewer | null | undefined): boolean {
 }
 
 /**
- * Какую линию показывать в сервисе. `null` — не фильтровать.
+ * Какую линию показывать в сервисе: одну линию, группу целиком
+ * (`group:<группа>`) или `null` — не фильтровать. Список линий под
+ * фильтром — `lineageFilterIds`.
  *
  * Одна функция на все сервисы и на веб: Образование и Музыка обязаны отвечать
  * на вопрос «что я вижу» одинаково, а страница — рисовать ту же подпись, что
@@ -215,7 +334,7 @@ export function isDevotee(viewer: LineageViewer | null | undefined): boolean {
 export function resolveContentLineage(
   viewer: LineageViewer | null | undefined,
   preference: LineagePreference,
-): LineageId | null {
+): LineageFilterValue | null {
   if (preference === LINEAGE_ALL) return null;
   if (preference) return preference;
   if (!isDevotee(viewer)) return null;

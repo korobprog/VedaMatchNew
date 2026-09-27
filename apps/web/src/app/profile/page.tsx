@@ -1,9 +1,5 @@
 ﻿import Link from "next/link";
-import {
-  lineageLabel,
-  type PricingPlan,
-  type SubscriptionState,
-} from "@vedamatch/shared";
+import { type PricingPlan, type SubscriptionState } from "@vedamatch/shared";
 import { redirectToLogin } from "@/lib/require-user";
 import { getBillingPlan, getProfile } from "@/lib/api";
 import { getRewardsMe } from "@/lib/rewards-api";
@@ -11,6 +7,7 @@ import { PLAN as DEFAULT_PLAN } from "@/lib/plan";
 import { formatDate, subscriptionStatusLabels } from "@/lib/support-labels";
 import { Header } from "@/components/header";
 import { ProfileEditor } from "@/components/profile-editor";
+import { LineageBadge } from "@/components/lineage-badge";
 import { TimeZoneField } from "@/components/time-zone-field";
 import { CommunityPicker } from "@/components/communities/community-picker";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -110,8 +107,8 @@ export default async function ProfilePage() {
             {user.spiritualStage === "devotee" && (
               <div className="flex justify-between gap-4">
                 <dt className="text-text-2">Духовная линия</dt>
-                <dd className="font-medium text-text-0">
-                  {lineageLabel(user.lineage) ?? "Не указана"}
+                <dd className="text-right font-medium text-text-0">
+                  <LineageBadge lineage={user.lineage} fallback="Не указана" />
                 </dd>
               </div>
             )}

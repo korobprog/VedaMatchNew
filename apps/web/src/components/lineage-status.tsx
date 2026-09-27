@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { lineageLabel, type LineageId } from "@vedamatch/shared";
+import { lineageFilterLabel, type LineageFilterValue } from "@vedamatch/shared";
 
 /**
  * Строка «что мне сейчас показывают»: линия, по которой отфильтрована
@@ -15,14 +15,18 @@ export function LineageStatus({
   allHref,
   className = "",
 }: {
-  /** `null` — фильтра нет; строка тогда не рисуется. */
-  lineage: LineageId | null;
+  /**
+   * Линия или вся группа (`group:<группа>`, VED-568); `null` — фильтра нет,
+   * строка тогда не рисуется.
+   */
+  lineage: LineageFilterValue | null;
   settingsHref: string;
   /** Ссылка «показать всё» на один просмотр, без смены настройки. */
   allHref?: string;
   className?: string;
 }) {
-  const label = lineageLabel(lineage);
+  // «Гаудия-матх» для группы, «Гаудия-матх — IPBYS» для одной линии.
+  const label = lineageFilterLabel(lineage);
   if (!label) return null;
   return (
     <p className={`text-xs text-text-2 ${className}`}>

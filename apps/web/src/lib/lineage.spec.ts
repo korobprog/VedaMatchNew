@@ -7,8 +7,15 @@ import {
   isLineageId,
   isLineagePreference,
   lineageLabel,
+  lineageBadge,
+  lineageFilterIds,
+  lineageFilterLabel,
+  lineageGroupFromFilter,
+  lineageGroupOf,
   lineagesByGroup,
+  lineagesOfGroup,
   needsLineageChoice,
+  soleLineageOfGroup,
   resolveContentLineage,
   toLineageId,
   toLineagePreference,
@@ -35,6 +42,19 @@ describe("справочник линий", () => {
     expect(LINEAGES[0].id).toBe(DEFAULT_CONTENT_LINEAGE);
   });
 
+  it("Шри Гопинатх Гаудия-матх — в группе Гаудия-матх (VED-567)", () => {
+    const gaudiya = lineagesByGroup().find((g) => g.group === "gaudiya_math");
+    const gopinath = gaudiya?.items.find(
+      (item) => item.id === "sri_gopinath_gaudiya_math",
+    );
+    expect(gopinath).toMatchObject({
+      label: "Шри Гопинатх Гаудия Матх",
+      shortLabel: "Шри Гопинатх Гаудия-матх",
+    });
+    expect(isLineageId("sri_gopinath_gaudiya_math")).toBe(true);
+    expect(isLineagePreference("sri_gopinath_gaudiya_math")).toBe(true);
+  });
+
   it("идентификаторы уникальны и у каждого есть подпись", () => {
     const ids = LINEAGES.map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -52,6 +72,66 @@ describe("справочник линий", () => {
     expect(toLineagePreference("hare")).toBeNull();
     expect(isLineagePreference("all")).toBe(true);
     expect(isLineagePreference(null)).toBe(true);
+  });
+});
+
+describe("группы линий (VED-568)", () => {
+  it("группа линии и линии группы", () => {
+    expect(lineageGroupOf("sri_gopinath_gaudiya_math")).toBe("gaudiya_math");
+    expect(lineageGroupOf("hare")).toBeNull();
+    expect(lineagesOfGroup("parivara")).toHaveLength(5);
+    expect(soleLineageOfGroup("iskcon")).toBe("iskcon");
+    expect(soleLineageOfGroup("gaudiya_math")).toBeNull();
+  });
+
+  it("метка на карточке — группа, конкретная линия раскрывается", () => {
+    expect(lineageBadge("ipbys")).toEqual({
+      group: "gaudiya_math",
+      label: "Гаудия-матх",
+      detail: "IPBYS",
+    });
+    expect(lineageBadge("gadadhara_parivara")).toMatchObject({
+      label: "Паривары",
+      detail: "Гададхара-паривара",
+    });
+    // У ISKCON раскрывать нечего — надпись одна.
+    expect(lineageBadge("iskcon")).toEqual({
+      group: "iskcon",
+      label: "ISKCON",
+      detail: null,
+    });
+    expect(lineageBadge(null)).toBeNull();
+  });
+
+  it("фильтр group:<группа> разворачивается в линии группы", () => {
+    expect(lineageGroupFromFilter("group:gaudiya_math")).toBe("gaudiya_math");
+    expect(lineageGroupFromFilter("group:hare")).toBeNull();
+    expect(lineageGroupFromFilter("ipbys")).toBeNull();
+    expect(lineageFilterIds("group:iskcon")).toEqual(["iskcon"]);
+    expect(lineageFilterIds("group:gaudiya_math")).toEqual([
+      "sri_chaitanya_gaudiya_math",
+      "sri_chaitanya_saraswat_math",
+      "sri_gopinath_gaudiya_math",
+      "ipbys",
+    ]);
+    expect(lineageFilterIds("ipbys")).toEqual(["ipbys"]);
+    expect(lineageFilterIds("all")).toBeNull();
+    expect(lineageFilterIds(null)).toBeNull();
+    expect(lineageFilterIds("group:hare")).toBeNull();
+  });
+
+  it("группа — законная настройка сервиса, чужая группа — нет", () => {
+    expect(isLineagePreference("group:parivara")).toBe(true);
+    expect(isLineagePreference("group:hare")).toBe(false);
+    expect(toLineagePreference("group:parivara")).toBe("group:parivara");
+    expect(resolveContentLineage(yogi, "group:parivara")).toBe("group:parivara");
+  });
+
+  it("подпись фильтра", () => {
+    expect(lineageFilterLabel("group:gaudiya_math")).toBe("Гаудия-матх");
+    expect(lineageFilterLabel("ipbys")).toBe("Гаудия-матх — IPBYS");
+    expect(lineageFilterLabel("iskcon")).toBe("ISKCON");
+    expect(lineageFilterLabel(null)).toBeNull();
   });
 });
 
