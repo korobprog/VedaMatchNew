@@ -70,7 +70,26 @@ export interface LibraryCategoryDto {
    * рубрику, но удаление задевает чужие материалы и чужие ссылки.
    */
   canDelete: boolean;
+  /**
+   * «Информация» о рубрике-авторе (VED-553): четыре раздела простым текстом,
+   * без разметки. `null` — раздел не заполнен. Приходят у детей на странице
+   * рубрики; где их не отдают, поля нет вовсе.
+   */
+  infoContacts?: string | null;
+  infoBio?: string | null;
+  infoResources?: string | null;
+  infoSchedule?: string | null;
 }
+
+/**
+ * Раздел «Информации» рубрики (VED-553). Порядок показа и лимит длины
+ * (5000 символов) держат API и веб у себя: здесь только типы.
+ */
+export type LibraryCategoryInfoField =
+  | 'infoContacts'
+  | 'infoBio'
+  | 'infoResources'
+  | 'infoSchedule';
 
 export interface LibraryCategoryTreeNode extends LibraryCategoryDto {
   children: LibraryCategoryTreeNode[];
@@ -289,6 +308,14 @@ export interface UpdateLibraryCategoryRequest {
   descriptionRu?: string | null;
   descriptionEn?: string | null;
   iconKey?: string | null;
+  /**
+   * Разделы «Информации» (VED-553). Права те же, что у названия; пустая
+   * строка очищает раздел.
+   */
+  infoContacts?: string | null;
+  infoBio?: string | null;
+  infoResources?: string | null;
+  infoSchedule?: string | null;
 }
 
 export type LibrarySectionRequestStatus = 'pending' | 'approved' | 'rejected';

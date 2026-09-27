@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText, FolderTree } from "lucide-react";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { categoryCounter } from "./category-tree";
+import { CategoryInfoButton } from "./category-info-dialog";
 import {
   categoryCountLabel,
   categoryPageSummary,
@@ -29,6 +30,8 @@ import {
  * по одной в строке и во всю ширину (VED-552): короткие имена раньше
  * вставали по две в ряд, и список авторов читался лесенкой. Не влезает имя
  * в строку — многоточие, но число остаётся видно.
+ * Между именем и числом — «i» с контактами, биографией, ресурсами и
+ * расписанием автора (VED-553); у читателя — только когда есть что читать.
  */
 export function CategoryStrip({
   categories,
@@ -103,6 +106,12 @@ export function CategoryStrip({
                 en: category.titleEn,
               })}
             </Link>
+            {/* «i» — между именем и числом, соседом ссылки, а не внутри
+                неё (VED-553). Только у авторов: верхний уровень — рубрики
+                портала, рассказывать о них нечего. */}
+            {!root && (
+              <CategoryInfoButton locale={locale} category={category} />
+            )}
             {root ? (
               /* Число словами, а не значком с цифрой: значок убран по просьбе
                  освободить плитку, а «4» без него одинаково читается и как
