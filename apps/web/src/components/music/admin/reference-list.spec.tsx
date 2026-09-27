@@ -227,7 +227,7 @@ describe("MusicReferenceList — линия исполнителя (VED-566)", (
   it("«Без линии» уходит как null", async () => {
     vi.mocked(setMusicArtistLineage).mockResolvedValue({
       artist: { id: "a1", name: "Avantika devi dasi", lineage: null },
-      updatedTracks: 0,
+      updatedTracks: 7,
     });
     const user = userEvent.setup();
     renderList([{ ...artist, lineage: "iskcon" }]);
@@ -239,7 +239,7 @@ describe("MusicReferenceList — линия исполнителя (VED-566)", (
 
     expect(setMusicArtistLineage).toHaveBeenCalledWith("a1", { lineage: null });
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "записи не менялись",
+      "Линия снята у исполнителя и его записей: 7",
     );
   });
 
