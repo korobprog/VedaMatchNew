@@ -87,13 +87,18 @@ describe("LineagePrompt", () => {
 });
 
 describe("LineageSelect", () => {
-  it("группирует линии и показывает пустой вариант и «все» только по просьбе", () => {
+  it("перечисляет линии плоским списком и показывает пустой вариант и «все» только по просьбе", () => {
     const onChange = vi.fn();
     const { rerender } = render(
       <LineageSelect value="" onChange={onChange} />,
     );
     const select = screen.getByRole("combobox", { name: "Духовная линия" });
-    expect(select.querySelectorAll("optgroup")).toHaveLength(3);
+    // Без строк-заголовков групп: Android показывает их отдельными
+    // строками списка (VED-288).
+    expect(select.querySelectorAll("optgroup")).toHaveLength(0);
+    const options = Array.from(select.querySelectorAll("option"));
+    expect(options[0]).toHaveValue("iskcon");
+    expect(options.at(-1)).toHaveValue("shyamananda_parivara");
     expect(screen.queryByRole("option", { name: /Все/ })).not.toBeInTheDocument();
     expect(select.querySelectorAll("option")).toHaveLength(10);
 

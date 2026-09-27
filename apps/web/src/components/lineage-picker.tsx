@@ -17,8 +17,11 @@ import { fieldClassName } from "@/components/ui/input";
  * - `LineageCards` — карточки по группам, для первого выбора: человек видит
  *   все варианты разом и понимает, что ISKCON, матхи и паривары — разные
  *   ветви одного древа;
- * - `LineageSelect` — выпадающий список с `<optgroup>`, для форм, где линия
- *   одно из десяти полей.
+ * - `LineageSelect` — плоский выпадающий список в том же порядке, для форм,
+ *   где линия одно из десяти полей. Без `<optgroup>`: Android рисует
+ *   заголовки групп отдельными строками, похожими на варианты, а названия
+ *   линий («…Матх», «…-вамша», «…-паривара») и так говорят, чья это ветвь
+ *   (VED-288).
  *
  * Значение — строка, чтобы `<select>` и радио были контролируемыми без
  * жонглирования `null`: `""` означает «не выбрано» либо «как в профиле» (что
@@ -157,16 +160,14 @@ export function LineageSelect({
       {allLabel !== undefined && (
         <option value={LINEAGE_ALL}>{allLabel}</option>
       )}
-      {lineagesByGroup().map((group) => (
-        <optgroup key={group.group} label={group.label}>
-          {group.items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {compact ? item.shortLabel : item.label}
-              {!compact && item.hint ? ` — ${item.hint}` : ""}
-            </option>
-          ))}
-        </optgroup>
-      ))}
+      {lineagesByGroup()
+        .flatMap((group) => group.items)
+        .map((item) => (
+          <option key={item.id} value={item.id}>
+            {compact ? item.shortLabel : item.label}
+            {!compact && item.hint ? ` — ${item.hint}` : ""}
+          </option>
+        ))}
     </select>
   );
 
