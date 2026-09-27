@@ -29,11 +29,18 @@ export function EntryCard({
   entry,
   locale,
   onDeleted,
+  hiddenCategorySlugs,
 }: {
   entry: LibraryEntryDto;
   locale: LibraryLocale;
   /** Лента убирает карточку из уже подгруженного списка после удаления. */
   onDeleted?: () => void;
+  /**
+   * Рубрики, чипы которых на этой странице лишние (VED-573): на странице
+   * автора «Проповедники» у каждой карточки повторяли крошки, а имя автора
+   * из-за них переносилось на отдельную строку.
+   */
+  hiddenCategorySlugs?: readonly string[];
 }) {
   const [blogShare, setBlogShare] = useState<{
     sharedAt: string | null;
@@ -57,7 +64,11 @@ export function EntryCard({
   const playable = entry.url !== null && videoEmbedUrl(entry.url) !== null;
 
   return (
-    <article className="glass rounded-2xl border border-glass-brd p-4">
+    // `relative` и подъём над соседями, пока внутри открыто меню (VED-573):
+    // `.glass` с `backdrop-filter` — свой контекст наложения, и меню «Линии»
+    // с его `z-30` пряталось под следующей карточкой — на экране от него
+    // оставалась полоска в зазоре между карточками.
+    <article className="glass relative rounded-2xl border border-glass-brd p-4 has-[[aria-expanded=true]]:z-40">
       {entry.previewUrl &&
         (playable && entry.url ? (
           <OutsideLink
@@ -196,18 +207,20 @@ export function EntryCard({
         <span>
           {t(locale, "entry.clicks")}: {entry.uniqueClickCount}
         </span>
-        {entry.categories.map((category) => (
-          <Link
-            key={category.id}
-            href={`/library/${category.slug}`}
-            className="rounded-full bg-glass-brd/40 px-2 py-0.5 hover:text-text-0"
-          >
-            {pickLocalized(locale, {
-              ru: category.titleRu,
-              en: category.titleEn,
-            })}
-          </Link>
-        ))}
+        {entry.categories
+          .filter((category) => !hiddenCategorySlugs?.includes(category.slug))
+          .map((category) => (
+            <Link
+              key={category.id}
+              href={`/library/${category.slug}`}
+              className="rounded-full bg-glass-brd/40 px-2 py-0.5 hover:text-text-0"
+            >
+              {pickLocalized(locale, {
+                ru: category.titleRu,
+                en: category.titleEn,
+              })}
+            </Link>
+          ))}
         {/* «В Блог-ленте · дата» — в строке рубрик (VED-539), а не между
             кнопками: там она разрывала ряд, и «Редактировать» с «Удалить»
             разъезжались по разным строкам. */}
