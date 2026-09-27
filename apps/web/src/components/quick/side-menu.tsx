@@ -18,6 +18,7 @@ import {
 } from "./quick-panel";
 import {
   isExternalQuickHref,
+  quickHrefOpensApp,
   parseQuickConfig,
   quickActionCatalog,
   quickActionMeta,
@@ -171,7 +172,7 @@ function SideMenuItem({
     return (
       <a
         href={href}
-        target="_blank"
+        target={quickHrefOpensApp(href) ? undefined : "_blank"}
         rel="noopener noreferrer"
         onClick={onClose}
         className={rowClass}

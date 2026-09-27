@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BUILTIN_QUICK_ACTIONS,
+  quickHrefOpensApp,
   DEFAULT_QUICK_ACTIONS,
   isExternalQuickHref,
   PINNED_QUICK_ACTIONS,
@@ -552,5 +553,17 @@ describe("shortQuickLabel (VED-484)", () => {
   it("простую подпись не трогает", () => {
     expect(shortQuickLabel("Avantika")).toBe("Avantika");
     expect(shortQuickLabel("Shanti people")).toBe("Shanti people");
+  });
+});
+
+describe("quickHrefOpensApp (VED-562)", () => {
+  it("t.me и telegram.me — открывает приложение, без новой вкладки", () => {
+    expect(quickHrefOpensApp("https://t.me/vedamatch")).toBe(true);
+    expect(quickHrefOpensApp("https://telegram.me/vedamatch")).toBe(true);
+  });
+
+  it("остальные внешние ссылки — новой вкладкой", () => {
+    expect(quickHrefOpensApp("https://vcalendar.ru/")).toBe(false);
+    expect(quickHrefOpensApp("https://t.me.evil.com/x")).toBe(false);
   });
 });
