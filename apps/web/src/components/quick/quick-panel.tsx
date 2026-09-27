@@ -91,6 +91,7 @@ import {
   toggleHeaderItem,
 } from "./header-toolbar";
 import { TuneRow } from "./tune-row";
+import { TelegramIcon } from "./telegram-icon";
 import {
   BUILTIN_QUICK_ACTIONS,
   isExternalQuickHref,
@@ -160,6 +161,8 @@ const ICONS: Record<
   // читалась как «то же самое ещё раз».
   collections: Images,
   calendar: CalendarDays,
+  // VED-562: логотип мессенджера — самолётик в круге; в lucide его нет.
+  telegram: TelegramIcon,
   calculator: Calculator,
   invite: Share2,
   donate: HeartHandshake,

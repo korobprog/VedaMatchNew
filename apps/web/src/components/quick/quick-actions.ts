@@ -22,6 +22,7 @@
  */
 
 import { SERVICE_CONTENT } from "@/lib/service-content";
+import { TELEGRAM_CHANNEL_URL } from "@/lib/telegram";
 import { VCALENDAR_URL } from "@/lib/vcalendar-button";
 
 export type BuiltinQuickActionId =
@@ -39,6 +40,7 @@ export type BuiltinQuickActionId =
   | "postcard"
   | "collections"
   | "calendar"
+  | "telegram"
   | "calculator"
   | "invite"
   | "donate"
@@ -188,6 +190,15 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     href: VCALENDAR_URL,
   },
   {
+    id: "telegram",
+    kind: "builtin",
+    // VED-562: канал портала в Телеграме — чужой сайт, открывается новой
+    // вкладкой, как «Календарь».
+    label: "Телеграм",
+    hint: "Канал VedaMatch в Телеграме — новости и анонсы",
+    href: TELEGRAM_CHANNEL_URL,
+  },
+  {
     id: "calculator",
     kind: "builtin",
     label: "Калькулятор",
@@ -292,8 +303,19 @@ const QUICK_ACTIONS_ADDED_IN_V7: readonly QuickActionId[] = ["app"];
  */
 const QUICK_ACTIONS_ADDED_IN_V8: readonly QuickActionId[] = ["radio", "blog"];
 
-/** Всё, что приехало после седьмой версии, — дописывается к старым записям. */
-const ADDED_SINCE_V7: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V8;
+/**
+ * «Телеграм» приехал в девятой версии (VED-562) — по тому же правилу:
+ * кнопку просили добавить в панель.
+ */
+const QUICK_ACTIONS_ADDED_IN_V9: readonly QuickActionId[] = ["telegram"];
+
+/** Всё, что приехало после восьмой версии, — дописывается к старым записям. */
+const ADDED_SINCE_V8: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V9;
+/** Всё, что приехало после седьмой. */
+const ADDED_SINCE_V7: readonly QuickActionId[] = [
+  ...QUICK_ACTIONS_ADDED_IN_V8,
+  ...ADDED_SINCE_V8,
+];
 /** Всё, что приехало после шестой. */
 const ADDED_SINCE_V6: readonly QuickActionId[] = [
   ...QUICK_ACTIONS_ADDED_IN_V7,
@@ -319,9 +341,9 @@ const ADDED_SINCE_V3: readonly QuickActionId[] = [
  * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
  * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392), шестая —
  * «Плеер» (VED-416), седьмая — «Приложение» (VED-448), восьмая — «Радио» и
- * «Блог-лента» (VED-502, VED-506).
+ * «Блог-лента» (VED-502, VED-506), девятая — «Телеграм» (VED-562).
  */
-const CONFIG_VERSION = 8;
+const CONFIG_VERSION = 9;
 
 /**
  * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
@@ -415,6 +437,7 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   "aphorism",
   "postcard",
   "calendar",
+  "telegram",
   "support",
 ];
 
@@ -547,9 +570,10 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
       const custom = parseCustom(record.custom);
       return { ids: dedupe(record.ids, custom), custom };
     }
-    // Седьмая, шестая, пятая, четвёртая и третья версии: всё то же, плюс
-    // кнопки, которых тогда не было.
+    // Восьмая, седьмая, шестая, пятая, четвёртая и третья версии: всё то
+    // же, плюс кнопки, которых тогда не было.
     if (
+      record.v === 8 ||
       record.v === 7 ||
       record.v === 6 ||
       record.v === 5 ||
@@ -558,15 +582,17 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
     ) {
       const custom = parseCustom(record.custom);
       const added =
-        record.v === 7
-          ? ADDED_SINCE_V7
-          : record.v === 6
-          ? ADDED_SINCE_V6
-          : record.v === 5
-            ? ADDED_SINCE_V5
-            : record.v === 4
-              ? ADDED_SINCE_V4
-              : ADDED_SINCE_V3;
+        record.v === 8
+          ? ADDED_SINCE_V8
+          : record.v === 7
+            ? ADDED_SINCE_V7
+            : record.v === 6
+              ? ADDED_SINCE_V6
+              : record.v === 5
+                ? ADDED_SINCE_V5
+                : record.v === 4
+                  ? ADDED_SINCE_V4
+                  : ADDED_SINCE_V3;
       return { ids: withAdded(dedupe(record.ids, custom), added), custom };
     }
     // Вторая версия: те же идентификаторы, своих кнопок ещё не было.

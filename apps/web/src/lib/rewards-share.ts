@@ -2,6 +2,7 @@ import type {
   RewardsLedgerType,
   RewardsReferralStatus,
 } from "@vedamatch/shared";
+import { TELEGRAM_CHANNEL_URL } from "./telegram";
 
 /**
  * Тексты и ссылки экрана баллов. Формулировки собирает веб, а не API: он
@@ -105,6 +106,3 @@ export function buildInviteMessage(params: { link: string }): string {
     `👥 А также Телеграм-канал: ${TELEGRAM_CHANNEL_URL}`,
   ].join("\n");
 }
-
-/** Телеграм-канал портала — в конце приглашения (VED-423). */
-export const TELEGRAM_CHANNEL_URL = "https://t.me/vedamatch";
