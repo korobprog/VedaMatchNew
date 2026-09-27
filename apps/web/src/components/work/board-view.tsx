@@ -837,6 +837,19 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
         <span className="rounded-full bg-glass px-2 py-0.5 font-mono text-xs uppercase text-text-2">
           {space.prefix}
         </span>
+        {/* «Оплата» — в строке названия, у правого края (VED-563): в конце
+            ряда вида она на телефоне уезжала отдельной строкой. */}
+        {!board.commercial && (
+          <div className="ml-auto">
+            <WorkCommercialBar
+              board={board}
+              canManageBoard={Boolean(canManage)}
+              personal={space.isPersonal}
+              onChanged={setBoard}
+              buttonClassName={workToolbarButtonClass()}
+            />
+          </div>
+        )}
         {/* Сводка коммерческой доски (VED-458) — полосой во всю ширину под
             названием. Кнопка «Оплата» у обычной доски стоит в ряду вида. */}
         {board.commercial && (
@@ -857,9 +870,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             у «Архива» и «Пригласить» текст возвращается рядом со значком от
             sm и шире, где место уже не в обрез. «По дате» и «По важности» —
             сама суть переключателя вида, их текст не прячем ни на одном
-            размере экрана. С VED-540 «Свернуть все» снова первая в ряду, а в
-            конце ряда — «Оплата»: семь кнопок встают в строку от 390 точек, на
-            360 «Оплата» переносится строкой ниже.
+            размере экрана. С VED-540 «Свернуть все» снова первая в ряду, а
+            «Оплата» с VED-563 — в строке названия.
 
             Прикидка ширины на 360 точек (контентная область экрана — 328 при
             паддинге страницы 16 с каждой стороны): три значка по 40
@@ -978,16 +990,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             viewerId={board.viewerId}
             onChanged={reload}
           />
-          {/* «Оплата» — последней в ряду и в его рамке (VED-540). */}
-          {!board.commercial && (
-            <WorkCommercialBar
-              board={board}
-              canManageBoard={Boolean(canManage)}
-              personal={space.isPersonal}
-              onChanged={setBoard}
-              buttonClassName={workToolbarButtonClass()}
-            />
-          )}
         </div>
       </div>
 
