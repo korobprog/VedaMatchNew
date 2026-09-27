@@ -401,7 +401,12 @@ function Row({
             </span>
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm text-text-0">
+            {/* Имя — главное в строке (VED-572): до двух строк с переносом,
+                а длиннее — многоточие и полное имя во всплывающей подсказке. */}
+            <span
+              title={row.primary}
+              className="line-clamp-2 break-words text-sm text-text-0"
+            >
               {row.primary}
             </span>
             <span className="block truncate text-xs text-text-2">
@@ -454,28 +459,24 @@ function Row({
                 )}
               </span>
             )}
-          {kind === "artist" && row.isAudiobook !== undefined && (
+          {/* Обычное состояние — записи в каталоге Медиатеки — подписью не
+              отмечается: пилюля «медиатека» в каждой строке отнимала место у
+              имени и ничего не сообщала (VED-572). Видна только отметка
+              «чтец», она же возвращает в каталог; отметить чтецом — галочкой
+              и панелью над списком (`MusicBulkArtistAudiobookBar`). На
+              телефоне пилюля уходит вниз, к селектам, а не в строку с именем. */}
+          {kind === "artist" && row.isAudiobook === true && (
             <button
               type="button"
               onClick={toggleAudiobook}
               disabled={pending}
-              aria-label={`«${row.primary}»: ${
-                row.isAudiobook
-                  ? "чтец, записи вне каталога Медиатеки"
-                  : "записи в каталоге Медиатеки"
-              }. Нажмите, чтобы ${
-                row.isAudiobook ? "вернуть в каталог Медиатеки" : "отметить чтецом"
-              }`}
-              className={`shrink-0 self-center rounded-full border px-2 text-[11px] transition-colors disabled:opacity-50 ${
-                row.isAudiobook
-                  ? // Цвет — рамкой и подложкой, а не буквами: одиннадцать
-                    // пикселей золотом не дают 4.5:1 ни в одной теме.
-                    // Состояние здесь и так названо словом, не оттенком.
-                    "border-gold/60 bg-gold/15 text-text-0"
-                  : "border-glass-brd text-text-2 hover:text-text-0"
-              }`}
+              aria-label={`«${row.primary}»: чтец, записи вне каталога Медиатеки. Нажмите, чтобы вернуть в каталог Медиатеки`}
+              // Цвет — рамкой и подложкой, а не буквами: одиннадцать
+              // пикселей золотом не дают 4.5:1 ни в одной теме.
+              // Состояние здесь и так названо словом, не оттенком.
+              className="order-last shrink-0 self-center rounded-full border border-gold/60 bg-gold/15 px-2 text-[11px] text-text-0 transition-colors disabled:opacity-50 sm:order-none"
             >
-              {row.isAudiobook ? "чтец" : "медиатека"}
+              чтец
             </button>
           )}
           {kind === "category" && row.categoryKind && (
