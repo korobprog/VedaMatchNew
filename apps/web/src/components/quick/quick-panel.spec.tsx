@@ -779,3 +779,50 @@ describe("QuickPanel: кнопка «Плеер»", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/music"));
   });
 });
+
+/*
+ * VED-591, VED-593: колокольчик стоит на равных расстояниях — до соседней
+ * кнопки слева, до аватара и до правого края, когда профиль убран.
+ */
+describe("QuickPanel: промежутки у колокольчика", () => {
+  function renderRow(ids: string[]) {
+    window.localStorage.setItem(
+      "vedamatch:header-toolbar",
+      JSON.stringify({ v: 2, ids }),
+    );
+    render(
+      <NextIntlClientProvider locale="ru" messages={ru}>
+        <QuickPanel
+          bell={<a href="/notifications">Уведомления</a>}
+          avatar={<a href="/profile">Профиль</a>}
+        />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("профиль убран — колокольчик подтянут к краю на 4px, а не на 8", () => {
+    renderRow(["hotkeys", "bell"]);
+    const pull = screen.getByRole("link", { name: "Уведомления" }).parentElement!;
+    expect(pull).toHaveClass("-mr-1", "sm:mr-0");
+    expect(pull).not.toHaveClass("-mr-2");
+  });
+
+  it("между колокольчиком и аватаром — поле 8px на телефоне", () => {
+    renderRow(["hotkeys", "bell", "avatar"]);
+    const slot = screen.getByTestId("header-avatar-slot");
+    expect(slot).toContainElement(screen.getByRole("link", { name: "Профиль" }));
+    expect(slot).toHaveClass("ml-2", "sm:ml-0");
+    // Крайний аватар к краю не отодвигается: он и так на месте (VED-439).
+    expect(slot).not.toHaveClass("mx-2");
+    expect(
+      screen
+        .getByRole("link", { name: "Уведомления" })
+        .compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("аватар посреди ряда — поле с обеих сторон", () => {
+    renderRow(["hotkeys", "bell", "avatar", "menu"]);
+    expect(screen.getByTestId("header-avatar-slot")).toHaveClass("mx-2", "sm:mx-0");
+  });
+});
