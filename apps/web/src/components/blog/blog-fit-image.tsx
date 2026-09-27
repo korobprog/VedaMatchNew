@@ -20,6 +20,7 @@ export function BlogFitImage({
   lazy = false,
   className = "",
   maxHeight,
+  maxAspect,
   children,
 }: {
   src: string;
@@ -29,6 +30,8 @@ export function BlogFitImage({
   lazy?: boolean;
   className?: string;
   maxHeight?: string;
+  /** Свой предел ширины рамки, см. `blogFrameFit`. */
+  maxAspect?: number;
   /** Поверх снимка: значок ролика и т.п. */
   children?: ReactNode;
 }) {
@@ -47,7 +50,7 @@ export function BlogFitImage({
     if (ref.current?.complete) measure(ref.current);
   }, [src]);
 
-  const { aspect, crop } = blogFrameFit(natural ?? known);
+  const { aspect, crop } = blogFrameFit(natural ?? known, maxAspect);
   return (
     <BlogFrame aspect={aspect} className={className} maxHeight={maxHeight}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
