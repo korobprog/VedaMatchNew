@@ -36,6 +36,9 @@ import {
 } from '@/lib/calls/media-state-signal';
 import {
   setPipEligible,
+  startGroupCallKeepAlive,
+  stopGroupCallKeepAlive,
+  subscribeToGroupCallTicks,
   subscribeToNetworkTransportChanges,
   subscribeToPipModeChanges,
 } from '@/lib/calls/native-call-bridge';
@@ -52,6 +55,7 @@ import { GroupCallsContext, type GroupCallsApi } from './group-call-context';
 import {
   GROUP_CALL_HEARTBEAT_MS,
   HEARTBEAT_LOST_MESSAGE,
+  heartbeatDue,
   heartbeatLost,
 } from './group-call-heartbeat';
 import { planPeers } from './group-call-peers';
@@ -234,6 +238,8 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
   const speaking = useRef<SpeakingState>(EMPTY_SPEAKING_STATE);
   /** Подряд не дошедшие подтверждения присутствия — см. `group-call-heartbeat.ts`. */
   const heartbeatFailures = useRef(0);
+  /** Когда ушло прошлое подтверждение — два источника не дублируют друг друга. */
+  const lastHeartbeatAt = useRef<number | null>(null);
 
   // ---------- сигналинг ----------
 
@@ -437,6 +443,8 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     speaking.current = EMPTY_SPEAKING_STATE;
     seqState.current = INITIAL_SIGNAL_SEQ_STATE;
     heartbeatFailures.current = 0;
+    lastHeartbeatAt.current = null;
+    stopGroupCallKeepAlive();
     if (Platform.OS !== 'web') InCallManager.stop();
   }, [closeAllLinks]);
 
@@ -887,19 +895,35 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
 
   // ---------- «я ещё здесь» ----------
 
-  useEffect(() => {
-    if (state.phase !== 'active' || !state.call) return;
-    const callId = state.call.id;
-    const timer = setInterval(() => {
+  /**
+   * Подтвердить присутствие. Источников два (VED-360, живая проверка
+   * 27.09): JS-таймер ниже и тик нативной службы
+   * (`GroupCallKeepAliveService`). Таймер один не годится: JS-таймеры
+   * Android останавливает вместе с `Activity` (`JavaTimerManager.onHostPause`),
+   * и свёрнутое приложение или открытое системное окно согласия на показ
+   * экрана переставали подтверждать присутствие — через 45 с сервер
+   * убирал человека из комнаты. Нативный тик до JS доходит и при стоящих
+   * таймерах; `heartbeatDue` не даёт двум источникам слать вдвое чаще.
+   */
+  const beat = useCallback(
+    (force = false) => {
+      const call = stateRef.current.call;
+      if (!call || stateRef.current.phase !== 'active') return;
+      const now = Date.now();
+      if (!heartbeatDue(lastHeartbeatAt.current, now, force)) return;
+      lastHeartbeatAt.current = now;
+      const callId = call.id;
       void groupApi
         .heartbeat(callId)
         .then((fresh) => {
+          if (stateRef.current.call?.id !== callId) return;
           heartbeatFailures.current = 0;
           dispatch({ type: 'stream', event: { type: 'group-call.updated', call: fresh }, selfId: userId });
           reconcilePeers(fresh);
           resyncScreenFlag(fresh);
         })
         .catch(() => {
+          if (stateRef.current.call?.id !== callId) return;
           heartbeatFailures.current += 1;
           // Подтверждения не доходят дольше, чем сервер готов ждать: нас
           // там уже нет, и показывать «разговор» с бегущим таймером —
@@ -908,9 +932,31 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
           teardown();
           dispatch({ type: 'failed', error: HEARTBEAT_LOST_MESSAGE });
         });
-    }, GROUP_CALL_HEARTBEAT_MS);
+    },
+    [groupApi, reconcilePeers, resyncScreenFlag, teardown, userId],
+  );
+
+  const activeCallId = state.phase === 'active' ? (state.call?.id ?? null) : null;
+
+  useEffect(() => {
+    if (!activeCallId) return;
+    const timer = setInterval(() => beat(), GROUP_CALL_HEARTBEAT_MS);
     return () => clearInterval(timer);
-  }, [groupApi, reconcilePeers, resyncScreenFlag, state.call, state.phase, teardown, userId]);
+  }, [activeCallId, beat]);
+
+  // Служба «Идёт групповой звонок» — на всё время в комнате: тикает
+  // heartbeat'ом, пока JS-таймеры стоят, и держит процесс с микрофоном на
+  // переднем плане. Поднимается при входе, когда приложение на экране —
+  // Android 12+ из фона службу поднять не даст.
+  useEffect(() => {
+    if (!activeCallId) return;
+    startGroupCallKeepAlive(activeCallId);
+    const unsubscribe = subscribeToGroupCallTicks(() => beat());
+    return () => {
+      unsubscribe();
+      stopGroupCallKeepAlive();
+    };
+  }, [activeCallId, beat]);
 
   // ---------- кто говорит ----------
 
@@ -973,10 +1019,15 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       setAppStateValue(next);
       if (next !== 'active') return;
       const call = stateRef.current.call;
-      if (call && stateRef.current.phase === 'active') void catchUpSignals();
+      if (call && stateRef.current.phase === 'active') {
+        // Вернулись на экран — подтверждаем сразу: сколько длилась пауза,
+        // мы не знаем, а таймер подтвердил бы только через шаг.
+        beat(true);
+        void catchUpSignals();
+      }
     });
     return () => subscription.remove();
-  }, [catchUpSignals]);
+  }, [beat, catchUpSignals]);
 
   const callInConversation = useCallback(
     (conversationId: string) => roomsByConversation[conversationId] ?? null,

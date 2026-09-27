@@ -2,6 +2,8 @@ import {
   GROUP_CALL_HEARTBEAT_MS,
   GROUP_CALL_TTL_MS,
   HEARTBEAT_FAILURES_BEFORE_LOST,
+  HEARTBEAT_MIN_GAP_MS,
+  heartbeatDue,
   heartbeatLost,
 } from './group-call-heartbeat';
 
@@ -38,5 +40,34 @@ describe('сторож подтверждений присутствия', () =>
     expect(HEARTBEAT_FAILURES_BEFORE_LOST * GROUP_CALL_HEARTBEAT_MS).toBe(
       GROUP_CALL_TTL_MS,
     );
+  });
+});
+
+describe('два источника подтверждений (VED-360)', () => {
+  const T = 1_700_000_000_000;
+
+  it('первое подтверждение уходит всегда', () => {
+    expect(heartbeatDue(null, T)).toBe(true);
+  });
+
+  it('таймер и нативный тик на переднем плане не дублируют друг друга', () => {
+    expect(heartbeatDue(T, T + 5_000)).toBe(false);
+  });
+
+  it('следующий шаг проходит, даже если тик приплыл на пару секунд раньше', () => {
+    expect(heartbeatDue(T, T + GROUP_CALL_HEARTBEAT_MS - 2_000)).toBe(true);
+  });
+
+  it('порог меньше шага: иначе один источник тикал бы через раз', () => {
+    expect(HEARTBEAT_MIN_GAP_MS).toBeLessThan(GROUP_CALL_HEARTBEAT_MS);
+  });
+
+  it('в фоне, где тикает только служба, успевает до TTL сервера', () => {
+    // Три шага службы — это ещё не TTL: два подтверждения укладываются.
+    expect(2 * GROUP_CALL_HEARTBEAT_MS).toBeLessThan(GROUP_CALL_TTL_MS);
+  });
+
+  it('возврат на экран подтверждает сразу, не дожидаясь шага', () => {
+    expect(heartbeatDue(T, T + 1_000, true)).toBe(true);
   });
 });

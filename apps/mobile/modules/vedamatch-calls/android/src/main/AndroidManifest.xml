@@ -44,6 +44,14 @@
       android:exported="false"
       android:foregroundServiceType="phoneCall|microphone|camera" />
 
+    <!-- Групповой звонок в фоне (VED-360): тикает heartbeat'ом, пока JS-таймеры
+         стоят, и держит процесс с микрофоном на переднем плане
+         (GroupCallKeepAliveService.kt). -->
+    <service
+      android:name="com.vedamatch.calls.GroupCallKeepAliveService"
+      android:exported="false"
+      android:foregroundServiceType="microphone" />
+
     <receiver
       android:name="com.vedamatch.calls.CallActionReceiver"
       android:exported="false" />

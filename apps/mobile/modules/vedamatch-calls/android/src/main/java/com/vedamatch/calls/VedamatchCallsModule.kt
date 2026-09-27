@@ -60,6 +60,12 @@ class VedamatchCallsModule : Module() {
       instance?.get()?.sendEvent("pipModeChanged", mapOf("inPip" to inPip))
     }
 
+    /** VED-360: тик службы группового звонка (`GroupCallKeepAliveService`) —
+     *  по нему JS шлёт heartbeat, пока его собственные таймеры стоят. */
+    fun sendGroupCallTick() {
+      instance?.get()?.sendEvent("groupCallTick", emptyMap<String, Any>())
+    }
+
     /** Контекст приложения для классов вне модуля (`VedamatchConnection`,
      *  `CallForegroundService`), у которых нет своего `Module.appContext`. */
     fun applicationContextOrNull(): Context? = instance?.get()?.appContext?.reactContext?.applicationContext
@@ -166,7 +172,7 @@ class VedamatchCallsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VedamatchCalls")
 
-    Events("answer", "decline", "end", "networkTransportChanged", "pipModeChanged")
+    Events("answer", "decline", "end", "networkTransportChanged", "pipModeChanged", "groupCallTick")
 
     OnCreate {
       instance = WeakReference(this@VedamatchCallsModule)
@@ -459,6 +465,19 @@ class VedamatchCallsModule : Module() {
         activity.setShowWhenLocked(active)
         activity.setTurnScreenOn(active)
       }
+    }
+
+    /** VED-360: служба группового звонка — см. `GroupCallKeepAliveService`. */
+    Function("startGroupCallKeepAlive") { callId: String ->
+      val context = appContext.reactContext?.applicationContext ?: return@Function null
+      GroupCallKeepAliveService.start(context, callId)
+      null
+    }
+
+    Function("stopGroupCallKeepAlive") {
+      val context = appContext.reactContext?.applicationContext ?: return@Function null
+      GroupCallKeepAliveService.stop(context)
+      null
     }
 
     /**

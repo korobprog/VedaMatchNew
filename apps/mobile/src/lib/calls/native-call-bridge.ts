@@ -287,6 +287,29 @@ export function setPipEligible(eligible: boolean): void {
   VedamatchCalls.setPipEligible(eligible);
 }
 
+/**
+ * VED-360: служба «Идёт групповой звонок» на всё время, пока мы в комнате.
+ * Держит процесс и микрофон на переднем плане и раз в 15 с шлёт
+ * `groupCallTick` — по нему провайдер отправляет heartbeat, пока JS-таймеры
+ * стоят (приложение не на экране, открыто системное окно согласия).
+ * См. `GroupCallKeepAliveService.kt`.
+ */
+export function startGroupCallKeepAlive(callId: string): void {
+  if (!SUPPORTED) return;
+  VedamatchCalls.startGroupCallKeepAlive(callId);
+}
+
+export function stopGroupCallKeepAlive(): void {
+  if (!SUPPORTED) return;
+  VedamatchCalls.stopGroupCallKeepAlive();
+}
+
+export function subscribeToGroupCallTicks(onTick: () => void): () => void {
+  if (!SUPPORTED) return () => undefined;
+  const subscription = VedamatchCalls.addListener('groupCallTick', () => onTick());
+  return () => subscription.remove();
+}
+
 /** VED-222, п.5: вошли/вышли из PiP — `app/call/[id].tsx` прячет кнопки. */
 export function subscribeToPipModeChanges(onChange: (inPip: boolean) => void): () => void {
   if (!SUPPORTED) return () => undefined;
