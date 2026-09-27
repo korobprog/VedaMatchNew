@@ -23,6 +23,12 @@ describe("порядок кнопок панели Блог-ленты (VED-497)
     expect([...order].sort()).toEqual([...HOME_PANEL_DEFAULT_ORDER].sort());
   });
 
+  it("«Нравится» (VED-586) — последней, и у старого порядка тоже", () => {
+    expect(HOME_PANEL_DEFAULT_ORDER.at(-1)).toBe("like");
+    const saved = HOME_PANEL_DEFAULT_ORDER.filter((id) => id !== "like");
+    expect(normalizePanelOrder([...saved].reverse()).at(-1)).toBe("like");
+  });
+
   it("сдвиг на шаг, у края — без изменений", () => {
     const order = [...HOME_PANEL_DEFAULT_ORDER];
     expect(movePanelButton(order, "write", -1).slice(0, 2)).toEqual([
@@ -30,6 +36,6 @@ describe("порядок кнопок панели Блог-ленты (VED-497)
       "calendar",
     ]);
     expect(movePanelButton(order, "calendar", -1)).toEqual(order);
-    expect(movePanelButton(order, "hide", 1)).toEqual(order);
+    expect(movePanelButton(order, "like", 1)).toEqual(order);
   });
 });

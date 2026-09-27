@@ -16,14 +16,12 @@ import {
 import {
   CalendarDays,
   Check,
-  ChevronDown,
-  ChevronUp,
   EyeOff,
+  Heart,
   Pause,
   PenLine,
   Play,
   Rows3,
-  Settings2,
   Share2,
   Star,
   Volume2,
@@ -34,7 +32,11 @@ import {
   BLOG_HOME_COOKIE_MAX_AGE,
   serializeBlogHomeVisible,
 } from "@/lib/blog-home-visibility";
-import { BlogApiError, fetchBlogFavorites } from "@/lib/blog-client-api";
+import {
+  BlogApiError,
+  fetchBlogFavorites,
+  setBlogLike,
+} from "@/lib/blog-client-api";
 import {
   VCALENDAR_URL,
   getVcalendarButtonServerSnapshot,
@@ -49,12 +51,10 @@ import {
   type BlogHomeSlide,
 } from "./blog-media-list";
 import { useBlogSpeech } from "./blog-speak-button";
+import { homeLikeOf, toggleHomeLike, type HomeLikeState } from "./home-like";
 import {
   HOME_PANEL_DEFAULT_ORDER,
-  HOME_PANEL_LABELS,
-  movePanelButton,
   readPanelOrder,
-  writePanelOrder,
   type HomePanelButton,
 } from "./home-panel-order";
 
@@ -76,6 +76,10 @@ import {
  * Кнопка «Скрыть» пишет cookie и перерисовывает главную на сервере: в
  * спрятанном виде виджета нет вовсе, и главная выглядит как раньше. Вернуть
  * ленту можно кнопкой в строке настроек над сеткой сервисов.
+ *
+ * Последняя кнопка панели — «Нравится» у поста на экране (VED-586), на
+ * месте бывшей шестерёнки «Порядок кнопок». Порядок панели теперь меняется
+ * на странице поста, в той же настройке, что и кнопки под постом.
  */
 export function BlogHomeWidget({
   data,
@@ -158,18 +162,35 @@ export function BlogHomeWidget({
   const [order, setOrder] = useState<HomePanelButton[]>(() => [
     ...HOME_PANEL_DEFAULT_ORDER,
   ]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   // Порядок с устройства — после гидрации, иначе разметка сервера и
   // браузера разойдётся.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage доступен только в браузере
     setOrder(readPanelOrder());
   }, []);
-  function move(id: HomePanelButton, direction: -1 | 1) {
-    const next = movePanelButton(order, id, direction);
-    setOrder(next);
-    writePanelOrder(next);
+
+  /* «Нравится» (VED-586) — у поста на экране, тем же запросом, что под
+     постом в ленте. Сердечко меняется сразу, а число после ответа берётся
+     с сервера; отметки живут по id поста, поэтому переживают листание и
+     переключение на избранное. */
+  const [likes, setLikes] = useState<Record<string, HomeLikeState>>({});
+  const like = currentPost ? homeLikeOf(currentPost, likes) : null;
+  async function toggleLike() {
+    if (!currentPost || !like) return;
+    const id = currentPost.id;
+    const next = toggleHomeLike(like);
+    setLikes((all) => ({ ...all, [id]: next }));
+    try {
+      const saved = await setBlogLike(id, next.liked);
+      setLikes((all) => ({ ...all, [id]: saved }));
+    } catch {
+      // Не вышло — сердечко возвращается как было.
+      setLikes((all) => ({ ...all, [id]: like }));
+    }
   }
+  // Отметку сообщает `aria-pressed`, в имени — только число.
+  const likeLabel =
+    like && like.likeCount > 0 ? `Нравится: ${like.likeCount}` : "Нравится";
 
   const [shared, setShared] = useState(false);
   async function share() {
@@ -305,6 +326,24 @@ export function BlogHomeWidget({
         <EyeOff aria-hidden className="size-4" />
       </button>
     ),
+    like: (
+      <button
+        type="button"
+        onClick={() => void toggleLike()}
+        disabled={!currentPost}
+        aria-pressed={like?.liked ?? false}
+        aria-label={likeLabel}
+        title={likeLabel}
+        className={`${iconButton} hover:border-magenta/60 disabled:opacity-50 ${
+          like?.liked ? "border-magenta" : ""
+        }`}
+      >
+        <Heart
+          aria-hidden
+          className={`size-4 ${like?.liked ? "fill-magenta text-magenta" : ""}`}
+        />
+      </button>
+    ),
   };
 
   return (
@@ -319,57 +358,7 @@ export function BlogHomeWidget({
         {order.map((id) =>
           buttons[id] ? <Fragment key={id}>{buttons[id]}</Fragment> : null,
         )}
-        <button
-          type="button"
-          onClick={() => setSettingsOpen((open) => !open)}
-          aria-expanded={settingsOpen}
-          aria-controls="blog-home-settings"
-          aria-label="Настройки панели: порядок кнопок"
-          title="Порядок кнопок"
-          className={`${iconButton} hover:border-cyan/60 ${settingsOpen ? "border-cyan" : ""}`}
-        >
-          <Settings2 aria-hidden className="size-4" />
-        </button>
       </div>
-
-      {settingsOpen && (
-        <div
-          id="blog-home-settings"
-          className="mx-1.5 mb-2 rounded-xl border border-glass-brd bg-bg-1 p-2"
-        >
-          <p className="px-1 pb-1 text-xs text-text-1">
-            Порядок кнопок — стрелками. Кнопку календаря можно спрятать в
-            настройке горячих кнопок.
-          </p>
-          <ol className="flex flex-col">
-            {order.map((id, at) => (
-              <li key={id} className="flex items-center gap-1">
-                <span className="min-w-0 flex-1 truncate px-1 text-sm text-text-0">
-                  {HOME_PANEL_LABELS[id]}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => move(id, -1)}
-                  disabled={at === 0}
-                  aria-label={`${HOME_PANEL_LABELS[id]}: левее`}
-                  className="inline-flex size-11 items-center justify-center rounded-lg text-text-1 hover:text-text-0 disabled:opacity-30"
-                >
-                  <ChevronUp aria-hidden className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(id, 1)}
-                  disabled={at === order.length - 1}
-                  aria-label={`${HOME_PANEL_LABELS[id]}: правее`}
-                  className="inline-flex size-11 items-center justify-center rounded-lg text-text-1 hover:text-text-0 disabled:opacity-30"
-                >
-                  <ChevronDown aria-hidden className="size-4" />
-                </button>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
 
       {/* Итог переключения — вслух: содержимое виджета сменилось на месте. */}
       <p role="status" className="sr-only">

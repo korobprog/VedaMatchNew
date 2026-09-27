@@ -1,8 +1,12 @@
 /**
  * Порядок кнопок в панели Блог-ленты на главной (VED-497): «Настройки»
- * переставляют кнопки, но не убирают их — так попросил заказчик. Кнопка
- * «Настройки» не участвует: она всегда последняя, иначе её можно было бы
- * «потерять» перестановкой.
+ * переставляют кнопки, но не убирают их — так попросил заказчик.
+ *
+ * Своей кнопки настроек у панели больше нет (VED-586): на её месте —
+ * «Нравится», а порядок панели меняется там же, где порядок кнопок под
+ * постом, — кнопкой «Порядок кнопок» на странице поста. Поэтому «Нравится»
+ * по умолчанию последняя: встаёт туда, где стояла шестерёнка, и у тех, кто
+ * уже переставлял кнопки, — тоже в конец.
  *
  * Порядок живёт на устройстве (`localStorage`), как и выбор кнопки
  * календаря.
@@ -14,7 +18,8 @@ export type HomePanelButton =
   | "favorites"
   | "share"
   | "speak"
-  | "hide";
+  | "hide"
+  | "like";
 
 export const HOME_PANEL_DEFAULT_ORDER: readonly HomePanelButton[] = [
   "calendar",
@@ -24,6 +29,7 @@ export const HOME_PANEL_DEFAULT_ORDER: readonly HomePanelButton[] = [
   "share",
   "speak",
   "hide",
+  "like",
 ];
 
 export const HOME_PANEL_LABELS: Record<HomePanelButton, string> = {
@@ -34,6 +40,7 @@ export const HOME_PANEL_LABELS: Record<HomePanelButton, string> = {
   share: "Поделиться",
   speak: "Озвучить",
   hide: "Убрать ленту",
+  like: "Нравится",
 };
 
 export const HOME_PANEL_ORDER_KEY = "blog-home:panel-order";
