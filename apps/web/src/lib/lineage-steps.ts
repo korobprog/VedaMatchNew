@@ -4,7 +4,6 @@ import {
   LINEAGE_GROUP_LABELS,
   LINEAGE_GROUPS,
   isLineageGroup,
-  lineageGroupFilter,
   lineageGroupFromFilter,
   lineageGroupOf,
   lineagesOfGroup,
@@ -21,7 +20,10 @@ import {
  * устройство. Разметка — в компонентах, здесь только арифметика.
  *
  * Значение поля — строка, как и раньше: `""` (не выбрано / как в профиле),
- * `"all"`, идентификатор линии либо — только в фильтрах — `group:<группа>`.
+ * `"all"` или идентификатор линии. Пункта «вся группа» («Любой Гаудия-матх»)
+ * нет — заказчик убрал его (VED-568), но значение `group:<группа>`, уже
+ * сохранённое в фильтре раньше, по-прежнему понимается: первый шаг
+ * показывает его группу, второй — ждёт уточнения.
  */
 
 /** Группа, к которой относится значение поля; `null` — пусто или «все». */
@@ -52,24 +54,33 @@ export function lineageGroupHasDetail(group: LineageGroup): boolean {
  * Что сделать, когда на первом шаге выбрали пункт.
  *
  * - `""`, `"all"` и группа из одной линии (ISKCON) — готовое значение;
- * - группа из нескольких линий в фильтре (`allowGroup`) — вся группа, а
- *   конкретную линию можно уточнить вторым шагом;
- * - в остальных местах (линия материала, профиля) хранится конкретная
- *   линия, поэтому группа только раскрывает второй шаг: значение не
- *   меняется, пока не выбрана линия. Если группа уже та же, что у значения,
- *   ждать нечего — линия уже выбрана.
+ * - группа из нескольких линий только раскрывает второй шаг: значение не
+ *   меняется, пока не выбрана линия. Выбрать группу целиком нельзя ни в
+ *   линии материала, ни в фильтре (VED-568). Если у значения уже линия
+ *   этой группы, ждать нечего — линия уже выбрана.
  */
 export function lineageFirstStepPick(
   picked: string,
   current: string,
-  allowGroup: boolean,
 ): { value: string } | { pending: LineageGroup } | null {
   if (!isLineageGroup(picked)) return { value: picked };
   const sole = soleLineageOfGroup(picked);
   if (sole) return { value: sole };
-  if (allowGroup) return { value: lineageGroupFilter(picked) };
-  if (lineageValueGroup(current) === picked) return null;
+  if (lineageGroupOf(current) === picked) return null;
   return { pending: picked };
+}
+
+/**
+ * Что стоит во втором шаге: линия значения либо `""` — «ещё не уточнено».
+ * Пусто и пока группа только выбрана (`pending`), и у сохранённой раньше
+ * группы целиком (`group:<группа>`): такого пункта в списке больше нет.
+ */
+export function lineageDetailValue(
+  value: string,
+  pending: LineageGroup | null,
+): string {
+  if (pending) return "";
+  return lineageGroupOf(value) ? value : "";
 }
 
 export interface LineageStepOption {
@@ -99,21 +110,12 @@ export function lineageGroupOptions(compact = false): LineageStepOption[] {
   });
 }
 
-/** Подпись пункта «вся группа» во втором шаге фильтра. */
-export const LINEAGE_GROUP_ANY_LABELS: Record<LineageGroup, string> = {
-  iskcon: "ISKCON",
-  gaudiya_math: "Любой Гаудия-матх",
-  parivara: "Любой паривар",
-};
-
-/**
- * Пункты второго шага — линии группы; в фильтре первым идёт «вся группа».
- */
+/** Пункты второго шага — линии группы, без пункта «вся группа» (VED-568). */
 export function lineageDetailOptions(
   group: LineageGroup,
-  { allowGroup = false, compact = false } = {},
+  { compact = false } = {},
 ): LineageStepOption[] {
-  const items = lineagesOfGroup(group).map((item) => {
+  return lineagesOfGroup(group).map((item) => {
     const full = item.hint ? `${item.label} — ${item.hint}` : item.label;
     return {
       value: item.id as string,
@@ -121,12 +123,6 @@ export function lineageDetailOptions(
       title: full,
     };
   });
-  if (!allowGroup) return items;
-  const any = LINEAGE_GROUP_ANY_LABELS[group];
-  return [
-    { value: lineageGroupFilter(group), label: any, title: any },
-    ...items,
-  ];
 }
 
 /** Как спросить второй шаг: «Какой именно матх». */

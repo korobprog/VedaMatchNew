@@ -91,19 +91,15 @@ describe("lineageFilterMenu (VED-449)", () => {
     expect(inGroups).toContain("shyamananda_parivara");
   });
 
-  it("первый пункт раскрывающейся группы — она вся (VED-568)", () => {
-    const labelled = lineageFilterMenu({
-      all: "Всё",
-      groups: { iskcon: "ИСККОН", gaudiya_math: "Гаудия-матх", parivara: "Паривары" },
-      anyInGroup: { gaudiya_math: "Любой Гаудия-матх", parivara: "Любой паривар" },
-    });
-    const firsts = labelled.flatMap((item) =>
-      item.kind === "group" ? [item.options[0]] : [],
+  it("в группах нет пункта «вся группа» — только линии (VED-568)", () => {
+    const values = menu.flatMap((item) =>
+      item.kind === "group" ? item.options.map((option) => option.value) : [],
     );
-    expect(firsts.map((option) => [option.value, option.label])).toEqual([
-      ["group:gaudiya_math", "Любой Гаудия-матх"],
-      ["group:parivara", "Любой паривар"],
-    ]);
+    expect(values.some((value) => value.startsWith("group:"))).toBe(false);
+    const firsts = menu.flatMap((item) =>
+      item.kind === "group" ? [item.options[0].value] : [],
+    );
+    expect(firsts).toEqual(["sri_chaitanya_gaudiya_math", "nityananda_vamsha"]);
   });
 
   it("группа выбранной линии", () => {

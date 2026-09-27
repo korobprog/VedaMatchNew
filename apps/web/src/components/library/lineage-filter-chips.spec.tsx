@@ -88,18 +88,28 @@ describe("LibraryLineageFilter (VED-449)", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("«Любой паривар» фильтрует всю группу (VED-568)", async () => {
+  it("в группе нет пункта «Любой паривар» — только линии (VED-568)", async () => {
     await open();
     await userEvent.click(screen.getByRole("button", { name: "Паривары" }));
-    await userEvent.click(screen.getByRole("button", { name: "Любой паривар" }));
+    expect(
+      screen.queryByRole("button", { name: /Любой/ }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Адвайта-вамша" }),
+    );
     const [, init] = apiFetch.mock.calls[0];
-    expect(JSON.parse(init.body)).toEqual({ lineage: "group:parivara" });
+    expect(JSON.parse(init.body)).toEqual({ lineage: "advaita_vamsha" });
   });
 
-  it("применённая группа видна в шапке группы", async () => {
+  it("сохранённая раньше группа целиком подсвечивает шапку группы", async () => {
     await open("group:parivara");
-    const group = screen.getByRole("button", { name: /^Паривары/ });
-    expect(group).toHaveTextContent("Любой паривар");
+    const group = screen.getByRole("button", { name: "Паривары" });
+    expect(group).toHaveClass("bg-magenta/10");
+    expect(group).toHaveTextContent(/^Паривары$/);
+    await userEvent.click(group);
+    expect(
+      screen.queryByRole("button", { name: /Любой/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("выбранная позиция — ничего не делает", async () => {

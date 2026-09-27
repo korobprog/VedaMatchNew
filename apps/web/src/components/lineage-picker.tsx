@@ -14,6 +14,7 @@ import { fieldClassName } from "@/components/ui/input";
 import {
   lineageDetailOptions,
   lineageDetailPrompt,
+  lineageDetailValue,
   lineageFirstStepPick,
   lineageFirstStepValue,
   lineageGroupHasDetail,
@@ -41,8 +42,10 @@ import {
  *
  * Значение — строка, чтобы `<select>` и радио были контролируемыми без
  * жонглирования `null`: `""` означает «не выбрано» либо «как в профиле» (что
- * именно — говорит подпись у пустого варианта), `"all"` — все линии,
- * `group:<группа>` — вся группа (только в фильтрах, `allowGroup`).
+ * именно — говорит подпись у пустого варианта), `"all"` — все линии.
+ * Группу целиком выбрать нельзя (VED-568), но `group:<группа>`, сохранённое
+ * в фильтре раньше, показывается группой на первом шаге с неуточнённым
+ * вторым.
  */
 
 const NONE = "";
@@ -111,7 +114,7 @@ export function LineageCards({
     } ${disabled ? "opacity-60" : ""}`;
 
   function pickGroup(picked: LineageGroup) {
-    const next = lineageFirstStepPick(picked, value, false);
+    const next = lineageFirstStepPick(picked, value);
     if (!next) return setPending(null);
     if ("pending" in next) return setPending(next.pending);
     setPending(null);
@@ -197,9 +200,11 @@ export function LineageSelect({
   className,
   compact = false,
   ariaLabel,
-  allowGroup = false,
 }: {
-  /** `""`, `"all"`, идентификатор линии или (в фильтре) `group:<группа>`. */
+  /**
+   * `""`, `"all"`, идентификатор линии или сохранённое раньше в фильтре
+   * `group:<группа>` — его уже не предлагаем, но показываем.
+   */
   value: string;
   onChange: (value: string) => void;
   /**
@@ -226,23 +231,18 @@ export function LineageSelect({
    * одинаковых полей «Духовная линия» не различить.
    */
   ariaLabel?: string;
-  /**
-   * Фильтр, а не линия материала: группу можно выбрать целиком
-   * (`group:gaudiya_math`), второй шаг лишь уточняет её. Без флага значение
-   * всегда конкретная линия, и группа только открывает второй шаг.
-   */
-  allowGroup?: boolean;
 }) {
   const [pending, setPending] = usePendingGroup(value);
   const first = lineageFirstStepValue(value, pending);
   const group = pending ?? lineageValueGroup(value);
+  const detail = lineageDetailValue(value, pending);
   const fieldClass = className ?? fieldClassName;
   const autoId = useId();
   const selectId = id ?? autoId;
   const name = label ? undefined : (ariaLabel ?? "Духовная линия");
 
   function pickFirst(picked: string) {
-    const next = lineageFirstStepPick(picked, value, allowGroup);
+    const next = lineageFirstStepPick(picked, value);
     if (!next) return setPending(null);
     if ("pending" in next) return setPending(next.pending);
     setPending(null);
@@ -279,8 +279,9 @@ export function LineageSelect({
   );
 
   // Второй шаг — только у группы из нескольких линий: какой именно матх или
-  // паривар. Пока линия не выбрана, значение поля прежнее — сохранить
-  // «просто Гаудия-матх» в материал нельзя, хранится конкретная линия.
+  // паривар. Пока линия не выбрана, значение поля прежнее — «просто
+  // Гаудия-матх» не сохранить ни в материал, ни в фильтр (VED-568). Группа
+  // целиком из старой настройки стоит на подсказке «Какой именно…».
   const detailSelect =
     group && lineageGroupHasDetail(group) ? (
       <select
@@ -290,7 +291,7 @@ export function LineageSelect({
             : lineageDetailPrompt(group)
         }
         aria-invalid={pending ? true : undefined}
-        value={pending ? NONE : value}
+        value={detail}
         disabled={disabled}
         onChange={(event) => {
           setPending(null);
@@ -298,12 +299,12 @@ export function LineageSelect({
         }}
         className={fieldClass}
       >
-        {pending && (
+        {detail === NONE && (
           <option value={NONE} disabled>
             {lineageDetailPrompt(group)}…
           </option>
         )}
-        {lineageDetailOptions(group, { allowGroup, compact }).map((option) => (
+        {lineageDetailOptions(group, { compact }).map((option) => (
           <option key={option.value} value={option.value} title={option.title}>
             {option.label}
           </option>

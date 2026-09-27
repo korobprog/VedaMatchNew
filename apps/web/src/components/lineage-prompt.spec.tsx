@@ -170,31 +170,41 @@ describe("LineageSelect", () => {
     ).toHaveValue("ipbys");
   });
 
-  it("в фильтре группа выбирается целиком, второй шаг её уточняет", async () => {
+  it("группу целиком не выбрать — только открыть второй шаг (VED-568)", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    const { rerender } = render(
-      <LineageSelect value="" onChange={onChange} emptyLabel="Все" allowGroup />,
-    );
+    render(<LineageSelect value="" onChange={onChange} emptyLabel="Все" />);
 
     await user.selectOptions(screen.getByRole("combobox"), "gaudiya_math");
-    expect(onChange).toHaveBeenCalledWith("group:gaudiya_math");
-
-    rerender(
-      <LineageSelect
-        value="group:gaudiya_math"
-        onChange={onChange}
-        emptyLabel="Все"
-        allowGroup
-      />,
-    );
+    expect(onChange).not.toHaveBeenCalled();
     const detail = screen.getByRole("combobox", {
       name: "Духовная линия: какой именно матх",
     });
-    expect(detail).toHaveValue("group:gaudiya_math");
     expect(
-      screen.getByRole("option", { name: "Любой Гаудия-матх" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("option", { name: /Любой/ }),
+    ).not.toBeInTheDocument();
+    await user.selectOptions(detail, "ipbys");
+    expect(onChange).toHaveBeenCalledWith("ipbys");
+  });
+
+  it("сохранённая раньше группа целиком — группа и неуточнённый второй шаг", () => {
+    render(
+      <LineageSelect
+        value="group:gaudiya_math"
+        onChange={vi.fn()}
+        emptyLabel="Все"
+      />,
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Духовная линия" }),
+    ).toHaveValue("gaudiya_math");
+    const detail = screen.getByRole("combobox", {
+      name: "Духовная линия: какой именно матх",
+    });
+    expect(detail).toHaveValue("");
+    expect(
+      screen.queryByRole("option", { name: /Любой/ }),
+    ).not.toBeInTheDocument();
   });
 });
 

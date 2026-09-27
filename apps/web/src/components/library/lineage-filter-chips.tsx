@@ -31,8 +31,9 @@ const API_URL = apiBase();
  * Сначала это был ряд из одиннадцати кнопок (VED-395), но на телефоне он
  * уезжал вбок и занимал строку над рубриками. Заказчик попросил одну кнопку
  * «Фильтры» и внутри четыре позиции — «Всё», ИСККОН, «Гаудия-матх»,
- * «Паривары»; матхи и паривары — внутри своих групп, и первым пунктом в
- * группе — она вся (VED-568).
+ * «Паривары»; матхи и паривары — внутри своих групп. Пункта «Любой
+ * Гаудия-матх» нет (VED-568): сохранённая раньше группа целиком подсвечивает
+ * шапку группы без подписи линии под ней.
  *
  * Выбор сохраняет настройку Образования, поэтому линия держится и в
  * рубриках, и при следующем заходе, а не живёт в одном адресе.
@@ -89,15 +90,15 @@ export function LibraryLineageFilter({
       gaudiya_math: t(locale, "lineage.group.gaudiya_math"),
       parivara: t(locale, "lineage.group.parivara"),
     },
-    anyInGroup: {
-      gaudiya_math: t(locale, "lineage.any.gaudiya_math"),
-      parivara: t(locale, "lineage.any.parivara"),
-    },
   });
   // Группы свёрнуты (VED-483): «шапка Гаудия-матх должна быть свёрнута,
   // при нажатии разворачиваться». Что выбрано внутри — видно в самой шапке.
   const [expanded, setExpanded] = useState<LineageGroup | null>(null);
   const currentGroup = lineageChoiceGroup(current);
+  // Линия внутри группы — подписью под шапкой. У группы целиком из старой
+  // настройки (VED-568) подписи нет: пункта «Любой…» больше не существует.
+  const lineageInGroup = (options: { value: LineageChoice; label: string }[]) =>
+    options.find((option) => option.value === current)?.label;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -203,11 +204,13 @@ export function LibraryLineageFilter({
                 >
                   <span className="min-w-0">
                     {item.label}
-                    {currentGroup === item.group && expanded !== item.group && (
-                      <span className="block truncate text-xs font-normal text-text-1">
-                        {item.options.find((option) => option.value === current)?.label}
-                      </span>
-                    )}
+                    {currentGroup === item.group &&
+                      expanded !== item.group &&
+                      lineageInGroup(item.options) && (
+                        <span className="block truncate text-xs font-normal text-text-1">
+                          {lineageInGroup(item.options)}
+                        </span>
+                      )}
                   </span>
                   <ChevronDown
                     aria-hidden
