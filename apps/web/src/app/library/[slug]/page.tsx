@@ -25,6 +25,7 @@ import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
+import { EntrySortMenu } from "@/components/library/entry-sort-menu";
 import { LibraryContents } from "@/components/library/library-contents";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
@@ -138,8 +139,9 @@ export default async function LibraryCategoryPage({
     en: category.titleEn,
   });
   // Страница автора (VED-521) — рубрика без подрубрик внутри раздела:
-  // «Проповедники → Ари Мардан Прабху». Фильтров и сортировки там нет,
-  // тип и язык выбираются значками в ряду действий.
+  // «Проповедники → Ари Мардан Прабху». Панели фильтров там нет: тип
+  // материала и порядок («Свой порядок» / «По алфавиту», VED-573) —
+  // значками в ряду действий.
   const authorPage =
     children.length === 0 && ancestors.length > 0 && shlokaMode === null;
 
@@ -199,9 +201,15 @@ export default async function LibraryCategoryPage({
           {authorPage ? (
             <>
               {/* У автора слева направо (VED-521, второй круг): «Содержание»
-                  значком, «Тип материала», «Упорядочить», «Редактировать»,
-                  «Язык» — тип и язык поменялись местами по стрелкам. Список
-                  «Содержания» раскрывается под рядом (VED-538). */}
+                  значком, «Тип материала», «Упорядочить», «Редактировать».
+                  Список «Содержания» раскрывается под рядом (VED-538).
+
+                  «Язык» с подписью «Все» убран (VED-573): на телефоне он
+                  один переносился на вторую строку и отодвигал ленту вниз.
+
+                  «Упорядочить» — порядок ленты для всех, админов тоже
+                  (VED-573), а не админское перетаскивание рубрик: у автора
+                  подрубрик нет, и режим показывал чужое дерево целиком. */}
               <div className="ml-auto" />
               <LibraryContents
                 locale={locale}
@@ -209,11 +217,8 @@ export default async function LibraryCategoryPage({
                 iconOnly
               />
               <EntryFilterMenu kind="type" locale={locale} />
-              {category.canMove && (
-                <LibraryOrganizeButton locale={locale} iconOnly />
-              )}
+              <EntrySortMenu locale={locale} />
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
-              <EntryFilterMenu kind="language" locale={locale} />
             </>
           ) : (
             <>
@@ -259,7 +264,7 @@ export default async function LibraryCategoryPage({
             categories={children}
             tree={tree ?? []}
             activeSlug={category.slug}
-            canOrganize={category.canMove}
+            canOrganize={category.canMove && !authorPage}
             organizeInToolbar
           />
         )}
@@ -315,8 +320,8 @@ export default async function LibraryCategoryPage({
               <DescendantsToggle locale={locale} enabled={withDescendants} />
             )}
 
-            {/* У автора панели фильтров нет (VED-521): тип и язык — значками
-                выше, сортировка одна — «новое сверху». */}
+            {/* У автора панели фильтров нет (VED-521): тип и порядок —
+                значками выше. */}
             {!authorPage && (
               <EntryFilters
                 locale={locale}
@@ -332,6 +337,10 @@ export default async function LibraryCategoryPage({
                 locale={locale}
                 query={{ ...query, categorySlug: slug }}
                 lineageFiltered={appliedLineage !== null}
+                // Родительские рубрики уже названы крошками, и их чипы на
+                // карточках лишние (VED-573): у автора «Проповедники»
+                // выталкивали его имя на отдельную строку.
+                hiddenCategorySlugs={ancestors.map((item) => item.slug)}
               />
             )}
           </>

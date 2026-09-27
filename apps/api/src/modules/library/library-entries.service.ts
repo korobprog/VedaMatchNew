@@ -36,7 +36,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CommunitiesService } from '../communities/communities.service';
 import {
   decodeCursor,
+  decodeOffsetCursor,
   encodeCursor,
+  encodeOffsetCursor,
   feedOrderBy,
   resolveSort,
 } from './library-feed-query';
@@ -870,7 +872,9 @@ export class LibraryEntriesService {
     viewerIsAdmin = false,
   ): Promise<LibraryFeedResponse> {
     const sort = resolveSort(filters.sort);
-    const cursor = decodeCursor(filters.cursor);
+    const cursor = sort === 'new' ? decodeCursor(filters.cursor) : null;
+    const offset =
+      sort === 'title' ? (decodeOffsetCursor(filters.cursor) ?? 0) : 0;
     const where: Prisma.LibraryEntryWhereInput = { status: 'published' };
 
     if (
@@ -935,6 +939,7 @@ export class LibraryEntriesService {
       this.prisma.libraryEntry.findMany({
         where,
         orderBy: feedOrderBy(sort),
+        ...(offset > 0 ? { skip: offset } : {}),
         take: PAGE_SIZE + 1,
         select: ENTRY_SELECT,
       }),
@@ -957,7 +962,9 @@ export class LibraryEntriesService {
       ),
       nextCursor:
         hasMore && last
-          ? encodeCursor({ publishedAt: last.publishedAt, id: last.id })
+          ? sort === 'title'
+            ? encodeOffsetCursor(offset + page.length)
+            : encodeCursor({ publishedAt: last.publishedAt, id: last.id })
           : null,
       total,
     };

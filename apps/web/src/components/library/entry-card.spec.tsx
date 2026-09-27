@@ -232,4 +232,44 @@ describe("EntryCard", () => {
 
     expect(container.querySelector("time")?.textContent).toBe("26 сент. 2026");
   });
+
+  it("не показывает чипы рубрик, названных крошками страницы (VED-573)", () => {
+    render(
+      <EntryCard
+        entry={{
+          ...entry,
+          categories: [
+            {
+              id: "c-1",
+              slug: "preachers",
+              titleRu: "Проповедники",
+              titleEn: null,
+            },
+            {
+              id: "c-2",
+              slug: "ari",
+              titleRu: "Ари Мардан Прабху",
+              titleEn: null,
+            },
+          ],
+        }}
+        locale="ru"
+        hiddenCategorySlugs={["preachers"]}
+      />,
+    );
+
+    expect(screen.queryByRole("link", { name: "Проповедники" })).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Ари Мардан Прабху" }),
+    ).toHaveAttribute("href", "/library/ari");
+  });
+
+  it("поднимается над соседями, пока открыто её меню (VED-573)", () => {
+    // `.glass` — свой контекст наложения: без подъёма меню «Линии» уходило
+    // под следующую карточку и от него оставалась полоска.
+    const { container } = render(<EntryCard entry={entry} locale="ru" />);
+    const article = container.querySelector("article");
+    expect(article?.className).toContain("relative");
+    expect(article?.className).toContain("has-[[aria-expanded=true]]:z-40");
+  });
 });

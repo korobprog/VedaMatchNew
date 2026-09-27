@@ -15,6 +15,7 @@ export function EntryList({
   locale,
   query,
   lineageFiltered = false,
+  hiddenCategorySlugs,
 }: {
   initialFeed: LibraryFeedResponse;
   locale: LibraryLocale;
@@ -27,6 +28,8 @@ export function EntryList({
    * Показать материалы всех линий» заказчик попросил убрать.
    */
   lineageFiltered?: boolean;
+  /** Чипы каких рубрик на карточках не показывать (VED-573). */
+  hiddenCategorySlugs?: readonly string[];
 }) {
   const [feed, setFeed] = useState(initialFeed);
   const [pending, setPending] = useState(false);
@@ -80,6 +83,7 @@ export function EntryList({
             entry={entry}
             locale={locale}
             onDeleted={() => dropEntry(entry.id)}
+            hiddenCategorySlugs={hiddenCategorySlugs}
           />
         ))}
       </div>
