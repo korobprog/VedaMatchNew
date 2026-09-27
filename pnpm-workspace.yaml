@@ -33,3 +33,4 @@ overrides:
 
 patchedDependencies:
   expo-audio@57.0.5: patches/expo-audio@57.0.5.patch
+  react-native-webrtc@124.0.8: patches/react-native-webrtc@124.0.8.patch

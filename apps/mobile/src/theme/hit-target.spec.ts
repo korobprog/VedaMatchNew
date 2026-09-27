@@ -92,15 +92,18 @@ describe('зона нажатия', () => {
       [
         // Строка беседы: два ряда текста и аватар, 76 — больше порога.
         'components/chat/conversation-row.tsx:row=76',
-        // Кнопки участника и выхода в групповом звонке — круги 64.
-        // Микрофон и переворот камеры делят голый `circle`, камера добавляет
-        // `blocked` (гаснет прозрачностью, но остаётся нажимаемой — иначе
+        // Кнопки участника и выхода в групповом звонке — круги 64, а когда
+        // в ряд встаёт пятая («Показать экран», VED-360) — 56
+        // (`circleDense`), всё равно крупнее порога. Микрофон и переворот
+        // камеры делят голый круг, камера и показ экрана добавляют
+        // `blocked` (гаснут прозрачностью, но остаются нажимаемыми — иначе
         // четвёртый жмёт в мёртвую кнопку и не узнаёт причину), выход —
-        // `leave`. Все четыре 64, порог перекрыт с запасом.
-        'app/group-call/[id].tsx:circle=64',
-        'app/group-call/[id].tsx:circle=64',
-        'app/group-call/[id].tsx:circle/blocked=64',
-        'app/group-call/[id].tsx:circle/leave=64',
+        // `leave`.
+        'app/group-call/[id].tsx:circleDense/circle=56',
+        'app/group-call/[id].tsx:circleDense/circle=56',
+        'app/group-call/[id].tsx:circleDense/circle/blocked=56',
+        'app/group-call/[id].tsx:circleDense/circle/blocked=56',
+        'app/group-call/[id].tsx:circleDense/circle/leave=56',
         // Кнопка в полоске отказа микрофона: сама 36, до 44 добирается
         // `hitSlop` — полоска низкая, растить её значит двигать композер.
         'components/chat/voice/voice-recorder-control.tsx:deniedButton=44',

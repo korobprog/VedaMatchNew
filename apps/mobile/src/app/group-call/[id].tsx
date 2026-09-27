@@ -30,6 +30,7 @@ import {
   videoTiles,
   type Tile,
 } from '@/lib/group-calls/group-video-state';
+import { screenButtonState } from '@/lib/group-calls/screen-share';
 import { splitStage, stageStrip, videoGridLayout } from '@/lib/group-calls/video-grid';
 import { confirmTap } from '@/lib/feedback';
 import { pressedStyle, ripple } from '@/theme/press';
@@ -104,8 +105,17 @@ export default function GroupCallScreen() {
   const ended = state.phase === 'ended';
   const showsGrid = !ended && camerasOn(call) > 0;
   const camera = cameraButtonState(call, calls.selfId, calls.cameraOn);
+  const screen = screenButtonState(call, calls.selfId, {
+    sharing: calls.screenOn,
+    supported: calls.screenSupported,
+  });
   const speaking = state.speaking;
   const sharer = ended ? null : screenSharer(call);
+  // Перевернуть камеру во время показа нечего: в отправителе экран.
+  const showFlip = calls.cameraOn && !calls.screenOn;
+  // Пять круглых кнопок по 64 не помещаются в 360 точек ширины — тогда
+  // кнопки чуть меньше и ближе, но не меньше 48 (`hitTarget`).
+  const dense = 3 + (showFlip ? 1 : 0) + (screen.visible ? 1 : 0) > 4;
 
   const grid = (
     <VideoGrid
@@ -113,6 +123,7 @@ export default function GroupCallScreen() {
       selfId={calls.selfId}
       call={call}
       sendingVideo={calls.sendingVideo}
+      sharingScreen={calls.screenOn}
       localStreamUrl={calls.localVideoStream?.toURL() ?? null}
       remoteStreams={calls.remoteStreams}
       remoteVideoOff={calls.remoteVideoOff}
@@ -218,7 +229,38 @@ export default function GroupCallScreen() {
         </Pressable>
       ) : null}
 
-      <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
+      {calls.screenOn && !ended ? (
+        <View style={styles.sharingBar}>
+          <Text style={[styles.sharingBarText, { color: colors.text0 }]}>
+            Остальные видят ваш экран
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              confirmTap();
+              void calls.toggleScreenShare();
+            }}
+            android_ripple={ripple(colors.glassBorder)}
+            style={({ pressed }) => [
+              styles.sharingStop,
+              { backgroundColor: colors.bg1, borderColor: colors.magenta },
+              pressedStyle(pressed),
+            ]}
+          >
+            <Text style={[styles.sharingStopLabel, { color: colors.text0 }]}>
+              Остановить показ
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <View
+        style={[
+          styles.controls,
+          dense ? styles.controlsDense : null,
+          { paddingBottom: insets.bottom + 20 },
+        ]}
+      >
         {ended ? (
           <Pressable
             accessibilityRole="button"
@@ -248,7 +290,7 @@ export default function GroupCallScreen() {
               }}
               android_ripple={ripple(colors.glassBorder, true)}
               style={({ pressed }) => [
-                styles.circle,
+                dense ? styles.circleDense : styles.circle,
                 { backgroundColor: colors.bg1, borderColor: colors.glassBorder },
                 pressedStyle(pressed),
               ]}
@@ -262,11 +304,17 @@ export default function GroupCallScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
-                camera.blocked
-                  ? `Включить камеру нельзя: ${camera.blockedReason}`
-                  : calls.cameraOn
-                    ? 'Выключить камеру'
-                    : 'Включить камеру'
+                // Во время показа экрана кнопка решает, вернётся ли камера
+                // после него: в отправителе сейчас экран.
+                calls.screenOn
+                  ? calls.cameraOn
+                    ? 'Не включать камеру после показа экрана'
+                    : 'Включить камеру после показа экрана'
+                  : camera.blocked
+                    ? `Включить камеру нельзя: ${camera.blockedReason}`
+                    : calls.cameraOn
+                      ? 'Выключить камеру'
+                      : 'Включить камеру'
               }
               accessibilityState={{ selected: calls.cameraOn }}
               onPress={() => {
@@ -275,9 +323,9 @@ export default function GroupCallScreen() {
               }}
               android_ripple={ripple(colors.glassBorder, true)}
               style={({ pressed }) => [
-                styles.circle,
+                dense ? styles.circleDense : styles.circle,
                 { backgroundColor: colors.bg1, borderColor: colors.glassBorder },
-                camera.blocked ? styles.blocked : null,
+                camera.blocked && !calls.screenOn ? styles.blocked : null,
                 pressedStyle(pressed),
               ]}
             >
@@ -287,7 +335,7 @@ export default function GroupCallScreen() {
               />
             </Pressable>
 
-            {calls.cameraOn ? (
+            {showFlip ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Перевернуть камеру"
@@ -297,12 +345,48 @@ export default function GroupCallScreen() {
                 }}
                 android_ripple={ripple(colors.glassBorder, true)}
                 style={({ pressed }) => [
-                  styles.circle,
+                  dense ? styles.circleDense : styles.circle,
                   { backgroundColor: colors.bg1, borderColor: colors.glassBorder },
                   pressedStyle(pressed),
                 ]}
               >
                 <FlipIcon color={colors.text0} />
+              </Pressable>
+            ) : null}
+
+            {/* Показ экрана (VED-360) — только Android 10+. Как и камера,
+                погашенная кнопка остаётся нажимаемой и объясняет причину,
+                но системное окно согласия при этом не открывается. */}
+            {screen.visible ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  screen.blocked
+                    ? `Показать экран нельзя: ${screen.blockedReason}`
+                    : calls.screenOn
+                      ? 'Остановить показ экрана'
+                      : 'Показать экран'
+                }
+                accessibilityState={{ selected: calls.screenOn }}
+                onPress={() => {
+                  confirmTap();
+                  void calls.toggleScreenShare();
+                }}
+                android_ripple={ripple(colors.glassBorder, true)}
+                style={({ pressed }) => [
+                  dense ? styles.circleDense : styles.circle,
+                  {
+                    backgroundColor: calls.screenOn ? colors.bg2 : colors.bg1,
+                    borderColor: calls.screenOn ? colors.magenta : colors.glassBorder,
+                  },
+                  screen.blocked ? styles.blocked : null,
+                  pressedStyle(pressed),
+                ]}
+              >
+                <ScreenIcon
+                  color={screen.blocked ? colors.text1 : colors.text0}
+                  stop={calls.screenOn}
+                />
               </Pressable>
             ) : null}
 
@@ -315,7 +399,7 @@ export default function GroupCallScreen() {
               }}
               android_ripple={ripple(colors.onAccent, true)}
               style={({ pressed }) => [
-                styles.circle,
+                dense ? styles.circleDense : styles.circle,
                 styles.leave,
                 { backgroundColor: colors.magenta, borderColor: colors.magenta },
                 pressedStyle(pressed),
@@ -358,6 +442,7 @@ function VideoGrid({
   call,
   selfId,
   sendingVideo,
+  sharingScreen = false,
   localStreamUrl,
   remoteStreams,
   remoteVideoOff,
@@ -371,6 +456,7 @@ function VideoGrid({
   call: Parameters<typeof videoTiles>[0]['call'];
   selfId: string;
   sendingVideo: boolean;
+  sharingScreen?: boolean;
   localStreamUrl: string | null;
   remoteStreams: Record<string, { toURL: () => string }>;
   remoteVideoOff: Record<string, boolean>;
@@ -384,6 +470,7 @@ function VideoGrid({
     call,
     selfId,
     sendingVideo,
+    sharingScreen,
     remoteStreams: new Set(Object.keys(remoteStreams)),
     remoteVideoOff: new Set(
       Object.entries(remoteVideoOff)
@@ -519,7 +606,15 @@ function GridTile({
         },
       ]}
     >
-      {tile.view === 'video' && url ? (
+      {tile.isSelf && tile.screen ? (
+        // Свой экран живым превью не рисуется: телефон показывает весь
+        // экран, и его копия внутри него самого — бесконечный коридор
+        // отражений, а не полезная картинка.
+        <View style={[styles.tilePlaceholder, styles.stagePlaceholder]}>
+          <ScreenIcon color={colors.text1} size={avatarSize > 48 ? 36 : 24} />
+          <Text style={[styles.stageHint, { color: colors.text1 }]}>Вы показываете экран</Text>
+        </View>
+      ) : tile.view === 'video' && url ? (
         <RTCView
           streamURL={url}
           style={StyleSheet.absoluteFill}
@@ -822,7 +917,16 @@ function CameraIcon({ off, color, size = 26 }: { off: boolean; color: string; si
   );
 }
 
-function ScreenIcon({ color, size = 26 }: { color: string; size?: number }) {
+function ScreenIcon({
+  color,
+  size = 26,
+  stop = false,
+}: {
+  color: string;
+  size?: number;
+  /** Крестик на экране — «остановить показ». */
+  stop?: boolean;
+}) {
   return (
     <Svg
       width={size}
@@ -836,6 +940,7 @@ function ScreenIcon({ color, size = 26 }: { color: string; size?: number }) {
     >
       <Rect x={2.5} y={4} width={19} height={13} rx={2.5} />
       <Path d="M8 21h8M12 17v4" />
+      {stop ? <Path d="M9.5 8l5 5M14.5 8l-5 5" /> : null}
     </Svg>
   );
 }
@@ -992,6 +1097,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  /** Пять кнопок в ряд — 56 точек, всё ещё крупнее `hitTarget`. */
+  circleDense: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlsDense: { gap: 12 },
+  sharingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 20,
+    marginTop: 12,
+  },
+  sharingBarText: { flex: 1, fontFamily: fonts.bodySemiBold, fontSize: 14 },
+  sharingStop: {
+    minHeight: hitTarget,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderWidth: 2,
+    borderRadius: hitTarget / 2,
+  },
+  sharingStopLabel: { fontFamily: fonts.bodyBold, fontSize: 15 },
   /** Недоступная кнопка гаснет прозрачностью, но остаётся нажимаемой. */
   blocked: { opacity: 0.6 },
   leave: { borderWidth: 0 },

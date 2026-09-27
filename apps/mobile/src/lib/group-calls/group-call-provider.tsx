@@ -26,6 +26,7 @@ import type { NetworkTransport } from '../../../modules/vedamatch-calls';
 import type { VideoEncoding } from '@/lib/calls/video-encoding';
 import { useSession } from '@/lib/auth/session';
 import { useChatStream } from '@/lib/chat/chat-stream';
+import { ApiError } from '@/lib/api/client';
 import { createChatCallsApi } from '@/lib/calls/chat-calls-client';
 import { describeMediaError } from '@/lib/calls/call-media-error';
 import {
@@ -35,6 +36,9 @@ import {
 } from '@/lib/calls/media-state-signal';
 import {
   setPipEligible,
+  startGroupCallKeepAlive,
+  stopGroupCallKeepAlive,
+  subscribeToGroupCallTicks,
   subscribeToNetworkTransportChanges,
   subscribeToPipModeChanges,
 } from '@/lib/calls/native-call-bridge';
@@ -51,6 +55,7 @@ import { GroupCallsContext, type GroupCallsApi } from './group-call-context';
 import {
   GROUP_CALL_HEARTBEAT_MS,
   HEARTBEAT_LOST_MESSAGE,
+  heartbeatDue,
   heartbeatLost,
 } from './group-call-heartbeat';
 import { planPeers } from './group-call-peers';
@@ -60,11 +65,23 @@ import {
   type GroupCallState,
 } from './group-call-state';
 import {
+  degradationFor,
   encodingChanged,
+  groupScreenEncoding,
   groupVideoEncoding,
 } from './group-video-quality';
+import type { DegradationPreference } from '@/lib/calls/video-encoding';
 import { formatVideoDiagnostics } from './group-video-link';
-import { shouldSendGroupVideo } from './group-video-state';
+import { outgoingVideo } from './group-video-state';
+import {
+  cameraToggleNeedsServer,
+  canShareScreen,
+  describeScreenShareError,
+  SCREEN_CAPTURE_SCALE,
+  screenButtonState,
+  screenFlagStale,
+  screenStopPatch,
+} from './screen-share';
 import { GroupPeerLink } from './group-peer-link';
 import {
   EMPTY_SPEAKING_STATE,
@@ -137,8 +154,28 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
    * обязано перерисовать сетку.
    */
   const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
-  /** Человек хочет камеру включённой. Что реально уходит — `shouldSendGroupVideo`. */
+  /** Человек хочет камеру включённой. Что реально уходит — `outgoingVideo`. */
   const [cameraOn, setCameraOn] = useState(false);
+  /**
+   * Показ экрана (VED-360): экран подменяет камеру в том же отправителе.
+   * `cameraOn` при этом не трогается — это то, вернётся ли камера, когда
+   * показ кончится.
+   */
+  const [screenOn, setScreenOn] = useState(false);
+  /** Свой экран потоком — для своей плитки, пока показываем. */
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
+  const screenTrack = useRef<MediaStreamTrack | null>(null);
+  const screenStream = useRef<MediaStream | null>(null);
+  /**
+   * Показ, который уже кончился, но чья дорожка ещё стоит в отправителях.
+   * Отпускается нативно (`release`) только после того, как отправители
+   * получили замену: освобождённая дорожка в живом отправителе — это
+   * обращение к уничтоженному нативному объекту.
+   */
+  const screenToRelease = useRef<MediaStream | null>(null);
+  /** Идёт запрос начала показа — `screenFlagStale` в это окно не чинит. */
+  const screenPending = useRef(false);
+  const screenSupported = canShareScreen({ os: Platform.OS, version: Platform.Version });
   /** Чужие потоки: из них экран берёт картинку. */
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   /** Кто сообщил `{kind:'media'}`, что сейчас не снимает. */
@@ -150,35 +187,59 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
   const videoTransport = useRef<NetworkTransport | null>(null);
   /** Последнее применённое качество — чтобы не дёргать нативный мост впустую. */
   const appliedEncoding = useRef<VideoEncoding | null>(null);
+  const appliedDegradation = useRef<DegradationPreference | null>(null);
   /** Что мы в последний раз сообщили о своей камере каждому собеседнику. */
   const announcedMedia = useRef(new Map<string, boolean>());
 
   /**
-   * Уходит ли наша картинка прямо сейчас — решает чистый
-   * `shouldSendGroupVideo` (`group-video-state.ts`), а не разбросанные по
+   * Что уходит в видео-отправитель — экран, камера или ничего — решает
+   * чистый `outgoingVideo` (`group-video-state.ts`), а не разбросанные по
    * провайдеру условия. `ref` рядом нужен обработчикам, которые вызываются
    * вне рендера (создание нового соединения из пришедшего offer).
    */
-  const sendingVideo = shouldSendGroupVideo({
+  const outgoing = outgoingVideo({
     phase: state.phase,
     cameraOn,
+    screenOn,
     appState: normalizeAppState(appStateValue),
     pipActive,
   });
+  const sendingVideo = outgoing !== null;
+  const outgoingRef = useRef(outgoing);
   const sendingVideoRef = useRef(sendingVideo);
+  const cameraOnRef = useRef(cameraOn);
+  const screenOnRef = useRef(screenOn);
   // Через эффект, а не прямо в теле: запись в `ref` во время отрисовки —
   // та же ошибка, из-за которой рядом так же синхронизируется `stateRef` в
-  // веб-провайдере. Читают этот `ref` только обработчики вне отрисовки, и
+  // веб-провайдере. Читают эти `ref` только обработчики вне отрисовки, и
   // они срабатывают уже после эффектов.
   useEffect(() => {
+    outgoingRef.current = outgoing;
     sendingVideoRef.current = sendingVideo;
-  }, [sendingVideo]);
+    cameraOnRef.current = cameraOn;
+    screenOnRef.current = screenOn;
+  }, [cameraOn, outgoing, screenOn, sendingVideo]);
+  /** Сколько людей в комнате — потолок качества пересчитывается и по нему. */
+  const participantCount = useRef(0);
+
+  /** Дорожка, которая сейчас должна стоять в отправителях. */
+  const currentVideoTrack = useCallback(
+    (): MediaStreamTrack | null =>
+      outgoingRef.current === 'screen'
+        ? screenTrack.current
+        : outgoingRef.current === 'camera'
+          ? cameraTrack.current
+          : null,
+    [],
+  );
   const iceServers = useRef<ChatIceServerDto[]>([]);
   const sendQueue = useRef(new SignalSendQueue());
   const seqState = useRef<SignalSeqState>(INITIAL_SIGNAL_SEQ_STATE);
   const speaking = useRef<SpeakingState>(EMPTY_SPEAKING_STATE);
   /** Подряд не дошедшие подтверждения присутствия — см. `group-call-heartbeat.ts`. */
   const heartbeatFailures = useRef(0);
+  /** Когда ушло прошлое подтверждение — два источника не дублируют друг друга. */
+  const lastHeartbeatAt = useRef<number | null>(null);
 
   // ---------- сигналинг ----------
 
@@ -219,15 +280,18 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
         },
       });
       links.current.set(peerId, link);
-      // Новому соединению сразу отдаём и камеру, и потолок качества: без
-      // этого вошедший четвёртым видел бы чёрные плитки до первого
-      // изменения состава.
-      void link.setVideoTrack(sendingVideoRef.current ? cameraTrack.current : null);
+      // Новому соединению сразу отдаём и картинку (камеру или экран), и
+      // потолок качества: без этого вошедший четвёртым видел бы чёрные
+      // плитки до первого изменения состава.
+      void link.setVideoTrack(currentVideoTrack());
       if (appliedEncoding.current)
-        void link.applyVideoEncoding(appliedEncoding.current);
+        void link.applyVideoEncoding(
+          appliedEncoding.current,
+          appliedDegradation.current ?? undefined,
+        );
       return link;
     },
-    [sendSignal],
+    [currentVideoTrack, sendSignal],
   );
 
   /**
@@ -236,11 +300,25 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
    * дважды, а разошлись — картинка обязана вернуться, а не доживать
    * разговор на 360p.
    */
-  const applyVideoQuality = useCallback((participantCount: number) => {
-    const target = groupVideoEncoding(videoTransport.current, participantCount);
-    if (!encodingChanged(appliedEncoding.current, target)) return;
+  const applyVideoQuality = useCallback((count: number) => {
+    participantCount.current = count;
+    // Экрану — свой потолок: кадр не уменьшается, падает частота
+    // (`groupScreenEncoding`). Пересчёт идёт и на смену источника.
+    const source = outgoingRef.current === 'screen' ? 'screen' : 'camera';
+    const target =
+      source === 'screen'
+        ? groupScreenEncoding(videoTransport.current, count)
+        : groupVideoEncoding(videoTransport.current, count);
+    const degradation = degradationFor(source);
+    if (
+      !encodingChanged(appliedEncoding.current, target) &&
+      appliedDegradation.current === degradation
+    )
+      return;
     appliedEncoding.current = target;
-    for (const link of links.current.values()) void link.applyVideoEncoding(target);
+    appliedDegradation.current = degradation;
+    for (const link of links.current.values())
+      void link.applyVideoEncoding(target, degradation);
   }, []);
 
   const closeLink = useCallback((peerId: string) => {
@@ -345,13 +423,28 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     cameraTrack.current = null;
     setLocalVideoStream(null);
     setCameraOn(false);
+    // Показ экрана кончается вместе со звонком. Соединения уже закрыты, так
+    // что дорожку можно отпустить сразу: `release` останавливает захват и
+    // гасит службу показа вместе с её уведомлением.
+    releaseScreen(screenStream.current);
+    releaseScreen(screenToRelease.current);
+    screenStream.current = null;
+    screenToRelease.current = null;
+    screenTrack.current = null;
+    screenOnRef.current = false;
+    screenPending.current = false;
+    setLocalScreenStream(null);
+    setScreenOn(false);
     setRemoteStreams({});
     setRemoteVideoOff({});
     announcedMedia.current.clear();
     appliedEncoding.current = null;
+    appliedDegradation.current = null;
     speaking.current = EMPTY_SPEAKING_STATE;
     seqState.current = INITIAL_SIGNAL_SEQ_STATE;
     heartbeatFailures.current = 0;
+    lastHeartbeatAt.current = null;
+    stopGroupCallKeepAlive();
     if (Platform.OS !== 'web') InCallManager.stop();
   }, [closeAllLinks]);
 
@@ -474,6 +567,15 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     if (!call || stateRef.current.phase !== 'active') return;
     const next = !cameraOn;
 
+    // Во время показа экрана место под видео держит экран, а камера в
+    // отправитель не попадёт до конца показа. Нажатие решает только,
+    // вернётся ли она потом, — сервер узнает вместе с концом показа
+    // (`screenStopPatch`). `{video:false}` сейчас погасил бы показ.
+    if (!cameraToggleNeedsServer(screenOnRef.current)) {
+      setCameraOn(next);
+      return;
+    }
+
     if (!next) {
       setCameraOn(false);
       void groupApi.setVideo(call.id, false).catch(() => {
@@ -526,20 +628,30 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
   }, [sendSignal]);
 
   /**
-   * Привести камеру в соответствие решению `shouldSendGroupVideo`: захватить
-   * её, раздать во все соединения и сообщить об этом собеседникам — либо
-   * остановить.
+   * Привести отправитель в соответствие решению `outgoingVideo`: захватить
+   * камеру и раздать её во все соединения, либо раздать экран, либо ничего,
+   * — и сообщить собеседникам, идёт ли картинка.
    *
-   * Дорожка именно ОСТАНАВЛИВАЕТСЯ, а не глушится `enabled = false`:
-   * выключенная камера обязана отпустить железо (на телефоне гаснет и
-   * индикатор), иначе экономии на батарее и нагреве, ради которой всё
-   * затевалось, не будет вовсе.
+   * Камера именно ОСТАНАВЛИВАЕТСЯ, а не глушится `enabled = false`, в том
+   * числе на время показа экрана: выключенная камера обязана отпустить
+   * железо (на телефоне гаснет и индикатор), иначе экономии на батарее и
+   * нагреве, ради которой всё затевалось, не будет вовсе.
+   *
+   * Кончившийся показ отпускается здесь же, ПОСЛЕ того как отправители
+   * получили замену (`screenToRelease`).
    */
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (sendingVideo) {
+      if (outgoing === 'camera') {
         if (!cameraTrack.current) {
+          // Пока камера захватывается, в отправителе не должно остаться
+          // кончившегося экрана — у собеседников замёрз бы его кадр.
+          await Promise.all(
+            [...links.current.values()].map((link) => link.setVideoTrack(null)),
+          );
+          releaseScreen(screenToRelease.current);
+          screenToRelease.current = null;
           try {
             const media = await mediaDevices.getUserMedia({
               audio: false,
@@ -566,21 +678,141 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
             return;
           }
         }
-        for (const link of links.current.values())
-          void link.setVideoTrack(cameraTrack.current);
+        await Promise.all(
+          [...links.current.values()].map((link) => link.setVideoTrack(cameraTrack.current)),
+        );
       } else {
-        for (const link of links.current.values()) void link.setVideoTrack(null);
+        const track = outgoing === 'screen' ? screenTrack.current : null;
+        await Promise.all(
+          [...links.current.values()].map((link) => link.setVideoTrack(track)),
+        );
         cameraTrack.current?.stop();
         cameraTrack.current = null;
         setLocalVideoStream(null);
       }
+      releaseScreen(screenToRelease.current);
+      screenToRelease.current = null;
+      // Источник сменился — потолок качества тоже: экрану нужен полный
+      // кадр, камере — лестница по составу.
+      applyVideoQuality(participantCount.current);
       announceMedia();
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только по решению предиката
-  }, [sendingVideo, announceMedia]);
+  }, [outgoing, announceMedia]);
+
+  // ---------- показ экрана ----------
+
+  /**
+   * Закончить показ — кнопкой, «Остановить показ» в шторке, системной
+   * остановкой (другое приложение забрало экран, пользователь выключил
+   * трансляцию) или выходом. Камера возвращается, если была включена, иначе
+   * место под видео отдаётся: серверу — одним запросом (`screenStopPatch`).
+   *
+   * Дорожка не отпускается здесь сразу: она ещё стоит в отправителях.
+   * Отпускает её эффект выше, когда раздаст замену.
+   */
+  const stopScreenShare = useCallback(() => {
+    const media = screenStream.current;
+    if (!media && !screenOnRef.current) return;
+    screenStream.current = null;
+    screenTrack.current = null;
+    screenOnRef.current = false;
+    if (media) {
+      // Предыдущий кончившийся показ, если его ещё не отпустили, отпускаем:
+      // одновременно в отправителях двух экранов не бывает.
+      releaseScreen(screenToRelease.current);
+      screenToRelease.current = media;
+    }
+    setLocalScreenStream(null);
+    setScreenOn(false);
+    const call = stateRef.current.call;
+    if (!call || stateRef.current.phase !== 'active') return;
+    const patch = screenStopPatch(cameraOnRef.current);
+    void sendWithRetry(() => groupApi.setScreen(call.id, patch).then(() => undefined));
+  }, [groupApi]);
+
+  /**
+   * Начать показ. Порядок обратный камере — сперва системное окно согласия,
+   * потом разрешение сервера: окно открывается только в ответ на нажатие, а
+   * сервер ответит за доли секунды. Остальные при этом ничего лишнего не
+   * видят: в отправитель экран попадает только после ответа сервера, а при
+   * отказе захват сразу отпускается вместе со службой показа.
+   */
+  const toggleScreenShare = useCallback(async () => {
+    if (!screenSupported) return;
+    const call = stateRef.current.call;
+    if (!call || stateRef.current.phase !== 'active') return;
+    if (screenOnRef.current) {
+      stopScreenShare();
+      return;
+    }
+    if (screenPending.current) return;
+    // Заведомый отказ (показывает другой, мест нет) объясняем сразу, не
+    // открывая системное окно: согласиться и только потом услышать
+    // «нельзя» обиднее.
+    const hint = screenButtonState(call, userId, { sharing: false, supported: true });
+    if (hint.blocked) {
+      if (hint.blockedReason) dispatch({ type: 'failed-action', error: hint.blockedReason });
+      return;
+    }
+    screenPending.current = true;
+    let media: MediaStream | null = null;
+    try {
+      media = await mediaDevices.getDisplayMedia({
+        android: { resolutionScale: SCREEN_CAPTURE_SCALE },
+      });
+      const [track] = media.getVideoTracks();
+      if (!track) throw new Error('Не удалось показать экран');
+      await groupApi.setScreen(call.id, { screen: true });
+      if (stateRef.current.phase !== 'active' || stateRef.current.call?.id !== call.id) {
+        // Пока ждали ответа, звонок кончился — показ отпускаем.
+        releaseScreen(media);
+        return;
+      }
+      // «Остановить показ» в шторке, системная остановка трансляции и
+      // вытеснение другим приложением приходят сюда концом дорожки.
+      // Сеттер, а не `addEventListener`: последнего нет в опубликованных
+      // типах react-native-webrtc 124.x (см. шапку `webrtc-session.ts`).
+      track.onended = () => stopScreenShare();
+      screenTrack.current = track;
+      screenStream.current = media;
+      screenOnRef.current = true;
+      setLocalScreenStream(media);
+      setScreenOn(true);
+    } catch (error) {
+      releaseScreen(media);
+      const message = describeScreenShareError(
+        error,
+        (e): e is Error => e instanceof ApiError,
+      );
+      if (message) dispatch({ type: 'failed-action', error: message });
+    } finally {
+      screenPending.current = false;
+    }
+  }, [groupApi, screenSupported, stopScreenShare, userId]);
+
+  /**
+   * Свежий состав говорит, что мы показываем, а мы уже нет — конец показа
+   * до сервера не дошёл. Повторяем его (`screenFlagStale`).
+   */
+  const resyncScreenFlag = useCallback(
+    (call: ChatGroupCallDto) => {
+      if (
+        !screenFlagStale(call, userId, {
+          sharing: screenOnRef.current,
+          pending: screenPending.current,
+        })
+      )
+        return;
+      void groupApi
+        .setScreen(call.id, screenStopPatch(cameraOnRef.current))
+        .catch(() => undefined);
+    },
+    [groupApi, userId],
+  );
 
   useEffect(() => subscribeToPipModeChanges(setPipActive), []);
 
@@ -663,18 +895,35 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
 
   // ---------- «я ещё здесь» ----------
 
-  useEffect(() => {
-    if (state.phase !== 'active' || !state.call) return;
-    const callId = state.call.id;
-    const timer = setInterval(() => {
+  /**
+   * Подтвердить присутствие. Источников два (VED-360, живая проверка
+   * 27.09): JS-таймер ниже и тик нативной службы
+   * (`GroupCallKeepAliveService`). Таймер один не годится: JS-таймеры
+   * Android останавливает вместе с `Activity` (`JavaTimerManager.onHostPause`),
+   * и свёрнутое приложение или открытое системное окно согласия на показ
+   * экрана переставали подтверждать присутствие — через 45 с сервер
+   * убирал человека из комнаты. Нативный тик до JS доходит и при стоящих
+   * таймерах; `heartbeatDue` не даёт двум источникам слать вдвое чаще.
+   */
+  const beat = useCallback(
+    (force = false) => {
+      const call = stateRef.current.call;
+      if (!call || stateRef.current.phase !== 'active') return;
+      const now = Date.now();
+      if (!heartbeatDue(lastHeartbeatAt.current, now, force)) return;
+      lastHeartbeatAt.current = now;
+      const callId = call.id;
       void groupApi
         .heartbeat(callId)
         .then((fresh) => {
+          if (stateRef.current.call?.id !== callId) return;
           heartbeatFailures.current = 0;
           dispatch({ type: 'stream', event: { type: 'group-call.updated', call: fresh }, selfId: userId });
           reconcilePeers(fresh);
+          resyncScreenFlag(fresh);
         })
         .catch(() => {
+          if (stateRef.current.call?.id !== callId) return;
           heartbeatFailures.current += 1;
           // Подтверждения не доходят дольше, чем сервер готов ждать: нас
           // там уже нет, и показывать «разговор» с бегущим таймером —
@@ -683,9 +932,31 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
           teardown();
           dispatch({ type: 'failed', error: HEARTBEAT_LOST_MESSAGE });
         });
-    }, GROUP_CALL_HEARTBEAT_MS);
+    },
+    [groupApi, reconcilePeers, resyncScreenFlag, teardown, userId],
+  );
+
+  const activeCallId = state.phase === 'active' ? (state.call?.id ?? null) : null;
+
+  useEffect(() => {
+    if (!activeCallId) return;
+    const timer = setInterval(() => beat(), GROUP_CALL_HEARTBEAT_MS);
     return () => clearInterval(timer);
-  }, [groupApi, reconcilePeers, state.call, state.phase, teardown, userId]);
+  }, [activeCallId, beat]);
+
+  // Служба «Идёт групповой звонок» — на всё время в комнате: тикает
+  // heartbeat'ом, пока JS-таймеры стоят, и держит процесс с микрофоном на
+  // переднем плане. Поднимается при входе, когда приложение на экране —
+  // Android 12+ из фона службу поднять не даст.
+  useEffect(() => {
+    if (!activeCallId) return;
+    startGroupCallKeepAlive(activeCallId);
+    const unsubscribe = subscribeToGroupCallTicks(() => beat());
+    return () => {
+      unsubscribe();
+      stopGroupCallKeepAlive();
+    };
+  }, [activeCallId, beat]);
 
   // ---------- кто говорит ----------
 
@@ -748,10 +1019,15 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       setAppStateValue(next);
       if (next !== 'active') return;
       const call = stateRef.current.call;
-      if (call && stateRef.current.phase === 'active') void catchUpSignals();
+      if (call && stateRef.current.phase === 'active') {
+        // Вернулись на экран — подтверждаем сразу: сколько длилась пауза,
+        // мы не знаем, а таймер подтвердил бы только через шаг.
+        beat(true);
+        void catchUpSignals();
+      }
     });
     return () => subscription.remove();
-  }, [catchUpSignals]);
+  }, [beat, catchUpSignals]);
 
   const callInConversation = useCallback(
     (conversationId: string) => roomsByConversation[conversationId] ?? null,
@@ -789,9 +1065,11 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
     const peers = await Promise.all(
       [...links.current.values()].map((link) => link.videoDiagnostics()),
     );
-    const own = cameraTrack.current
-      ? `Своя камера: снимает (${sendingVideoRef.current ? 'отдаём' : 'не отдаём'})`
-      : 'Своя камера: выключена';
+    const own = screenTrack.current
+      ? 'Свой экран: показываем'
+      : cameraTrack.current
+        ? `Своя камера: снимает (${sendingVideoRef.current ? 'отдаём' : 'не отдаём'})`
+        : 'Своя камера: выключена';
     return `${own}\n\n${formatVideoDiagnostics(peers)}`;
   }, []);
 
@@ -810,6 +1088,10 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       localVideoStream,
       toggleCamera,
       switchCamera,
+      screenSupported,
+      screenOn,
+      toggleScreenShare,
+      localScreenStream,
       remoteStreams,
       remoteVideoOff,
       pipActive,
@@ -826,16 +1108,20 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       dismiss,
       join,
       leave,
+      localScreenStream,
       localVideoStream,
       pipActive,
       remoteStreams,
       remoteVideoOff,
+      screenOn,
+      screenSupported,
       sendingVideo,
       startOrJoin,
       state,
       switchCamera,
       toggleCamera,
       toggleMute,
+      toggleScreenShare,
       userId,
       watchConversation,
     ],
@@ -847,6 +1133,18 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       <GroupCallBanner visible={!screenVisible} />
     </GroupCallsContext.Provider>
   );
+}
+
+/**
+ * Отпустить захват экрана нативно: `stop()` в react-native-webrtc лишь
+ * выключает дорожку, а захват, `MediaProjection` и служба показа с её
+ * уведомлением освобождаются только `release()`. В веб-сборке приложения
+ * показа нет вовсе, и `release` там не объявлен — отсюда `?.`.
+ */
+function releaseScreen(media: MediaStream | null): void {
+  if (!media) return;
+  for (const track of media.getTracks()) track.stop();
+  (media as MediaStream & { release?: () => void }).release?.();
 }
 
 /**

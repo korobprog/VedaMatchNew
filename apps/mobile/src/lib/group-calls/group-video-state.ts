@@ -59,6 +59,30 @@ export function shouldSendGroupVideo({
   return !videoDimmedByBackground(appState, pipActive);
 }
 
+/**
+ * Что уходит в наш видео-отправитель (VED-360): экран, камера или ничего.
+ *
+ * Экран и камера делят ОДИН отправитель — показ подменяет камеру через
+ * `replaceTrack`, без новой видеосекции и пересогласования. Экран сильнее
+ * камеры: она вернётся сама, когда показ кончится.
+ *
+ * Фон гасит камеру, но НЕ экран: показывающий уходит из приложения ровно
+ * затем, чтобы показать другое. Погасить показ в этот момент — значит
+ * сломать его целиком. Держит процесс и микрофон в фоне служба показа
+ * (`MediaProjectionService`, типы `mediaProjection|microphone`).
+ */
+export function outgoingVideo({
+  phase,
+  cameraOn,
+  screenOn,
+  appState,
+  pipActive,
+}: GroupVideoSendInput & { screenOn: boolean }): 'screen' | 'camera' | null {
+  if (phase !== 'active') return null;
+  if (screenOn) return 'screen';
+  return shouldSendGroupVideo({ phase, cameraOn, appState, pipActive }) ? 'camera' : null;
+}
+
 /** Что в плитке участника. */
 export type TileView =
   /** Живая картинка. */

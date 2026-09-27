@@ -113,6 +113,9 @@ type VedamatchCallsEvents = {
   /** VED-222, п.5: `MainActivity.onPictureInPictureModeChanged` — вошли/
    *  вышли из картинки-в-картинке. */
   pipModeChanged(payload: { inPip: boolean }): void;
+  /** VED-360: тик службы группового звонка раз в 15 с — по нему JS шлёт
+   *  heartbeat, пока его собственные таймеры стоят (приложение не на экране). */
+  groupCallTick(payload: Record<string, never>): void;
 };
 
 declare class VedamatchCallsNativeModule extends NativeModule<VedamatchCallsEvents> {
@@ -177,6 +180,11 @@ declare class VedamatchCallsNativeModule extends NativeModule<VedamatchCallsEven
   /** VED-222, п.5: можно ли сейчас автоматически войти в картинку-в-картинке
    *  при уходе из приложения (только видеозвонок, `active`, экран открыт). */
   setPipEligible(eligible: boolean): void;
+  /** VED-360: служба «Идёт групповой звонок» (тип `microphone`) с тиком
+   *  `groupCallTick` — на всё время, пока мы в комнате. Идемпотентно. */
+  startGroupCallKeepAlive(callId: string): void;
+  /** Погасить службу группового звонка; без неё — no-op. */
+  stopGroupCallKeepAlive(): void;
 }
 
 // Вне Android модуля нет: `requireOptionalNativeModule` отдаёт `null` вместо

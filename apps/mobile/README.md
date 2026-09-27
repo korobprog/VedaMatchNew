@@ -639,6 +639,18 @@ self-managed `ConnectionService`; фоновый пуш для звонка по
 не различает `nativeCalls`, правка вне этого worktree). Подробности —
 `docs/mobile-calls-native.md`, §12.14.
 
+Показ экрана в групповом звонке (VED-360, Android 10+): кнопка на экране
+`group-call/[id]` зовёт `mediaDevices.getDisplayMedia()` —
+системное окно согласия, затем foreground-служба `MediaProjectionService`
+самой `react-native-webrtc`. Служба поправлена заплаткой
+`patches/react-native-webrtc@124.0.8.patch` (включена по умолчанию, тип
+`mediaProjection|microphone`, кнопка «Остановить показ» в шторке, иконка
+приложения вместо несуществующей `ic_notification`); русские подписи
+уведомления — `plugins/with-screen-share.js`. Обновляя
+`react-native-webrtc`, заплатку переносят на новую версию или убеждаются,
+что библиотека научилась тому же сама. Подробности —
+`docs/chat-group-calls-plan.md`, раздел «Показ экрана с Android».
+
 Служебный экран «Проверка связи» (замер relay STUN/TURN на текущей сети)
 скрыт: долгое нажатие на заголовок вкладки «Звонки» открывает
 `/calls-probe`. Это инструмент команды, не часть продукта — запускать с

@@ -41,3 +41,30 @@ export function heartbeatLost(consecutiveFailures: number): boolean {
 /** Что показать, когда подтверждения перестали доходить. */
 export const HEARTBEAT_LOST_MESSAGE =
   'Связь с порталом пропала — вас вывели из звонка';
+
+/**
+ * Не чаще этого — между двумя подтверждениями (VED-360).
+ *
+ * Подтверждение теперь шлют два источника: JS-таймер (пока приложение на
+ * экране) и тик нативной службы (`GroupCallKeepAliveService`, идёт всегда —
+ * JS-таймеры Android останавливает вместе с `Activity`). На переднем плане
+ * оба тикают раз в 15 с, и без этого порога запросов было бы вдвое больше.
+ * Порог заметно меньше шага: тик и таймер плывут, и пропустить законный
+ * тик из-за дрожи в секунду нельзя.
+ */
+export const HEARTBEAT_MIN_GAP_MS = 10_000;
+
+/**
+ * Пора ли подтверждать присутствие. `lastAt` — когда ушло прошлое
+ * подтверждение (`null` — ещё не уходило). `force` — возврат приложения
+ * на экран: после паузы, о которой мы не знаем, сколько она длилась,
+ * подтверждаем сразу.
+ */
+export function heartbeatDue(
+  lastAt: number | null,
+  now: number,
+  force = false,
+): boolean {
+  if (force || lastAt === null) return true;
+  return now - lastAt >= HEARTBEAT_MIN_GAP_MS;
+}

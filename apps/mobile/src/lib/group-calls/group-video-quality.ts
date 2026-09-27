@@ -1,4 +1,9 @@
-import { videoEncodingFor, type VideoEncoding } from '@/lib/calls/video-encoding';
+import {
+  DEGRADATION_PREFERENCE,
+  videoEncodingFor,
+  type DegradationPreference,
+  type VideoEncoding,
+} from '@/lib/calls/video-encoding';
 import type { NetworkTransport } from '../../../modules/vedamatch-calls';
 
 /**
@@ -78,6 +83,37 @@ export function groupVideoEncoding(
     maxFramerate: Math.min(base.maxFramerate, step.framerate),
     scaleResolutionDownBy: base.scaleResolutionDownBy * step.scale,
   };
+}
+
+/**
+ * Показ экрана (VED-360) — другой потолок, потому что другое содержимое.
+ * Лицо переживает уменьшенный кадр и 20 кадров в секунду; мелкий текст
+ * после `scaleResolutionDownBy: 2` не читается вовсе, а частота ему почти
+ * не нужна — экран меняется рывками. Поэтому кадр не уменьшается никогда
+ * (его размер задаёт сам захват, `SCREEN_CAPTURE_SCALE`), а частота падает
+ * с ростом комнаты. Битрейт — тот же, что у камеры на этом транспорте и
+ * составе: канал у показывающего тот же.
+ */
+const SCREEN_FRAMERATE: readonly number[] = [15, 15, 15, 10, 8];
+
+export function groupScreenEncoding(
+  transport: NetworkTransport | null,
+  participantCount: number,
+): VideoEncoding {
+  const camera = groupVideoEncoding(transport, participantCount);
+  return {
+    maxBitrate: camera.maxBitrate,
+    maxFramerate: SCREEN_FRAMERATE[clampIndex(participantCount)],
+    scaleResolutionDownBy: 1,
+  };
+}
+
+/**
+ * Чем жертвовать, когда канал не тянет: камере — чем угодно, экрану —
+ * только частотой кадров. Пусть обновляется реже, но читается.
+ */
+export function degradationFor(source: 'camera' | 'screen'): DegradationPreference {
+  return source === 'screen' ? 'maintain-resolution' : DEGRADATION_PREFERENCE;
 }
 
 function clampIndex(participantCount: number): number {

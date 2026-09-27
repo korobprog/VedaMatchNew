@@ -78,6 +78,10 @@ function api(call: ChatGroupCallDto, over: Partial<GroupCallsApi> = {}): GroupCa
     localVideoStream: null,
     toggleCamera: jest.fn(),
     switchCamera: jest.fn(),
+    screenSupported: false,
+    screenOn: false,
+    toggleScreenShare: jest.fn(),
+    localScreenStream: null,
     remoteStreams: {},
     remoteVideoOff: {},
     pipActive: false,
@@ -184,5 +188,57 @@ describe('чужой показ экрана', () => {
     );
     expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Остальные в звонке')).toHaveLength(0);
     expect(renderer.root.find((node) => node.props.accessibilityLabel === 'Кто в звонке')).toBeTruthy();
+  });
+});
+
+describe('свой показ экрана (Android)', () => {
+  it('кнопка есть, где телефон умеет показ, и начинает его', () => {
+    const value = api(room([participant('me'), participant('b')]), { screenSupported: true });
+    const renderer = render(value);
+    act(() => buttonMatching(renderer, /^Показать экран$/).props.onPress());
+    expect(value.toggleScreenShare).toHaveBeenCalled();
+  });
+
+  it('на телефоне без показа кнопки нет', () => {
+    const renderer = render(api(room([participant('me'), participant('b')])));
+    expect(() => buttonMatching(renderer, /Показать экран/)).toThrow();
+  });
+
+  it('показывает другой — кнопка называет кого', () => {
+    const renderer = render(
+      api(room([participant('me'), participant('b', { video: true, screen: true })]), {
+        screenSupported: true,
+        remoteStreams: { b: stream('b') } as unknown as GroupCallsApi['remoteStreams'],
+      }),
+    );
+    expect(buttonMatching(renderer, /^Показать экран нельзя: Экран показывает Имя b$/)).toBeTruthy();
+  });
+
+  it('свой показ: «Остановить показ», своя плитка — без живого превью', () => {
+    const value = api(room([participant('me', { video: true, screen: true }), participant('b')]), {
+      screenSupported: true,
+      screenOn: true,
+      sendingVideo: true,
+      localScreenStream: stream('me-screen') as unknown as GroupCallsApi['localScreenStream'],
+    });
+    const renderer = render(value);
+    expect(screenText(renderer)).toContain('Остальные видят ваш экран');
+    expect(screenText(renderer)).toContain('Вы показываете экран');
+    expect(views(renderer).map((v) => v.props.streamURL)).not.toContain('stream-me-screen');
+    act(() => buttonMatching(renderer, /^Остановить показ экрана$/).props.onPress());
+    expect(value.toggleScreenShare).toHaveBeenCalledTimes(1);
+  });
+
+  it('камера во время показа решает, вернётся ли она, и перевернуть её нельзя', () => {
+    const renderer = render(
+      api(room([participant('me', { video: true, screen: true })]), {
+        screenSupported: true,
+        screenOn: true,
+        cameraOn: true,
+        sendingVideo: true,
+      }),
+    );
+    expect(buttonMatching(renderer, /^Не включать камеру после показа экрана$/)).toBeTruthy();
+    expect(() => buttonMatching(renderer, /Перевернуть камеру/)).toThrow();
   });
 });

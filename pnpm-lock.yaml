@@ -18,6 +18,7 @@ overrides:
 
 patchedDependencies:
   expo-audio@57.0.5: cab425a4e0956e109975c315f8699cda0bdfa83741f190578efb39edf2420e53
+  react-native-webrtc@124.0.8: 1007009c8ac4c73037cb633f18b6ae6596e76f4ca2afd0e8963b44b1bdaf11cc
 
 importers:
 
@@ -351,7 +352,7 @@ importers:
         version: 0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react-native-webrtc:
         specifier: 124.0.8
-        version: 124.0.8(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))
+        version: 124.0.8(patch_hash=1007009c8ac4c73037cb633f18b6ae6596e76f4ca2afd0e8963b44b1bdaf11cc)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))
       react-native-worklets:
         specifier: 0.10.1
         version: 0.10.1(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
@@ -17835,7 +17836,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  react-native-webrtc@124.0.8(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)):
+  react-native-webrtc@124.0.8(patch_hash=1007009c8ac4c73037cb633f18b6ae6596e76f4ca2afd0e8963b44b1bdaf11cc)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3)):
     dependencies:
       base64-js: 1.5.1
       debug: 4.3.4

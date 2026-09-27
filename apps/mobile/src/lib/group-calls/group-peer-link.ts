@@ -2,7 +2,9 @@ import { MediaStream, MediaStreamTrack, RTCPeerConnection } from 'react-native-w
 import type { ChatCallSignal, ChatIceServerDto } from '@vedamatch/shared';
 import { normalizeIceServers } from '@/lib/calls/ice-server-normalize';
 import {
+  DEGRADATION_PREFERENCE,
   withVideoEncoding,
+  type DegradationPreference,
   type SenderParameters,
   type VideoEncoding,
 } from '@/lib/calls/video-encoding';
@@ -124,6 +126,7 @@ export class GroupPeerLink {
    */
   private wantedVideoTrack: MediaStreamTrack | null = null;
   private wantedEncoding: VideoEncoding | null = null;
+  private wantedDegradation: DegradationPreference = DEGRADATION_PREFERENCE;
   /** Чужие дорожки, из которых собрана картинка (`mergeRemoteTrack`). */
   private remoteTracks: MediaStreamTrack[] = [];
   /** Поток-обёртка над чужой видеодорожкой — его `toURL()` берёт `RTCView`. */
@@ -248,7 +251,8 @@ export class GroupPeerLink {
     // Камеру и потолок качества провайдер отдал, когда отправителя ещё не
     // было, — применяем запомненное.
     void this.pushVideoTrack();
-    if (this.wantedEncoding) void this.applyVideoEncoding(this.wantedEncoding);
+    if (this.wantedEncoding)
+      void this.applyVideoEncoding(this.wantedEncoding, this.wantedDegradation);
   }
 
   /** Инициатор пары: собрать и отправить offer. */
@@ -338,12 +342,16 @@ export class GroupPeerLink {
    * `setParameters` меняет параметры кодера без пересогласования SDP —
    * собеседнику ничего не приходит.
    */
-  async applyVideoEncoding(target: VideoEncoding): Promise<void> {
+  async applyVideoEncoding(
+    target: VideoEncoding,
+    degradation: DegradationPreference = DEGRADATION_PREFERENCE,
+  ): Promise<void> {
     this.wantedEncoding = target;
+    this.wantedDegradation = degradation;
     if (this.closed || !this.videoSender) return;
     try {
       const params = this.videoSender.getParameters() as SenderParameters;
-      const next = withVideoEncoding(params, target);
+      const next = withVideoEncoding(params, target, degradation);
       if (!next) return;
       await this.videoSender.setParameters(next);
     } catch {

@@ -134,6 +134,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'android.permission.FOREGROUND_SERVICE_CAMERA',
         'android.permission.ACCESS_WIFI_STATE',
         'android.permission.CHANGE_NETWORK_STATE',
+        // Показ экрана в групповом звонке (VED-360): Android 14 требует
+        // объявлять разрешение под тип службы `mediaProjection`, иначе
+        // `startForeground` бросает `SecurityException`. «Обычное» —
+        // выдаётся без диалога; сам захват экрана каждый раз спрашивает
+        // система своим окном. Служба — react-native-webrtc
+        // (`MediaProjectionService`, заплатка
+        // `patches/react-native-webrtc@124.0.8.patch`), тип microphone рядом
+        // с ней держит голос, пока показывающий в другом приложении.
+        'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
         // Медиатека (VED-331): плеер держит процессор и Wi-Fi, пока играет
         // поток с погашенным экраном (`WAKE_MODE_NETWORK`, заплатка
         // `patches/expo-audio@57.0.5.patch`) — иначе в Doze докачка встаёт
@@ -280,6 +289,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // импортом функции: ExpoConfig.plugins типизирован только под путь к
       // модулю (@expo/config-types), Expo резолвит и вызывает его сам.
       './plugins/with-release-signing.js',
+      // Русские подписи уведомления «Идёт показ экрана» (VED-360) — строки
+      // приложения перекрывают английские строки react-native-webrtc.
+      './plugins/with-screen-share.js',
       // Нативный код только под ARM-телефоны: x86/x86_64 (эмуляторы,
       // Chromebook) добавляли к APK с сайта ~71 МБ из 155. Под эмулятор —
       // ANDROID_ARCHITECTURES=x86_64, см. plugins/gradle-architectures.js.
