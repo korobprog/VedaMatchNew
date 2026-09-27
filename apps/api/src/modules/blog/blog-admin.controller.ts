@@ -11,6 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
   BlogPinRequest,
+  BlogPostLineageRequest,
   BlogPostLifetimeRequest,
   BlogSettingsDto,
 } from '@vedamatch/shared';
@@ -19,9 +20,10 @@ import { BlogService } from './blog.service';
 import { isAdmin } from './is-admin';
 
 /**
- * Администрирование ленты (VED-238): срок нахождения поста в ленте и
- * закрепление наверху. Единственное, чем в этом сервисе управляет
- * администратор; участник «постит один за другим» и сюда не ходит.
+ * Администрирование ленты (VED-238): срок нахождения поста в ленте,
+ * закрепление наверху и линия поста (VED-596). Единственное, чем в этом
+ * сервисе управляет администратор; участник «постит один за другим» и сюда
+ * не ходит.
  *
  * Свой контроллер с префиксом `blog/admin`, а не флаги в общем: так права
  * видно по адресу маршрута, и обычная лента не обрастает админскими телами.
@@ -67,6 +69,18 @@ export class BlogAdminController {
   ) {
     this.assertAdmin(user);
     return this.blog.setPinned(user.sub, id, Boolean(body?.pinned));
+  }
+
+  /** Линия поста (VED-596): ISKCON, матх, паривар или `null` — для всех. */
+  @Patch('posts/:id/lineage')
+  @Throttle({ default: { ttl: 3_600_000, limit: 120 } })
+  setLineage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: BlogPostLineageRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.blog.setLineage(user.sub, id, body?.lineage ?? null);
   }
 
   private assertAdmin(user: AccessTokenPayload): void {

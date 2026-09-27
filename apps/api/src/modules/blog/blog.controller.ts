@@ -67,8 +67,14 @@ export class BlogController {
     @CurrentUser() user: AccessTokenPayload,
     @Query('scope') scope?: string,
     @Query('cursor') cursor?: string,
+    // Фильтр читателя по линии (VED-596): линия или `group:<группа>`.
+    @Query('lineage') lineage?: string,
   ) {
-    return this.blog.feed(user.sub, isAdmin(user), { scope, cursor });
+    return this.blog.feed(user.sub, isAdmin(user), {
+      scope,
+      cursor,
+      lineage,
+    });
   }
 
   /** «Избранное» того, кто смотрит (VED-238). */
@@ -76,8 +82,9 @@ export class BlogController {
   favorites(
     @CurrentUser() user: AccessTokenPayload,
     @Query('cursor') cursor?: string,
+    @Query('lineage') lineage?: string,
   ) {
-    return this.blog.favorites(user.sub, isAdmin(user), cursor);
+    return this.blog.favorites(user.sub, isAdmin(user), cursor, { lineage });
   }
 
   @Get('authors/:authorId')

@@ -7175,6 +7175,12 @@ model BlogPost {
   /// которого автор не трогал.
   editedAt  DateTime?
 
+  /// Духовная линия поста (VED-596): идентификатор справочника
+  /// `@vedamatch/shared/lineage`, строкой, как `LibraryEntry.lineage`.
+  /// `null` — пост для всех линий. Ставит администратор ленты; читатель,
+  /// отфильтровавший ленту по линии, видит её посты и посты «для всех».
+  lineage String?
+
   images    BlogPostImage[]
   favorites BlogFavorite[]
   likes     BlogLike[]

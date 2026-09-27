@@ -18,6 +18,7 @@ import type {
   BlogSettingsDto,
   CreateBlogPostRequest,
   UpdateBlogPostRequest,
+  LineageId,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 
@@ -60,6 +61,7 @@ const MESSAGES: Record<string, string> = {
   repost_not_editable:
     "Репост не правится — поправить можно только исходный пост, и делает это его автор.",
   admin_only: "Доступно только администратору.",
+  invalid_lineage: "Такой линии нет в списке.",
 };
 
 function mb(bytes: number): number {
@@ -251,6 +253,17 @@ export function setBlogPostPinned(
   return request<BlogPostDto>(
     `/blog/admin/posts/${encodeURIComponent(id)}/pin`,
     { method: "PATCH", ...json({ pinned }) },
+  );
+}
+
+/** Линия поста (VED-596): только администратор; `null` — для всех линий. */
+export function setBlogPostLineage(
+  id: string,
+  lineage: LineageId | null,
+): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/admin/posts/${encodeURIComponent(id)}/lineage`,
+    { method: "PATCH", ...json({ lineage }) },
   );
 }
 

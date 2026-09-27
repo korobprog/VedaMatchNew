@@ -541,3 +541,81 @@ describe('BlogService favorites', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('BlogService lineage (VED-596)', () => {
+  it('sets the lineage of a post and returns it in the card', async () => {
+    const { service, prisma } = build(storedPost());
+    prisma.blogPost.update.mockResolvedValue(
+      storedPost({ lineage: 'sri_chaitanya_saraswat_math' }),
+    );
+
+    const dto = await service.setLineage(
+      'admin',
+      'post-1',
+      'sri_chaitanya_saraswat_math',
+    );
+
+    expect(prisma.blogPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'post-1' },
+        data: { lineage: 'sri_chaitanya_saraswat_math' },
+      }),
+    );
+    expect(dto.lineage).toBe('sri_chaitanya_saraswat_math');
+  });
+
+  it('clears the lineage with null — the post is for everyone', async () => {
+    const { service, prisma } = build(storedPost({ lineage: 'iskcon' }));
+    prisma.blogPost.update.mockResolvedValue(storedPost({ lineage: null }));
+
+    const dto = await service.setLineage('admin', 'post-1', null);
+
+    expect(prisma.blogPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { lineage: null } }),
+    );
+    expect(dto.lineage).toBeNull();
+  });
+
+  it('refuses a value outside the directory before touching the post', async () => {
+    const { service, prisma } = build(storedPost());
+    await expect(
+      service.setLineage('admin', 'post-1', 'group:parivara'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 for a missing post', async () => {
+    const { service } = build(null);
+    await expect(
+      service.setLineage('admin', 'post-1', 'iskcon'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('filters the feed by lineage and keeps posts for everyone', async () => {
+    const { service, prisma } = build(storedPost());
+    const findMany = fn(() => Promise.resolve([]));
+    (prisma.blogPost as Record<string, jest.Mock>).findMany = findMany;
+
+    await service.feed('viewer', false, { scope: 'all', lineage: 'iskcon' });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [{}, { OR: [{ lineage: 'iskcon' }, { lineage: null }] }],
+        },
+      }),
+    );
+  });
+
+  it('leaves the feed unfiltered without a lineage', async () => {
+    const { service, prisma } = build(storedPost());
+    const findMany = fn(() => Promise.resolve([]));
+    (prisma.blogPost as Record<string, jest.Mock>).findMany = findMany;
+
+    await service.feed('viewer', false, { scope: 'all', lineage: 'all' });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
+  });
+});

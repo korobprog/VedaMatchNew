@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
+import { LineageMenuButton } from "@/components/lineage-menu-button";
+import { setBlogPostLineage } from "@/lib/blog-client-api";
 import { BlogPostCard } from "./blog-post-card";
 import { PostActionsOrderButton } from "./post-actions-order-button";
 
@@ -44,7 +46,9 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
 
   return (
     <>
-      <div className="relative mb-4 flex items-center justify-between gap-2">
+      {/* С переносом: у админа, который ещё и автор, в ряду шесть кнопок, и
+          на 360 точках правая группа уходит второй строкой, а не за экран. */}
+      <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/blog"
           className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60"
@@ -54,7 +58,7 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
         </Link>
         {/* «Порядок кнопок» (VED-509) — слева от «Поделиться»: кнопки под
             постом переставляются отсюда для всей ленты. */}
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <PostActionsOrderButton />
           {/* «Редактировать» и сверху (VED-495): под длинным постом до
               нижней кнопки «слишком долго мотать». На телефоне — значком,
@@ -70,6 +74,20 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
               <Pencil aria-hidden className="size-4" />
               <span className="hidden sm:inline">Редактировать</span>
             </button>
+          )}
+          {/* «Линия» (VED-596) — значок-домик, как в Образовании и
+              Медиатеке, и только у администратора: линия решает, кому пост
+              виден в отфильтрованной ленте. У репоста линия своя, не
+              оригинала: фильтр ленты смотрит на строку самого репоста. */}
+          {post.canModerate && (
+            <LineageMenuButton
+              value={post.lineage ?? null}
+              buttonClassName="rounded-lg"
+              menuLabel="Линия поста"
+              onSelect={async (lineage) => {
+                setPost(await setBlogPostLineage(post.id, lineage));
+              }}
+            />
           )}
           <button
             type="button"

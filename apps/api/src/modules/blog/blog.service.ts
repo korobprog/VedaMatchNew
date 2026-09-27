@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import {
   BLOG_MAX_POSTS_PER_DAY,
   resolveDisplayName,
+  toLineageId,
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
   type BlogFavoriteResponse,
@@ -27,6 +28,12 @@ import type { BlogLinkPostInput } from './blog-link-post';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
+import {
+  blogFilterConditions,
+  blogLineageInput,
+  combineBlogWhere,
+  type BlogFeedFilters,
+} from './blog-filters';
 import {
   BLOG_PAGE_SIZE,
   blogCursorFilter,
@@ -89,6 +96,7 @@ const POST_SELECT_BASE = {
   likeCount: true,
   createdAt: true,
   editedAt: true,
+  lineage: true,
   // Нужен не карточке, а праву на правку: репост не правится никем.
   repostOfId: true,
   linkUrl: true,
@@ -227,17 +235,19 @@ export class BlogService {
   async feed(
     userId: string,
     viewerIsAdmin: boolean,
-    params: { scope?: string; cursor?: string },
+    params: { scope?: string; cursor?: string } & BlogFeedFilters,
   ): Promise<BlogFeedResponse> {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const now = new Date();
     const currentOnly = params.scope !== 'all';
     const base = this.feedWhere(viewer, now, currentOnly);
 
+    // Фильтры читателя (VED-596): линия из адреса ленты.
     const cursor = decodeBlogCursor(params.cursor);
-    const where: Prisma.BlogPostWhereInput = cursor
-      ? { AND: [base, blogCursorFilter(cursor)] }
-      : base;
+    const where = combineBlogWhere(base, [
+      ...blogFilterConditions(params),
+      ...(cursor ? [blogCursorFilter(cursor)] : []),
+    ]);
 
     const rows = await this.prisma.blogPost.findMany({
       where,
@@ -783,6 +793,7 @@ export class BlogService {
     userId: string,
     viewerIsAdmin: boolean,
     cursor?: string,
+    filters: BlogFeedFilters = {},
   ): Promise<BlogFeedResponse> {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const now = new Date();
@@ -791,9 +802,10 @@ export class BlogService {
       favorites: { some: { userId } },
     };
     const decoded = decodeBlogCursor(cursor);
-    const where: Prisma.BlogPostWhereInput = decoded
-      ? { AND: [base, blogCursorFilter(decoded)] }
-      : base;
+    const where = combineBlogWhere(base, [
+      ...blogFilterConditions(filters),
+      ...(decoded ? [blogCursorFilter(decoded)] : []),
+    ]);
 
     const rows = await this.prisma.blogPost.findMany({
       where,
@@ -870,6 +882,33 @@ export class BlogService {
     const updated = await this.prisma.blogPost.update({
       where: { id },
       data: { pinned: Boolean(pinned) },
+      select: postSelect(userId),
+    });
+    const viewer: Viewer = { userId, isAdmin: true, hiddenUserIds: new Set() };
+    return this.postDto(updated, viewer, new Date());
+  }
+
+  /**
+   * Линия поста (VED-596) — право администратора, как срок и закрепление:
+   * линия решает, кому пост виден в отфильтрованной ленте. `null` — «без
+   * линии, для всех».
+   */
+  async setLineage(
+    userId: string,
+    id: string,
+    value: unknown,
+  ): Promise<BlogPostDto> {
+    const lineage = blogLineageInput(value);
+    if (lineage === 'invalid') throw new BadRequestException('invalid_lineage');
+    const exists = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('post_not_found');
+
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: { lineage },
       select: postSelect(userId),
     });
     const viewer: Viewer = { userId, isAdmin: true, hiddenUserIds: new Set() };
@@ -1053,5 +1092,6 @@ function toPostDto(
     favorited: row.favorites.length > 0,
     liked: row.likes.length > 0,
     likeCount: row.likeCount,
+    lineage: toLineageId(row.lineage),
   };
 }
