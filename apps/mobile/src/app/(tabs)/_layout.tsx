@@ -4,18 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MediaTabBar } from '@/components/media/media-tab-bar';
 import { QuickBar } from '@/components/quick-bar/quick-bar';
 import { QuickBarSlot } from '@/components/quick-bar/screen-top-inset';
-import { TabIcon, type TabIconName } from '@/components/tab-icon';
+import { TabIcon } from '@/components/tab-icon';
+import { useHomeSectionsLoaded } from '@/lib/home/home-sections-store';
+import { MAIN_TABS } from '@/lib/navigation/main-tabs';
 import { useQuickPinsLoaded } from '@/lib/services/quick-pins-store';
 import { useTheme } from '@/theme/theme';
 import { fonts } from '@/theme/tokens';
-
-const TABS: { name: string; title: string; icon: TabIconName }[] = [
-  { name: 'index', title: 'Чаты', icon: 'chats' },
-  { name: 'calls', title: 'Звонки', icon: 'calls' },
-  { name: 'people', title: 'Люди', icon: 'people' },
-  { name: 'communities', title: 'Общины', icon: 'communities' },
-  { name: 'services', title: 'Сервисы', icon: 'services' },
-];
 
 /**
  * В нижнем меню только связь, всё остальное живёт во вкладке «Сервисы».
@@ -31,15 +25,20 @@ const TABS: { name: string; title: string; icon: TabIconName }[] = [
  * а не из `insets.top` напрямую.
  *
  * Пока хранилище закреплённого не прочитано, вкладки не рисуются: иначе
- * первый кадр вышел бы без панели и экран съехал бы вниз следом. Чтение
- * запущено ещё при восстановлении сессии и к этому моменту обычно готово.
+ * первый кадр вышел бы без панели и экран съехал бы вниз следом. То же с
+ * галочками главной из «Настроек»: без них «Чаты» встали бы с умолчаниями и
+ * перестроились кадром позже. Оба чтения запущены ещё при восстановлении
+ * сессии и к этому моменту обычно готовы.
+ *
+ * Порядок вкладок — `lib/navigation/main-tabs.ts`: «Сервисы» по центру.
  */
 export default function TabsLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const pinsLoaded = useQuickPinsLoaded();
+  const homeSectionsLoaded = useHomeSectionsLoaded();
 
-  if (!pinsLoaded) return <View style={{ flex: 1, backgroundColor: colors.bg0 }} />;
+  if (!pinsLoaded || !homeSectionsLoaded) return <View style={{ flex: 1, backgroundColor: colors.bg0 }} />;
 
   return (
     <QuickBarSlot value>
@@ -63,7 +62,7 @@ export default function TabsLayout() {
             sceneStyle: { backgroundColor: colors.bg0 },
           }}
         >
-          {TABS.map((tab) => (
+          {MAIN_TABS.map((tab) => (
             <Tabs.Screen
               key={tab.name}
               name={tab.name}

@@ -69,15 +69,6 @@ export function shownContent(post: BlogPostDto): BlogPostDto | BlogRepostSourceD
   return post.repostOf ?? post;
 }
 
-/** Подпись плитки: заголовок, а без него — начало текста. */
-export function blogTileTitle(post: BlogPostDto): string {
-  const shown = shownContent(post);
-  if (shown.title) return shown.title;
-  const text = shown.text.replace(/\s+/g, ' ').trim();
-  if (!text) return 'Фотография';
-  return text.length > 60 ? `${text.slice(0, 59).trimEnd()}…` : text;
-}
-
 /**
  * Тихая строка под заголовком карточки: автор, дата, отметки.
  *

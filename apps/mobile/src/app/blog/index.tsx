@@ -1,5 +1,5 @@
 import type { BlogPostDto } from '@vedamatch/shared';
-import { Stack, useFocusEffect } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,8 +10,8 @@ import { useBlogPostActions } from '@/components/blog/use-blog-post-actions';
 import { useSession } from '@/lib/auth/session';
 import { createBlogApi } from '@/lib/blog/blog-api';
 import { openBlogComposer, openBlogPost } from '@/lib/blog/blog-routes';
-import { readBlogHomeVisible, writeBlogHomeVisible } from '@/lib/blog/blog-home-visibility';
 import { useBlogPages, type BlogPage } from '@/lib/blog/use-blog-pages';
+import { homeSectionsStore, useHomeSections } from '@/lib/home/home-sections-store';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
 import { fonts, hitTarget, radius } from '@/theme/tokens';
@@ -31,10 +31,10 @@ const keyOf = (post: BlogPostDto) => post.id;
 export default function BlogFeedScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { api, user } = useSession();
+  const { api } = useSession();
   const blogApi = useMemo(() => createBlogApi(api), [api]);
   const [now] = useState(() => new Date());
-  const [stripHidden, setStripHidden] = useState(false);
+  const stripShown = useHomeSections().blog;
 
   const fetchPage = useCallback(
     async (cursor: string | null): Promise<BlogPage<null>> => {
@@ -46,21 +46,10 @@ export default function BlogFeedScreen() {
   const feed = useBlogPages(fetchPage);
   const actions = useBlogPostActions();
 
-  // Вернуть полосу в «Чаты» можно только отсюда — как на сайте кнопка
-  // «Лента» в строке настроек главной. Перечитываем на каждом входе: её
-  // могли спрятать только что.
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) return;
-      void readBlogHomeVisible(user.id).then((visible) => setStripHidden(!visible));
-    }, [user]),
-  );
-
-  const restoreStrip = useCallback(() => {
-    if (!user) return;
-    setStripHidden(false);
-    void writeBlogHomeVisible(user.id, true).catch(() => setStripHidden(true));
-  }, [user]);
+  // Включить полосу в «Чатах» можно и отсюда — как на сайте кнопка «Лента»
+  // в строке настроек главной. Это та же галочка «Блог-лента», что в
+  // «Настройках» (`lib/home/home-sections.ts`), а не второй флаг.
+  const showStrip = useCallback(() => void homeSectionsStore.set('blog', true), []);
 
   const renderItem = useCallback<ListRenderItem<BlogPostDto>>(
     ({ item }) => (
@@ -91,20 +80,22 @@ export default function BlogFeedScreen() {
       >
         <Text style={[styles.writeText, { color: colors.onAccent }]}>Написать пост</Text>
       </Pressable>
-      {stripHidden ? (
+      {stripShown ? null : (
         <View style={[styles.restore, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}>
-          <Text style={[styles.restoreText, { color: colors.text1 }]}>Лента убрана из «Чатов».</Text>
+          <Text style={[styles.restoreText, { color: colors.text1 }]}>
+            В «Чатах» лента не показывается. Её включает галочка в «Настройках» — или эта кнопка.
+          </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Вернуть ленту в «Чаты»"
-            onPress={restoreStrip}
+            accessibilityLabel="Показывать ленту в «Чатах»"
+            onPress={showStrip}
             android_ripple={ripple(colors.glassBorder)}
             style={({ pressed }) => [styles.restoreButton, { borderColor: colors.glassBorder }, pressedStyle(pressed)]}
           >
-            <Text style={[styles.restoreButtonText, { color: colors.text0 }]}>Вернуть</Text>
+            <Text style={[styles.restoreButtonText, { color: colors.text0 }]}>Показывать</Text>
           </Pressable>
         </View>
-      ) : null}
+      )}
       {feed.loadError && feed.posts ? <InlineError message={feed.loadError} /> : null}
     </View>
   );
