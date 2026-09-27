@@ -35,6 +35,7 @@ import {
   useBlogTextFold,
 } from "./blog-post-text";
 import { blogEditedLabel, blogPostDate } from "./blog-format";
+import { blogCategoryLabel } from "./blog-feed-filters";
 import type { PostAction } from "./post-actions-order";
 import { usePostActionsOrder } from "./use-post-actions-order";
 
@@ -99,6 +100,7 @@ export function BlogPostCard({
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const source = post.repostOf;
   const edited = blogEditedLabel(post.editedAt, post.createdAt);
+  const category = blogCategoryLabel(post.category);
   const { fold, attachBody, attachTitle } = useBlogTextFold(
     post.text,
     source ? null : post.title,
@@ -347,6 +349,9 @@ export function BlogPostCard({
               {/* Отметка о правке — той же тихой строкой, что дата: пост
                   поправили, а не опубликовали заново (VED-321). */}
               {edited && ` · ${edited}`}
+              {/* Категория (VED-590) — той же тихой строкой: читатель видит,
+                  почему пост попал в отфильтрованную ленту. */}
+              {category && ` · ${category}`}
               {post.pinned && " · закреплено"}
               {!post.inFeed && " · вне ленты"}
             </span>

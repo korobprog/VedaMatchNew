@@ -619,3 +619,131 @@ describe('BlogService lineage (VED-596)', () => {
     );
   });
 });
+
+describe('BlogService category (VED-590)', () => {
+  /** `data` последнего вызова заглушки: что ушло бы в базу. */
+  function lastData(mock: jest.Mock): Record<string, unknown> {
+    const calls = mock.mock.calls as Array<[{ data: Record<string, unknown> }]>;
+    return calls[calls.length - 1][0].data;
+  }
+
+  function withCreate(post: ReturnType<typeof storedPost> | null) {
+    const built = build(post);
+    const blogPost = built.prisma.blogPost as Record<string, jest.Mock>;
+    blogPost.create = fn(() => Promise.resolve({ id: 'post-1' }));
+    blogPost.count = fn(() => Promise.resolve(0));
+    const prisma = built.prisma as unknown as Record<
+      string,
+      Record<string, jest.Mock>
+    >;
+    prisma.blogSettings = {
+      findUnique: fn(() => Promise.resolve({ feedLifetimeHours: 0 })),
+    };
+    return { ...built, blogPost };
+  }
+
+  it('the author assigns a category when publishing', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await service.create('author', false, {
+      text: 'Экадаши',
+      category: 'calendar',
+    });
+
+    expect(lastData(blogPost.create).category).toBe('calendar');
+  });
+
+  it('publishes without a category by default', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await service.create('author', false, { text: 'Просто пост' });
+
+    expect(lastData(blogPost.create).category).toBeNull();
+  });
+
+  it('refuses an unknown category before creating anything', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await expect(
+      service.create('author', false, {
+        text: 'Пост',
+        category: 'sport' as never,
+      }),
+    ).rejects.toMatchObject({ message: 'invalid_category' });
+    expect(blogPost.create).not.toHaveBeenCalled();
+  });
+
+  it('an edit without the field keeps the category', async () => {
+    const { service, prisma } = build(storedPost());
+
+    await service.update('author', false, 'post-1', { text: 'Новый' });
+
+    expect(lastData(prisma.blogPost.update)).not.toHaveProperty('category');
+  });
+
+  it('an edit changes and clears the category', async () => {
+    const { service, prisma } = build(storedPost());
+
+    await service.update('author', false, 'post-1', {
+      text: 'Новый',
+      category: 'news',
+    });
+    expect(lastData(prisma.blogPost.update).category).toBe('news');
+
+    await service.update('author', false, 'post-1', {
+      text: 'Новый',
+      category: null,
+    });
+    expect(lastData(prisma.blogPost.update).category).toBeNull();
+  });
+
+  it('the author sets the category with one button', async () => {
+    const { service, prisma } = build(storedPost());
+    prisma.blogPost.update.mockResolvedValue(
+      storedPost({ category: 'devotee_life' }),
+    );
+
+    const dto = await service.setCategory(
+      'author',
+      false,
+      'post-1',
+      'devotee_life',
+    );
+
+    expect(prisma.blogPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { category: 'devotee_life' } }),
+    );
+    expect(dto.category).toBe('devotee_life');
+  });
+
+  it('a stranger cannot set the category, an admin can', async () => {
+    const { service, prisma } = build(storedPost());
+
+    await expect(
+      service.setCategory('someone', false, 'post-1', 'news'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+
+    await service.setCategory('admin', true, 'post-1', 'news');
+    expect(prisma.blogPost.update).toHaveBeenCalled();
+  });
+
+  it('a repost has no category of its own', async () => {
+    const { service } = build(storedPost({ repostOfId: 'origin' }));
+    await expect(
+      service.setCategory('author', false, 'post-1', 'news'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('filters the feed by category', async () => {
+    const { service, prisma } = build(storedPost());
+    const findMany = fn(() => Promise.resolve([]));
+    (prisma.blogPost as Record<string, jest.Mock>).findMany = findMany;
+
+    await service.feed('viewer', false, { scope: 'all', category: 'news' });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { AND: [{}, { category: 'news' }] } }),
+    );
+  });
+});

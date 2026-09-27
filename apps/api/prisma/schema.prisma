@@ -7179,7 +7179,10 @@ model BlogPost {
   /// `@vedamatch/shared/lineage`, строкой, как `LibraryEntry.lineage`.
   /// `null` — пост для всех линий. Ставит администратор ленты; читатель,
   /// отфильтровавший ленту по линии, видит её посты и посты «для всех».
-  lineage String?
+  lineage  String?
+  /// Категория поста (VED-590): назначает автор, читатель фильтрует ленту.
+  /// `null` — без категории, пост виден только во «Все».
+  category BlogPostCategory?
 
   images    BlogPostImage[]
   favorites BlogFavorite[]
@@ -7223,6 +7226,14 @@ model BlogPostImage {
 enum BlogMediaKind {
   photo
   video
+}
+
+/// Категория поста Блог-ленты (VED-590). Порядок — как в меню фильтра.
+enum BlogPostCategory {
+  knowledge
+  news
+  devotee_life
+  calendar
 }
 
 /// «Избранное» участника (VED-238): пост, отмеченный звёздочкой, виден в

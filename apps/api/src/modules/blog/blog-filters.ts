@@ -1,7 +1,9 @@
 import type { Prisma } from '@prisma/client';
 import {
+  isBlogPostCategory,
   isLineageId,
   lineageFilterIds,
+  type BlogPostCategory,
   type LineageId,
 } from '@vedamatch/shared';
 
@@ -25,6 +27,33 @@ export function blogLineageInput(value: unknown): LineageId | null | 'invalid' {
 }
 
 /**
+ * Категория, которую автор назначает посту (VED-590).
+ *
+ * - `undefined` — поля в запросе нет: при правке категория прежняя;
+ * - `null` — снять категорию. Пустая строка значит то же: multipart не умеет
+ *   передать `null`, а поле формы «Без категории» уезжает пустым;
+ * - `'invalid'` — не из списка, запрос отвечает 400.
+ */
+export function blogCategoryInput(
+  value: unknown,
+): BlogPostCategory | null | undefined | 'invalid' {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  return isBlogPostCategory(value) ? value : 'invalid';
+}
+
+/**
+ * Условие ленты по категории (VED-590): только выбранная, остальные скрыты.
+ * Пусто, «все» или мусор — фильтра нет: испорченный адрес должен вернуть
+ * ленту, а не пустоту.
+ */
+export function blogCategoryWhere(
+  filter: unknown,
+): Prisma.BlogPostWhereInput | null {
+  return isBlogPostCategory(filter) ? { category: filter } : null;
+}
+
+/**
  * Условие ленты по линии (VED-596): посты выбранной линии (или любой линии
  * группы — `group:gaudiya_math`) плюс посты «для всех» (`null`). Пустое,
  * `all` или мусор — фильтра нет, `null`. Разбор значения общий с
@@ -42,6 +71,7 @@ export function blogLineageWhere(
 
 /** Фильтры читателя из адреса ленты. */
 export interface BlogFeedFilters {
+  category?: string;
   lineage?: string;
 }
 
@@ -54,6 +84,8 @@ export function blogFilterConditions(
   filters: BlogFeedFilters,
 ): Prisma.BlogPostWhereInput[] {
   const conditions: Prisma.BlogPostWhereInput[] = [];
+  const category = blogCategoryWhere(filters.category);
+  if (category) conditions.push(category);
   const lineage = blogLineageWhere(filters.lineage);
   if (lineage) conditions.push(lineage);
   return conditions;

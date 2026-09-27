@@ -19,6 +19,7 @@ import {
   BLOG_POST_MAX_IMAGES,
   BLOG_VIDEO_MAX_BYTES,
   type AccessTokenPayload,
+  type BlogPostCategoryRequest,
   type CreateBlogPostRequest,
   type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
@@ -67,12 +68,15 @@ export class BlogController {
     @CurrentUser() user: AccessTokenPayload,
     @Query('scope') scope?: string,
     @Query('cursor') cursor?: string,
-    // Фильтр читателя по линии (VED-596): линия или `group:<группа>`.
+    // Фильтры читателя: категория (VED-590) и линия или `group:<группа>`
+    // (VED-596).
+    @Query('category') category?: string,
     @Query('lineage') lineage?: string,
   ) {
     return this.blog.feed(user.sub, isAdmin(user), {
       scope,
       cursor,
+      category,
       lineage,
     });
   }
@@ -82,9 +86,13 @@ export class BlogController {
   favorites(
     @CurrentUser() user: AccessTokenPayload,
     @Query('cursor') cursor?: string,
+    @Query('category') category?: string,
     @Query('lineage') lineage?: string,
   ) {
-    return this.blog.favorites(user.sub, isAdmin(user), cursor, { lineage });
+    return this.blog.favorites(user.sub, isAdmin(user), cursor, {
+      category,
+      lineage,
+    });
   }
 
   @Get('authors/:authorId')
@@ -139,6 +147,22 @@ export class BlogController {
     @UploadedFiles() files?: UploadedImageFile[],
   ) {
     return this.blog.update(user.sub, isAdmin(user), id, body, files ?? []);
+  }
+
+  /** Категория поста одной кнопкой (VED-590): автор или администратор. */
+  @Patch('posts/:id/category')
+  @Throttle({ default: { ttl: 3_600_000, limit: 240 } })
+  setCategory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: BlogPostCategoryRequest,
+  ) {
+    return this.blog.setCategory(
+      user.sub,
+      isAdmin(user),
+      id,
+      body?.category ?? null,
+    );
   }
 
   @Post('posts/:id/repost')

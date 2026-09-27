@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { BlogPostDto } from "@vedamatch/shared";
-import { setBlogPostLineage } from "@/lib/blog-client-api";
+import { setBlogPostCategory, setBlogPostLineage } from "@/lib/blog-client-api";
 import { BlogPostView } from "./blog-post-view";
 
 vi.mock("next/navigation", () => ({
@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/blog-client-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/blog-client-api")>()),
   setBlogPostLineage: vi.fn(),
+  setBlogPostCategory: vi.fn(),
 }));
 
 function makePost(overrides: Partial<BlogPostDto> = {}): BlogPostDto {
@@ -105,5 +106,44 @@ describe("«Линия» поста", () => {
     expect(
       screen.getByRole("button", { name: "Линия: ISKCON" }),
     ).toBeInTheDocument();
+  });
+});
+
+/* VED-590: «Сократи кнопку-надпись Поделиться до кнопки-значка»; «у каждого,
+   кто добавляет пост, должна быть кнопка — Назначить категорию». */
+describe("ряд кнопок над постом (VED-590)", () => {
+  it("«Поделиться» — значок без подписи на экране, с именем для скринридера", () => {
+    render(<BlogPostView initial={makePost()} />);
+    const share = screen.getByRole("button", { name: "Поделиться" });
+    expect(share).toHaveTextContent("");
+    expect(share).toHaveAttribute("title", "Поделиться");
+  });
+
+  it("чужой пост — без «Назначить категорию»", () => {
+    render(<BlogPostView initial={makePost()} />);
+    expect(
+      screen.queryByRole("button", { name: /^Назначить категорию/ }),
+    ).toBeNull();
+  });
+
+  it("автор назначает категорию, и она видна в строке даты", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setBlogPostCategory).mockResolvedValue(
+      makePost({ canEdit: true, category: "news" }),
+    );
+    render(<BlogPostView initial={makePost({ canEdit: true })} />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Назначить категорию: без категории",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Новости" }));
+
+    expect(setBlogPostCategory).toHaveBeenCalledWith("post-1", "news");
+    expect(
+      screen.getByRole("button", { name: "Назначить категорию: Новости" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/· Новости/)).toBeInTheDocument();
   });
 });

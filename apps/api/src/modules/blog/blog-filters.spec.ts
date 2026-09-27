@@ -1,4 +1,6 @@
 import {
+  blogCategoryInput,
+  blogCategoryWhere,
   blogFilterConditions,
   blogLineageInput,
   blogLineageWhere,
@@ -59,9 +61,52 @@ describe('blogLineageWhere (VED-596)', () => {
   });
 });
 
+describe('blogCategoryInput (VED-590)', () => {
+  it('accepts every category of the list', () => {
+    for (const value of ['knowledge', 'news', 'devotee_life', 'calendar']) {
+      expect(blogCategoryInput(value)).toBe(value);
+    }
+  });
+
+  it('tells «not sent» from «cleared»', () => {
+    expect(blogCategoryInput(undefined)).toBeUndefined();
+    expect(blogCategoryInput(null)).toBeNull();
+    // Multipart не умеет null: «Без категории» уезжает пустой строкой.
+    expect(blogCategoryInput('')).toBeNull();
+  });
+
+  it('refuses anything else', () => {
+    expect(blogCategoryInput('all')).toBe('invalid');
+    expect(blogCategoryInput('Новости')).toBe('invalid');
+    expect(blogCategoryInput(1)).toBe('invalid');
+  });
+});
+
+describe('blogCategoryWhere (VED-590)', () => {
+  it('shows only the chosen category', () => {
+    expect(blogCategoryWhere('news')).toEqual({ category: 'news' });
+  });
+
+  it('does not filter for «all», empty and garbage', () => {
+    expect(blogCategoryWhere(undefined)).toBeNull();
+    expect(blogCategoryWhere('')).toBeNull();
+    expect(blogCategoryWhere('all')).toBeNull();
+    expect(blogCategoryWhere('nope')).toBeNull();
+  });
+});
+
 describe('blogFilterConditions', () => {
   it('is empty without filters', () => {
     expect(blogFilterConditions({})).toEqual([]);
+  });
+
+  it('adds both filters together', () => {
+    expect(
+      blogFilterConditions({ category: 'calendar', lineage: 'iskcon' }),
+    ).toEqual([
+      { category: 'calendar' },
+      { OR: [{ lineage: 'iskcon' }, { lineage: null }] },
+    ]);
   });
 
   it('adds the lineage condition', () => {

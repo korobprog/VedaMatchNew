@@ -90,6 +90,35 @@ export const BLOG_UPLOAD_MAX_TOTAL_BYTES = 80 * 1024 * 1024;
 
 export type BlogMediaKind = 'photo' | 'video';
 
+/**
+ * Категория поста (VED-590): автор назначает её при публикации или правке,
+ * читатель фильтрует ленту кнопкой-значком. Пост без категории (`null`)
+ * виден только в «Все».
+ */
+export type BlogPostCategory = 'knowledge' | 'news' | 'devotee_life' | 'calendar';
+
+/** Порядок — порядок в меню выбора и фильтра, как в карточке заказчика. */
+export const BLOG_POST_CATEGORIES: readonly BlogPostCategory[] = [
+  'knowledge',
+  'news',
+  'devotee_life',
+  'calendar',
+];
+
+export const BLOG_POST_CATEGORY_LABELS: Record<BlogPostCategory, string> = {
+  knowledge: 'Знания',
+  news: 'Новости',
+  devotee_life: 'Жизнь преданных',
+  calendar: 'Календарь',
+};
+
+export function isBlogPostCategory(value: unknown): value is BlogPostCategory {
+  return (
+    typeof value === 'string' &&
+    (BLOG_POST_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
 export interface BlogAuthorDto {
   id: string;
   /** Всегда через resolveDisplayName(): наружу человек виден духовным именем. */
@@ -200,6 +229,8 @@ export interface BlogPostDto {
    * Необязательное — установленные сборки приложения поля не знают.
    */
   lineage?: LineageId | null;
+  /** Категория поста (VED-590); `null` — без категории. */
+  category?: BlogPostCategory | null;
 }
 
 export interface BlogFeedResponse {
@@ -240,6 +271,11 @@ export interface BlogSettingsDto {
 export interface CreateBlogPostRequest {
   title?: string | null;
   text: string;
+  /**
+   * Категория (VED-590). При правке: поля нет — категория прежняя, `null`
+   * или пустая строка (multipart) — снять.
+   */
+  category?: BlogPostCategory | null;
 }
 
 /**
@@ -263,6 +299,11 @@ export interface BlogPostLifetimeRequest {
 
 export interface BlogPinRequest {
   pinned: boolean;
+}
+
+/** Категория поста (VED-590): назначает автор или администратор. */
+export interface BlogPostCategoryRequest {
+  category: BlogPostCategory | null;
 }
 
 /** Линия поста (VED-596): идентификатор из справочника или `null` — для всех. */

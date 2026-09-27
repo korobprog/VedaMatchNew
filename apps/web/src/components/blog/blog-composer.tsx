@@ -5,6 +5,7 @@ import { Film, ImagePlus, X } from "lucide-react";
 import {
   BLOG_POST_MAX_IMAGES,
   BLOG_POST_TITLE_MAX_LENGTH,
+  type BlogPostCategory,
   type BlogPostDto,
 } from "@vedamatch/shared";
 import {
@@ -13,6 +14,7 @@ import {
   createBlogPost,
 } from "@/lib/blog-client-api";
 import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
+import { BlogCategorySelect } from "./blog-category-select";
 import {
   BLOG_MEDIA_ACCEPT,
   isBlogVideoFile,
@@ -38,6 +40,7 @@ export function BlogComposer({
 }) {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
+  const [category, setCategory] = useState<BlogPostCategory | "">("");
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +90,10 @@ export function BlogComposer({
 
     setPending(true);
     try {
-      const created = await createBlogPost({ title, text }, files);
+      const created = await createBlogPost(
+        { title, text, category: category || null },
+        files,
+      );
       if (created.failed.length > 0) {
         setNote(
           `Не загрузились: ${created.failed
@@ -97,6 +103,7 @@ export function BlogComposer({
       }
       setTitle("");
       setText("");
+      setCategory("");
       setFiles([]);
       onPublished?.(created.post);
     } catch (cause) {
@@ -146,6 +153,11 @@ export function BlogComposer({
       />
       <BlogTextCounter id={counterId} state={limit} />
       <BlogBlankLinesTool value={text} onChange={setText} disabled={pending} />
+      <BlogCategorySelect
+        value={category}
+        onChange={setCategory}
+        disabled={pending}
+      />
 
       {files.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-2">

@@ -9,6 +9,11 @@ import {
   fetchBlogFeed,
 } from "@/lib/blog-client-api";
 import { BlogComposer } from "./blog-composer";
+import {
+  BlogCategoryFilter,
+  BlogLineageFilter,
+} from "./blog-feed-filter-menus";
+import type { BlogFeedFilterValues } from "./blog-feed-filters";
 import { BlogPostCard } from "./blog-post-card";
 
 /**
@@ -22,6 +27,7 @@ export function BlogFeed({
   autoFocusComposer = false,
   nav,
   beforeComposer,
+  filters,
 }: {
   initial: BlogFeedResponse;
   /** `favorites` — вкладка «Избранное» (VED-238). */
@@ -36,6 +42,12 @@ export function BlogFeed({
   nav?: ReactNode;
   /** Над формой, в том же свёрнутом блоке, — настройки срока для админа. */
   beforeComposer?: ReactNode;
+  /**
+   * Фильтры читателя из адреса (VED-590, VED-596). Есть — в ряду кнопок
+   * встают значки «Категории постов» и «Фильтр по организациям», и «Показать
+   * ещё» догружает с теми же фильтрами.
+   */
+  filters?: BlogFeedFilterValues;
 }) {
   const [composing, setComposing] = useState(autoFocusComposer);
   const [posts, setPosts] = useState(initial.posts);
@@ -50,8 +62,8 @@ export function BlogFeed({
     try {
       const page =
         scope === "favorites"
-          ? await fetchBlogFavorites(cursor)
-          : await fetchBlogFeed(scope, cursor);
+          ? await fetchBlogFavorites(cursor, filters)
+          : await fetchBlogFeed(scope, cursor, filters);
       setPosts((current) => [...current, ...page.posts]);
       setCursor(page.nextCursor);
     } catch (cause) {
@@ -79,8 +91,16 @@ export function BlogFeed({
     <div>
       {/* Зазоры 6px на телефоне: вкладки и «Новый пост» встают в одну
           строку и на 360 точках. */}
-      <div className="mb-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
+      {/* `relative` — точка отсчёта для меню фильтров: панель встаёт от
+          правого края ряда, а не от кнопки, и не уезжает за экран. */}
+      <div className="relative mb-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
         {nav}
+        {filters && (
+          <>
+            <BlogCategoryFilter value={filters.category} />
+            <BlogLineageFilter value={filters.lineage} />
+          </>
+        )}
         {showComposer && (
           <button
             type="button"
@@ -124,9 +144,11 @@ export function BlogFeed({
 
       {posts.length === 0 ? (
         <p className="rounded-2xl border border-glass-brd bg-glass px-4 py-8 text-center text-sm text-text-1">
-          {scope === "favorites"
-            ? "В избранном пока пусто. Отметьте пост звёздочкой — он появится здесь."
-            : "Здесь пока пусто. Напишите первый пост — его увидят все на главной."}
+          {filters && (filters.category || filters.lineage)
+            ? "С такими фильтрами постов нет. Выберите другую категорию или линию."
+            : scope === "favorites"
+              ? "В избранном пока пусто. Отметьте пост звёздочкой — он появится здесь."
+              : "Здесь пока пусто. Напишите первый пост — его увидят все на главной."}
         </p>
       ) : (
         /* `space-y-3`, а не 4 (VED-371): восемь пикселей между тремя
