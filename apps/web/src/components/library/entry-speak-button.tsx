@@ -3,7 +3,7 @@
 import { useRef, useSyncExternalStore } from "react";
 import { Pause, Play, Volume2 } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
-import { useSpeechAnchor } from "@/lib/speech-dock";
+import { useSpeechAnchor } from "@/lib/use-speech-dock";
 import {
   canSpeak,
   getEntryPausedId,

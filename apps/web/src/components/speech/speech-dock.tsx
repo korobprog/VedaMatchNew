@@ -5,8 +5,8 @@ import {
   pauseDockSpeech,
   resumeDockSpeech,
   stopDockSpeech,
-  useDockedSpeech,
 } from "@/lib/speech-dock";
+import { useDockedSpeech } from "@/lib/use-speech-dock";
 
 /**
  * Плавающий пульт озвучки (VED-569). Включили «Слушать» в Блог-ленте,

@@ -3,7 +3,7 @@
 import { useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { Pause, Play, Volume2 } from "lucide-react";
 import { fetchLibraryEntry } from "@/lib/library-client-api";
-import { useSpeechAnchor } from "@/lib/speech-dock";
+import { useSpeechAnchor } from "@/lib/use-speech-dock";
 import {
   buildSpokenPost,
   canSpeak,

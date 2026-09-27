@@ -34,7 +34,7 @@ import {
   hasBackgroundAudio,
   nextAudioIndex,
 } from "./background-audio";
-import { useSpeechAnchor } from "@/lib/speech-dock";
+import { useSpeechAnchor } from "@/lib/use-speech-dock";
 import { buildSpokenQuote, canSpeak } from "./speak-quote";
 import {
   getQuotePausedId,
