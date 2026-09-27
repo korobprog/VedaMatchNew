@@ -311,6 +311,7 @@ const ui = {
     "category.deleteDone": "Рубрика удалена",
     "tree.organize": "Упорядочить",
     "tree.done": "Готово",
+    "tree.editOrder": "Редактировать порядок",
     "tree.hint":
       "Тяните вверх-вниз, чтобы переставить, и вправо-влево, чтобы вложить или вынести",
     "tree.keyboardHint":
@@ -643,6 +644,7 @@ const ui = {
     "category.deleteDone": "Category deleted",
     "tree.organize": "Organise",
     "tree.done": "Done",
+    "tree.editOrder": "Edit order",
     "tree.hint":
       "Drag up and down to reorder, left and right to nest or unnest",
     "tree.keyboardHint":
