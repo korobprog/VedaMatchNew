@@ -20,6 +20,7 @@ import { getProfile } from "@/lib/api";
 import { getMusicAdminArtists } from "@/lib/music-admin-api";
 import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
 import { MusicTrackLineageButton } from "@/components/music/track-lineage-button";
+import { MusicTrackAudienceButton } from "@/components/music/track-audience-button";
 
 export async function generateMetadata({
   params,
@@ -129,6 +130,13 @@ export default async function MusicTrackPage({
               title={track.title}
               size="size-11"
               className="shrink-0 border border-glass-brd"
+            />
+            {/* «Ступени» самоидентификации (VED-575) — рядом с «Линией». */}
+            <MusicTrackAudienceButton
+              trackId={track.id}
+              audienceStages={track.audienceStages ?? []}
+              canEdit={canEdit}
+              className="shrink-0"
             />
           </div>
         </div>
