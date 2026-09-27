@@ -35,6 +35,19 @@ describe("справочник линий", () => {
     expect(LINEAGES[0].id).toBe(DEFAULT_CONTENT_LINEAGE);
   });
 
+  it("Шри Гопинатх Гаудия-матх — в группе Гаудия-матх (VED-567)", () => {
+    const gaudiya = lineagesByGroup().find((g) => g.group === "gaudiya_math");
+    const gopinath = gaudiya?.items.find(
+      (item) => item.id === "sri_gopinath_gaudiya_math",
+    );
+    expect(gopinath).toMatchObject({
+      label: "Шри Гопинатх Гаудия Матх",
+      shortLabel: "Шри Гопинатх Гаудия-матх",
+    });
+    expect(isLineageId("sri_gopinath_gaudiya_math")).toBe(true);
+    expect(isLineagePreference("sri_gopinath_gaudiya_math")).toBe(true);
+  });
+
   it("идентификаторы уникальны и у каждого есть подпись", () => {
     const ids = LINEAGES.map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);

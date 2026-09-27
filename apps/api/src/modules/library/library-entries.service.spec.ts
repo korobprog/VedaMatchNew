@@ -1737,6 +1737,20 @@ describe('LibraryEntriesService — духовная линия', () => {
     expect(create.data.lineage).toBe('nityananda_vamsha');
   });
 
+  it('принимает линию Шри Гопинатх Гаудия-матха из справочника (VED-567)', async () => {
+    const { service, prisma } = build();
+
+    await service.create(
+      'user-1',
+      validBody({ lineage: 'sri_gopinath_gaudiya_math' }) as never,
+    );
+
+    const create = prisma.libraryEntry.create.mock.calls[0][0] as {
+      data: { lineage: string | null };
+    };
+    expect(create.data.lineage).toBe('sri_gopinath_gaudiya_math');
+  });
+
   it('у автора без линии материал подписывается ISKCON', async () => {
     const { service, prisma } = build();
 
