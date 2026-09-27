@@ -87,17 +87,21 @@ export function MusicTrackRow({
           строка целиком: слушать хотят чаще, чем читать о записи. Видна
           всегда: на телефоне наведения нет, а список смотрят как раз с
           телефона. Сердце без избранного (гость, ответ ещё не пришёл) не
-          рисуется вовсе. */}
+          рисуется вовсе.
+
+          Второй круг VED-531: значки ещё ближе ко времени и друг к другу —
+          области нажатия по 32 точки заходят друг на друга на 6, сам значок
+          остаётся в центре своей области. */}
       <span className="pointer-events-none absolute right-2 flex items-center">
         <MusicFavoriteButton
           trackId={track.id}
           title={track.title}
-          className="pointer-events-auto size-8!"
+          className="pointer-events-auto -mr-1.5 size-8!"
         />
         <Link
           href={`/music/tracks/${track.id}`}
           aria-label={`Карточка записи: ${track.title}`}
-          className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:text-text-0"
+          className="pointer-events-auto -mr-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-text-2 hover:text-text-0"
         >
           <svg
             viewBox="0 0 24 24"
