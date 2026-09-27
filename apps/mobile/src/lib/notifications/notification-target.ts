@@ -55,8 +55,17 @@ export type NotificationTarget =
    */
   | { kind: 'app-update' }
   /**
+   * «Персональный день» Астрологии: пуш `astro.transit.digest-ready` с путём
+   * `/astro/chart`. Весь сервис в приложение не переносился — только этот
+   * экран (`app/astro/today.tsx`): по уведомлению человек хочет прочитать
+   * день, а сайт во вкладке браузера открывался ему гостем, без сессии
+   * приложения. Остальные пути Астрологии (`/astro`, совместимость) — сайт.
+   */
+  | { kind: 'astro-today' }
+  /**
    * Раздел, которого в приложении нет: Рынок, Объявления, «Работа»,
-   * «Мотивация», «Музыка», Библиотека, админка. Путь сохранён
+   * «Мотивация», «Музыка», Библиотека, Астрология кроме персонального дня,
+   * админка. Путь сохранён
    * целиком вместе с `?query`: `/motivation/create?reel=<id>` без запроса
    * открыл бы пустую форму вместо нужного рилса.
    */
@@ -171,6 +180,8 @@ export function resolveNotificationTarget(url: unknown): NotificationTarget {
 
   if (first === 'app' && !second) return { kind: 'app-update' };
 
+  if (first === 'astro' && second === 'chart' && !third) return { kind: 'astro-today' };
+
   if (first === 'communities') {
     const communityId = idOf(second);
     if (communityId) return { kind: 'community', communityId };
@@ -220,6 +231,8 @@ export function routeOfTarget(target: NotificationTarget): NotificationDestinati
       return { kind: 'route', pathname: '/union/users/[id]', params: { id: target.userId } };
     case 'app-update':
       return { kind: 'route', pathname: '/services' };
+    case 'astro-today':
+      return { kind: 'route', pathname: '/astro/today' };
     case 'site':
       return null;
   }
