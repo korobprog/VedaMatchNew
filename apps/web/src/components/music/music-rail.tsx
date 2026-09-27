@@ -162,15 +162,16 @@ export function MusicRail({
 
   return (
     <nav aria-label="Своя музыка" className="w-full lg:w-56 lg:shrink-0">
-      {/* Правый край ленты на телефоне тает (VED-535): обрезанный краем
-          значок следующего пункта выглядел поломкой, а плавное исчезновение
-          читается как «дальше есть ещё». Тает список, а не рамка: рамка
-          ровно по краю «Загрузить» над ней. Последние 20px — уже пусто
-          (VED-535, круг 2): «кругляшок „Истории“ всё равно заметен». Раз в день лента сама показывает,
-          что листается (`MusicRailScroller`). */}
+      {/* Окно ленты на телефоне кончается за последним пунктом, влезшим
+          целиком (VED-535, круг 3): прежнее затухание по краю лишь размывало
+          значок следующего пункта, и «кругляшок „Истории“ всё равно
+          заметен». Теперь рамка сама сужается по целой кнопке — `w-fit` —
+          и не шире строки поиска над ней — `max-w-full`; ширину окна
+          считает `MusicRailScroller`. Раз в день лента сама показывает, что
+          листается. */}
       <MusicRailScroller
-        boxClassName="glass rounded-2xl p-1.5 lg:p-2.5"
-        className="scroll-slim flex gap-0.5 overflow-x-auto max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%-4.5rem),transparent_calc(100%-1.25rem))] lg:flex-col lg:gap-0.5 lg:overflow-visible"
+        boxClassName="glass max-w-full rounded-2xl p-1.5 max-lg:w-fit lg:p-2.5"
+        className="scroll-slim flex gap-0.5 overflow-x-auto lg:flex-col lg:gap-0.5 lg:overflow-visible"
       >
         {items.map((item) => {
           const current = item.key === active;
