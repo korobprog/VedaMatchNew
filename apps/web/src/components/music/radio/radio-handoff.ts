@@ -1,4 +1,5 @@
-import type { MusicRadioItemDto } from "@vedamatch/shared";
+import type { MusicRadioItemDto, MusicTrackDto } from "@vedamatch/shared";
+import { sortTracks } from "../sort-tracks";
 
 /**
  * Переход из эфира в плеер Медиатеки (VED-542) — чистая часть.
@@ -61,4 +62,19 @@ export function radioHandoffStep(main: {
 }): RadioHandoffStep {
   if (main.loadError) return "cancel";
   return main.isPlaying && !main.isLoading ? "finish" : "wait";
+}
+
+/**
+ * Очередь плеера после перехода из эфира (VED-585): вся папка исполнителя
+ * записи в том порядке, в каком её видно на странице исполнителя, — по
+ * алфавиту (`MusicArtistPlayback`, VED-273), — чтобы «дальше» вело к
+ * следующей записи папки, а не упиралось в одну-единственную. Записи нет
+ * в папке (скрыта, исполнитель не пришёл) — только она сама, как раньше.
+ */
+export function radioHandoffQueue(
+  trackId: string,
+  artistTracks: readonly MusicTrackDto[] | null,
+): string[] {
+  if (!artistTracks?.some((track) => track.id === trackId)) return [trackId];
+  return sortTracks([...artistTracks], "alpha", false).map((track) => track.id);
 }

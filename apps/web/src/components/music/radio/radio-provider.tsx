@@ -17,6 +17,7 @@ import {
   type MusicRadioStateDto,
 } from "@vedamatch/shared";
 import {
+  fetchMusicArtistTracks,
   fetchMusicRadio,
   leaveMusicRadio,
   musicRadioHeartbeat,
@@ -30,6 +31,7 @@ import { useMusicPlayer } from "../player/player-provider";
 import { revealMusicPlayerCollapsed } from "../player/player-reveal";
 import {
   radioHandoffPosition,
+  radioHandoffQueue,
   radioHandoffTrackId,
   radioHandoffStep,
 } from "./radio-handoff";
@@ -570,6 +572,16 @@ export function MusicRadioProvider({ children }: { children: ReactNode }) {
     }
     handoffRef.current = true;
     player.play(trackId, [trackId], position);
+    // Очередь — папка исполнителя (VED-585): запись в эфире одна, и без
+    // папки «дальше» в плеере было некуда. Звук ради неё не ждёт — список
+    // подменяется вокруг уже играющей записи, когда придёт.
+    const artist = item.track?.artist?.slug;
+    if (!artist) return;
+    const adopt = player.adoptQueue;
+    void fetchMusicArtistTracks(artist).then((tracks) => {
+      const queue = radioHandoffQueue(trackId, tracks);
+      if (queue.length > 1) adopt(trackId, queue);
+    });
   }, [item, player]);
 
   // Запустили запись в Медиатеке — радио уступает. Кроме перехода в

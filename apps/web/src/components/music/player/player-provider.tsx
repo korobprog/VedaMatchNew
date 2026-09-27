@@ -216,6 +216,12 @@ export interface MusicPlayerApi {
   playNext(trackId: string): void;
   /** Дописать в конец очереди. */
   addToQueue(trackId: string): void;
+  /**
+   * Подменить очередь, не прерывая звук (VED-585): `list` встаёт очередью,
+   * указатель — на `trackId` в ней. Ничего не делает, если сейчас играет
+   * уже не `trackId` или его нет в `list`.
+   */
+  adoptQueue(trackId: string, list: string[]): void;
   /** Убрать из очереди по месту. Играющую запись не трогает. */
   removeFromQueue(at: number): void;
   /** Очистить очередь, оставив то, что звучит. */
@@ -1318,6 +1324,21 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * Подменить очередь вокруг звучащей записи (VED-585): переход из радио
+   * запускает одну запись сразу, а очередь папки исполнителя приходит
+   * следом. Перезапускать звук ради неё нельзя, поэтому только список и
+   * указатель. Человек успел переключиться — его выбор главнее.
+   */
+  const adoptQueue = useCallback((trackId: string, list: string[]) => {
+    const at = list.indexOf(trackId);
+    if (at < 0) return;
+    const { queue: was, index: now } = playbackRef.current;
+    if (was[now] !== trackId) return;
+    setQueue(list);
+    setIndex(at);
+  }, []);
+
+  /**
    * Убрать из очереди. Играющую запись не трогаем: убрать её значит оборвать
    * звук, а человек просил прибраться в списке, а не выключить музыку.
    */
@@ -1575,6 +1596,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       play,
       playNext,
       addToQueue,
+      adoptQueue,
       removeFromQueue,
       clearQueue,
       close,
@@ -1624,6 +1646,7 @@ export function MusicPlayerProvider({ children }: { children: ReactNode }) {
       play,
       playNext,
       addToQueue,
+      adoptQueue,
       removeFromQueue,
       clearQueue,
       close,
