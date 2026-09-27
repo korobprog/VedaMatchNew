@@ -19,6 +19,7 @@ import {
   ENTRY_ICON_BUTTON,
   EntryShareActions,
 } from "@/components/library/entry-share-actions";
+import { EntryLikeButton } from "@/components/library/entry-like-button";
 import { EntrySpeakButton } from "@/components/library/entry-speak-button";
 import { buildSpokenEntry } from "@/components/library/entry-speech";
 import { EditEntryForm } from "@/components/library/edit-entry-form";
@@ -137,8 +138,9 @@ export default async function LibraryEntryPage({
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
         {/* Только что опубликованный материал: «Назад» ведёт в его раздел,
             а не по истории — там позади форма добавления (VED-91). */}
-        {/* Справа от «Назад» — «Поделиться», «В Блог-ленту» и «Озвучить»
-            значками, слева направо, как на скриншоте карточки VED-515. */}
+        {/* Справа от «Назад» — «Нравится» (VED-549), «Поделиться», «В
+            Блог-ленту» и «Озвучить» значками, слева направо, как на
+            скриншоте карточки VED-515. */}
         <div className="-mt-3 mb-2 flex flex-wrap items-center gap-2">
           <div className="mt-3">
             <BackLink
@@ -157,6 +159,15 @@ export default async function LibraryEntryPage({
             title={title}
             blogSharedAt={entry.blogSharedAt}
             compact
+            leading={
+              <EntryLikeButton
+                locale={locale}
+                entryId={entry.id}
+                initialLiked={entry.liked ?? false}
+                initialCount={entry.likeCount ?? 0}
+                className="ml-auto"
+              />
+            }
             trailing={
               <EntrySpeakButton
                 locale={locale}

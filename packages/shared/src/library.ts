@@ -143,6 +143,13 @@ export interface LibraryEntryDto {
   commentsCount: number;
   /** `true` — текущий пользователь добавил ссылку в избранное. */
   bookmarked: boolean;
+  /**
+   * «Нравится» (VED-549): сколько человек отметили материал сердечком.
+   * Приходит со страницы материала; в ленте и прочих ответах может не быть.
+   */
+  likeCount?: number;
+  /** `true` — текущий пользователь отметил материал «Нравится». */
+  liked?: boolean;
   publishedAt: string;
   categories: Array<
     Pick<LibraryCategoryDto, 'id' | 'slug' | 'titleRu' | 'titleEn'>
@@ -178,6 +185,12 @@ export interface LibraryEntryDto {
    * шрифтом для санскрита. У остальных типов поля нет.
    */
   shloka?: { verse: string | null; text: string } | null;
+}
+
+/** Ответ на «Нравится» и его снятие у материала (VED-549). */
+export interface LibraryEntryLikeResponse {
+  liked: boolean;
+  likeCount: number;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -32,6 +33,7 @@ import {
   type UploadedPreviewFile,
 } from './library-entries.service';
 import { LibraryFilesService } from './library-files.service';
+import { LibraryLikesService } from './library-likes.service';
 import { LibraryShlokasService } from './library-shlokas.service';
 import { isAdmin } from './is-admin';
 
@@ -44,6 +46,7 @@ export class LibraryEntriesController {
     private readonly comments: LibraryCommentsService,
     private readonly files: LibraryFilesService,
     private readonly shlokas: LibraryShlokasService,
+    private readonly likes: LibraryLikesService,
   ) {}
 
   @Get()
@@ -72,7 +75,11 @@ export class LibraryEntriesController {
   @Get(':id')
   async byId(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     const entry = await this.entries.byId(id, user.sub, isAdmin(user));
-    return { ...entry, files: await this.files.forEntry(entry.id) };
+    const [files, liked] = await Promise.all([
+      this.files.forEntry(entry.id),
+      this.likes.isLiked(user.sub, entry.id),
+    ]);
+    return { ...entry, liked, files };
   }
 
   /**
@@ -189,6 +196,22 @@ export class LibraryEntriesController {
     @Param('id') id: string,
   ) {
     return this.entries.shareToBlog(id, user.sub, isAdmin(user));
+  }
+
+  /**
+   * «Нравится» (VED-549), как у постов Блог-ленты. Идемпотентно: повтор не
+   * ошибка, в ответе — отметка и число с сервера.
+   */
+  @Put(':id/like')
+  @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
+  like(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.likes.setLike(user.sub, id, true);
+  }
+
+  @Delete(':id/like')
+  @Throttle({ default: { ttl: 3_600_000, limit: 600 } })
+  unlike(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.likes.setLike(user.sub, id, false);
   }
 
   @Post(':id/bookmark')

@@ -176,6 +176,7 @@ const ENTRY_SELECT = {
 const ENTRY_DETAIL_SELECT = {
   ...ENTRY_SELECT,
   body: true,
+  likeCount: true,
 } satisfies Prisma.LibraryEntrySelect;
 
 @Injectable()
@@ -1070,6 +1071,7 @@ function toEntryDetailDto(
   return {
     ...toEntryDto(entry, bookmarked, viewerId, viewerIsAdmin),
     body: entry.body,
+    likeCount: entry.likeCount,
   };
 }
 
