@@ -42,6 +42,7 @@ export function EntryShareActions({
   title,
   blogSharedAt: initialSharedAt,
   compact = false,
+  leading,
   trailing,
   statusOutside = false,
   onShared,
@@ -55,6 +56,11 @@ export function EntryShareActions({
    * отметка «В Блог-ленте» тогда встают своей строкой ниже.
    */
   compact?: boolean;
+  /**
+   * Кнопка перед «Поделиться» в том же ряду значков — «Нравится» (VED-549).
+   * Прижимает ряд вправо сама: отступ `ml-auto` тогда её, а не «Поделиться».
+   */
+  leading?: ReactNode;
   /** Кнопка за «В Блог-ленту» в том же ряду значков — «Озвучить». */
   trailing?: ReactNode;
   /**
@@ -125,12 +131,15 @@ export function EntryShareActions({
 
   return (
     <>
+      {compact && leading}
       <button
         type="button"
         onClick={() => void share()}
         aria-label={compact ? shareLabel : undefined}
         title={compact ? shareLabel : undefined}
-        className={compact ? `${ENTRY_ICON_BUTTON} ml-auto` : button}
+        className={
+          compact ? `${ENTRY_ICON_BUTTON} ${leading ? "" : "ml-auto"}` : button
+        }
       >
         {copied ? (
           <Check aria-hidden className={compact ? "size-4" : "h-3.5 w-3.5"} />

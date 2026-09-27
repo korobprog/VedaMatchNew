@@ -267,6 +267,7 @@ const ui = {
     "entry.urlRequired":
       "У материала без источника адрес убрать нельзя",
     "entry.delete": "Удалить",
+    "entry.like": "Нравится",
     "entry.share": "Поделиться",
     "entry.shareCopied": "Ссылка скопирована",
     "entry.toBlog": "В Блог-ленту",
@@ -584,6 +585,7 @@ const ui = {
     "entry.urlRequired":
       "An entry without a source cannot have its address removed",
     "entry.delete": "Delete",
+    "entry.like": "Like",
     "entry.share": "Share",
     "entry.shareCopied": "Link copied",
     "entry.toBlog": "To the Blog feed",

@@ -21,6 +21,7 @@ import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
 import { LibraryBookStorageService } from './library-book-storage.service';
 import { LibraryFilesService } from './library-files.service';
+import { LibraryLikesService } from './library-likes.service';
 import { LibraryShlokasController } from './library-shlokas.controller';
 import { LibraryShlokasService } from './library-shlokas.service';
 
@@ -47,6 +48,7 @@ import { LibraryShlokasService } from './library-shlokas.service';
     LibraryBookStorageService,
     LibraryFilesService,
     LibraryBookmarksService,
+    LibraryLikesService,
     LibraryCommentsService,
     LibraryAdminService,
     LibrarySectionRequestsService,
