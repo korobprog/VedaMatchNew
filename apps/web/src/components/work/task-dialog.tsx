@@ -252,7 +252,9 @@ export function WorkTaskDialog({
    * лимит запросов, потерянные права) выглядел как «кнопка не нажимается».
    * Заодно `busy` не даёт отправить второй раз, пока летит первый.
    */
-  async function run(action: () => Promise<WorkTaskDto | void>) {
+  async function run(
+    action: () => Promise<WorkTaskDto | void>,
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
@@ -262,11 +264,28 @@ export function WorkTaskDialog({
       // Дошло — окно так и говорит. Правок в черновике это не касается: пока
       // они есть, полоса показывает их, а не «Сохранено».
       setJustSaved(true);
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * Закрыть окно после сохранения (VED-400): «после нажатия кнопки
+   * Сохранить окно редакции задачи должно закрываться». Правок не осталось,
+   * черновик на доске больше не нужен.
+   */
+  function closeSaved() {
+    if (task) {
+      patchBoardSession(browserSessionStore(), board.id, (session) => ({
+        ...session,
+        taskDrafts: without(session.taskDrafts, task.id),
+      }));
+    }
+    onClose();
   }
 
   /**
@@ -344,6 +363,8 @@ export function WorkTaskDialog({
       const updated = await commit(task, next);
       if (updated) resetDraft(draftFromTask(updated));
       return updated ?? undefined;
+    }).then((ok) => {
+      if (ok) closeSaved();
     });
   }
 
@@ -644,9 +665,21 @@ export function WorkTaskDialog({
                     </div>
                   </>
                 ) : (
-                  <p role="status" className="text-sm text-text-1">
-                    Сохранено
-                  </p>
+                  <>
+                    <p role="status" className="text-sm text-text-1 sm:mr-auto">
+                      Сохранено
+                    </p>
+                    {/* Всё уже на сервере (скриншот, чек-лист, раздел уходят
+                        сразу), но кнопка «Сохранить» есть и здесь (VED-400):
+                        ею окно и закрывают, как после правки полей. */}
+                    <button
+                      type="button"
+                      onClick={closeSaved}
+                      className="ml-auto min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Сохранить
+                    </button>
+                  </>
                 )}
               </div>
             )}
