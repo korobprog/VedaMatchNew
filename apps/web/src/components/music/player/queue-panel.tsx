@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
+import { Users } from "lucide-react";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { useMusicPlayer } from "./player-provider";
 import { useQueueTracks } from "./use-queue-tracks";
@@ -61,14 +63,28 @@ export function MusicQueuePanel({ onClose }: { onClose: () => void }) {
       className="player-bar pointer-events-auto absolute bottom-full right-0 mb-2 max-h-[60vh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl p-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="font-display text-sm font-bold text-text-0">Очередь</h2>
+        {/* Слева — выход к исполнителям (VED-481): «на его месте сделай
+            кнопку выхода в окно исполнителей, откуда можно открыть любого
+            из них». Заголовок — к центру. */}
+        <Link
+          href="/music#music-artists"
+          onClick={onClose}
+          aria-label="Исполнители"
+          title="Исполнители: открыть любого и его записи"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-2 hover:text-text-0"
+        >
+          <Users aria-hidden className="h-4 w-4" />
+        </Link>
+        <h2 className="flex-1 text-center font-display text-sm font-bold text-text-0">
+          Очередь
+        </h2>
         {/* «Очистить» оставляет играющую запись: убрать её значит оборвать
             звук, а человек просил прибраться в списке. */}
         {queue.length > 1 && (
           <button
             type="button"
             onClick={player.clearQueue}
-            className="ml-auto rounded-lg px-2 py-1 text-[11px] font-semibold text-text-2 hover:text-magenta"
+            className="rounded-lg px-2 py-1 text-[11px] font-semibold text-text-2 hover:text-magenta"
           >
             Очистить
           </button>
