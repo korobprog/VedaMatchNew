@@ -16,6 +16,8 @@ import type {
   LibrarySectionRequestsState,
   LibraryShlokaDto,
   LibraryShlokaListResponse,
+  LibraryShlokaSourceLinesResponse,
+  LibraryShlokaSourcesResponse,
 } from "@vedamatch/shared";
 import { buildLibraryQuery } from "./library-query";
 
@@ -72,6 +74,18 @@ export const getLibraryShloka = (id: string) =>
 export const getLibraryShlokaList = (categorySlug: string) =>
   libraryGet<LibraryShlokaListResponse>(
     `/library/shlokas?category=${encodeURIComponent(categorySlug)}`,
+  );
+
+/** Папки-источники рубрики «Шлоки» (VED-465). */
+export const getLibraryShlokaSources = (categorySlug: string) =>
+  libraryGet<LibraryShlokaSourcesResponse>(
+    `/library/shlokas/sources?category=${encodeURIComponent(categorySlug)}`,
+  );
+
+/** Все шлоки одной папки-источника одним списком (VED-465). */
+export const getLibraryShlokaSourceLines = (categorySlug: string, key: string) =>
+  libraryGet<LibraryShlokaSourceLinesResponse>(
+    `/library/shlokas/source?category=${encodeURIComponent(categorySlug)}&key=${encodeURIComponent(key)}`,
   );
 
 export const getLibraryPreferences = () =>

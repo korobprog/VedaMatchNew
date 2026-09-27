@@ -11,6 +11,8 @@ import {
   getLibraryFeed,
   getLibraryPreferences,
   getLibraryShlokaList,
+  getLibraryShlokaSourceLines,
+  getLibraryShlokaSources,
 } from "@/lib/library-api";
 import { Header } from "@/components/header";
 import { BackLink } from "@/components/library/back-link";
@@ -29,6 +31,9 @@ import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips"
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
 import { ShlokaRootPanel } from "@/components/library/shloka/shloka-root-panel";
 import { ShlokaSourcePanel } from "@/components/library/shloka/shloka-source-panel";
+import { ShlokaSourceFolders } from "@/components/library/shloka/shloka-source-folders";
+import { ShlokaFolderList } from "@/components/library/shloka/shloka-folder-list";
+import { folderKeyFromQuery } from "@/components/library/shloka/shloka-folders";
 import { st } from "@/components/library/shloka/shloka-text";
 import {
   categoryPageSummary,
@@ -79,15 +84,32 @@ export default async function LibraryCategoryPage({
     ancestors: page.ancestors,
     shlokaTotal: shlokas?.total ?? 0,
   });
+  // Папка-источник рубрики «Шлоки» (VED-465) открывается на этой же
+  // странице: `?source=<ключ>`.
+  const folderKey =
+    shlokaMode === "root" ? folderKeyFromQuery(query.source) : null;
   // В окне источника шлоки стоят списком выше, а лента ниже — остальные
-  // материалы раздела, без повтора тех же шлок.
+  // материалы раздела, без повтора тех же шлок. В корне «Шлок» так же: сами
+  // шлоки разложены по папкам (VED-465).
   const feedQuery = {
-    ...query,
+    ...Object.fromEntries(
+      Object.entries(query).filter(([key]) => key !== "source"),
+    ),
     categorySlug: slug,
     withDescendants: withDescendants ? "true" : "false",
-    ...(shlokaMode === "source" ? { excludeType: "shloka" } : {}),
+    ...(shlokaMode !== null ? { excludeType: "shloka" } : {}),
   };
-  const feed = await getLibraryFeed(feedQuery);
+  const [feed, sources, folder] = await Promise.all([
+    // В папке ленты нет — только её шлоки.
+    folderKey ? Promise.resolve(null) : getLibraryFeed(feedQuery),
+    shlokaMode === "root" && !folderKey
+      ? getLibraryShlokaSources(slug).catch(() => null)
+      : Promise.resolve(null),
+    folderKey
+      ? getLibraryShlokaSourceLines(slug, folderKey).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  if (folderKey && !folder) notFound();
 
   const locale = preferences?.uiLanguage ?? "ru";
   const explicitLineage =
@@ -225,16 +247,32 @@ export default async function LibraryCategoryPage({
           />
         )}
 
-        <CategoryNavigator
-          locale={locale}
-          categories={children}
-          tree={tree ?? []}
-          activeSlug={category.slug}
-          canOrganize={category.canMove}
-          organizeInToolbar
-        />
+        {folder ? (
+          <ShlokaFolderList
+            locale={locale}
+            categorySlug={category.slug}
+            data={folder}
+          />
+        ) : (
+          <CategoryNavigator
+            locale={locale}
+            categories={children}
+            tree={tree ?? []}
+            activeSlug={category.slug}
+            canOrganize={category.canMove}
+            organizeInToolbar
+          />
+        )}
 
-        {shlokaMode === "root" && (
+        {sources && (
+          <ShlokaSourceFolders
+            locale={locale}
+            categorySlug={category.slug}
+            sources={sources}
+          />
+        )}
+
+        {shlokaMode === "root" && !folder && (
           <ShlokaRootPanel
             locale={locale}
             tree={tree ?? []}
@@ -250,7 +288,7 @@ export default async function LibraryCategoryPage({
           />
         )}
 
-        {shlokaMode === "source" ? (
+        {folder ? null : shlokaMode !== null ? (
           // Прочие материалы раздела — только если они есть: пустая лента
           // под списком шлок читалась бы как «здесь ничего нет».
           feed &&

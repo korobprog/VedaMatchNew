@@ -226,6 +226,143 @@ describe('LibraryShlokasService.list', () => {
   });
 });
 
+describe('LibraryShlokasService.sources (VED-465)', () => {
+  it('группирует шлоки поддерева рубрики по источнику', async () => {
+    const { service, prisma } = setup();
+    prisma.libraryCategory.findMany.mockResolvedValue([{ id: 'cat-sub' }]);
+    prisma.libraryEntry.findMany.mockResolvedValue([
+      { id: 'a', source: 'Бхагавад-гита', publishedAt: NOW },
+      { id: 'b', source: 'бхагавад-гита ', publishedAt: NOW },
+      { id: 'c', source: null, publishedAt: NOW },
+    ]);
+
+    const result = await service.sources('bhagavad-gita');
+
+    expect(prisma.libraryCategory.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: 'active', path: { startsWith: '.cat-root.cat-bg.' } },
+      }),
+    );
+    expect(prisma.libraryEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          type: 'shloka',
+          status: 'published',
+          categories: { some: { categoryId: { in: ['cat-bg', 'cat-sub'] } } },
+        },
+      }),
+    );
+    expect(result.total).toBe(3);
+    expect(result.folders).toEqual([
+      { key: 'бхагавад-гита', label: 'Бхагавад-гита', count: 2 },
+      { key: '_', label: null, count: 1 },
+    ]);
+  });
+
+  it('неизвестная рубрика — 404', async () => {
+    const { service, prisma } = setup();
+    prisma.libraryCategory.findFirst.mockResolvedValue(null);
+    await expect(service.sources('nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('LibraryShlokasService.sourceLines (VED-465)', () => {
+  function withFolder() {
+    const ctx = setup();
+    ctx.prisma.libraryCategory.findMany.mockResolvedValue([]);
+    ctx.prisma.libraryEntry.findMany.mockResolvedValue([
+      { id: 'late', source: 'Бхагавад-гита', publishedAt: NOW, addedById: 'x' },
+      { id: 's10', source: 'Бхагавад-гита', publishedAt: NOW, addedById: 'me' },
+      { id: 's2', source: 'БХАГАВАД-ГИТА', publishedAt: NOW, addedById: 'x' },
+      { id: 'sb', source: 'Шримад-Бхагаватам', publishedAt: NOW },
+    ]);
+    ctx.prisma.libraryShloka.findMany.mockResolvedValue([
+      {
+        entryId: 's10',
+        verse: '10.8',
+        text: 'ahaṁ sarvasya\nprabhavo',
+        translation: 'Я',
+      },
+      {
+        entryId: 's2',
+        verse: '2.13',
+        text: '',
+        translation: 'Как воплощённая душа',
+      },
+      { entryId: 'late', verse: null, text: 'стих', translation: null },
+    ]);
+    return ctx;
+  }
+
+  it('одна строка на шлоку, по номеру стиха, с правом правки', async () => {
+    const { service, prisma } = withFolder();
+
+    const result = await service.sourceLines(
+      'bhagavad-gita',
+      'бхагавад-гита',
+      'me',
+      false,
+    );
+
+    expect(prisma.libraryShloka.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { entryId: { in: ['late', 's10', 's2'] } },
+      }),
+    );
+    expect(result.folder).toEqual({
+      key: 'бхагавад-гита',
+      label: 'Бхагавад-гита',
+      count: 3,
+    });
+    expect(result.items).toEqual([
+      {
+        id: 's2',
+        verse: '2.13',
+        line: 'Как воплощённая душа',
+        lineFrom: 'translation',
+        canEdit: false,
+      },
+      {
+        id: 's10',
+        verse: '10.8',
+        line: 'ahaṁ sarvasya',
+        lineFrom: 'text',
+        canEdit: true,
+      },
+      {
+        id: 'late',
+        verse: null,
+        line: 'стих',
+        lineFrom: 'text',
+        canEdit: false,
+      },
+    ]);
+  });
+
+  it('админ правит всё', async () => {
+    const { service } = withFolder();
+    const result = await service.sourceLines(
+      'bg',
+      'бхагавад-гита',
+      'admin',
+      true,
+    );
+    expect(result.items.every((item) => item.canEdit)).toBe(true);
+  });
+
+  it('без ключа — 400, пустая папка — 404', async () => {
+    const { service } = withFolder();
+    await expect(
+      service.sourceLines('bg', ' ', 'me', false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.sourceLines('bg', 'ишопанишад', 'me', false),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
 describe('LibraryShlokasService.create', () => {
   it('проставляет источник по рубрике, линию «для всех» и заголовок из номера', async () => {
     const { service, prisma, tx, events } = setup();
