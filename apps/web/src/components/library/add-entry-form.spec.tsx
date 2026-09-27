@@ -130,6 +130,37 @@ describe("AddEntryForm", () => {
     });
   });
 
+  it("рубрика, с которой пришли, уже отмечена и уезжает в запись (VED-192)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ id: "entry-1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AddEntryForm locale="ru" tree={tree} initialCategorySlug="gita" />,
+    );
+
+    expect(screen.getByLabelText("Гита")).toBeChecked();
+    expect(screen.getByLabelText("Философия и писания")).not.toBeChecked();
+
+    await userEvent.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://example.com/site",
+    );
+    await userEvent.type(screen.getByLabelText("Заголовок по-русски"), "Сайт");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+
+    await waitFor(() => {
+      expect(postsTo(fetchMock, "/library/entries")).toHaveLength(1);
+    });
+    const [, init] = postsTo(fetchMock, "/library/entries")[0];
+    expect(JSON.parse(String((init as RequestInit).body)).categoryIds).toEqual(
+      ["category-1"],
+    );
+  });
+
   it("подставляет линию автора-рубрики, пока линию не выбрали руками (VED-548)", async () => {
     const authorTree: LibraryCategoryTreeNode[] = [
       { ...tree[0], lineage: "sri_chaitanya_saraswat_math" },

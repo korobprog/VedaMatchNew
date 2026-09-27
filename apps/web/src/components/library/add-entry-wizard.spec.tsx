@@ -153,6 +153,28 @@ describe("AddEntryWizard", () => {
     expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
   });
 
+  it("рубрика, с которой пришли, на третьем шаге уже отмечена (VED-192)", async () => {
+    const user = userEvent.setup();
+    render(
+      <AddEntryWizard locale="ru" tree={tree} initialCategorySlug="prabhupada" />,
+    );
+    await pickType(user, "video");
+
+    await user.type(
+      screen.getByLabelText("Адрес ссылки"),
+      "https://example.com/kirtan",
+    );
+    await user.type(
+      screen.getByLabelText("Заголовок по-русски"),
+      "Как проходит киртан",
+    );
+    await user.click(screen.getByRole("button", { name: "Далее" }));
+
+    // Выбирать ту же рубрику второй раз не нужно — дальше пускает сразу.
+    expect(screen.getByLabelText("Шрила Прабхупада")).toBeChecked();
+    expect(screen.getByRole("button", { name: "Далее" })).toBeEnabled();
+  });
+
   it("доходит до отправки материала из книги — без всякой ссылки", async () => {
     const user = userEvent.setup();
     setup();

@@ -263,6 +263,24 @@ export function renameInTree(
   );
 }
 
+/**
+ * Рубрики, отмеченные в форме добавления сразу (VED-192).
+ *
+ * «Добавить» на странице рубрики или автора ведёт на форму с
+ * `?category=<slug>`: раз материал заводят отсюда, он и относится сюда, и
+ * выбирать ту же рубрику второй раз руками — лишняя работа. Неизвестный
+ * slug (рубрику удалили, ссылка старая) не мешает — форма просто пустая.
+ */
+export function initialSelectedCategories(
+  nodes: LibraryCategoryTreeNode[],
+  slug: string | null | undefined,
+): LibraryCategoryDto[] {
+  const wanted = slug?.trim();
+  if (!wanted) return [];
+  const row = flattenTree(nodes).find((item) => item.node.slug === wanted);
+  return row ? [row.node] : [];
+}
+
 /** Только что созданная рубрика — сразу на своё место под родителем. */
 export function insertIntoTree(
   nodes: LibraryCategoryTreeNode[],
