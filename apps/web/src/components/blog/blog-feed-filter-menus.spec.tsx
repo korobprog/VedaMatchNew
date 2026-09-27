@@ -72,7 +72,7 @@ describe("BlogLineageFilter", () => {
     });
   });
 
-  it("Гаудия-матх раскрывается: вся группа или один матх", async () => {
+  it("Гаудия-матх раскрывается конкретными матхами, без «Любой» (VED-568)", async () => {
     const user = userEvent.setup();
     render(<BlogLineageFilter value={null} />);
 
@@ -82,9 +82,12 @@ describe("BlogLineageFilter", () => {
     const group = screen.getByRole("button", { name: "Гаудия-матх" });
     expect(group).toHaveAttribute("aria-expanded", "false");
     await user.click(group);
-    await user.click(screen.getByRole("button", { name: "Любой Гаудия-матх" }));
+    expect(
+      screen.queryByRole("button", { name: "Любой Гаудия-матх" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("button", { name: /^IPBYS/ }));
 
-    expect(push).toHaveBeenCalledWith("/blog?lineage=group%3Agaudiya_math", {
+    expect(push).toHaveBeenCalledWith("/blog?lineage=ipbys", {
       scroll: false,
     });
   });

@@ -163,22 +163,18 @@ export function BlogLineageFilter({
                     aria-label={option.label}
                     className="ml-3 border-l border-glass-brd pl-2"
                   >
-                    {lineageDetailOptions(group, { allowGroup: true }).map(
-                      (detail) => (
-                        <button
-                          key={detail.value}
-                          type="button"
-                          title={detail.title}
-                          aria-pressed={detail.value === current}
-                          onClick={() => choose(detail.value, close)}
-                          className={blogMenuOptionClass(
-                            detail.value === current,
-                          )}
-                        >
-                          {detail.label}
-                        </button>
-                      ),
-                    )}
+                    {lineageDetailOptions(group).map((detail) => (
+                      <button
+                        key={detail.value}
+                        type="button"
+                        title={detail.title}
+                        aria-pressed={detail.value === current}
+                        onClick={() => choose(detail.value, close)}
+                        className={blogMenuOptionClass(detail.value === current)}
+                      >
+                        {detail.label}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
