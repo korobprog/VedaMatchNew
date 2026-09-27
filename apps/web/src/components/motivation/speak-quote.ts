@@ -3,6 +3,29 @@ import { splitQuoteAndExplanation } from "./quote-text";
 import { attributionLine } from "./reels";
 
 /**
+ * Адреса в тексте (VED-550): `https://…`, `www.…` и голые домены вида
+ * `site.ru/путь`; точка или запятая за адресом остаётся тексту. Голосом
+ * ссылку не читают — её не набрать на слух. Зона домена — только строчными
+ * латинскими буквами или «рф»: так «Бхагавад-гита 2.13» и «т. е.» не
+ * считаются адресами. Копия из озвучки Блог-ленты: сервисы портала друг
+ * друга не импортируют.
+ */
+const URL_PATTERN = /\b(?:https?:\/\/|www\.)\S*[^\s.,;:!?)\]»"'…]/gi;
+const BARE_DOMAIN_PATTERN =
+  /(?<![\p{L}\p{N}@.\-/])(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-z]{2,24}|(?:[а-яёА-ЯЁ0-9](?:[а-яёА-ЯЁ0-9-]*[а-яёА-ЯЁ0-9])?\.)+рф)(?::\d+)?(?:\/(?:\S*[^\s.,;:!?)\]»"'…])?)?(?![\p{L}\p{N}])/gu;
+
+/** Текст без адресов; хвосты вроде «Подробнее: » остаются без пустоты. */
+export function stripUrls(text: string): string {
+  return text
+    .replace(URL_PATTERN, " ")
+    .replace(BARE_DOMAIN_PATTERN, " ")
+    .replace(/\(\s*\)/g, " ")
+    .replace(/[ \t]+([.,;:!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Что читать голосом и на каком языке.
  *
  * Читаем цитату и подпись, но не пояснение: пояснение — это разбор, его
@@ -21,7 +44,9 @@ export function buildSpokenQuote(post: {
 }): string {
   const { quote } = splitQuoteAndExplanation(post.text ?? "");
   const source = attributionLine(post as MotivationPostDto);
-  return [quote.trim(), source.trim()].filter(Boolean).join(". ");
+  return [stripUrls(quote), stripUrls(source)]
+    .filter((part) => /[\p{L}\p{N}]/u.test(part))
+    .join(". ");
 }
 
 /**

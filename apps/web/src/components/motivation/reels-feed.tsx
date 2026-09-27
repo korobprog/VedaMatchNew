@@ -34,7 +34,18 @@ import {
   hasBackgroundAudio,
   nextAudioIndex,
 } from "./background-audio";
-import { buildSpokenQuote, canSpeak, spokenLanguage } from "./speak-quote";
+import { buildSpokenQuote, canSpeak } from "./speak-quote";
+import {
+  getQuotePausedId,
+  getQuoteSpeakingId,
+  getQuoteSpeechServerSnapshot,
+  pauseQuoteSpeech,
+  resumeQuoteSpeech,
+  speakButtonAction,
+  speakQuote,
+  stopQuoteSpeech,
+  subscribeQuoteSpeech,
+} from "./quote-speech";
 import {
   DEFAULT_RAIL,
   RAIL_STORAGE_KEY,
@@ -219,8 +230,17 @@ export function ReelsFeed({
    * и таймера у него нет: вернуть текст — то же нажатие.
    */
   const [textHidden, setTextHidden] = useState(false);
-  /** Что читает голос сейчас. `null` — молчит. */
-  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  /** Что читает голос сейчас и что стоит на паузе. `null` — нет такого. */
+  const speakingId = useSyncExternalStore(
+    subscribeQuoteSpeech,
+    getQuoteSpeakingId,
+    getQuoteSpeechServerSnapshot,
+  );
+  const pausedSpeechId = useSyncExternalStore(
+    subscribeQuoteSpeech,
+    getQuotePausedId,
+    getQuoteSpeechServerSnapshot,
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const slidesRef = useRef<Slide[]>([]);
   const viewedRef = useRef<Set<string>>(new Set());
@@ -272,40 +292,32 @@ export function ReelsFeed({
      и был прав, польза от неё была нулевая. Ни один эффект больше не зависит
      от тождества этих функций, а обработчику кнопки оно безразлично. */
   function stopSpeaking() {
-    if (canSpeak()) window.speechSynthesis.cancel();
-    setSpeakingId(null);
+    stopQuoteSpeech();
   }
 
   /* Читает браузер, а не сервер: голос устройства бесплатен, работает без
      сети и говорит тем же голосом, к которому человек привык в остальных
-     приложениях. Синтез на стороне API стоил бы денег на каждое нажатие. */
+     приложениях. Синтез на стороне API стоил бы денег на каждое нажатие.
+     Второе нажатие — пауза, а не «стоп» (VED-549): третье продолжает с той
+     же фразы, а не читает цитату сначала. */
   function toggleSpeak() {
     const post = items[activeIndex];
     if (!post || !canSpeak()) return;
-    if (speakingId === post.id) {
-      stopSpeaking();
-      return;
-    }
-    const text = buildSpokenQuote(post);
-    if (!text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = spokenLanguage(text);
-    utterance.onend = () => setSpeakingId(null);
-    utterance.onerror = () => setSpeakingId(null);
-    window.speechSynthesis.speak(utterance);
-    setSpeakingId(post.id);
+    const action = speakButtonAction({
+      speaking: speakingId === post.id,
+      paused: pausedSpeechId === post.id,
+    });
+    if (action === "pause") pauseQuoteSpeech();
+    else if (action === "resume") resumeQuoteSpeech();
+    else speakQuote(post.id, buildSpokenQuote(post));
   }
 
-  /* Уход со страницы не должен оставлять голос говорить в пустоту. Чистилка
-     отменяет речь сама, а не зовёт stopSpeaking: от неё нужна ровно отмена, а
-     состояние размонтированного компонента менять незачем. Заодно эффект
-     перестал зависеть от тождества функции — иначе он снимался бы и ставился
-     заново на каждом рендере, обрывая чтение на полуслове. */
+  /* Уход со страницы не должен оставлять голос говорить в пустоту, а паузу —
+     ждать кнопки, которой больше нет. Эффект не зависит от тождества
+     функций — иначе он снимался бы и ставился заново на каждом рендере,
+     обрывая чтение на полуслове. */
   useEffect(() => {
-    return () => {
-      if (canSpeak()) window.speechSynthesis.cancel();
-    };
+    return () => stopQuoteSpeech();
   }, []);
 
   // Просмотр: активный слайд, продержавшийся положенное время. Один раз на
@@ -557,14 +569,28 @@ export function ReelsFeed({
           <RailButton
           label={
             speakingId === activePost.id
-              ? "Остановить чтение"
-              : "Озвучить цитату"
+              ? "Пауза чтения"
+              : pausedSpeechId === activePost.id
+                ? "Продолжить чтение"
+                : "Озвучить цитату"
           }
           pressed={speakingId === activePost.id}
-          caption={speakingId === activePost.id ? "Молчать" : "Озвучить"}
+          caption={
+            speakingId === activePost.id
+              ? "Пауза"
+              : pausedSpeechId === activePost.id
+                ? "Продолжить"
+                : "Озвучить"
+          }
           onClick={toggleSpeak}
         >
-          <SpeakIcon />
+          {speakingId === activePost.id ? (
+            <SpeechPauseIcon />
+          ) : pausedSpeechId === activePost.id ? (
+            <SpeechPlayIcon />
+          ) : (
+            <SpeakIcon />
+          )}
         </RailButton>
         ) : null,
         edit: isAdmin ? (
@@ -1926,6 +1952,23 @@ function SpeakIcon() {
       <path d="M11 5L6 9H3v6h3l5 4z" />
       <path d="M16 8.5a4.5 4.5 0 0 1 0 7" />
       <path d="M19 5.5a8.5 8.5 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+function SpeechPauseIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <rect x="6" y="5" width="4" height="14" rx="1" />
+      <rect x="14" y="5" width="4" height="14" rx="1" />
+    </svg>
+  );
+}
+
+function SpeechPlayIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M7 4.5v15a1 1 0 0 0 1.5.87l12-7.5a1 1 0 0 0 0-1.74l-12-7.5A1 1 0 0 0 7 4.5z" />
     </svg>
   );
 }

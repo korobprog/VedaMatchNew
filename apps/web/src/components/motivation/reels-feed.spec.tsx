@@ -1200,7 +1200,7 @@ describe("ReelsFeed", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("читает цитату голосом устройства и замолкает по второму нажатию", async () => {
+  it("читает цитату голосом устройства, второе нажатие — пауза, третье — продолжение (VED-549)", async () => {
     const speak = vi.fn();
     const cancel = vi.fn();
     vi.stubGlobal("speechSynthesis", { speak, cancel });
@@ -1231,8 +1231,15 @@ describe("ReelsFeed", () => {
     expect(utterance.text).not.toContain("Пояснение a");
     expect(utterance.lang).toBe("ru-RU");
 
-    await user.click(screen.getByRole("button", { name: "Остановить чтение" }));
+    await user.click(screen.getByRole("button", { name: "Пауза чтения" }));
     expect(cancel).toHaveBeenCalled();
+
+    speak.mockClear();
+    await user.click(screen.getByRole("button", { name: "Продолжить чтение" }));
+    expect(speak).toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Пауза чтения" }),
+    ).toBeInTheDocument();
   });
 
   it("без синтеза речи кнопки нет: молчащая кнопка хуже её отсутствия", () => {
