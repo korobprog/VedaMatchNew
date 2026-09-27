@@ -176,16 +176,22 @@ export default async function LibraryCategoryPage({
           </Link>
           {authorPage ? (
             <>
-              {/* У автора справа налево (VED-521): «Тип материала»,
-                  «Редактировать», «Упорядочить», «Язык». */}
-              <div className="ml-auto">
-                <EntryFilterMenu kind="language" locale={locale} />
-              </div>
+              {/* У автора слева направо (VED-521, второй круг): «Содержание»
+                  значком, «Тип материала», «Упорядочить», «Редактировать»,
+                  «Язык» — тип и язык поменялись местами по стрелкам. Список
+                  «Содержания» раскрывается под рядом (VED-538). */}
+              <div className="ml-auto" />
+              <LibraryContents
+                locale={locale}
+                categorySlug={category.slug}
+                iconOnly
+              />
+              <EntryFilterMenu kind="type" locale={locale} />
               {category.canMove && (
                 <LibraryOrganizeButton locale={locale} iconOnly />
               )}
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
-              <EntryFilterMenu kind="type" locale={locale} />
+              <EntryFilterMenu kind="language" locale={locale} />
             </>
           ) : (
             <>
@@ -209,12 +215,6 @@ export default async function LibraryCategoryPage({
             </>
           )}
         </div>
-
-        {/* «Содержание» автора (VED-538) — оглавление его текстовых
-            материалов. */}
-        {authorPage && (
-          <LibraryContents locale={locale} categorySlug={category.slug} />
-        )}
 
         {user && !authorPage && (
           <LineagePrompt

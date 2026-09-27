@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Languages, Shapes } from "lucide-react";
+import { Shapes } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { useDismissable } from "@/lib/use-dismissable";
 import { ENTRY_FILTER_LANGUAGES, ENTRY_FILTER_TYPES } from "./entry-filters";
@@ -14,6 +14,10 @@ import { LIBRARY_ICON_BUTTON } from "./icon-button";
  * фильтров с селектами там убрана, а выбор остался — кнопкой в ряду
  * действий, рядом с «Добавить». Выбор пишется в адрес (`?type=`,
  * `?language=`), как в панели фильтров: лента читает его оттуда же.
+ *
+ * «Язык» — не значком перевода, а самим языком: «RU», «EN», без выбора —
+ * «Все» (VED-546). Код языка читается сразу, значок «文A» приходилось
+ * угадывать.
  *
  * Меню раскрывается у правого края ряда — ряд `relative`, у обёртки своей
  * точки отсчёта нет: от кнопки на телефоне оно уезжало бы за экран.
@@ -64,7 +68,6 @@ export function EntryFilterMenu({
     router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }
 
-  const Icon = kind === "type" ? Shapes : Languages;
   const optionClass = (pressed: boolean) =>
     `flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm transition-colors ${
       pressed
@@ -88,7 +91,13 @@ export function EntryFilterMenu({
             : "border-glass-brd text-text-1 hover:text-text-0"
         }`}
       >
-        <Icon aria-hidden className="size-4" />
+        {kind === "type" ? (
+          <Shapes aria-hidden className="size-4" />
+        ) : (
+          <span aria-hidden className="font-mono text-xs font-semibold">
+            {chosen ? chosen.label : t(locale, "filters.all")}
+          </span>
+        )}
       </button>
       {open && (
         <div
