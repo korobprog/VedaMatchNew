@@ -15,6 +15,7 @@ import { MusicRadioBar } from "@/components/music/radio/radio-bar";
 import { MusicRadioProvider } from "@/components/music/radio/radio-provider";
 import { PortalWindowsTracker } from "@/components/quick/portal-windows-tracker";
 import { PortalCallProviders } from "@/components/chat/calls/portal-call-providers";
+import { SpeechDock } from "@/components/speech/speech-dock";
 import { getProfile, getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
@@ -194,6 +195,11 @@ export default async function RootLayout({
               ) : (
                 children
               )}
+              {/* Пульт озвучки (VED-569): «Слушать» в Блог-ленте,
+                  Образовании или Вдохновении продолжает читать и после ухода
+                  со страницы, и остановить его можно с любой. Вне ветки
+                  сессии: читают и гостю. Пока речи нет, пульт не рисуется. */}
+              <SpeechDock />
             </ThemeProvider>
           </ServiceCatalogProvider>
         </NextIntlClientProvider>

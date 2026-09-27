@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { Pause, Play, Volume2 } from "lucide-react";
 import { fetchLibraryEntry } from "@/lib/library-client-api";
+import { useSpeechAnchor } from "@/lib/use-speech-dock";
 import {
   buildSpokenPost,
   canSpeak,
@@ -11,12 +12,12 @@ import {
   getBlogSpeakingId,
   getBlogSpeakingServerId,
   libraryEntryIdOf,
+  SPEECH_SOURCE,
   pauseBlogSpeech,
   resolveSpokenPostText,
   resumeBlogSpeech,
   speakBlogPost,
   speakButtonAction,
-  stopBlogSpeech,
   subscribeBlogSpeech,
   type SpokenLibraryEntry,
 } from "./blog-speech";
@@ -56,11 +57,16 @@ function loadSpokenEntry(id: string): Promise<SpokenLibraryEntry | null> {
  * Пост, присланный из Образования, читается текстом самого материала, а не
  * своей ссылкой (VED-550): текст подгружается у Образования по его
  * публичному API в момент нажатия. Лента таблиц Образования не читает.
+ *
+ * Пока кнопка на экране, пульт озвучки портала (VED-569) спрятан: `anchor` —
+ * сама кнопка, без него в расчёт идёт только то, что она смонтирована.
  */
 export function useBlogSpeech(
   id: string | null,
   source: SpokenPostSource | null,
+  anchor?: RefObject<Element | null>,
 ) {
+  useSpeechAnchor(SPEECH_SOURCE, id, anchor);
   const speakingId = useSyncExternalStore(
     subscribeBlogSpeech,
     getBlogSpeakingId,
@@ -130,27 +136,22 @@ export function BlogSpeakButton({
   className?: string;
   labelClassName?: string;
 }) {
+  const ref = useRef<HTMLButtonElement>(null);
   const { available, speaking, paused, loading, toggle } = useBlogSpeech(
     postId,
     source,
+    ref,
   );
 
-  // Карточка ушла со страницы — голос не должен читать в пустоту, а пауза
-  // не должна ждать продолжения у кнопки, которой нет.
-  useEffect(
-    () => () => {
-      if (getBlogSpeakingId() === postId || getBlogPausedId() === postId) {
-        stopBlogSpeech();
-      }
-    },
-    [postId],
-  );
+  // Карточка ушла со страницы — чтение не обрывается (VED-569): паузу и стоп
+  // человек найдёт в плавающем пульте озвучки поверх любой страницы.
 
   if (!available) return null;
   const caption = speaking ? "Пауза" : paused ? "Продолжить" : "Слушать";
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={() => void toggle()}
       disabled={loading}

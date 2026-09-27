@@ -10,6 +10,8 @@
  * кнопка первого гаснет сама (подписка через `useSyncExternalStore`).
  */
 
+import { clearSpeech, reportSpeech, speechTitle } from "@/lib/speech-dock";
+
 /**
  * Адреса в тексте (VED-550): `https://…`, `www.…` и голые домены вида
  * `site.ru/путь`; точка или запятая за адресом остаётся тексту. Голосом
@@ -205,10 +207,41 @@ let currentChunk = 0;
 /** Поколение чтения: обработчики отменённых фраз не трогают новое. */
 let generation = 0;
 
+/** Slug для портального пульта озвучки (VED-569). */
+export const SPEECH_SOURCE = "blog";
+
 function emit(next: string | null) {
   speakingId = next;
   for (const listener of listeners) listener();
+  reportToDock();
 }
+
+/**
+ * Портальный пульт (VED-569): уйдя со страницы, человек ставит паузу и
+ * останавливает чтение плавающим доком. Пульт получает факт и команды этого
+ * диктора. Чужих дикторов сервис не импортирует — только портальный `lib`.
+ */
+function reportToDock() {
+  const id = speakingId ?? paused?.id ?? null;
+  if (!id) {
+    clearSpeech(SPEECH_SOURCE);
+    return;
+  }
+  reportSpeech({
+    source: SPEECH_SOURCE,
+    id,
+    service: "Блог-лента",
+    title: speechTitle(speakingId ? currentText : (paused?.text ?? "")),
+    status: speakingId ? "speaking" : "paused",
+    controls: dockControls,
+  });
+}
+
+const dockControls = {
+  pause: () => pauseBlogSpeech(),
+  resume: () => void resumeBlogSpeech(),
+  stop: () => stopBlogSpeech(),
+};
 
 export function subscribeBlogSpeech(listener: () => void): () => void {
   listeners.push(listener);
