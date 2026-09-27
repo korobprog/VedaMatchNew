@@ -402,6 +402,80 @@ describe("WorkTaskDialog — несколько вложений за раз (VE
   });
 });
 
+describe("WorkTaskDialog — «Прикрепить» с первого нажатия (VED-266)", () => {
+  const shot = (name: string) => new File(["x"], name, { type: "image/png" });
+
+  it("нажатие на видимую кнопку открывает выбор файла", async () => {
+    const user = userEvent.setup();
+    open();
+    const input = await screen.findByLabelText("Прикрепить картинки или файлы");
+    const picked = vi.fn();
+    input.addEventListener("click", picked);
+
+    await user.click(screen.getByText("Прикрепить картинки или файлы"));
+
+    expect(picked).toHaveBeenCalledTimes(1);
+  });
+
+  it("пока файл грузится, кнопка пишет «Загружаю…» и не принимает второй выбор", async () => {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    open();
+    const input = await screen.findByLabelText("Прикрепить картинки или файлы");
+
+    await user.upload(input, shot("1.png"));
+
+    const pending = screen.getByLabelText("Загружаю…");
+    expect(pending).toBe(input);
+    expect(input).toBeDisabled();
+
+    finish(task);
+    expect(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+    ).toBeEnabled();
+  });
+
+  it("корзина у вложения — кнопка с областью 40×40", async () => {
+    vi.mocked(getWorkTask).mockResolvedValueOnce({
+      ...task,
+      attachments: [
+        {
+          id: "f1",
+          name: "shot.png",
+          mime: "image/png",
+          sizeBytes: 1,
+          url: "https://files.test/shot.png",
+          createdAt: "2026-09-13T00:00:00.000Z",
+        },
+        {
+          id: "f2",
+          name: "смета.pdf",
+          mime: "application/pdf",
+          sizeBytes: 1,
+          url: "https://files.test/smeta.pdf",
+          createdAt: "2026-09-13T00:00:00.000Z",
+        },
+      ],
+    } as unknown as WorkTaskDto);
+    open();
+
+    for (const name of ["shot.png", "смета.pdf"]) {
+      const trash = await screen.findByRole("button", {
+        name: `Убрать вложение «${name}»`,
+      });
+      expect(trash.className).toContain("size-10");
+      expect(trash.className).toContain("active:");
+    }
+  });
+});
+
 describe("WorkTaskDialog — «Удалить насовсем» (VED-6)", () => {
   it("стирает карточку после подтверждения и закрывает окно", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);

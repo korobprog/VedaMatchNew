@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { WorkMemberDto, WorkTaskPriority } from "@vedamatch/shared";
+import { WORK_ATTACH_PICKER_CLASS } from "./attach-button";
 import { MAX_FILES_AT_ONCE } from "./attach-files";
 import { deriveTaskTitle } from "./task-title";
 import { PRIORITY_TITLE } from "./task-priority";
@@ -316,9 +317,8 @@ export function TaskComposer({
             }
             className="peer sr-only"
           />
-          <span className="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-glass-brd bg-bg-1 px-3 py-1 text-xs text-text-1 hover:text-text-0 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-magenta">
-            Выбрать
-          </span>
+          {/* Вид и отклик — общие с «Прикрепить» в карточке (VED-266). */}
+          <span className={WORK_ATTACH_PICKER_CLASS}>Выбрать</span>
         </label>
       </div>
       {draftFiles.length > 0 && (
