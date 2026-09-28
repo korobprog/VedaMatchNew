@@ -12,6 +12,7 @@ import {
   nextQuestion,
   optionLook,
   pickAnswer,
+  quizPreloadUrls,
   quizVerdict,
   type OptionLook,
 } from "./quiz-session";
@@ -31,8 +32,41 @@ export function MotivationQuiz({ quiz }: { quiz: MotivationQuizDto }) {
   const router = useRouter();
   const [state, setState] = useState(INITIAL_QUIZ_STATE);
   const nextRef = useRef<HTMLButtonElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  /** Картинка какого вопроса уже на экране — до неё виден скелетон. */
+  const [shownId, setShownId] = useState<string | null>(null);
   const total = quiz.questions.length;
   const question = quiz.questions[state.index];
+  const questionId = question?.id ?? null;
+  const imageShown = questionId !== null && shownId === questionId;
+
+  /* Картинка из кэша успевает догрузиться до гидратации, и onLoad по ней
+     уже не придёт — такую отмечаем по `complete` сразу. */
+  useEffect(() => {
+    const image = imageRef.current;
+    if (questionId && image?.complete && image.naturalWidth > 0) {
+      setShownId(questionId);
+    }
+  }, [questionId]);
+
+  /* Следующие картинки раунда (VED-627) грузятся, пока человек думает над
+     текущей, — «Дальше» открывает уже готовую. Начинаем, когда текущая
+     показана: иначе заготовки делили бы с ней канал, и медленнее стала бы
+     именно та, на которую смотрят. Объекты живут в ref до конца раунда —
+     без ссылки браузер вправе бросить загрузку, а повторно одну и ту же
+     картинку не запрашиваем. */
+  const preloaded = useRef(new Map<string, HTMLImageElement>());
+  useEffect(() => {
+    if (!imageShown) return;
+    for (const url of quizPreloadUrls(quiz.questions, state.index)) {
+      if (preloaded.current.has(url)) continue;
+      const image = new Image();
+      image.decoding = "async";
+      image.fetchPriority = "low";
+      image.src = url;
+      preloaded.current.set(url, image);
+    }
+  }, [imageShown, quiz.questions, state.index]);
 
   /* После ответа фокус — на «Дальше»: выбранный вариант становится
      неактивным, и фокус с него иначе падал бы в начало страницы. */
@@ -109,14 +143,35 @@ export function MotivationQuiz({ quiz }: { quiz: MotivationQuizDto }) {
         </span>
       </div>
 
-      <div className="relative mt-3 overflow-hidden rounded-2xl border border-glass-brd bg-bg-2">
+      {/* Высота рамки постоянная (VED-627): пока картинка грузится, на её
+          месте скелетон того же размера, и варианты ответа не прыгают ни
+          при загрузке, ни при смене вопроса. */}
+      <div
+        className="relative mt-3 h-[55dvh] overflow-hidden rounded-2xl border border-glass-brd bg-bg-2"
+        aria-busy={!imageShown || undefined}
+      >
+        {!imageShown && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 animate-pulse bg-bg-1 motion-reduce:animate-none"
+          />
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          ref={imageRef}
           key={question.id}
           src={question.imageUrl}
           // Описание не выдаёт ответ: текст стиха в alt — это подсказка.
           alt="Иллюстрация к стиху Бхагавад-гиты"
-          className="mx-auto max-h-[55dvh] w-full object-contain"
+          // Главное на экране: грузится первой и без ленивой отсрочки.
+          fetchPriority="high"
+          loading="eager"
+          decoding="async"
+          onLoad={() => setShownId(question.id)}
+          // Не доехала — скелетон убираем: вместо вечного мерцания пусть
+          // будет видно, что картинки нет (и её alt).
+          onError={() => setShownId(question.id)}
+          className="relative h-full w-full object-contain"
         />
         {answered && (
           <div

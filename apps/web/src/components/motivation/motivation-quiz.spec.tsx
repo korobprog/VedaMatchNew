@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationQuizDto } from "@vedamatch/shared";
@@ -111,5 +111,45 @@ describe("MotivationQuiz", () => {
     expect(
       screen.getByText("Иллюстраций к стихам Гиты пока нет"),
     ).toBeInTheDocument();
+  });
+});
+
+/* VED-627: «Картинки в викторине загружаются медленно». */
+describe("MotivationQuiz: загрузка картинок", () => {
+  it("текущая — с высоким приоритетом, до загрузки на её месте скелетон", () => {
+    const { container } = render(<MotivationQuiz quiz={quiz} />);
+    const image = screen.getByRole("img", {
+      name: "Иллюстрация к стиху Бхагавад-гиты",
+    });
+    expect(image).toHaveAttribute("fetchpriority", "high");
+    expect(image).toHaveAttribute("loading", "eager");
+    expect(container.querySelector("[aria-busy]")).not.toBeNull();
+
+    fireEvent.load(image);
+    expect(container.querySelector("[aria-busy]")).toBeNull();
+  });
+
+  it("следующая начинает грузиться, когда текущая показана", () => {
+    const requested: string[] = [];
+    const Original = window.Image;
+    class RecordingImage {
+      decoding = "";
+      fetchPriority = "";
+      set src(url: string) {
+        requested.push(url);
+      }
+    }
+    window.Image = RecordingImage as unknown as typeof Image;
+    try {
+      render(<MotivationQuiz quiz={quiz} />);
+      expect(requested).toEqual([]);
+
+      fireEvent.load(
+        screen.getByRole("img", { name: "Иллюстрация к стиху Бхагавад-гиты" }),
+      );
+      expect(requested).toEqual(["https://cdn/b.webp"]);
+    } finally {
+      window.Image = Original;
+    }
   });
 });
