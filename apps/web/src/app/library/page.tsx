@@ -95,12 +95,11 @@ export default async function LibraryPage({
         </div>
 
         {/* Ряды кнопок по просьбе заказчика (VED-517): «Добавить»,
-            «Избранное», язык — слева направо; ниже «Упорядочить».
-            Кнопки «Фильтры» по линиям нет (VED-628): линии выбирают
-            «Фильтры материалов» на главной. */}
-        <div
-          className={`${canOrganize ? "mb-2" : "mb-6"} flex flex-wrap items-center gap-2`}
-        >
+            «Избранное», язык — слева направо; ниже «Содержание» и
+            «Упорядочить». Кнопки «Фильтры» по линиям нет (VED-628): линии
+            выбирают «Фильтры материалов» на главной, а на её место встало
+            «Содержание». */}
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <Link
             href="/library/add"
             className="btn-mint inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
@@ -118,15 +117,12 @@ export default async function LibraryPage({
               закладками Образования, то же, что в рубриках. */}
           <LibraryBookmarksDialog locale={locale} />
         </div>
-        {canOrganize && (
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <LibraryOrganizeButton locale={locale} />
-          </div>
-        )}
-
         {/* «Содержание» (VED-538) — оглавление текстовых материалов всего
-            Образования. */}
-        <LibraryContents locale={locale} />
+            Образования; раскрытый список встаёт строкой под рядом. */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <LibraryContents locale={locale} inRow />
+          {canOrganize && <LibraryOrganizeButton locale={locale} />}
+        </div>
 
         {user && (
           <LineagePrompt
