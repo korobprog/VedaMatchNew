@@ -55,7 +55,7 @@ export function BlogCategoryButton({
         <>
           {blogCategoryAssignOptions().map((option) => (
             <button
-              key={option.value || "none"}
+              key={option.value}
               type="button"
               disabled={pending}
               aria-pressed={option.value === current}

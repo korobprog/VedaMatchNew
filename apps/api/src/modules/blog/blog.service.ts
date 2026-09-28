@@ -29,9 +29,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
 import {
-  blogCategoryInput,
+  blogCategoryChoice,
   blogFilterConditions,
   blogLineageInput,
+  blogPostMarksInput,
   combineBlogWhere,
   type BlogFeedFilters,
 } from './blog-filters';
@@ -355,11 +356,10 @@ export class BlogService {
       imageCount: files.length,
     });
     if (error) throw new BadRequestException(error);
-    // Категорию назначает автор прямо в форме (VED-590).
-    const category = blogCategoryInput(body?.category);
-    if (category === 'invalid') {
-      throw new BadRequestException('invalid_category');
-    }
+    // Категорию и линию назначает автор прямо в форме, и без них пост не
+    // публикуется (VED-590). «Для всех» — тоже выбор, `lineage: 'all'`.
+    const marks = blogPostMarksInput(body, 'create');
+    if ('error' in marks) throw new BadRequestException(marks.error);
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
     }
@@ -373,7 +373,8 @@ export class BlogService {
         authorId: userId,
         title,
         text,
-        category: category ?? null,
+        category: marks.category,
+        lineage: marks.lineage ?? null,
         feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
       },
       select: { id: true },
@@ -454,11 +455,10 @@ export class BlogService {
       imageCount: plan.kept.length + files.length,
     });
     if (error) throw new BadRequestException(error);
-    // Нет поля — категория прежняя: правка из старого клиента её не снимет.
-    const category = blogCategoryInput(body?.category);
-    if (category === 'invalid') {
-      throw new BadRequestException('invalid_category');
-    }
+    // Нет поля — категория и линия прежние: правка из старого клиента и
+    // старого поста без них не ломается. Очистить их нельзя (VED-590).
+    const marks = blogPostMarksInput(body, 'update');
+    if ('error' in marks) throw new BadRequestException(marks.error);
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
     }
@@ -502,7 +502,7 @@ export class BlogService {
           title,
           text,
           editedAt: now,
-          ...(category === undefined ? {} : { category }),
+          ...marks,
         },
       });
     });
@@ -715,9 +715,13 @@ export class BlogService {
     id: string,
     value: unknown,
   ): Promise<BlogPostDto> {
-    const category = blogCategoryInput(value);
-    if (category === 'invalid') {
+    // Снять категорию нельзя: пост без неё не публикуется (VED-590).
+    const category = blogCategoryChoice(value);
+    if (category === 'invalid' || category === undefined) {
       throw new BadRequestException('invalid_category');
+    }
+    if (category === 'required') {
+      throw new BadRequestException('category_required');
     }
     const row = await this.prisma.blogPost.findUnique({
       where: { id },
@@ -730,7 +734,40 @@ export class BlogService {
 
     const updated = await this.prisma.blogPost.update({
       where: { id },
-      data: { category: category ?? null },
+      data: { category },
+      select: postSelect(userId),
+    });
+    const viewer = await this.viewer(userId, viewerIsAdmin);
+    return this.postDto(updated, viewer, new Date());
+  }
+
+  /**
+   * Линия своего поста одной кнопкой (VED-590): автор назначает её при
+   * публикации и может сменить потом. Право то же, что у правки и
+   * категории: автор или администратор, репост — никто (линию репоста
+   * меняет только администратор, `blog/admin/posts/:id/lineage`).
+   * `null` или `'all'` — «для всех».
+   */
+  async setOwnLineage(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    value: unknown,
+  ): Promise<BlogPostDto> {
+    const lineage = blogLineageInput(value);
+    if (lineage === 'invalid') throw new BadRequestException('invalid_lineage');
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true, repostOfId: true },
+    });
+    if (!row) throw new NotFoundException('post_not_found');
+    const denial = blogEditDenial(row, { userId, isAdmin: viewerIsAdmin });
+    if (denial === 'repost_not_editable') throw new BadRequestException(denial);
+    if (denial) throw new ForbiddenException(denial);
+
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: { lineage },
       select: postSelect(userId),
     });
     const viewer = await this.viewer(userId, viewerIsAdmin);

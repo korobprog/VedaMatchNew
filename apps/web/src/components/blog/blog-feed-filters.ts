@@ -63,7 +63,7 @@ export function blogFeedHref(
 }
 
 export interface BlogCategoryOption {
-  /** `""` — «Все» в фильтре и «Без категории» в назначении. */
+  /** `""` — «Все» в фильтре. */
   value: BlogPostCategory | "";
   label: string;
 }
@@ -79,15 +79,15 @@ export function blogCategoryFilterOptions(): BlogCategoryOption[] {
   ];
 }
 
-/** Выбор категории поста: «Без категории», затем категории. */
+/**
+ * Выбор категории поста — только категории. «Без категории» больше нет:
+ * пост без неё не публикуется, и снять её потом нельзя (VED-590).
+ */
 export function blogCategoryAssignOptions(): BlogCategoryOption[] {
-  return [
-    { value: "", label: "Без категории" },
-    ...BLOG_POST_CATEGORIES.map((value) => ({
-      value,
-      label: BLOG_POST_CATEGORY_LABELS[value],
-    })),
-  ];
+  return BLOG_POST_CATEGORIES.map((value) => ({
+    value,
+    label: BLOG_POST_CATEGORY_LABELS[value],
+  }));
 }
 
 /** Подпись категории поста; `null` — без категории. */

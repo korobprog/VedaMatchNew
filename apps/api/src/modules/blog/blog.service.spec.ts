@@ -291,6 +291,11 @@ describe('BlogService.update', () => {
   });
 });
 
+/** Тело публикации с обязательными категорией и линией (VED-590). */
+function marked(text: string) {
+  return { text, category: 'news' as const, lineage: 'all' as const };
+}
+
 describe('BlogService media', () => {
   function withCreate(post = storedPost()) {
     const built = build(post);
@@ -312,7 +317,7 @@ describe('BlogService media', () => {
   it('stores a video with the poster and the measured duration', async () => {
     const { service, prisma, images } = withCreate();
 
-    const result = await service.create('author', false, { text: 'Ролик' }, [
+    const result = await service.create('author', false, marked('Ролик'), [
       {
         buffer: Buffer.from('v'),
         mimetype: 'video/mp4',
@@ -349,7 +354,7 @@ describe('BlogService media', () => {
       poster: Buffer.from('p'),
     });
 
-    const result = await service.create('author', false, { text: 'Длинный' }, [
+    const result = await service.create('author', false, marked('Длинный'), [
       {
         buffer: Buffer.from('v'),
         mimetype: 'video/mp4',
@@ -620,6 +625,59 @@ describe('BlogService lineage (VED-596)', () => {
   });
 });
 
+describe('BlogService own lineage (VED-590)', () => {
+  it('the author sets the lineage of their post', async () => {
+    const { service, prisma } = build(storedPost());
+    prisma.blogPost.update.mockResolvedValue(storedPost({ lineage: 'iskcon' }));
+
+    const dto = await service.setOwnLineage(
+      'author',
+      false,
+      'post-1',
+      'iskcon',
+    );
+
+    expect(prisma.blogPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { lineage: 'iskcon' } }),
+    );
+    expect(dto.lineage).toBe('iskcon');
+  });
+
+  it('«all» makes the post for everyone', async () => {
+    const { service, prisma } = build(storedPost({ lineage: 'iskcon' }));
+    await service.setOwnLineage('author', false, 'post-1', 'all');
+    expect(prisma.blogPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { lineage: null } }),
+    );
+  });
+
+  it('only on their own post; an admin on any', async () => {
+    const { service, prisma } = build(storedPost());
+    await expect(
+      service.setOwnLineage('someone', false, 'post-1', 'iskcon'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+
+    await service.setOwnLineage('admin', true, 'post-1', 'iskcon');
+    expect(prisma.blogPost.update).toHaveBeenCalled();
+  });
+
+  it('a repost is not the author’s to mark', async () => {
+    const { service } = build(storedPost({ repostOfId: 'origin' }));
+    await expect(
+      service.setOwnLineage('author', false, 'post-1', 'iskcon'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuses garbage before touching the post', async () => {
+    const { service, prisma } = build(storedPost());
+    await expect(
+      service.setOwnLineage('author', false, 'post-1', 'group:parivara'),
+    ).rejects.toMatchObject({ message: 'invalid_lineage' });
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('BlogService category (VED-590)', () => {
   /** `data` последнего вызова заглушки: что ушло бы в базу. */
   function lastData(mock: jest.Mock): Record<string, unknown> {
@@ -648,17 +706,35 @@ describe('BlogService category (VED-590)', () => {
     await service.create('author', false, {
       text: 'Экадаши',
       category: 'calendar',
+      lineage: 'iskcon',
     });
 
     expect(lastData(blogPost.create).category).toBe('calendar');
+    expect(lastData(blogPost.create).lineage).toBe('iskcon');
   });
 
-  it('publishes without a category by default', async () => {
+  it('«for everyone» is stored as no lineage', async () => {
     const { service, blogPost } = withCreate(storedPost());
 
-    await service.create('author', false, { text: 'Просто пост' });
+    await service.create('author', false, {
+      text: 'Всем',
+      category: 'news',
+      lineage: 'all',
+    });
 
-    expect(lastData(blogPost.create).category).toBeNull();
+    expect(lastData(blogPost.create).lineage).toBeNull();
+  });
+
+  it('refuses to publish without a category or a lineage', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await expect(
+      service.create('author', false, { text: 'Просто пост' }),
+    ).rejects.toMatchObject({ message: 'category_required' });
+    await expect(
+      service.create('author', false, { text: 'Пост', category: 'news' }),
+    ).rejects.toMatchObject({ message: 'lineage_required' });
+    expect(blogPost.create).not.toHaveBeenCalled();
   });
 
   it('refuses an unknown category before creating anything', async () => {
@@ -668,6 +744,7 @@ describe('BlogService category (VED-590)', () => {
       service.create('author', false, {
         text: 'Пост',
         category: 'sport' as never,
+        lineage: 'all',
       }),
     ).rejects.toMatchObject({ message: 'invalid_category' });
     expect(blogPost.create).not.toHaveBeenCalled();
@@ -681,7 +758,7 @@ describe('BlogService category (VED-590)', () => {
     expect(lastData(prisma.blogPost.update)).not.toHaveProperty('category');
   });
 
-  it('an edit changes and clears the category', async () => {
+  it('an edit changes the category and the lineage but cannot clear them', async () => {
     const { service, prisma } = build(storedPost());
 
     await service.update('author', false, 'post-1', {
@@ -692,9 +769,26 @@ describe('BlogService category (VED-590)', () => {
 
     await service.update('author', false, 'post-1', {
       text: 'Новый',
-      category: null,
+      lineage: 'iskcon',
     });
-    expect(lastData(prisma.blogPost.update).category).toBeNull();
+    expect(lastData(prisma.blogPost.update).lineage).toBe('iskcon');
+
+    prisma.blogPost.update.mockClear();
+    await expect(
+      service.update('author', false, 'post-1', {
+        text: 'Новый',
+        category: null,
+      }),
+    ).rejects.toMatchObject({ message: 'category_required' });
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+  });
+
+  it('the category cannot be removed with the button', async () => {
+    const { service, prisma } = build(storedPost());
+    await expect(
+      service.setCategory('author', false, 'post-1', null),
+    ).rejects.toMatchObject({ message: 'category_required' });
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
   });
 
   it('the author sets the category with one button', async () => {

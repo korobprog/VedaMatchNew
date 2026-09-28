@@ -7,7 +7,11 @@ import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { MaterialMarksMenuButton } from "@/components/material-marks-menu-button";
 import { LineageInfoButton } from "@/components/lineage-info-button";
-import { setBlogPostCategory, setBlogPostLineage } from "@/lib/blog-client-api";
+import {
+  setBlogPostCategory,
+  setBlogPostLineage,
+  setOwnBlogPostLineage,
+} from "@/lib/blog-client-api";
 import { BlogCategoryButton } from "./blog-category-button";
 import { BlogPostCard } from "./blog-post-card";
 import { shareBlogPost } from "./blog-share";
@@ -83,17 +87,22 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
             />
           )}
           {/* «Разметка» (VED-596, VED-616) — отпечаток пальца, как в
-              Образовании и Медиатеке, и только у администратора: линия
-              решает, кому пост виден в отфильтрованной ленте. Ступеней у
-              постов нет — в окне одна колонка линии. У репоста линия своя,
-              не оригинала: фильтр ленты смотрит на строку самого репоста. */}
-          {post.canModerate && (
+              Образовании и Медиатеке: линия решает, кому пост виден в
+              отфильтрованной ленте. С VED-590 линию своему посту назначает
+              и автор (`canEdit`), администратор — любому. Ступеней у постов
+              нет — в окне одна колонка линии. У репоста линия своя, не
+              оригинала, и менять её может только администратор. */}
+          {(post.canEdit || post.canModerate) && (
             <MaterialMarksMenuButton
               lineage={post.lineage ?? null}
               buttonClassName="rounded-lg"
               menuLabel="Разметка поста"
               onSave={async ({ lineage }) => {
-                setPost(await setBlogPostLineage(post.id, lineage));
+                setPost(
+                  await (post.canModerate
+                    ? setBlogPostLineage(post.id, lineage)
+                    : setOwnBlogPostLineage(post.id, lineage)),
+                );
               }}
             />
           )}

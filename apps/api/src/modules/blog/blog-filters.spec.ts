@@ -1,9 +1,11 @@
 import {
-  blogCategoryInput,
+  blogCategoryChoice,
   blogCategoryWhere,
   blogFilterConditions,
+  blogLineageChoice,
   blogLineageInput,
   blogLineageWhere,
+  blogPostMarksInput,
   combineBlogWhere,
 } from './blog-filters';
 
@@ -17,11 +19,12 @@ describe('blogLineageInput (VED-596)', () => {
     expect(blogLineageInput(null)).toBeNull();
     expect(blogLineageInput(undefined)).toBeNull();
     expect(blogLineageInput('')).toBeNull();
+    // «Для всех» из меню и формы — то же значение, что в фильтре.
+    expect(blogLineageInput('all')).toBeNull();
   });
 
   it('refuses a group and garbage', () => {
     expect(blogLineageInput('group:gaudiya_math')).toBe('invalid');
-    expect(blogLineageInput('all')).toBe('invalid');
     expect(blogLineageInput('nope')).toBe('invalid');
     expect(blogLineageInput(42)).toBe('invalid');
   });
@@ -61,24 +64,93 @@ describe('blogLineageWhere (VED-596)', () => {
   });
 });
 
-describe('blogCategoryInput (VED-590)', () => {
+describe('blogCategoryChoice (VED-590)', () => {
   it('accepts every category of the list', () => {
     for (const value of ['knowledge', 'news', 'devotee_life', 'calendar']) {
-      expect(blogCategoryInput(value)).toBe(value);
+      expect(blogCategoryChoice(value)).toBe(value);
     }
   });
 
   it('tells «not sent» from «cleared»', () => {
-    expect(blogCategoryInput(undefined)).toBeUndefined();
-    expect(blogCategoryInput(null)).toBeNull();
-    // Multipart не умеет null: «Без категории» уезжает пустой строкой.
-    expect(blogCategoryInput('')).toBeNull();
+    expect(blogCategoryChoice(undefined)).toBeUndefined();
+    expect(blogCategoryChoice(null)).toBe('required');
+    // Multipart не умеет null: очищенное поле уезжает пустой строкой.
+    expect(blogCategoryChoice('')).toBe('required');
   });
 
   it('refuses anything else', () => {
-    expect(blogCategoryInput('all')).toBe('invalid');
-    expect(blogCategoryInput('Новости')).toBe('invalid');
-    expect(blogCategoryInput(1)).toBe('invalid');
+    expect(blogCategoryChoice('all')).toBe('invalid');
+    expect(blogCategoryChoice('Новости')).toBe('invalid');
+    expect(blogCategoryChoice(1)).toBe('invalid');
+  });
+});
+
+describe('blogLineageChoice (VED-590)', () => {
+  it('reads «all» as an explicit «for everyone»', () => {
+    expect(blogLineageChoice('all')).toBeNull();
+  });
+
+  it('does not take emptiness for «for everyone»', () => {
+    expect(blogLineageChoice(null)).toBe('required');
+    expect(blogLineageChoice('')).toBe('required');
+    expect(blogLineageChoice(undefined)).toBeUndefined();
+  });
+
+  it('accepts a lineage and refuses a group and garbage', () => {
+    expect(blogLineageChoice('iskcon')).toBe('iskcon');
+    expect(blogLineageChoice('group:gaudiya_math')).toBe('invalid');
+    expect(blogLineageChoice('nope')).toBe('invalid');
+  });
+});
+
+describe('blogPostMarksInput (VED-590)', () => {
+  it('requires both fields when publishing', () => {
+    expect(blogPostMarksInput({}, 'create')).toEqual({
+      error: 'category_required',
+    });
+    expect(blogPostMarksInput(undefined, 'create')).toEqual({
+      error: 'category_required',
+    });
+    expect(blogPostMarksInput({ category: 'news' }, 'create')).toEqual({
+      error: 'lineage_required',
+    });
+    expect(
+      blogPostMarksInput({ category: 'news', lineage: '' }, 'create'),
+    ).toEqual({ error: 'lineage_required' });
+  });
+
+  it('publishes with a lineage or explicitly for everyone', () => {
+    expect(
+      blogPostMarksInput({ category: 'news', lineage: 'iskcon' }, 'create'),
+    ).toEqual({ category: 'news', lineage: 'iskcon' });
+    expect(
+      blogPostMarksInput({ category: 'calendar', lineage: 'all' }, 'create'),
+    ).toEqual({ category: 'calendar', lineage: null });
+  });
+
+  it('refuses garbage with its own code', () => {
+    expect(
+      blogPostMarksInput({ category: 'sport', lineage: 'all' }, 'create'),
+    ).toEqual({ error: 'invalid_category' });
+    expect(
+      blogPostMarksInput({ category: 'news', lineage: 'nope' }, 'create'),
+    ).toEqual({ error: 'invalid_lineage' });
+  });
+
+  it('an edit without the fields keeps both — old posts stay editable', () => {
+    expect(blogPostMarksInput({}, 'update')).toEqual({});
+    expect(blogPostMarksInput({ lineage: 'all' }, 'update')).toEqual({
+      lineage: null,
+    });
+  });
+
+  it('an edit cannot clear a field', () => {
+    expect(blogPostMarksInput({ category: '' }, 'update')).toEqual({
+      error: 'category_required',
+    });
+    expect(blogPostMarksInput({ lineage: null }, 'update')).toEqual({
+      error: 'lineage_required',
+    });
   });
 });
 

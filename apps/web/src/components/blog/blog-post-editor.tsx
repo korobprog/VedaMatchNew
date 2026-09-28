@@ -15,14 +15,20 @@ import {
   fetchBlogPost,
   updateBlogPost,
 } from "@/lib/blog-client-api";
+import { lineageToSelect } from "@/components/lineage-picker";
 import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
-import { BlogCategorySelect } from "./blog-category-select";
 import {
   BLOG_MEDIA_ACCEPT,
   isBlogVideoFile,
   pickBlogFiles,
 } from "./blog-file-pick";
 import { blogMediaPreviewUrl, postMedia } from "./blog-media-list";
+import {
+  blogCategoryRequestValue,
+  blogLineageRequestValue,
+  blogPostMarksHint,
+} from "./blog-post-marks";
+import { BlogPostMarksFields } from "./blog-post-marks-fields";
 import { BlogTextCounter } from "./blog-text-counter";
 import { blogTextLimitState } from "./blog-text-limit";
 
@@ -49,6 +55,9 @@ export function BlogPostEditor({
   const [category, setCategory] = useState<BlogPostCategory | "">(
     post.category ?? "",
   );
+  // Пост без линии — «для всех» (так его и показывает лента), поэтому в
+  // форме правки это уже выбранный вариант, а не пустота (VED-590).
+  const [lineage, setLineage] = useState(lineageToSelect(post.lineage));
   const [kept, setKept] = useState<BlogMediaDto[]>(() => postMedia(post));
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
@@ -57,7 +66,10 @@ export function BlogPostEditor({
   const inputRef = useRef<HTMLInputElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const counterId = useId();
+  const marksHintId = useId();
   const limit = blogTextLimitState(text);
+  // Старый пост без категории сохраняется только с ней — как и новый.
+  const marksHint = blogPostMarksHint(category, lineage, "save");
   /** Человек уже что-то поменял — обновлением с сервера это не затираем. */
   const touched = useRef(false);
 
@@ -80,6 +92,7 @@ export function BlogPostEditor({
         setTitle(fresh.title ?? "");
         setText(fresh.text);
         setCategory(fresh.category ?? "");
+        setLineage(lineageToSelect(fresh.lineage));
         setKept(postMedia(fresh));
       })
       .catch(() => {
@@ -125,6 +138,9 @@ export function BlogPostEditor({
       setError(limit.label);
       return;
     }
+    const chosenCategory = blogCategoryRequestValue(category);
+    const chosenLineage = blogLineageRequestValue(lineage);
+    if (!chosenCategory || !chosenLineage) return;
 
     setPending(true);
     try {
@@ -133,7 +149,8 @@ export function BlogPostEditor({
         {
           title,
           text,
-          category: category || null,
+          category: chosenCategory,
+          lineage: chosenLineage,
           keepImageIds: kept.map((image) => image.id),
         },
         files,
@@ -221,12 +238,17 @@ export function BlogPostEditor({
         }}
         disabled={pending}
       />
-      <BlogCategorySelect
-        value={category}
+      <BlogPostMarksFields
+        category={category}
+        lineage={lineage}
         disabled={pending}
-        onChange={(next) => {
+        onCategoryChange={(next) => {
           touched.current = true;
           setCategory(next);
+        }}
+        onLineageChange={(next) => {
+          touched.current = true;
+          setLineage(next);
         }}
       />
 
@@ -337,13 +359,19 @@ export function BlogPostEditor({
         </button>
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || marksHint !== null}
+          aria-describedby={marksHint ? marksHintId : undefined}
           className="min-h-11 rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-on-mint disabled:opacity-60"
         >
           {pending ? "Сохраняю…" : "Сохранить"}
         </button>
       </div>
 
+      {marksHint && (
+        <p id={marksHintId} className="mt-2 text-xs text-text-1">
+          {marksHint}
+        </p>
+      )}
       {error && (
         <p role="alert" className="mt-2 text-xs text-magenta">
           {error}

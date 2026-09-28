@@ -64,6 +64,9 @@ const MESSAGES: Record<string, string> = {
   admin_only: "Доступно только администратору.",
   invalid_lineage: "Такой линии нет в списке.",
   invalid_category: "Такой категории нет в списке.",
+  category_required: "Выберите категорию поста — без неё пост не публикуется.",
+  lineage_required:
+    "Выберите линию поста или «Для всех» — без неё пост не публикуется.",
 };
 
 function mb(bytes: number): number {
@@ -192,6 +195,7 @@ export function createBlogPost(
   if (body.title) form.append("title", body.title);
   form.append("text", body.text ?? "");
   if (body.category) form.append("category", body.category);
+  if (body.lineage) form.append("lineage", body.lineage);
   for (const file of files) form.append("files", file);
   return request<BlogPostCreatedResponse>("/blog/posts", {
     method: "POST",
@@ -229,11 +233,9 @@ export function updateBlogPost(
   const form = new FormData();
   if (body.title) form.append("title", body.title);
   form.append("text", body.text ?? "");
-  // Пустая строка — «Без категории»: multipart не умеет передать null, а
-  // молчание сервер читает как «категория прежняя» (VED-590).
-  if (body.category !== undefined) {
-    form.append("category", body.category ?? "");
-  }
+  // Молчание сервер читает как «прежние»; очистить поля нельзя (VED-590).
+  if (body.category) form.append("category", body.category);
+  if (body.lineage) form.append("lineage", body.lineage);
   if (body.keepImageIds) {
     // Поле обязано доехать даже пустым: на сервере молчание про картинки
     // означает «не трогать их», а пустой список — «убрал все».
@@ -294,6 +296,20 @@ export function setBlogPostCategory(
     `/blog/posts/${encodeURIComponent(id)}/category`,
     { method: "PATCH", ...json({ category }) },
   );
+}
+
+/**
+ * Линия своего поста (VED-590): автор или администратор, репост — нет.
+ * `null` — для всех линий.
+ */
+export function setOwnBlogPostLineage(
+  id: string,
+  lineage: LineageId | null,
+): Promise<BlogPostDto> {
+  return request<BlogPostDto>(`/blog/posts/${encodeURIComponent(id)}/lineage`, {
+    method: "PATCH",
+    ...json({ lineage }),
+  });
 }
 
 /** Линия поста (VED-596): только администратор; `null` — для всех линий. */
