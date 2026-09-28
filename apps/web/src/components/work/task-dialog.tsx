@@ -199,7 +199,10 @@ export function WorkTaskDialog({
    *  Ставят кнопка «Сохранить» и правки со своей кнопкой (текст и пункты
    *  чек-листа, комментарий): они уходят сразу, и об этом тоже надо сказать.
    *  Галочка чек-листа (VED-603), статус и раздел (VED-611), скриншоты
-   *  (VED-518, у них своя индикация загрузки) — нет. */
+   *  (VED-518, у них своя индикация загрузки) — нет, и больше того: они
+   *  снимают «Сохранено», оставшееся от прошлого действия (VED-625). Иначе
+   *  полоса, поднятая пунктом чек-листа, продолжала висеть после смены
+   *  статуса, и выглядело так, будто её вызвал статус. */
   const [justSaved, setJustSaved] = useState(false);
   /** Идёт загрузка вложений к этой задаче: сколько ушло из скольких. Из
    *  очереди портала (VED-608), поэтому видна и в заново открытом окне. */
@@ -399,8 +402,9 @@ export function WorkTaskDialog({
       // Дошло — окно так и говорит. Правок в черновике это не касается: пока
       // они есть, полоса показывает их, а не «Сохранено». Действия-щелчки
       // (галочка чек-листа, VED-603) полосу не вызывают: как статус и
-      // раздел (VED-611), они видны сами по себе.
-      if (announce) setJustSaved(true);
+      // раздел (VED-611), они видны сами по себе, — и снимают прежнюю
+      // (VED-625).
+      setJustSaved(announce);
       return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
@@ -408,21 +412,6 @@ export function WorkTaskDialog({
     } finally {
       setBusy(false);
     }
-  }
-
-  /**
-   * Закрыть окно после сохранения (VED-400): «после нажатия кнопки
-   * Сохранить окно редакции задачи должно закрываться». Правок не осталось,
-   * черновик на доске больше не нужен.
-   */
-  function closeSaved() {
-    if (task) {
-      patchBoardSession(browserSessionStore(), board.id, (session) => ({
-        ...session,
-        taskDrafts: without(session.taskDrafts, task.id),
-      }));
-    }
-    onClose();
   }
 
   /**
@@ -507,6 +496,9 @@ export function WorkTaskDialog({
     if (!task || !base) return;
     const spot = placeOf(choice);
     setError(null);
+    // «Сохранено» от прошлого действия уходит (VED-625): выбор статуса полосу
+    // не вызывает и не оставляет.
+    setJustSaved(false);
     setTask((current) => (current ? withPlace(current, spot) : current));
     void taskPlacer.place(base, spot).then((outcome) => {
       openTaskPlaces.get(taskId)?.(outcome);
@@ -515,7 +507,12 @@ export function WorkTaskDialog({
     });
   }
 
-  /** «Сохранить»: все правки черновика разом. */
+  /**
+   * «Сохранить»: все правки черновика разом. Окно остаётся открытым и говорит
+   * «Сохранено» (VED-625). VED-400 когда-то просил закрывать его после
+   * сохранения; заказчик передумал: «после нажатия на „Сохранить“ окно
+   * задачи закрывается автоматически, а я это уже просил исключить».
+   */
   function save() {
     const next = withPlace({ ...draft, ...latestText.current }, saved);
     if (!task || taskEditsProblem(next) || !pendingFormEdits(saved, next)) {
@@ -525,8 +522,6 @@ export function WorkTaskDialog({
       const updated = await commit(task, next);
       if (updated) resetDraft(draftFromTask(updated));
       return updated ?? undefined;
-    }).then((ok) => {
-      if (ok) closeSaved();
     });
   }
 
@@ -1239,22 +1234,13 @@ export function WorkTaskDialog({
                     </div>
                   </>
                 ) : (
-                  <>
-                    <p role="status" className="text-sm text-text-1 sm:mr-auto">
-                      Сохранено
-                    </p>
-                    {/* Всё уже на сервере (пункты чек-листа, комментарий
-                        уходят сразу), но кнопка «Сохранить» есть и здесь
-                        (VED-400): ею окно и закрывают, как после правки
-                        полей. */}
-                    <button
-                      type="button"
-                      onClick={closeSaved}
-                      className="ml-auto min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Сохранить
-                    </button>
-                  </>
+                  // Всё уже на сервере — сохранять нечего, и кнопки
+                  // «Сохранить» здесь нет (VED-625). Раньше она стояла рядом
+                  // с «Сохранено» и закрывала окно (VED-400), а заказчик
+                  // видел в этой паре лишнюю строку.
+                  <p role="status" className="min-h-11 py-2.5 text-sm text-text-1">
+                    Сохранено
+                  </p>
                 )}
               </div>
             )}
