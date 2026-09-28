@@ -328,3 +328,74 @@ export interface WellnessRecipeMatchDto {
   ratio: number;
 
 }
+
+// ===== Раздел «Знания» (VED-229): рубрики и статьи =====
+
+export type WellnessArticleStatus = 'draft' | 'published';
+
+/** Рубрика архива знаний. `children` заполнен в дереве, в хлебных крошках пуст. */
+export interface WellnessKnowledgeCategoryDto {
+  id: string;
+  parentId: string | null;
+  slug: string;
+  titleRu: string;
+  titleEn: string | null;
+  descriptionRu: string | null;
+  position: number;
+  /** Опубликованные статьи самой рубрики, без подрубрик. */
+  articleCount: number;
+  children: WellnessKnowledgeCategoryDto[];
+}
+
+/** Страница рубрики: сама рубрика, путь от корня и прямые подрубрики. */
+export interface WellnessKnowledgeCategoryPage {
+  category: WellnessKnowledgeCategoryDto;
+  breadcrumbs: { slug: string; titleRu: string }[];
+  children: WellnessKnowledgeCategoryDto[];
+}
+
+export interface WellnessArticleAuthor {
+  id: string;
+  name: string;
+  isAgent: boolean;
+}
+
+export interface WellnessArticleCard {
+  id: string;
+  categoryId: string;
+  title: string;
+  excerpt: string;
+  coverUrl: string | null;
+  status: WellnessArticleStatus;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WellnessArticleDetail extends WellnessArticleCard {
+  body: string;
+  author: WellnessArticleAuthor | null;
+  category: { id: string; slug: string; titleRu: string };
+}
+
+export interface WellnessArticleListResponse {
+  items: WellnessArticleCard[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface WellnessKnowledgeCategoryInput {
+  parentId?: string;
+  titleRu: string;
+  titleEn?: string | null;
+  descriptionRu?: string | null;
+  position?: number;
+}
+
+export interface WellnessArticleInput {
+  categoryId: string;
+  title: string;
+  body: string;
+  status: WellnessArticleStatus;
+}
