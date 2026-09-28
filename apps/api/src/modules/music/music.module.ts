@@ -53,6 +53,7 @@ import {
 } from './music-radio.controller';
 import { MusicRadioService } from './music-radio.service';
 import { MusicDurationRecountService } from './music-duration-recount.service';
+import { MusicTranscodeService } from './music-transcode.service';
 
 /**
  * Сервис «Музыка». См. docs/music-service-plan.md.
@@ -111,6 +112,7 @@ import { MusicDurationRecountService } from './music-duration-recount.service';
     MusicIngestProcessService,
     MusicWorkerService,
     MusicDurationRecountService,
+    MusicTranscodeService,
     MusicPurgeListener,
     MusicAssistantListener,
     MusicRadioService,

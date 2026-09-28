@@ -5,10 +5,17 @@ import { MusicUploadForm } from "./upload-form";
 
 const uploadMusicTrack = vi.fn();
 const fetchMusicUploadUsage = vi.fn();
+const waitForTranscode = vi.fn();
 
 vi.mock("@/lib/music-client-api", () => ({
   uploadMusicTrack: (...args: unknown[]) => uploadMusicTrack(...args),
   fetchMusicUploadUsage: () => fetchMusicUploadUsage(),
+  fetchMusicUploadState: vi.fn(),
+}));
+// Опрос перекодирования проверяет upload-transcode.spec; здесь — только что
+// форма показывает, пока ждёт, и что после.
+vi.mock("./upload-transcode", () => ({
+  waitForTranscode: (...args: unknown[]) => waitForTranscode(...args),
 }));
 
 vi.mock("@/lib/music-playback-api", () => ({ getTrack: vi.fn() }));
@@ -31,10 +38,98 @@ beforeEach(() => {
   // По умолчанию сведений о месте нет — решает сервер, как раньше.
   fetchMusicUploadUsage.mockReset().mockRejectedValue(new Error("offline"));
   uploadMusicTrack.mockReset().mockResolvedValue({
+    uploadId: "up1",
     trackId: "t1",
     status: "published",
     title: "Gaura",
     durationSeconds: 100,
+    transcoding: false,
+  });
+  waitForTranscode.mockReset().mockResolvedValue(null);
+});
+
+describe("MusicUploadForm — FLAC, WAV и OGG (VED-244)", () => {
+  async function uploadFlac(user: ReturnType<typeof userEvent.setup>) {
+    await user.upload(
+      screen.getByLabelText(/Файлы/i),
+      new File(["fLaC"], "kirtan.flac", { type: "audio/flac" }),
+    );
+    await user.selectOptions(
+      screen.getByLabelText(/Основание/i),
+      "own_recording",
+    );
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+  }
+
+  beforeEach(() => {
+    uploadMusicTrack.mockResolvedValue({
+      uploadId: "up9",
+      trackId: null,
+      status: null,
+      title: "kirtan",
+      durationSeconds: null,
+      transcoding: true,
+    });
+  });
+
+  it("поле выбора принимает FLAC, WAV и OGG, подсказка про перекодирование", () => {
+    render(<MusicUploadForm />);
+
+    const accept = screen.getByLabelText(/Файлы/i).getAttribute("accept");
+    for (const part of [".flac", ".wav", ".ogg", ".opus", "audio/flac"]) {
+      expect(accept).toContain(part);
+    }
+    expect(screen.getByText(/сервер перекодирует/)).toBeInTheDocument();
+  });
+
+  it("пока сервер перекодирует — «перекодируется…», а не «в очереди»", async () => {
+    const user = userEvent.setup();
+    let finish: (value: unknown) => void = () => {};
+    waitForTranscode.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(<MusicUploadForm />);
+
+    await uploadFlac(user);
+
+    await waitFor(() =>
+      expect(screen.getByText("перекодируется…")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("в очереди")).not.toBeInTheDocument();
+    expect(waitForTranscode).toHaveBeenCalledWith(
+      "up9",
+      expect.any(Function),
+      expect.objectContaining({ cancelled: expect.any(Function) }),
+    );
+
+    finish({
+      uploadId: "up9",
+      state: "completed",
+      trackId: "t9",
+      failureReason: null,
+    });
+    await waitFor(() =>
+      expect(screen.getByText("в очереди")).toBeInTheDocument(),
+    );
+  });
+
+  it("отказ стадии показывает причину", async () => {
+    const user = userEvent.setup();
+    waitForTranscode.mockResolvedValue({
+      uploadId: "up9",
+      state: "failed",
+      trackId: null,
+      failureReason: "Запись слишком длинная.",
+    });
+    render(<MusicUploadForm />);
+
+    await uploadFlac(user);
+
+    await waitFor(() =>
+      expect(screen.getByText("Запись слишком длинная.")).toBeInTheDocument(),
+    );
   });
 });
 

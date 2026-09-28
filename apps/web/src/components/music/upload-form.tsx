@@ -1,16 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MusicUploadRightsBasis } from "@vedamatch/shared";
 import {
-  MUSIC_ACCEPTED_EXTENSIONS,
-  MUSIC_ACCEPTED_MIME,
+  MUSIC_UPLOAD_EXTENSIONS,
+  MUSIC_UPLOAD_MIME,
 } from "@vedamatch/shared";
 import {
+  fetchMusicUploadState,
   fetchMusicUploadUsage,
   uploadMusicTrack,
 } from "@/lib/music-client-api";
+import { waitForTranscode } from "./upload-transcode";
 import { formatBytes } from "@/lib/music/offline-capacity";
 import {
   isQuotaRejection,
@@ -74,9 +76,28 @@ export function MusicUploadForm({
   const [results, setResults] = useState<
     Record<
       string,
-      { state: "ok" | "failed" | "skipped"; note: string; kept?: boolean }
+      {
+        /**
+         * `transcoding` — FLAC, WAV или OGG залит и перекодируется на
+         * сервере (VED-244): «в очереди» он станет, когда стадия закончит.
+         */
+        state: "ok" | "failed" | "skipped" | "transcoding";
+        note: string;
+        kept?: boolean;
+      }
     >
   >({});
+  /**
+   * Форма ещё на экране — опрос перекодирования без этого продолжал бы
+   * спрашивать сервер из закрытой страницы до двадцати минут.
+   */
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [currentName, setCurrentName] = useState<string | null>(null);
   /**
    * Пусто по умолчанию, и это не забывчивость.
@@ -144,6 +165,7 @@ export function MusicUploadForm({
     let freeBytes = plan.freeBytes;
 
     let ok = 0;
+    const transcoding: { name: string; uploadId: string }[] = [];
     for (const [index, file] of files.entries()) {
       if (index >= stoppedAt) break;
       setCurrentName(file.name);
@@ -158,6 +180,17 @@ export function MusicUploadForm({
           audiobook?.id ?? null,
         );
         ok += 1;
+        if (result.transcoding) {
+          // Записи ещё нет — сервер перекодирует исходник. Копию на
+          // устройстве не кладём: здесь лежит FLAC или OGG, а играть портал
+          // будет m4a, и на iPhone такая копия просто молчала бы.
+          transcoding.push({ name: file.name, uploadId: result.uploadId });
+          setResults((was) => ({
+            ...was,
+            [file.name]: { state: "transcoding", note: result.title },
+          }));
+          continue;
+        }
         // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
         // в браузере, и качать их обратно незачем. Карточку приходится
         // спросить — в ответе на завершение заливки её нет, а в хранилище без
@@ -165,7 +198,9 @@ export function MusicUploadForm({
         let kept = false;
         if (keepCopy && offlineUserId) {
           try {
-            const card = await getTrack(result.trackId);
+            const card = result.trackId
+              ? await getTrack(result.trackId)
+              : null;
             if (card) {
               await keepUploadedTrackOffline(offlineUserId, card, file);
               kept = true;
@@ -217,15 +252,41 @@ export function MusicUploadForm({
     setCurrentName(null);
     setProgress(null);
     if (ok > 0) {
-      setDone(
+      const base =
         files.length === 1
           ? "Запись ушла в очередь проверки."
-          : `Готово: ${ok} из ${files.length} ушли в очередь проверки.`,
+          : `Готово: ${ok} из ${files.length} ушли в очередь проверки.`;
+      setDone(
+        transcoding.length > 0
+          ? `${base} FLAC, WAV и OGG сначала перекодируются на сервере — это займёт пару минут.`
+          : base,
       );
     }
     setFiles([]);
     if (inputRef.current) inputRef.current.value = "";
     router.refresh();
+
+    // Перекодирование ждём после всей партии, а не посреди неё: иначе
+    // следующий файл стоял бы в очереди на заливку, пока сервер жмёт
+    // предыдущий.
+    for (const { name, uploadId } of transcoding) {
+      void waitForTranscode(uploadId, fetchMusicUploadState, {
+        cancelled: () => !mounted.current,
+      }).then((final) => {
+        if (!final || !mounted.current) return;
+        setResults((was) => ({
+          ...was,
+          [name]:
+            final.state === "completed"
+              ? { state: "ok", note: was[name]?.note ?? name }
+              : {
+                  state: "failed",
+                  note: final.failureReason ?? "Не удалось перекодировать",
+                },
+        }));
+        if (final.state === "completed") router.refresh();
+      });
+    }
   }
 
   const busy = progress !== null;
@@ -236,8 +297,10 @@ export function MusicUploadForm({
         Загрузить запись
       </h3>
       <p className="mt-1 text-sm text-text-2">
-        Принимаем mp3 и m4a. Название и исполнителя редакция поправит — если в
-        файле они записаны неточно, переделывать и перезаливать не нужно.
+        Принимаем mp3 и m4a, а ещё FLAC, WAV и OGG — их сервер перекодирует в
+        m4a, чтобы запись играла на любом телефоне. Название и исполнителя
+        редакция поправит — если в файле они записаны неточно, переделывать и
+        перезаливать не нужно.
         Файлы уходят по очереди; неудача одного не останавливает остальные.
       </p>
       {audiobook && (
@@ -262,7 +325,7 @@ export function MusicUploadForm({
             ref={inputRef}
             type="file"
             multiple
-            accept={[...MUSIC_ACCEPTED_MIME, ...MUSIC_ACCEPTED_EXTENSIONS].join(",")}
+            accept={[...MUSIC_UPLOAD_MIME, ...MUSIC_UPLOAD_EXTENSIONS].join(",")}
             disabled={busy}
             onChange={(event) =>
               setFiles(Array.from(event.target.files ?? []))
@@ -374,6 +437,12 @@ export function MusicUploadForm({
                           ? "shrink-0 text-cyan"
                           : "shrink-0 text-text-2"
                     }
+                    // Смена «перекодируется…» на итог объявляется
+                    // скринридеру: ждать её приходится минуты, и глазами
+                    // на строку в это время никто не смотрит. Область живая
+                    // с первого итога, иначе атрибут появлялся бы вместе с
+                    // новым текстом и объявления не было бы.
+                    aria-live={result ? "polite" : undefined}
                     title={
                       result?.state === "failed" ? result.note : undefined
                     }
@@ -384,7 +453,9 @@ export function MusicUploadForm({
                         ? result.kept
                           ? "в очереди · копия здесь"
                           : "в очереди"
-                        : currentName === name
+                        : result?.state === "transcoding"
+                          ? "перекодируется…"
+                          : currentName === name
                           ? "загружается"
                           : "ждёт"}
                   </span>

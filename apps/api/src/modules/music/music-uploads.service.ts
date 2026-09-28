@@ -13,11 +13,14 @@ import type {
   CreateMusicUploadRequest,
   CreateMusicUploadResponse,
   MusicStorageUsageDto,
+  MusicUploadRightsBasis,
+  MusicUploadStateDto,
   MyMusicUploadsDto,
 } from '@vedamatch/shared';
 import {
   isLineageId,
-  MUSIC_ACCEPTED_MIME,
+  isMusicTranscodeMime,
+  MUSIC_UPLOAD_MIME,
   normalizeMusicMime,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -26,15 +29,19 @@ import {
   MUSIC_UPLOAD_DEFAULT_LIMITS,
   MUSIC_UPLOAD_REJECTION_TEXT,
   validateMusicUploadCompletion,
+  transcodeSourceLimit,
   validateMusicUploadRequest,
 } from './music-upload-validate';
-import type { MusicUploadLimits } from './music-upload-validate';
+import type {
+  MusicUploadLimits,
+  MusicUploadRejection,
+} from './music-upload-validate';
 import {
   extractEmbeddedCover,
   fallbackTrackTitle,
   normalizeAudioMetadata,
 } from './music-metadata-parse';
-import type { EmbeddedCover } from './music-metadata-parse';
+import type { EmbeddedCover, RawAudioMetadata } from './music-metadata-parse';
 import {
   buildMusicCoverKey,
   coverExtensionFor,
@@ -47,12 +54,59 @@ import {
 } from './music-duration-estimate';
 import { initialStatusFor } from './music-publish-policy';
 import { trackLineageWithArtistDefault } from './artist-lineage';
+import { sniffTranscodeSource } from './music-transcode';
+import type { TranscodeRequest } from './music-transcode';
 
 /** Расширение по типу: имя файла от браузера может быть любым. */
 const EXTENSION_BY_MIME: Record<string, string> = {
   'audio/mpeg': 'mp3',
   'audio/mp4': 'm4a',
+  'audio/flac': 'flac',
+  'audio/wav': 'wav',
+  'audio/ogg': 'ogg',
 };
+
+/**
+ * Загрузки, которые ещё занимают место: не догруженные и ждущие
+ * перекодирования (VED-244) — у последних в бакете лежит исходник.
+ */
+const IN_FLIGHT_UPLOAD_STATUSES = [
+  'pending',
+  'transcode_queued',
+  'transcoding',
+] as const;
+
+/**
+ * Что нужно, чтобы завести запись по объекту в бакете. Общее у обычной
+ * заливки и у перекодированной: во втором случае объект — уже результат
+ * ffmpeg, а не то, что залил браузер.
+ */
+export interface AcceptObjectInput {
+  upload: {
+    id: string;
+    uploaderId: string;
+    rightsBasis: MusicUploadRightsBasis;
+  };
+  storageKey: string;
+  mime: string;
+  sizeBytes: number;
+  /** Контрольная сумма для дублей — у перекодированного это сумма исходника. */
+  checksum: string | null;
+  raw: RawAudioMetadata | null;
+  durationSeconds: number | null;
+  bitrateKbps: number | null;
+  request: TranscodeRequest;
+  /**
+   * Перекодированный объект: строка загрузки переезжает на новый ключ и тип,
+   * и обновляется только из `transcoding` — строку мог забрать возврат
+   * зависших, и тогда запись заводить нельзя.
+   */
+  transcoded: boolean;
+}
+
+export type AcceptObjectResult =
+  | { ok: true; response: CompleteMusicUploadResponse }
+  | { ok: false; rejection: MusicUploadRejection; message: string };
 
 /**
  * Незавершённая загрузка живёт два часа: подписанный PUT действует час,
@@ -100,7 +154,16 @@ export class MusicUploadsService {
         'MUSIC_ACCOUNT_QUOTA_BYTES',
         MUSIC_UPLOAD_DEFAULT_LIMITS.accountQuotaBytes,
       ),
+      maxTranscodeSourceBytes: num(
+        'MUSIC_MAX_TRANSCODE_SOURCE_BYTES',
+        MUSIC_UPLOAD_DEFAULT_LIMITS.maxTranscodeSourceBytes!,
+      ),
     };
+  }
+
+  /** Пределы из окружения — их же держит стадия перекодирования. */
+  get uploadLimits(): MusicUploadLimits {
+    return this.limits;
   }
 
   async usage(
@@ -112,7 +175,8 @@ export class MusicUploadsService {
       quotaBytes: this.limits.accountQuotaBytes,
       unlimited: viewerIsAdmin,
       maxUploadBytes: this.limits.maxBytes,
-      acceptedMime: [...MUSIC_ACCEPTED_MIME],
+      maxTranscodeSourceBytes: transcodeSourceLimit(this.limits),
+      acceptedMime: [...MUSIC_UPLOAD_MIME],
     };
   }
 
@@ -126,6 +190,9 @@ export class MusicUploadsService {
    * в «Закончилось место» и больше не мог загрузить ничего — квота наказывала
    * самых полезных. Смысл квоты — не дать завалить очередь проверки, и
    * считает она ровно то, что лежит на совести загрузившего.
+   *
+   * Исходник, ждущий перекодирования, считается своим размером: пока
+   * стадия не закончилась, он лежит в бакете целиком.
    */
   private async usedBytes(userId: string): Promise<number> {
     const [tracks, uploads] = await Promise.all([
@@ -134,7 +201,10 @@ export class MusicUploadsService {
         _sum: { sizeBytes: true },
       }),
       this.prisma.musicUpload.aggregate({
-        where: { uploaderId: userId, status: 'pending' },
+        where: {
+          uploaderId: userId,
+          status: { in: [...IN_FLIGHT_UPLOAD_STATUSES] },
+        },
         _sum: { sizeBytes: true },
       }),
     ]);
@@ -376,14 +446,26 @@ export class MusicUploadsService {
     }
 
     const prefix = await this.storage.readPrefix(upload.storageKey);
+    const request: TranscodeRequest = {
+      fileName: fileName ?? null,
+      lineage: requestedLineage ?? null,
+      artistId: requestedArtistId ?? null,
+      audiobookId: requestedAudiobookId ?? null,
+      canAssignArtist,
+    };
+
+    // Что лежит в объекте — по первым байтам (VED-244). FLAC, WAV и OGG
+    // уходят на перекодирование, даже если браузер назвал их mp3; заявленный
+    // FLAC, в котором нет FLAC, — отказ, а не попытка ffmpeg угадать.
+    const source = sniffTranscodeSource(prefix);
+    if (source || isMusicTranscodeMime(upload.mime)) {
+      return this.queueTranscode(upload, object, source !== null, request);
+    }
+
     const raw = prefix
       ? await this.metadata.read(prefix, upload.mime, object.sizeBytes)
       : null;
     const metadata = normalizeAudioMetadata(raw);
-    // Обложка, вшитая в файл. Достаём здесь, пока теги под рукой, а кладём
-    // после того, как запись принята: у отклонённой загрузки объекта в
-    // бакете остаться не должно.
-    const embeddedCover = extractEmbeddedCover(raw, MUSIC_COVER_MAX_BYTES);
 
     /**
      * Длительность считаем сами, когда прочитан не весь файл: пакет
@@ -398,37 +480,197 @@ export class MusicUploadsService {
       readBytes: prefix ? prefix.length : 0,
     });
 
+    const result = await this.acceptObject({
+      upload,
+      storageKey: upload.storageKey,
+      mime: upload.mime,
+      sizeBytes: object.sizeBytes,
+      checksum: object.etag,
+      raw,
+      durationSeconds,
+      bitrateKbps: metadata.bitrateKbps,
+      request,
+      transcoded: false,
+    });
+
+    if (!result.ok) {
+      // Отклонённый объект в бакете не оставляем: он занимает место и
+      // считается в квоте, а нужен уже никому.
+      await this.storage.remove(upload.storageKey);
+      await this.fail(upload.id, result.rejection);
+      throw new BadRequestException(result.message);
+    }
+    return result.response;
+  }
+
+  /**
+   * Исходник FLAC, WAV или OGG залит — ставим его в очередь перекодирования
+   * (VED-244). Запись появится, когда стадия закончит; до тех пор форма
+   * показывает «перекодируется…» и спрашивает `uploadState`.
+   *
+   * Дубль ловим уже здесь, по сумме исходника: незачем тратить минуты
+   * процессора, чтобы потом сказать «такая запись у вас уже есть».
+   */
+  private async queueTranscode(
+    upload: { id: string; uploaderId: string; storageKey: string },
+    object: { sizeBytes: number; etag: string | null },
+    recognized: boolean,
+    request: TranscodeRequest,
+  ): Promise<CompleteMusicUploadResponse> {
+    const reject = async (
+      rejection: MusicUploadRejection,
+      message = MUSIC_UPLOAD_REJECTION_TEXT[rejection],
+    ): Promise<never> => {
+      await this.storage.remove(upload.storageKey);
+      await this.fail(upload.id, rejection);
+      throw new BadRequestException(message);
+    };
+
+    if (!recognized) return reject('mime_not_accepted');
+    if (object.sizeBytes <= 0) return reject('file_empty');
+    if (object.sizeBytes > transcodeSourceLimit(this.limits)) {
+      return reject('file_too_large');
+    }
     const duplicateOf = object.etag
-      ? await this.liveDuplicate(userId, object.etag)
+      ? await this.liveDuplicate(upload.uploaderId, object.etag)
+      : null;
+    if (duplicateOf) return reject('duplicate', duplicateMessage(duplicateOf));
+
+    // Клейм, а не `update`: два `complete` подряд (двойной клик, повтор
+    // запроса) не должны поставить в очередь один файл дважды.
+    const queued = await this.prisma.musicUpload.updateMany({
+      where: { id: upload.id, status: 'pending' },
+      data: {
+        status: 'transcode_queued',
+        sizeBytes: object.sizeBytes,
+        checksum: object.etag,
+        transcodeAttempts: 0,
+        transcodeRequest: { ...request },
+      },
+    });
+    if (queued.count === 0) {
+      throw new BadRequestException('Эта загрузка уже завершена');
+    }
+
+    return {
+      uploadId: upload.id,
+      trackId: null,
+      status: null,
+      title: fallbackTrackTitle(
+        normalizeAudioMetadata(null),
+        request.fileName ?? upload.storageKey,
+      ),
+      durationSeconds: null,
+      transcoding: true,
+    };
+  }
+
+  /**
+   * Где загрузка сейчас — для формы, которая ждёт перекодирования.
+   * Только своя: 404 на чужую, как и у `complete`.
+   */
+  async uploadState(
+    userId: string,
+    uploadId: string,
+  ): Promise<MusicUploadStateDto> {
+    const upload = await this.prisma.musicUpload.findUnique({
+      where: { id: uploadId },
+      select: {
+        id: true,
+        uploaderId: true,
+        status: true,
+        storageKey: true,
+        failureReason: true,
+      },
+    });
+    if (!upload || upload.uploaderId !== userId) {
+      throw new NotFoundException('Загрузка не найдена');
+    }
+
+    if (upload.status === 'completed') {
+      const track = await this.prisma.musicTrack.findUnique({
+        where: { storageKey: upload.storageKey },
+        select: { id: true },
+      });
+      return {
+        uploadId: upload.id,
+        state: 'completed',
+        trackId: track?.id ?? null,
+        failureReason: null,
+      };
+    }
+    if (upload.status === 'failed' || upload.status === 'expired') {
+      const reason = upload.failureReason ?? 'transcode_failed';
+      return {
+        uploadId: upload.id,
+        state: 'failed',
+        trackId: null,
+        failureReason:
+          MUSIC_UPLOAD_REJECTION_TEXT[reason as MusicUploadRejection] ?? reason,
+      };
+    }
+    return {
+      uploadId: upload.id,
+      state: upload.status === 'pending' ? 'uploading' : 'transcoding',
+      trackId: null,
+      failureReason: null,
+    };
+  }
+
+  /**
+   * Завести запись по объекту в бакете: дубль, пределы, линия, исполнитель,
+   * книга, обложка из тегов. Общая часть обычного `complete` и стадии
+   * перекодирования.
+   *
+   * Отказ не бросается, а возвращается: `complete` отвечает на него 400, а
+   * воркер помечает загрузку отказанной и убирает оба объекта — исходник и
+   * результат.
+   */
+  async acceptObject(input: AcceptObjectInput): Promise<AcceptObjectResult> {
+    const { upload, request } = input;
+    const userId = upload.uploaderId;
+    const metadata = normalizeAudioMetadata(input.raw);
+    // Обложка, вшитая в файл. Достаём здесь, пока теги под рукой, а кладём
+    // после того, как запись принята: у отклонённой загрузки объекта в
+    // бакете остаться не должно.
+    const embeddedCover = extractEmbeddedCover(
+      input.raw,
+      MUSIC_COVER_MAX_BYTES,
+    );
+    const durationSeconds = input.durationSeconds;
+
+    const duplicateOf = input.checksum
+      ? await this.liveDuplicate(userId, input.checksum)
       : null;
     const duplicate = duplicateOf !== null;
 
     const rejection = validateMusicUploadCompletion(
       {
-        sizeBytes: object.sizeBytes,
+        sizeBytes: input.sizeBytes,
         durationSeconds,
-        bitrateKbps: metadata.bitrateKbps,
+        bitrateKbps: input.bitrateKbps,
         duplicate,
       },
       this.limits,
     );
 
     if (rejection) {
-      // Отклонённый объект в бакете не оставляем: он занимает место и
-      // считается в квоте, а нужен уже никому.
-      await this.storage.remove(upload.storageKey);
-      await this.fail(upload.id, rejection);
       // Дубль называем по имени (VED-533): поиск мог его не показать —
       // запись на проверке или в другой линии, — и «уже есть» без названия
       // выглядело ошибкой.
-      throw new BadRequestException(
-        duplicateOf
+      return {
+        ok: false,
+        rejection,
+        message: duplicateOf
           ? duplicateMessage(duplicateOf)
           : MUSIC_UPLOAD_REJECTION_TEXT[rejection],
-      );
+      };
     }
 
-    const title = fallbackTrackTitle(metadata, fileName ?? upload.storageKey);
+    const title = fallbackTrackTitle(
+      metadata,
+      request.fileName ?? input.storageKey,
+    );
     const status = initialStatusFor(upload.rightsBasis);
     /* Линия записи — та, что выбрал загрузивший; не выбрал — слышат все.
 
@@ -442,16 +684,18 @@ export class MusicUploadsService {
        Пустое значение означает «слышат все» и остаётся таким: это честнее
        угаданного. Поправить может модератор в очереди и редакция в форме
        правки каталога. */
-    const explicitLineage = this.uploadLineage(requestedLineage);
+    const explicitLineage = this.uploadLineage(
+      request.lineage as LineageId | null,
+    );
     const audiobook = await this.uploadAudiobook(
-      requestedAudiobookId,
-      canAssignArtist,
+      request.audiobookId,
+      request.canAssignArtist,
     );
     // Глава без явного исполнителя получает чтеца книги: иначе в плеере под
     // главой стояло бы «Исполнитель не указан».
     const artist = await this.uploadArtist(
-      requestedArtistId ?? audiobook?.readerId,
-      canAssignArtist,
+      request.artistId ?? audiobook?.readerId,
+      request.canAssignArtist,
     );
     const artistId = artist?.id ?? null;
     // Линия не выбрана, но запись подписана исполнителем с линией (VED-566):
@@ -469,11 +713,11 @@ export class MusicUploadsService {
       const created = await tx.musicTrack.create({
         data: {
           title,
-          storageKey: upload.storageKey,
-          mime: upload.mime,
-          sizeBytes: object.sizeBytes,
+          storageKey: input.storageKey,
+          mime: input.mime,
+          sizeBytes: input.sizeBytes,
           durationSeconds: durationSeconds!,
-          bitrateKbps: metadata.bitrateKbps,
+          bitrateKbps: input.bitrateKbps,
           language: metadata.language,
           lineage,
           // Исполнителя из тега в каталог не заводим: справочником владеет
@@ -490,14 +734,31 @@ export class MusicUploadsService {
         },
       });
 
-      await tx.musicUpload.update({
-        where: { id: upload.id },
-        data: {
-          status: 'completed',
-          sizeBytes: object.sizeBytes,
-          checksum: object.etag,
-        },
-      });
+      if (input.transcoded) {
+        // Строка загрузки переезжает на результат: по ключу её находят
+        // удаление записи, дубли и очередь модерации. Условие по статусу —
+        // иначе запись завёл бы процесс, у которого строку уже забрал
+        // возврат зависших; `update` без совпадения бросит и откатит всё.
+        await tx.musicUpload.update({
+          where: { id: upload.id, status: 'transcoding' },
+          data: {
+            status: 'completed',
+            storageKey: input.storageKey,
+            mime: input.mime,
+            sizeBytes: input.sizeBytes,
+            checksum: input.checksum,
+          },
+        });
+      } else {
+        await tx.musicUpload.update({
+          where: { id: upload.id },
+          data: {
+            status: 'completed',
+            sizeBytes: input.sizeBytes,
+            checksum: input.checksum,
+          },
+        });
+      }
 
       if (audiobook) {
         // В конец книги: файлы пачки уходят по одному и по порядку выбора,
@@ -519,10 +780,15 @@ export class MusicUploadsService {
     });
 
     return {
-      trackId: track.id,
-      status,
-      title: track.title,
-      durationSeconds: track.durationSeconds,
+      ok: true,
+      response: {
+        uploadId: upload.id,
+        trackId: track.id,
+        status,
+        title: track.title,
+        durationSeconds: track.durationSeconds,
+        transcoding: false,
+      },
     };
   }
 
@@ -585,7 +851,8 @@ export class MusicUploadsService {
     return book ?? null;
   }
 
-  private async fail(uploadId: string, reason: string): Promise<void> {
+  /** Отказ по загрузке. Причина — код отказа или готовая фраза, до 200 знаков. */
+  async fail(uploadId: string, reason: string): Promise<void> {
     await this.prisma.musicUpload.update({
       where: { id: uploadId },
       data: { status: 'failed', failureReason: reason.slice(0, 200) },

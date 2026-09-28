@@ -203,9 +203,56 @@ describe('MusicUploadsService.createUpload', () => {
     const storage = storageMock();
 
     await expect(
-      service(prisma, storage).createUpload('u1', body({ mime: 'audio/flac' })),
+      service(prisma, storage).createUpload('u1', body({ mime: 'audio/aac' })),
     ).rejects.toThrow(BadRequestException);
     expect(storage.presignPut).not.toHaveBeenCalled();
+  });
+
+  it('FLAC больше обычного потолка принимает под пределом исходника (VED-244)', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    await service(prisma, storage).createUpload(
+      'u1',
+      body({ mime: 'audio/x-flac', sizeBytes: 400_000_000 }),
+    );
+
+    expect(storage.buildKey).toHaveBeenCalledWith('u1', 'flac');
+    expect(storage.presignPut).toHaveBeenCalledWith(
+      'music/uploads/u1/abc.mp3',
+      'audio/flac',
+      400_000_000,
+    );
+  });
+
+  it('исходник больше гигабайта — отказ до ссылки', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    await expect(
+      service(prisma, storage).createUpload(
+        'u1',
+        body({ mime: 'audio/wav', sizeBytes: 1024 * 1024 * 1024 + 1 }),
+        true,
+      ),
+    ).rejects.toThrow(/большой/i);
+    expect(storage.presignPut).not.toHaveBeenCalled();
+  });
+
+  it('в занятое место считает и ждущие перекодирования', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    await service(prisma, storage).createUpload('u1', body());
+
+    expect(prisma.prisma.musicUpload.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          uploaderId: 'u1',
+          status: { in: ['pending', 'transcode_queued', 'transcoding'] },
+        },
+      }),
+    );
   });
 
   it('в занятое место считает и незавершённые загрузки', async () => {
@@ -933,5 +980,300 @@ describe('MusicUploadsService.deleteMyTrack', () => {
     await service(prisma, storage).deleteMyTrack('u1', 't1');
 
     expect(order).toEqual(['db', 's3']);
+  });
+});
+
+/** Начало настоящего FLAC: `fLaC` и блок STREAMINFO. */
+const FLAC_PREFIX = Buffer.concat([
+  Buffer.from('fLaC'),
+  Buffer.from([0x80, 0, 0, 34]),
+  Buffer.alloc(40),
+]);
+
+describe('MusicUploadsService.completeUpload: FLAC, WAV и OGG (VED-244)', () => {
+  const flac = {
+    id: 'up1',
+    uploaderId: 'u1',
+    storageKey: 'music/uploads/u1/abc.flac',
+    status: 'pending',
+    mime: 'audio/flac',
+    sizeBytes: 400_000_000,
+    rightsBasis: 'own_recording' as const,
+  };
+
+  it('ставит в очередь перекодирования, записи пока не заводит', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock({
+      head: jest
+        .fn()
+        .mockResolvedValue({ sizeBytes: 400_000_000, etag: 'md5' }),
+      readPrefix: jest.fn().mockResolvedValue(FLAC_PREFIX),
+    });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(flac);
+
+    const result = await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'Киртан.flac',
+      null,
+      'artist-1',
+      true,
+    );
+
+    expect(result).toEqual({
+      uploadId: 'up1',
+      trackId: null,
+      status: null,
+      title: 'Киртан',
+      durationSeconds: null,
+      transcoding: true,
+    });
+    expect(prisma.prisma.musicUpload.updateMany).toHaveBeenCalledWith({
+      where: { id: 'up1', status: 'pending' },
+      data: {
+        status: 'transcode_queued',
+        sizeBytes: 400_000_000,
+        checksum: 'md5',
+        transcodeAttempts: 0,
+        transcodeRequest: {
+          fileName: 'Киртан.flac',
+          lineage: null,
+          artistId: 'artist-1',
+          audiobookId: null,
+          canAssignArtist: true,
+        },
+      },
+    });
+    expect(prisma.tx.musicTrack.create).not.toHaveBeenCalled();
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+
+  it('браузер назвал FLAC «mp3» — решает содержимое, а не тип', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock({
+      readPrefix: jest.fn().mockResolvedValue(FLAC_PREFIX),
+    });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({
+      ...flac,
+      mime: 'audio/mpeg',
+      sizeBytes: 4_000_000,
+    });
+
+    const result = await service(prisma, storage).completeUpload(
+      'u1',
+      'up1',
+      'k.mp3',
+    );
+
+    expect(result.transcoding).toBe(true);
+    expect(prisma.tx.musicTrack.create).not.toHaveBeenCalled();
+  });
+
+  it('заявлен FLAC, а внутри не он — отказ и объект убран', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock({
+      readPrefix: jest.fn().mockResolvedValue(Buffer.alloc(64, 0x41)),
+    });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(flac);
+
+    await expect(
+      service(prisma, storage).completeUpload('u1', 'up1', 'fake.flac'),
+    ).rejects.toThrow(/Принимаем mp3, m4a, FLAC/);
+    expect(storage.remove).toHaveBeenCalledWith('music/uploads/u1/abc.flac');
+    expect(prisma.prisma.musicUpload.update).toHaveBeenCalledWith({
+      where: { id: 'up1' },
+      data: { status: 'failed', failureReason: 'mime_not_accepted' },
+    });
+    expect(prisma.prisma.musicUpload.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('дубль по сумме исходника ловится до перекодирования', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock({
+      readPrefix: jest.fn().mockResolvedValue(FLAC_PREFIX),
+    });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(flac);
+    prisma.prisma.musicUpload.findMany.mockResolvedValue([
+      { storageKey: 'music/uploads/u1/old.m4a' },
+    ]);
+    prisma.prisma.musicTrack.findFirst.mockResolvedValue({
+      title: 'Киртан',
+      status: 'published',
+    });
+
+    await expect(
+      service(prisma, storage).completeUpload('u1', 'up1', 'k.flac'),
+    ).rejects.toThrow(/«Киртан» — в каталоге/);
+    expect(storage.remove).toHaveBeenCalledWith('music/uploads/u1/abc.flac');
+    expect(prisma.prisma.musicUpload.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('повторный complete не ставит файл в очередь дважды', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock({
+      readPrefix: jest.fn().mockResolvedValue(FLAC_PREFIX),
+    });
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue(flac);
+    prisma.prisma.musicUpload.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service(prisma, storage).completeUpload('u1', 'up1', 'k.flac'),
+    ).rejects.toThrow(/уже завершена/);
+  });
+});
+
+describe('MusicUploadsService.acceptObject: перекодированный объект', () => {
+  const input = {
+    upload: {
+      id: 'up1',
+      uploaderId: 'u1',
+      rightsBasis: 'own_recording' as const,
+    },
+    storageKey: 'music/uploads/u1/new.m4a',
+    mime: 'audio/mp4',
+    sizeBytes: 77_000_000,
+    checksum: 'md5',
+    raw: { format: {}, common: { title: 'Гаура-арати' } },
+    durationSeconds: 2400,
+    bitrateKbps: 256,
+    request: {
+      fileName: 'k.flac',
+      lineage: null,
+      artistId: null,
+      audiobookId: null,
+      canAssignArtist: false,
+    },
+    transcoded: true,
+  };
+
+  it('заводит запись m4a и переносит загрузку на новый ключ из `transcoding`', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    const result = await service(prisma, storage).acceptObject(input);
+
+    expect(result).toMatchObject({
+      ok: true,
+      response: { trackId: 't1', transcoding: false, durationSeconds: 2400 },
+    });
+    expect(prisma.tx.musicTrack.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        storageKey: 'music/uploads/u1/new.m4a',
+        mime: 'audio/mp4',
+        bitrateKbps: 256,
+        title: 'Гаура-арати',
+      }),
+    });
+    expect(prisma.tx.musicUpload.update).toHaveBeenCalledWith({
+      where: { id: 'up1', status: 'transcoding' },
+      data: {
+        status: 'completed',
+        storageKey: 'music/uploads/u1/new.m4a',
+        mime: 'audio/mp4',
+        sizeBytes: 77_000_000,
+        checksum: 'md5',
+      },
+    });
+  });
+
+  it('отказ возвращает, а не бросает — решает воркер', async () => {
+    const prisma = prismaMock();
+    const storage = storageMock();
+
+    const result = await service(prisma, storage).acceptObject({
+      ...input,
+      durationSeconds: 5 * 60 * 60,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      rejection: 'duration_too_long',
+      message: 'Запись слишком длинная.',
+    });
+    expect(prisma.tx.musicTrack.create).not.toHaveBeenCalled();
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('MusicUploadsService.uploadState', () => {
+  const row = {
+    id: 'up1',
+    uploaderId: 'u1',
+    storageKey: 'music/uploads/u1/new.m4a',
+    failureReason: null,
+  };
+
+  it('чужая загрузка — 404', async () => {
+    const prisma = prismaMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({
+      ...row,
+      uploaderId: 'u2',
+      status: 'transcoding',
+    });
+
+    await expect(
+      service(prisma, storageMock()).uploadState('u1', 'up1'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it.each([
+    ['pending', 'uploading'],
+    ['transcode_queued', 'transcoding'],
+    ['transcoding', 'transcoding'],
+  ])('%s → %s', async (status, state) => {
+    const prisma = prismaMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({ ...row, status });
+
+    await expect(
+      service(prisma, storageMock()).uploadState('u1', 'up1'),
+    ).resolves.toEqual({
+      uploadId: 'up1',
+      state,
+      trackId: null,
+      failureReason: null,
+    });
+  });
+
+  it('готово — с записью по ключу результата', async () => {
+    const prisma = prismaMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({
+      ...row,
+      status: 'completed',
+    });
+    prisma.prisma.musicTrack.findUnique.mockResolvedValue({ id: 't9' });
+
+    await expect(
+      service(prisma, storageMock()).uploadState('u1', 'up1'),
+    ).resolves.toMatchObject({ state: 'completed', trackId: 't9' });
+    expect(prisma.prisma.musicTrack.findUnique).toHaveBeenCalledWith({
+      where: { storageKey: 'music/uploads/u1/new.m4a' },
+      select: { id: true },
+    });
+  });
+
+  it('отказ — код причины становится текстом для человека, фраза остаётся', async () => {
+    const prisma = prismaMock();
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({
+      ...row,
+      status: 'failed',
+      failureReason: 'transcode_failed',
+    });
+    await expect(
+      service(prisma, storageMock()).uploadState('u1', 'up1'),
+    ).resolves.toMatchObject({
+      state: 'failed',
+      failureReason: expect.stringMatching(/перекодировать/),
+    });
+
+    prisma.prisma.musicUpload.findUnique.mockResolvedValue({
+      ...row,
+      status: 'failed',
+      failureReason: 'Такая запись у вас уже есть: «К» — в каталоге.',
+    });
+    await expect(
+      service(prisma, storageMock()).uploadState('u1', 'up1'),
+    ).resolves.toMatchObject({
+      failureReason: 'Такая запись у вас уже есть: «К» — в каталоге.',
+    });
   });
 });

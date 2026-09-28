@@ -1,4 +1,8 @@
-import { MUSIC_ACCEPTED_MIME, normalizeMusicMime } from '@vedamatch/shared';
+import {
+  isMusicTranscodeMime,
+  MUSIC_ACCEPTED_MIME,
+  normalizeMusicMime,
+} from '@vedamatch/shared';
 import type { MusicUploadRightsBasis } from '@vedamatch/shared';
 
 /**
@@ -20,6 +24,13 @@ export interface MusicUploadLimits {
   maxBitrateKbps: number;
   /** Сколько всего байт разрешено держать одному человеку. */
   accountQuotaBytes: number;
+  /**
+   * Предел исходника, который сервер перекодирует (FLAC, WAV, OGG — VED-244).
+   * Отдельный от `maxBytes`: в каталог ляжет результат, и уже он обязан
+   * уложиться в `maxBytes`, а исходник без сжатия весит в четыре-пять раз
+   * больше. Не задан — `MUSIC_UPLOAD_DEFAULT_LIMITS`.
+   */
+  maxTranscodeSourceBytes?: number;
 }
 
 export const MUSIC_UPLOAD_DEFAULT_LIMITS: MusicUploadLimits = {
@@ -33,6 +44,13 @@ export const MUSIC_UPLOAD_DEFAULT_LIMITS: MusicUploadLimits = {
   // транскодирования, которого в v1 нет.
   maxBitrateKbps: 320,
   accountQuotaBytes: 2 * 1024 * 1024 * 1024,
+  // Гигабайт: WAV 16 бит/44.1 кГц — около 10 МБ в минуту, то есть полтора
+  // часа записи; FLAC вдвое плотнее. Четырёхчасовая программа в WAV
+  // (~2.4 ГБ) не пройдёт — её честнее перекодировать у себя. Больше не
+  // даём: исходник целиком ложится на диск контейнера на время работы
+  // ffmpeg, и десяток таких одновременно заливок — это уже место в бакете,
+  // которое оплачивается до конца стадии.
+  maxTranscodeSourceBytes: 1024 * 1024 * 1024,
 };
 
 export type MusicUploadRejection =
@@ -45,7 +63,8 @@ export type MusicUploadRejection =
   | 'duration_too_long'
   | 'duration_unknown'
   | 'bitrate_too_high'
-  | 'duplicate';
+  | 'duplicate'
+  | 'transcode_failed';
 
 export interface MusicUploadRequestFacts {
   mime: string;
@@ -59,9 +78,20 @@ export interface MusicUploadRequestFacts {
 
 const ACCEPTED = new Set<string>(MUSIC_ACCEPTED_MIME);
 
+/** Предел исходника под перекодирование с учётом умолчания. */
+export function transcodeSourceLimit(limits: MusicUploadLimits): number {
+  return (
+    limits.maxTranscodeSourceBytes ??
+    MUSIC_UPLOAD_DEFAULT_LIMITS.maxTranscodeSourceBytes!
+  );
+}
+
 /**
  * Проверка заявки на загрузку — до выдачи подписанного PUT.
  * `null` — можно выдавать ссылку.
+ *
+ * FLAC, WAV и OGG принимаются под своим, бо́льшим пределом: сервер
+ * перекодирует их в m4a (VED-244), и в каталог ляжет уже результат.
  */
 export function validateMusicUploadRequest(
   facts: MusicUploadRequestFacts,
@@ -70,12 +100,14 @@ export function validateMusicUploadRequest(
   // `audio/mpeg; codecs=...` и `audio/x-m4a` браузеры присылают наравне с
   // каноническим типом.
   const mime = normalizeMusicMime(facts.mime, facts.fileName);
-  if (!ACCEPTED.has(mime)) return 'mime_not_accepted';
+  const transcode = isMusicTranscodeMime(mime);
+  if (!ACCEPTED.has(mime) && !transcode) return 'mime_not_accepted';
 
   if (!Number.isFinite(facts.sizeBytes) || facts.sizeBytes <= 0) {
     return 'file_empty';
   }
-  if (facts.sizeBytes > limits.maxBytes) return 'file_too_large';
+  const maxBytes = transcode ? transcodeSourceLimit(limits) : limits.maxBytes;
+  if (facts.sizeBytes > maxBytes) return 'file_too_large';
 
   // Без основания прав кнопка загрузки неактивна, но неактивная кнопка —
   // это украшение: отвечать перед правообладателем будет портал.
@@ -134,7 +166,7 @@ export function validateMusicUploadCompletion(
 export const MUSIC_UPLOAD_REJECTION_TEXT: Record<MusicUploadRejection, string> =
   {
     mime_not_accepted:
-      'Принимаем mp3 и m4a. FLAC, WAV и OGG пока не играют на всех устройствах.',
+      'Принимаем mp3, m4a, FLAC, WAV и OGG (Vorbis или Opus). Этот файл не похож ни на один из них.',
     file_too_large: 'Файл слишком большой.',
     file_empty: 'Файл пустой или не догрузился.',
     rights_basis_required:
@@ -148,6 +180,8 @@ export const MUSIC_UPLOAD_REJECTION_TEXT: Record<MusicUploadRejection, string> =
       'Не удалось прочитать длительность. Попробуйте пересохранить файл в mp3.',
     bitrate_too_high: 'Битрейт выше допустимого — пересохраните файл.',
     duplicate: 'Такая запись у вас уже есть.',
+    transcode_failed:
+      'Не удалось перекодировать файл. Проверьте, что он играет у вас, или пересохраните его в mp3.',
   };
 
 /**

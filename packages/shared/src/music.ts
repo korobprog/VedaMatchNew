@@ -62,13 +62,35 @@ export type MusicReportKind = 'copyright' | 'content' | 'quality';
 export type MusicReportStatus = 'open' | 'resolved' | 'rejected';
 
 /**
- * Форматы, которые сервис принимает в v1. `flac`, `wav` и `ogg` отклоняются
- * на валидации: без транскодирования они играют не везде, а транскодирование
- * — отдельный воркер и отдельный деплой.
+ * Форматы, которые каталог **отдаёт**: mp3 и m4a (AAC) играют в любом
+ * браузере и на любом iPhone. Всё, что лежит в каталоге, — одно из двух.
  */
 export const MUSIC_ACCEPTED_MIME = ['audio/mpeg', 'audio/mp4'] as const;
 
 export type MusicAcceptedMime = (typeof MUSIC_ACCEPTED_MIME)[number];
+
+/**
+ * Форматы, которые принимаются только личной загрузкой и перекодируются на
+ * сервере в m4a (VED-244). FLAC и WAV — без сжатия и тяжелее предела в разы,
+ * OGG (Vorbis и Opus) не играет в Safari на старых iOS. Хранится только
+ * результат перекодирования, исходник удаляется.
+ *
+ * Редакционный приём по ссылкам их пока не берёт: у него своя дорога без
+ * стадии перекодирования.
+ */
+export const MUSIC_TRANSCODE_MIME = [
+  'audio/flac',
+  'audio/wav',
+  'audio/ogg',
+] as const;
+
+export type MusicTranscodeMime = (typeof MUSIC_TRANSCODE_MIME)[number];
+
+/** Всё, что принимает форма личной загрузки. */
+export const MUSIC_UPLOAD_MIME = [
+  ...MUSIC_ACCEPTED_MIME,
+  ...MUSIC_TRANSCODE_MIME,
+] as const;
 
 /**
  * Расширения для `accept` у поля выбора файла. Одних MIME мало: файловый
@@ -76,11 +98,31 @@ export type MusicAcceptedMime = (typeof MUSIC_ACCEPTED_MIME)[number];
  */
 export const MUSIC_ACCEPTED_EXTENSIONS = ['.mp3', '.m4a'] as const;
 
+/** Расширения форматов, которые перекодируются на сервере (VED-244). */
+export const MUSIC_TRANSCODE_EXTENSIONS = [
+  '.flac',
+  '.wav',
+  '.ogg',
+  '.oga',
+  '.opus',
+] as const;
+
+/** Всё, что принимает форма личной загрузки, — расширениями. */
+export const MUSIC_UPLOAD_EXTENSIONS = [
+  ...MUSIC_ACCEPTED_EXTENSIONS,
+  ...MUSIC_TRANSCODE_EXTENSIONS,
+] as const;
+
 /**
  * Одни и те же форматы браузеры называют по-разному: Chrome на Android
  * отдаёт m4a как `audio/x-m4a`, старые Safari — mp3 как `audio/mp3` (VED-195).
+ * У FLAC, WAV и OGG разнобой ещё больше: `audio/x-flac`, `audio/x-wav`,
+ * `audio/vnd.wave`, `audio/opus`, `application/ogg`.
  */
-const MUSIC_MIME_ALIASES: Record<string, MusicAcceptedMime> = {
+const MUSIC_MIME_ALIASES: Record<
+  string,
+  MusicAcceptedMime | MusicTranscodeMime
+> = {
   'audio/mpeg': 'audio/mpeg',
   'audio/mp3': 'audio/mpeg',
   'audio/x-mp3': 'audio/mpeg',
@@ -93,15 +135,34 @@ const MUSIC_MIME_ALIASES: Record<string, MusicAcceptedMime> = {
   'audio/m4a': 'audio/mp4',
   'audio/mp4a-latm': 'audio/mp4',
   'audio/x-mp4': 'audio/mp4',
+  'audio/flac': 'audio/flac',
+  'audio/x-flac': 'audio/flac',
+  'audio/wav': 'audio/wav',
+  'audio/x-wav': 'audio/wav',
+  'audio/wave': 'audio/wav',
+  'audio/vnd.wave': 'audio/wav',
+  'audio/ogg': 'audio/ogg',
+  'audio/x-ogg': 'audio/ogg',
+  'audio/vorbis': 'audio/ogg',
+  'audio/opus': 'audio/ogg',
+  'application/ogg': 'audio/ogg',
 };
 
-const MUSIC_MIME_BY_EXTENSION: Record<string, MusicAcceptedMime> = {
+const MUSIC_MIME_BY_EXTENSION: Record<
+  string,
+  MusicAcceptedMime | MusicTranscodeMime
+> = {
   mp3: 'audio/mpeg',
   m4a: 'audio/mp4',
+  flac: 'audio/flac',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/ogg',
 };
 
 /**
- * Приводит заявленный браузером тип к одному из `MUSIC_ACCEPTED_MIME`.
+ * Приводит заявленный браузером тип к одному из `MUSIC_UPLOAD_MIME`.
  *
  * Синоним сводится к каноническому типу. Пустой тип и
  * `application/octet-stream` — браузер формат не узнал — решаются по
@@ -124,6 +185,11 @@ export function normalizeMusicMime(
     }
   }
   return bare;
+}
+
+/** Тип, который сервер перекодирует, а не кладёт в каталог как есть. */
+export function isMusicTranscodeMime(mime: string): mime is MusicTranscodeMime {
+  return (MUSIC_TRANSCODE_MIME as readonly string[]).includes(mime);
 }
 
 /** Сколько живёт подписанная ссылка на аудио. Файлы в бакете не публичные. */
@@ -679,11 +745,35 @@ export interface CompleteMusicUploadRequest {
   audiobookId?: string | null;
 }
 
+/**
+ * Итог `complete`.
+ *
+ * FLAC, WAV и OGG записью сразу не становятся: они встают в очередь
+ * перекодирования (VED-244), и `transcoding` у них `true`, а `trackId`,
+ * `status` и `durationSeconds` — `null`, пока стадия не закончилась. Дождаться
+ * её можно через `GET music/uploads/:uploadId` (`MusicUploadStateDto`).
+ */
 export interface CompleteMusicUploadResponse {
-  trackId: string;
-  status: MusicTrackStatus;
+  uploadId: string;
+  trackId: string | null;
+  status: MusicTrackStatus | null;
   title: string;
-  durationSeconds: number;
+  durationSeconds: number | null;
+  transcoding: boolean;
+}
+
+/**
+ * Где сейчас загрузка — для формы, которая ждёт перекодирования (VED-244).
+ *
+ * `transcoding` — ещё в очереди или в работе; `completed` — запись заведена,
+ * `trackId` заполнен; `failed` — отказ, причина человеческим текстом в
+ * `failureReason`.
+ */
+export interface MusicUploadStateDto {
+  uploadId: string;
+  state: 'uploading' | 'transcoding' | 'completed' | 'failed';
+  trackId: string | null;
+  failureReason: string | null;
 }
 
 // ===== Обложки =====
@@ -744,6 +834,12 @@ export interface MusicStorageUsageDto {
   /** Редакция Музыки — без квоты: она и наполняет каталог. */
   unlimited?: boolean;
   maxUploadBytes: number;
+  /**
+   * Предел исходника, который сервер перекодирует (FLAC, WAV, OGG), —
+   * отдельный и больше `maxUploadBytes`: WAV на сорок минут весит ~400 МБ,
+   * а в каталог ляжет m4a в пределах обычного потолка.
+   */
+  maxTranscodeSourceBytes: number;
   acceptedMime: string[];
 }
 

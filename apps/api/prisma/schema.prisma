@@ -4914,6 +4914,10 @@ enum MusicUploadStatus {
   completed
   failed
   expired
+  /// FLAC, WAV или OGG залит и ждёт перекодирования в m4a (VED-244).
+  transcode_queued
+  /// Перекодирование идёт: строку взял воркер (клейм через `updateMany`).
+  transcoding
 }
 
 /// Основание, на котором человек заливает запись. Без отметки кнопка
@@ -5354,24 +5358,30 @@ model MusicBookmark {
 /// как файл появился в бакете; `POST music/uploads/:id/complete` дочитывает
 /// метаданные и создаёт `MusicTrack`.
 model MusicUpload {
-  id            String                 @id @default(uuid())
-  uploaderId    String
-  uploader      User                   @relation("MusicUploads", fields: [uploaderId], references: [id], onDelete: Cascade)
-  storageKey    String                 @unique
-  status        MusicUploadStatus      @default(pending)
+  id                String                 @id @default(uuid())
+  uploaderId        String
+  uploader          User                   @relation("MusicUploads", fields: [uploaderId], references: [id], onDelete: Cascade)
+  storageKey        String                 @unique
+  status            MusicUploadStatus      @default(pending)
   /// Заявленные браузером размер и тип. Сервер сверяет их с фактическим
   /// объектом на `complete` — присланному значению веры нет.
-  sizeBytes     Int
-  mime          String
-  rightsBasis   MusicUploadRightsBasis
+  sizeBytes         Int
+  mime              String
+  rightsBasis       MusicUploadRightsBasis
   /// ETag объекта из S3, читается на `complete`. Для загрузки одним PUT это
   /// MD5 содержимого, и он достаётся бесплатно из HEAD — честная SHA-256
   /// потребовала бы выкачать сотню мегабайт обратно в API ради дедупликации.
   /// По нему ловятся дубли: один и тот же киртан приходит с разных сторон.
-  checksum      String?
-  failureReason String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  checksum          String?
+  failureReason     String?
+  /// Сколько раз воркер брался перекодировать исходник (VED-244); растёт при
+  /// клейме, после третьей неудачи загрузка отклоняется.
+  transcodeAttempts Int                    @default(0)
+  /// Что форма прислала на `complete` (имя файла, линия, исполнитель, книга):
+  /// запись заводится после перекодирования, и эти поля нужны ей тогда же.
+  transcodeRequest  Json?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@index([uploaderId, status])
   @@index([status, createdAt])
