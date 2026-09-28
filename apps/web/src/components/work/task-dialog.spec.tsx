@@ -416,9 +416,9 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
   });
 
-  it("галочка чек-листа уходит сразу, и окно говорит «Сохранено»", async () => {
-    // У пункта чек-листа нет черновика: нажатие на галочку — уже решение.
-    // Но и здесь человек должен видеть, что дошло.
+  it("галочка чек-листа уходит сразу и полосу «Сохранено / Сохранить» не вызывает (VED-603)", async () => {
+    // У пункта чек-листа нет черновика: нажатие на галочку — уже решение,
+    // и видно оно по самой галочке. Полоса снизу после неё мешала.
     const withItem = {
       ...task,
       checklist: [{ id: "i1", text: "Проверить", done: false, position: 0 }],
@@ -428,6 +428,7 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     vi.mocked(updateWorkChecklistItem).mockResolvedValue({
       ...withItem,
       checklist: [{ id: "i1", text: "Проверить", done: true, position: 0 }],
+      checklistDone: 1,
     } as unknown as WorkTaskDto);
     const user = userEvent.setup();
     open();
@@ -435,7 +436,9 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     await user.click(await screen.findByLabelText("Проверить"));
 
     expect(updateWorkChecklistItem).toHaveBeenCalledWith("i1", { done: true });
-    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    expect(await screen.findByText("1 из 1")).toBeInTheDocument();
+    expect(screen.queryByText("Сохранено")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
   });
 });
 

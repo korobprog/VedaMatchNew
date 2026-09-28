@@ -196,8 +196,9 @@ export function WorkTaskDialog({
     () => new Set(),
   );
   /** Только что сохранили — показать «Сохранено», пока снова не начали править.
-   *  Ставят и кнопка «Сохранить», и действия со своей кнопкой (чек-лист,
-   *  вложения, комментарий): они уходят сразу, и об этом тоже надо сказать. */
+   *  Ставят кнопка «Сохранить» и правки со своей кнопкой (текст и пункты
+   *  чек-листа, комментарий): они уходят сразу, и об этом тоже надо сказать.
+   *  Галочка чек-листа (VED-603), статус и раздел (VED-611) — нет. */
   const [justSaved, setJustSaved] = useState(false);
   /** Идёт загрузка вложений к этой задаче: сколько ушло из скольких. Из
    *  очереди портала (VED-608), поэтому видна и в заново открытом окне. */
@@ -383,6 +384,7 @@ export function WorkTaskDialog({
    */
   async function run(
     action: () => Promise<WorkTaskDto | void>,
+    { announce = true }: { announce?: boolean } = {},
   ): Promise<boolean> {
     setBusy(true);
     setError(null);
@@ -391,8 +393,10 @@ export function WorkTaskDialog({
       if (next) showTask(next);
       await onChanged();
       // Дошло — окно так и говорит. Правок в черновике это не касается: пока
-      // они есть, полоса показывает их, а не «Сохранено».
-      setJustSaved(true);
+      // они есть, полоса показывает их, а не «Сохранено». Действия-щелчки
+      // (галочка чек-листа, VED-603) полосу не вызывают: как статус и
+      // раздел (VED-611), они видны сами по себе.
+      if (announce) setJustSaved(true);
       return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
@@ -881,8 +885,12 @@ export function WorkTaskDialog({
                     aria-labelledby={`check-text-${item.id}`}
                     onChange={(event) => {
                       const done = event.target.checked;
-                      void run(() =>
-                        updateWorkChecklistItem(item.id, { done }),
+                      // Галочка — щелчок, а не правка текста: уходит сразу
+                      // и полосу «Сохранено / Сохранить» не вызывает
+                      // (VED-603), как выбор статуса (VED-611).
+                      void run(
+                        () => updateWorkChecklistItem(item.id, { done }),
+                        { announce: false },
                       );
                     }}
                   />
