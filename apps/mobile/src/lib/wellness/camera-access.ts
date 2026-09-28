@@ -62,10 +62,34 @@ const COPY: Record<Exclude<CameraAccess, 'granted'>, CameraAccessCopy> = {
   },
 };
 
+/**
+ * Для чего камера. Текст про штрихкод («снимок никуда не отправляется») для
+ * «Третьего глаза» был бы неправдой: там кадр уходит на сервер, и человек
+ * должен знать это до того, как разрешит камеру.
+ */
+export type CameraPurpose = 'barcode' | 'eye';
+
+const EYE_COPY: Record<Exclude<CameraAccess, 'granted'>, CameraAccessCopy> = {
+  ask: {
+    title: 'Нужна камера',
+    body: 'Камера смотрит вместо вас, а телефон говорит вслух, что видит: номер автобуса, товар и цену. Кадры уходят на сервер VedaMatch только на время разбора и нигде не сохраняются.',
+    action: 'Разрешить камеру',
+    fallback: 'Без камеры помощник не работает. Остальные средства «Здоровья» доступны и без неё.',
+  },
+  blocked: {
+    title: 'Камера отключена в настройках',
+    body: 'Система больше не спросит про камеру из приложения. Включить её можно в настройках телефона, в разрешениях VedaMatch.',
+    action: 'Открыть настройки',
+    fallback: 'Без камеры помощник не работает. Остальные средства «Здоровья» доступны и без неё.',
+  },
+};
+
 export function describeCameraAccess(
   access: CameraAccess,
+  purpose: CameraPurpose = 'barcode',
 ): CameraAccessCopy | null {
-  return access === 'granted' ? null : COPY[access];
+  if (access === 'granted') return null;
+  return purpose === 'eye' ? EYE_COPY[access] : COPY[access];
 }
 
 /**

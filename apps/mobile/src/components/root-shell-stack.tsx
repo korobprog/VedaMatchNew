@@ -194,6 +194,9 @@ function RootStackInner() {
               адресе — к нему и привяжется новая карточка. */}
           <Stack.Screen name="wellness/label/[barcode]" />
           <Stack.Screen name="wellness/history" />
+          {/* «Третий глаз» — помощник для слабовидящих: камера на весь экран,
+              ответ голосом. */}
+          <Stack.Screen name="wellness/eye" />
           {/* Блог-лента (VED-334) — маршруты корневого стека, а не шестая
               вкладка: начало ленты стоит полосой в «Чатах»
               (`components/blog/blog-home-strip.tsx`), вся лента открывается

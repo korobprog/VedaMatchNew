@@ -129,6 +129,17 @@ function ToolIcon({ kind, color }: { kind: WellnessToolIcon; color: string }) {
           />
           <Path d="M8 8v8M12 8v8M16 8v8" stroke={color} strokeWidth={2} strokeLinecap="round" />
         </>
+      ) : kind === 'eye' ? (
+        <>
+          {/* Глаз: контур века и зрачок. */}
+          <Path
+            d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"
+            stroke={color}
+            strokeWidth={2}
+            strokeLinejoin="round"
+          />
+          <Path d="M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" stroke={color} strokeWidth={2} />
+        </>
       ) : (
         <>
           {/* Часы со стрелкой назад — «что было раньше». */}

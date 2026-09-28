@@ -30,6 +30,7 @@ export const QUICK_BAR_HIDDEN: readonly { route: string; why: string }[] = [
   { route: 'conference/[id]', why: 'полулист управления конференцией' },
   { route: 'wellness/scan', why: 'сканер: видоискатель камеры на весь экран' },
   { route: 'wellness/label/[barcode]', why: 'съёмка состава камерой' },
+  { route: 'wellness/eye', why: '«Третий глаз»: камера на весь экран и крупные кнопки для слабовидящих' },
   { route: 'onboarding', why: 'вопросы новичку до входа во вкладки' },
   { route: 'login', why: 'гость: вкладок и сервисов у него нет' },
 ];
