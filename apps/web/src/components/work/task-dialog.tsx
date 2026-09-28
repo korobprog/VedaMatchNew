@@ -198,7 +198,8 @@ export function WorkTaskDialog({
   /** Только что сохранили — показать «Сохранено», пока снова не начали править.
    *  Ставят кнопка «Сохранить» и правки со своей кнопкой (текст и пункты
    *  чек-листа, комментарий): они уходят сразу, и об этом тоже надо сказать.
-   *  Галочка чек-листа (VED-603), статус и раздел (VED-611) — нет. */
+   *  Галочка чек-листа (VED-603), статус и раздел (VED-611), скриншоты
+   *  (VED-518, у них своя индикация загрузки) — нет. */
   const [justSaved, setJustSaved] = useState(false);
   /** Идёт загрузка вложений к этой задаче: сколько ушло из скольких. Из
    *  очереди портала (VED-608), поэтому видна и в заново открытом окне. */
@@ -219,9 +220,10 @@ export function WorkTaskDialog({
   >(() => {});
   takeUploadOutcome.current = (outcome) => {
     if (outcome.last) showTask(outcome.last);
+    // Успех «Сохранено» не показывает (VED-518): у скриншотов своя
+    // индикация — «Загружаю N из M» и итог в очереди загрузок (VED-608).
     void Promise.resolve(onChanged()).then(() => {
       if (outcome.problem) setError(outcome.problem);
-      else setJustSaved(true);
     });
   };
   useEffect(() => {
@@ -292,6 +294,8 @@ export function WorkTaskDialog({
   /* Место (раздел и статус) не делает черновик «грязным» (VED-611): оно
      уходит само, и «Сохранить» из-за него не появляется. */
   const dirty = Boolean(task) && hasFormEdits(saved, draft);
+  /** Полоса «Сохранить / Сохранено» внизу окна (VED-56, VED-518). */
+  const saveBar = canEdit && (dirty || justSaved);
 
   // Несохранённое — в память вкладки (VED-520): уход в другое окно портала
   // снимает окно карточки, и без этого правка пропадала. Сохранили или
@@ -803,62 +807,6 @@ export function WorkTaskDialog({
               onSave={save}
             />
 
-            {/* Кнопка «Сохранить» (VED-56). Видна после любой правки полей
-                карточки — от названия до срока — и прилипает к низу окна:
-                поля правят наверху, а кнопка всё равно перед глазами. */}
-            {canEdit && (dirty || justSaved) && (
-              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3 group-has-[[data-sound-control]]/sheet:pl-16">
-                {dirty ? (
-                  <>
-                    {/* На телефоне надпись — своей строкой, кнопки — под ней
-                        справа. В один ряд все трое не помещались, и
-                        «Сохранить» переносился в угол слева, отдельно от
-                        «Отменить правки» (VED-105). */}
-                    <p
-                      role={problem ? "alert" : undefined}
-                      className={`w-full text-sm sm:mr-auto sm:w-auto ${problem ? "text-magenta" : "text-text-2"}`}
-                    >
-                      {problem ?? "Есть несохранённые правки"}
-                    </p>
-                    <div className="ml-auto flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={discard}
-                        disabled={busy}
-                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
-                      >
-                        Отменить правки
-                      </button>
-                      <button
-                        type="button"
-                        onClick={save}
-                        disabled={busy || Boolean(problem)}
-                        className="min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        {busy ? "Сохраняем…" : "Сохранить"}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p role="status" className="text-sm text-text-1 sm:mr-auto">
-                      Сохранено
-                    </p>
-                    {/* Всё уже на сервере (скриншот, чек-лист уходят
-                        сразу), но кнопка «Сохранить» есть и здесь (VED-400):
-                        ею окно и закрывают, как после правки полей. */}
-                    <button
-                      type="button"
-                      onClick={closeSaved}
-                      className="ml-auto min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Сохранить
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
             {/* Время и стоимость (VED-458) — только на коммерческой доске. */}
             {board.kind === "commercial" && (
               <WorkTaskFinance taskId={task.id} canEdit={Boolean(canEdit)} />
@@ -1051,7 +999,9 @@ export function WorkTaskDialog({
                           type="button"
                           disabled={busy}
                           onClick={() =>
-                            void run(() => removeWorkAttachment(file.id))
+                            void run(() => removeWorkAttachment(file.id), {
+                              announce: false,
+                            })
                           }
                           aria-label={`Убрать вложение «${file.name}»`}
                           className={`absolute right-0.5 top-0.5 bg-bg-0/80 ${WORK_ATTACH_REMOVE_CLASS}`}
@@ -1086,7 +1036,9 @@ export function WorkTaskDialog({
                         type="button"
                         disabled={busy}
                         onClick={() =>
-                          void run(() => removeWorkAttachment(file.id))
+                          void run(() => removeWorkAttachment(file.id), {
+                            announce: false,
+                          })
                         }
                         aria-label={`Убрать вложение «${file.name}»`}
                         className={WORK_ATTACH_REMOVE_CLASS}
@@ -1247,20 +1199,83 @@ export function WorkTaskDialog({
               </div>
             )}
 
+            {/* Кнопка «Сохранить» (VED-56). Видна после любой правки полей
+                карточки — от названия до срока — и прилипает к низу окна:
+                поля правят наверху, а кнопка всё равно перед глазами.
+                Стоит последней в окне (VED-518: «в самом низу, справа»):
+                раньше она шла сразу под описанием и, долистав ниже,
+                человек видел её посреди окна, над чек-листом. */}
+            {saveBar && (
+              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3 group-has-[[data-sound-control]]/sheet:pl-16">
+                {dirty ? (
+                  <>
+                    {/* На телефоне надпись — своей строкой, кнопки — под ней
+                        справа. В один ряд все трое не помещались, и
+                        «Сохранить» переносился в угол слева, отдельно от
+                        «Отменить правки» (VED-105). */}
+                    <p
+                      role={problem ? "alert" : undefined}
+                      className={`w-full text-sm sm:mr-auto sm:w-auto ${problem ? "text-magenta" : "text-text-2"}`}
+                    >
+                      {problem ?? "Есть несохранённые правки"}
+                    </p>
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={discard}
+                        disabled={busy}
+                        className="min-h-11 rounded-xl px-3 py-2 text-sm text-text-1 hover:text-text-0 disabled:opacity-50"
+                      >
+                        Отменить правки
+                      </button>
+                      <button
+                        type="button"
+                        onClick={save}
+                        disabled={busy || Boolean(problem)}
+                        className="min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {busy ? "Сохраняем…" : "Сохранить"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p role="status" className="text-sm text-text-1 sm:mr-auto">
+                      Сохранено
+                    </p>
+                    {/* Всё уже на сервере (пункты чек-листа, комментарий
+                        уходят сразу), но кнопка «Сохранить» есть и здесь
+                        (VED-400): ею окно и закрывают, как после правки
+                        полей. */}
+                    <button
+                      type="button"
+                      onClick={closeSaved}
+                      className="ml-auto min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Сохранить
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Пуск и пауза звука портала (VED-577): окно накрывает шапку
                 затемнением, и её «Плеер / Радио» не нажать. Мятный круг
                 (VED-600) плавает в левом нижнем углу окна (VED-608) — там же,
                 где пузырь плеера поверх других окон, — и не занимает место
                 в шапке. Строка своя, высотой с кнопку (и нулевая, когда
                 звука нет): в конце прокрутки кнопка стоит под содержимым, а
-                не поверх него. Полоса
-                «Сохранить» при ней отступает слева. Пузырь плеера поверх
+                не поверх него. При полосе «Сохранить» строка нулевая и
+                идёт после полосы (VED-518): круг садится в её левый край,
+                а полоса при нём отступает слева. Пузырь плеера поверх
                 окна не показывается — см. `hasForeignModal`.
                 VED-612: «опусти немного» — `bottom-0` вместо `bottom-3`.
                 Липкий отступ считается от края внутренних полей окна (p-4),
                 так что круг теперь в 16px от низа окна, а не в 28px, и
                 меньше заслоняет содержимое над собой. */}
-            <div className="pointer-events-none sticky bottom-0 z-20 flex h-0 items-end has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10">
+            <div
+              className={`pointer-events-none sticky bottom-0 z-20 flex h-0 items-end ${saveBar ? "" : "has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10"}`}
+            >
               <CompactSoundButton
                 tone="mint"
                 className="pointer-events-auto shadow-lg"

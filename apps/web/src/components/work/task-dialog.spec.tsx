@@ -6,6 +6,7 @@ import { WorkTaskDialog } from "./task-dialog";
 import { dueToInput } from "./task-due";
 import { workUploads } from "./work-uploads";
 import {
+  addWorkChecklistItem,
   attachWorkFile,
   deleteWorkTaskForever,
   getWorkTask,
@@ -442,6 +443,33 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
   });
 });
 
+describe("WorkTaskDialog — «Сохранить» в самом низу окна (VED-518)", () => {
+  it("после пункта чек-листа — «Сохранено» и «Сохранить» последними в окне", async () => {
+    vi.mocked(addWorkChecklistItem).mockResolvedValue({
+      ...task,
+      checklist: [{ id: "i1", text: "Новый", done: false, position: 0 }],
+      checklistTotal: 1,
+    } as unknown as WorkTaskDto);
+    const user = userEvent.setup();
+    open();
+
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Новый",
+    );
+    await user.click(screen.getByRole("button", { name: "Добавить" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    const save = screen.getByRole("button", { name: "Сохранить" });
+    // Полоса ниже всего содержимого окна, а не под описанием.
+    const discussion = screen.getByText("Обсуждение");
+    expect(
+      discussion.compareDocumentPosition(save) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
+
 describe("WorkTaskDialog — несколько вложений за раз (VED-112)", () => {
   const shot = (name: string) =>
     new File(["x"], name, { type: "image/png" });
@@ -481,6 +509,10 @@ describe("WorkTaskDialog — несколько вложений за раз (VE
       ]);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).toBeNull();
+    // У скриншотов своя индикация загрузки (VED-608): полосы «Сохранено /
+    // Сохранить» после них нет (VED-518).
+    expect(screen.queryByText("Сохранено")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
   });
 
   it("называет скриншот, который не приложился, а остальные оставляет", async () => {
