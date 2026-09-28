@@ -143,7 +143,13 @@ export default async function LibraryEntryPage({
         {/* Справа от «Назад» — «Нравится» (VED-549), «Поделиться», «В
             Блог-ленту» и «Озвучить» значками, слева направо, как на
             скриншоте карточки VED-515. */}
-        <div className="-mt-3 mb-2 flex flex-wrap items-center gap-2">
+        {/* У администратора значков семь, и на телефоне последний —
+            «Ступени» — переносился отдельной строкой под «Назад» (VED-609).
+            Уже sm кружки на 40px вместо 44 и зазор 4px: ряд с «Назад»
+            помещается в 358px (экран 390 минус поля). 40px — с запасом выше
+            24px WCAG 2.2 (SC 2.5.8). Перенос остаётся запасным: длинный
+            счётчик «Нравится» уведёт ряд на вторую строку, а не за край. */}
+        <div className="-mt-3 mb-2 flex flex-wrap items-center gap-2 max-sm:gap-x-1 max-sm:[&_.h-11]:h-10 max-sm:[&_.min-w-11]:min-w-10 max-sm:[&_.size-11]:size-10">
           <div className="mt-3">
             <BackLink
               locale={locale}

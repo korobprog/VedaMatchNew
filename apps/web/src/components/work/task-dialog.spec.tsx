@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkBoardDto, WorkTaskDto } from "@vedamatch/shared";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueToInput } from "./task-due";
+import { workUploads } from "./work-uploads";
 import {
   attachWorkFile,
   deleteWorkTaskForever,
@@ -434,6 +435,77 @@ describe("WorkTaskDialog — несколько вложений за раз (VE
   });
 });
 
+describe("WorkTaskDialog — загрузка переживает закрытие окна (VED-608)", () => {
+  const shot = (name: string) => new File(["x"], name, { type: "image/png" });
+
+  it("окно закрыли посреди загрузки — файлы уходят дальше, итог остаётся в очереди портала", async () => {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const props = { onClose: vi.fn(), onChanged: vi.fn() };
+    const view = render(
+      <WorkTaskDialog taskId="t1" board={board} {...props} />,
+    );
+    const input = await screen.findByLabelText("Прикрепить картинки или файлы");
+    await user.upload(input, shot("1.png"));
+    expect(workUploads.isBusy()).toBe(true);
+
+    // Ушли в другое окно портала: доска и окно задачи размонтированы.
+    view.unmount();
+    finish(task);
+
+    await waitFor(() =>
+      expect(workUploads.getSnapshot()).toContainEqual(
+        expect.objectContaining({
+          taskKey: "VED-56",
+          phase: "done",
+          problem: null,
+        }),
+      ),
+    );
+    expect(props.onChanged).not.toHaveBeenCalled();
+    for (const job of workUploads.getSnapshot()) workUploads.dismiss(job.id);
+  });
+
+  it("окно открыли заново — прогресс виден и в нём, и итог забирает оно", async () => {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const first = render(
+      <WorkTaskDialog
+        taskId="t1"
+        board={board}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+    first.unmount();
+
+    const props = open();
+    expect(await screen.findByLabelText("Загружаю…")).toBeDisabled();
+    finish(task);
+
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(workUploads.getSnapshot()).toEqual([]);
+  });
+});
+
 describe("WorkTaskDialog — «Прикрепить» с первого нажатия (VED-266)", () => {
   const shot = (name: string) => new File(["x"], name, { type: "image/png" });
 
@@ -677,6 +749,37 @@ describe("WorkTaskDialog — индикатор вложений (VED-431)", () 
     });
     expect(link).toHaveAttribute("href", "#work-task-attachments");
   });
+
+  it("скрепка и крестик — в панели над заголовком, а не сбоку от него (VED-602)", async () => {
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      attachments: [
+        {
+          id: "a1",
+          name: "shot.png",
+          mime: "image/png",
+          sizeBytes: 1,
+          width: null,
+          height: null,
+          url: "",
+          createdAt: "2026-09-09T00:00:00.000Z",
+        },
+      ],
+    } as unknown as WorkTaskDto);
+    open();
+    const link = await screen.findByRole("link", {
+      name: "Вложения: 1. Перейти к ним",
+    });
+    const close = screen.getByRole("button", { name: "Закрыть" });
+    const title = screen.getByLabelText("Название задачи");
+    // Одна строка-панель на номер, скрепку и крестик…
+    expect(close.closest("div")).toBe(link.parentElement);
+    // …и заголовок под ней, отдельным блоком во всю ширину.
+    expect(title.closest("div")?.contains(link)).toBe(false);
+    expect(
+      link.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });
 
 describe("WorkTaskDialog — несохранённое переживает уход в другое окно (VED-520)", () => {
@@ -706,7 +809,7 @@ describe("WorkTaskDialog — несохранённое переживает у�
 });
 
 
-describe("WorkTaskDialog — правка пункта чек-листа (VED-524)", () => {
+describe("WorkTaskDialog — правка пункта чек-листа нажатием на текст (VED-524, VED-603)", () => {
   const withItem = () =>
     vi.mocked(getWorkTask).mockResolvedValue({
       ...task,
@@ -714,36 +817,91 @@ describe("WorkTaskDialog — правка пункта чек-листа (VED-52
       checklistTotal: 1,
     } as unknown as WorkTaskDto);
 
-  it("«Изменить» рядом с «Убрать»: Enter сохраняет новый текст", async () => {
+  beforeEach(() => {
+    vi.mocked(updateWorkChecklistItem).mockReset();
+  });
+
+  it("кнопки-карандаша нет: правку открывает сам текст пункта", async () => {
+    withItem();
+    open();
+    const text = await screen.findByRole("button", {
+      name: "Изменить пункт: Опечтака",
+    });
+    expect(text).toHaveTextContent("Опечтака");
+    expect(
+      screen.queryByRole("button", { name: /^Изменить пункт «/ }),
+    ).toBeNull();
+    // Галочка по-прежнему названа текстом пункта и отмечает, а не правит.
+    expect(screen.getByRole("checkbox", { name: "Опечтака" })).toBeInTheDocument();
+  });
+
+  it("нажатие на текст — поле на месте, Enter сохраняет новый текст", async () => {
     const user = userEvent.setup();
     withItem();
     vi.mocked(updateWorkChecklistItem).mockResolvedValue(task);
     open();
 
     await user.click(
-      await screen.findByRole("button", { name: "Изменить пункт «Опечтака»" }),
+      await screen.findByRole("button", { name: "Изменить пункт: Опечтака" }),
     );
     const field = screen.getByLabelText("Текст пункта чек-листа");
+    expect(field).toHaveFocus();
     await user.clear(field);
     await user.type(field, "Опечатка{Enter}");
 
+    expect(updateWorkChecklistItem).toHaveBeenCalledTimes(1);
     expect(updateWorkChecklistItem).toHaveBeenCalledWith("i1", {
       text: "Опечатка",
     });
   });
 
-  it("Escape отменяет правку, а окно карточки остаётся открытым", async () => {
+  it("уход из поля тоже сохраняет", async () => {
     const user = userEvent.setup();
     withItem();
-    vi.mocked(updateWorkChecklistItem).mockClear();
+    vi.mocked(updateWorkChecklistItem).mockResolvedValue(task);
+    open();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Изменить пункт: Опечтака" }),
+    );
+    const field = screen.getByLabelText("Текст пункта чек-листа");
+    await user.clear(field);
+    await user.type(field, "Опечатка");
+    await user.click(screen.getByLabelText("Новый пункт чек-листа"));
+
+    expect(updateWorkChecklistItem).toHaveBeenCalledTimes(1);
+    expect(updateWorkChecklistItem).toHaveBeenCalledWith("i1", {
+      text: "Опечатка",
+    });
+  });
+
+  it("с клавиатуры: Enter на тексте открывает правку", async () => {
+    const user = userEvent.setup();
+    withItem();
+    open();
+
+    (
+      await screen.findByRole("button", { name: "Изменить пункт: Опечтака" })
+    ).focus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByLabelText("Текст пункта чек-листа")).toHaveFocus();
+  });
+
+  it("Escape отменяет правку, возвращает фокус на текст, окно остаётся", async () => {
+    const user = userEvent.setup();
+    withItem();
     const props = open();
 
     await user.click(
-      await screen.findByRole("button", { name: "Изменить пункт «Опечтака»" }),
+      await screen.findByRole("button", { name: "Изменить пункт: Опечтака" }),
     );
     await user.type(screen.getByLabelText("Текст пункта чек-листа"), "{Escape}");
 
     expect(screen.queryByLabelText("Текст пункта чек-листа")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Изменить пункт: Опечтака" }),
+    ).toHaveFocus();
     expect(props.onClose).not.toHaveBeenCalled();
     expect(updateWorkChecklistItem).not.toHaveBeenCalled();
   });

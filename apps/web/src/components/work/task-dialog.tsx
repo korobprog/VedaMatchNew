@@ -8,9 +8,10 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentProps,
 } from "react";
-import { FileText, Loader2, Paperclip, Pencil, Trash2, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
 import { CompactSoundButton } from "@/components/quick/compact-sound-button";
 import type {
@@ -21,7 +22,6 @@ import type {
 import {
   addWorkChecklistItem,
   archiveWorkTask,
-  attachWorkFile,
   removeWorkAttachment,
   commentWorkTask,
   deleteWorkTaskForever,
@@ -36,12 +36,8 @@ import {
   WORK_ATTACH_PICKER_CLASS,
   WORK_ATTACH_REMOVE_CLASS,
 } from "./attach-button";
-import {
-  MAX_FILES_AT_ONCE,
-  uploadInTurn,
-  uploadProblemMessage,
-} from "./attach-files";
-import { shrinkImageForUpload } from "./attach-image-canvas";
+import type { AttachOutcome, WorkUploadJob } from "./upload-queue";
+import { workUploads } from "./work-uploads";
 import { isLongChecklistText } from "./checklist-text";
 import {
   chooseSection,
@@ -67,9 +63,29 @@ import {
   without,
 } from "./board-session";
 
+/**
+ * Открытые окна задач (VED-608): вложения уходят через очередь портала и
+ * переживают закрытие окна и переход в другое окно портала. Итог загрузки
+ * забирает окно, открытое на этой задаче сейчас, — даже если это уже другое
+ * окно, открытое заново. Нет такого — итог сообщает индикатор портала.
+ */
+const openTaskDialogs = new Map<
+  string,
+  (outcome: AttachOutcome<WorkTaskDto>) => void
+>();
+
+const NO_UPLOADS: readonly WorkUploadJob[] = [];
+
 /** Поле карточки: одинаковое у всех списков и у срока. */
 const FIELD_CLASS =
   "mt-1 block w-full min-w-0 rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0";
+
+/** Вид текста пункта чек-листа: зачёркнут, если выполнен; свёрнут до трёх строк. */
+function checklistTextClass(done: boolean, clamped: boolean): string {
+  return `whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
+    done ? "text-text-2 line-through" : "text-text-0"
+  } ${clamped ? "line-clamp-3" : "block"}`;
+}
 
 /** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
 function growToText(element: HTMLTextAreaElement): void {
@@ -124,6 +140,19 @@ export function WorkTaskDialog({
   const [titleKey, setTitleKey] = useState(0);
   /** Пункт чек-листа, который правят на месте (VED-524). */
   const [editingItem, setEditingItem] = useState<string | null>(null);
+  /** Кнопка-текст пункта, куда вернуть фокус после правки (VED-603): поле
+   *  исчезает, и без этого фокус падал бы на `body`. */
+  const itemTextButtons = useRef(new Map<string, HTMLButtonElement>());
+  const focusItemAfterEdit = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingItem !== null || !focusItemAfterEdit.current) return;
+    itemTextButtons.current.get(focusItemAfterEdit.current)?.focus();
+    focusItemAfterEdit.current = null;
+  }, [editingItem]);
+  function finishItemEdit(itemId: string) {
+    focusItemAfterEdit.current = itemId;
+    setEditingItem(null);
+  }
   /** Какие длинные пункты чек-листа раскрыты кнопкой «Далее» (VED-375). */
   const [expandedItems, setExpandedItems] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -132,11 +161,38 @@ export function WorkTaskDialog({
    *  Ставят и кнопка «Сохранить», и действия со своей кнопкой (чек-лист,
    *  вложения, комментарий): они уходят сразу, и об этом тоже надо сказать. */
   const [justSaved, setJustSaved] = useState(false);
-  /** Идёт загрузка нескольких вложений: сколько ушло из скольких. */
-  const [uploading, setUploading] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
+  /** Идёт загрузка вложений к этой задаче: сколько ушло из скольких. Из
+   *  очереди портала (VED-608), поэтому видна и в заново открытом окне. */
+  const uploadJobs = useSyncExternalStore(
+    workUploads.subscribe,
+    workUploads.getSnapshot,
+    () => NO_UPLOADS,
+  );
+  const uploadJob = uploadJobs.find(
+    (job) => job.taskId === taskId && job.phase === "uploading",
+  );
+  const uploading = uploadJob
+    ? { done: uploadJob.done, total: uploadJob.total }
+    : null;
+  /** Итог загрузки — в это окно, пока оно открыто. */
+  const takeUploadOutcome = useRef<
+    (outcome: AttachOutcome<WorkTaskDto>) => void
+  >(() => {});
+  takeUploadOutcome.current = (outcome) => {
+    if (outcome.last) setTask(outcome.last);
+    void Promise.resolve(onChanged()).then(() => {
+      if (outcome.problem) setError(outcome.problem);
+      else setJustSaved(true);
+    });
+  };
+  useEffect(() => {
+    const take = (outcome: AttachOutcome<WorkTaskDto>) =>
+      takeUploadOutcome.current(outcome);
+    openTaskDialogs.set(taskId, take);
+    return () => {
+      if (openTaskDialogs.get(taskId) === take) openTaskDialogs.delete(taskId);
+    };
+  }, [taskId]);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const canEdit =
@@ -319,31 +375,25 @@ export function WorkTaskDialog({
   /**
    * Вложения по одному запросу на файл, по очереди (VED-112). Если какой-то
    * не приложился, остальные остаются в карточке, а ошибка называет его по
-   * имени.
+   * имени. Уходят через очередь портала (VED-608): окно можно закрыть и уйти
+   * в другое окно портала — загрузка продолжится, а итог покажет индикатор.
    */
   function attachFiles(files: File[]) {
-    if (files.length === 0) return;
-    // Состояние «Загружаю…» — в тот же кадр, что и выбор файла, а не после
-    // первого ответа сервера: иначе кажется, что нажатие не сработало.
-    setUploading({ done: 0, total: Math.min(files.length, MAX_FILES_AT_ONCE) });
-    void run(async () => {
-      try {
-        const result = await uploadInTurn(
-          files,
-          (file) => attachWorkFile(taskId, file),
-          (done, total) => setUploading({ done, total }),
-          shrinkImageForUpload,
-        );
-        const message = uploadProblemMessage(result);
-        if (!message) return result.last;
-        // Приложившиеся уже на сервере: показываем их, и только потом ошибку.
-        if (result.last) setTask(result.last);
-        await onChanged();
-        throw new Error(message);
-      } finally {
-        setUploading(null);
-      }
-    });
+    if (files.length === 0 || !task) return;
+    setError(null);
+    // «Загружаю…» — в тот же кадр, что и выбор файла: задание встаёт в
+    // очередь синхронно, до первого ответа сервера.
+    void workUploads
+      .attach({
+        boardId: board.id,
+        taskId,
+        taskKey: task.key,
+        title: task.title,
+        files,
+        boardHref: `/work/planner/${board.spaceId}`,
+        watcher: { watching: () => openTaskDialogs.has(taskId) },
+      })
+      .then((outcome) => openTaskDialogs.get(taskId)?.(outcome));
   }
 
   function edit(next: Partial<typeof draft>) {
@@ -420,7 +470,7 @@ export function WorkTaskDialog({
         if (event.target === event.currentTarget) requestClose();
       }}
     >
-      <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-sheet p-4 sm:rounded-2xl">
+      <div className="group/sheet max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-sheet p-4 sm:rounded-2xl">
         {!task ? (
           <p className="flex items-center gap-2 text-sm text-text-2">
             <Loader2 aria-hidden className="size-4 animate-spin" />
@@ -428,81 +478,83 @@ export function WorkTaskDialog({
           </p>
         ) : (
           <>
-            <div className="mb-3 flex items-start gap-2">
-              <span className="mt-1 flex shrink-0 flex-col items-start gap-1">
-                <span className="font-mono text-xs text-text-2">{task.key}</span>
-                {/* Индикатор вложений (VED-431): скриншоты лежат внизу окна,
-                    под чек-листом, и об их существовании было не узнать, не
-                    долистав. Скрепка с числом у номера — и переход к ним. */}
-                {task.attachments.length > 0 && (
-                  <a
-                    href="#work-task-attachments"
-                    aria-label={`Вложения: ${task.attachments.length}. Перейти к ним`}
-                    title="Перейти к вложениям"
-                    className="-mx-1 inline-flex min-h-6 items-center gap-0.5 rounded px-1 text-xs text-text-1 hover:text-text-0"
-                  >
-                    <Paperclip aria-hidden className="size-3.5" />
-                    {task.attachments.length}
-                  </a>
-                )}
-                {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
-                    нажать: пуск и пауза — здесь (VED-577). Под номером мятным
-                    кругом (VED-600), а не у крестика; пузырь плеера поверх
-                    окна при ней не показывается — см. `hasForeignModal`. */}
-                <CompactSoundButton tone="mint" className="mt-1" />
+            {/* Шапка окна — две строки (VED-602): сверху панель кнопок
+                (номер, скрепка вложений, крестик), под ней заголовок во
+                всю ширину окна. Раньше заголовок стоял между номером и
+                крестиком узкой колонкой, и длинное название вытягивалось в
+                столбик на пол-экрана. */}
+            <div className="mb-2 flex items-center gap-2">
+              <span className="font-mono text-xs text-text-2">{task.key}</span>
+              {/* Индикатор вложений (VED-431): скриншоты лежат внизу окна,
+                  под чек-листом, и об их существовании было не узнать, не
+                  долистав. Скрепка с числом — в верхней панели рядом с
+                  номером (VED-602), и переход к ним. */}
+              {task.attachments.length > 0 && (
+                <a
+                  href="#work-task-attachments"
+                  aria-label={`Вложения: ${task.attachments.length}. Перейти к ним`}
+                  title="Перейти к вложениям"
+                  className="inline-flex min-h-6 items-center gap-0.5 rounded px-1 text-xs text-text-1 hover:text-text-0"
+                >
+                  <Paperclip aria-hidden className="size-3.5" />
+                  {task.attachments.length}
+                </a>
+              )}
+              <span className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  aria-label="Закрыть"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-lg text-text-1 hover:text-text-0"
+                >
+                  <X aria-hidden className="size-5" />
+                </button>
               </span>
-              {/* Название целиком, а не первой строкой. В однострочном поле
-                  длинное название обрывалось на середине слова, и карточка
-                  открывалась так, будто текста в ней нет. Поле растёт под текст
-                  и обведено — иначе заголовок не читается как правимый. */}
-              {/* ✖ — стереть заголовок одним нажатием (VED-488), как в поле
-                  «Заголовок» новой задачи. Кнопка поверх правого верхнего
-                  угла поля, вне его: поле растёт вниз под длинный текст. */}
-              <div className="relative min-w-0 flex-1">
-                <DraftTextarea
-                  key={`title-${textKey}-${titleKey}`}
-                  ref={titleRef}
-                  initialValue={latestText.current.title}
-                  onValueChange={(value) => editText("title", value)}
-                  readOnly={!canEdit}
-                  rows={1}
-                  maxLength={200}
-                  aria-label="Название задачи"
-                  onInput={(event) => growToText(event.currentTarget)}
-                  onKeyDown={(event) => {
-                    // Enter в заголовке — это «готово»: сохранить, а не новая
-                    // строка.
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      save();
-                    }
-                  }}
-                  className={`block w-full resize-none overflow-hidden rounded-lg py-1 pl-2 font-display text-lg font-bold text-text-0 ${
-                    canEdit
-                      ? "border border-glass-brd bg-bg-1 pr-10"
-                      : "bg-transparent pr-2"
-                  }`}
-                />
-                {canEdit && draft.title && (
-                  <button
-                    type="button"
-                    onClick={clearTitle}
-                    aria-label="Очистить заголовок"
-                    title="Очистить заголовок"
-                    className="absolute right-0.5 top-0.5 flex size-8 items-center justify-center rounded-md text-text-2 hover:text-text-0"
-                  >
-                    <X aria-hidden className="size-4" />
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={requestClose}
-                aria-label="Закрыть"
-                className="rounded-lg p-1 text-text-1"
-              >
-                <X aria-hidden className="size-5" />
-              </button>
+            </div>
+            {/* Название целиком, а не первой строкой. В однострочном поле
+                длинное название обрывалось на середине слова, и карточка
+                открывалась так, будто текста в ней нет. Поле растёт под текст
+                и обведено — иначе заголовок не читается как правимый. Шрифт
+                на ступень меньше (VED-602): поле не должно занимать пол-окна. */}
+            {/* ✖ — стереть заголовок одним нажатием (VED-488), как в поле
+                «Заголовок» новой задачи. Кнопка поверх правого верхнего угла
+                поля, вне его: поле растёт вниз под длинный текст. */}
+            <div className="relative mb-3">
+              <DraftTextarea
+                key={`title-${textKey}-${titleKey}`}
+                ref={titleRef}
+                initialValue={latestText.current.title}
+                onValueChange={(value) => editText("title", value)}
+                readOnly={!canEdit}
+                rows={1}
+                maxLength={200}
+                aria-label="Название задачи"
+                onInput={(event) => growToText(event.currentTarget)}
+                onKeyDown={(event) => {
+                  // Enter в заголовке — это «готово»: сохранить, а не новая
+                  // строка.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    save();
+                  }
+                }}
+                className={`block w-full resize-none overflow-hidden rounded-lg py-1 pl-2 font-display text-base font-bold leading-snug text-text-0 ${
+                  canEdit
+                    ? "border border-glass-brd bg-bg-1 pr-10"
+                    : "bg-transparent pr-2"
+                }`}
+              />
+              {canEdit && draft.title && (
+                <button
+                  type="button"
+                  onClick={clearTitle}
+                  aria-label="Очистить заголовок"
+                  title="Очистить заголовок"
+                  className="absolute right-0.5 top-0.5 flex size-8 items-center justify-center rounded-md text-text-2 hover:text-text-0"
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+              )}
             </div>
 
             {error && (
@@ -666,7 +718,7 @@ export function WorkTaskDialog({
                 карточки — от названия до срока — и прилипает к низу окна:
                 поля правят наверху, а кнопка всё равно перед глазами. */}
             {canEdit && (dirty || justSaved) && (
-              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3">
+              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3 group-has-[[data-sound-control]]/sheet:pl-16">
                 {dirty ? (
                   <>
                     {/* На телефоне надпись — своей строкой, кнопки — под ней
@@ -739,6 +791,9 @@ export function WorkTaskDialog({
                     checked={item.done}
                     disabled={!canEdit}
                     id={`check-${item.id}`}
+                    // Имя галочки — текст пункта: у правящего он внутри
+                    // кнопки «Изменить пункт», а не в `label` (VED-603).
+                    aria-labelledby={`check-text-${item.id}`}
                     onChange={(event) => {
                       const done = event.target.checked;
                       void run(() =>
@@ -759,30 +814,59 @@ export function WorkTaskDialog({
                           const next = await updateWorkChecklistItem(item.id, {
                             text,
                           });
-                          setEditingItem(null);
+                          finishItemEdit(item.id);
                           return next;
                         })
                       }
-                      onCancel={() => setEditingItem(null)}
+                      onCancel={() => finishItemEdit(item.id)}
                     />
                   ) : (
                     <div className="min-w-0 flex-1">
-                      <label
-                        htmlFor={`check-${item.id}`}
-                        id={`check-text-${item.id}`}
-                        // `line-clamp-3` сам задаёт display: вместе с `block`
-                        // побеждал `block`, и свёрнутый пункт не сворачивался.
-                        className={`whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
-                          item.done ? "text-text-2 line-through" : "text-text-0"
-                        } ${
-                          isLongChecklistText(item.text) &&
-                          !expandedItems.has(item.id)
-                            ? "line-clamp-3"
-                            : "block"
-                        }`}
-                      >
-                        {item.text}
-                      </label>
+                      {/* Правка — нажатием на сам текст пункта (VED-603),
+                          без отдельной кнопки-карандаша. Текст — кнопка:
+                          с клавиатуры до правки доходят Tab и Enter, а
+                          галочку по-прежнему ставит чекбокс слева. Длинный
+                          пункт свёрнут до трёх строк (VED-375);
+                          `line-clamp-3` сам задаёт display, поэтому он на
+                          внутреннем span, а не на кнопке. */}
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          ref={(element) => {
+                            if (element) {
+                              itemTextButtons.current.set(item.id, element);
+                            } else {
+                              itemTextButtons.current.delete(item.id);
+                            }
+                          }}
+                          onClick={() => setEditingItem(item.id)}
+                          aria-label={`Изменить пункт: ${item.text}`}
+                          className="block w-full cursor-text rounded text-left hover:bg-glass"
+                        >
+                          <span
+                            id={`check-text-${item.id}`}
+                            className={checklistTextClass(
+                              item.done,
+                              isLongChecklistText(item.text) &&
+                                !expandedItems.has(item.id),
+                            )}
+                          >
+                            {item.text}
+                          </span>
+                        </button>
+                      ) : (
+                        <label
+                          htmlFor={`check-${item.id}`}
+                          id={`check-text-${item.id}`}
+                          className={checklistTextClass(
+                            item.done,
+                            isLongChecklistText(item.text) &&
+                              !expandedItems.has(item.id),
+                          )}
+                        >
+                          {item.text}
+                        </label>
+                      )}
                       {isLongChecklistText(item.text) && (
                         <button
                           type="button"
@@ -802,19 +886,6 @@ export function WorkTaskDialog({
                         </button>
                       )}
                     </div>
-                  )}
-                  {/* «Изменить» — рядом с «Убрать» (VED-524): опечатку в
-                      пункте правят на месте, а не удаляют и заводят заново. */}
-                  {canEdit && editingItem !== item.id && (
-                    <button
-                      type="button"
-                      aria-label={`Изменить пункт «${item.text}»`}
-                      disabled={busy}
-                      onClick={() => setEditingItem(item.id)}
-                      className="text-text-2 hover:text-text-0 disabled:opacity-50"
-                    >
-                      <Pencil aria-hidden className="size-4" />
-                    </button>
                   )}
                   {canEdit && (
                     <button
@@ -947,7 +1018,7 @@ export function WorkTaskDialog({
                   type="file"
                   multiple
                   className="peer sr-only"
-                  disabled={busy}
+                  disabled={busy || uploading !== null}
                   accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                   onChange={(event) => {
                     const files = Array.from(event.target.files ?? []);
@@ -1082,6 +1153,22 @@ export function WorkTaskDialog({
                 )}
               </div>
             )}
+
+            {/* Пуск и пауза звука портала (VED-577): окно накрывает шапку
+                затемнением, и её «Плеер / Радио» не нажать. Мятный круг
+                (VED-600) плавает в левом нижнем углу окна (VED-608) — там же,
+                где пузырь плеера поверх других окон, — и не занимает место
+                в шапке. Строка своя, высотой с кнопку (и нулевая, когда
+                звука нет): в конце прокрутки кнопка стоит под содержимым, а
+                не поверх него. Полоса
+                «Сохранить» при ней отступает слева. Пузырь плеера поверх
+                окна не показывается — см. `hasForeignModal`. */}
+            <div className="pointer-events-none sticky bottom-3 z-20 flex h-0 items-end has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10">
+              <CompactSoundButton
+                tone="mint"
+                className="pointer-events-auto shadow-lg"
+              />
+            </div>
           </>
         )}
       </div>
@@ -1202,14 +1289,11 @@ function DescriptionField({
 }
 
 /**
- * Новый пункт чек-листа. Текст живёт здесь, а не в окне: иначе каждая буква
- * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
- * дошёл до сервера.
- */
-/**
- * Правка пункта чек-листа на месте (VED-524). Enter — сохранить, Shift+Enter
- * — новая строка, Escape — отменить: только правку, окно карточки остаётся
- * открытым.
+ * Правка пункта на месте (VED-524, VED-603): поле встаёт вместо текста.
+ * Enter или уход из поля — сохранить, Shift+Enter — новая строка, Escape —
+ * отменить только правку: окно карточки остаётся открытым. Кнопок «Сохранить /
+ * Отменить» нет: правку открывают нажатием на сам текст, и лишняя строка
+ * кнопок под ним сбивала. Неизменённый текст ничего не отправляет.
  */
 function ChecklistEditForm({
   initial,
@@ -1223,15 +1307,34 @@ function ChecklistEditForm({
   onCancel: () => void;
 }) {
   const [text, setText] = useState(initial);
-  const trimmed = text.trim();
+  /* Правка уже завершена: Enter, а за ним blur от исчезновения поля, иначе
+     отправили бы пункт дважды. */
+  const finished = useRef(false);
+  // Сервер не принял правку — поле остаётся, и её можно завершить заново.
+  useEffect(() => {
+    if (!busy) finished.current = false;
+  }, [busy]);
+
+  function finish(value: string) {
+    if (finished.current || busy) return;
+    const trimmed = value.trim();
+    // Стёртый текст — не правка: пустой пункт сервер не примет, а удаляют
+    // корзиной.
+    if (!trimmed || trimmed === initial) {
+      finished.current = true;
+      onCancel();
+      return;
+    }
+    finished.current = true;
+    onSave(trimmed);
+  }
+
   return (
     <form
-      className="flex min-w-0 flex-1 flex-col gap-2"
+      className="flex min-w-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!trimmed) return;
-        if (trimmed === initial) onCancel();
-        else onSave(trimmed);
+        finish(text);
       }}
     >
       <textarea
@@ -1241,10 +1344,12 @@ function ChecklistEditForm({
         onChange={(event) => setText(event.target.value)}
         onInput={(event) => growToText(event.currentTarget)}
         onFocus={(event) => growToText(event.currentTarget)}
+        onBlur={(event) => finish(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             // Иначе Escape долетел бы до окна и закрыл карточку.
             event.stopPropagation();
+            finished.current = true;
             onCancel();
             return;
           }
@@ -1255,28 +1360,22 @@ function ChecklistEditForm({
         }}
         maxLength={WORK_CHECKLIST_TEXT_MAX}
         aria-label="Текст пункта чек-листа"
+        aria-describedby="work-checklist-edit-hint"
+        disabled={busy}
         className="w-full resize-none overflow-hidden rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
       />
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="min-h-9 rounded-xl px-3 text-sm text-text-1 hover:text-text-0"
-        >
-          Отменить
-        </button>
-        <button
-          type="submit"
-          disabled={busy || !trimmed}
-          className="min-h-9 rounded-xl bg-glass px-3 text-sm text-text-0 disabled:opacity-50"
-        >
-          Сохранить
-        </button>
-      </div>
+      <span id="work-checklist-edit-hint" className="sr-only">
+        Enter — сохранить, Escape — отменить
+      </span>
     </form>
   );
 }
 
+/**
+ * Новый пункт чек-листа. Текст живёт здесь, а не в окне: иначе каждая буква
+ * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
+ * дошёл до сервера.
+ */
 function ChecklistAddForm({
   busy,
   onAdd,
