@@ -80,6 +80,7 @@ import {
   FEED_POSITION_DELAY_MS,
   feedEnding,
   feedPositionBody,
+  isSameFeedHref,
 } from "./feed-position";
 import { SourceLink } from "./source-link";
 import {
@@ -385,6 +386,27 @@ export function ReelsFeed({
     if (!container) return;
     container.scrollBy({ top: direction * container.clientHeight, behavior: "smooth" });
   }, []);
+
+  /**
+   * «Начать сначала» на финальном слайде (VED-599). Адрес начала отличается
+   * от текущего (лента открыта с места остановки или с поста) — обычный
+   * переход: у страницы другой ключ, и лента загрузится заново с первой
+   * картинки. Совпадает — переход ничего бы не сделал, и человек оставался
+   * на чёрном финальном слайде. Тогда лента сама уходит к первому посту: её
+   * первая страница и есть начало. Фокус — на ленту, иначе он остался бы на
+   * кнопке уехавшего из вида слайда.
+   */
+  function restartFromEnd(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (!isSameFeedHref(window.location.pathname + window.location.search, href)) return;
+    event.preventDefault();
+    stopSpeaking();
+    const container = containerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: 0 });
+    container.focus({ preventScroll: true });
+    setActiveIndex(0);
+    syncCurrentSlide();
+  }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowDown" || event.key === "j") {
@@ -767,6 +789,7 @@ export function ReelsFeed({
                 ending={ending}
                 error={error}
                 onRetry={loadMore}
+                onRestart={restartFromEnd}
                 categoryNav={categoryNav}
               />
             );
@@ -1860,6 +1883,7 @@ function EndSlide({
   ending,
   error,
   onRetry,
+  onRestart,
   categoryNav,
 }: {
   donation: DonationSettingsDto | null;
@@ -1868,8 +1892,11 @@ function EndSlide({
   ending: { title: string; restartHref: string | null };
   error: string | null;
   onRetry: () => void;
+  /** Нажали «Начать сначала» (VED-599): лента решает, переход это или прокрутка. */
+  onRestart?: (event: React.MouseEvent<HTMLAnchorElement>, href: string) => void;
   categoryNav: (className?: string) => ReactNode;
 }) {
+  const restartHref = ending.restartHref;
   return (
     <section aria-label="Конец ленты" className="flex h-full w-full snap-start snap-always flex-col items-center px-8 text-center">
       {!error && categoryNav("shrink-0 pt-28")}
@@ -1897,9 +1924,10 @@ function EndSlide({
               </p>
             )}
             <div className="flex flex-wrap justify-center gap-2">
-              {ending.restartHref && (
+              {restartHref && (
                 <Link
-                  href={ending.restartHref}
+                  href={restartHref}
+                  onClick={(event) => onRestart?.(event, restartHref)}
                   className="btn-mint inline-flex min-h-11 items-center rounded-xl px-4 py-2 text-sm font-semibold"
                 >
                   ↺ Начать сначала

@@ -325,6 +325,42 @@ describe("ReelsFeed", () => {
     );
   });
 
+  it("«Начать сначала» на том же адресе уводит ленту к первому посту (VED-599)", () => {
+    fetchOk({});
+    // Лента раздела открыта не с места остановки: её начало — тот же адрес,
+    // и переход по ссылке ничего бы не сделал — человек стоял на финале.
+    window.history.pushState({}, "", "/motivation?category=guru&tab=cards");
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    try {
+      render(
+        <ReelsFeed
+          initial={{ items: [post("a"), post("b")], nextCursor: null }}
+          tab="cards"
+          donation={null}
+          category="guru"
+          categories={[
+            { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 2, feed: "both" as const, artCount: 0, cardsCount: 2 },
+          ]}
+        />,
+      );
+      const feed = screen.getByRole("feed", { name: "Лента вдохновения" });
+      const end = within(feed).getByRole("region", { name: "Конец ленты" });
+      const restart = within(end).getByRole("link", { name: /Начать сначала/ });
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+      restart.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(true);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+      expect(feed).toHaveFocus();
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("без непустых категорий кнопок нет", () => {
     fetchOk({});
     render(
