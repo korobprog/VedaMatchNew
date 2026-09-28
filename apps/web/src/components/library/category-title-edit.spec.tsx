@@ -122,3 +122,77 @@ describe("CategoryTitleEdit (VED-394)", () => {
     );
   });
 });
+
+describe("CategoryTitleEdit, название в общем списке (VED-614)", () => {
+  it("не рисуется у того, кто не может править рубрику", () => {
+    const { container } = render(
+      <CategoryTitleEdit
+        locale="ru"
+        category={category(false)}
+        target="title"
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("рядом с карандашом страницы — своя кнопка со своим значком", () => {
+    render(
+      <>
+        <CategoryTitleEdit locale="ru" category={category(true)} iconOnly />
+        <CategoryTitleEdit
+          locale="ru"
+          category={category(true)}
+          iconOnly
+          target="title"
+        />
+      </>,
+    );
+    const page = screen.getByRole("button", {
+      name: "Редактировать заголовок этой страницы",
+    });
+    const list = screen.getByRole("button", {
+      name: "Редактировать название в общем списке",
+    });
+    expect(list).toHaveAttribute(
+      "title",
+      "Редактировать название в общем списке",
+    );
+    expect(list.querySelector("svg")?.getAttribute("class")).not.toBe(
+      page.querySelector("svg")?.getAttribute("class"),
+    );
+  });
+
+  it("правит название рубрики, а не заголовок страницы", async () => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...category(true), titleRu: "Ари Мардан" }),
+    });
+    render(
+      <CategoryTitleEdit
+        locale="ru"
+        category={{ ...category(true), pageTitleRu: "Заголовок страницы" }}
+        target="title"
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Редактировать название в общем списке",
+      }),
+    );
+    const field = screen.getByLabelText("Название по-русски");
+    expect(field).toHaveValue("Ари Мардан Прабху");
+    expect(field).toHaveFocus();
+
+    fireEvent.change(field, { target: { value: "Ари Мардан" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    const [url, init] = apiFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/library\/categories\/c1$/);
+    expect(JSON.parse(init.body as string)).toEqual({
+      titleRu: "Ари Мардан",
+      titleEn: null,
+    });
+  });
+});

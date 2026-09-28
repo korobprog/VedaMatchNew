@@ -77,5 +77,16 @@ export function lineageButtonLabel(value: LineageId | null): string {
  * зелёная, как у отмеченной соседней кнопки «Ступени» (`border-cyan/60`).
  */
 export function lineageButtonToneClass(value: LineageId | null): string {
-  return value ? "border-magenta/50 text-text-0" : "border-cyan/60 text-text-1";
+  return markedToneClass(value !== null);
+}
+
+/**
+ * Каёмка кнопок разметки (VED-613): `marked` — выбран конкретный вариант,
+ * светло-малиновая; иначе «для всех» — зелёная. Общая для «Линии» и
+ * «Разметки», чтобы соседние кнопки красились одинаково.
+ */
+export function markedToneClass(marked: boolean): string {
+  return marked
+    ? "border-magenta/50 text-text-0"
+    : "border-cyan/60 text-text-1";
 }

@@ -15,13 +15,11 @@ import { AnchoredPopover } from "@/components/anchored-popover";
 import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import { sameAudienceStages, toggleAudienceStage } from "@/lib/audience-stages";
+import { lineageMenuItems, lineageMenuOpenGroup } from "@/lib/lineage-menu";
 import {
-  lineageButtonToneClass,
-  lineageMenuItems,
-  lineageMenuOpenGroup,
-} from "@/lib/lineage-menu";
-import {
+  hasMarkedStages,
   materialMarksButtonLabel,
+  materialMarksButtonToneClass,
   type MaterialMarks,
 } from "@/lib/material-marks";
 
@@ -84,8 +82,7 @@ export function MaterialMarksMenuButton({
   useDismissable(panelRef, close, open, triggerRef);
 
   const label = materialMarksButtonLabel({ stages, lineage });
-  const markedStages =
-    withStages && stages.length > 0 && stages.length < AUDIENCE_STAGES.length;
+  const markedStages = hasMarkedStages(stages);
   const currentGroup = lineageGroupOf(draftLineage);
 
   async function save(next: MaterialMarks) {
@@ -209,10 +206,10 @@ export function MaterialMarksMenuButton({
           }
           setOpen(!open);
         }}
-        /* Каёмка — по линии, как у домика (VED-613): конкретная линия —
-           светло-малиновая, «для всех линий» — зелёная. Ступени видны
-           кружком-счётчиком. */
-        className={`relative inline-flex ${sizeClassName} shrink-0 items-center justify-center border transition-colors hover:text-text-0 ${lineageButtonToneClass(lineage)} ${buttonClassName}`}
+        /* Каёмка (VED-613): любая разметка — отмечены ступени или выбрана
+           линия — светло-малиновая, как у домика с конкретной линией;
+           «для всех» — зелёная. Сколько ступеней, показывает кружок. */
+        className={`relative inline-flex ${sizeClassName} shrink-0 items-center justify-center border transition-colors hover:text-text-0 ${materialMarksButtonToneClass({ stages, lineage })} ${buttonClassName}`}
       >
         <Fingerprint aria-hidden className="size-4" />
         {/* Сколько ступеней отмечено — чтобы размеченное было видно, не

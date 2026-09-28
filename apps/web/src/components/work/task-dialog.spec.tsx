@@ -6,6 +6,7 @@ import { WorkTaskDialog } from "./task-dialog";
 import { dueToInput } from "./task-due";
 import { workUploads } from "./work-uploads";
 import {
+  addWorkChecklistItem,
   attachWorkFile,
   deleteWorkTaskForever,
   getWorkTask,
@@ -416,9 +417,9 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
   });
 
-  it("галочка чек-листа уходит сразу, и окно говорит «Сохранено»", async () => {
-    // У пункта чек-листа нет черновика: нажатие на галочку — уже решение.
-    // Но и здесь человек должен видеть, что дошло.
+  it("галочка чек-листа уходит сразу и полосу «Сохранено / Сохранить» не вызывает (VED-603)", async () => {
+    // У пункта чек-листа нет черновика: нажатие на галочку — уже решение,
+    // и видно оно по самой галочке. Полоса снизу после неё мешала.
     const withItem = {
       ...task,
       checklist: [{ id: "i1", text: "Проверить", done: false, position: 0 }],
@@ -428,6 +429,7 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     vi.mocked(updateWorkChecklistItem).mockResolvedValue({
       ...withItem,
       checklist: [{ id: "i1", text: "Проверить", done: true, position: 0 }],
+      checklistDone: 1,
     } as unknown as WorkTaskDto);
     const user = userEvent.setup();
     open();
@@ -435,7 +437,36 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     await user.click(await screen.findByLabelText("Проверить"));
 
     expect(updateWorkChecklistItem).toHaveBeenCalledWith("i1", { done: true });
+    expect(await screen.findByText("1 из 1")).toBeInTheDocument();
+    expect(screen.queryByText("Сохранено")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+  });
+});
+
+describe("WorkTaskDialog — «Сохранить» в самом низу окна (VED-518)", () => {
+  it("после пункта чек-листа — «Сохранено» и «Сохранить» последними в окне", async () => {
+    vi.mocked(addWorkChecklistItem).mockResolvedValue({
+      ...task,
+      checklist: [{ id: "i1", text: "Новый", done: false, position: 0 }],
+      checklistTotal: 1,
+    } as unknown as WorkTaskDto);
+    const user = userEvent.setup();
+    open();
+
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Новый",
+    );
+    await user.click(screen.getByRole("button", { name: "Добавить" }));
+
     expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    const save = screen.getByRole("button", { name: "Сохранить" });
+    // Полоса ниже всего содержимого окна, а не под описанием.
+    const discussion = screen.getByText("Обсуждение");
+    expect(
+      discussion.compareDocumentPosition(save) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 
@@ -478,6 +509,10 @@ describe("WorkTaskDialog — несколько вложений за раз (VE
       ]);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).toBeNull();
+    // У скриншотов своя индикация загрузки (VED-608): полосы «Сохранено /
+    // Сохранить» после них нет (VED-518).
+    expect(screen.queryByText("Сохранено")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
   });
 
   it("называет скриншот, который не приложился, а остальные оставляет", async () => {
