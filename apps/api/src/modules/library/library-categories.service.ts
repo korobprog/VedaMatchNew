@@ -37,6 +37,23 @@ import {
   isCategoryPageTitleRejection,
   pickCategoryPageTitle,
 } from './category-page-title';
+import { hiddenCategoryIds } from './category-visibility';
+import {
+  loadViewerLineageIds,
+  loadViewerMaterialFilters,
+} from './viewer-lineage';
+
+/**
+ * Прятать ли от зрителя авторов чужих линий (VED-621). Только там, где
+ * рубрики просматривают: список разделов и страница рубрики. Админка и
+ * выбор рубрики в форме материала получают дерево целиком — иначе нельзя
+ * было бы положить материал к автору, скрытому своими же фильтрами.
+ */
+export interface CategoryViewOptions {
+  byViewerFilters?: boolean;
+  /** Явная линия из адреса страницы (`?lineage=`), как у ленты. */
+  lineage?: string;
+}
 
 /** Выше этого сходства создание требует явного подтверждения пользователем. */
 export const SIMILARITY_BLOCK_THRESHOLD = 0.75;
@@ -116,8 +133,11 @@ export class LibraryCategoriesService {
     viewerId?: string,
     viewerCanMove = false,
     viewerIsAdmin = false,
+    options: CategoryViewOptions = {},
   ): Promise<LibraryCategoryTreeNode[]> {
-    const rows = await this.activeRows();
+    const allRows = await this.activeRows();
+    const hidden = await this.hiddenForViewer(allRows, viewerId, options);
+    const rows = allRows.filter((row) => !hidden.has(row.id));
     const counts = await this.subtreeCounts();
 
     const byParent = new Map<string | null, CategoryRow[]>();
@@ -151,16 +171,27 @@ export class LibraryCategoriesService {
     viewerId?: string,
     viewerCanMove = false,
     viewerIsAdmin = false,
+    options: CategoryViewOptions = {},
   ): Promise<LibraryCategoryPageDto> {
     const rows = await this.activeRows();
     const target = rows.find((row) => row.slug === slug);
     if (!target) throw new NotFoundException('category_not_found');
 
+    // Сама рубрика и её предки не прячутся (VED-621): прямая ссылка на
+    // автора чужой линии обязана открываться, как и на его материал. Прячутся
+    // только соседи по списку — чужие авторы среди подрубрик.
+    const hidden = await this.hiddenForViewer(
+      rows.filter(
+        (row) => row.id !== target.id && !target.path.includes(`.${row.id}.`),
+      ),
+      viewerId,
+      options,
+    );
     const counts = await this.subtreeCounts();
     const byId = new Map(rows.map((row) => [row.id, row]));
     const childrenOf = (id: string) =>
       rows
-        .filter((row) => row.parentId === id)
+        .filter((row) => row.parentId === id && !hidden.has(row.id))
         .sort((left, right) => left.position - right.position);
 
     const toDto = (row: CategoryRow): LibraryCategoryDto =>
@@ -190,7 +221,29 @@ export class LibraryCategoriesService {
         ...toDto(row),
         ...infoOf(row),
       })),
+      // Сколько подрубрик спрятано фильтрами: раздел, у которого скрыты все
+      // авторы, — всё ещё раздел, а не страница автора.
+      hiddenChildrenCount: rows.filter(
+        (row) => row.parentId === target.id && hidden.has(row.id),
+      ).length,
     };
+  }
+
+  /** Рубрики, которые прячут от зрителя его линии (VED-621). */
+  private async hiddenForViewer(
+    rows: readonly CategoryRow[],
+    viewerId: string | undefined,
+    options: CategoryViewOptions,
+  ): Promise<Set<string>> {
+    if (!options.byViewerFilters) return new Set();
+    const filters = await loadViewerMaterialFilters(this.prisma, viewerId);
+    const allowed = await loadViewerLineageIds(
+      this.prisma,
+      viewerId,
+      options.lineage,
+      filters,
+    );
+    return hiddenCategoryIds(rows, allowed);
   }
 
   /**

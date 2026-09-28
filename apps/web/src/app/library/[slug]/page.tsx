@@ -82,9 +82,16 @@ export default async function LibraryCategoryPage({
   // прятало бы контент — рубрику убрали внутрь, и лента родителя опустела.
   const withDescendants = query.withDescendants !== "false";
 
+  const explicitLineage =
+    typeof query.lineage === "string" && isLineagePreference(query.lineage)
+      ? query.lineage
+      : null;
+  // Авторы чужих линий скрыты вместе с их материалами (VED-621): и среди
+  // подрубрик, и в дереве навигации. Сама рубрика по ссылке открывается.
+  const categoryView = { filtered: true, lineage: explicitLineage };
   const [page, tree, preferences, communities, shlokas] = await Promise.all([
-    getLibraryCategoryPage(slug),
-    getLibraryCategoryTree(),
+    getLibraryCategoryPage(slug, categoryView),
+    getLibraryCategoryTree(categoryView),
     getLibraryPreferences(),
     getLibraryCommunities(),
     // Шлоки рубрики по порядку стихов (VED-386). Для обычной рубрики —
@@ -127,10 +134,6 @@ export default async function LibraryCategoryPage({
   if (folderKey && !folder) notFound();
 
   const locale = preferences?.uiLanguage ?? "ru";
-  const explicitLineage =
-    typeof query.lineage === "string" && isLineagePreference(query.lineage)
-      ? query.lineage
-      : null;
   // Настройка Образования сильнее «Фильтров материалов» с главной
   // (VED-617); без неё действуют они — та же арифметика, что на сервере.
   const preference = preferences?.lineage ?? null;
@@ -165,8 +168,13 @@ export default async function LibraryCategoryPage({
   // «Проповедники → Ари Мардан Прабху». Панели фильтров там нет: тип
   // материала — значком в ряду действий. «Упорядочить» у автора убрано
   // (VED-573): порядок выбирают в списке авторов, а не в ленте одного.
+  // Раздел, где фильтры линий спрятали всех авторов (VED-621), — всё ещё
+  // раздел, а не автор.
   const authorPage =
-    children.length === 0 && ancestors.length > 0 && shlokaMode === null;
+    children.length === 0 &&
+    !page.hiddenChildrenCount &&
+    ancestors.length > 0 &&
+    shlokaMode === null;
 
   return (
     <div className="relative min-h-dvh bg-bg-0">

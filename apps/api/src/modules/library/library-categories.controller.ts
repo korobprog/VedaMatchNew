@@ -32,10 +32,21 @@ import { isAdmin } from './is-admin';
 export class LibraryCategoriesController {
   constructor(private readonly categories: LibraryCategoriesService) {}
 
+  /**
+   * `?filtered=true` — дерево для просмотра: без авторов чужих линий
+   * (VED-621). Без него — целиком, для админки и выбора рубрики.
+   */
   @Get('tree')
-  tree(@CurrentUser() user: AccessTokenPayload) {
+  tree(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query('filtered') filtered?: string,
+    @Query('lineage') lineage?: string,
+  ) {
     const admin = isAdmin(user);
-    return this.categories.tree(user.sub, admin, admin);
+    return this.categories.tree(user.sub, admin, admin, {
+      byViewerFilters: filtered === 'true',
+      lineage,
+    });
   }
 
   @Get('suggest')
@@ -48,9 +59,14 @@ export class LibraryCategoriesController {
   page(
     @CurrentUser() user: AccessTokenPayload,
     @Param('slug') slug: string,
+    @Query('filtered') filtered?: string,
+    @Query('lineage') lineage?: string,
   ) {
     const admin = isAdmin(user);
-    return this.categories.page(slug, user.sub, admin, admin);
+    return this.categories.page(slug, user.sub, admin, admin, {
+      byViewerFilters: filtered === 'true',
+      lineage,
+    });
   }
 
   @Post()

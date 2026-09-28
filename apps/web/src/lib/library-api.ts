@@ -39,14 +39,40 @@ async function libraryGet<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
+/**
+ * Как просят рубрики экраны просмотра (VED-621): `filtered` — без авторов
+ * чужих линий, по тем же правилам, что лента; `lineage` — явная линия из
+ * адреса страницы. Без параметров — всё дерево, для админки и форм.
+ */
+export interface LibraryCategoryView {
+  filtered?: boolean;
+  lineage?: string | null;
+}
+
+/** Строка запроса для `LibraryCategoryView`; пустая — всё дерево. */
+export function categoryViewQuery(
+  view: LibraryCategoryView | undefined,
+): string {
+  const params = new URLSearchParams();
+  if (view?.filtered) params.set("filtered", "true");
+  if (view?.filtered && view.lineage) params.set("lineage", view.lineage);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
 /** Всё дерево рубрик: разделов как отдельной сущности больше нет. */
-export const getLibraryCategoryTree = () =>
-  libraryGet<LibraryCategoryTreeNode[]>("/library/categories/tree");
+export const getLibraryCategoryTree = (view?: LibraryCategoryView) =>
+  libraryGet<LibraryCategoryTreeNode[]>(
+    `/library/categories/tree${categoryViewQuery(view)}`,
+  );
 
 /** Рубрика с хлебными крошками и прямыми детьми. */
-export const getLibraryCategoryPage = (slug: string) =>
+export const getLibraryCategoryPage = (
+  slug: string,
+  view?: LibraryCategoryView,
+) =>
   libraryGet<LibraryCategoryPageDto>(
-    `/library/categories/${encodeURIComponent(slug)}`,
+    `/library/categories/${encodeURIComponent(slug)}${categoryViewQuery(view)}`,
   );
 
 export const getLibraryFeed = (

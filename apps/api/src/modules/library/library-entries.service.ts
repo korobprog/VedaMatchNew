@@ -27,21 +27,18 @@ import {
   authorLineageFor,
   defaultLineageFor,
   isLineageId,
-  isLineagePreference,
   effectiveAudienceStages,
-  effectiveLineageIds,
-  resolveMaterialFilters,
   resolveDisplayName,
   toAudienceStages,
   toLineageId,
-  toLineagePreference,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { lineageFeedCondition } from './lineage-feed-filter';
 import {
-  MATERIAL_FILTERS_SELECT,
-  audienceStageCondition,
-} from './audience-stage-filter';
+  loadViewerLineageIds,
+  loadViewerMaterialFilters,
+} from './viewer-lineage';
+import { audienceStageCondition } from './audience-stage-filter';
 import { CommunitiesService } from '../communities/communities.service';
 import {
   decodeCursor,
@@ -217,45 +214,20 @@ export class LibraryEntriesService {
       : null;
   }
 
-  /**
-   * «Фильтры материалов» зрителя (VED-617): ступени и линии с главной, а без
-   * ручного выбора — по анкете. Из `User` — ровно поля фильтров, анкеты и
-   * прежнего переключателя «Все ступени»; пишет их портал. Гость — без
-   * фильтров.
-   */
-  private async viewerMaterialFilters(
+  /** «Фильтры материалов» зрителя (VED-617), см. `viewer-lineage.ts`. */
+  private viewerMaterialFilters(
     viewerId: string | undefined,
   ): Promise<MaterialFilters> {
-    if (!viewerId) return { stages: [], lineages: [] };
-    const user = await this.prisma.user.findUnique({
-      where: { id: viewerId },
-      select: MATERIAL_FILTERS_SELECT,
-    });
-    return resolveMaterialFilters(user);
+    return loadViewerMaterialFilters(this.prisma, viewerId);
   }
 
-  /**
-   * Какие линии показать в ленте: `null` — все. Явный параметр запроса
-   * сильнее настройки Образования, та — сильнее «Фильтров материалов» с
-   * главной; без настройки действуют они (VED-617).
-   */
-  private async viewerLineageIds(
+  /** Линии ленты: `null` — все (VED-617), см. `viewer-lineage.ts`. */
+  private viewerLineageIds(
     viewerId: string | undefined,
     explicit: string | undefined,
     filters: MaterialFilters,
   ): Promise<LineageId[] | null> {
-    if (explicit !== undefined && isLineagePreference(explicit) && explicit) {
-      return effectiveLineageIds(explicit, filters);
-    }
-    if (!viewerId) return null;
-    const preference = await this.prisma.libraryPreference.findUnique({
-      where: { userId: viewerId },
-      select: { lineage: true },
-    });
-    return effectiveLineageIds(
-      toLineagePreference(preference?.lineage),
-      filters,
-    );
+    return loadViewerLineageIds(this.prisma, viewerId, explicit, filters);
   }
 
   /**

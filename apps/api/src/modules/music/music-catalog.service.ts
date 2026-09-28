@@ -145,7 +145,7 @@ export class MusicCatalogService {
           orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
           take: SHOWCASE_FRESH,
         }),
-        this.listShowcaseArtists(),
+        this.listShowcaseArtists(lineage),
         this.listSystemPlaylists(),
         // Тот же фильтр, что у «нового»: число отвечает на «сколько я
         // реально вижу», а не «сколько есть в базе вообще».
@@ -179,7 +179,7 @@ export class MusicCatalogService {
     );
   }
 
-  private async listShowcaseArtists() {
+  private async listShowcaseArtists(lineage: readonly LineageId[] | null) {
     // Исполнители без единой опубликованной записи в витрине не нужны:
     // кружок, ведущий на пустую страницу, — обещание, которого нет. Главы
     // книг (VED-297) записями Медиатеки не считаются: исполнитель, у
@@ -193,6 +193,11 @@ export class MusicCatalogService {
       where: {
         ...catalogArtistCondition(),
         tracks: { some: catalogTrack },
+        // Исполнитель чужой линии скрыт вместе со своими записями (VED-621):
+        // те же линии, что у ленты, плюс исполнители без линии — их видят
+        // все. По ступеням не прячем: у исполнителя их нет, а записи «для
+        // всех ступеней» найдутся почти у каждого.
+        AND: lineageAndConditions(lineage),
       },
       include: {
         _count: { select: { tracks: { where: catalogTrack } } },

@@ -636,3 +636,127 @@ describe('LibraryCategoriesService.remove', () => {
     });
   });
 });
+
+describe('LibraryCategoriesService — авторы чужих линий (VED-621)', () => {
+  function rows() {
+    return [
+      categoryRecord({
+        id: 'root-1',
+        parentId: null,
+        path: '',
+        slug: 'acharyas',
+        lineage: null,
+      }),
+      categoryRecord({
+        id: 'a-iskcon',
+        path: '.root-1.',
+        position: 0,
+        slug: 'prabhupada',
+        lineage: 'iskcon',
+      }),
+      categoryRecord({
+        id: 'a-math',
+        path: '.root-1.',
+        position: 1,
+        slug: 'sridhar',
+        lineage: 'sri_chaitanya_saraswat_math',
+      }),
+      categoryRecord({
+        id: 'a-all',
+        path: '.root-1.',
+        position: 2,
+        slug: 'rupa',
+        lineage: null,
+      }),
+    ];
+  }
+
+  function withViewer(
+    materialLineages: string[],
+    preference: string | null = null,
+  ) {
+    const prisma = prismaMock({
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          spiritualStage: 'devotee',
+          lineage: 'iskcon',
+          showAllStages: false,
+          materialFiltersSetAt: new Date(),
+          materialStages: [],
+          materialLineages,
+        }),
+      },
+      libraryPreference: {
+        findUnique: jest.fn().mockResolvedValue({ lineage: preference }),
+      },
+    });
+    prisma.libraryCategory.findMany = jest.fn().mockResolvedValue(rows());
+    return new LibraryCategoriesService(prisma as never);
+  }
+
+  it('страница раздела прячет авторов чужой линии, автор без линии виден', async () => {
+    const page = await withViewer(['iskcon']).page(
+      'acharyas',
+      'viewer-1',
+      false,
+      false,
+      {
+        byViewerFilters: true,
+      },
+    );
+
+    expect(page.children.map((child) => child.slug)).toEqual([
+      'prabhupada',
+      'rupa',
+    ]);
+    expect(page.category.childrenCount).toBe(2);
+    expect(page.hiddenChildrenCount).toBe(1);
+  });
+
+  it('без byViewerFilters — все авторы (админка, выбор рубрики)', async () => {
+    const page = await withViewer(['iskcon']).page('acharyas', 'viewer-1');
+
+    expect(page.children).toHaveLength(3);
+    expect(page.hiddenChildrenCount).toBe(0);
+  });
+
+  it('«Всё» в настройке Образования сильнее фильтров с главной', async () => {
+    const page = await withViewer(['iskcon'], 'all').page(
+      'acharyas',
+      'viewer-1',
+      false,
+      false,
+      {
+        byViewerFilters: true,
+      },
+    );
+
+    expect(page.children).toHaveLength(3);
+  });
+
+  it('прямая ссылка на автора чужой линии открывается', async () => {
+    const page = await withViewer(['iskcon']).page(
+      'sridhar',
+      'viewer-1',
+      false,
+      false,
+      {
+        byViewerFilters: true,
+      },
+    );
+
+    expect(page.category.slug).toBe('sridhar');
+  });
+
+  it('дерево для просмотра — без чужих авторов', async () => {
+    const tree = await withViewer(['iskcon']).tree('viewer-1', false, false, {
+      byViewerFilters: true,
+    });
+
+    expect(tree[0].children.map((child) => child.slug)).toEqual([
+      'prabhupada',
+      'rupa',
+    ]);
+    expect(tree[0].childrenCount).toBe(2);
+  });
+});
