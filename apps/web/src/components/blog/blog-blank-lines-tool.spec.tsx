@@ -18,34 +18,51 @@ function Harness({ initial }: { initial: string }) {
 
 const MESSY = "Раз\n   \n\t\nДва\n\n\n\nТри";
 
-describe("BlogBlankLinesTool (VED-372)", () => {
-  it("removes blank lines only on request and says how many", async () => {
+async function remove(
+  user: ReturnType<typeof userEvent.setup>,
+  choice: string,
+) {
+  await user.click(screen.getByRole("button", { name: "Убрать пустые строки" }));
+  await user.click(screen.getByRole("button", { name: choice }));
+}
+
+describe("BlogBlankLinesTool (VED-372, VED-633)", () => {
+  it("is one button; how many lines to remove is in its menu", async () => {
     const user = userEvent.setup();
     render(<Harness initial={MESSY} />);
     const field = screen.getByLabelText("Текст");
 
-    // Сам по себе инструмент текст не трогает.
+    // Сам по себе инструмент текст не трогает, и развёрнутого поля нет.
     expect(field).toHaveValue(MESSY);
+    expect(screen.queryByRole("combobox")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Убрать пустые строки" }));
+    const menu = screen.getByRole("group", {
+      name: "Сколько пустых строк убрать между абзацами",
+    });
+    expect(menu).toHaveTextContent(
+      "Убрать 1 строкуУбрать 2 строкиУбрать 3 строкиУбрать все",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Убрать все" }));
     expect(field).toHaveValue("Раз\nДва\nТри");
     expect(screen.getByRole("status")).toHaveTextContent("Убрано 5 пустых строк.");
   });
 
-  it("keeps as many blank lines as chosen", async () => {
+  it("removes as many lines from each gap as chosen", async () => {
     const user = userEvent.setup();
     render(<Harness initial={MESSY} />);
 
-    await user.selectOptions(screen.getByLabelText("оставлять пустых строк"), "1");
-    await user.click(screen.getByRole("button", { name: "Убрать пустые строки" }));
-    expect(screen.getByLabelText("Текст")).toHaveValue("Раз\n\nДва\n\nТри");
+    await remove(user, "Убрать 1 строку");
+    expect(screen.getByLabelText("Текст")).toHaveValue("Раз\n\nДва\n\n\nТри");
   });
 
-  it("gives the original text back", async () => {
+  it("gives the original text back, even after several steps", async () => {
     const user = userEvent.setup();
     render(<Harness initial={MESSY} />);
 
-    await user.click(screen.getByRole("button", { name: "Убрать пустые строки" }));
+    await remove(user, "Убрать 1 строку");
+    await remove(user, "Убрать 1 строку");
     await user.click(screen.getByRole("button", { name: "Вернуть как было" }));
 
     expect(screen.getByLabelText("Текст")).toHaveValue(MESSY);
@@ -58,7 +75,7 @@ describe("BlogBlankLinesTool (VED-372)", () => {
     const user = userEvent.setup();
     render(<Harness initial={MESSY} />);
 
-    await user.click(screen.getByRole("button", { name: "Убрать пустые строки" }));
+    await remove(user, "Убрать все");
     await user.type(screen.getByLabelText("Текст"), "!");
 
     expect(screen.queryByRole("button", { name: "Вернуть как было" })).toBeNull();
@@ -69,7 +86,7 @@ describe("BlogBlankLinesTool (VED-372)", () => {
     const user = userEvent.setup();
     render(<Harness initial={"Раз\nДва"} />);
 
-    await user.click(screen.getByRole("button", { name: "Убрать пустые строки" }));
+    await remove(user, "Убрать 2 строки");
     expect(screen.getByLabelText("Текст")).toHaveValue("Раз\nДва");
     expect(screen.getByRole("status")).toHaveTextContent(
       "Пустых строк между абзацами не нашлось.",

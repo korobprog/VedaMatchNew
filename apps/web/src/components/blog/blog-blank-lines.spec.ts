@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  BLOG_BLANK_LINES_DEFAULT_KEEP,
-  BLOG_BLANK_LINES_KEEP_CHOICES,
+  BLOG_BLANK_LINES_REMOVE_CHOICES,
+  blogBlankLinesChoiceLabel,
   blogBlankLinesMessage,
   collapseBlankLines,
+  removeBlankLines,
 } from "./blog-blank-lines";
 
 describe("collapseBlankLines", () => {
@@ -93,12 +94,48 @@ describe("collapseBlankLines", () => {
     expect(collapseBlankLines("Раз\n\nДва", -3).text).toBe("Раз\nДва");
     expect(collapseBlankLines("Раз\n\n\nДва", 1.7).text).toBe("Раз\n\nДва");
   });
+});
 
-  it("offers the choices the form shows", () => {
-    // «Две» нет: сервер схлопывает пустые строки до одной, и выбор «две»
-    // молча превращался бы в «одну» при сохранении.
-    expect(BLOG_BLANK_LINES_KEEP_CHOICES).toEqual([0, 1]);
-    expect(BLOG_BLANK_LINES_DEFAULT_KEEP).toBe(0);
+describe("removeBlankLines (VED-633)", () => {
+  it("removes as many blank lines from each gap as asked", () => {
+    const text = "Раз\n\n\n\nДва\n\nТри";
+    expect(removeBlankLines(text, 1)).toEqual({
+      text: "Раз\n\n\nДва\nТри",
+      removed: 2,
+    });
+    expect(removeBlankLines(text, 2)).toEqual({
+      text: "Раз\n\nДва\nТри",
+      removed: 3,
+    });
+    expect(removeBlankLines(text, 3).text).toBe("Раз\nДва\nТри");
+    expect(removeBlankLines(text, "all").text).toBe("Раз\nДва\nТри");
+  });
+
+  it("treats spaces as blank and empties the lines it keeps", () => {
+    expect(removeBlankLines("Раз\n  \n\t\nДва", 1)).toEqual({
+      text: "Раз\n\nДва",
+      removed: 1,
+    });
+  });
+
+  it("drops the blank lines at the edges and says when there was nothing", () => {
+    expect(removeBlankLines("\n\nРаз\n\n\nДва\n\n", 1).text).toBe("Раз\n\nДва");
+    expect(removeBlankLines("Раз\nДва", 3)).toEqual({
+      text: "Раз\nДва",
+      removed: 0,
+    });
+  });
+
+  it("offers 1–3 and all, labelled as actions", () => {
+    expect(BLOG_BLANK_LINES_REMOVE_CHOICES).toEqual([1, 2, 3, "all"]);
+    expect(
+      BLOG_BLANK_LINES_REMOVE_CHOICES.map(blogBlankLinesChoiceLabel),
+    ).toEqual([
+      "Убрать 1 строку",
+      "Убрать 2 строки",
+      "Убрать 3 строки",
+      "Убрать все",
+    ]);
   });
 });
 

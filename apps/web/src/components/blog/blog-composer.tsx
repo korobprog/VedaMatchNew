@@ -178,8 +178,18 @@ export function BlogComposer({
         aria-invalid={limit.over || undefined}
         className="mt-2 w-full rounded-lg border border-glass-brd bg-bg-1 px-3 py-2 text-sm leading-6 text-text-0 placeholder:text-text-2"
       />
-      <BlogTextCounter id={counterId} state={limit} />
-      <BlogBlankLinesTool value={text} onChange={setText} disabled={pending} />
+      {/* Счётчик и уборка пустых строк — одной строкой под полем (VED-633):
+          прежняя развёрнутая панель уборки занимала пол-экрана формы. */}
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-x-2">
+        <div className="flex min-h-11 items-center [&>p]:mt-0">
+          <BlogTextCounter id={counterId} state={limit} />
+        </div>
+        <BlogBlankLinesTool
+          value={text}
+          onChange={setText}
+          disabled={pending}
+        />
+      </div>
       <BlogPostMarksFields
         category={category}
         lineage={lineage}
