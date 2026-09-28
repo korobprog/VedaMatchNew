@@ -301,6 +301,10 @@ const ui = {
     // страницы: плитка, путь и чипы на карточках держат прежнее название.
     "category.editTitle": "Редактировать",
     "category.editTitleLabel": "Редактировать заголовок этой страницы",
+    // Соседняя кнопка (VED-614): название рубрики в общем списке — на плитке
+    // у родителя, в пути и в чипах карточек.
+    "category.editListTitle": "Название в списке",
+    "category.editListTitleLabel": "Редактировать название в общем списке",
     "category.pageTitle": "Заголовок этой страницы",
     "category.pageTitleHint":
       "Меняется только здесь. На плитке, в пути и на карточках останется прежнее название:",
@@ -640,6 +644,8 @@ const ui = {
     "category.edit": "Edit category",
     "category.editTitle": "Edit",
     "category.editTitleLabel": "Edit this page's heading",
+    "category.editListTitle": "Name in the list",
+    "category.editListTitleLabel": "Edit the name in the common list",
     "category.pageTitle": "This page's heading",
     "category.pageTitleHint":
       "Changes only here. The tile, the path and the cards keep the current name:",

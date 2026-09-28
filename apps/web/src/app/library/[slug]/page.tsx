@@ -253,6 +253,14 @@ export default async function LibraryCategoryPage({
                 buttonClassName="rounded-xl"
               />
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
+              {/* Рядом — название в общем списке (VED-614): плитка у
+                  родителя, путь, чипы. */}
+              <CategoryTitleEdit
+                locale={locale}
+                category={category}
+                iconOnly
+                target="title"
+              />
             </>
           ) : (
             <>
@@ -271,6 +279,14 @@ export default async function LibraryCategoryPage({
                 />
               </div>
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
+              {/* Рядом — название в общем списке (VED-614): плитка у
+                  родителя, путь, чипы. */}
+              <CategoryTitleEdit
+                locale={locale}
+                category={category}
+                iconOnly
+                target="title"
+              />
               {/* «Упорядочить» (VED-573) — меню для всех: «Свой порядок»
                   или «По алфавиту». У админа в нём же «Редактировать
                   порядок» — прежнее перетаскивание дерева. */}
