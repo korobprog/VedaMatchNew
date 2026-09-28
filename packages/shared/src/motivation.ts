@@ -116,9 +116,9 @@ export interface MotivationPostDto {
   categoryTitle: string;
   imageUrl: string;
   /**
-   * Лёгкая копия `imageUrl` для показа на слайде — WebP шириной 720
-   * (VED-629). Пустая строка — копии ещё нет: показывать `imageUrl`. Оригинал
-   * остаётся для «открыть полностью» и скачивания.
+   * Лёгкая копия `imageUrl` только для викторины — WebP шириной 720
+   * (VED-629). Пустая строка — копии ещё нет: показывать `imageUrl`. Лента
+   * и всё остальное Вдохновения, «Поделиться» и скачивание — оригинал.
    */
   imageThumbUrl: string;
   storyImageUrl: string;

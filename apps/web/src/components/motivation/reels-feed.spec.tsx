@@ -532,6 +532,25 @@ describe("ReelsFeed", () => {
     expect(frame).toHaveAttribute("alt", "");
   });
 
+  it("показывает оригинал картинки, а не лёгкую копию викторины (VED-629)", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("a", { imageThumbUrl: "https://cdn/a-w720.webp" })],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const slide = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0];
+    const sources = [...slide.querySelectorAll("img")].map((img) => img.getAttribute("src"));
+    expect(sources).toContain("https://cdn/a.webp");
+    expect(sources).not.toContain("https://cdn/a-w720.webp");
+  });
+
   it("отправка своим живёт внутри «Поделиться», а не соседней кнопкой", () => {
     fetchOk({});
     render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
