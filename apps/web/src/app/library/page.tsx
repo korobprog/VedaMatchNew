@@ -5,9 +5,11 @@ import { effectiveLineageIds, isLineagePreference } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { LineagePrompt } from "@/components/lineage-prompt";
 import { LineageStatus } from "@/components/lineage-status";
-import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
-import { currentLineageChoice } from "@/components/library/lineage-filter";
-import { profileMaterialFilters } from "@/lib/material-filters";
+import {
+  MATERIAL_FILTERS_HREF,
+  MATERIAL_FILTERS_LABEL,
+  profileMaterialFilters,
+} from "@/lib/material-filters";
 import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import {
   getLibraryCategoryTree,
@@ -40,8 +42,9 @@ export default async function LibraryPage({
 
   const params = await searchParams;
   // Та же арифметика, что на сервере: явный `?lineage=` в адресе сильнее
-  // настройки Образования, та — сильнее «Фильтров материалов» с главной
-  // (VED-617). Подпись обязана говорить ровно то, что применил API.
+  // «Фильтров материалов» с главной (VED-617). Своей кнопки линии у
+  // Образования больше нет (VED-628). Подпись обязана говорить ровно то, что
+  // применил API.
   const explicitLineage =
     typeof params.lineage === "string" && isLineagePreference(params.lineage)
       ? params.lineage
@@ -58,20 +61,10 @@ export default async function LibraryPage({
   ]);
   const locale = preferences?.uiLanguage ?? "ru";
   const roots = tree ?? [];
-  const preference = preferences?.lineage ?? null;
-  const materialFilters = profileMaterialFilters(user);
   const appliedLineageIds = effectiveLineageIds(
-    explicitLineage ?? preference,
-    materialFilters,
+    explicitLineage,
+    profileMaterialFilters(user),
   );
-  const lineageChoice = currentLineageChoice({
-    explicit: explicitLineage,
-    preference,
-    portalLineages: materialFilters.lineages,
-  });
-  // Кнопки линий видны всем (VED-395): у ищущего без настройки нажата «все
-  // линии», и выдача та же, что была, — но сузить её он теперь может в одно
-  // касание, а не через профиль.
 
   // «Упорядочить» — у тех, кто может переставлять рубрики.
   const canOrganize = roots.some((root) => root.canMove);
@@ -96,15 +89,18 @@ export default async function LibraryPage({
           <p className="mt-1 text-sm text-text-2">{t(locale, "service.subtitle")}</p>
           <LineageStatus
             lineageIds={appliedLineageIds}
-            settingsHref="#lineage-switch"
+            settingsHref={MATERIAL_FILTERS_HREF}
             className="mt-1"
           />
         </div>
 
         {/* Ряды кнопок по просьбе заказчика (VED-517): «Добавить»,
-            «Избранное», язык — слева направо; ниже «Фильтры» и
-            «Упорядочить». */}
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+            «Избранное», язык — слева направо; ниже «Упорядочить».
+            Кнопки «Фильтры» по линиям нет (VED-628): линии выбирают
+            «Фильтры материалов» на главной. */}
+        <div
+          className={`${canOrganize ? "mb-2" : "mb-6"} flex flex-wrap items-center gap-2`}
+        >
           <Link
             href="/library/add"
             className="btn-mint inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold shadow-[0_0_12px_var(--vm-glow-mint)]"
@@ -122,19 +118,11 @@ export default async function LibraryPage({
               закладками Образования, то же, что в рубриках. */}
           <LibraryBookmarksDialog locale={locale} />
         </div>
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          {/* Якорь `#lineage-switch` прежний: на него ведут «настроить» в
-              подписи и подсказка выбрать линию со страниц рубрик. */}
-          <div id="lineage-switch" className="scroll-mt-24">
-            <LibraryLineageFilter
-              locale={locale}
-              current={lineageChoice}
-              preference={preference}
-              portalLineages={materialFilters.lineages}
-            />
+        {canOrganize && (
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <LibraryOrganizeButton locale={locale} />
           </div>
-          {canOrganize && <LibraryOrganizeButton locale={locale} />}
-        </div>
+        )}
 
         {/* «Содержание» (VED-538) — оглавление текстовых материалов всего
             Образования. */}
@@ -144,8 +132,8 @@ export default async function LibraryPage({
           <LineagePrompt
             user={user}
             serviceName="Образования"
-            settingsHref="#lineage-switch"
-            settingsLabel="кнопкой «Фильтры»"
+            settingsHref={MATERIAL_FILTERS_HREF}
+            settingsLabel={MATERIAL_FILTERS_LABEL}
           />
         )}
 

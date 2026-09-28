@@ -1711,7 +1711,7 @@ describe('LibraryEntriesService — духовная линия', () => {
     expect(whereOf(prisma)).not.toHaveProperty('AND');
   });
 
-  it('настройка Образования сильнее профиля', async () => {
+  it('прежняя настройка линии Образования не действует (VED-628)', async () => {
     const prisma = prismaMock();
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
@@ -1726,10 +1726,9 @@ describe('LibraryEntriesService — духовная линия', () => {
     await service.feed({}, 'user-1');
 
     expect(whereOf(prisma).AND).toEqual([
-      {
-        OR: [{ lineage: 'sri_chaitanya_saraswat_math' }, { lineage: null }],
-      },
+      { OR: [{ lineage: 'iskcon' }, { lineage: null }] },
     ]);
+    expect(prisma.libraryPreference.findUnique).not.toHaveBeenCalled();
   });
 
   it('явный lineage=all в запросе снимает фильтр линии', async () => {
@@ -1742,22 +1741,6 @@ describe('LibraryEntriesService — духовная линия', () => {
     const { service } = build(prisma);
 
     await service.feed({ lineage: 'all' }, 'user-1');
-
-    expect(whereOf(prisma)).not.toHaveProperty('AND');
-    expect(prisma.libraryPreference.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('настройка Образования «all» сильнее линии из фильтров', async () => {
-    const prisma = prismaMock();
-    prisma.user.findUnique.mockResolvedValue({
-      spiritualStage: 'devotee',
-      lineage: 'iskcon',
-      showAllStages: true,
-    });
-    prisma.libraryPreference.findUnique.mockResolvedValue({ lineage: 'all' });
-    const { service } = build(prisma);
-
-    await service.feed({}, 'user-1');
 
     expect(whereOf(prisma)).not.toHaveProperty('AND');
   });

@@ -720,7 +720,7 @@ describe('LibraryCategoriesService — авторы чужих линий (VED-6
     expect(page.hiddenChildrenCount).toBe(0);
   });
 
-  it('«Всё» в настройке Образования сильнее фильтров с главной', async () => {
+  it('прежняя настройка Образования «Всё» больше не действует (VED-628)', async () => {
     const page = await withViewer(['iskcon'], 'all').page(
       'acharyas',
       'viewer-1',
@@ -731,7 +731,10 @@ describe('LibraryCategoriesService — авторы чужих линий (VED-6
       },
     );
 
-    expect(page.children).toHaveLength(3);
+    expect(page.children.map((child) => child.slug)).toEqual([
+      'prabhupada',
+      'rupa',
+    ]);
   });
 
   it('прямая ссылка на автора чужой линии открывается', async () => {

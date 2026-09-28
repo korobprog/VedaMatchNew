@@ -2,14 +2,13 @@ import {
   effectiveLineageIds,
   isLineagePreference,
   resolveMaterialFilters,
-  toLineagePreference,
   type LineageId,
   type MaterialFilters,
 } from '@vedamatch/shared';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { MATERIAL_FILTERS_SELECT } from './audience-stage-filter';
 
-type ViewerPrisma = Pick<PrismaService, 'user' | 'libraryPreference'>;
+type ViewerPrisma = Pick<PrismaService, 'user'>;
 
 /**
  * «Фильтры материалов» зрителя (VED-617): ступени и линии с главной, а без
@@ -31,23 +30,20 @@ export async function loadViewerMaterialFilters(
 
 /**
  * Какие линии видит зритель в Образовании: `null` — все. Явный параметр
- * запроса сильнее настройки Образования, та — сильнее «Фильтров материалов»
- * с главной; без настройки действуют они (VED-617). Одно правило на ленту
- * и на список авторов (VED-621).
+ * запроса (ссылка «показать все линии») сильнее «Фильтров материалов» с
+ * главной; без него действуют они (VED-617). Одно правило на ленту и на
+ * список авторов (VED-621).
+ *
+ * Своей настройки линии у Образования больше нет (VED-628): кнопку
+ * «Фильтры» убрали как дубль «Фильтров материалов», и записанная ею раньше
+ * `LibraryPreference.lineage` не действует — иначе её нечем было бы снять.
  */
-export async function loadViewerLineageIds(
-  prisma: ViewerPrisma,
-  viewerId: string | undefined,
+export function viewerLineageIds(
   explicit: string | undefined,
   filters: MaterialFilters,
-): Promise<LineageId[] | null> {
+): LineageId[] | null {
   if (explicit !== undefined && isLineagePreference(explicit) && explicit) {
     return effectiveLineageIds(explicit, filters);
   }
-  if (!viewerId) return null;
-  const preference = await prisma.libraryPreference.findUnique({
-    where: { userId: viewerId },
-    select: { lineage: true },
-  });
-  return effectiveLineageIds(toLineagePreference(preference?.lineage), filters);
+  return effectiveLineageIds(null, filters);
 }
