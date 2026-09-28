@@ -82,6 +82,15 @@ describe("buildAdvisorCards: порядок", () => {
   });
 });
 
+describe("buildAdvisorCards: входящие в Знакомствах", () => {
+  it("«Ответить» ведёт во входящие лайки, а не в ленту анкет (VED-597)", () => {
+    const [card] = buildAdvisorCards({ ...calm, unionIncomingLikes: 1 });
+    expect(card.id).toBe("union-incoming");
+    expect(card.actionLabel).toBe("Ответить");
+    expect(card.href).toBe("/union/likes");
+  });
+});
+
 describe("greetFirst", () => {
   it("называет имя только в первой карточке", () => {
     const cards = greetFirst(

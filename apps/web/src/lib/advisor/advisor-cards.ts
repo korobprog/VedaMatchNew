@@ -128,7 +128,10 @@ function todoCards(input: AdvisorInput): AdvisorCard[] {
       service: "union",
       text: `${n} ${plural(n, "человек ждёт", "человека ждут", "человек ждут")} вашего ответа в Знакомствах`,
       actionLabel: "Ответить",
-      href: "/union",
+      // VED-597: не лента `/union` — там первой лежит чужая анкета, и
+      // «Ответить» выглядело как переход не к тому человеку. Ждущие ответа
+      // живут во «Лайках», их же и считает `incomingPending`.
+      href: "/union/likes",
       weight: 90,
     });
   }
