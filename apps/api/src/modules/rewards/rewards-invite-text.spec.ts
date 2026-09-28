@@ -2,6 +2,7 @@ import {
   INVITE_TEXT_DEFAULT,
   INVITE_TEXT_MAX_LENGTH,
   buildInviteMessage,
+  linkifyTelegram,
   normalizeInviteText,
 } from './rewards-invite-text';
 
@@ -14,7 +15,7 @@ describe('buildInviteMessage', () => {
     expect(text).toContain(`как под IOS  так и под Android: ${LINK}`);
     // Заглавное название в шапке — не адрес, его не трогаем.
     expect(text.startsWith('🌎 VEDAMATCH.ru\n')).toBe(true);
-    expect(text).toContain('@vedamatch_bot');
+    expect(text.endsWith('через: https://t.me/vedamatch_bot')).toBe(true);
     expect(text.split(LINK)).toHaveLength(2);
   });
 
@@ -54,6 +55,35 @@ describe('buildInviteMessage', () => {
 
   it('без адреса и без {ссылка} дописывает ссылку последней строкой', () => {
     expect(buildInviteMessage('Привет!', LINK)).toBe(`Привет!\n\n${LINK}`);
+  });
+});
+
+describe('linkifyTelegram', () => {
+  it('упоминание бота становится ссылкой https://t.me/', () => {
+    expect(
+      linkifyTelegram('установить APK можно и через наш:\n@vedamatch_bot'),
+    ).toBe('установить APK можно и через наш:\nhttps://t.me/vedamatch_bot');
+    expect(linkifyTelegram('Бот (@VedaMatchBot).')).toBe(
+      'Бот (https://t.me/VedaMatchBot).',
+    );
+  });
+
+  it('t.me без схемы получает https://', () => {
+    expect(linkifyTelegram('Бот: t.me/vedamatch_bot')).toBe(
+      'Бот: https://t.me/vedamatch_bot',
+    );
+  });
+
+  it('не трогает готовые ссылки, почту и упоминания людей', () => {
+    const text =
+      'https://t.me/vedamatch_bot, http://t.me/x, info@vedamatch_bot.ru, @ivan, @robot_fan';
+    expect(linkifyTelegram(text)).toBe(text);
+  });
+
+  it('бот в тексте администратора тоже становится ссылкой', () => {
+    expect(
+      buildInviteMessage('Сайт: {ссылка}\nБот: @vedamatch_bot', LINK),
+    ).toBe(`Сайт: ${LINK}\nБот: https://t.me/vedamatch_bot`);
   });
 });
 
