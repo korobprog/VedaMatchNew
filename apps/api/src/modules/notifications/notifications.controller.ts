@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Headers,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -29,6 +30,7 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { NotificationsService } from './notifications.service';
+import { parseShownReceipt } from './push-receipt';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -53,6 +55,20 @@ export class NotificationsController {
   ): Promise<{ ok: true }> {
     await this.notifications.saveSubscription(user.sub, body, userAgent);
     return { ok: true };
+  }
+
+  /**
+   * Service worker показал уведомление (VED-327). Без `AuthGuard`: у воркера
+   * нет ни cookie, ни токена, а подписку и так называет её секретный
+   * `endpoint`. Ответ один и тот же для знакомой и незнакомой подписки —
+   * иначе ручка отвечала бы на перебор адресов.
+   */
+  @Post('shown')
+  @HttpCode(204)
+  async shown(@Body() body: unknown): Promise<void> {
+    const receipt = parseShownReceipt(body);
+    if (!receipt) throw new BadRequestException('Неверная квитанция показа');
+    await this.notifications.recordShown(receipt);
   }
 
   @UseGuards(AuthGuard)

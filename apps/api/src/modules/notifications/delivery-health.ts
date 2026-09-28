@@ -64,6 +64,12 @@ export interface DeliveryPointHealth {
   failureCount: number;
   /** Подтверждение от самого клиента; у строк до VED-314 его нет. */
   lastSeenAt: Date | null;
+  /**
+   * Клиент показал уведомление (VED-327) — есть только у веб-подписки.
+   * Сильнейший из сигналов жизни, но ненадёжный: его отсутствие ничего не
+   * доказывает, поэтому он лишь дополняет `lastSeenAt`.
+   */
+  lastShownAt?: Date | null;
   deadSince: Date | null;
 }
 
@@ -76,10 +82,15 @@ function silentFor(point: DeliveryPointHealth, now: Date): number {
   return now.getTime() - since.getTime();
 }
 
-/** Клиент сам объявлялся недавно — значит он жив, что бы ни говорил посредник. */
+/**
+ * Клиент сам объявлялся недавно — значит он жив, что бы ни говорил посредник.
+ * Объявиться он может двумя путями: пересохранить подписку при запуске
+ * (`lastSeenAt`) или подтвердить показ уведомления (`lastShownAt`, VED-327).
+ */
 function confirmedByClient(point: DeliveryPointHealth, now: Date): boolean {
-  if (!point.lastSeenAt) return false;
-  return now.getTime() - point.lastSeenAt.getTime() < DELIVERY_SILENCE_MS;
+  return [point.lastSeenAt, point.lastShownAt].some(
+    (at) => at != null && now.getTime() - at.getTime() < DELIVERY_SILENCE_MS,
+  );
 }
 
 /**

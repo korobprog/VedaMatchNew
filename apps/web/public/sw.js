@@ -112,15 +112,53 @@ function fetchAndStore(request) {
 }
 
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch {
-    return;
-  }
-  event.waitUntil(showNotificationUnlessOpen(payload));
+  event.waitUntil(showNotificationUnlessOpen(readPush(event.data)));
 });
+
+/**
+ * Разбор данных пуша. Пустой или битый пуш — не повод промолчать: пуш без
+ * показанного уведомления Safari считает «тихим» и за несколько таких
+ * отзывает подписку (VED-313), Chrome вместо нас показывает служебное «сайт
+ * обновился в фоне». Общее уведомление, ведущее на главную, лучше обоих.
+ */
+function readPush(data) {
+  if (data) {
+    try {
+      const payload = data.json();
+      if (payload && typeof payload === "object") return payload;
+    } catch {
+      // Ниже — общее уведомление.
+    }
+  }
+  return { title: "VedaMatch", body: "Новое уведомление", url: "/" };
+}
+
+/**
+ * Подписка у службы доставки Apple — Safari на iPhone и iPad (сайт на
+ * домашнем экране) и на Mac. Хост `endpoint` — не секрет, секрет — путь.
+ */
+function isApplePushEndpoint(endpoint) {
+  if (typeof endpoint !== "string") return false;
+  try {
+    return /(^|\.)push\.apple\.com$/.test(new URL(endpoint).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Можно ли погасить уведомление, раз человек смотрит на тот же экран. У Apple
+ * нельзя: каждый доставленный пуш обязан закончиться видимым уведомлением,
+ * иначе после нескольких «тихих» Safari молча отзывает подписку — и на айфоне
+ * пуши перестают приходить совсем, без единой ошибки на сервере (VED-313).
+ * Один лишний баннер поверх открытой беседы дешевле.
+ */
+async function maySuppressNotification() {
+  const subscription = await self.registration.pushManager
+    .getSubscription()
+    .catch(() => null);
+  return !isApplePushEndpoint(subscription?.endpoint);
+}
 
 async function showNotificationUnlessOpen(payload) {
   const windows = await self.clients.matchAll({
@@ -136,13 +174,13 @@ async function showNotificationUnlessOpen(payload) {
   );
   if (focused) {
     focused.postMessage({ type: "push-received", payload });
-    return;
+    if (await maySuppressNotification()) return;
   }
   // Входящий звонок: кнопки прямо в уведомлении и настойчивость — оно не
   // должно свернуться само, пока звонят. Тег «call:» ставит API.
   const isCall = typeof payload.tag === "string" && payload.tag.startsWith("call:");
-  await self.registration.showNotification(payload.title, {
-    body: payload.body,
+  await self.registration.showNotification(payload.title || "VedaMatch", {
+    body: payload.body ?? "",
     tag: payload.tag,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
@@ -158,13 +196,58 @@ async function showNotificationUnlessOpen(payload) {
         }
       : {}),
   });
+  await confirmShown(payload.receipt);
+}
+
+/**
+ * Подтверждение показа (VED-327): уведомление уже на экране — сообщаем
+ * серверу, что пуш дошёл до человека, а не только до службы доставки.
+ *
+ * Адрес и id отправки кладёт в пуш сам API (`receipt`): у воркера нет ни
+ * адреса API, ни входа, поэтому подписку называет её `endpoint`. Сообщаем
+ * только факт показа — нажатие на уведомление и время прочтения никуда не
+ * уходят. Ошибка сети — не беда: отсутствие подтверждения подписку мёртвой
+ * не делает, и показанное уведомление от неё не пострадает.
+ */
+async function confirmShown(receipt) {
+  if (!receipt || typeof receipt.id !== "string") return;
+  if (!isReceiptUrl(receipt.url)) return;
+  try {
+    const subscription = await self.registration.pushManager.getSubscription();
+    if (!subscription) return;
+    await fetch(receipt.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint, id: receipt.id }),
+      credentials: "omit",
+      keepalive: true,
+    });
+  } catch {
+    // Подтверждение ненадёжно по природе — повторять не за чем.
+  }
+}
+
+/** Квитанцию отправляем только по https (и на localhost при разработке). */
+function isReceiptUrl(url) {
+  if (typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:") return true;
+    return (
+      parsed.protocol === "http:" &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
 }
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   let url = event.notification.data?.url ?? "/";
   // «Отклонить» из уведомления: страница откроется с меткой и сама
-  // отклонит звонок — сервис-воркер не знает адреса API и не ходит в него.
+  // отклонит звонок: адреса API сервис-воркер не знает (в пуше есть только
+  // адрес квитанции показа, VED-327), а отклонение требует входа.
   if (event.action === "decline") url += (url.includes("?") ? "&" : "?") + "callAction=decline";
   if (event.action === "answer") url += (url.includes("?") ? "&" : "?") + "callAction=answer";
   event.waitUntil(openTarget(url));

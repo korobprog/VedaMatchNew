@@ -33,6 +33,10 @@ import {
   type TreeRow,
 } from './category-tree';
 import { isCategoryInfoRejection, pickCategoryInfo } from './category-info';
+import {
+  isCategoryPageTitleRejection,
+  pickCategoryPageTitle,
+} from './category-page-title';
 
 /** Выше этого сходства создание требует явного подтверждения пользователем. */
 export const SIMILARITY_BLOCK_THRESHOLD = 0.75;
@@ -70,6 +74,8 @@ type CategoryRow = TreeRow & {
   infoBio: string | null;
   infoResources: string | null;
   infoSchedule: string | null;
+  pageTitleRu: string | null;
+  pageTitleEn: string | null;
 };
 
 const CATEGORY_SELECT = {
@@ -91,6 +97,8 @@ const CATEGORY_SELECT = {
   infoBio: true,
   infoResources: true,
   infoSchedule: true,
+  pageTitleRu: true,
+  pageTitleEn: true,
 } satisfies Prisma.LibraryCategorySelect;
 
 @Injectable()
@@ -172,7 +180,9 @@ export class LibraryCategoriesService {
       .map(toAncestor);
 
     return {
-      category: toDto(target),
+      // Свой заголовок страницы (VED-394) нужен только ей самой: плитки,
+      // путь и чипы держат общее название.
+      category: { ...toDto(target), ...pageTitleOf(target) },
       ancestors,
       // «Информацию» (VED-553) показывает плитка автора — то есть ребёнок
       // на странице рубрики. В дереве и у самой рубрики она лишний груз.
@@ -357,6 +367,23 @@ export class LibraryCategoriesService {
       data.normalizedEn = normalizeTitle(titleEn);
     }
 
+    // Заголовок страницы (VED-394) сравнивается с названием, которое будет
+    // после этой же правки: совпал — хранится как «нет своего».
+    const pageTitle = pickCategoryPageTitle(body as Record<string, unknown>, {
+      titleRu:
+        data.titleRu !== undefined
+          ? (data.titleRu as string | null)
+          : existing.titleRu,
+      titleEn:
+        data.titleEn !== undefined
+          ? (data.titleEn as string | null)
+          : existing.titleEn,
+    });
+    if (isCategoryPageTitleRejection(pageTitle)) {
+      throw new BadRequestException(pageTitle);
+    }
+    Object.assign(data, pageTitle);
+
     if (body.descriptionRu !== undefined || body.descriptionEn !== undefined) {
       const descriptionRu =
         body.descriptionRu !== undefined
@@ -400,6 +427,7 @@ export class LibraryCategoriesService {
         viewerIsAdmin,
       }),
       ...infoOf(updated),
+      ...pageTitleOf(updated),
     };
   }
 
@@ -604,6 +632,12 @@ function infoOf(
     infoResources: row.infoResources,
     infoSchedule: row.infoSchedule,
   };
+}
+
+function pageTitleOf(
+  row: Pick<CategoryRow, 'pageTitleRu' | 'pageTitleEn'>,
+): Pick<LibraryCategoryDto, 'pageTitleRu' | 'pageTitleEn'> {
+  return { pageTitleRu: row.pageTitleRu, pageTitleEn: row.pageTitleEn };
 }
 
 function toAncestor(row: CategoryRow): LibraryCategoryAncestor {

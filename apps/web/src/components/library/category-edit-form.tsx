@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { LibraryCategoryDto, LibraryLocale } from "@vedamatch/shared";
 import { Pencil } from "lucide-react";
 import { pickLocalized, t } from "./i18n";
+import { pageTitleFormValues } from "./category-page-title";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 
@@ -22,6 +23,7 @@ export function CategoryEditForm({
   open: openProp,
   onClose,
   autoFocus = false,
+  target = "title",
 }: {
   locale: LibraryLocale;
   category: LibraryCategoryDto;
@@ -46,6 +48,13 @@ export function CategoryEditForm({
    * клавиатура и экранный диктор остаются на кнопке и формы не замечают.
    */
   autoFocus?: boolean;
+  /**
+   * Что правит форма. `title` — название рубрики, одно на плитку, путь и
+   * чипы. `pageTitle` — только заголовок страницы рубрики (VED-394): так
+   * правит кнопка «Редактировать» в окне рубрики, чтобы остальные места
+   * сохранили прежнее название. Пустой заголовок — снова как название.
+   */
+  target?: "title" | "pageTitle";
 }) {
   const router = useRouter();
   const [openState, setOpenState] = useState(false);
@@ -56,8 +65,12 @@ export function CategoryEditForm({
     if (controlled) onClose?.();
     else setOpenState(false);
   };
-  const [titleRu, setTitleRu] = useState(category.titleRu ?? "");
-  const [titleEn, setTitleEn] = useState(category.titleEn ?? "");
+  const pageTitle = target === "pageTitle";
+  const initial = pageTitle
+    ? pageTitleFormValues(category)
+    : { ru: category.titleRu ?? "", en: category.titleEn ?? "" };
+  const [titleRu, setTitleRu] = useState(initial.ru);
+  const [titleEn, setTitleEn] = useState(initial.en);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +93,7 @@ export function CategoryEditForm({
 
   async function submit() {
     setError(null);
-    if (!titleRu.trim() && !titleEn.trim()) {
+    if (!pageTitle && !titleRu.trim() && !titleEn.trim()) {
       setError(t(locale, "add.titleRequired"));
       return;
     }
@@ -90,10 +103,17 @@ export function CategoryEditForm({
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          titleRu: titleRu.trim() || null,
-          titleEn: titleEn.trim() || null,
-        }),
+        body: JSON.stringify(
+          pageTitle
+            ? {
+                pageTitleRu: titleRu.trim() || null,
+                pageTitleEn: titleEn.trim() || null,
+              }
+            : {
+                titleRu: titleRu.trim() || null,
+                titleEn: titleEn.trim() || null,
+              },
+        ),
       });
       if (!res.ok) {
         setError(t(locale, "add.failed"));
@@ -131,16 +151,29 @@ export function CategoryEditForm({
       onClick={(event) => event.stopPropagation()}
       className="relative z-10 mt-2 w-64 max-w-full rounded-xl border border-glass-brd bg-bg-1 p-3 text-sm shadow-xl"
     >
-      <p className="mb-2 text-text-2">
-        {t(locale, "category.edit")}:{" "}
-        {pickLocalized(locale, {
-          ru: category.titleRu,
-          en: category.titleEn,
-        })}
-      </p>
+      {pageTitle ? (
+        <p className="mb-2 text-text-2">
+          <span className="block text-text-1">
+            {t(locale, "category.pageTitle")}
+          </span>
+          {t(locale, "category.pageTitleHint")}{" "}
+          «{pickLocalized(locale, {
+            ru: category.titleRu,
+            en: category.titleEn,
+          })}»
+        </p>
+      ) : (
+        <p className="mb-2 text-text-2">
+          {t(locale, "category.edit")}:{" "}
+          {pickLocalized(locale, {
+            ru: category.titleRu,
+            en: category.titleEn,
+          })}
+        </p>
+      )}
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="text-text-1">
-          {t(locale, "category.titleRu")}
+          {t(locale, pageTitle ? "category.pageTitleRu" : "category.titleRu")}
           <input
             value={titleRu}
             onChange={(event) => setTitleRu(event.target.value)}
@@ -150,7 +183,7 @@ export function CategoryEditForm({
           />
         </label>
         <label className="text-text-1">
-          {t(locale, "category.titleEn")}
+          {t(locale, pageTitle ? "category.pageTitleEn" : "category.titleEn")}
           <input
             value={titleEn}
             onChange={(event) => setTitleEn(event.target.value)}

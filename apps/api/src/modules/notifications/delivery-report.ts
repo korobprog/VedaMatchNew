@@ -33,6 +33,7 @@ export interface WebSubscriptionRow extends DeliveryPointHealth {
   userId: string;
   userAgent: string | null;
   lastFailureAt: Date | null;
+  lastShownAt: Date | null;
 }
 
 export interface AppDeviceRow extends DeliveryPointHealth {
@@ -79,6 +80,8 @@ function toPoint(
     lastFailureAt: row.lastFailureAt?.toISOString() ?? null,
     failureCount: row.failureCount,
     lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+    // Подтверждение показа есть только у веб-подписки (VED-327).
+    lastShownAt: row.lastShownAt?.toISOString() ?? null,
     deadSince: row.deadSince?.toISOString() ?? null,
   };
 }

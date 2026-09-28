@@ -54,6 +54,7 @@ export class NotificationDeliveryAdminService {
           userAgent: true,
           lastFailureAt: true,
           ...deliveryHealthSelect,
+          lastShownAt: true,
         },
       }),
       this.prisma.notificationDevice.findMany({

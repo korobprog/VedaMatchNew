@@ -218,6 +218,8 @@ function categoryRecord(overrides: Record<string, unknown> = {}) {
     infoBio: null,
     infoResources: null,
     infoSchedule: null,
+    pageTitleRu: null,
+    pageTitleEn: null,
     ...overrides,
   };
 }
@@ -285,6 +287,49 @@ describe('LibraryCategoriesService.update', () => {
     await expect(
       service.update('author-1', false, 'missing', { titleRu: 'x' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('LibraryCategoriesService.update — заголовок страницы (VED-394)', () => {
+  it('changes only the page heading, leaving the rubric name as it was', async () => {
+    const prisma = updateMock();
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const result = await service.update('author-1', false, 'category-1', {
+      pageTitleRu: 'Лекции Е. С. Бхактивигьяны Госвами',
+    });
+
+    const [[{ data }]] = (
+      prisma.libraryCategory.update as jest.Mock<
+        unknown,
+        [{ data: Record<string, unknown> }]
+      >
+    ).mock.calls;
+    expect(data).toEqual({ pageTitleRu: 'Лекции Е. С. Бхактивигьяны Госвами' });
+    expect(result).toMatchObject({
+      titleRu: 'Лекции по Гите',
+      pageTitleRu: 'Лекции Е. С. Бхактивигьяны Госвами',
+    });
+  });
+
+  it('keeps the same owner rule as the name', async () => {
+    const prisma = updateMock();
+    const service = new LibraryCategoriesService(prisma as never);
+
+    await expect(
+      service.update('other-user', false, 'category-1', { pageTitleRu: 'x' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.libraryCategory.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an overlong heading', async () => {
+    const service = new LibraryCategoriesService(updateMock() as never);
+
+    await expect(
+      service.update('author-1', false, 'category-1', {
+        pageTitleRu: 'a'.repeat(121),
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
@@ -413,6 +458,41 @@ describe('LibraryCategoriesService.page — «Информация» (VED-553)',
       infoSchedule: 'Пн 19:00',
       canEdit: false,
     });
+  });
+});
+
+describe('LibraryCategoriesService.page — заголовок страницы (VED-394)', () => {
+  it('gives the heading to the page itself, not to the path or the tiles', async () => {
+    const prisma = prismaMock();
+    prisma.libraryCategory.findMany = jest.fn().mockResolvedValue([
+      categoryRecord({
+        id: 'root-1',
+        parentId: null,
+        path: '',
+        slug: 'guru',
+        pageTitleRu: 'Гуру — все лекции',
+      }),
+      categoryRecord({
+        id: 'author-a',
+        parentId: 'root-1',
+        path: '.root-1.',
+        slug: 'bvgm',
+        titleRu: 'Е. С. Бхактивигьяна Г. М.',
+        pageTitleRu: 'Бхактивигьяна Госвами',
+      }),
+    ]);
+    const service = new LibraryCategoriesService(prisma as never);
+
+    const author = await service.page('bvgm', 'viewer-1');
+    expect(author.category).toMatchObject({
+      titleRu: 'Е. С. Бхактивигьяна Г. М.',
+      pageTitleRu: 'Бхактивигьяна Госвами',
+    });
+    expect(author.ancestors[0]).not.toHaveProperty('pageTitleRu');
+
+    const parent = await service.page('guru', 'viewer-1');
+    expect(parent.children[0]).not.toHaveProperty('pageTitleRu');
+    expect(parent.children[0].titleRu).toBe('Е. С. Бхактивигьяна Г. М.');
   });
 });
 

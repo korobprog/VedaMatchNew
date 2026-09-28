@@ -1934,6 +1934,13 @@ model LibraryCategory {
   infoResources String?
   infoSchedule  String?
 
+  /// Заголовок страницы рубрики, отдельный от названия (VED-394). Кнопка
+  /// «Редактировать» в окне рубрики правит только его: плитка у родителя,
+  /// путь «Все рубрики › …» и чипы на карточках держат `titleRu`/`titleEn`.
+  /// `null` — заголовок совпадает с названием.
+  pageTitleRu String?
+  pageTitleEn String?
+
   entries LibraryEntryCategory[]
 
   @@index([parentId, position])
@@ -2255,31 +2262,39 @@ model LibraryShlokaImage {
 /// Подписка браузера на веб-пуши. У одного пользователя их несколько:
 /// телефон, ноутбук, планшет. Ключ подписки — endpoint, его выдаёт браузер.
 model PushSubscription {
-  id            String    @id @default(uuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint      String    @unique
-  p256dh        String
-  auth          String
-  userAgent     String?
-  createdAt     DateTime  @default(now())
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint        String    @unique
+  p256dh          String
+  auth            String
+  userAgent       String?
+  createdAt       DateTime  @default(now())
   /// Когда служба доставки браузера последний раз ПРИНЯЛА пуш (VED-314).
   /// «Приняла» — не «человек увидел»: браузер, который не открывали месяц,
   /// принимает пуш так же, как живой. Но пустая отметка при накопленных
   /// неудачах — уже повод считать подписку мёртвой, см. `delivery-health.ts`.
-  lastSuccessAt DateTime?
+  lastSuccessAt   DateTime?
   /// Последний отказ службы доставки (кроме `gone` — по нему строка удаляется).
-  lastFailureAt DateTime?
+  lastFailureAt   DateTime?
   /// Неудачи подряд. Обнуляется любым успехом и повторной регистрацией.
-  failureCount  Int       @default(0)
+  failureCount    Int       @default(0)
   /// Браузер подтвердил подписку: страница портала при загрузке пересохраняет
   /// её (`syncPushSubscription`). Единственный сигнал жизни, идущий от самого
   /// клиента, — поэтому свежая отметка защищает подписку от удаления.
-  lastSeenAt    DateTime?
+  lastSeenAt      DateTime?
   /// Когда правило впервые сочло подписку мёртвой. Сначала помечаем и держим
   /// отметку на глазах в админке, удаляем только по истечении отсрочки: терять
   /// подписку человека, который был в отпуске, дороже, чем лишняя строка.
-  deadSince     DateTime?
+  deadSince       DateTime?
+  /// Service worker ПОКАЗАЛ уведомление и сообщил об этом (VED-327): не
+  /// «служба доставки приняла», а «баннер на экране». Сигнал ненадёжен по
+  /// природе — браузер закрыт, сеть пропала, — поэтому его отсутствие подписку
+  /// мёртвой не делает, а наличие защищает так же, как `lastSeenAt`.
+  lastShownAt     DateTime?
+  /// Какой пуш подтверждён последним: повторная отметка того же пуша ничего
+  /// не меняет. Случайный id отправки, а не id уведомления в ленте.
+  lastShownPushId String?
 
   @@index([userId])
 }
