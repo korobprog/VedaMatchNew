@@ -191,7 +191,7 @@ export function WelcomeWizard({
                   key={value}
                   className={`cursor-pointer rounded-xl border px-4 py-2 text-sm transition ${
                     gender === value
-                      ? "border-magenta bg-magenta/10 text-text-0"
+                      ? "border-glass-brd bg-magenta/10 font-semibold text-text-0"
                       : "border-glass-brd text-text-1 hover:text-text-0"
                   }`}
                 >

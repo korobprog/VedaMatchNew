@@ -92,7 +92,7 @@ export function CategoryOrderMenu({
         }}
         aria-label={done}
         title={done}
-        className={`${LIBRARY_ICON_BUTTON} border-magenta text-text-0`}
+        className={`${LIBRARY_ICON_BUTTON} border-glass-brd text-text-0`}
       >
         <Check aria-hidden className="size-4" />
       </button>
@@ -111,11 +111,9 @@ export function CategoryOrderMenu({
         aria-label={`${label}: ${chosen}`}
         title={`${label}: ${chosen}`}
         onClick={() => setOpen((value) => !value)}
-        className={`${LIBRARY_ICON_BUTTON} ${
-          alphabetical
-            ? "border-magenta text-text-0"
-            : "border-glass-brd text-text-1 hover:text-text-0"
-        }`}
+        /* Без красной полоски при «По алфавиту» (VED-631): что выбрано,
+           видно по значку, в подписи кнопки и галочкой в меню. */
+        className={`${LIBRARY_ICON_BUTTON} border-glass-brd text-text-1 hover:text-text-0`}
       >
         {alphabetical ? (
           <ArrowDownAZ aria-hidden className="size-4" />

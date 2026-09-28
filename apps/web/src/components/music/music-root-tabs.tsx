@@ -40,7 +40,8 @@ export function MusicRootTabs({
   const tab =
     "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors";
   const idle = "border-glass-brd text-text-1 hover:text-text-0";
-  const selected = "border-magenta/40 bg-magenta/15 text-text-0";
+  // Выбор — подложкой, без розовой каёмки (VED-623).
+  const selected = "border-glass-brd bg-magenta/15 text-text-0";
 
   return (
     <nav aria-label="Направление">

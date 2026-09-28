@@ -91,7 +91,7 @@ export function MusicPlaylistVisibilityPicker({
             onClick={() => void choose(option.value)}
             className={`h-9 rounded-full border px-3.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
               current === option.value
-                ? "border-magenta/50 bg-glass text-text-0"
+                ? "border-glass-brd bg-magenta/10 text-text-0"
                 : "border-glass-brd text-text-1 hover:text-text-0"
             }`}
           >

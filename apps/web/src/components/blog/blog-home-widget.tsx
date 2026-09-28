@@ -334,9 +334,8 @@ export function BlogHomeWidget({
         aria-pressed={like?.liked ?? false}
         aria-label={likeLabel}
         title={likeLabel}
-        className={`${iconButton} hover:border-magenta/60 disabled:opacity-50 ${
-          like?.liked ? "border-magenta" : ""
-        }`}
+        /* Лайк виден закрашенным сердцем, без розовой каёмки (VED-623). */
+        className={`${iconButton} hover:border-magenta/60 disabled:opacity-50`}
       >
         <Heart
           aria-hidden
