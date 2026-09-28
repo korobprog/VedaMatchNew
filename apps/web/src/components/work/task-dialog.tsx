@@ -1272,9 +1272,15 @@ export function WorkTaskDialog({
                 VED-612: «опусти немного» — `bottom-0` вместо `bottom-3`.
                 Липкий отступ считается от края внутренних полей окна (p-4),
                 так что круг теперь в 16px от низа окна, а не в 28px, и
-                меньше заслоняет содержимое над собой. */}
+                меньше заслоняет содержимое над собой.
+                VED-612, «ещё ниже»: круг сдвинут `translate-y-3` на 12px в
+                нижнее поле окна — до края остаётся 4px. Сдвиг рисованием, а
+                не отрицательным `bottom`: так круг опускается одинаково и
+                прилипшим, и в конце прокрутки, и не выходит за окно (поле
+                p-4 глубже сдвига). «Сохранить» справа он не задевает —
+                полоса при нём отступает слева на pl-16. */}
             <div
-              className={`pointer-events-none sticky bottom-0 z-20 flex h-0 items-end ${saveBar ? "" : "has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10"}`}
+              className={`pointer-events-none sticky bottom-0 z-20 flex h-0 translate-y-3 items-end ${saveBar ? "" : "has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10"}`}
             >
               <CompactSoundButton
                 tone="mint"
