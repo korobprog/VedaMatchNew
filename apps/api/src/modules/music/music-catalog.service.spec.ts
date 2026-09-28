@@ -381,6 +381,39 @@ describe('MusicCatalogService — исполнители витрины', () => 
     };
     expect(args.take ?? Infinity).toBeGreaterThan(8);
   });
+
+  it('исполнители чужой линии скрыты по «Фильтрам материалов» (VED-621)', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'iskcon',
+      showAllStages: false,
+      materialFiltersSetAt: new Date(),
+      materialStages: [],
+      materialLineages: ['iskcon', 'ipbys'],
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.showcase('u1');
+
+    expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
+      where: {
+        AND: [
+          { OR: [{ lineage: { in: ['iskcon', 'ipbys'] } }, { lineage: null }] },
+        ],
+      },
+    });
+  });
+
+  it('без фильтра линий — все исполнители', async () => {
+    const { service: catalog, prisma } = service();
+
+    await catalog.showcase(null);
+
+    expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
+      where: { AND: [] },
+    });
+  });
 });
 
 // VED-237: «отображение всех аудиокниг должно находиться внутри этой

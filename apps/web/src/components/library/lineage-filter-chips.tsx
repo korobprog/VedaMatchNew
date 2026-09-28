@@ -157,15 +157,13 @@ export function LibraryLineageFilter({
         onClick={() => setOpen((value) => !value)}
         aria-label={iconOnly ? t(locale, "lineage.menu") : undefined}
         title={iconOnly ? t(locale, "lineage.menu") : undefined}
+        /* Без подсветки выбранного (VED-613, VED-623): цветом выбор
+           показывает только «Фильтры материалов» на главной. */
         className={`${
           iconOnly
             ? LIBRARY_ICON_BUTTON
             : "inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-4 text-sm transition-colors"
-        } ${
-          current === "all"
-            ? "border-glass-brd text-text-1 hover:text-text-0"
-            : "border-magenta text-text-0"
-        }`}
+        } border-glass-brd text-text-1 hover:text-text-0`}
       >
         <ListFilter aria-hidden className="size-4" />
         {!iconOnly && t(locale, "lineage.menu")}

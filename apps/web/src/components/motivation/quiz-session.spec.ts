@@ -6,6 +6,7 @@ import {
   nextQuestion,
   optionLook,
   pickAnswer,
+  quizPreloadUrls,
   quizVerdict,
 } from "./quiz-session";
 
@@ -91,5 +92,35 @@ describe("итог", () => {
   it("семя раунда — восемь знаков из букв и цифр", () => {
     expect(freshQuizSeed(() => 0)).toBe("00000000");
     expect(freshQuizSeed(() => 0.999999)).toMatch(/^[0-9a-z]{8}$/);
+  });
+});
+
+describe("quizPreloadUrls (VED-627)", () => {
+  const round = ["a.png", "b.png", "c.png", "d.png"].map((imageUrl) => ({
+    imageUrl,
+  }));
+
+  it("подгружает две следующие картинки", () => {
+    expect(quizPreloadUrls(round, 0)).toEqual(["b.png", "c.png"]);
+    expect(quizPreloadUrls(round, 1)).toEqual(["c.png", "d.png"]);
+  });
+
+  it("в конце раунда — сколько осталось, после него — ничего", () => {
+    expect(quizPreloadUrls(round, 2)).toEqual(["d.png"]);
+    expect(quizPreloadUrls(round, 3)).toEqual([]);
+    expect(quizPreloadUrls(round, 4)).toEqual([]);
+  });
+
+  it("не повторяет текущую и одинаковые", () => {
+    const same = [
+      { imageUrl: "a.png" },
+      { imageUrl: "a.png" },
+      { imageUrl: "b.png" },
+      { imageUrl: "b.png" },
+    ];
+    expect(quizPreloadUrls(same, 0, 3)).toEqual(["b.png"]);
+    expect(
+      quizPreloadUrls([{ imageUrl: "a.png" }, { imageUrl: "" }], 0),
+    ).toEqual([]);
   });
 });

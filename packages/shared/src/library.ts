@@ -172,6 +172,12 @@ export interface LibraryCategoryPageDto {
   /** От корня к родителю; сама рубрика не входит. */
   ancestors: LibraryCategoryAncestor[];
   children: LibraryCategoryDto[];
+  /**
+   * Подрубрики, спрятанные фильтрами линий зрителя (VED-621), — в `children`
+   * их нет. Раздел, где скрыты все авторы, не должен выглядеть страницей
+   * автора. Без `?filtered=true` — 0.
+   */
+  hiddenChildrenCount?: number;
 }
 
 export interface LibraryCategorySuggestion {

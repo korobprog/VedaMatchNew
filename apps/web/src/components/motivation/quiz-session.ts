@@ -85,3 +85,25 @@ export function freshQuizSeed(random: () => number = Math.random): string {
     .toString(36)
     .padStart(8, "0");
 }
+
+/** Сколько следующих картинок раунда подгружать заранее (VED-627). */
+export const QUIZ_PRELOAD_AHEAD = 2;
+
+/**
+ * Картинки следующих вопросов, которые стоит начать грузить, пока человек
+ * думает над текущим (VED-627): иначе каждая «Дальше» упирается в загрузку
+ * иллюстрации заново. Текущая и уже пройденные не нужны, повторы — тоже.
+ */
+export function quizPreloadUrls(
+  questions: readonly { imageUrl: string }[],
+  index: number,
+  ahead = QUIZ_PRELOAD_AHEAD,
+): string[] {
+  const current = questions[index]?.imageUrl;
+  const urls: string[] = [];
+  for (const next of questions.slice(index + 1, index + 1 + ahead)) {
+    const url = next.imageUrl;
+    if (url && url !== current && !urls.includes(url)) urls.push(url);
+  }
+  return urls;
+}

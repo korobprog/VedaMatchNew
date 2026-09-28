@@ -6,8 +6,9 @@ import { blogCategoryAssignOptions } from "./blog-feed-filters";
 
 /**
  * «Назначить категорию» в форме публикации и правки (VED-590): у каждого,
- * кто добавляет пост. Обычный список: пунктов пять, и на телефоне системный
- * выбор удобнее своего меню. `""` — «Без категории».
+ * кто добавляет пост. Обычный список: пунктов четыре, и на телефоне
+ * системный выбор удобнее своего меню. `""` — ещё не выбрана: пункт-подсказка
+ * виден, но не выбирается — без категории пост не публикуется.
  */
 export function BlogCategorySelect({
   value,
@@ -31,10 +32,16 @@ export function BlogCategorySelect({
         onChange={(event) =>
           onChange(event.target.value as BlogPostCategory | "")
         }
+        aria-required
         className="min-h-11 rounded-lg border border-glass-brd bg-bg-1 px-3 text-sm text-text-0 disabled:opacity-60"
       >
+        {value === "" && (
+          <option value="" disabled>
+            Выберите категорию
+          </option>
+        )}
         {blogCategoryAssignOptions().map((option) => (
-          <option key={option.value || "none"} value={option.value}>
+          <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}

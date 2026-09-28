@@ -14,12 +14,17 @@ import {
   createBlogPost,
 } from "@/lib/blog-client-api";
 import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
-import { BlogCategorySelect } from "./blog-category-select";
 import {
   BLOG_MEDIA_ACCEPT,
   isBlogVideoFile,
   pickBlogFiles,
 } from "./blog-file-pick";
+import {
+  blogCategoryRequestValue,
+  blogLineageRequestValue,
+  blogPostMarksHint,
+} from "./blog-post-marks";
+import { BlogPostMarksFields } from "./blog-post-marks-fields";
 import { BlogTextCounter } from "./blog-text-counter";
 import { blogTextLimitState } from "./blog-text-limit";
 
@@ -41,6 +46,8 @@ export function BlogComposer({
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [category, setCategory] = useState<BlogPostCategory | "">("");
+  /** `""` — линия не выбрана, `"all"` — осознанное «Для всех» (VED-590). */
+  const [lineage, setLineage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +55,11 @@ export function BlogComposer({
   const inputRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const counterId = useId();
+  const marksHintId = useId();
   const limit = blogTextLimitState(text);
+  // Без категории и линии пост не публикуется (VED-590): кнопка неактивна,
+  // а рядом сказано почему.
+  const marksHint = blogPostMarksHint(category, lineage);
 
   useEffect(() => {
     if (autoFocus) titleRef.current?.focus();
@@ -87,11 +98,14 @@ export function BlogComposer({
       setError(limit.label);
       return;
     }
+    const chosenCategory = blogCategoryRequestValue(category);
+    const chosenLineage = blogLineageRequestValue(lineage);
+    if (!chosenCategory || !chosenLineage) return;
 
     setPending(true);
     try {
       const created = await createBlogPost(
-        { title, text, category: category || null },
+        { title, text, category: chosenCategory, lineage: chosenLineage },
         files,
       );
       if (created.failed.length > 0) {
@@ -104,6 +118,7 @@ export function BlogComposer({
       setTitle("");
       setText("");
       setCategory("");
+      setLineage("");
       setFiles([]);
       onPublished?.(created.post);
     } catch (cause) {
@@ -153,9 +168,11 @@ export function BlogComposer({
       />
       <BlogTextCounter id={counterId} state={limit} />
       <BlogBlankLinesTool value={text} onChange={setText} disabled={pending} />
-      <BlogCategorySelect
-        value={category}
-        onChange={setCategory}
+      <BlogPostMarksFields
+        category={category}
+        lineage={lineage}
+        onCategoryChange={setCategory}
+        onLineageChange={setLineage}
         disabled={pending}
       />
 
@@ -209,7 +226,8 @@ export function BlogComposer({
         </label>
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || marksHint !== null}
+          aria-describedby={marksHint ? marksHintId : undefined}
           className="min-h-11 rounded-lg bg-mint px-4 py-2 text-sm font-semibold text-on-mint disabled:opacity-60"
         >
           {pending
@@ -220,6 +238,11 @@ export function BlogComposer({
         </button>
       </div>
 
+      {marksHint && (
+        <p id={marksHintId} className="mt-2 text-xs text-text-1">
+          {marksHint}
+        </p>
+      )}
       {error && (
         <p role="alert" className="mt-2 text-xs text-magenta">
           {error}

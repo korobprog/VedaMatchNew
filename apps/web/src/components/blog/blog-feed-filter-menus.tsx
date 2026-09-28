@@ -50,7 +50,6 @@ export function BlogCategoryFilter({
       label={blogCategoryFilterLabel(value)}
       menuLabel="Категории постов"
       icon={<Tags aria-hidden className="size-4" />}
-      active={value !== null}
       busy={pending}
     >
       {(close) =>
@@ -113,7 +112,6 @@ export function BlogLineageFilter({
       label={blogLineageFilterLabel(value)}
       menuLabel="Фильтр по организациям"
       icon={<Landmark aria-hidden className="size-4" />}
-      active={value !== null}
       busy={pending}
     >
       {(close) => (

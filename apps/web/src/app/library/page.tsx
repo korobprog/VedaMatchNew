@@ -39,8 +39,16 @@ export default async function LibraryPage({
   if (!user) redirectToLogin("/library");
 
   const params = await searchParams;
+  // Та же арифметика, что на сервере: явный `?lineage=` в адресе сильнее
+  // настройки Образования, та — сильнее «Фильтров материалов» с главной
+  // (VED-617). Подпись обязана говорить ровно то, что применил API.
+  const explicitLineage =
+    typeof params.lineage === "string" && isLineagePreference(params.lineage)
+      ? params.lineage
+      : null;
   const [tree, preferences, feed, communities, materials] = await Promise.all([
-    getLibraryCategoryTree(),
+    // Авторы чужих линий скрыты вместе с их материалами (VED-621).
+    getLibraryCategoryTree({ filtered: true, lineage: explicitLineage }),
     getLibraryPreferences(),
     getLibraryFeed(params),
     getLibraryCommunities(),
@@ -50,13 +58,6 @@ export default async function LibraryPage({
   ]);
   const locale = preferences?.uiLanguage ?? "ru";
   const roots = tree ?? [];
-  // Та же арифметика, что на сервере: явный `?lineage=` в адресе сильнее
-  // настройки Образования, та — сильнее «Фильтров материалов» с главной
-  // (VED-617). Подпись обязана говорить ровно то, что применил API.
-  const explicitLineage =
-    typeof params.lineage === "string" && isLineagePreference(params.lineage)
-      ? params.lineage
-      : null;
   const preference = preferences?.lineage ?? null;
   const materialFilters = profileMaterialFilters(user);
   const appliedLineageIds = effectiveLineageIds(

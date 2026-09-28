@@ -2,7 +2,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { BlogPostDto } from "@vedamatch/shared";
-import { setBlogPostCategory, setBlogPostLineage } from "@/lib/blog-client-api";
+import {
+  setBlogPostCategory,
+  setBlogPostLineage,
+  setOwnBlogPostLineage,
+} from "@/lib/blog-client-api";
 import { BlogPostView } from "./blog-post-view";
 
 vi.mock("next/navigation", () => ({
@@ -12,6 +16,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/blog-client-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/blog-client-api")>()),
   setBlogPostLineage: vi.fn(),
+  setOwnBlogPostLineage: vi.fn(),
   setBlogPostCategory: vi.fn(),
 }));
 
@@ -116,6 +121,28 @@ describe("«Линия» поста", () => {
     expect(
       await screen.findByRole("button", { name: "Разметка. Линия: ISKCON" }),
     ).toBeInTheDocument();
+  });
+
+  /* VED-590: «добавь возможность тем, кто публикует, назначать посту
+     линию, но только своим постам». */
+  it("автор назначает линию своему посту через свой адрес", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setOwnBlogPostLineage).mockResolvedValue(
+      makePost({ canEdit: true, lineage: "iskcon" }),
+    );
+    vi.mocked(setBlogPostLineage).mockClear();
+    render(<BlogPostView initial={makePost({ canEdit: true })} />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Разметка. Линия: для всех линий",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "ISKCON" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(setOwnBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
+    expect(setBlogPostLineage).not.toHaveBeenCalled();
   });
 });
 

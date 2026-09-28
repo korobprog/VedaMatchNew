@@ -24,10 +24,9 @@ describe("категории Блог-ленты", () => {
     expect(blogCategoryFilterOptions()[0].value).toBe("");
   });
 
-  it("назначение: «Без категории» вместо «Все»", () => {
+  it("назначение: только категории, без «Все» и «Без категории»", () => {
     const options = blogCategoryAssignOptions();
-    expect(options[0]).toEqual({ value: "", label: "Без категории" });
-    expect(options.slice(1).map((item) => item.value)).toEqual([
+    expect(options.map((item) => item.value)).toEqual([
       "knowledge",
       "news",
       "devotee_life",

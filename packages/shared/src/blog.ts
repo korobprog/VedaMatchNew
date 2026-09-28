@@ -10,7 +10,7 @@
 // точечный у поста. Участник срок не трогает — он просто постит один за
 // другим (VED-238).
 
-import type { LineageId } from './lineage';
+import type { LINEAGE_ALL, LineageId } from './lineage';
 
 /** Заголовок поста: он виден в ленте рядом с картинкой, поэтому короткий. */
 export const BLOG_POST_TITLE_MAX_LENGTH = 120;
@@ -225,7 +225,8 @@ export interface BlogPostDto {
   likeCount: number;
   /**
    * Духовная линия поста (VED-596); `null` — для всех линий. Назначает
-   * администратор (`canModerate`), лента фильтруется по `?lineage=`.
+   * автор при публикации (VED-590) и меняет автор или администратор, лента
+   * фильтруется по `?lineage=`.
    * Необязательное — установленные сборки приложения поля не знают.
    */
   lineage?: LineageId | null;
@@ -272,10 +273,19 @@ export interface CreateBlogPostRequest {
   title?: string | null;
   text: string;
   /**
-   * Категория (VED-590). При правке: поля нет — категория прежняя, `null`
-   * или пустая строка (multipart) — снять.
+   * Категория (VED-590). Веб-форма шлёт её всегда и без неё не публикует.
+   * Передано пустым — 400 `category_required`. Поля нет вовсе — пост без
+   * категории (установленные сборки приложения до обновления), при правке —
+   * категория прежняя. Репост поле не читает.
    */
   category?: BlogPostCategory | null;
+  /**
+   * Линия (VED-590): идентификатор справочника или `'all'` — «для всех».
+   * Передано пустым — 400 `lineage_required`: пустота не считается выбором
+   * «для всех». Поля нет вовсе — «для всех» при публикации (старые сборки
+   * приложения), прежняя линия при правке.
+   */
+  lineage?: LineageId | typeof LINEAGE_ALL | null;
 }
 
 /**
@@ -306,9 +316,12 @@ export interface BlogPostCategoryRequest {
   category: BlogPostCategory | null;
 }
 
-/** Линия поста (VED-596): идентификатор из справочника или `null` — для всех. */
+/**
+ * Линия поста (VED-596, VED-590): идентификатор из справочника, `null` или
+ * `'all'` — для всех.
+ */
 export interface BlogPostLineageRequest {
-  lineage: LineageId | null;
+  lineage: LineageId | typeof LINEAGE_ALL | null;
 }
 
 /** Файл, который не доехал: имя для человека и код причины. */

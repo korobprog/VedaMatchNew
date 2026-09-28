@@ -20,6 +20,7 @@ import {
   BLOG_VIDEO_MAX_BYTES,
   type AccessTokenPayload,
   type BlogPostCategoryRequest,
+  type BlogPostLineageRequest,
   type CreateBlogPostRequest,
   type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
@@ -162,6 +163,25 @@ export class BlogController {
       isAdmin(user),
       id,
       body?.category ?? null,
+    );
+  }
+
+  /**
+   * Линия своего поста (VED-590): автор или администратор, как категория.
+   * `null` или `'all'` — для всех.
+   */
+  @Patch('posts/:id/lineage')
+  @Throttle({ default: { ttl: 3_600_000, limit: 240 } })
+  setLineage(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: BlogPostLineageRequest,
+  ) {
+    return this.blog.setOwnLineage(
+      user.sub,
+      isAdmin(user),
+      id,
+      body?.lineage ?? null,
     );
   }
 
