@@ -20,6 +20,8 @@ import {
   findNameError,
   isLineageId,
   resolveDisplayName,
+  parseMaterialFilters,
+  resolveMaterialFilters,
   toLineageId,
   type AdminAuditEvent,
   type Gender,
@@ -176,6 +178,7 @@ export class UsersService {
       timeZone: user.timeZone,
       timeZoneLocked: user.timeZoneLocked,
       showAllStages: user.showAllStages,
+      materialFilters: resolveMaterialFilters(user),
       subscription: toSubscriptionState(user, new Date(), billingMode),
       accountStatus: user.accountStatus,
       pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
@@ -356,6 +359,18 @@ export class UsersService {
     if ('showAllStages' in payload) {
       // Переключатель, а не текст: всё, кроме `true`, — «моя ступень».
       data.showAllStages = payload.showAllStages === true;
+    }
+    if ('materialFilters' in payload) {
+      // «Фильтры материалов» (VED-617): выбор руками решает, что человек
+      // видит; `null` — вернуться к фильтрам по анкете. Анкету это не
+      // трогает: самоидентификация меняется только её новым прохождением.
+      const filters = parseMaterialFilters(payload.materialFilters);
+      if (filters === undefined) {
+        throw new BadRequestException('Неизвестная ступень или линия');
+      }
+      data.materialStages = filters?.stages ?? [];
+      data.materialLineages = filters?.lineages ?? [];
+      data.materialFiltersSetAt = filters ? new Date() : null;
     }
     if ('languages' in payload) {
       data.languages = normalizeLanguages(payload.languages);

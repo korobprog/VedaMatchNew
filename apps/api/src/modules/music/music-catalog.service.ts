@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
-  LineageFilterValue,
+  LineageId,
   LineagePreference,
+  MaterialFilters,
   MusicAlbumPageDto,
   MusicArtistPageDto,
   MusicCatalogDto,
@@ -10,12 +11,12 @@ import type {
   MusicPlaylistCardDto,
   MusicTrackDetailDto,
   MusicTrackListDto,
-  SpiritualStage,
 } from '@vedamatch/shared';
 import {
+  effectiveAudienceStages,
+  effectiveLineageIds,
   lineageFilterIds,
-  resolveAudienceStage,
-  resolveContentLineage,
+  resolveMaterialFilters,
   toLineagePreference,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -25,7 +26,10 @@ import {
   catalogOnlyCondition,
 } from './music-audiobook-scope';
 import { countTracksByCategory } from './music-category-counts';
-import { audienceStageAndConditions } from './music-audience-stage';
+import {
+  MATERIAL_FILTERS_SELECT,
+  audienceStageAndConditions,
+} from './music-audience-stage';
 import {
   buildCoverUrl,
   toMusicAlbumDto,
@@ -69,12 +73,11 @@ const TRACK_CARD_INCLUDE = {
  * (VED-165) — двумя разными ключами `categories` в одном объекте их не
  * сложить, второй спред молча стёр бы первый.
  */
-function lineageAndConditions(lineage: LineageFilterValue | null) {
-  const ids = lineageFilterIds(lineage);
-  if (!ids) return [];
+function lineageAndConditions(ids: readonly LineageId[] | null) {
+  if (!ids?.length) return [];
   // Одна линия — прежнее равенство; группа (VED-568) — `in` по её линиям.
   const match =
-    ids.length === 1 ? { lineage: ids[0] } : { lineage: { in: ids } };
+    ids.length === 1 ? { lineage: ids[0] } : { lineage: { in: [...ids] } };
   return [{ OR: [match, { lineage: null }] }];
 }
 
@@ -85,8 +88,8 @@ function lineageAndConditions(lineage: LineageFilterValue | null) {
  * (название или исполнитель), и второй `OR` молча перетёр бы первый. Пустой
  * объект, когда фильтра нет.
  */
-export function lineageCondition(lineage: LineageFilterValue | null) {
-  const and = lineageAndConditions(lineage);
+export function lineageCondition(lineage: LineagePreference) {
+  const and = lineageAndConditions(lineageFilterIds(lineage));
   return and.length ? { AND: and } : {};
 }
 
@@ -119,10 +122,9 @@ export class MusicCatalogService {
      */
     rootSlug: string | null = null,
   ): Promise<MusicCatalogDto> {
-    const [lineage, audienceStage] = await Promise.all([
-      this.viewerLineage(viewerId, null),
-      this.viewerAudienceStage(viewerId),
-    ]);
+    const filters = await this.viewerMaterialFilters(viewerId);
+    const lineage = await this.viewerLineageIds(viewerId, null, filters);
+    const audienceStage = effectiveAudienceStages(filters);
     // Аудиокниги живут отдельным разделом (VED-237, VED-297) и в витрину не
     // идут ни главами, ни карточками чтецов, ни числом над заголовком.
     const notAudiobook = catalogOnlyCondition();
@@ -242,10 +244,13 @@ export class MusicCatalogService {
     query: NormalizedMusicTrackQuery,
     viewerId: string | null = null,
   ): Promise<MusicTrackListDto> {
-    const [lineage, audienceStage] = await Promise.all([
-      this.viewerLineage(viewerId, query.lineage),
-      this.viewerAudienceStage(viewerId),
-    ]);
+    const filters = await this.viewerMaterialFilters(viewerId);
+    const lineage = await this.viewerLineageIds(
+      viewerId,
+      query.lineage,
+      filters,
+    );
+    const audienceStage = effectiveAudienceStages(filters);
 
     // Корневая категория (VED-165-2) переехала на исполнителя: фильтр по ней
     // — условие на связь `artist.rootCategory`, а не на `categories`, как у
@@ -311,44 +316,43 @@ export class MusicCatalogService {
   }
 
   /**
-   * Какую линию слышит человек. Явный параметр запроса сильнее настройки
-   * Музыки; нет ни того, ни другого — весь каталог.
+   * Какие линии слышит человек: `null` — все. Явный параметр запроса
+   * сильнее настройки Музыки, та — сильнее «Фильтров материалов» с главной
+   * (VED-617); без настройки действуют они.
    *
-   * Линию из портального профиля Музыка не наследует (VED-82). Киртаны и
-   * бхаджаны общие для всех линий: наследованный фильтр только прятал
-   * записи, а строка «Показываем линию…» над каталогом возвращалась при
-   * каждом заходе, сколько её ни снимай. Кто хочет слушать одну линию,
-   * выбирает её в настройках Музыки — и это его собственный выбор, о
-   * котором строка над каталогом ему и напоминает.
+   * Линию из профиля напрямую Музыка по-прежнему не наследует (VED-82): она
+   * приходит только через фильтры, которые человек видит и меняет одной
+   * кнопкой на главной, а не всплывает сама при каждом заходе.
    */
-  private async viewerLineage(
+  private async viewerLineageIds(
     viewerId: string | null,
     explicit: LineagePreference,
-  ): Promise<LineageFilterValue | null> {
-    if (explicit) return resolveContentLineage(null, explicit);
-    if (!viewerId) return null;
+    filters: MaterialFilters,
+  ): Promise<LineageId[] | null> {
+    if (explicit) return effectiveLineageIds(explicit, filters);
+    if (!viewerId) return effectiveLineageIds(null, filters);
     const settings = await this.prisma.musicSettings.findUnique({
       where: { userId: viewerId },
       select: { lineage: true },
     });
-    return resolveContentLineage(null, toLineagePreference(settings?.lineage));
+    return effectiveLineageIds(toLineagePreference(settings?.lineage), filters);
   }
 
   /**
-   * Ступень самоидентификации слушателя (VED-575). Из `User` — ровно
-   * `spiritualStage` и портальный переключатель «Все ступени» с главной;
-   * пишет их портал. `null` — не фильтровать: гость, человек без
-   * самоидентификации или выбравший «Все ступени».
+   * «Фильтры материалов» слушателя (VED-617): ступени и линии с главной, а
+   * без ручного выбора — по анкете. Из `User` — ровно поля фильтров, анкеты
+   * и прежнего переключателя «Все ступени»; пишет их портал. Гость — без
+   * фильтров.
    */
-  private async viewerAudienceStage(
+  private async viewerMaterialFilters(
     viewerId: string | null,
-  ): Promise<SpiritualStage | null> {
-    if (!viewerId) return null;
+  ): Promise<MaterialFilters> {
+    if (!viewerId) return { stages: [], lineages: [] };
     const user = await this.prisma.user.findUnique({
       where: { id: viewerId },
-      select: { spiritualStage: true, showAllStages: true },
+      select: MATERIAL_FILTERS_SELECT,
     });
-    return resolveAudienceStage(user);
+    return resolveMaterialFilters(user);
   }
 
   /**

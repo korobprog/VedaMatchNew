@@ -1,18 +1,18 @@
 import type { Prisma } from '@prisma/client';
-import { lineageFilterIds, type LineageFilterValue } from '@vedamatch/shared';
+import type { LineageId } from '@vedamatch/shared';
 
 /**
- * Условие ленты по линии: сама линия (или любая линия группы —
- * `group:gaudiya_math`, VED-568) плюс материалы «для всех» (`null`).
- * `null` — фильтра нет. Разбор значения общий (`lineageFilterIds` из
- * `@vedamatch/shared`), а условие Prisma — своё у Образования.
+ * Условие ленты по линиям: любая из выбранных (одна линия, группа —
+ * VED-568 — или несколько из «Фильтров материалов», VED-617) плюс материалы
+ * «для всех» (`null`). `null` — фильтра нет. Какие линии — решает общая
+ * `effectiveLineageIds` из `@vedamatch/shared`, условие Prisma — своё у
+ * Образования.
  */
 export function lineageFeedCondition(
-  filter: LineageFilterValue | null,
+  ids: readonly LineageId[] | null,
 ): Prisma.LibraryEntryWhereInput | null {
-  const ids = lineageFilterIds(filter);
-  if (!ids) return null;
+  if (!ids?.length) return null;
   const match: Prisma.LibraryEntryWhereInput =
-    ids.length === 1 ? { lineage: ids[0] } : { lineage: { in: ids } };
+    ids.length === 1 ? { lineage: ids[0] } : { lineage: { in: [...ids] } };
   return { OR: [match, { lineage: null }] };
 }

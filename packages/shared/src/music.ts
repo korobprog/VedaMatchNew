@@ -242,6 +242,11 @@ export interface MusicArtistRefDto {
   id: string;
   slug: string;
   name: string;
+  /**
+   * Духовная линия исполнителя (VED-566) — для окна «Линия» с домиком
+   * (VED-616). Необязательное: у старых ответов и офлайн-копий поля нет.
+   */
+  lineage?: LineageId | null;
 }
 
 export interface MusicCategoryDto {

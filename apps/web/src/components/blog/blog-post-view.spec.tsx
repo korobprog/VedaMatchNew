@@ -83,14 +83,21 @@ describe("ряд действий поста: только для админов
   });
 });
 
-/* VED-596: «в меню кнопок поста значок „Линия“, только для админов». */
+/* VED-596: «в меню кнопок поста значок „Линия“, только для админов».
+   VED-616: разметка — отпечатком пальца у админа, домик — всем. */
 describe("«Линия» поста", () => {
-  it("участник значка не видит", () => {
-    render(<BlogPostView initial={makePost()} />);
-    expect(screen.queryByRole("button", { name: /^Линия:/ })).toBeNull();
+  it("участник видит только домик: к какой линии пост", async () => {
+    const user = userEvent.setup();
+    render(<BlogPostView initial={makePost({ lineage: "ipbys" })} />);
+    expect(screen.queryByRole("button", { name: /^Разметка/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: "Линия. Пост: Гаудия-матх — IPBYS" }),
+    );
+    expect(screen.getByText("Гаудия-матх — IPBYS")).toBeInTheDocument();
   });
 
-  it("админ назначает линию, и значок показывает её", async () => {
+  it("админ назначает линию в окне разметки, и значок показывает её", async () => {
     const user = userEvent.setup();
     vi.mocked(setBlogPostLineage).mockResolvedValue(
       makePost({ canModerate: true, lineage: "iskcon" }),
@@ -98,13 +105,16 @@ describe("«Линия» поста", () => {
     render(<BlogPostView initial={makePost({ canModerate: true })} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Линия: для всех линий" }),
+      screen.getByRole("button", {
+        name: "Разметка. Линия: для всех линий",
+      }),
     );
     await user.click(screen.getByRole("button", { name: "ISKCON" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     expect(setBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
     expect(
-      screen.getByRole("button", { name: "Линия: ISKCON" }),
+      await screen.findByRole("button", { name: "Разметка. Линия: ISKCON" }),
     ).toBeInTheDocument();
   });
 });

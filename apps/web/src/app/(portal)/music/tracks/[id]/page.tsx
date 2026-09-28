@@ -19,8 +19,8 @@ import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicAdminArtists } from "@/lib/music-admin-api";
 import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
-import { MusicTrackLineageButton } from "@/components/music/track-lineage-button";
-import { MusicTrackAudienceButton } from "@/components/music/track-audience-button";
+import { MusicTrackMarksButton } from "@/components/music/track-marks-button";
+import { LineageInfoButton } from "@/components/lineage-info-button";
 import { MusicTrackHeroLayout } from "@/components/music/track-hero-layout";
 
 export async function generateMetadata({
@@ -108,11 +108,29 @@ export default async function MusicTrackPage({
         }
         actions={
           <>
-            {/* «Линия» — только редакции Музыки (VED-561). */}
-            <MusicTrackLineageButton
+            {/* «Разметка» (VED-616) — ступени и линия в одном окне, только
+                редакции Музыки. */}
+            <MusicTrackMarksButton
               trackId={track.id}
+              audienceStages={track.audienceStages ?? []}
               lineage={track.lineage}
               canEdit={canEdit}
+            />
+            {/* «Линия» с домиком (VED-616) — всем: чья запись и чей
+                исполнитель. */}
+            <LineageInfoButton
+              subjects={[
+                { title: "Запись", lineage: track.lineage },
+                ...(track.artist
+                  ? [
+                      {
+                        title: "Исполнитель",
+                        lineage: track.artist.lineage ?? null,
+                        emptyLabel: "Линия не указана",
+                      },
+                    ]
+                  : []),
+              ]}
             />
             {/* «Поделиться» (VED-281). */}
             <MusicShareTrackButton
@@ -131,13 +149,6 @@ export default async function MusicTrackPage({
               title={track.title}
               size="size-11"
               className="shrink-0 border border-glass-brd"
-            />
-            {/* «Ступени» самоидентификации (VED-575) — рядом с «Линией». */}
-            <MusicTrackAudienceButton
-              trackId={track.id}
-              audienceStages={track.audienceStages ?? []}
-              canEdit={canEdit}
-              className="shrink-0"
             />
           </>
         }

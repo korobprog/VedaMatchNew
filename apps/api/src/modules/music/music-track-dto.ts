@@ -136,7 +136,16 @@ export function hasTrackLyrics(
 
 function toArtistRef(artist: MusicArtistRow | null) {
   if (!artist) return null;
-  return { id: artist.id, slug: artist.slug, name: artist.name };
+  return {
+    id: artist.id,
+    slug: artist.slug,
+    name: artist.name,
+    // Линия исполнителя — окну «Линия» с домиком (VED-616). Только когда
+    // строка её несёт: вложенные выборки без поля не выдумывают «не задана».
+    ...(artist.lineage === undefined
+      ? {}
+      : { lineage: toLineageId(artist.lineage) }),
+  };
 }
 
 function toAlbumRef(album: MusicAlbumRow | null) {

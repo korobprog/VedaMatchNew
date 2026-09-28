@@ -6,8 +6,8 @@ import { getLocale } from "next-intl/server";
 import {
   canAdminService,
   isLineagePreference,
+  effectiveLineageIds,
   isMusicTrackSort,
-  resolveContentLineage,
   serviceCardName,
 } from "@vedamatch/shared";
 import { getProfile, getServiceCard } from "@/lib/api";
@@ -20,6 +20,7 @@ import {
   getMyMusicUploads,
 } from "@/lib/music-api";
 import { LineageStatus } from "@/components/lineage-status";
+import { profileMaterialFilters } from "@/lib/material-filters";
 import {
   MUSIC_ICON_BUTTON,
   MusicArtistsSection,
@@ -170,8 +171,9 @@ export default async function MusicPage({
       getMyMusicUploads().catch(() => null),
       getMyMusicFavorites().catch(() => null),
       getMyMusicPlaylists().catch(() => null),
-      // Настройки — ради линии: подпись над списком ставится, только когда
-      // человек сам выбрал линию в настройках Музыки. Гостю — null.
+      // Настройки — ради линии: подпись над списком говорит, какие линии
+      // применил сервер (настройка Музыки или фильтры материалов). Гостю —
+      // null.
       getMusicSettingsServer().catch(() => null),
       getProfile().catch(() => null),
     ]);
@@ -209,12 +211,13 @@ export default async function MusicPage({
     </>
   );
 
-  // Та же арифметика, что в API: явный параметр сильнее настройки Музыки, а
-  // линию из профиля Музыка не наследует (VED-82) — без настройки слышно всё
-  // и подписи нет. Подпись обязана говорить то, что применил сервер.
-  const appliedLineage = explicitLineage
-    ? resolveContentLineage(null, explicitLineage)
-    : resolveContentLineage(null, settings?.lineage ?? null);
+  // Та же арифметика, что в API: явный параметр сильнее настройки Музыки,
+  // та — сильнее «Фильтров материалов» с главной (VED-617). Подпись обязана
+  // говорить то, что применил сервер.
+  const appliedLineage = effectiveLineageIds(
+    explicitLineage ?? settings?.lineage ?? null,
+    profileMaterialFilters(profile),
+  );
 
   const serviceName = service
     ? serviceCardName(service, locale)
@@ -346,7 +349,7 @@ export default async function MusicPage({
             <p className="text-sm text-text-2">{serviceDescription}</p>
           )}
           <LineageStatus
-            lineage={appliedLineage}
+            lineageIds={appliedLineage}
             settingsHref="/music/settings"
             allHref="/music?all=1&lineage=all"
           />

@@ -31,14 +31,14 @@ describe("LibraryLineageFilter (VED-449)", () => {
       | null = "iskcon",
   ) {
     render(
-      <LibraryLineageFilter locale="ru" applied={applied} preference={null} />,
+      <LibraryLineageFilter locale="ru" current={applied ?? "all"} preference={null} />,
     );
     return userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
   }
 
   it("одна кнопка «Фильтры», меню закрыто", () => {
     render(
-      <LibraryLineageFilter locale="ru" applied="iskcon" preference={null} />,
+      <LibraryLineageFilter locale="ru" current="iskcon" preference={null} />,
     );
     expect(screen.getByRole("button", { name: "Фильтры" })).toHaveAttribute(
       "aria-expanded",
@@ -134,5 +134,26 @@ describe("LibraryLineageFilter (VED-449)", () => {
       await screen.findByText("Не удалось переключить линию, попробуйте ещё раз"),
     ).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("при линиях в фильтрах материалов — пункт «Как в фильтрах материалов» (VED-617)", async () => {
+    render(
+      <LibraryLineageFilter
+        locale="ru"
+        current="portal"
+        preference={null}
+        portalLineages={["iskcon"]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
+    expect(
+      screen.getByRole("button", { name: "Как в фильтрах материалов" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // «Всё» теперь явный выбор: отрывает Образование от фильтров.
+    await userEvent.click(screen.getByRole("button", { name: "Всё" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const [, init] = apiFetch.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ lineage: "all" });
   });
 });

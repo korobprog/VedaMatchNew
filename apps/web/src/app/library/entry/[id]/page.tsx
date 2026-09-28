@@ -15,8 +15,8 @@ import { BookmarkButton } from "@/components/library/bookmark-button";
 import { CoverPicture } from "@/components/library/cover-picture";
 import { CoverViewer } from "@/components/library/cover-viewer";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
-import { EntryLineageButton } from "@/components/library/entry-lineage-button";
-import { EntryAudienceButton } from "@/components/library/entry-audience-button";
+import { EntryMarksButton } from "@/components/library/entry-marks-button";
+import { LineageInfoButton } from "@/components/lineage-info-button";
 import {
   ENTRY_ICON_BUTTON,
   EntryShareActions,
@@ -191,17 +191,23 @@ export default async function LibraryEntryPage({
                   })}
                   className={ENTRY_ICON_BUTTON}
                 />
-                {/* «Линия» — только администратору Образования (VED-561). */}
-                <EntryLineageButton
-                  entryId={entry.id}
-                  lineage={entry.lineage}
-                  canSetLineage={entry.canSetLineage}
-                />
-                {/* «Ступени» (VED-575) — те же права, что у «Линии». */}
-                <EntryAudienceButton
+                {/* «Разметка» (VED-616) — ступени и линия в одном окне,
+                    только администратору Образования. */}
+                <EntryMarksButton
                   entryId={entry.id}
                   audienceStages={entry.audienceStages ?? []}
+                  lineage={entry.lineage}
                   canSet={entry.canSetLineage}
+                />
+                {/* «Линия» с домиком (VED-616) — всем: чей это материал. */}
+                <LineageInfoButton
+                  subjects={[
+                    {
+                      title: t(locale, "lineage.infoMaterial"),
+                      lineage: entry.lineage,
+                      emptyLabel: t(locale, "lineage.badgeAll"),
+                    },
+                  ]}
                 />
               </>
             }

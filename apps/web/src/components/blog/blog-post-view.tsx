@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
-import { LineageMenuButton } from "@/components/lineage-menu-button";
+import { MaterialMarksMenuButton } from "@/components/material-marks-menu-button";
+import { LineageInfoButton } from "@/components/lineage-info-button";
 import { setBlogPostCategory, setBlogPostLineage } from "@/lib/blog-client-api";
 import { BlogCategoryButton } from "./blog-category-button";
 import { BlogPostCard } from "./blog-post-card";
@@ -81,20 +82,26 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
               }}
             />
           )}
-          {/* «Линия» (VED-596) — значок-домик, как в Образовании и
-              Медиатеке, и только у администратора: линия решает, кому пост
-              виден в отфильтрованной ленте. У репоста линия своя, не
-              оригинала: фильтр ленты смотрит на строку самого репоста. */}
+          {/* «Разметка» (VED-596, VED-616) — отпечаток пальца, как в
+              Образовании и Медиатеке, и только у администратора: линия
+              решает, кому пост виден в отфильтрованной ленте. Ступеней у
+              постов нет — в окне одна колонка линии. У репоста линия своя,
+              не оригинала: фильтр ленты смотрит на строку самого репоста. */}
           {post.canModerate && (
-            <LineageMenuButton
-              value={post.lineage ?? null}
+            <MaterialMarksMenuButton
+              lineage={post.lineage ?? null}
               buttonClassName="rounded-lg"
-              menuLabel="Линия поста"
-              onSelect={async (lineage) => {
+              menuLabel="Разметка поста"
+              onSave={async ({ lineage }) => {
                 setPost(await setBlogPostLineage(post.id, lineage));
               }}
             />
           )}
+          {/* «Линия» с домиком (VED-616) — всем: к какой линии пост. */}
+          <LineageInfoButton
+            subjects={[{ title: "Пост", lineage: post.lineage ?? null }]}
+            buttonClassName="rounded-lg"
+          />
           <button
             type="button"
             onClick={() => void share()}

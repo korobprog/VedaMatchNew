@@ -15,8 +15,8 @@ import { BookmarkButton } from "./bookmark-button";
 import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
-import { EntryLineageButton } from "./entry-lineage-button";
-import { EntryAudienceButton } from "./entry-audience-button";
+import { EntryMarksButton } from "./entry-marks-button";
+import { LineageInfoButton } from "@/components/lineage-info-button";
 import { EntryBlogStatus, EntryShareActions } from "./entry-share-actions";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -294,34 +294,38 @@ export function EntryCard({
             />
           </>
         )}
-        {/* «Ступени» (VED-575) и «Линия» (VED-561) — только администратору
-            Образования, парой у правого края: меню раскрываются влево и не
-            уходят за экран. Пара не разрывается (VED-607): поодиночке
-            «Ступени» переносились на свою строку под «Редактировать», хотя
-            по смыслу стоят рядом с «Линией». Кнопки по 40px, а не 44 — так
-            пара влезает в строку с «Редактировать» и «Удалить» на телефоне
-            шириной 412; уже — переносится целиком и прижимается вправо. */}
-        {entry.canSetLineage && (
-          <div
-            data-testid="entry-admin-marks"
-            className="ml-auto flex shrink-0 items-center gap-1.5"
-          >
-            <EntryAudienceButton
-              entryId={entry.id}
-              audienceStages={audienceStages}
-              canSet={entry.canSetLineage}
-              onChanged={setAudienceStages}
-              sizeClassName="size-10"
-            />
-            <EntryLineageButton
-              entryId={entry.id}
-              lineage={lineage}
-              canSetLineage={entry.canSetLineage}
-              onChanged={setLineage}
-              sizeClassName="size-10"
-            />
-          </div>
-        )}
+        {/* Справа парой (VED-616): «Разметка» с отпечатком — только
+            администратору Образования, ступени и линия в одном окне;
+            «Линия» с домиком — всем, к какой линии относится материал.
+            Меню раскрываются влево и не уходят за экран. Пара не
+            разрывается (VED-607); кнопки по 40px, чтобы влезть в строку с
+            «Редактировать» и «Удалить» на телефоне шириной 412. */}
+        <div
+          data-testid="entry-admin-marks"
+          className="ml-auto flex shrink-0 items-center gap-1.5"
+        >
+          <EntryMarksButton
+            entryId={entry.id}
+            audienceStages={audienceStages}
+            lineage={lineage}
+            canSet={entry.canSetLineage}
+            onChanged={(marks) => {
+              setAudienceStages(marks.stages);
+              setLineage(marks.lineage);
+            }}
+            sizeClassName="size-10"
+          />
+          <LineageInfoButton
+            subjects={[
+              {
+                title: t(locale, "lineage.infoMaterial"),
+                lineage,
+                emptyLabel: t(locale, "lineage.badgeAll"),
+              },
+            ]}
+            sizeClassName="size-10"
+          />
+        </div>
       </div>
     </article>
   );
