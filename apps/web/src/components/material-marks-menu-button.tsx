@@ -17,9 +17,7 @@ import { useDismissable } from "@/lib/use-dismissable";
 import { sameAudienceStages, toggleAudienceStage } from "@/lib/audience-stages";
 import { lineageMenuItems, lineageMenuOpenGroup } from "@/lib/lineage-menu";
 import {
-  hasMarkedStages,
   materialMarksButtonLabel,
-  materialMarksButtonToneClass,
   type MaterialMarks,
 } from "@/lib/material-marks";
 
@@ -82,7 +80,6 @@ export function MaterialMarksMenuButton({
   useDismissable(panelRef, close, open, triggerRef);
 
   const label = materialMarksButtonLabel({ stages, lineage });
-  const markedStages = hasMarkedStages(stages);
   const currentGroup = lineageGroupOf(draftLineage);
 
   async function save(next: MaterialMarks) {
@@ -206,25 +203,11 @@ export function MaterialMarksMenuButton({
           }
           setOpen(!open);
         }}
-        /* Каёмка (VED-613): любая разметка — отмечены ступени или выбрана
-           линия — светло-малиновая, как у домика с конкретной линией;
-           «для всех» — зелёная. Сколько ступеней, показывает кружок. */
-        className={`relative inline-flex ${sizeClassName} shrink-0 items-center justify-center border transition-colors hover:text-text-0 ${materialMarksButtonToneClass({ stages, lineage })} ${buttonClassName}`}
+        /* Вид нейтральный, без каёмок и счётчика (VED-613, отбой): что
+           размечено, видно в окне и в подписи кнопки. */
+        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0 transition-colors ${buttonClassName}`}
       >
         <Fingerprint aria-hidden className="size-4" />
-        {/* Сколько ступеней отмечено — чтобы размеченное было видно, не
-            открывая окно. Число дублирует имя кнопки и скрыто от чтения.
-            Кружок светло-малиновый, как выбранный пункт меню (VED-613):
-            непрозрачная смесь 20% --vm-magenta с --vm-bg-0 и рамка
-            magenta/50. Цифра --vm-text-0: 12,9:1 светлая · 14,5:1 тёмная. */}
-        {markedStages && (
-          <span
-            aria-hidden
-            className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--vm-magenta)_20%,var(--vm-bg-0))] font-mono text-[10px] font-bold leading-none text-text-0 tabular-nums ring-1 ring-magenta/50"
-          >
-            {stages.length}
-          </span>
-        )}
       </button>
       {open && (
         <AnchoredPopover

@@ -69,24 +69,3 @@ export function lineageMenuOpenGroup(
 export function lineageButtonLabel(value: LineageId | null): string {
   return `Линия: ${lineageFilterLabel(value) ?? "для всех линий"}`;
 }
-
-/**
- * Каёмка кнопки «Линия» (VED-613): что выбрано, видно без открытия меню.
- * Конкретная линия — светло-малиновая, как рамка выбранного пункта внутри
- * меню (`menuOptionClass`, `ring-magenta/50`); «без линии — для всех» —
- * зелёная, как у отмеченной соседней кнопки «Ступени» (`border-cyan/60`).
- */
-export function lineageButtonToneClass(value: LineageId | null): string {
-  return markedToneClass(value !== null);
-}
-
-/**
- * Каёмка кнопок разметки (VED-613): `marked` — выбран конкретный вариант,
- * светло-малиновая; иначе «для всех» — зелёная. Общая для «Линии» и
- * «Разметки», чтобы соседние кнопки красились одинаково.
- */
-export function markedToneClass(marked: boolean): string {
-  return marked
-    ? "border-magenta/50 text-text-0"
-    : "border-cyan/60 text-text-1";
-}

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Landmark } from "lucide-react";
 import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
-import { lineageButtonToneClass } from "@/lib/lineage-menu";
 import { lineageInfoRows, type LineageInfoSubject } from "@/lib/lineage-info";
 
 /**
@@ -55,9 +54,9 @@ export function LineageInfoButton({
         aria-label={`Линия. ${label}`}
         title={label}
         onClick={() => setOpen(!open)}
-        /* Каёмка (VED-613): у материала есть линия — светло-малиновая, «для
-           всех линий» — зелёная. */
-        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border transition-colors hover:text-text-0 ${lineageButtonToneClass(subjects[0]?.lineage ?? null)} ${buttonClassName}`}
+        /* Вид нейтральный, как у соседей по ряду (VED-613, отбой каёмок):
+           выбор цветом показывает только «Фильтры материалов» на главной. */
+        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0 transition-colors ${buttonClassName}`}
       >
         <Landmark aria-hidden className="size-4" />
       </button>

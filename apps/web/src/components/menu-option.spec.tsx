@@ -65,8 +65,8 @@ describe("выбор виден внутри меню (VED-596)", () => {
     );
   });
 
-  it("«Разметка»: каёмка по линии и светлый кружок-счётчик ступеней (VED-613)", () => {
-    const { container, rerender } = render(
+  it("«Разметка»: без каёмки и счётчика при любой разметке (VED-613)", () => {
+    const { container } = render(
       <MaterialMarksMenuButton
         stages={["yogi"]}
         lineage="iskcon"
@@ -74,16 +74,8 @@ describe("выбор виден внутри меню (VED-596)", () => {
       />,
     );
     const trigger = screen.getByRole("button", { name: /^Разметка/ });
-    expect(trigger).toHaveClass("border-magenta/50");
-    const badge = container.querySelector("span[aria-hidden]");
-    expect(badge).toHaveTextContent("1");
-    expect(badge).toHaveClass("ring-magenta/50", "text-text-0");
-    expect(badge).not.toHaveClass("bg-magenta");
-    rerender(
-      <MaterialMarksMenuButton stages={[]} lineage={null} onSave={vi.fn()} />,
-    );
-    expect(screen.getByRole("button", { name: /^Разметка/ })).toHaveClass(
-      "border-cyan/60",
-    );
+    expect(trigger).toHaveClass("border-glass-brd");
+    expect(trigger.className).not.toMatch(/(^| )border-(magenta|cyan)/);
+    expect(container.querySelector("button span")).toBeNull();
   });
 });

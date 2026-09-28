@@ -82,11 +82,7 @@ export function EntryFilterMenu({
         aria-label={chosen ? `${label}: ${chosen.label}` : label}
         title={chosen ? `${label}: ${chosen.label}` : label}
         onClick={() => setOpen((value) => !value)}
-        className={`${LIBRARY_ICON_BUTTON} ${
-          chosen
-            ? "border-magenta text-text-0"
-            : "border-glass-brd text-text-1 hover:text-text-0"
-        }`}
+        className={`${LIBRARY_ICON_BUTTON} border-glass-brd text-text-1 hover:text-text-0`}
       >
         {kind === "type" ? (
           <Shapes aria-hidden className="size-4" />

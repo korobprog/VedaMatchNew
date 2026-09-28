@@ -47,24 +47,23 @@ describe("LineageInfoButton (VED-616)", () => {
   });
 });
 
-/* VED-613: каёмка домика — светло-малиновая у конкретной линии, зелёная —
-   «для всех линий». */
-describe("каёмка домика (VED-613)", () => {
-  it("линия материала есть — малиновая, нет — зелёная", () => {
+/* VED-613, отбой: «Менять цвет может только главная клавиша фильтров» —
+   домик нейтральный при любой линии материала. */
+describe("вид домика (VED-613)", () => {
+  it("без цветной каёмки — и с линией, и без", () => {
     const { rerender } = render(
       <LineageInfoButton
         subjects={[{ title: "Материал", lineage: "iskcon" }]}
       />,
     );
-    expect(screen.getByRole("button", { name: /^Линия/ })).toHaveClass(
-      "border-magenta/50",
-    );
+    const button = () => screen.getByRole("button", { name: /^Линия/ });
+    expect(button()).toHaveClass("border-glass-brd");
+    expect(button().className).not.toMatch(/(^| )border-(magenta|cyan)/);
     rerender(
       <LineageInfoButton subjects={[{ title: "Материал", lineage: null }]} />,
     );
-    expect(screen.getByRole("button", { name: /^Линия/ })).toHaveClass(
-      "border-cyan/60",
-    );
+    expect(button()).toHaveClass("border-glass-brd");
+    expect(button().className).not.toMatch(/(^| )border-(magenta|cyan)/);
   });
 });
 

@@ -30,7 +30,6 @@ export function BlogMenuButton({
   label,
   menuLabel,
   icon,
-  active = false,
   busy = false,
   children,
 }: {
@@ -39,8 +38,6 @@ export function BlogMenuButton({
   /** Имя панели для скринридера. */
   menuLabel: string;
   icon: ReactNode;
-  /** Выбрано не значение по умолчанию — рамка акцентом, как в Образовании. */
-  active?: boolean;
   busy?: boolean;
   /** Пункты меню; `close` закрывает меню и возвращает фокус на кнопку. */
   children: (close: () => void) => ReactNode;
@@ -75,11 +72,9 @@ export function BlogMenuButton({
         aria-label={label}
         title={label}
         onClick={() => setOpen((value) => !value)}
-        className={`${BLOG_ICON_BUTTON} ${
-          active
-            ? "border-magenta text-text-0"
-            : "border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0"
-        }`}
+        /* Без подсветки выбранного (VED-613): цветом выбор показывает только
+           «Фильтры материалов» на главной, значение — в имени кнопки. */
+        className={`${BLOG_ICON_BUTTON} border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0`}
       >
         {icon}
       </button>
