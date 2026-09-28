@@ -13,6 +13,7 @@ import { apiBase } from "@/lib/api-base";
 import { Tabs } from "./reels-feed";
 import { reelsHref } from "./feed-style";
 import { FEED_RESTART_EVENT } from "./feed-position";
+import { RemainingBadge } from "./remaining-badge";
 import {
   appendVideos,
   shouldAutoplay,
@@ -142,6 +143,13 @@ export function VideoFeed({
         </nav>
       )}
 
+      {/* Сколько роликов осталось (VED-640) — вспышкой на секунду, под ☰;
+          когда там строка папок — под ней. */}
+      <RemainingBadge
+        total={initial.total}
+        index={activeIndex}
+        placement={chips.length > 1 ? "right-3 top-[6.5rem]" : undefined}
+      />
       {items.length === 0 ? (
         <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
           <p className="font-display text-lg">
@@ -172,7 +180,7 @@ export function VideoFeed({
               key={video.id}
               video={video}
               position={index + 1}
-              total={cursor ? -1 : items.length}
+              total={initial.total ?? (cursor ? -1 : items.length)}
               active={index === activeIndex}
               soundOn={soundOn}
               onSound={setSoundOn}

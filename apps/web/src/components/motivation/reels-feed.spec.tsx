@@ -290,6 +290,21 @@ describe("ReelsFeed", () => {
     }
   });
 
+  it("держит под ☰ число оставшихся в ленте, пока не листали — погашенным (VED-640)", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a"), post("b")], nextCursor: "next", total: 12 }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+    const badge = screen.getByTestId("remaining-badge");
+    expect(badge).toHaveTextContent("11");
+    expect(badge).toHaveAttribute("aria-hidden", "true");
+    expect(badge).toHaveAttribute("data-visible", "false");
+  });
+
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
     fetchOk({});
     render(

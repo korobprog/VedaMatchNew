@@ -4,6 +4,7 @@ import {
   encodeMotivationCursor,
   emptyMotivationCursor,
   feedPage,
+  feedTotal,
 } from './motivation-feed';
 
 describe('feedPage', () => {
@@ -95,5 +96,25 @@ describe('семя случайного порядка в курсоре', () =>
     ).toString('base64url');
 
     expect(() => decodeMotivationCursor(bad)).toThrow(BadRequestException);
+  });
+});
+
+describe('feedTotal', () => {
+  const ids = ['a', 'b', 'c', 'd'];
+
+  it('считает ленту от места, с которого начата первая страница', () => {
+    expect(feedTotal(ids, 0, null)).toBe(4);
+    expect(feedTotal(ids, 2, null)).toBe(2);
+    expect(feedTotal(ids, 9, null)).toBe(0);
+  });
+
+  it('закреплённый пост вне остатка ленты добавляет один', () => {
+    expect(feedTotal(ids, 0, 'x')).toBe(5);
+    // Уже пролистанный пост — тоже вне остатка.
+    expect(feedTotal(ids, 2, 'a')).toBe(3);
+  });
+
+  it('закреплённый пост из остатка не считается дважды', () => {
+    expect(feedTotal(ids, 0, 'c')).toBe(4);
   });
 });

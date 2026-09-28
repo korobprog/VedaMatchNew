@@ -57,6 +57,7 @@ function build(rows: unknown[] = []) {
     }),
   );
   const findMany = jest.fn().mockResolvedValue(rows);
+  const count = jest.fn().mockResolvedValue(rows.length);
   const findUnique = jest.fn().mockResolvedValue(null);
   const remove = jest.fn().mockResolvedValue({});
   const resolveSlug = jest.fn().mockResolvedValue('vedy');
@@ -64,7 +65,7 @@ function build(rows: unknown[] = []) {
     .fn()
     .mockImplementation((key: string) => Promise.resolve(`https://cdn/${key}`));
   const prisma = {
-    motivationVideo: { create, findMany, findUnique, delete: remove },
+    motivationVideo: { create, findMany, count, findUnique, delete: remove },
     motivationCategory: {
       findMany: jest.fn().mockResolvedValue([{ slug: 'vedy', title: 'Веды' }]),
     },
@@ -78,6 +79,7 @@ function build(rows: unknown[] = []) {
     service,
     create,
     findMany,
+    count,
     findUnique,
     remove,
     resolveSlug,
@@ -141,6 +143,30 @@ describe('MotivationVideosService.list', () => {
     expect(page.items.map((item) => item.id)).toEqual(['v3', 'v2']);
     expect(page.items[0].categoryTitle).toBe('Веды');
     expect(decodeVideoCursor(page.nextCursor)?.id).toBe('v2');
+  });
+
+  it('к первой странице — сколько роликов в папке, к следующим — нет (VED-640)', async () => {
+    const rows = [2, 1].map((n) => ({
+      id: `v${n}`,
+      url: `https://cdn/${n}.mp4`,
+      title: '',
+      category: 'vedy',
+      durationSeconds: 10,
+      createdAt: new Date(Date.UTC(2026, 8, n)),
+    }));
+    const { service, count } = build(rows);
+    count.mockResolvedValue(7);
+    const first = await service.list({ category: 'vedy', limit: '1' });
+    expect(count).toHaveBeenCalledWith({ where: { category: 'vedy' } });
+    expect(first.total).toBe(7);
+
+    count.mockClear();
+    const next = await service.list({
+      category: 'vedy',
+      cursor: first.nextCursor ?? undefined,
+    });
+    expect(count).not.toHaveBeenCalled();
+    expect(next.total).toBeUndefined();
   });
 });
 

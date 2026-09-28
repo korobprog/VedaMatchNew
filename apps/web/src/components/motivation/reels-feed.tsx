@@ -85,6 +85,7 @@ import {
   isSameFeedHref,
 } from "./feed-position";
 import { SourceLink } from "./source-link";
+import { RemainingBadge } from "./remaining-badge";
 import {
   attributionParts,
   formatCount,
@@ -727,6 +728,9 @@ export function ReelsFeed({
         filterState={filterState}
         isAdmin={isAdmin}
       />
+      {/* Сколько ещё осталось в этой ленте (VED-640) — вспышкой на секунду
+          при перелистывании, под ☰. */}
+      <RemainingBadge total={initial.total} index={activeIndex} hidden={!onPost} />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
