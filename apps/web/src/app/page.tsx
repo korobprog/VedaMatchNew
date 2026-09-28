@@ -11,6 +11,10 @@ import {
 import { Header } from "@/components/header";
 import { ServiceGrid } from "@/components/service-grid";
 import { FeaturedServices } from "@/components/featured-services";
+import {
+  HOME_FEATURED_COLORS_COOKIE,
+  parseFeaturedColors,
+} from "@/components/featured-accents";
 import { FeaturedServicesEditor } from "@/components/featured-services-editor";
 import { StageScopeToggle } from "@/components/stage-scope-toggle";
 import {
@@ -245,6 +249,11 @@ export default async function Home({
     featuredOptions,
   );
   const featuredRoutes = new Set(featured.map((item) => item.href));
+  // Цвета трёх кнопок, перекрашенных кружком в углу (VED-452).
+  const featuredColors = parseFeaturedColors(
+    (await cookies()).get(HOME_FEATURED_COLORS_COOKIE)?.value,
+    user.id,
+  );
   // Блог-лента наверху главной (VED-238). Выбор «убрать ленту с экрана»
   // живёт в cookie и читается здесь, на сервере: лента рисуется в SSR, и
   // решение, известное только браузеру, дало бы главную, которая сначала
@@ -376,7 +385,12 @@ export default async function Home({
         )}
         {/* Ходовые сервисы отдельной строкой над сеткой: за ними заходят
             чаще всего, и искать их среди равных плиток не нужно. */}
-        <FeaturedServices items={featured} unread={chatBadge} />
+        <FeaturedServices
+          items={featured}
+          unread={chatBadge}
+          userId={user.id}
+          savedColors={featuredColors}
+        />
         {/* Сразу под ходовыми сервисами, как в макете Main.dc.html: карточка
             возвращает к недослушанному, не заходя в Музыку. Её нет вовсе,
             когда возвращаться не к чему и избранное пусто. */}

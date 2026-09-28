@@ -44,6 +44,7 @@
   --color-like: var(--vm-like);
   --color-violet: var(--vm-violet);
   --color-blue: var(--vm-blue);
+  --color-lime: var(--vm-lime);
   --color-chart-income: var(--vm-chart-income);
   --color-chart-expense: var(--vm-chart-expense);
   --color-mark-progress: var(--vm-mark-progress);
@@ -163,6 +164,18 @@
      под мелкий текст (12px): 6,5:1 и 6,1:1 на --vm-bg-0. */
   --vm-violet: #7A3FBF;
   --vm-blue: #1F5FBF;
+  /* Цвета знаков трёх главных кнопок главной (VED-452): мятный, фиолетовый,
+     малиновый, золотой, синий и салатовый — человек выбирает сам. Салатовый
+     свой, остальные — общие акценты. Знак — графика 28–32px, порог 3:1;
+     замер на стекле кнопки (--vm-glass поверх --vm-bg-0 / 1 / 2):
+       --vm-cyan     4,68 / 4,57 / 4,45 светлая · 12,27 / 11,31 / 10,76 тёмная
+       --vm-violet   6,30 / 6,16 / 6,00          ·  7,29 /  6,73 /  6,40
+       --vm-magenta  5,07 / 4,95 / 4,82          ·  5,35 /  4,94 /  4,70
+       --vm-gold     3,78 / 3,69 / 3,60          · 11,68 / 10,77 / 10,24
+       --vm-blue     6,02 / 5,88 / 5,73          ·  8,44 /  7,78 /  7,40
+       --vm-lime     5,07 / 4,96 / 4,83          · 11,47 / 10,58 / 10,06
+     Золото знаку годится, мелкому тексту — нет (см. --vm-gold). */
+  --vm-lime: #4B7A0C;
   /* Доход и расход на графиках кассы. Пара проверена валидатором палитры
      (скилл dataviz): дальтоники различают её, контраст с фоном не ниже 3:1. */
   --vm-chart-income: #1F5FBF;
@@ -316,6 +329,7 @@
 
   --vm-violet: #C68BFF;
   --vm-blue: #7FB4FF;
+  --vm-lime: #A6E05A;
   /* Тёмные ступени графика: #7FB4FF и #FF3E9E выходят за полосу светлоты. */
   --vm-chart-income: #5B93E8;
   --vm-chart-expense: #F0358F;
@@ -403,6 +417,7 @@
 
     --vm-violet: #C68BFF;
     --vm-blue: #7FB4FF;
+    --vm-lime: #A6E05A;
     --vm-chart-income: #5B93E8;
     --vm-chart-expense: #F0358F;
 
