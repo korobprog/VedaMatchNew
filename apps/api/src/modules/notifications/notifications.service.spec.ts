@@ -147,6 +147,8 @@ function createService() {
     /* Что записали в отметки живости и что удалили: тесты смотрят сюда, а не
        в сами jest-моки — так проверяется результат, а не форма вызова. */
     webWrites: [] as Array<Record<string, unknown>>,
+    /** Условия `pushSubscription.updateMany` — рядом с `webWrites`. */
+    webWhere: [] as Array<Record<string, unknown>>,
     webDeleted: [] as string[],
     deviceWrites: [] as Array<Record<string, unknown>>,
     deviceDeleted: [] as string[],
@@ -286,10 +288,19 @@ function createService() {
         return Promise.resolve({ count: 1 });
       }),
       findMany: jest.fn(() => Promise.resolve(store.subscriptions)),
-      updateMany: jest.fn(({ data }: { data: Record<string, unknown> }) => {
-        store.webWrites.push(data);
-        return Promise.resolve({ count: 1 });
-      }),
+      updateMany: jest.fn(
+        ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }) => {
+          store.webWrites.push(data);
+          store.webWhere.push(where);
+          return Promise.resolve({ count: 1 });
+        },
+      ),
       count: jest.fn(({ where }: { where: { deadSince?: unknown } }) =>
         Promise.resolve(
           where.deadSince === null ? store.webCount : store.webStale,
@@ -1717,5 +1728,41 @@ describe('NotificationsService.readClosedWorkTask (VED-406)', () => {
     await expect(
       service.readClosedWorkTask('space-1', 'VED-380', [null]),
     ).resolves.toBe(0);
+  });
+});
+
+describe('NotificationsService.recordShown (VED-327)', () => {
+  const receipt = {
+    endpoint: 'https://web.push.apple.com/abc',
+    pushId: '3f2b8c1e-6a4d-4e0f-9b7a-1c2d3e4f5a6b',
+  };
+
+  it('отмечает показ и снимает пометку «мёртвая»', async () => {
+    const { service, store } = createService();
+
+    await service.recordShown(receipt);
+
+    expect(store.webWrites).toHaveLength(1);
+    const written = store.webWrites[0];
+    expect(written.lastShownAt).toBeInstanceOf(Date);
+    expect(written.lastShownPushId).toBe(receipt.pushId);
+    expect(written.failureCount).toBe(0);
+    expect(written.deadSince).toBeNull();
+  });
+
+  it('повтор той же квитанции отметку не сдвигает: условие по id отправки', async () => {
+    const { service, store } = createService();
+
+    await service.recordShown(receipt);
+
+    expect(store.webWhere).toEqual([
+      {
+        endpoint: receipt.endpoint,
+        OR: [
+          { lastShownPushId: null },
+          { lastShownPushId: { not: receipt.pushId } },
+        ],
+      },
+    ]);
   });
 });

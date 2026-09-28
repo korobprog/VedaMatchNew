@@ -247,6 +247,11 @@ function PointRow({
         Приняла пуш: {daysAgoLabel(point.lastSuccessAt, now)}
         {" · "}
         Клиент подтверждал: {daysAgoLabel(point.lastSeenAt, now)}
+        {/* Показ подтверждает только service worker браузера (VED-327): у
+            телефона и бота такой отметки нет, и «никогда» там было бы ложью. */}
+        {point.kind === "web"
+          ? ` · Показала уведомление: ${daysAgoLabel(point.lastShownAt, now)}`
+          : ""}
         {streak ? ` · ${streak}` : ""}
         {point.deadSince
           ? ` · помечена ${daysAgoLabel(point.deadSince, now)}`

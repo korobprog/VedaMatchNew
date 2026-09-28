@@ -83,6 +83,40 @@ describe('judgeDeliveryPoint', () => {
     ).toBe('keep');
   });
 
+  // VED-327: показ уведомления — такое же свидетельство жизни от клиента.
+  it('свежее подтверждение показа защищает подписку так же', () => {
+    expect(
+      judgeDeliveryPoint(
+        point({
+          failureCount: DELIVERY_FAILURE_STREAK + 5,
+          lastShownAt: ago(day),
+        }),
+        now,
+      ),
+    ).toBe('keep');
+    expect(
+      deliveryPointState(
+        point({
+          lastSuccessAt: ago(DELIVERY_SILENCE_MS + day),
+          lastShownAt: ago(day),
+        }),
+        now,
+      ),
+    ).toBe('alive');
+  });
+
+  it('старое подтверждение показа не защищает, как и старое lastSeenAt', () => {
+    expect(
+      judgeDeliveryPoint(
+        point({
+          failureCount: DELIVERY_FAILURE_STREAK,
+          lastShownAt: ago(DELIVERY_SILENCE_MS),
+        }),
+        now,
+      ),
+    ).toBe('mark');
+  });
+
   it('старое подтверждение клиента подписку уже не защищает', () => {
     expect(
       judgeDeliveryPoint(

@@ -196,13 +196,58 @@ async function showNotificationUnlessOpen(payload) {
         }
       : {}),
   });
+  await confirmShown(payload.receipt);
+}
+
+/**
+ * Подтверждение показа (VED-327): уведомление уже на экране — сообщаем
+ * серверу, что пуш дошёл до человека, а не только до службы доставки.
+ *
+ * Адрес и id отправки кладёт в пуш сам API (`receipt`): у воркера нет ни
+ * адреса API, ни входа, поэтому подписку называет её `endpoint`. Сообщаем
+ * только факт показа — нажатие на уведомление и время прочтения никуда не
+ * уходят. Ошибка сети — не беда: отсутствие подтверждения подписку мёртвой
+ * не делает, и показанное уведомление от неё не пострадает.
+ */
+async function confirmShown(receipt) {
+  if (!receipt || typeof receipt.id !== "string") return;
+  if (!isReceiptUrl(receipt.url)) return;
+  try {
+    const subscription = await self.registration.pushManager.getSubscription();
+    if (!subscription) return;
+    await fetch(receipt.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint, id: receipt.id }),
+      credentials: "omit",
+      keepalive: true,
+    });
+  } catch {
+    // Подтверждение ненадёжно по природе — повторять не за чем.
+  }
+}
+
+/** Квитанцию отправляем только по https (и на localhost при разработке). */
+function isReceiptUrl(url) {
+  if (typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "https:") return true;
+    return (
+      parsed.protocol === "http:" &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
 }
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   let url = event.notification.data?.url ?? "/";
   // «Отклонить» из уведомления: страница откроется с меткой и сама
-  // отклонит звонок — сервис-воркер не знает адреса API и не ходит в него.
+  // отклонит звонок: адреса API сервис-воркер не знает (в пуше есть только
+  // адрес квитанции показа, VED-327), а отклонение требует входа.
   if (event.action === "decline") url += (url.includes("?") ? "&" : "?") + "callAction=decline";
   if (event.action === "answer") url += (url.includes("?") ? "&" : "?") + "callAction=answer";
   event.waitUntil(openTarget(url));

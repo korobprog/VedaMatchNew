@@ -24,6 +24,7 @@ function web(patch: Partial<WebSubscriptionRow> = {}): WebSubscriptionRow {
     lastFailureAt: null,
     failureCount: 0,
     lastSeenAt: null,
+    lastShownAt: null,
     deadSince: null,
     ...patch,
   };
@@ -71,6 +72,19 @@ describe('buildDeliveryPoints', () => {
       'dead',
     ]);
     expect(digest.byUser.get('u1')?.[0].label).toBe('Chrome, Android');
+  });
+
+  // VED-327: админке видно не только «служба доставки приняла», но и
+  // «уведомление показано».
+  it('несёт подтверждение показа у веб-подписки, у телефона его нет', () => {
+    const shown = ago(day);
+    const digest = buildDeliveryPoints(
+      { web: [web({ lastShownAt: shown })], devices: [device()] },
+      now,
+    );
+    const [webPoint, appPoint] = digest.byUser.get('u1') ?? [];
+    expect(webPoint.lastShownAt).toBe(shown.toISOString());
+    expect(appPoint.lastShownAt).toBeNull();
   });
 
   it('телефон и бот разведены: бот в счёт приложения не идёт', () => {

@@ -56,6 +56,7 @@ import {
   sliceHistoryPage,
 } from './inbox-history';
 import type { PushFailure } from './push-errors';
+import type { ShownReceipt } from './push-receipt';
 import { TELEGRAM_DEVICE_PROVIDER } from './telegram-device';
 
 const defaults: NotificationPreferencesDto = {
@@ -265,6 +266,35 @@ export class NotificationsService {
         p256dh: true,
         auth: true,
         ...deliveryHealthSelect,
+        lastShownAt: true,
+      },
+    });
+  }
+
+  /**
+   * Service worker показал уведомление (VED-327). Идемпотентно по id отправки:
+   * повтор той же квитанции — браузер переслал запрос, воркер перезапустился —
+   * отметку не сдвигает.
+   *
+   * Показ — доказательство жизни сильнее приёма службой доставки, поэтому он
+   * снимает пометку «мёртвая» и обнуляет счётчик неудач, как и `seenByClient`.
+   * Незнакомый `endpoint` молча пропускается: ручка открыта без входа, и
+   * отвечать ей «такой подписки нет» — значит отвечать на перебор.
+   */
+  async recordShown(receipt: ShownReceipt): Promise<void> {
+    await this.prisma.pushSubscription.updateMany({
+      where: {
+        endpoint: receipt.endpoint,
+        OR: [
+          { lastShownPushId: null },
+          { lastShownPushId: { not: receipt.pushId } },
+        ],
+      },
+      data: {
+        lastShownAt: new Date(),
+        lastShownPushId: receipt.pushId,
+        failureCount: 0,
+        deadSince: null,
       },
     });
   }

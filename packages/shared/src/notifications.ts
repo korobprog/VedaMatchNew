@@ -1099,6 +1099,12 @@ export interface NotificationDeliveryPointDto {
   failureCount: number;
   /** Когда клиент последний раз подтвердил точку сам. */
   lastSeenAt: string | null;
+  /**
+   * Когда service worker последний раз сообщил, что ПОКАЗАЛ уведомление
+   * (VED-327). Есть только у веб-подписки; `null` — подтверждений не было,
+   * что само по себе не значит «не показано».
+   */
+  lastShownAt: string | null;
   /** Когда правило сочло точку мёртвой. */
   deadSince: string | null;
 }
