@@ -1934,6 +1934,13 @@ model LibraryCategory {
   infoResources String?
   infoSchedule  String?
 
+  /// Заголовок страницы рубрики, отдельный от названия (VED-394). Кнопка
+  /// «Редактировать» в окне рубрики правит только его: плитка у родителя,
+  /// путь «Все рубрики › …» и чипы на карточках держат `titleRu`/`titleEn`.
+  /// `null` — заголовок совпадает с названием.
+  pageTitleRu String?
+  pageTitleEn String?
+
   entries LibraryEntryCategory[]
 
   @@index([parentId, position])

@@ -293,9 +293,15 @@ const ui = {
     "entry.deleteFailed": "Не удалось удалить ссылку, попробуйте позже",
     "category.edit": "Редактировать категорию",
     // Кнопка на странице рубрики (VED-394): для «Гуру → …» и «Проповедники →
-    // …» название рубрики — имя исполнителя.
+    // …» название рубрики — имя исполнителя. Правит только заголовок этой
+    // страницы: плитка, путь и чипы на карточках держат прежнее название.
     "category.editTitle": "Редактировать",
-    "category.editTitleLabel": "Редактировать название рубрики",
+    "category.editTitleLabel": "Редактировать заголовок этой страницы",
+    "category.pageTitle": "Заголовок этой страницы",
+    "category.pageTitleHint":
+      "Меняется только здесь. На плитке, в пути и на карточках останется прежнее название:",
+    "category.pageTitleRu": "Заголовок по-русски",
+    "category.pageTitleEn": "Заголовок по-английски",
     "category.saved": "Категория обновлена",
     "category.delete": "Удалить рубрику",
     "category.deleteConfirm": "Удалить рубрику? Отменить нельзя.",
@@ -625,7 +631,12 @@ const ui = {
     "entry.deleteFailed": "Could not delete the link, please try again later",
     "category.edit": "Edit category",
     "category.editTitle": "Edit",
-    "category.editTitleLabel": "Edit category name",
+    "category.editTitleLabel": "Edit this page's heading",
+    "category.pageTitle": "This page's heading",
+    "category.pageTitleHint":
+      "Changes only here. The tile, the path and the cards keep the current name:",
+    "category.pageTitleRu": "Russian heading",
+    "category.pageTitleEn": "English heading",
     "category.saved": "Category updated",
     "category.delete": "Delete category",
     "category.deleteConfirm": "Delete this category? This cannot be undone.",

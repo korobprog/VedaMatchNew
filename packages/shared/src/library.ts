@@ -88,6 +88,14 @@ export interface LibraryCategoryDto {
    * клиенты и ответы без него читаются как «не задана».
    */
   lineage?: LineageId | null;
+  /**
+   * Свой заголовок страницы рубрики (VED-394), отдельный от названия: его
+   * правит кнопка «Редактировать» в окне рубрики, а плитка, путь и чипы на
+   * карточках держат `titleRu`/`titleEn`. `null` — заголовок равен
+   * названию. Приходит только у самой рубрики на её странице.
+   */
+  pageTitleRu?: string | null;
+  pageTitleEn?: string | null;
 }
 
 /**
@@ -384,6 +392,12 @@ export interface UpdateLibraryCategoryRequest {
   infoBio?: string | null;
   infoResources?: string | null;
   infoSchedule?: string | null;
+  /**
+   * Заголовок страницы рубрики (VED-394). Пустая строка, `null` или
+   * совпадение с названием — «своего заголовка нет».
+   */
+  pageTitleRu?: string | null;
+  pageTitleEn?: string | null;
 }
 
 export type LibrarySectionRequestStatus = 'pending' | 'approved' | 'rejected';

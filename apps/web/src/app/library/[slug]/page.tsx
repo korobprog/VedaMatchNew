@@ -27,6 +27,7 @@ import {
 } from "@/components/library/category-order";
 import { headerEntriesCount } from "@/components/library/category-tree";
 import { CategoryTitleEdit } from "@/components/library/category-title-edit";
+import { categoryPageTitle } from "@/components/library/category-page-title";
 import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
@@ -179,8 +180,10 @@ export default async function LibraryCategoryPage({
             раздела, у которого своих материалов нет, читалось как «здесь
             три» — а все три лежали в подразделах. */}
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          {/* Свой заголовок страницы (VED-394) — только здесь; путь выше и
+              плитка у родителя держат название рубрики. */}
           <h1 className="font-display text-2xl font-bold text-text-0">
-            {title}
+            {categoryPageTitle(locale, category)}
           </h1>
           <p className="text-sm text-text-2">
             {categoryPageSummary(
