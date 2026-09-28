@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import type { WorkMemberDto, WorkTaskPriority } from "@vedamatch/shared";
 import { WORK_ATTACH_PICKER_CLASS } from "./attach-button";
 import { MAX_FILES_AT_ONCE } from "./attach-files";
-import { deriveTaskTitle } from "./task-title";
+import { deriveTaskTitle, normalizeTaskTitle } from "./task-title";
 import { PRIORITY_TITLE } from "./task-priority";
 
 /**
@@ -91,6 +91,7 @@ export function TaskComposer({
   const editTitleRef = useRef<HTMLButtonElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const filesLabelId = useId();
+  const titleHintId = useId();
   const returnFocusToEditTitle = useRef(false);
 
   useEffect(() => {
@@ -121,8 +122,17 @@ export function TaskComposer({
     }
   }, [draftTitle]);
 
+  /** Заголовок, который получится из написанного, — считаем на каждом нажатии
+      клавиши: строка под полем должна показывать правду, а не обещание. */
+  const autoTitle = deriveTaskTitle(draft);
+  /* Без заголовка задача не заводится (VED-637): он собирается только из
+     слов, выделенных ЗАГЛАВНЫМИ, либо вписывается руками. */
+  const canSubmit =
+    draft.trim() !== "" &&
+    (draftTitle === null ? autoTitle : normalizeTaskTitle(draftTitle)) !== "";
+
   async function submit() {
-    if (!draft.trim() || saving) return;
+    if (!canSubmit || saving) return;
     setSaving(true);
     try {
       await onSubmit({
@@ -136,10 +146,6 @@ export function TaskComposer({
       setSaving(false);
     }
   }
-
-  /** Заголовок, который получится из написанного, — считаем на каждом нажатии
-      клавиши: строка под полем должна показывать правду, а не обещание. */
-  const autoTitle = deriveTaskTitle(draft);
 
   return (
     <form
@@ -179,7 +185,25 @@ export function TaskComposer({
           человек, и сплошная строка без пробелов не должна
           вылезать за край колонки — но обычные слова от
           `break-all` рвались посередине («открывает о/кно»). */}
-      {draft.trim() && draftTitle === null && (
+      {draft.trim() && draftTitle === null && !autoTitle && (
+        /* Выделения нет — заголовка нет (VED-637). Подсказка объясняет,
+           почему «Добавить» неактивна, и её же читает скринридер у кнопки
+           через `aria-describedby`. */
+        <p className="mt-1 flex flex-wrap items-baseline gap-1 text-xs text-text-1">
+          <span id={titleHintId}>
+            Выделите БОЛЬШИМИ буквами слова для заголовка
+          </span>
+          <button
+            type="button"
+            ref={editTitleRef}
+            onClick={() => setDraftTitle("")}
+            className="py-1 font-semibold text-text-1 underline"
+          >
+            Вписать вручную
+          </button>
+        </p>
+      )}
+      {draft.trim() && draftTitle === null && autoTitle && (
         <p className="mt-1 flex flex-wrap items-baseline gap-1 text-xs text-text-2">
           <span>Заголовок:</span>
           <span className="text-text-1 [overflow-wrap:anywhere]">
@@ -329,7 +353,12 @@ export function TaskComposer({
       <div className="mt-2 flex gap-2">
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || !canSubmit}
+          aria-describedby={
+            draft.trim() && draftTitle === null && !autoTitle
+              ? titleHintId
+              : undefined
+          }
           className="rounded-lg bg-magenta px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
         >
           {saving ? "Добавляем…" : "Добавить"}

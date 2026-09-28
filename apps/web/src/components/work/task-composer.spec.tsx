@@ -38,13 +38,13 @@ describe("TaskComposer (VED-453)", () => {
 
     await user.type(
       screen.getByLabelText("Описание новой задачи в разделе «Разное»"),
-      "Кнопка не жмётся",
+      "КНОПКА не жмётся",
     );
 
     expect(onDraftChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ description: "Кнопка не жмётся" }),
+      expect.objectContaining({ description: "КНОПКА не жмётся" }),
     );
-    expect(screen.getByText("«Кнопка не жмётся»")).toBeInTheDocument();
+    expect(screen.getByText("«Кнопка»")).toBeInTheDocument();
   });
 
   it("начинает с переданного черновика — начатое переживает сворачивание", () => {
@@ -60,11 +60,11 @@ describe("TaskComposer (VED-453)", () => {
 
     await user.type(
       screen.getByLabelText("Описание новой задачи в разделе «Разное»"),
-      "Сломался поиск{Control>}{Enter}{/Control}",
+      "Сломался ПОИСК{Control>}{Enter}{/Control}",
     );
 
     expect(onSubmit).toHaveBeenCalledWith({
-      description: "Сломался поиск",
+      description: "Сломался ПОИСК",
       title: null,
       files: [],
       assigneeId: "me",
@@ -84,6 +84,54 @@ describe("TaskComposer (VED-453)", () => {
       "{Escape}",
     );
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  /* VED-637: заголовок — только из слов ЗАГЛАВНЫМИ. Нет выделения — нет
+     заголовка, и задача не заводится, пока его не выделят или не впишут. */
+  it("без выделения подсказывает и не отправляет", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = setup();
+    const description = screen.getByLabelText(
+      "Описание новой задачи в разделе «Разное»",
+    );
+
+    await user.type(description, "Сломался поиск{Control>}{Enter}{/Control}");
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    const add = screen.getByRole("button", { name: "Добавить" });
+    expect(add).toBeDisabled();
+    expect(add).toHaveAccessibleDescription(
+      "Выделите БОЛЬШИМИ буквами слова для заголовка",
+    );
+
+    await user.clear(description);
+    await user.type(description, "Сломался ПОИСК");
+    expect(add).toBeEnabled();
+    expect(screen.getByText("«Поиск»")).toBeInTheDocument();
+  });
+
+  it("без выделения заголовок можно вписать руками", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = setup();
+    await user.type(
+      screen.getByLabelText("Описание новой задачи в разделе «Разное»"),
+      "Сломался поиск",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Вписать вручную" }));
+    const title = screen.getByLabelText("Заголовок");
+    expect(title).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeDisabled();
+
+    await user.type(title, "Поиск по доске");
+    await user.click(screen.getByRole("button", { name: "Добавить" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "Сломался поиск",
+        title: "Поиск по доске",
+      }),
+    );
   });
 });
 
@@ -105,11 +153,11 @@ describe("composerHasContent", () => {
     setup();
     await user.type(
       screen.getByLabelText("Описание новой задачи в разделе «Разное»"),
-      "Кнопка не жмётся",
+      "КНОПКА не жмётся",
     );
     await user.click(screen.getByRole("button", { name: "Изменить" }));
     const title = screen.getByLabelText("Заголовок");
-    expect(title).toHaveValue("Кнопка не жмётся");
+    expect(title).toHaveValue("Кнопка");
 
     await user.click(
       screen.getByRole("button", { name: "Очистить заголовок" }),
