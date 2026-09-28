@@ -7,6 +7,8 @@ import {
   type LineageGroup,
   type LineageId,
 } from "@vedamatch/shared";
+import { AnchoredPopover } from "@/components/anchored-popover";
+import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   lineageButtonLabel,
@@ -22,14 +24,15 @@ import {
  * `onSelect`. Показывать ли кнопку (только админам сервиса), тоже решает
  * сервис — здесь проверки прав нет.
  *
- * Меню раскрывается у правого края обёртки: у кнопки в конце ряда слева
- * место есть всегда, а вправо на телефоне оно уехало бы за экран.
+ * Меню — `AnchoredPopover` (VED-604): порталом поверх страницы и целиком в
+ * пределах экрана, где бы ни стояла кнопка.
  */
 export function LineageMenuButton({
   value,
   onSelect,
   className = "",
   buttonClassName = "rounded-full",
+  sizeClassName = "size-11",
   menuLabel = "Линия материала",
 }: {
   value: LineageId | null;
@@ -42,6 +45,11 @@ export function LineageMenuButton({
    * Медиатеке, со скруглёнными углами в ряду Блог-ленты (VED-596).
    */
   buttonClassName?: string;
+  /**
+   * Размер кнопки. По умолчанию 44px; в тесном ряду карточки Образования —
+   * `size-10`, чтобы встать в строку с «Редактировать» и «Удалить» (VED-607).
+   */
+  sizeClassName?: string;
   /** Имя панели для скринридера: «Линия материала», «Линия поста». */
   menuLabel?: string;
 }) {
@@ -80,12 +88,7 @@ export function LineageMenuButton({
     }
   }
 
-  const optionClass = (pressed: boolean) =>
-    `flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm transition-colors disabled:opacity-50 ${
-      pressed
-        ? "bg-magenta/10 font-semibold text-text-0"
-        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-    }`;
+  const optionClass = menuOptionClass;
 
   return (
     <div className={`relative ${className}`}>
@@ -101,18 +104,19 @@ export function LineageMenuButton({
           if (!open) setExpanded(lineageMenuOpenGroup(value));
           setOpen(!open);
         }}
-        className={`inline-flex size-11 shrink-0 items-center justify-center border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 ${buttonClassName}`}
+        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 ${buttonClassName}`}
       >
         <Landmark aria-hidden className="size-4" />
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
           id={panelId}
           role="group"
           aria-label={menuLabel}
           aria-busy={pending}
-          className="absolute right-0 top-full z-30 mt-2 max-h-[60vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           {lineageMenuItems().map((item) =>
             item.kind === "choice" ? (
@@ -124,7 +128,9 @@ export function LineageMenuButton({
                 onClick={() => void choose(item.option.value)}
                 className={optionClass(item.option.value === value)}
               >
-                {item.option.label}
+                <MenuOptionLabel pressed={item.option.value === value}>
+                  {item.option.label}
+                </MenuOptionLabel>
               </button>
             ) : (
               <div key={item.group}>
@@ -171,7 +177,9 @@ export function LineageMenuButton({
                         onClick={() => void choose(option.value)}
                         className={optionClass(option.value === value)}
                       >
-                        {option.label}
+                        <MenuOptionLabel pressed={option.value === value}>
+                          {option.label}
+                        </MenuOptionLabel>
                       </button>
                     ))}
                   </div>
@@ -184,7 +192,7 @@ export function LineageMenuButton({
               {error}
             </p>
           )}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

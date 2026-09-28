@@ -12,6 +12,7 @@ import {
   type LineageGroup,
 } from "@vedamatch/shared";
 import { lineageDetailOptions, lineageGroupOptions } from "@/lib/lineage-steps";
+import { MenuOptionLabel } from "@/components/menu-option";
 import {
   blogCategoryFilterLabel,
   blogCategoryFilterOptions,
@@ -66,7 +67,9 @@ export function BlogCategoryFilter({
             }}
             className={blogMenuOptionClass(option.value === current)}
           >
-            {option.label}
+            <MenuOptionLabel pressed={option.value === current}>
+              {option.label}
+            </MenuOptionLabel>
           </button>
         ))
       }
@@ -121,7 +124,9 @@ export function BlogLineageFilter({
             onClick={() => choose("", close)}
             className={blogMenuOptionClass(current === "")}
           >
-            Все линии
+            <MenuOptionLabel pressed={current === ""}>
+              Все линии
+            </MenuOptionLabel>
           </button>
           {lineageGroupOptions(true).map((option) => {
             const group = option.value as LineageGroup;
@@ -136,7 +141,9 @@ export function BlogLineageFilter({
                   onClick={() => choose(sole, close)}
                   className={blogMenuOptionClass(current === sole)}
                 >
-                  {option.label}
+                  <MenuOptionLabel pressed={current === sole}>
+                    {option.label}
+                  </MenuOptionLabel>
                 </button>
               );
             }
@@ -172,7 +179,9 @@ export function BlogLineageFilter({
                         onClick={() => choose(detail.value, close)}
                         className={blogMenuOptionClass(detail.value === current)}
                       >
-                        {detail.label}
+                        <MenuOptionLabel pressed={detail.value === current}>
+                          {detail.label}
+                        </MenuOptionLabel>
                       </button>
                     ))}
                   </div>

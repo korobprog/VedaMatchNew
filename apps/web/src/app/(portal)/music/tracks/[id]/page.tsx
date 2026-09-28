@@ -21,6 +21,7 @@ import { getMusicAdminArtists } from "@/lib/music-admin-api";
 import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
 import { MusicTrackLineageButton } from "@/components/music/track-lineage-button";
 import { MusicTrackAudienceButton } from "@/components/music/track-audience-button";
+import { MusicTrackHeroLayout } from "@/components/music/track-hero-layout";
 
 export async function generateMetadata({
   params,
@@ -83,30 +84,30 @@ export default async function MusicTrackPage({
   return (
     // Сверху меньше воздуха (VED-595): «Каталог» поднят к шапке.
     <main className="mx-auto max-w-4xl px-4 pb-8 pt-3 md:px-6 md:py-10">
-      <Link
-        href="/music"
-        className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
-      >
-        <span aria-hidden="true">←</span> Каталог
-      </Link>
-
-      <div className="mt-2 flex flex-col gap-6 sm:mt-5 sm:flex-row sm:gap-7">
-        {/* Обложка и кнопки одним рядом (VED-595): картинка во всю ширину
-            в своих пропорциях — без цветных полей вокруг, что давал
-            `contain` в квадрате (VED-248: обрезать её по-прежнему нельзя),
-            — а «Линия», «Поделиться» и сердце столбиком вдоль правого края,
-            одного размера. Рядом с названием кнопки наезжали на длинный
-            заголовок. */}
-        <div className="flex items-start gap-3 sm:shrink-0">
-          <div className="min-w-0 flex-1 overflow-hidden rounded-2xl sm:w-72 sm:flex-none">
-            <MusicCover
-              url={track.coverUrl}
-              seed={track.id}
-              alt={`Обложка: ${track.title}`}
-              natural
-            />
-          </div>
-          <div className="flex shrink-0 flex-col gap-2">
+      <MusicTrackHeroLayout
+        back={
+          <Link
+            href="/music"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm text-text-2 hover:text-text-0"
+          >
+            <span aria-hidden="true">←</span> Каталог
+          </Link>
+        }
+        // Картинка во всю ширину в своих пропорциях — без цветных полей
+        // вокруг, что давал `contain` в квадрате (VED-248: обрезать её
+        // по-прежнему нельзя). Кнопки — столбиком вдоль правого края, одного
+        // размера (VED-595): рядом с названием они наезжали на длинный
+        // заголовок. Как столбик встаёт на телефоне — см. раскладку (VED-605).
+        cover={
+          <MusicCover
+            url={track.coverUrl}
+            seed={track.id}
+            alt={`Обложка: ${track.title}`}
+            natural
+          />
+        }
+        actions={
+          <>
             {/* «Линия» — только редакции Музыки (VED-561). */}
             <MusicTrackLineageButton
               trackId={track.id}
@@ -138,78 +139,84 @@ export default async function MusicTrackPage({
               canEdit={canEdit}
               className="shrink-0"
             />
-          </div>
-        </div>
+          </>
+        }
+        heading={
+          <>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
+              {track.title}
+            </h1>
 
-        <div className="flex min-w-0 flex-col gap-3">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text-0 md:text-3xl">
-            {track.title}
-          </h1>
-
-          {track.artist && (
-            <Link
-              href={`/music/artists/${track.artist.slug}`}
-              className="text-base font-semibold text-cyan hover:text-magenta"
-            >
-              {track.artist.name}
-            </Link>
-          )}
-
-          {track.album && (
-            <Link
-              href={`/music/albums/${track.album.slug}`}
-              className="text-sm text-text-1 hover:text-text-0"
-            >
-              {track.album.title}
-            </Link>
-          )}
-
-          <ul className="mt-1 flex flex-wrap gap-2">
-            {track.categories.map((category) => (
-              <li key={category.id}>
-                <Link
-                  href={`/music?category=${category.slug}`}
-                  className="flex h-8 items-center rounded-full border border-glass-brd px-3 text-xs font-semibold text-text-1 hover:text-text-0"
-                >
-                  {category.title}
-                </Link>
-              </li>
-            ))}
-            {track.isLiveRecording && (
-              <li className="flex h-8 items-center rounded-full border border-glass-brd bg-glass px-3 text-xs font-semibold text-text-1">
-                Запись с программы
-              </li>
+            {track.artist && (
+              <Link
+                href={`/music/artists/${track.artist.slug}`}
+                className="text-base font-semibold text-cyan hover:text-magenta"
+              >
+                {track.artist.name}
+              </Link>
             )}
-          </ul>
 
-          <div className="mt-1 flex flex-col gap-2">
-            {/* Первым и отдельно от остальных: это то, зачем страницу
-                открывают, а «в плейлист» и «на устройство» — что делают с
-                записью потом. */}
-            <MusicListenButton trackId={track.id} title={track.title} />
-            <Suspense fallback={<div className="h-11" />}>
-              <MusicAddToPlaylist
-                trackId={track.id}
-                trackTitle={track.title}
-                artistName={track.artist?.name ?? null}
-              />
-            </Suspense>
-            <MusicQueueActions trackId={track.id} />
-            <MusicOfflineButton track={track} />
-            <MusicDownloadButton trackId={track.id} />
-            <MusicSleepTimerButton />
-          </div>
+            {track.album && (
+              <Link
+                href={`/music/albums/${track.album.slug}`}
+                className="text-sm text-text-1 hover:text-text-0"
+              >
+                {track.album.title}
+              </Link>
+            )}
+          </>
+        }
+        rest={
+          <>
+            <ul className="mt-1 flex flex-wrap gap-2">
+              {track.categories.map((category) => (
+                <li key={category.id}>
+                  <Link
+                    href={`/music?category=${category.slug}`}
+                    className="flex h-8 items-center rounded-full border border-glass-brd px-3 text-xs font-semibold text-text-1 hover:text-text-0"
+                  >
+                    {category.title}
+                  </Link>
+                </li>
+              ))}
+              {track.isLiveRecording && (
+                <li className="flex h-8 items-center rounded-full border border-glass-brd bg-glass px-3 text-xs font-semibold text-text-1">
+                  Запись с программы
+                </li>
+              )}
+            </ul>
 
-          <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-            {facts.map((fact) => (
-              <div key={fact.label} className="flex flex-col">
-                <dt className="text-xs text-text-2">{fact.label}</dt>
-                <dd className="font-mono text-sm text-text-0">{fact.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
+            <div className="mt-1 flex flex-col gap-2">
+              {/* Первым и отдельно от остальных: это то, зачем страницу
+                  открывают, а «в плейлист» и «на устройство» — что делают с
+                  записью потом. */}
+              <MusicListenButton trackId={track.id} title={track.title} />
+              <Suspense fallback={<div className="h-11" />}>
+                <MusicAddToPlaylist
+                  trackId={track.id}
+                  trackTitle={track.title}
+                  artistName={track.artist?.name ?? null}
+                />
+              </Suspense>
+              <MusicQueueActions trackId={track.id} />
+              <MusicOfflineButton track={track} />
+              <MusicDownloadButton trackId={track.id} />
+              <MusicSleepTimerButton />
+            </div>
+
+            <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+              {facts.map((fact) => (
+                <div key={fact.label} className="flex flex-col">
+                  <dt className="text-xs text-text-2">{fact.label}</dt>
+                  <dd className="font-mono text-sm text-text-0">
+                    {fact.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        }
+      />
 
       {/* `Suspense` обязателен: внутри `useSearchParams` (VED-269, открытие
           по `?edit=lyrics` из панели плеера), без границы Next роняет

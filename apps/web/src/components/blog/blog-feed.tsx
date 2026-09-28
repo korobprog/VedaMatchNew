@@ -91,9 +91,7 @@ export function BlogFeed({
     <div>
       {/* Зазоры 6px на телефоне: вкладки и «Новый пост» встают в одну
           строку и на 360 точках. */}
-      {/* `relative` — точка отсчёта для меню фильтров: панель встаёт от
-          правого края ряда, а не от кнопки, и не уезжает за экран. */}
-      <div className="relative mb-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-1.5 sm:gap-2">
         {nav}
         {filters && (
           <>

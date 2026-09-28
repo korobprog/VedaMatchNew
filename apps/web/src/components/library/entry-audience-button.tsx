@@ -20,12 +20,15 @@ export function EntryAudienceButton({
   canSet,
   onChanged,
   className,
+  sizeClassName,
 }: {
   entryId: string;
   audienceStages: readonly SpiritualStage[];
   canSet?: boolean;
   onChanged?: (stages: SpiritualStage[]) => void;
   className?: string;
+  /** Размер кнопки; по умолчанию 44px. */
+  sizeClassName?: string;
 }) {
   const router = useRouter();
   if (!canSet) return null;
@@ -34,6 +37,7 @@ export function EntryAudienceButton({
     <AudienceStagesMenuButton
       value={audienceStages}
       className={className}
+      sizeClassName={sizeClassName}
       onSave={async (next) => {
         const saved = await setLibraryEntryAudienceStages(entryId, next);
         if (onChanged) onChanged(saved.audienceStages);

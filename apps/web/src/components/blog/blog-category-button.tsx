@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Tags } from "lucide-react";
 import type { BlogPostCategory } from "@vedamatch/shared";
+import { MenuOptionLabel } from "@/components/menu-option";
 import {
   blogCategoryAssignLabel,
   blogCategoryAssignOptions,
@@ -61,7 +62,9 @@ export function BlogCategoryButton({
               onClick={() => void choose(option.value, close)}
               className={blogMenuOptionClass(option.value === current)}
             >
-              {option.label}
+              <MenuOptionLabel pressed={option.value === current}>
+                {option.label}
+              </MenuOptionLabel>
             </button>
           ))}
           {error && (

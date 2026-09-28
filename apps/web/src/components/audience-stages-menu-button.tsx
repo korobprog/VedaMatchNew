@@ -8,6 +8,8 @@ import {
   type SpiritualStage,
 } from "@vedamatch/shared";
 import { Button } from "@/components/ui/button";
+import { AnchoredPopover } from "@/components/anchored-popover";
+import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   audienceStagesButtonLabel,
@@ -33,12 +35,15 @@ export function AudienceStagesMenuButton({
   value,
   onSave,
   className = "",
+  sizeClassName = "size-11",
 }: {
   value: readonly SpiritualStage[];
   /** Сохранить выбор. Ошибка показывается под меню, выбор не меняется. */
   onSave: (stages: SpiritualStage[]) => Promise<void>;
   /** Классы обёртки: место в ряду. */
   className?: string;
+  /** Размер кнопки, по умолчанию 44px (см. `LineageMenuButton`, VED-607). */
+  sizeClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -74,12 +79,10 @@ export function AudienceStagesMenuButton({
     }
   }
 
-  const optionClass = (pressed: boolean) =>
-    `flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-3 text-left text-sm transition-colors disabled:opacity-50 ${
-      pressed
-        ? "bg-magenta/10 font-semibold text-text-0"
-        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-    }`;
+  const optionClass = menuOptionClass;
+  // «Для всех» — пустая разметка или все четыре ступени: выбор виден в
+  // окне так же, как отмеченная ступень (VED-596).
+  const forAll = draft.length === 0 || draft.length === AUDIENCE_STAGES.length;
 
   return (
     <div className={`relative ${className}`}>
@@ -98,7 +101,7 @@ export function AudienceStagesMenuButton({
           }
           setOpen(!open);
         }}
-        className={`relative inline-flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors hover:text-text-0 ${
+        className={`relative inline-flex ${sizeClassName} shrink-0 items-center justify-center rounded-full border transition-colors hover:text-text-0 ${
           marked
             ? "border-cyan/60 text-text-0"
             : "border-glass-brd text-text-1 hover:border-cyan/60"
@@ -117,13 +120,14 @@ export function AudienceStagesMenuButton({
         )}
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
           id={panelId}
           role="group"
           aria-label="Ступени самоидентификации материала"
           aria-busy={pending}
-          className="absolute right-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           <p className="px-3 pb-1 pt-1 text-xs text-text-1">
             Кому показывать: от одной до четырёх ступеней. Без отметок — всем.
@@ -141,8 +145,9 @@ export function AudienceStagesMenuButton({
                 }
                 className={optionClass(pressed)}
               >
-                {AUDIENCE_STAGE_LABELS[stage]}
-                {pressed && <Check aria-hidden className="size-4 shrink-0" />}
+                <MenuOptionLabel pressed={pressed}>
+                  {AUDIENCE_STAGE_LABELS[stage]}
+                </MenuOptionLabel>
               </button>
             );
           })}
@@ -150,9 +155,17 @@ export function AudienceStagesMenuButton({
             <button
               type="button"
               disabled={pending}
+              aria-pressed={forAll}
               onClick={() => void save([])}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-glass-brd px-3 text-sm text-text-1 transition-colors hover:text-text-0 disabled:opacity-50"
+              className={`inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-sm transition-colors disabled:opacity-50 ${
+                forAll
+                  ? "border-magenta bg-magenta/10 font-semibold text-text-0"
+                  : "border-glass-brd text-text-1 hover:text-text-0"
+              }`}
             >
+              {forAll && (
+                <Check aria-hidden className="size-4 shrink-0 text-magenta" />
+              )}
               Для всех
             </button>
             <Button
@@ -169,7 +182,7 @@ export function AudienceStagesMenuButton({
               {error}
             </p>
           )}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

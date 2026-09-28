@@ -294,22 +294,34 @@ export function EntryCard({
             />
           </>
         )}
-        {/* «Линия» — только администратору Образования (VED-561), крайней
-            справа: меню раскрывается влево и не уходит за экран. */}
-        <EntryLineageButton
-          entryId={entry.id}
-          lineage={lineage}
-          canSetLineage={entry.canSetLineage}
-          onChanged={setLineage}
-          className="ml-auto"
-        />
-        {/* «Ступени» (VED-575) — рядом с «Линией», те же права. */}
-        <EntryAudienceButton
-          entryId={entry.id}
-          audienceStages={audienceStages}
-          canSet={entry.canSetLineage}
-          onChanged={setAudienceStages}
-        />
+        {/* «Ступени» (VED-575) и «Линия» (VED-561) — только администратору
+            Образования, парой у правого края: меню раскрываются влево и не
+            уходят за экран. Пара не разрывается (VED-607): поодиночке
+            «Ступени» переносились на свою строку под «Редактировать», хотя
+            по смыслу стоят рядом с «Линией». Кнопки по 40px, а не 44 — так
+            пара влезает в строку с «Редактировать» и «Удалить» на телефоне
+            шириной 412; уже — переносится целиком и прижимается вправо. */}
+        {entry.canSetLineage && (
+          <div
+            data-testid="entry-admin-marks"
+            className="ml-auto flex shrink-0 items-center gap-1.5"
+          >
+            <EntryAudienceButton
+              entryId={entry.id}
+              audienceStages={audienceStages}
+              canSet={entry.canSetLineage}
+              onChanged={setAudienceStages}
+              sizeClassName="size-10"
+            />
+            <EntryLineageButton
+              entryId={entry.id}
+              lineage={lineage}
+              canSetLineage={entry.canSetLineage}
+              onChanged={setLineage}
+              sizeClassName="size-10"
+            />
+          </div>
+        )}
       </div>
     </article>
   );
