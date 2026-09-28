@@ -26,8 +26,14 @@ function saveColors(userId: string, accents: readonly FeaturedAccent[]) {
  * цвета прямо на этих трёх клавишах».
  *
  * Стоит рядом со ссылкой сервиса, а не внутри неё: кнопка внутри `<a>` —
- * невалидная разметка, и нажатие на кружок уводило бы в сервис. Видимый
- * кружок маленький, а цель нажатия — 32px, чтобы попадать пальцем.
+ * невалидная разметка, и нажатие на кружок уводило бы в сервис.
+ *
+ * VED-601: кружок не должен спорить с самой кнопкой — 8px, без цвета
+ * сервиса (контур вторым цветом текста, полупрозрачный), прижат к правому
+ * верхнему углу. Центр — в 14px от краёв, внутри скругления `rounded-2xl`.
+ * Ярче он становится только под курсором и в фокусе. Цель нажатия —
+ * прозрачные 24px вокруг, как требует WCAG 2.5.8; обводку фокуса даёт
+ * глобальный `*:focus-visible`.
  *
  * Выбор пишется в cookie и главная перерисовывается на сервере — так же, как
  * выбор самих кнопок в `FeaturedServicesEditor`.
@@ -66,11 +72,11 @@ export function FeaturedColorPicker({
         disabled={pending}
         aria-label={`Цвет кнопки: ${FEATURED_ACCENT_NAMES[current]}`}
         title={`Цвет кнопки «${serviceName}»`}
-        className="absolute right-1 top-1 z-10 flex size-8 items-center justify-center rounded-full disabled:opacity-50"
+        className="group absolute right-0.5 top-0.5 z-10 flex size-6 items-center justify-center rounded-full disabled:opacity-50"
       >
         <span
           aria-hidden
-          className={`block size-3 rounded-full ring-1 ring-glass-brd ${FEATURED_ACCENT_FILL[current]}`}
+          className="block size-2 rounded-full border border-text-2 opacity-50 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
         />
       </button>
 
