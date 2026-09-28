@@ -57,6 +57,7 @@ import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
 import { MotivationPicturesService } from './motivation-pictures.service';
 import { MAX_REEL_IMAGE_BYTES, type UploadedReelImage } from './reel-image';
+import { MotivationVideosService } from './motivation-videos.service';
 
 @Controller()
 export class MotivationController {
@@ -74,6 +75,7 @@ export class MotivationController {
     private readonly postcards: MotivationPostcardsService,
     private readonly analytics: MotivationAnalyticsService,
     private readonly pictures: MotivationPicturesService,
+    private readonly videos: MotivationVideosService,
   ) {}
 
   /**
@@ -297,6 +299,26 @@ export class MotivationController {
   @Get('motivation/audio')
   audio() {
     return this.audio_.list();
+  }
+
+  /**
+   * Лента «Видео» (VED-246): короткие ролики редакции, от новых к старым.
+   * `?category=` — папка из справочника афоризмов (несколько — через запятую).
+   */
+  @Get('motivation/videos')
+  @UseGuards(AuthGuard)
+  videoFeed(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('category') category?: string,
+  ) {
+    return this.videos.list({ cursor, limit, category });
+  }
+  /** Меню категорий ленты «Видео»: только папки с роликами. */
+  @Get('motivation/videos/categories')
+  @UseGuards(AuthGuard)
+  videoCategories() {
+    return this.videos.categoryMenu();
   }
 
   /** Справочники объявлены до `:id`: иначе «music» уедет в параметр. */

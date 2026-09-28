@@ -7882,4 +7882,27 @@ model WellnessArticle {
   updatedAt   DateTime  @updatedAt
 
   @@index([categoryId, status, createdAt])
+
+/// Короткие видео Вдохновения (VED-246) — отдельная лента «Видео» рядом с
+/// «Открытками». Файл загружает редакция, как картинки; категория — слаг из
+/// того же справочника `MotivationCategory`, что у афоризмов (FK нет, как и у
+/// `MotivationPost.category`: удалённая категория не должна уносить ролики).
+model MotivationVideo {
+  id              String   @id @default(uuid())
+  /// Слаг категории из `MotivationCategory`.
+  category        String
+  title           String   @default("")
+  /// Публичный адрес файла в хранилище — тот же путь, что у кадров рилсов.
+  url             String
+  /// С каким типом файл отдаётся из хранилища.
+  contentType     String
+  sizeBytes       Int
+  durationSeconds Int
+  /// Кто загрузил. Без FK: ролик редакции переживает удаление аккаунта.
+  uploadedById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdAt, id])
+  @@index([category, createdAt, id])
 }

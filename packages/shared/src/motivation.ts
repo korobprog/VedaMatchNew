@@ -73,6 +73,38 @@ export interface MotivationAudioDto {
   sortOrder: number;
 }
 
+/**
+ * Короткое видео ленты «Видео» (VED-246). Загружает редакция; категория — из
+ * того же справочника, что у афоризмов.
+ */
+export interface MotivationVideoDto {
+  id: string;
+  url: string;
+  title: string;
+  category: string;
+  /** Название категории для показа; пусто — справочник её не знает. */
+  categoryTitle: string;
+  durationSeconds: number;
+  createdAt: string;
+}
+
+export interface MotivationVideoPage {
+  items: MotivationVideoDto[];
+  nextCursor: string | null;
+}
+
+/**
+ * Категория в меню ленты «Видео»: только те, где есть ролики, и их
+ * родители — иначе подкатегории не к чему крепиться.
+ */
+export interface MotivationVideoCategoryDto {
+  id: string;
+  slug: string;
+  title: string;
+  parentId: string | null;
+  videoCount: number;
+}
+
 export interface MotivationPostDto {
   id: string;
   slug: string;

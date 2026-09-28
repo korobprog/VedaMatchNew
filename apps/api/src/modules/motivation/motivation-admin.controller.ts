@@ -49,6 +49,8 @@ import {
 } from './reel-image';
 import { MotivationAudioService } from './motivation-audio.service';
 import { MAX_AUDIO_BYTES, type UploadedAudio } from './audio-upload';
+import { MotivationVideosService } from './motivation-videos.service';
+import { MAX_VIDEO_BYTES, type UploadedVideo } from './video-upload';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
@@ -80,6 +82,7 @@ export class MotivationAdminController {
     private readonly postcards: MotivationPostcardsService,
     private readonly analytics: MotivationAnalyticsService,
     private readonly pictures: MotivationPicturesService,
+    private readonly videos: MotivationVideosService,
   ) {}
   /** Состояние генерации: очередь и живой воркер. */
   @Get('health')
@@ -137,6 +140,30 @@ export class MotivationAdminController {
     @Body() body: unknown,
   ) {
     return this.pictures.create(user, file, body);
+  }
+
+  /**
+   * Короткое видео в ленту «Видео» (VED-246) — сразу опубликованным. Поля
+   * формы: `file`, `category`, необязательные `title` и `durationSeconds`
+   * (браузер читает её сам — нужна для WebM, у mp4/mov сервер берёт свою).
+   */
+  @Post('videos')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_VIDEO_BYTES } }),
+  )
+  createVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFile() file: UploadedVideo | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.videos.create(user, file, body);
+  }
+  @Delete('videos/:id')
+  removeVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.videos.remove(user, id);
   }
 
   /**
