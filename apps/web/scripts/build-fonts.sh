@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Собирает woff2 для next/font/local: шрифты портала — в src/app/fonts/,
-# шрифты стиха Библиотеки — в src/components/library/shloka/fonts/.
+# шрифты стиха Библиотеки — в src/components/library/shloka/fonts/, их копия
+# для санскрита в «Читать полностью» Вдохновения — в
+# src/components/motivation/fonts/ (сервис не берёт файлы чужого, VED-263).
 #
 # Раньше шрифты тянул next/font/google прямо во время `next build`, и сборка
 # образа падала, когда fonts.googleapis.com не отвечал. Теперь файлы лежат в
@@ -19,9 +21,10 @@ set -euo pipefail
 WEB="$(cd "$(dirname "$0")/.." && pwd)"
 PORTAL="$WEB/src/app/fonts"
 VERSE="$WEB/src/components/library/shloka/fonts"
+MOTIVATION="$WEB/src/components/motivation/fonts"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$PORTAL" "$VERSE"
+mkdir -p "$PORTAL" "$VERSE" "$MOTIVATION"
 
 GF="https://raw.githubusercontent.com/google/fonts/23e54b51ddffbc7713c583748e3bd86f62b1fa4a/ofl"
 GS="https://fonts.gstatic.com/s"
@@ -67,4 +70,6 @@ fetch "$GS/notoserif/v33/ga6saw1J5X9T9RW6j9bNfFIMZhhWnFTyNZIQD1-_FXP0RgnaOg9MYBN
 subset noto.ttf "$CYRILLIC_EXT,$CYRILLIC,$LATIN_EXT,$LATIN" "$VERSE/noto-serif-400.woff2"
 subset noto-italic.ttf "$CYRILLIC_EXT,$CYRILLIC,$LATIN_EXT,$LATIN" "$VERSE/noto-serif-400-italic.woff2"
 
-ls -l "$PORTAL" "$VERSE"
+cp "$VERSE/tiro-devanagari-sanskrit-devanagari.woff2" "$VERSE/noto-serif-400.woff2" "$MOTIVATION/"
+
+ls -l "$PORTAL" "$VERSE" "$MOTIVATION"

@@ -30,6 +30,8 @@ import {
   splitQuoteAndExplanation,
 } from "./quote-text";
 import { needsFullQuote, pictureTextOf } from "./picture-text";
+import { parseScriptureVerse, type ScriptureVerseRef } from "./scripture-verse";
+import { ScriptureVerseBlocks } from "./scripture-verse-blocks";
 import {
   BACKGROUND_VOLUME,
   hasBackgroundAudio,
@@ -1037,6 +1039,7 @@ function ReelSlide({
      срезала бы края надписи. */
   const printed = kind === "image" && post.captionInImage;
   const sourceParts = attributionParts(post);
+  const verseRef = parseScriptureVerse(post.attributionWork, post.attributionLocator);
   const sourceFields = attributionFields(post);
   const hasCategory = Boolean(categoryLink(post));
   const explanationToggle = explanation && (
@@ -1386,12 +1389,15 @@ function ReelSlide({
           {/* У фото надпись может быть поправлена отдельно от полного
               текста (VED-241) — тогда кнопка нужна всегда: окно покажет
               цитату целиком, а не то, что стоит на картинке. */}
-          {!printed &&
-            (kind === "image"
-              ? needsFullQuote({ pictureText, quote, clamped: quoteClamped })
-              : isLongQuote(quote) || quoteClamped) && (
-              <FullQuoteToggle quote={quote} sourceParts={sourceParts} />
-            )}
+          {/* У стиха Писания окно нужно всегда, даже под короткой цитатой:
+              в нём санскрит, транслитерация и пословный перевод (VED-263). */}
+          {(verseRef ||
+            (!printed &&
+              (kind === "image"
+                ? needsFullQuote({ pictureText, quote, clamped: quoteClamped })
+                : isLongQuote(quote) || quoteClamped))) && (
+            <FullQuoteToggle quote={quote} sourceParts={sourceParts} verseRef={verseRef} />
+          )}
           {/* Комментарий — слова комментатора о стихе, и живут они в
               Библиотеке. Своей копии не заводим: она разошлась бы с
               оригиналом на первой же правке книги. */}
@@ -1637,7 +1643,15 @@ function SourceFields({
  * своей DOM-цитаты нет вовсе (текст вшит в кадр воркером), а полный текст
  * всё равно есть в данных поста — доставать его из видео не нужно.
  */
-function FullQuoteToggle({ quote, sourceParts }: { quote: string; sourceParts: string[] }) {
+function FullQuoteToggle({
+  quote,
+  sourceParts,
+  verseRef,
+}: {
+  quote: string;
+  sourceParts: string[];
+  verseRef: ScriptureVerseRef | null;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -1664,6 +1678,7 @@ function FullQuoteToggle({ quote, sourceParts }: { quote: string; sourceParts: s
               />
             </p>
           )}
+          {verseRef && <ScriptureVerseBlocks verseRef={verseRef} />}
         </CenteredSheet>
       )}
     </>
