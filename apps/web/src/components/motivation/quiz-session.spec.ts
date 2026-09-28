@@ -123,4 +123,13 @@ describe("quizPreloadUrls (VED-627)", () => {
       quizPreloadUrls([{ imageUrl: "a.png" }, { imageUrl: "" }], 0),
     ).toEqual([]);
   });
+
+  it("подгружает лёгкую копию, если она есть (VED-629)", () => {
+    const withThumbs = [
+      { imageUrl: "a.png", imageThumbUrl: "a.webp" },
+      { imageUrl: "b.png", imageThumbUrl: "b.webp" },
+      { imageUrl: "c.png", imageThumbUrl: "" },
+    ];
+    expect(quizPreloadUrls(withThumbs, 0)).toEqual(["b.webp", "c.png"]);
+  });
 });

@@ -1,3 +1,5 @@
+import { type DisplayImageSource, displayImageUrl } from "./display-image";
+
 /**
  * Ход викторины (VED-243): какой вопрос на экране, что выбрано и сколько
  * угадано. Чистая логика без React — её проверяют тесты, а компонент только
@@ -93,16 +95,20 @@ export const QUIZ_PRELOAD_AHEAD = 2;
  * Картинки следующих вопросов, которые стоит начать грузить, пока человек
  * думает над текущим (VED-627): иначе каждая «Дальше» упирается в загрузку
  * иллюстрации заново. Текущая и уже пройденные не нужны, повторы — тоже.
+ *
+ * Грузим тот же файл, что потом покажем, — лёгкую копию, если она есть
+ * (VED-629): заранее скачанный оригинал экрану не пригодился бы.
  */
 export function quizPreloadUrls(
-  questions: readonly { imageUrl: string }[],
+  questions: readonly DisplayImageSource[],
   index: number,
   ahead = QUIZ_PRELOAD_AHEAD,
 ): string[] {
-  const current = questions[index]?.imageUrl;
+  const shown = questions[index];
+  const current = shown ? displayImageUrl(shown) : undefined;
   const urls: string[] = [];
   for (const next of questions.slice(index + 1, index + 1 + ahead)) {
-    const url = next.imageUrl;
+    const url = displayImageUrl(next);
     if (url && url !== current && !urls.includes(url)) urls.push(url);
   }
   return urls;

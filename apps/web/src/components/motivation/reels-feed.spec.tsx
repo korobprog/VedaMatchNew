@@ -33,6 +33,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   category: "daily",
   categoryTitle: "Каждый день",
   imageUrl: `https://cdn/${id}.webp`,
+  imageThumbUrl: "",
   storyImageUrl: "",
   videoUrl: "",
   videoHasSound: false,

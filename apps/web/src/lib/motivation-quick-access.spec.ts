@@ -15,6 +15,7 @@ const post = (over: Partial<MotivationPostDto> = {}): MotivationPostDto => ({
   category: "wisdom",
   categoryTitle: "Мудрость",
   imageUrl: "",
+  imageThumbUrl: "",
   storyImageUrl: "",
   videoUrl: "",
   videoHasSound: false,

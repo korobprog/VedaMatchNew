@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { MotivationCategoryDto, MotivationPostDto } from "@vedamatch/shared";
+import { displayImageUrl } from "./display-image";
 import {
   collectionHref,
   collectionsHref,
@@ -276,7 +277,8 @@ export function MotivationCollectionGrid({
               src={
                 variant === "story" && post.storyImageUrl
                   ? post.storyImageUrl
-                  : post.imageUrl
+                  : // Плитке тем более хватает лёгкой копии (VED-629).
+                    displayImageUrl(post)
               }
               alt=""
               loading="lazy"

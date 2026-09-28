@@ -15,6 +15,7 @@ const quiz: MotivationQuizDto = {
       id: "a",
       slug: "post-a",
       imageUrl: "https://cdn/a.webp",
+      imageThumbUrl: "",
       answer: "2.11",
       options: ["4.7", "2.11", "9.22", "18.66"],
       text: "Мудрые не скорбят ни о живых, ни о мёртвых.",
@@ -23,6 +24,7 @@ const quiz: MotivationQuizDto = {
       id: "b",
       slug: "post-b",
       imageUrl: "https://cdn/b.webp",
+      imageThumbUrl: "",
       answer: "4.7",
       options: ["4.7", "2.13", "3.5", "6.5"],
       text: "",
@@ -49,6 +51,25 @@ describe("MotivationQuiz", () => {
         screen.getByRole("button", { name: `Стих ${option}` }),
       ).toBeEnabled();
     expect(screen.getByText(/Вопрос/)).toHaveTextContent("Вопрос 1 из 2");
+  });
+
+  it("показывает лёгкую копию картинки, если она есть (VED-629)", () => {
+    const [first, second] = quiz.questions;
+    render(
+      <MotivationQuiz
+        quiz={{
+          ...quiz,
+          questions: [
+            { ...first, imageThumbUrl: "https://cdn/a-w720.webp" },
+            second,
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("img", { name: "Иллюстрация к стиху Бхагавад-гиты" }),
+    ).toHaveAttribute("src", "https://cdn/a-w720.webp");
   });
 
   it("верный ответ: «Верно», очко и текст стиха", async () => {
