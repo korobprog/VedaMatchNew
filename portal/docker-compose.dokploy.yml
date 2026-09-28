@@ -131,6 +131,11 @@ services:
       # Фоновая проверка в интернете (WELLNESS_SEARCH_MODEL) — на gpt-5.4: там
       # никто не ждёт, а поиск в интернете умеет только она.
       WELLNESS_VISION_MODEL: ${WELLNESS_VISION_MODEL:-}
+      # «Третий глаз» (помощник для слабовидящих): человек ждёт ответа на
+      # остановке, важна задержка. Замер 28.09 на релее, кадр 1280 px: haiku
+      # 2,2–4,5 с, gemini-3.6-flash 8–11 с (и зря пугал «Осторожно»),
+      # gemini-3.5-flash 11–21 с, gpt-5.4-mini — 429. Точность у всех одна.
+      WELLNESS_EYE_MODEL: ${WELLNESS_EYE_MODEL:-claude-haiku-4-5}
       WELLNESS_AI_USD_CENTS_PER_MTOK_IN: ${WELLNESS_AI_USD_CENTS_PER_MTOK_IN:-}
       WELLNESS_AI_USD_CENTS_PER_MTOK_OUT: ${WELLNESS_AI_USD_CENTS_PER_MTOK_OUT:-}
       WELLNESS_AI_USD_CENTS_PER_SEARCH: ${WELLNESS_AI_USD_CENTS_PER_SEARCH:-}

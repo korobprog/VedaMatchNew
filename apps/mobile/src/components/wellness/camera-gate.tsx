@@ -3,6 +3,7 @@ import {
   cameraAction,
   describeCameraAccess,
   type CameraAccess,
+  type CameraPurpose,
 } from '@/lib/wellness/camera-access';
 import { pressedStyle, ripple } from '@/theme/press';
 import { useTheme } from '@/theme/theme';
@@ -22,15 +23,18 @@ import { fonts, hitTarget, radius } from '@/theme/tokens';
 export function CameraGate({
   access,
   onRequest,
+  purpose = 'barcode',
   children,
 }: {
   access: CameraAccess;
+  /** Для чего камера: от этого зависит, что честно сказать про снимок. */
+  purpose?: CameraPurpose;
   onRequest(): void;
   /** Запасной путь — форма ручного ввода. Показывается в обоих отказах. */
   children?: React.ReactNode;
 }) {
   const { colors } = useTheme();
-  const copy = describeCameraAccess(access);
+  const copy = describeCameraAccess(access, purpose);
   if (!copy) return null;
   const action = cameraAction(access);
 

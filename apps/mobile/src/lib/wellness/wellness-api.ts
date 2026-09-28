@@ -6,6 +6,7 @@ import type {
   WellnessScanResult,
 } from '@vedamatch/shared';
 import type { ApiClient } from '@/lib/api/client';
+import type { EyeMode } from './eye';
 
 /**
  * Маршруты сервиса «Здоровье» (`wellness/*`), которыми пользуется приложение
@@ -49,6 +50,20 @@ export function createWellnessApi(api: ApiClient) {
       api.request<WellnessProductCard>('/wellness/products', {
         method: 'POST',
         body,
+      }),
+    /**
+     * «Третий глаз»: кадр с камеры → фраза для синтезатора речи. Кадр на
+     * сервере не сохраняется. `previous` — что уже прозвучало: модель по нему
+     * не пересказывает тот же автобус другими словами.
+     */
+    look: (
+      body: { mode: EyeMode; imageDataUrl: string; previous: string | null },
+      signal?: AbortSignal,
+    ) =>
+      api.request<{ speech: string; nothing: boolean }>('/wellness/eye/look', {
+        method: 'POST',
+        body,
+        signal,
       }),
     /** Последние проверки этого человека. */
     history: () => api.request<WellnessHistoryItem[]>('/wellness/history'),

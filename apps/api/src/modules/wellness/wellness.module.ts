@@ -7,6 +7,8 @@ import { WellnessAssistantListener } from './wellness-assistant.listener';
 import { WellnessCheckWorkerService } from './wellness-check-worker.service';
 import { WellnessCheckService } from './wellness-check.service';
 import { WellnessController } from './wellness.controller';
+import { WellnessEyeController } from './wellness-eye.controller';
+import { WellnessEyeService } from './wellness-eye.service';
 import { WellnessImagesService } from './wellness-images.service';
 import { WellnessKnowledgeController } from './wellness-knowledge.controller';
 import { WellnessKnowledgeService } from './wellness-knowledge.service';
@@ -30,6 +32,7 @@ import { WellnessService } from './wellness.service';
   controllers: [
     WellnessAdminController,
     WellnessKnowledgeController,
+    WellnessEyeController,
     WellnessController,
   ],
   providers: [
@@ -46,6 +49,7 @@ import { WellnessService } from './wellness.service';
     WellnessCheckWorkerService,
     WellnessImagesService,
     WellnessKnowledgeService,
+    WellnessEyeService,
   ],
 })
 export class WellnessModule {}

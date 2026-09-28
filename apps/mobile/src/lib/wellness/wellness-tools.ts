@@ -16,7 +16,7 @@
  */
 
 /** Значок рисуется экраном; имена намеренно свои, а не из чужой библиотеки. */
-export type WellnessToolIcon = 'scan' | 'history';
+export type WellnessToolIcon = 'scan' | 'eye' | 'history';
 
 export interface WellnessTool {
   key: string;
@@ -35,6 +35,13 @@ export const WELLNESS_TOOLS: readonly WellnessTool[] = [
     text: 'Наведите камеру на штрихкод — покажем, подходит ли продукт. Код можно набрать и руками.',
     route: '/wellness/scan',
     icon: 'scan',
+  },
+  {
+    key: 'eye',
+    title: 'Третий глаз',
+    text: 'Для тех, кто плохо видит: камера смотрит, телефон говорит вслух — номер автобуса, товар и цену, что перед вами.',
+    route: '/wellness/eye',
+    icon: 'eye',
   },
   {
     key: 'history',
