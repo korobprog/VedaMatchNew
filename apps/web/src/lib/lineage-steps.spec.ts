@@ -10,13 +10,30 @@ import {
 } from "./lineage-steps";
 
 describe("выбор линии в два шага (VED-568)", () => {
-  it("первый шаг — три группы, ISKCON одной строкой с расшифровкой", () => {
+  it("первый шаг — три группы, ISKCON одной строкой", () => {
     expect(lineageGroupOptions().map((o) => [o.value, o.label])).toEqual([
-      ["iskcon", "ISKCON — Международное общество сознания Кришны"],
+      ["iskcon", "ISKCON"],
       ["gaudiya_math", "Гаудия-матх"],
       ["parivara", "Паривары"],
     ]);
     expect(lineageGroupOptions(true)[0].label).toBe("ISKCON");
+  });
+
+  /* VED-634: «убери расшифровку ISKCON, оставь только аббревиатуру … то же
+     самое сделай для Международного общества чистой бхакти-йоги». */
+  it("аббревиатуры без расшифровки в подписи, расшифровка — в подсказке", () => {
+    const iskcon = lineageGroupOptions()[0];
+    expect(iskcon.label).toBe("ISKCON");
+    expect(iskcon.title).toBe(
+      "ISKCON — Международное общество сознания Кришны",
+    );
+    const ipbys = lineageDetailOptions("gaudiya_math").find(
+      (o) => o.value === "ipbys",
+    );
+    expect(ipbys?.label).toBe("IPBYS");
+    expect(ipbys?.title).toBe(
+      "IPBYS — Международное общество чистой бхакти-йоги",
+    );
   });
 
   it("второй шаг нужен только группам из нескольких линий", () => {

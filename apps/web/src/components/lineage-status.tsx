@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { lineageIdsLabel, type LineageId } from "@vedamatch/shared";
+import { LineageLabel } from "@/components/abbr-help";
 
 /**
  * Строка «что мне сейчас показывают»: линия, по которой отфильтрована
@@ -30,7 +31,8 @@ export function LineageStatus({
   return (
     <p className={`text-xs text-text-2 ${className}`}>
       {lineageIds && lineageIds.length > 1 ? "Показываем линии" : "Показываем линию"}{" "}
-      <span className="font-medium text-text-1">{label}</span>
+      {/* Аббревиатура с «?» (VED-634): расшифровка — по нажатию. */}
+      <LineageLabel text={label} className="font-medium text-text-1" />
       {" · "}
       <Link href={settingsHref} className="underline hover:text-text-0">
         настроить

@@ -11,6 +11,7 @@ import {
   type LineageId,
 } from "@vedamatch/shared";
 import { fieldClassName } from "@/components/ui/input";
+import { WithLineageHelp } from "@/components/abbr-help";
 import {
   lineageDetailOptions,
   lineageDetailPrompt,
@@ -106,12 +107,15 @@ export function LineageCards({
   const group = pending ?? lineageValueGroup(value);
   const groupsId = useId();
 
+  // Выбор — подложкой и жирным, без розовой каёмки (VED-623).
   const cardClass = (checked: boolean) =>
-    `cursor-pointer rounded-xl border px-4 py-2 text-sm transition ${
+    `rounded-xl border border-glass-brd text-sm transition ${
       checked
-        ? "border-magenta bg-magenta/10 text-text-0"
-        : "border-glass-brd text-text-1 hover:text-text-0"
+        ? "bg-magenta/10 font-semibold text-text-0"
+        : "text-text-1 hover:text-text-0"
     } ${disabled ? "opacity-60" : ""}`;
+  // Метка — вся карточка, кроме «?» (VED-634): тот рядом, отдельной кнопкой.
+  const labelClass = "block cursor-pointer px-4 py-2";
 
   function pickGroup(picked: LineageGroup) {
     const next = lineageFirstStepPick(picked, value);
@@ -128,24 +132,23 @@ export function LineageCards({
         <div className="flex flex-wrap gap-2">
           {LINEAGE_GROUPS.map((option) => {
             const checked = group === option;
-            const sole = lineagesOfGroup(option);
-            const hint = sole.length === 1 ? sole[0].hint : undefined;
             return (
-              <label key={option} className={cardClass(checked)}>
-                <input
-                  type="radio"
-                  name={`${name}-group-${groupsId}`}
-                  value={option}
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => pickGroup(option)}
-                  className="sr-only"
-                />
-                {LINEAGE_GROUP_LABELS[option]}
-                {hint && (
-                  <span className="block text-xs text-text-2">{hint}</span>
-                )}
-              </label>
+              <div key={option} className={cardClass(checked)}>
+                <WithLineageHelp text={LINEAGE_GROUP_LABELS[option]}>
+                  <label className={labelClass}>
+                    <input
+                      type="radio"
+                      name={`${name}-group-${groupsId}`}
+                      value={option}
+                      checked={checked}
+                      disabled={disabled}
+                      onChange={() => pickGroup(option)}
+                      className="sr-only"
+                    />
+                    {LINEAGE_GROUP_LABELS[option]}
+                  </label>
+                </WithLineageHelp>
+              </div>
             );
           })}
         </div>
@@ -159,26 +162,25 @@ export function LineageCards({
             {lineagesOfGroup(group).map((item) => {
               const checked = value === item.id;
               return (
-                <label key={item.id} className={cardClass(checked)}>
-                  <input
-                    type="radio"
-                    name={name}
-                    value={item.id}
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={() => {
-                      setPending(null);
-                      onChange(item.id);
-                    }}
-                    className="sr-only"
-                  />
-                  {item.label}
-                  {item.hint && (
-                    <span className="block text-xs text-text-2">
-                      {item.hint}
-                    </span>
-                  )}
-                </label>
+                <div key={item.id} className={cardClass(checked)}>
+                  <WithLineageHelp text={item.label}>
+                    <label className={labelClass}>
+                      <input
+                        type="radio"
+                        name={name}
+                        value={item.id}
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => {
+                          setPending(null);
+                          onChange(item.id);
+                        }}
+                        className="sr-only"
+                      />
+                      {item.label}
+                    </label>
+                  </WithLineageHelp>
+                </div>
               );
             })}
           </div>
@@ -312,7 +314,7 @@ export function LineageSelect({
       </select>
     ) : null;
 
-  const steps = (
+  const fields = (
     <span
       className={
         compact
@@ -323,6 +325,16 @@ export function LineageSelect({
       {groupSelect}
       {detailSelect}
     </span>
+  );
+  // В списке — одна аббревиатура (VED-634); расшифровку выбранной линии
+  // даёт «?» рядом: в родной `<select>` на телефоне кнопку не вставить.
+  // Компактный переключатель в строке таблицы — без «?», места там нет.
+  const steps = compact ? (
+    fields
+  ) : (
+    <WithLineageHelp text={pending ? null : lineageOption(value)?.label}>
+      {fields}
+    </WithLineageHelp>
   );
 
   if (!label) return steps;

@@ -14,6 +14,7 @@ import {
 } from "@vedamatch/shared";
 import { Button } from "@/components/ui/button";
 import { AnchoredPopover } from "@/components/anchored-popover";
+import { WithLineageHelp } from "@/components/abbr-help";
 import { useDismissable } from "@/lib/use-dismissable";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -215,22 +216,26 @@ export function MaterialFiltersButton({
                 if (items.length === 1) {
                   const id = items[0].id;
                   const checked = draft.lineages.includes(id);
+                  // «?» рядом с аббревиатурой (VED-634) — отдельной
+                  // кнопкой, не внутри метки: нажатие не ставит галочку.
                   return (
-                    <label key={group} className={rowClass(checked)}>
-                      <input
-                        type="checkbox"
-                        className={boxClass}
-                        checked={checked}
-                        disabled={pending}
-                        onChange={() =>
-                          setDraft((d) => ({
-                            ...d,
-                            lineages: toggleLineage(d.lineages, id),
-                          }))
-                        }
-                      />
-                      {groupLabel}
-                    </label>
+                    <WithLineageHelp key={group} text={groupLabel}>
+                      <label className={rowClass(checked)}>
+                        <input
+                          type="checkbox"
+                          className={boxClass}
+                          checked={checked}
+                          disabled={pending}
+                          onChange={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              lineages: toggleLineage(d.lineages, id),
+                            }))
+                          }
+                        />
+                        {groupLabel}
+                      </label>
+                    </WithLineageHelp>
                   );
                 }
                 const state = lineageGroupState(draft.lineages, group);
@@ -262,21 +267,26 @@ export function MaterialFiltersButton({
                       {items.map((item) => {
                         const checked = draft.lineages.includes(item.id);
                         return (
-                          <label key={item.id} className={rowClass(checked)}>
-                            <input
-                              type="checkbox"
-                              className={boxClass}
-                              checked={checked}
-                              disabled={pending}
-                              onChange={() =>
-                                setDraft((d) => ({
-                                  ...d,
-                                  lineages: toggleLineage(d.lineages, item.id),
-                                }))
-                              }
-                            />
-                            {item.label}
-                          </label>
+                          <WithLineageHelp key={item.id} text={item.label}>
+                            <label className={rowClass(checked)}>
+                              <input
+                                type="checkbox"
+                                className={boxClass}
+                                checked={checked}
+                                disabled={pending}
+                                onChange={() =>
+                                  setDraft((d) => ({
+                                    ...d,
+                                    lineages: toggleLineage(
+                                      d.lineages,
+                                      item.id,
+                                    ),
+                                  }))
+                                }
+                              />
+                              {item.label}
+                            </label>
+                          </WithLineageHelp>
                         );
                       })}
                     </div>
