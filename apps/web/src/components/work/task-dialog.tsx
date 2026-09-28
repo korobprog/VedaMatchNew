@@ -65,6 +65,13 @@ import {
 } from "./task-place";
 import { WorkTaskFinance } from "./task-finance";
 import {
+  createChecklistQueue,
+  joinChecklistText,
+  pendingItems,
+  type ChecklistAddOutcome,
+  type PendingChecklist,
+} from "./checklist-queue";
+import {
   browserSessionStore,
   patchBoardSession,
   readBoardSession,
@@ -79,7 +86,7 @@ import {
  */
 const openTaskDialogs = new Map<
   string,
-  (outcome: AttachOutcome<WorkTaskDto>) => void
+  (outcome: AttachOutcome<WorkTaskDto>, checklistBefore: number) => void
 >();
 
 const NO_UPLOADS: readonly WorkUploadJob[] = [];
@@ -100,6 +107,67 @@ const openTaskPlaces = new Map<
   string,
   (outcome: PlaceOutcome<WorkTaskDto>) => void
 >();
+
+/**
+ * Новые пункты чек-листа (VED-624) — тоже очередью вне окна, с `keepalive`:
+ * ни загрузка скриншота, ни закрытие окна, ни уход в другое окно портала
+ * пункт не теряют.
+ */
+const checklistQueue = createChecklistQueue<WorkTaskDto>({
+  add: (taskId, text) =>
+    addWorkChecklistItem(taskId, { text }, { keepalive: true }),
+});
+
+const NO_PENDING_CHECKLIST: PendingChecklist = {};
+
+/** Окна, открытые на задаче сейчас, — им итог нового пункта. */
+const openTaskChecklists = new Map<
+  string,
+  (outcome: ChecklistAddOutcome<WorkTaskDto>) => void
+>();
+
+/** Недописанный или не дошедший пункт — в память вкладки (VED-624). */
+function keepChecklistText(boardId: string, taskId: string, text: string) {
+  patchBoardSession(browserSessionStore(), boardId, (session) => {
+    const next = text.trim() ? text : "";
+    return {
+      ...session,
+      checklist: next
+        ? { ...session.checklist, [taskId]: next }
+        : without(session.checklist, taskId),
+    };
+  });
+}
+
+function keptChecklistText(boardId: string, taskId: string): string {
+  return (
+    readBoardSession(browserSessionStore(), boardId).checklist[taskId] ?? ""
+  );
+}
+
+/**
+ * Отправить пункт очередью. Итог забирает окно, открытое на задаче сейчас;
+ * не дошёл — текст возвращается в поле нового пункта, в том числе окна,
+ * открытого позже. Доска обновляется, даже если окно уже закрыли.
+ */
+function sendChecklistItem(
+  boardId: string,
+  taskId: string,
+  text: string,
+  onChanged: () => void | Promise<void>,
+) {
+  void checklistQueue.add(taskId, text).then((outcome) => {
+    if (outcome.problem) {
+      keepChecklistText(
+        boardId,
+        taskId,
+        joinChecklistText(outcome.text, keptChecklistText(boardId, taskId)),
+      );
+    }
+    openTaskChecklists.get(taskId)?.(outcome);
+    if (outcome.task) void Promise.resolve(onChanged()).catch(() => {});
+  });
+}
 
 /** Поле карточки: одинаковое у всех списков и у срока. */
 const FIELD_CLASS =
@@ -199,7 +267,10 @@ export function WorkTaskDialog({
    *  Ставят кнопка «Сохранить» и правки со своей кнопкой (текст и пункты
    *  чек-листа, комментарий): они уходят сразу, и об этом тоже надо сказать.
    *  Галочка чек-листа (VED-603), статус и раздел (VED-611), скриншоты
-   *  (VED-518, у них своя индикация загрузки) — нет. */
+   *  (VED-518, у них своя индикация загрузки) — нет, и больше того: они
+   *  снимают «Сохранено», оставшееся от прошлого действия (VED-625). Иначе
+   *  полоса, поднятая пунктом чек-листа, продолжала висеть после смены
+   *  статуса, и выглядело так, будто её вызвал статус. */
   const [justSaved, setJustSaved] = useState(false);
   /** Идёт загрузка вложений к этой задаче: сколько ушло из скольких. Из
    *  очереди портала (VED-608), поэтому видна и в заново открытом окне. */
@@ -208,6 +279,45 @@ export function WorkTaskDialog({
     workUploads.getSnapshot,
     () => NO_UPLOADS,
   );
+  /** Пункты чек-листа, которые ещё летят (VED-624): видны сразу. */
+  const pendingChecklist = pendingItems(
+    useSyncExternalStore(
+      checklistQueue.subscribe,
+      checklistQueue.getSnapshot,
+      () => NO_PENDING_CHECKLIST,
+    ),
+    taskId,
+  );
+  /** Текст в поле нового пункта — чтобы закрытие окна его отправило. */
+  const newItemText = useRef("");
+  /** Смена ключа заводит поле нового пункта заново — вернуть не дошедший. */
+  const [checklistKey, setChecklistKey] = useState(0);
+  const takeChecklistOutcome = useRef<
+    (outcome: ChecklistAddOutcome<WorkTaskDto>) => void
+  >(() => {});
+  takeChecklistOutcome.current = (outcome) => {
+    if (outcome.task) {
+      showTask(outcome.task);
+      setJustSaved(true);
+      return;
+    }
+    if (outcome.problem) {
+      setError(`Пункт «${outcome.text}» не сохранился: ${outcome.problem}`);
+      // Текст уже вернулся в память вкладки — поле берёт его оттуда.
+      newItemText.current = keptChecklistText(board.id, taskId);
+      setChecklistKey((key) => key + 1);
+    }
+  };
+  useEffect(() => {
+    const take = (outcome: ChecklistAddOutcome<WorkTaskDto>) =>
+      takeChecklistOutcome.current(outcome);
+    openTaskChecklists.set(taskId, take);
+    return () => {
+      if (openTaskChecklists.get(taskId) === take) {
+        openTaskChecklists.delete(taskId);
+      }
+    };
+  }, [taskId]);
   const uploadJob = uploadJobs.find(
     (job) => job.taskId === taskId && job.phase === "uploading",
   );
@@ -216,10 +326,24 @@ export function WorkTaskDialog({
     : null;
   /** Итог загрузки — в это окно, пока оно открыто. */
   const takeUploadOutcome = useRef<
-    (outcome: AttachOutcome<WorkTaskDto>) => void
+    (outcome: AttachOutcome<WorkTaskDto>, checklistBefore: number) => void
   >(() => {});
-  takeUploadOutcome.current = (outcome) => {
+  takeUploadOutcome.current = (outcome, checklistBefore) => {
     if (outcome.last) showTask(outcome.last);
+    // Пока грузился скриншот, ушёл пункт чек-листа (VED-624): ответ загрузки
+    // мог быть собран до пункта и показал бы чек-лист без него. Берём
+    // карточку заново.
+    if (
+      outcome.last &&
+      (checklistQueue.settled(taskId) !== checklistBefore ||
+        pendingItems(checklistQueue.getSnapshot(), taskId).length > 0)
+    ) {
+      void getWorkTask(taskId)
+        .then((fresh) => {
+          if (openTaskDialogs.has(taskId)) showTask(fresh);
+        })
+        .catch(() => undefined);
+    }
     // Успех «Сохранено» не показывает (VED-518): у скриншотов своя
     // индикация — «Загружаю N из M» и итог в очереди загрузок (VED-608).
     void Promise.resolve(onChanged()).then(() => {
@@ -227,8 +351,10 @@ export function WorkTaskDialog({
     });
   };
   useEffect(() => {
-    const take = (outcome: AttachOutcome<WorkTaskDto>) =>
-      takeUploadOutcome.current(outcome);
+    const take = (
+      outcome: AttachOutcome<WorkTaskDto>,
+      checklistBefore: number,
+    ) => takeUploadOutcome.current(outcome, checklistBefore);
     openTaskDialogs.set(taskId, take);
     return () => {
       if (openTaskDialogs.get(taskId) === take) openTaskDialogs.delete(taskId);
@@ -257,6 +383,8 @@ export function WorkTaskDialog({
           .taskDrafts[loaded.id];
         const fresh = draftFromTask(loaded);
         resetDraft(kept ? withPlace(kept, placeOf(fresh)) : fresh);
+        // Недописанный пункт чек-листа — тоже (VED-624).
+        newItemText.current = keptChecklistText(board.id, loaded.id);
       })
       .catch((cause: unknown) => {
         if (alive) {
@@ -344,29 +472,67 @@ export function WorkTaskDialog({
   );
 
   /**
+   * Отправить всё несохранённое: правки полей и недописанный пункт
+   * чек-листа (VED-624). С `keepalive` — запросы доходят, даже если следом
+   * закрыли вкладку или приложение. Не дошли правки полей — они остаются
+   * черновиком в памяти вкладки и вернутся в поля при новом открытии (VED-520).
+   */
+  const flushUnsaved = useCallback(() => {
+    if (!task || !canEdit) return;
+    // Место в черновик не входит (VED-611): оно уже ушло своей очередью.
+    const next = withPlace(
+      { ...draft, ...latestText.current },
+      placeOf(task),
+    );
+    const pending = pendingFormEdits(draftFromTask(task), next);
+    // Правки уходят на сервер вместе с закрытием — черновик больше не нужен.
+    patchBoardSession(browserSessionStore(), board.id, (session) => ({
+      ...session,
+      taskDrafts: without(session.taskDrafts, task.id),
+    }));
+    if (pending?.update) {
+      void updateWorkTask(task.id, pending.update, { keepalive: true })
+        .then(() => onChanged())
+        .catch(() =>
+          patchBoardSession(browserSessionStore(), board.id, (session) => ({
+            ...session,
+            taskDrafts: { ...session.taskDrafts, [task.id]: next },
+          })),
+        );
+    }
+    const text = newItemText.current.trim();
+    if (text) {
+      newItemText.current = "";
+      keepChecklistText(board.id, task.id, "");
+      sendChecklistItem(board.id, task.id, text, onChanged);
+    }
+  }, [task, canEdit, draft, onChanged, board.id]);
+
+  /**
    * Закрыть окно, не потеряв правок: несохранённое уходит на сервер. Раньше
    * Escape прямо из поля закрывал окно раньше, чем поле теряло фокус, и
-   * правка пропадала.
+   * правка пропадала; а набранный, но не добавленный пункт чек-листа
+   * пропадал вместе с окном (VED-624).
    */
   const requestClose = useCallback(() => {
-    // Место в черновик не входит (VED-611): оно уже ушло своей очередью.
-    const next = task
-      ? withPlace({ ...draft, ...latestText.current }, placeOf(task))
-      : { ...draft, ...latestText.current };
-    if (task && canEdit && pendingFormEdits(draftFromTask(task), next)) {
-      void commit(task, next)
-        .then(() => onChanged())
-        .catch(() => undefined);
-    }
-    // Правки ушли на сервер вместе с закрытием — черновик больше не нужен.
-    if (task) {
-      patchBoardSession(browserSessionStore(), board.id, (session) => ({
-        ...session,
-        taskDrafts: without(session.taskDrafts, task.id),
-      }));
-    }
+    flushUnsaved();
     onClose();
-  }, [task, canEdit, draft, commit, onChanged, onClose, board.id]);
+  }, [flushUnsaved, onClose]);
+
+  // Вкладку закрыли или ушли со страницы прямо из окна — то же, что закрыть
+  // окно: ничего не теряется (VED-624). Поле нового пункта заводится заново
+  // пустым: вернись страница из кэша — пункт не уйдёт второй раз.
+  const flushOnLeave = useRef(flushUnsaved);
+  flushOnLeave.current = flushUnsaved;
+  useEffect(() => {
+    function onPageHide() {
+      const hadItem = newItemText.current.trim() !== "";
+      flushOnLeave.current();
+      if (hadItem) setChecklistKey((key) => key + 1);
+    }
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
 
   // Escape закрывает окно: без этого на компьютере из карточки выходят мышью,
   // а с клавиатуры — никак.
@@ -399,8 +565,9 @@ export function WorkTaskDialog({
       // Дошло — окно так и говорит. Правок в черновике это не касается: пока
       // они есть, полоса показывает их, а не «Сохранено». Действия-щелчки
       // (галочка чек-листа, VED-603) полосу не вызывают: как статус и
-      // раздел (VED-611), они видны сами по себе.
-      if (announce) setJustSaved(true);
+      // раздел (VED-611), они видны сами по себе, — и снимают прежнюю
+      // (VED-625).
+      setJustSaved(announce);
       return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не сохранилось");
@@ -408,21 +575,6 @@ export function WorkTaskDialog({
     } finally {
       setBusy(false);
     }
-  }
-
-  /**
-   * Закрыть окно после сохранения (VED-400): «после нажатия кнопки
-   * Сохранить окно редакции задачи должно закрываться». Правок не осталось,
-   * черновик на доске больше не нужен.
-   */
-  function closeSaved() {
-    if (task) {
-      patchBoardSession(browserSessionStore(), board.id, (session) => ({
-        ...session,
-        taskDrafts: without(session.taskDrafts, task.id),
-      }));
-    }
-    onClose();
   }
 
   /**
@@ -434,6 +586,7 @@ export function WorkTaskDialog({
   function attachFiles(files: File[]) {
     if (files.length === 0 || !task) return;
     setError(null);
+    const checklistBefore = checklistQueue.settled(taskId);
     // «Загружаю…» — в тот же кадр, что и выбор файла: задание встаёт в
     // очередь синхронно, до первого ответа сервера.
     void workUploads
@@ -446,7 +599,9 @@ export function WorkTaskDialog({
         boardHref: `/work/planner/${board.spaceId}`,
         watcher: { watching: () => openTaskDialogs.has(taskId) },
       })
-      .then((outcome) => openTaskDialogs.get(taskId)?.(outcome));
+      .then((outcome) =>
+        openTaskDialogs.get(taskId)?.(outcome, checklistBefore),
+      );
   }
 
   function edit(next: Partial<typeof draft>) {
@@ -507,6 +662,9 @@ export function WorkTaskDialog({
     if (!task || !base) return;
     const spot = placeOf(choice);
     setError(null);
+    // «Сохранено» от прошлого действия уходит (VED-625): выбор статуса полосу
+    // не вызывает и не оставляет.
+    setJustSaved(false);
     setTask((current) => (current ? withPlace(current, spot) : current));
     void taskPlacer.place(base, spot).then((outcome) => {
       openTaskPlaces.get(taskId)?.(outcome);
@@ -515,7 +673,12 @@ export function WorkTaskDialog({
     });
   }
 
-  /** «Сохранить»: все правки черновика разом. */
+  /**
+   * «Сохранить»: все правки черновика разом. Окно остаётся открытым и говорит
+   * «Сохранено» (VED-625). VED-400 когда-то просил закрывать его после
+   * сохранения; заказчик передумал: «после нажатия на „Сохранить“ окно
+   * задачи закрывается автоматически, а я это уже просил исключить».
+   */
   function save() {
     const next = withPlace({ ...draft, ...latestText.current }, saved);
     if (!task || taskEditsProblem(next) || !pendingFormEdits(saved, next)) {
@@ -525,8 +688,6 @@ export function WorkTaskDialog({
       const updated = await commit(task, next);
       if (updated) resetDraft(draftFromTask(updated));
       return updated ?? undefined;
-    }).then((ok) => {
-      if (ok) closeSaved();
     });
   }
 
@@ -943,17 +1104,44 @@ export function WorkTaskDialog({
                   )}
                 </li>
               ))}
+              {/* Пункты, которые ещё летят (VED-624): видны сразу, в том
+                  порядке, в каком добавлены. */}
+              {pendingChecklist.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-start gap-2"
+                  aria-busy="true"
+                >
+                  <input
+                    type="checkbox"
+                    disabled
+                    aria-label={`${item.text} — сохраняется`}
+                  />
+                  <span className="min-w-0 flex-1 whitespace-pre-wrap text-sm text-text-1 [overflow-wrap:anywhere]">
+                    {item.text}
+                  </span>
+                  <Loader2
+                    aria-hidden
+                    className="size-4 shrink-0 text-text-2 motion-safe:animate-spin"
+                  />
+                </li>
+              ))}
             </ul>
             {canEdit && (
               <ChecklistAddForm
-                busy={busy}
-                onAdd={(text, clear) =>
-                  void run(async () => {
-                    const next = await addWorkChecklistItem(task.id, { text });
-                    clear();
-                    return next;
-                  })
-                }
+                key={`checklist-${checklistKey}`}
+                initialText={keptChecklistText(board.id, task.id)}
+                onTextChange={(text) => {
+                  newItemText.current = text;
+                  keepChecklistText(board.id, task.id, text);
+                }}
+                onAdd={(text) => {
+                  // Пункт уходит сразу и сам по себе (VED-624): не ждёт ни
+                  // загрузки скриншотов, ни других действий окна, и закрытие
+                  // окна его не отменяет.
+                  setError(null);
+                  sendChecklistItem(board.id, task.id, text, onChanged);
+                }}
               />
             )}
 
@@ -1239,22 +1427,13 @@ export function WorkTaskDialog({
                     </div>
                   </>
                 ) : (
-                  <>
-                    <p role="status" className="text-sm text-text-1 sm:mr-auto">
-                      Сохранено
-                    </p>
-                    {/* Всё уже на сервере (пункты чек-листа, комментарий
-                        уходят сразу), но кнопка «Сохранить» есть и здесь
-                        (VED-400): ею окно и закрывают, как после правки
-                        полей. */}
-                    <button
-                      type="button"
-                      onClick={closeSaved}
-                      className="ml-auto min-h-11 rounded-xl bg-magenta px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Сохранить
-                    </button>
-                  </>
+                  // Всё уже на сервере — сохранять нечего, и кнопки
+                  // «Сохранить» здесь нет (VED-625). Раньше она стояла рядом
+                  // с «Сохранено» и закрывала окно (VED-400), а заказчик
+                  // видел в этой паре лишнюю строку.
+                  <p role="status" className="min-h-11 py-2.5 text-sm text-text-1">
+                    Сохранено
+                  </p>
                 )}
               </div>
             )}
@@ -1491,17 +1670,24 @@ function ChecklistEditForm({
 
 /**
  * Новый пункт чек-листа. Текст живёт здесь, а не в окне: иначе каждая буква
- * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
- * дошёл до сервера.
+ * перерисовывала всю карточку (VED-453). Поле очищается в момент нажатия:
+ * пункт уже в очереди (VED-624), и его видно в списке. `onTextChange` —
+ * набранное, чтобы закрытие окна его не потеряло.
  */
 function ChecklistAddForm({
-  busy,
+  initialText = "",
+  onTextChange,
   onAdd,
 }: {
-  busy: boolean;
-  onAdd: (text: string, clear: () => void) => void;
+  initialText?: string;
+  onTextChange: (text: string) => void;
+  onAdd: (text: string) => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setTextState] = useState(initialText);
+  const setText = (next: string) => {
+    setTextState(next);
+    onTextChange(next);
+  };
   return (
     <form
       className="mt-2 flex gap-2"
@@ -1509,7 +1695,8 @@ function ChecklistAddForm({
         event.preventDefault();
         const trimmed = text.trim();
         if (!trimmed) return;
-        onAdd(trimmed, () => setText(""));
+        setText("");
+        onAdd(trimmed);
       }}
     >
       {/* Поле растёт под текст (VED-375): пункт теперь до 2000
@@ -1533,7 +1720,7 @@ function ChecklistAddForm({
       />
       <button
         type="submit"
-        disabled={busy || !text.trim()}
+        disabled={!text.trim()}
         className="rounded-xl bg-glass px-3 py-2 text-sm text-text-0 disabled:opacity-50"
       >
         Добавить

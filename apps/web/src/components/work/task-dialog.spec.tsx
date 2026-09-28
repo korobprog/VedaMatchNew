@@ -123,8 +123,27 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
       description: "Видна после правки",
     });
     expect(props.onChanged).toHaveBeenCalled();
-    // VED-400: сохранили — окно закрывается.
-    await waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
+    // VED-625 (отменяет VED-400): сохранили — окно остаётся и говорит
+    // «Сохранено», без второй кнопки «Сохранить».
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(screen.getByLabelText("Название задачи")).toHaveValue(
+      "Кнопка «Сохранить»",
+    );
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it("Enter в заголовке сохраняет, а окно не закрывает (VED-625)", async () => {
+    const user = userEvent.setup();
+    const props = open();
+    const title = await screen.findByLabelText("Название задачи");
+
+    await user.type(title, "!{Enter}");
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    expect(props.onClose).not.toHaveBeenCalled();
+    // Правок не осталось — черновика в памяти вкладки тоже.
+    expect(sessionStorage.getItem("vedamatch:work-board:b1")).toBeNull();
   });
 
   it("saves with Enter in the title", async () => {
@@ -220,9 +239,12 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     await user.type(description, " и ещё строка");
     await user.keyboard("{Escape}");
 
-    expect(updateWorkTask).toHaveBeenCalledWith("t1", {
-      description: "Старое описание и ещё строка",
-    });
+    // С keepalive (VED-624): правка доходит, даже если следом закрыли вкладку.
+    expect(updateWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { description: "Старое описание и ещё строка" },
+      { keepalive: true },
+    );
     expect(props.onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
   });
@@ -414,7 +436,11 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
       ),
     );
     expect(moveWorkTask).toHaveBeenCalledTimes(1);
-    expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
+    expect(updateWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { assigneeId: "u2" },
+      { keepalive: true },
+    );
   });
 
   it("галочка чек-листа уходит сразу и полосу «Сохранено / Сохранить» не вызывает (VED-603)", async () => {
@@ -444,7 +470,7 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
 });
 
 describe("WorkTaskDialog — «Сохранить» в самом низу окна (VED-518)", () => {
-  it("после пункта чек-листа — «Сохранено» и «Сохранить» последними в окне", async () => {
+  it("после пункта чек-листа — «Сохранено» последним в окне, без кнопки (VED-625)", async () => {
     vi.mocked(addWorkChecklistItem).mockResolvedValue({
       ...task,
       checklist: [{ id: "i1", text: "Новый", done: false, position: 0 }],
@@ -459,14 +485,82 @@ describe("WorkTaskDialog — «Сохранить» в самом низу ок�
     );
     await user.click(screen.getByRole("button", { name: "Добавить" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
-    const save = screen.getByRole("button", { name: "Сохранить" });
+    const saved = await screen.findByRole("status");
+    expect(saved).toHaveTextContent("Сохранено");
+    // Сохранять нечего — кнопки «Сохранить» рядом нет (VED-625).
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
     // Полоса ниже всего содержимого окна, а не под описанием.
     const discussion = screen.getByText("Обсуждение");
     expect(
-      discussion.compareDocumentPosition(save) &
+      discussion.compareDocumentPosition(saved) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+/**
+ * VED-625: «После изменения статуса продолжает вылазить строка „Сохранено —
+ * Сохранить“». Статус полосу не поднимал (VED-611), но и не снимал: полоса,
+ * поднятая пунктом чек-листа, продолжала висеть после смены статуса.
+ */
+describe("WorkTaskDialog — после статуса полосы нет (VED-625)", () => {
+  it("пункт чек-листа, затем статус — полоса «Сохранено» уходит", async () => {
+    vi.mocked(addWorkChecklistItem).mockResolvedValue({
+      ...task,
+      checklist: [{ id: "i1", text: "Новый", done: false, position: 0 }],
+      checklistTotal: 1,
+    } as unknown as WorkTaskDto);
+    const user = userEvent.setup();
+    const props = open();
+
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Новый{Enter}",
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
+
+    expect(screen.queryByRole("status")).toBeNull();
+    await waitFor(() =>
+      expect(moveWorkTask).toHaveBeenCalledWith(
+        "t1",
+        { columnId: "c2" },
+        { keepalive: true },
+      ),
+    );
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalledTimes(2));
+    // И после ответа сервера полоса не возвращается.
+    expect(screen.getByLabelText("Статус")).toHaveValue("c2");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+  });
+
+  it("галочка чек-листа тоже снимает прежнее «Сохранено»", async () => {
+    const withItem = {
+      ...task,
+      checklist: [{ id: "i1", text: "Новый", done: false, position: 0 }],
+      checklistTotal: 1,
+    } as unknown as WorkTaskDto;
+    vi.mocked(addWorkChecklistItem).mockResolvedValue(withItem);
+    vi.mocked(updateWorkChecklistItem).mockResolvedValue({
+      ...withItem,
+      checklist: [{ id: "i1", text: "Новый", done: true, position: 0 }],
+      checklistDone: 1,
+    } as unknown as WorkTaskDto);
+    const user = userEvent.setup();
+    open();
+
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Новый{Enter}",
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+
+    await user.click(screen.getByLabelText("Новый"));
+
+    expect(await screen.findByText("1 из 1")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });
 
@@ -1089,5 +1183,185 @@ describe("WorkTaskDialog — графа «Дата» (VED-598)", () => {
     expect(screen.getByText("9 сентября 2026 г.")).toBeInTheDocument();
     // У задачи без срока графы «Срок» нет вовсе.
     expect(screen.queryByLabelText("Срок")).toBeNull();
+  });
+});
+
+/**
+ * VED-624: «Я нажал на загрузить скриншот, а потом написал ещё один пункт в
+ * чек-листе и вышел из окна этой задачи. Новый пункт не сохранился. Надо,
+ * чтобы ничего не терялось». Пункт уходит очередью вне окна, с keepalive, не
+ * дожидаясь загрузки; недописанный уходит при закрытии окна.
+ */
+describe("WorkTaskDialog — пункт чек-листа не теряется (VED-624)", () => {
+  const shot = (name: string) => new File(["x"], name, { type: "image/png" });
+  const withItem = (text: string) =>
+    ({
+      ...task,
+      checklist: [{ id: "i1", text, done: false, position: 0 }],
+      checklistTotal: 1,
+    }) as unknown as WorkTaskDto;
+
+  /** Скриншот, который грузится, пока тест не отпустит. */
+  function slowUpload() {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    return (value: WorkTaskDto) => finish(value);
+  }
+
+  function cleanUploads() {
+    for (const job of workUploads.getSnapshot()) workUploads.dismiss(job.id);
+  }
+
+  beforeEach(() => {
+    vi.mocked(addWorkChecklistItem).mockReset();
+  });
+
+  it("загрузка идёт → добавил пункт → закрыл окно → пункт дошёл", async () => {
+    const finishUpload = slowUpload();
+    let finishItem: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(addWorkChecklistItem).mockImplementation(
+      () => new Promise((resolve) => (finishItem = resolve)),
+    );
+    const user = userEvent.setup();
+    const props = { onClose: vi.fn(), onChanged: vi.fn() };
+    const view = render(
+      <WorkTaskDialog taskId="t1" board={board} {...props} />,
+    );
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+    expect(workUploads.isBusy()).toBe(true);
+
+    await user.type(
+      screen.getByLabelText("Новый пункт чек-листа"),
+      "Проверить на телефоне{Enter}",
+    );
+
+    // Ушёл сразу, не дожидаясь скриншота, и виден в списке, пока летит.
+    expect(addWorkChecklistItem).toHaveBeenCalledWith(
+      "t1",
+      { text: "Проверить на телефоне" },
+      { keepalive: true },
+    );
+    expect(screen.getByText("Проверить на телефоне")).toBeInTheDocument();
+    expect(screen.getByLabelText("Новый пункт чек-листа")).toHaveValue("");
+
+    await user.keyboard("{Escape}");
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    view.unmount();
+
+    finishItem(withItem("Проверить на телефоне"));
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(addWorkChecklistItem).toHaveBeenCalledTimes(1);
+    finishUpload(task);
+    await waitFor(() => expect(workUploads.isBusy()).toBe(false));
+    cleanUploads();
+  });
+
+  it("загрузка идёт → написал пункт, не нажав «Добавить» → закрыл окно → пункт дошёл", async () => {
+    const finishUpload = slowUpload();
+    vi.mocked(addWorkChecklistItem).mockResolvedValue(withItem("Недописанный"));
+    const user = userEvent.setup();
+    const props = open();
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+
+    await user.type(
+      screen.getByLabelText("Новый пункт чек-листа"),
+      "Недописанный",
+    );
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(addWorkChecklistItem).toHaveBeenCalledWith(
+      "t1",
+      { text: "Недописанный" },
+      { keepalive: true },
+    );
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    // Отправленное из памяти вкладки стёрто: при новом открытии не вернётся.
+    expect(sessionStorage.getItem("vedamatch:work-board:b1")).toBeNull();
+    finishUpload(task);
+    await waitFor(() => expect(workUploads.isBusy()).toBe(false));
+    cleanUploads();
+  });
+
+  it("ушли в другое окно портала — недописанный пункт вернулся в поле", async () => {
+    const user = userEvent.setup();
+    const first = render(
+      <WorkTaskDialog
+        taskId="t1"
+        board={board}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Вернусь и допишу",
+    );
+    first.unmount();
+
+    open();
+
+    expect(await screen.findByLabelText("Новый пункт чек-листа")).toHaveValue(
+      "Вернусь и допишу",
+    );
+    expect(addWorkChecklistItem).not.toHaveBeenCalled();
+  });
+
+  it("сервер не принял пункт — текст возвращается в поле, окно говорит почему", async () => {
+    vi.mocked(addWorkChecklistItem).mockRejectedValue(
+      new Error("Сеть недоступна"),
+    );
+    const user = userEvent.setup();
+    open();
+
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Не потеряй меня{Enter}",
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Пункт «Не потеряй меня» не сохранился: Сеть недоступна",
+    );
+    expect(screen.getByLabelText("Новый пункт чек-листа")).toHaveValue(
+      "Не потеряй меня",
+    );
+  });
+
+  it("ответ загрузки без нового пункта не прячет его — карточка берётся заново", async () => {
+    const finishUpload = slowUpload();
+    vi.mocked(addWorkChecklistItem).mockResolvedValue(withItem("Пункт"));
+    const user = userEvent.setup();
+    open();
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+    await user.type(screen.getByLabelText("Новый пункт чек-листа"), "Пункт{Enter}");
+    expect(await screen.findByText("0 из 1")).toBeInTheDocument();
+
+    // Сервер собрал ответ загрузки до пункта — в нём чек-лист пуст.
+    vi.mocked(getWorkTask).mockResolvedValue(withItem("Пункт"));
+    const loads = vi.mocked(getWorkTask).mock.calls.length;
+    finishUpload(task);
+
+    await waitFor(() =>
+      expect(getWorkTask).toHaveBeenCalledTimes(loads + 1),
+    );
+    expect(await screen.findByText("0 из 1")).toBeInTheDocument();
+    expect(screen.getByText("Пункт")).toBeInTheDocument();
+    await waitFor(() => expect(workUploads.isBusy()).toBe(false));
+    cleanUploads();
   });
 });

@@ -70,6 +70,20 @@ describe("board session (VED-520)", () => {
     expect(store.data.has(boardSessionKey("b1"))).toBe(false);
   });
 
+  it("недописанный пункт чек-листа живёт своей записью (VED-624)", () => {
+    const store = memoryStore();
+    patchBoardSession(store, "b1", (s) => ({
+      ...s,
+      checklist: { t1: "Допишу потом" },
+    }));
+    expect(readBoardSession(store, "b1").checklist.t1).toBe("Допишу потом");
+    patchBoardSession(store, "b1", (s) => ({
+      ...s,
+      checklist: without(s.checklist, "t1"),
+    }));
+    expect(store.data.has(boardSessionKey("b1"))).toBe(false);
+  });
+
   it("испорченная запись и отсутствие хранилища не роняют доску", () => {
     const store = memoryStore();
     store.data.set(boardSessionKey("b1"), "{не json");

@@ -255,10 +255,13 @@ export const commentWorkTask = (
   body: CreateWorkCommentRequest,
 ) => send<WorkTaskDto>(`/work/tasks/${taskId}/comments`, "POST", body);
 
+/** Новый пункт уходит и с `keepalive` (VED-624): закрытие окна его не теряет. */
 export const addWorkChecklistItem = (
   taskId: string,
   body: CreateWorkChecklistItemRequest,
-) => send<WorkTaskDto>(`/work/tasks/${taskId}/checklist`, "POST", body);
+  options?: WorkSendOptions,
+) =>
+  send<WorkTaskDto>(`/work/tasks/${taskId}/checklist`, "POST", body, options);
 
 export const updateWorkChecklistItem = (
   itemId: string,

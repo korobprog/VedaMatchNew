@@ -19,8 +19,8 @@ import {
   EyeOff,
   Heart,
   Pause,
-  PenLine,
   Play,
+  Plus,
   Rows3,
   Share2,
   Star,
@@ -217,8 +217,9 @@ export function BlogHomeWidget({
      надписи «Блог-лента» больше нет — она «занимала место». Название
      осталось для скринридера. На узком телефоне кнопки 36px, от 400 точек —
      40px: восемь штук по 44 в строку 360 точек не встают. */
-  const iconButton =
-    "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-glass-brd text-text-1 min-[400px]:size-10";
+  const iconShape =
+    "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border min-[400px]:size-10";
+  const iconButton = `${iconShape} border-glass-brd text-text-1`;
 
   const buttons: Record<HomePanelButton, ReactNode> = {
     calendar: showCalendar ? (
@@ -235,14 +236,17 @@ export function BlogHomeWidget({
         <CalendarDays aria-hidden className="size-4" />
       </a>
     ) : null,
+    /* «Написать пост» — плюсом, а не карандашом (VED-626): карандаш на
+       портале означает «изменить». Акцентный цвет выделяет единственную
+       кнопку, которая создаёт, а не листает; маджента на фоне — 4,8:1. */
     write: (
       <Link
         href="/blog?new=1"
         aria-label="Написать пост"
         title="Написать пост"
-        className={`${iconButton} hover:border-cyan/60`}
+        className={`${iconShape} border-magenta/40 text-magenta hover:border-magenta hover:bg-magenta/10`}
       >
-        <PenLine aria-hidden className="size-4" />
+        <Plus aria-hidden strokeWidth={2.5} className="size-5" />
       </Link>
     ),
     feed: (

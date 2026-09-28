@@ -53,6 +53,24 @@ export const INVITE_LINK_PLACEHOLDER = '{ссылка}';
  */
 const BARE_SITE_ADDRESS = /(?<![\w./@:-])vedamatch\.ru(?![\w/-]|\.\w)/g;
 
+/** `@имя_bot` отдельным словом: имя бота Telegram оканчивается на «bot». */
+const TELEGRAM_BOT_MENTION = /(?<![\w./@:-])@([A-Za-z]\w{1,29}bot)(?!\w)/gi;
+
+/** `t.me/…` без схемы: не хвост другого адреса. */
+const BARE_TELEGRAM_LINK = /(?<![\w./@:-])t\.me\//gi;
+
+/**
+ * Ссылки на Telegram в виде, который мессенджеры сами подсвечивают
+ * (VED-622): `@vedamatch_bot` синим становится только внутри Telegram, а в
+ * WhatsApp и прочих — простой текст. Упоминание бота и `t.me/…` без схемы
+ * приводятся к `https://t.me/…`; остальной текст не меняется.
+ */
+export function linkifyTelegram(text: string): string {
+  return text
+    .replace(BARE_TELEGRAM_LINK, 'https://t.me/')
+    .replace(TELEGRAM_BOT_MENTION, 'https://t.me/$1');
+}
+
 /**
  * Текст, который человек отправляет другу: шаблон с его личной ссылкой.
  *
@@ -61,9 +79,11 @@ const BARE_SITE_ADDRESS = /(?<![\w./@:-])vedamatch\.ru(?![\w/-]|\.\w)/g;
  * `{ссылка}` в шаблоне → на её место; иначе голый адрес `vedamatch.ru`
  * (в тексте по умолчанию — в строке про регистрацию на сайте) → заменяется
  * ссылкой, как было и в прежнем тексте VED-423; иначе ссылка дописывается
- * последней строкой.
+ * последней строкой. Упоминание бота заранее становится ссылкой
+ * (`linkifyTelegram`) — и в тексте по умолчанию, и в тексте администратора.
  */
-export function buildInviteMessage(template: string, link: string): string {
+export function buildInviteMessage(raw: string, link: string): string {
+  const template = linkifyTelegram(raw);
   if (template.includes(INVITE_LINK_PLACEHOLDER)) {
     return template.split(INVITE_LINK_PLACEHOLDER).join(link);
   }

@@ -72,7 +72,10 @@ export default async function MusicArtistPage({
       {/* «← Каталог» — в левом поле над строкой имени (VED-588). */}
       <MusicCatalogBackLink />
       <header className="flex items-center gap-5">
-        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full">
+        {/* Обложка опущена на 12px (VED-588): «← Каталог» висит над ней и
+            почти касался круга. Поле сверху растит и шапку — до кнопок
+            «Слушать» под ней промежуток прежний. */}
+        <div className="mt-3 h-24 w-24 shrink-0 overflow-hidden rounded-full">
           <MusicCover
             url={artist.coverUrl}
             seed={artist.id}
