@@ -16,6 +16,7 @@ import { MusicRadioProvider } from "@/components/music/radio/radio-provider";
 import { PortalWindowsTracker } from "@/components/quick/portal-windows-tracker";
 import { PortalCallProviders } from "@/components/chat/calls/portal-call-providers";
 import { SpeechDock } from "@/components/speech/speech-dock";
+import { WorkUploadIndicator } from "@/components/work/upload-indicator";
 import { getProfile, getPublicServices } from "@/lib/api";
 import { isThemePreference, THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
@@ -190,6 +191,12 @@ export default async function RootLayout({
                     </PortalCallProviders>
                     <MiniPlayer />
                     <MusicRadioBar />
+                    {/* Загрузки «Работы» (VED-608): задача и её скриншоты
+                        догружаются после ухода с доски в другое окно
+                        портала, и прогресс с итогом видно на любой
+                        странице. Как у плеера: смонтированный на доске
+                        индикатор умер бы вместе с ней. */}
+                    <WorkUploadIndicator />
                   </MusicRadioProvider>
                 </MusicPlayerProvider>
               ) : (

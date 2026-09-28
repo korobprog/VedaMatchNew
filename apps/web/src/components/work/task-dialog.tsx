@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentProps,
 } from "react";
 import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
@@ -21,7 +22,6 @@ import type {
 import {
   addWorkChecklistItem,
   archiveWorkTask,
-  attachWorkFile,
   removeWorkAttachment,
   commentWorkTask,
   deleteWorkTaskForever,
@@ -36,12 +36,8 @@ import {
   WORK_ATTACH_PICKER_CLASS,
   WORK_ATTACH_REMOVE_CLASS,
 } from "./attach-button";
-import {
-  MAX_FILES_AT_ONCE,
-  uploadInTurn,
-  uploadProblemMessage,
-} from "./attach-files";
-import { shrinkImageForUpload } from "./attach-image-canvas";
+import type { AttachOutcome, WorkUploadJob } from "./upload-queue";
+import { workUploads } from "./work-uploads";
 import { isLongChecklistText } from "./checklist-text";
 import {
   chooseSection,
@@ -66,6 +62,19 @@ import {
   readBoardSession,
   without,
 } from "./board-session";
+
+/**
+ * Открытые окна задач (VED-608): вложения уходят через очередь портала и
+ * переживают закрытие окна и переход в другое окно портала. Итог загрузки
+ * забирает окно, открытое на этой задаче сейчас, — даже если это уже другое
+ * окно, открытое заново. Нет такого — итог сообщает индикатор портала.
+ */
+const openTaskDialogs = new Map<
+  string,
+  (outcome: AttachOutcome<WorkTaskDto>) => void
+>();
+
+const NO_UPLOADS: readonly WorkUploadJob[] = [];
 
 /** Поле карточки: одинаковое у всех списков и у срока. */
 const FIELD_CLASS =
@@ -152,11 +161,38 @@ export function WorkTaskDialog({
    *  Ставят и кнопка «Сохранить», и действия со своей кнопкой (чек-лист,
    *  вложения, комментарий): они уходят сразу, и об этом тоже надо сказать. */
   const [justSaved, setJustSaved] = useState(false);
-  /** Идёт загрузка нескольких вложений: сколько ушло из скольких. */
-  const [uploading, setUploading] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
+  /** Идёт загрузка вложений к этой задаче: сколько ушло из скольких. Из
+   *  очереди портала (VED-608), поэтому видна и в заново открытом окне. */
+  const uploadJobs = useSyncExternalStore(
+    workUploads.subscribe,
+    workUploads.getSnapshot,
+    () => NO_UPLOADS,
+  );
+  const uploadJob = uploadJobs.find(
+    (job) => job.taskId === taskId && job.phase === "uploading",
+  );
+  const uploading = uploadJob
+    ? { done: uploadJob.done, total: uploadJob.total }
+    : null;
+  /** Итог загрузки — в это окно, пока оно открыто. */
+  const takeUploadOutcome = useRef<
+    (outcome: AttachOutcome<WorkTaskDto>) => void
+  >(() => {});
+  takeUploadOutcome.current = (outcome) => {
+    if (outcome.last) setTask(outcome.last);
+    void Promise.resolve(onChanged()).then(() => {
+      if (outcome.problem) setError(outcome.problem);
+      else setJustSaved(true);
+    });
+  };
+  useEffect(() => {
+    const take = (outcome: AttachOutcome<WorkTaskDto>) =>
+      takeUploadOutcome.current(outcome);
+    openTaskDialogs.set(taskId, take);
+    return () => {
+      if (openTaskDialogs.get(taskId) === take) openTaskDialogs.delete(taskId);
+    };
+  }, [taskId]);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const canEdit =
@@ -339,31 +375,25 @@ export function WorkTaskDialog({
   /**
    * Вложения по одному запросу на файл, по очереди (VED-112). Если какой-то
    * не приложился, остальные остаются в карточке, а ошибка называет его по
-   * имени.
+   * имени. Уходят через очередь портала (VED-608): окно можно закрыть и уйти
+   * в другое окно портала — загрузка продолжится, а итог покажет индикатор.
    */
   function attachFiles(files: File[]) {
-    if (files.length === 0) return;
-    // Состояние «Загружаю…» — в тот же кадр, что и выбор файла, а не после
-    // первого ответа сервера: иначе кажется, что нажатие не сработало.
-    setUploading({ done: 0, total: Math.min(files.length, MAX_FILES_AT_ONCE) });
-    void run(async () => {
-      try {
-        const result = await uploadInTurn(
-          files,
-          (file) => attachWorkFile(taskId, file),
-          (done, total) => setUploading({ done, total }),
-          shrinkImageForUpload,
-        );
-        const message = uploadProblemMessage(result);
-        if (!message) return result.last;
-        // Приложившиеся уже на сервере: показываем их, и только потом ошибку.
-        if (result.last) setTask(result.last);
-        await onChanged();
-        throw new Error(message);
-      } finally {
-        setUploading(null);
-      }
-    });
+    if (files.length === 0 || !task) return;
+    setError(null);
+    // «Загружаю…» — в тот же кадр, что и выбор файла: задание встаёт в
+    // очередь синхронно, до первого ответа сервера.
+    void workUploads
+      .attach({
+        boardId: board.id,
+        taskId,
+        taskKey: task.key,
+        title: task.title,
+        files,
+        boardHref: `/work/planner/${board.spaceId}`,
+        watcher: { watching: () => openTaskDialogs.has(taskId) },
+      })
+      .then((outcome) => openTaskDialogs.get(taskId)?.(outcome));
   }
 
   function edit(next: Partial<typeof draft>) {
@@ -440,7 +470,7 @@ export function WorkTaskDialog({
         if (event.target === event.currentTarget) requestClose();
       }}
     >
-      <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-sheet p-4 sm:rounded-2xl">
+      <div className="group/sheet max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-sheet p-4 sm:rounded-2xl">
         {!task ? (
           <p className="flex items-center gap-2 text-sm text-text-2">
             <Loader2 aria-hidden className="size-4 animate-spin" />
@@ -449,7 +479,7 @@ export function WorkTaskDialog({
         ) : (
           <>
             {/* Шапка окна — две строки (VED-602): сверху панель кнопок
-                (номер, скрепка вложений, звук, крестик), под ней заголовок во
+                (номер, скрепка вложений, крестик), под ней заголовок во
                 всю ширину окна. Раньше заголовок стоял между номером и
                 крестиком узкой колонкой, и длинное название вытягивалось в
                 столбик на пол-экрана. */}
@@ -470,12 +500,7 @@ export function WorkTaskDialog({
                   {task.attachments.length}
                 </a>
               )}
-              {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
-                  нажать: пуск и пауза — здесь (VED-577), мятным кругом
-                  (VED-600); пузырь плеера поверх окна при ней не
-                  показывается — см. `hasForeignModal`. */}
               <span className="ml-auto flex items-center gap-2">
-                <CompactSoundButton tone="mint" />
                 <button
                   type="button"
                   onClick={requestClose}
@@ -693,7 +718,7 @@ export function WorkTaskDialog({
                 карточки — от названия до срока — и прилипает к низу окна:
                 поля правят наверху, а кнопка всё равно перед глазами. */}
             {canEdit && (dirty || justSaved) && (
-              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3">
+              <div className="sticky bottom-0 z-10 -mx-4 mt-3 flex flex-wrap items-center gap-2 border-t border-glass-brd bg-sheet px-4 py-3 group-has-[[data-sound-control]]/sheet:pl-16">
                 {dirty ? (
                   <>
                     {/* На телефоне надпись — своей строкой, кнопки — под ней
@@ -993,7 +1018,7 @@ export function WorkTaskDialog({
                   type="file"
                   multiple
                   className="peer sr-only"
-                  disabled={busy}
+                  disabled={busy || uploading !== null}
                   accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                   onChange={(event) => {
                     const files = Array.from(event.target.files ?? []);
@@ -1128,6 +1153,22 @@ export function WorkTaskDialog({
                 )}
               </div>
             )}
+
+            {/* Пуск и пауза звука портала (VED-577): окно накрывает шапку
+                затемнением, и её «Плеер / Радио» не нажать. Мятный круг
+                (VED-600) плавает в левом нижнем углу окна (VED-608) — там же,
+                где пузырь плеера поверх других окон, — и не занимает место
+                в шапке. Строка своя, высотой с кнопку (и нулевая, когда
+                звука нет): в конце прокрутки кнопка стоит под содержимым, а
+                не поверх него. Полоса
+                «Сохранить» при ней отступает слева. Пузырь плеера поверх
+                окна не показывается — см. `hasForeignModal`. */}
+            <div className="pointer-events-none sticky bottom-3 z-20 flex h-0 items-end has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10">
+              <CompactSoundButton
+                tone="mint"
+                className="pointer-events-auto shadow-lg"
+              />
+            </div>
           </>
         )}
       </div>

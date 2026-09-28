@@ -29,9 +29,7 @@ import type {
   WorkTaskCardDto,
 } from "@vedamatch/shared";
 import {
-  attachWorkFile,
   createWorkColumn,
-  createWorkTask,
   deleteWorkColumn,
   getWorkBoard,
   getWorkSpace,
@@ -99,11 +97,7 @@ import {
   taskMark,
   type WorkTaskFolder,
 } from "./foreign-tasks";
-import {
-  uploadInTurn,
-  uploadProblemMessage,
-} from "./attach-files";
-import { shrinkImageForUpload } from "./attach-image-canvas";
+import { workUploads } from "./work-uploads";
 import { taskFromDraft } from "./task-title";
 import {
   TaskComposer,
@@ -366,7 +360,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
           ) {
             setOpenTaskId(reopen);
           }
-          if (session.composer) {
+          // Задача из этого черновика ещё заводится (ушли с доски, не
+          // дождавшись, VED-608): форма с тем же текстом звала бы отправить
+          // его второй раз. Не заведётся — черновик останется до следующего
+          // захода.
+          const stillCreating = workUploads
+            .getSnapshot()
+            .some(
+              (job) =>
+                job.boardId === loaded.board?.id && job.phase === "creating",
+            );
+          if (session.composer && !stillCreating) {
             const restored: TaskComposerDraft = {
               ...emptyComposerDraft(session.composer.assigneeId),
               description: session.composer.description,
@@ -399,6 +403,17 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       alive = false;
     };
   }, [spaceId, setBoard]);
+
+  /* Смонтирована ли доска (VED-608): задача и её файлы уходят через очередь
+     портала и переживают переход в другое окно, а доска — нет. После ухода
+     итог сообщает индикатор портала, а не она. */
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const reload = useCallback(async () => {
     const loaded = await fetchSpaceBoard(spaceId);
@@ -568,49 +583,69 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
    * Завести задачу по написанному описанию (VED-324).
    *
    * Порядок — карточка, потом файлы: вложение сервер принимает только к
-   * существующей задаче. Сбой загрузки карточку не отменяет — она уже заведена
-   * и текст в ней есть, — но и молчать о нём нельзя: человек думает, что
-   * скриншот приложен, а его нет.
+   * существующей задаче. Всё уходит через очередь загрузок портала (VED-608):
+   * форма закрывается, как только задача заведена, а скриншоты догружаются
+   * в фоне — и при уходе в другое окно портала тоже. Черновик формы
+   * снимается в `onCreated`, без доски: иначе при возврате он вставал на
+   * место, будто задача не ушла. Сбой загрузки карточку не отменяет, но и
+   * молчать о нём нельзя: пока доска открыта, ошибку показывает она, после
+   * ухода — индикатор портала.
    */
   async function addTask(
     columnId: string,
     draft: TaskComposerDraft,
   ): Promise<boolean> {
     if (!board || !draft.description.trim()) return false;
+    const boardId = board.id;
     const { title, description } = taskFromDraft(
       draft.description,
       draft.title,
     );
-    const files = draft.files;
+    const watcher = { watching: () => mounted.current };
     try {
-      const task = await createWorkTask(board.id, {
-        columnId,
+      await workUploads.createWithFiles({
+        boardId,
+        body: {
+          columnId,
+          title,
+          description: description || undefined,
+          assigneeId: draft.assigneeId || null,
+          dueAt: null,
+          priority: draft.priority,
+        },
         title,
-        description: description || undefined,
-        assigneeId: draft.assigneeId || null,
-        dueAt: null,
-        priority: draft.priority,
+        files: draft.files,
+        boardHref: `/work/planner/${spaceId}`,
+        watcher,
+        onFilesDone: (task, outcome) => {
+          if (!mounted.current) return;
+          if (outcome.problem) setError(`${task.key}: ${outcome.problem}`);
+          // Карточка на доске — уже с вложениями: скрепка и счётчик.
+          void getWorkBoard(boardId)
+            .then((next) => {
+              if (mounted.current) setBoard(next);
+            })
+            .catch(() => {});
+        },
+        onCreated: () =>
+          patchBoardSession(browserSessionStore(), boardId, (session) =>
+            session.composer?.columnId === columnId
+              ? { ...session, composer: null }
+              : session,
+          ),
       });
-      if (files.length > 0) {
-        const result = await uploadInTurn(
-          files,
-          (file) => attachWorkFile(task.id, file),
-          undefined,
-          shrinkImageForUpload,
-        );
-        const problem = uploadProblemMessage(result);
-        setError(problem ? `${task.key}: ${problem}` : null);
-      } else {
-        setError(null);
-      }
+      if (!mounted.current) return true;
+      setError(null);
       // Заведённая задача — форма прячется под «+ Задача» (VED-424): иначе
       // она оставалась открытой и выкатывалась снова при каждом развороте
       // раздела.
       setComposerColumn(null);
-      setBoard(await getWorkBoard(board.id));
+      setBoard(await getWorkBoard(boardId));
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Не получилось");
+      if (mounted.current) {
+        setError(cause instanceof Error ? cause.message : "Не получилось");
+      }
       return false;
     }
   }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkBoardDto, WorkTaskDto } from "@vedamatch/shared";
 import { WorkTaskDialog } from "./task-dialog";
 import { dueToInput } from "./task-due";
+import { workUploads } from "./work-uploads";
 import {
   attachWorkFile,
   deleteWorkTaskForever,
@@ -431,6 +432,77 @@ describe("WorkTaskDialog — несколько вложений за раз (VE
     );
     expect(attachWorkFile).toHaveBeenCalledTimes(3);
     expect(props.onChanged).toHaveBeenCalled();
+  });
+});
+
+describe("WorkTaskDialog — загрузка переживает закрытие окна (VED-608)", () => {
+  const shot = (name: string) => new File(["x"], name, { type: "image/png" });
+
+  it("окно закрыли посреди загрузки — файлы уходят дальше, итог остаётся в очереди портала", async () => {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const props = { onClose: vi.fn(), onChanged: vi.fn() };
+    const view = render(
+      <WorkTaskDialog taskId="t1" board={board} {...props} />,
+    );
+    const input = await screen.findByLabelText("Прикрепить картинки или файлы");
+    await user.upload(input, shot("1.png"));
+    expect(workUploads.isBusy()).toBe(true);
+
+    // Ушли в другое окно портала: доска и окно задачи размонтированы.
+    view.unmount();
+    finish(task);
+
+    await waitFor(() =>
+      expect(workUploads.getSnapshot()).toContainEqual(
+        expect.objectContaining({
+          taskKey: "VED-56",
+          phase: "done",
+          problem: null,
+        }),
+      ),
+    );
+    expect(props.onChanged).not.toHaveBeenCalled();
+    for (const job of workUploads.getSnapshot()) workUploads.dismiss(job.id);
+  });
+
+  it("окно открыли заново — прогресс виден и в нём, и итог забирает оно", async () => {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const first = render(
+      <WorkTaskDialog
+        taskId="t1"
+        board={board}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+    first.unmount();
+
+    const props = open();
+    expect(await screen.findByLabelText("Загружаю…")).toBeDisabled();
+    finish(task);
+
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(workUploads.getSnapshot()).toEqual([]);
   });
 });
 
