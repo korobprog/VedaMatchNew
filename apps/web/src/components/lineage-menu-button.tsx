@@ -12,6 +12,7 @@ import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   lineageButtonLabel,
+  lineageButtonToneClass,
   lineageMenuItems,
   lineageMenuOpenGroup,
 } from "@/lib/lineage-menu";
@@ -104,7 +105,7 @@ export function LineageMenuButton({
           if (!open) setExpanded(lineageMenuOpenGroup(value));
           setOpen(!open);
         }}
-        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 ${buttonClassName}`}
+        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border transition-colors hover:text-text-0 ${lineageButtonToneClass(value)} ${buttonClassName}`}
       >
         <Landmark aria-hidden className="size-4" />
       </button>
