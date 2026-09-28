@@ -77,25 +77,30 @@ export type BlogPostMarksError =
   | 'invalid_lineage';
 
 /**
- * Пост нельзя опубликовать, не назначив категорию и линию (VED-590). При
- * публикации оба поля обязательны. При правке молчание — «как было»:
- * старые посты и клиенты, которые полей не шлют, правятся как раньше, а
- * очистить поле нельзя. Репост сюда не заходит — у него своих полей нет.
+ * Категория и линия из тела публикации или правки (VED-590).
+ *
+ * Поле, которое передали, обязано быть выбором: пустое (`null`, пустая
+ * строка из multipart) — 400 `category_required` / `lineage_required`,
+ * мусор — `invalid_*`. Поле, которого в запросе нет вовсе, — «как было»:
+ * при правке значение прежнее, при публикации категории нет, а линия
+ * «для всех» (`null`).
+ *
+ * Отсутствие не отвергается даже при публикации — ради обратной
+ * совместимости: установленные сборки приложения до обновления публикуют
+ * пост без этих полей, и 400 оставил бы их без публикации вовсе.
+ * Обязательность держит веб-форма: она всегда шлёт оба поля («для всех» —
+ * `'all'`). Когда приложение догонит, отсутствие при публикации можно
+ * сделать ошибкой. Репост сюда не заходит — у него своих полей нет.
  */
 export function blogPostMarksInput(
   body: { category?: unknown; lineage?: unknown } | null | undefined,
-  mode: 'create' | 'update',
 ): BlogPostMarks | { error: BlogPostMarksError } {
   const category = blogCategoryChoice(body?.category);
   if (category === 'invalid') return { error: 'invalid_category' };
-  if (category === 'required' || (mode === 'create' && !category)) {
-    return { error: 'category_required' };
-  }
+  if (category === 'required') return { error: 'category_required' };
   const lineage = blogLineageChoice(body?.lineage);
   if (lineage === 'invalid') return { error: 'invalid_lineage' };
-  if (lineage === 'required' || (mode === 'create' && lineage === undefined)) {
-    return { error: 'lineage_required' };
-  }
+  if (lineage === 'required') return { error: 'lineage_required' };
   const marks: BlogPostMarks = {};
   if (category) marks.category = category;
   if (lineage !== undefined) marks.lineage = lineage;

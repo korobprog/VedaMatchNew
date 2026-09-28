@@ -104,52 +104,39 @@ describe('blogLineageChoice (VED-590)', () => {
 });
 
 describe('blogPostMarksInput (VED-590)', () => {
-  it('requires both fields when publishing', () => {
-    expect(blogPostMarksInput({}, 'create')).toEqual({
-      error: 'category_required',
-    });
-    expect(blogPostMarksInput(undefined, 'create')).toEqual({
-      error: 'category_required',
-    });
-    expect(blogPostMarksInput({ category: 'news' }, 'create')).toEqual({
-      error: 'lineage_required',
-    });
-    expect(
-      blogPostMarksInput({ category: 'news', lineage: '' }, 'create'),
-    ).toEqual({ error: 'lineage_required' });
+  it('without the fields — as before: old app builds keep publishing', () => {
+    expect(blogPostMarksInput({})).toEqual({});
+    expect(blogPostMarksInput(undefined)).toEqual({});
   });
 
-  it('publishes with a lineage or explicitly for everyone', () => {
+  it('a sent but empty field is refused', () => {
+    expect(blogPostMarksInput({ category: '', lineage: 'all' })).toEqual({
+      error: 'category_required',
+    });
+    expect(blogPostMarksInput({ category: 'news', lineage: '' })).toEqual({
+      error: 'lineage_required',
+    });
+    expect(blogPostMarksInput({ category: 'news', lineage: null })).toEqual({
+      error: 'lineage_required',
+    });
+  });
+
+  it('a lineage or explicitly for everyone', () => {
+    expect(blogPostMarksInput({ category: 'news', lineage: 'iskcon' })).toEqual(
+      { category: 'news', lineage: 'iskcon' },
+    );
     expect(
-      blogPostMarksInput({ category: 'news', lineage: 'iskcon' }, 'create'),
-    ).toEqual({ category: 'news', lineage: 'iskcon' });
-    expect(
-      blogPostMarksInput({ category: 'calendar', lineage: 'all' }, 'create'),
+      blogPostMarksInput({ category: 'calendar', lineage: 'all' }),
     ).toEqual({ category: 'calendar', lineage: null });
+    expect(blogPostMarksInput({ lineage: 'all' })).toEqual({ lineage: null });
   });
 
   it('refuses garbage with its own code', () => {
-    expect(
-      blogPostMarksInput({ category: 'sport', lineage: 'all' }, 'create'),
-    ).toEqual({ error: 'invalid_category' });
-    expect(
-      blogPostMarksInput({ category: 'news', lineage: 'nope' }, 'create'),
-    ).toEqual({ error: 'invalid_lineage' });
-  });
-
-  it('an edit without the fields keeps both — old posts stay editable', () => {
-    expect(blogPostMarksInput({}, 'update')).toEqual({});
-    expect(blogPostMarksInput({ lineage: 'all' }, 'update')).toEqual({
-      lineage: null,
+    expect(blogPostMarksInput({ category: 'sport', lineage: 'all' })).toEqual({
+      error: 'invalid_category',
     });
-  });
-
-  it('an edit cannot clear a field', () => {
-    expect(blogPostMarksInput({ category: '' }, 'update')).toEqual({
-      error: 'category_required',
-    });
-    expect(blogPostMarksInput({ lineage: null }, 'update')).toEqual({
-      error: 'lineage_required',
+    expect(blogPostMarksInput({ category: 'news', lineage: 'nope' })).toEqual({
+      error: 'invalid_lineage',
     });
   });
 });

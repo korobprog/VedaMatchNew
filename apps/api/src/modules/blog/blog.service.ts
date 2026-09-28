@@ -356,9 +356,10 @@ export class BlogService {
       imageCount: files.length,
     });
     if (error) throw new BadRequestException(error);
-    // Категорию и линию назначает автор прямо в форме, и без них пост не
-    // публикуется (VED-590). «Для всех» — тоже выбор, `lineage: 'all'`.
-    const marks = blogPostMarksInput(body, 'create');
+    // Категорию и линию назначает автор прямо в форме (VED-590). «Для всех»
+    // — тоже выбор, `lineage: 'all'`. Пустое поле — 400; поля нет вовсе —
+    // старая сборка приложения, пост публикуется как раньше.
+    const marks = blogPostMarksInput(body);
     if ('error' in marks) throw new BadRequestException(marks.error);
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
@@ -373,7 +374,7 @@ export class BlogService {
         authorId: userId,
         title,
         text,
-        category: marks.category,
+        category: marks.category ?? null,
         lineage: marks.lineage ?? null,
         feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
       },
@@ -457,7 +458,7 @@ export class BlogService {
     if (error) throw new BadRequestException(error);
     // Нет поля — категория и линия прежние: правка из старого клиента и
     // старого поста без них не ломается. Очистить их нельзя (VED-590).
-    const marks = blogPostMarksInput(body, 'update');
+    const marks = blogPostMarksInput(body);
     if ('error' in marks) throw new BadRequestException(marks.error);
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');

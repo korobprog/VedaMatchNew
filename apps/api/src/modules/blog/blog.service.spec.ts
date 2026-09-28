@@ -725,14 +725,31 @@ describe('BlogService category (VED-590)', () => {
     expect(lastData(blogPost.create).lineage).toBeNull();
   });
 
-  it('refuses to publish without a category or a lineage', async () => {
+  it('an old app build without the fields publishes as before', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await service.create('author', false, { text: 'Просто пост' });
+
+    expect(lastData(blogPost.create).category).toBeNull();
+    expect(lastData(blogPost.create).lineage).toBeNull();
+  });
+
+  it('refuses a sent but empty category or lineage', async () => {
     const { service, blogPost } = withCreate(storedPost());
 
     await expect(
-      service.create('author', false, { text: 'Просто пост' }),
+      service.create('author', false, {
+        text: 'Пост',
+        category: '' as never,
+        lineage: 'all',
+      }),
     ).rejects.toMatchObject({ message: 'category_required' });
     await expect(
-      service.create('author', false, { text: 'Пост', category: 'news' }),
+      service.create('author', false, {
+        text: 'Пост',
+        category: 'news',
+        lineage: '' as never,
+      }),
     ).rejects.toMatchObject({ message: 'lineage_required' });
     expect(blogPost.create).not.toHaveBeenCalled();
   });
