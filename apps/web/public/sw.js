@@ -112,15 +112,53 @@ function fetchAndStore(request) {
 }
 
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch {
-    return;
-  }
-  event.waitUntil(showNotificationUnlessOpen(payload));
+  event.waitUntil(showNotificationUnlessOpen(readPush(event.data)));
 });
+
+/**
+ * Разбор данных пуша. Пустой или битый пуш — не повод промолчать: пуш без
+ * показанного уведомления Safari считает «тихим» и за несколько таких
+ * отзывает подписку (VED-313), Chrome вместо нас показывает служебное «сайт
+ * обновился в фоне». Общее уведомление, ведущее на главную, лучше обоих.
+ */
+function readPush(data) {
+  if (data) {
+    try {
+      const payload = data.json();
+      if (payload && typeof payload === "object") return payload;
+    } catch {
+      // Ниже — общее уведомление.
+    }
+  }
+  return { title: "VedaMatch", body: "Новое уведомление", url: "/" };
+}
+
+/**
+ * Подписка у службы доставки Apple — Safari на iPhone и iPad (сайт на
+ * домашнем экране) и на Mac. Хост `endpoint` — не секрет, секрет — путь.
+ */
+function isApplePushEndpoint(endpoint) {
+  if (typeof endpoint !== "string") return false;
+  try {
+    return /(^|\.)push\.apple\.com$/.test(new URL(endpoint).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Можно ли погасить уведомление, раз человек смотрит на тот же экран. У Apple
+ * нельзя: каждый доставленный пуш обязан закончиться видимым уведомлением,
+ * иначе после нескольких «тихих» Safari молча отзывает подписку — и на айфоне
+ * пуши перестают приходить совсем, без единой ошибки на сервере (VED-313).
+ * Один лишний баннер поверх открытой беседы дешевле.
+ */
+async function maySuppressNotification() {
+  const subscription = await self.registration.pushManager
+    .getSubscription()
+    .catch(() => null);
+  return !isApplePushEndpoint(subscription?.endpoint);
+}
 
 async function showNotificationUnlessOpen(payload) {
   const windows = await self.clients.matchAll({
@@ -136,13 +174,13 @@ async function showNotificationUnlessOpen(payload) {
   );
   if (focused) {
     focused.postMessage({ type: "push-received", payload });
-    return;
+    if (await maySuppressNotification()) return;
   }
   // Входящий звонок: кнопки прямо в уведомлении и настойчивость — оно не
   // должно свернуться само, пока звонят. Тег «call:» ставит API.
   const isCall = typeof payload.tag === "string" && payload.tag.startsWith("call:");
-  await self.registration.showNotification(payload.title, {
-    body: payload.body,
+  await self.registration.showNotification(payload.title || "VedaMatch", {
+    body: payload.body ?? "",
     tag: payload.tag,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",

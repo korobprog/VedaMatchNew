@@ -113,15 +113,27 @@ function appPathFor(rawUrl) {
 }
 
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch {
-    return;
-  }
-  event.waitUntil(showPush(payload));
+  event.waitUntil(showPush(readPush(event.data)));
 });
+
+/**
+ * Разбор данных пуша. Пустой или битый пуш — НЕ повод промолчать: на iPhone
+ * пуш без показанного уведомления считается «тихим», и за несколько таких
+ * Safari отзывает подписку (см. `showPush`). Поэтому вместо выхода — общее
+ * уведомление, ведущее на главную: лучше один безликий баннер, чем потерять
+ * доставку целиком.
+ */
+function readPush(data) {
+  if (data) {
+    try {
+      const payload = data.json();
+      if (payload && typeof payload === 'object') return payload;
+    } catch {
+      // Ниже — общее уведомление.
+    }
+  }
+  return { title: 'VedaMatch', body: 'Новое уведомление', url: '/' };
+}
 
 /**
  * Уведомление показывается ВСЕГДА — в отличие от сайта, где открытый на том

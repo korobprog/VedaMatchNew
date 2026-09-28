@@ -3,6 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 import { classifyPushError, type PushFailure } from './push-errors';
 import type { StoredSubscription } from './notifications.service';
+import {
+  describePushFailure,
+  pushServiceOf,
+  webPushOptions,
+} from './web-push-request';
 
 @Injectable()
 export class PushSenderService {
@@ -35,7 +40,7 @@ export class PushSenderService {
    *  где необработанное отклонение уронило бы процесс. */
   async send(
     subscription: StoredSubscription,
-    payload: object,
+    payload: { tag?: unknown },
   ): Promise<PushFailure | null> {
     if (!this.configured) return 'transient';
     try {
@@ -45,13 +50,21 @@ export class PushSenderService {
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         JSON.stringify(payload),
+        webPushOptions(payload),
       );
       return null;
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
+      const { statusCode, body } = error as {
+        statusCode?: number;
+        body?: unknown;
+      };
       const failure = classifyPushError(statusCode);
       this.logger.warn(
-        `Пуш не доставлен (${statusCode ?? 'без кода'}): ${failure}`,
+        `Пуш не доставлен (${describePushFailure(
+          pushServiceOf(subscription.endpoint),
+          statusCode,
+          body,
+        )}): ${failure}`,
       );
       return failure;
     }

@@ -73,3 +73,15 @@ test('мусор вместо адреса — главная, а не паде�
   // Чужой адрес: без ведущей косой в `clients.openWindow` уводить некуда.
   assert.equal(appPathFor('https://example.com/chat/1'), '/');
 });
+
+test('пуш без данных или с битыми данными всё равно показывает уведомление', () => {
+  // На iPhone пуш без уведомления — «тихий», и за несколько таких Safari
+  // отзывает подписку (VED-313).
+  const readPush = vm.runInContext('readPush', context);
+  const fallback = { title: 'VedaMatch', body: 'Новое уведомление', url: '/' };
+  assert.deepEqual({ ...readPush(null) }, fallback);
+  assert.deepEqual({ ...readPush({ json: () => { throw new SyntaxError('bad'); } }) }, fallback);
+  assert.deepEqual({ ...readPush({ json: () => 'строка' }) }, fallback);
+  const payload = { title: 'Сообщение', body: 'Привет', url: '/chat/1', tag: 'chat:1' };
+  assert.deepEqual({ ...readPush({ json: () => payload }) }, payload);
+});
