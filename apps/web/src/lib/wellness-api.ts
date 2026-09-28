@@ -2,10 +2,16 @@
 // В коде и маршрутах сервис зовётся `wellness`: имя `health` занято
 // техническим liveness-эндпоинтом API.
 import type {
+  WellnessArticleDetail,
+  WellnessArticleInput,
+  WellnessArticleListResponse,
   WellnessBasketDto,
   WellnessDietProfileDto,
   WellnessHistoryItem,
   WellnessIngredientDto,
+  WellnessKnowledgeCategoryDto,
+  WellnessKnowledgeCategoryInput,
+  WellnessKnowledgeCategoryPage,
   WellnessProductCard,
   WellnessRecipeDetail,
   WellnessRecipeMatchDto,
@@ -139,3 +145,94 @@ export const getWellnessRecipesForBasket = (signal?: AbortSignal) =>
     method: "GET",
     signal,
   });
+
+// ===== Знания (VED-229): рубрики и статьи. Правка — админам сервиса =====
+
+export const getWellnessKnowledgeTree = (signal?: AbortSignal) =>
+  request<WellnessKnowledgeCategoryDto[]>("/wellness/knowledge/categories", {
+    method: "GET",
+    signal,
+  });
+
+export const getWellnessKnowledgeCategory = (
+  slug: string,
+  signal?: AbortSignal,
+) =>
+  request<WellnessKnowledgeCategoryPage>(
+    `/wellness/knowledge/categories/${encodeURIComponent(slug)}`,
+    { method: "GET", signal },
+  );
+
+export const getWellnessKnowledgeArticles = (
+  slug: string,
+  page: number,
+  signal?: AbortSignal,
+) =>
+  request<WellnessArticleListResponse>(
+    `/wellness/knowledge/categories/${encodeURIComponent(slug)}/articles?page=${page}`,
+    { method: "GET", signal },
+  );
+
+export const getWellnessArticle = (id: string, signal?: AbortSignal) =>
+  request<WellnessArticleDetail>(
+    `/wellness/knowledge/articles/${encodeURIComponent(id)}`,
+    { method: "GET", signal },
+  );
+
+export const createWellnessKnowledgeCategory = (
+  body: WellnessKnowledgeCategoryInput,
+) =>
+  request<WellnessKnowledgeCategoryDto>("/wellness/knowledge/categories", {
+    method: "POST",
+    ...json(body),
+  });
+
+export const updateWellnessKnowledgeCategory = (
+  id: string,
+  body: Partial<WellnessKnowledgeCategoryInput>,
+) =>
+  request<WellnessKnowledgeCategoryDto>(
+    `/wellness/knowledge/categories/${encodeURIComponent(id)}`,
+    { method: "PATCH", ...json(body) },
+  );
+
+export const deleteWellnessKnowledgeCategory = (id: string) =>
+  request<void>(`/wellness/knowledge/categories/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+export const createWellnessArticle = (body: WellnessArticleInput) =>
+  request<WellnessArticleDetail>("/wellness/knowledge/articles", {
+    method: "POST",
+    ...json(body),
+  });
+
+export const updateWellnessArticle = (
+  id: string,
+  body: Partial<WellnessArticleInput>,
+) =>
+  request<WellnessArticleDetail>(
+    `/wellness/knowledge/articles/${encodeURIComponent(id)}`,
+    { method: "PATCH", ...json(body) },
+  );
+
+export const deleteWellnessArticle = (id: string) =>
+  request<void>(`/wellness/knowledge/articles/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+export const uploadWellnessArticleCover = (id: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  // Content-Type не задаём: браузер сам поставит boundary для multipart.
+  return request<WellnessArticleDetail>(
+    `/wellness/knowledge/articles/${encodeURIComponent(id)}/cover`,
+    { method: "POST", body: form },
+  );
+};
+
+export const deleteWellnessArticleCover = (id: string) =>
+  request<WellnessArticleDetail>(
+    `/wellness/knowledge/articles/${encodeURIComponent(id)}/cover`,
+    { method: "DELETE" },
+  );
