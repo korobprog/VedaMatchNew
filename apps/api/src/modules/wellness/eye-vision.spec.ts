@@ -90,6 +90,11 @@ describe('buildEyeRequest', () => {
     });
   });
 
+  it('к человеку — на «вы»', () => {
+    const system = buildEyeRequest('m', 'scene', FRAME, null).messages[0];
+    expect(system.role === 'system' ? system.content : '').toContain('на «вы»');
+  });
+
   it('у каждого режима своё задание', () => {
     expect(taskText(buildEyeRequest('m', 'transport', FRAME, null))).toMatch(
       /номер маршрута/,
