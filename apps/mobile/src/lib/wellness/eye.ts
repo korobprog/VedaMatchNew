@@ -133,6 +133,19 @@ export function nothingPhrase(mode: EyeMode): string {
   }
 }
 
+/**
+ * Размер шрифта фразы на экране. Короткий ответ («Автобус 47») — самым
+ * крупным, чтобы дочитать его глазами. Длинный крупным не влезает: на
+ * телефоне пользователя приветствие шрифтом 28 закрыло весь видоискатель, и
+ * зона «Спросить сейчас» сжалась в полоску.
+ */
+export function phraseFontSize(text: string): { fontSize: number; lineHeight: number } {
+  const length = text.trim().length;
+  if (length <= 60) return { fontSize: 28, lineHeight: 36 };
+  if (length <= 140) return { fontSize: 24, lineHeight: 31 };
+  return { fontSize: 20, lineHeight: 27 };
+}
+
 /* ------------------------------------------------------------------ */
 /* Кадр                                                                */
 /* ------------------------------------------------------------------ */

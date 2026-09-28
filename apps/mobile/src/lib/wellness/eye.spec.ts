@@ -13,6 +13,7 @@ import {
   missingRussianVoice,
   nextRateIndex,
   nothingPhrase,
+  phraseFontSize,
   pickEyeFrameSize,
   samePhrase,
   shouldSpeak,
@@ -85,6 +86,14 @@ describe('shouldSpeak', () => {
 
   it('пустое не говорится', () => {
     expect(shouldSpeak({ ...base, speech: '  ', last: null, asked: true })).toBe(false);
+  });
+});
+
+describe('phraseFontSize', () => {
+  it('короткий ответ — крупнее всего, длинный — мельче', () => {
+    expect(phraseFontSize('Автобус 47, до вокзала.').fontSize).toBe(28);
+    expect(phraseFontSize('а'.repeat(100)).fontSize).toBe(24);
+    expect(phraseFontSize('а'.repeat(200)).fontSize).toBe(20);
   });
 });
 
