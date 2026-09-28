@@ -786,8 +786,9 @@ describe("QuickPanel: кнопка «Плеер»", () => {
 });
 
 /*
- * VED-591, VED-593: колокольчик стоит на равных расстояниях — до соседней
- * кнопки слева, до аватара и до правого края, когда профиль убран.
+ * VED-591: когда профиль убран, колокольчик стоит от правого края на том же
+ * расстоянии, что от соседней кнопки слева. VED-593: до аватара — обычный
+ * промежуток ряда, без поля 8px (вернули как было).
  */
 describe("QuickPanel: промежутки у колокольчика", () => {
   function renderRow(ids: string[]) {
@@ -812,11 +813,11 @@ describe("QuickPanel: промежутки у колокольчика", () => {
     expect(pull).not.toHaveClass("-mr-2");
   });
 
-  it("между колокольчиком и аватаром — поле 8px на телефоне", () => {
+  it("между колокольчиком и аватаром — без своего поля", () => {
     renderRow(["hotkeys", "bell", "avatar"]);
     const slot = screen.getByTestId("header-avatar-slot");
     expect(slot).toContainElement(screen.getByRole("link", { name: "Профиль" }));
-    expect(slot).toHaveClass("ml-2", "sm:ml-0");
+    expect(slot).not.toHaveClass("ml-2");
     // Крайний аватар — в 17px от правого края, как видимый край логотипа от
     // левого (VED-439): 16px поля шапки и 1px своего.
     expect(slot).toHaveClass("mr-px");
@@ -828,8 +829,10 @@ describe("QuickPanel: промежутки у колокольчика", () => {
     ).toBeTruthy();
   });
 
-  it("аватар посреди ряда — поле с обеих сторон", () => {
+  it("аватар посреди ряда — без полей", () => {
     renderRow(["hotkeys", "bell", "avatar", "menu"]);
-    expect(screen.getByTestId("header-avatar-slot")).toHaveClass("mx-2", "sm:mx-0");
+    const slot = screen.getByTestId("header-avatar-slot");
+    expect(slot).not.toHaveClass("mx-2");
+    expect(slot).not.toHaveClass("mr-px");
   });
 });
