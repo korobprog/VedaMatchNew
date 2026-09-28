@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { FeaturedColorPicker } from "./featured-color-picker";
 import {
+  FEATURED_ACCENT_FILL,
   HOME_FEATURED_COLORS_COOKIE,
   parseFeaturedColors,
 } from "./featured-accents";
@@ -34,6 +35,27 @@ function saved() {
 }
 
 describe("FeaturedColorPicker (VED-452)", () => {
+  it("кружок неприметный: 8px, без цвета сервиса, у самого угла (VED-601)", () => {
+    render(
+      <FeaturedColorPicker
+        userId="u1"
+        serviceName="Общение"
+        index={0}
+        accents={["text-cyan", "text-violet", "text-magenta"]}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Цвет кнопки: мятный" });
+    // Цель нажатия не меньше 24px (WCAG 2.5.8) и прижата к углу.
+    expect(button).toHaveClass("size-6", "right-0.5", "top-0.5");
+    const dot = button.firstElementChild;
+    expect(dot).toHaveClass("size-2", "border-text-2", "opacity-50");
+    // Ни одной заливки палитры: цвет сервиса кружок больше не повторяет.
+    for (const fill of Object.values(FEATURED_ACCENT_FILL)) {
+      expect(dot).not.toHaveClass(fill);
+    }
+  });
+
   it("кружок назван текущим цветом и открывает выбор с клавиатуры", async () => {
     const user = userEvent.setup();
     render(

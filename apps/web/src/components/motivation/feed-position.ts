@@ -109,3 +109,25 @@ function categoryTitle(
     .filter((title): title is string => Boolean(title));
   return titles.length ? titles.join(", ") : null;
 }
+
+/**
+ * Ведёт ли ссылка туда же, где человек уже стоит (VED-599). Порядок и
+ * кодировка параметров не важны: `?category=a&tab=cards` и
+ * `?tab=cards&category=a` — одна лента.
+ *
+ * Нужно «Начать сначала» на финальном слайде: у ленты, открытой не с места
+ * остановки, начало — ровно тот же адрес. Переход на него в Next.js ничего
+ * не перезагружает — лента держит посты в своём состоянии, ключ страницы тот
+ * же, — и человек оставался на чёрном финальном слайде. Такой переход лента
+ * заменяет прокруткой к первому посту: её первая страница и есть начало.
+ */
+export function isSameFeedHref(current: string, target: string): boolean {
+  const parse = (href: string) => {
+    const url = new URL(href, "http://feed.local");
+    const params = [...url.searchParams.entries()]
+      .map(([key, value]) => `${key}=${value}`)
+      .sort();
+    return `${url.pathname.replace(/\/+$/, "") || "/"}?${params.join("&")}`;
+  };
+  return parse(current) === parse(target);
+}

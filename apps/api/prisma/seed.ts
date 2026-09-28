@@ -54,6 +54,7 @@ const { noticeRubrics } = require('./notice-rubrics-data.js') as {
     kinds: Array<'offer' | 'request' | 'event' | 'info'>;
     nameRu: string;
     nameEn: string;
+    iconKey?: string;
   }>;
 };
 

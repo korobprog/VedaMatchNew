@@ -5,11 +5,15 @@
  * ним маленький пузырь «пуск / пауза».
  *
  * Свои окна плеера (панель настроек, очередь) не в счёт: они внутри
- * `[data-music-player]`, и пауза в них и так под рукой.
+ * `[data-music-player]`, и пауза в них и так под рукой. Не в счёт и окна
+ * со своей кнопкой звука `[data-sound-control]` (VED-600): окно задачи
+ * держит мятную паузу у номера, и пузырь её только дублировал.
  */
 export function hasForeignModal(root: ParentNode): boolean {
   for (const node of root.querySelectorAll('[aria-modal="true"]')) {
-    if (!node.closest("[data-music-player]")) return true;
+    if (node.closest("[data-music-player]")) continue;
+    if (node.querySelector("[data-sound-control]")) continue;
+    return true;
   }
   return false;
 }

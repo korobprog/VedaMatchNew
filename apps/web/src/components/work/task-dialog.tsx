@@ -445,6 +445,11 @@ export function WorkTaskDialog({
                     {task.attachments.length}
                   </a>
                 )}
+                {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
+                    нажать: пуск и пауза — здесь (VED-577). Под номером мятным
+                    кругом (VED-600), а не у крестика; пузырь плеера поверх
+                    окна при ней не показывается — см. `hasForeignModal`. */}
+                <CompactSoundButton tone="mint" className="mt-1" />
               </span>
               {/* Название целиком, а не первой строкой. В однострочном поле
                   длинное название обрывалось на середине слова, и карточка
@@ -490,9 +495,6 @@ export function WorkTaskDialog({
                   </button>
                 )}
               </div>
-              {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
-                  нажать: пуск и пауза — здесь же, у крестика (VED-577). */}
-              <CompactSoundButton className="-my-1.5" />
               <button
                 type="button"
                 onClick={requestClose}

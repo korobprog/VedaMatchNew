@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedEnding, feedPositionBody } from "./feed-position";
+import { feedEnding, feedPositionBody, isSameFeedHref } from "./feed-position";
 
 describe("feedPositionBody", () => {
   it("запоминает ленту раздела, источника и автора", () => {
@@ -104,5 +104,41 @@ describe("feedEnding", () => {
       title: "Это всё избранное",
       restartHref: null,
     });
+  });
+});
+
+describe("isSameFeedHref", () => {
+  it("тот же адрес при другом порядке и кодировке параметров", () => {
+    expect(
+      isSameFeedHref(
+        "/motivation?category=filosofiya-2&tab=cards",
+        "/motivation?tab=cards&category=filosofiya-2",
+      ),
+    ).toBe(true);
+    expect(
+      isSameFeedHref(
+        "/motivation?work=%D0%93%D0%B8%D1%82%D0%B0",
+        "/motivation?work=Гита",
+      ),
+    ).toBe(true);
+    expect(isSameFeedHref("/motivation/", "/motivation")).toBe(true);
+  });
+
+  it("лента с места остановки или с поста — другой адрес", () => {
+    expect(
+      isSameFeedHref(
+        "/motivation?category=filosofiya-2&resume=1",
+        "/motivation?category=filosofiya-2",
+      ),
+    ).toBe(false);
+    expect(
+      isSameFeedHref(
+        "/motivation?category=filosofiya-2&from=p",
+        "/motivation?category=filosofiya-2",
+      ),
+    ).toBe(false);
+    expect(
+      isSameFeedHref("/motivation?tab=cards", "/motivation?category=a"),
+    ).toBe(false);
   });
 });

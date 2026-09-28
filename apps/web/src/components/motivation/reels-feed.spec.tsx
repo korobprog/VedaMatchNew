@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationPostDto } from "@vedamatch/shared";
 import { ReelsFeed } from "./reels-feed";
+import { resetScriptureChapterCache } from "@/lib/motivation-client-api";
 
 // jsdom не знает IntersectionObserver; активный слайд в тестах не нужен.
 class FakeObserver {
@@ -90,6 +91,9 @@ function fetchOk(body: unknown) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // Глава Писания кешируется на уровне модуля — иначе ответ одного теста
+  // достался бы следующему.
+  resetScriptureChapterCache();
   // Синтез речи подменяется в одном тесте на весь файл, и без сброса кнопка
   // «Озвучить» осталась бы видна там, где её быть не должно.
   vi.unstubAllGlobals();
@@ -323,6 +327,42 @@ describe("ReelsFeed", () => {
       "href",
       "/motivation?tab=cards&category=guru",
     );
+  });
+
+  it("«Начать сначала» на том же адресе уводит ленту к первому посту (VED-599)", () => {
+    fetchOk({});
+    // Лента раздела открыта не с места остановки: её начало — тот же адрес,
+    // и переход по ссылке ничего бы не сделал — человек стоял на финале.
+    window.history.pushState({}, "", "/motivation?category=guru&tab=cards");
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    try {
+      render(
+        <ReelsFeed
+          initial={{ items: [post("a"), post("b")], nextCursor: null }}
+          tab="cards"
+          donation={null}
+          category="guru"
+          categories={[
+            { id: "1", slug: "guru", title: "Гуру", sortOrder: 1, isDefault: false, parentId: null, postCount: 2, feed: "both" as const, artCount: 0, cardsCount: 2 },
+          ]}
+        />,
+      );
+      const feed = screen.getByRole("feed", { name: "Лента вдохновения" });
+      const end = within(feed).getByRole("region", { name: "Конец ленты" });
+      const restart = within(end).getByRole("link", { name: /Начать сначала/ });
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+      restart.dispatchEvent(click);
+      expect(click.defaultPrevented).toBe(true);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+      expect(feed).toHaveFocus();
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+      window.history.pushState({}, "", "/");
+    }
   });
 
   it("без непустых категорий кнопок нет", () => {
@@ -1123,7 +1163,10 @@ describe("ReelsFeed", () => {
     fetchOk({});
     render(
       <ReelsFeed
-        initial={{ items: [post("a")], nextCursor: null }}
+        initial={{
+          items: [post("a", { attributionWork: "Письма", attributionLocator: "1972" })],
+          nextCursor: null,
+        }}
         tab="forYou"
         donation={null}
       />,
@@ -1132,6 +1175,58 @@ describe("ReelsFeed", () => {
     expect(
       screen.queryByRole("button", { name: "Читать полностью ›" }),
     ).not.toBeInTheDocument();
+  });
+
+  // VED-263: санскрит, транслитерация и пословный перевод — из Библиотеки.
+  it("у стиха Гиты даже короткой цитаты открывает санскрит из Библиотеки", async () => {
+    const fetchMock = fetchOk({
+      units: [
+        {
+          id: "u47",
+          title: "Текст 47",
+          sourceUrl: "https://vedabase.ru/bhagavad-gita/2/47/",
+          originalHtml: "<p>कर्मण्येवाधिकारस्ते</p>",
+          transliterationHtml: "<p>карман̣й эва̄дхика̄рас те<br>ма̄ пхалешу када̄чана</p>",
+          synonymsHtml: "<p>карман̣и — в предписанных обязанностях</p>",
+        },
+      ],
+    });
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Читать полностью ›" }));
+
+    const sanskrit = await screen.findByText("कर्मण्येवाधिकारस्ते");
+    expect(sanskrit).toHaveAttribute("lang", "sa");
+    expect(screen.getByText("Санскрит")).toBeInTheDocument();
+    expect(screen.getByText("Транслитерация")).toBeInTheDocument();
+    expect(screen.getByText("Пословный перевод")).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/vedabase/books/bhagavad-gita/chapters/2"),
+      ),
+    ).toBe(true);
+  });
+
+  it("не показывает блоков стиха, если в Библиотеке его нет", async () => {
+    fetchOk({ units: [] });
+    render(
+      <ReelsFeed
+        initial={{ items: [post("a")], nextCursor: null }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Читать полностью ›" }));
+
+    expect(screen.getByText("Цитата целиком")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Санскрит")).not.toBeInTheDocument());
   });
 
   it("показывает «Читать полностью» и у длинной цитаты видео-поста", () => {
