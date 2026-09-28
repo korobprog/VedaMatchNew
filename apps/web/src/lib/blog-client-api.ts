@@ -20,6 +20,7 @@ import type {
   UpdateBlogPostRequest,
   BlogPostCategory,
   LineageId,
+  SpiritualStage,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 
@@ -67,6 +68,9 @@ const MESSAGES: Record<string, string> = {
   category_required: "Выберите категорию поста — без неё пост не публикуется.",
   lineage_required:
     "Выберите линию поста или «Для всех» — без неё пост не публикуется.",
+  invalid_audience_stages: "Такой ступени нет в списке.",
+  audience_stages_required:
+    "Выберите ступень самоидентификации или «Для всех» — без неё пост не публикуется.",
 };
 
 function mb(bytes: number): number {
@@ -177,6 +181,23 @@ export function fetchBlogAuthorFeed(
 }
 
 /**
+ * Ступени поста в multipart (VED-590): по значению на ступень — сервер
+ * читает повторяющееся поле списком, а одно — строкой. «Для всех» — `all`.
+ * Молчание сервер читает как «прежние» (при публикации — «для всех»).
+ */
+function appendAudienceStages(
+  form: FormData,
+  value: CreateBlogPostRequest["audienceStages"],
+): void {
+  if (!value) return;
+  if (typeof value === "string") {
+    form.append("audienceStages", value);
+    return;
+  }
+  for (const stage of value) form.append("audienceStages", stage);
+}
+
+/**
  * Публикация. Картинки уезжают тем же запросом: FormData, когда файлы есть,
  * и обычный JSON, когда их нет. Content-Type у multipart не задаём — браузер
  * сам поставит boundary.
@@ -196,6 +217,7 @@ export function createBlogPost(
   form.append("text", body.text ?? "");
   if (body.category) form.append("category", body.category);
   if (body.lineage) form.append("lineage", body.lineage);
+  appendAudienceStages(form, body.audienceStages);
   for (const file of files) form.append("files", file);
   return request<BlogPostCreatedResponse>("/blog/posts", {
     method: "POST",
@@ -236,6 +258,7 @@ export function updateBlogPost(
   // Молчание сервер читает как «прежние»; очистить поля нельзя (VED-590).
   if (body.category) form.append("category", body.category);
   if (body.lineage) form.append("lineage", body.lineage);
+  appendAudienceStages(form, body.audienceStages);
   if (body.keepImageIds) {
     // Поле обязано доехать даже пустым: на сервере молчание про картинки
     // означает «не трогать их», а пустой список — «убрал все».
@@ -310,6 +333,20 @@ export function setOwnBlogPostLineage(
     method: "PATCH",
     ...json({ lineage }),
   });
+}
+
+/**
+ * Ступени самоидентификации своего поста (VED-590): автор или
+ * администратор. Список ступеней или `'all'` — для всех.
+ */
+export function setBlogPostAudienceStages(
+  id: string,
+  audienceStages: SpiritualStage[] | "all",
+): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/posts/${encodeURIComponent(id)}/audience-stages`,
+    { method: "PATCH", ...json({ audienceStages }) },
+  );
 }
 
 /** Линия поста (VED-596): только администратор; `null` — для всех линий. */

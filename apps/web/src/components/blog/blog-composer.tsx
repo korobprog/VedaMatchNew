@@ -20,9 +20,11 @@ import {
   pickBlogFiles,
 } from "./blog-file-pick";
 import {
+  blogAudienceRequestValue,
   blogCategoryRequestValue,
   blogLineageRequestValue,
   blogPostMarksHint,
+  type BlogAudienceValue,
 } from "./blog-post-marks";
 import { BlogPostMarksFields } from "./blog-post-marks-fields";
 import { BlogTextCounter } from "./blog-text-counter";
@@ -48,6 +50,8 @@ export function BlogComposer({
   const [category, setCategory] = useState<BlogPostCategory | "">("");
   /** `""` — линия не выбрана, `"all"` — осознанное «Для всех» (VED-590). */
   const [lineage, setLineage] = useState("");
+  /** Ступени самоидентификации: `null` — не выбраны (VED-590). */
+  const [audience, setAudience] = useState<BlogAudienceValue>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +61,9 @@ export function BlogComposer({
   const counterId = useId();
   const marksHintId = useId();
   const limit = blogTextLimitState(text);
-  // Без категории и линии пост не публикуется (VED-590): кнопка неактивна,
-  // а рядом сказано почему.
-  const marksHint = blogPostMarksHint(category, lineage);
+  // Без категории, линии и ступени пост не публикуется (VED-590): кнопка
+  // неактивна, а рядом сказано почему.
+  const marksHint = blogPostMarksHint({ category, lineage, audience });
 
   useEffect(() => {
     if (autoFocus) titleRef.current?.focus();
@@ -100,12 +104,19 @@ export function BlogComposer({
     }
     const chosenCategory = blogCategoryRequestValue(category);
     const chosenLineage = blogLineageRequestValue(lineage);
-    if (!chosenCategory || !chosenLineage) return;
+    const chosenAudience = blogAudienceRequestValue(audience);
+    if (!chosenCategory || !chosenLineage || !chosenAudience) return;
 
     setPending(true);
     try {
       const created = await createBlogPost(
-        { title, text, category: chosenCategory, lineage: chosenLineage },
+        {
+          title,
+          text,
+          category: chosenCategory,
+          lineage: chosenLineage,
+          audienceStages: chosenAudience,
+        },
         files,
       );
       if (created.failed.length > 0) {
@@ -119,6 +130,7 @@ export function BlogComposer({
       setText("");
       setCategory("");
       setLineage("");
+      setAudience(null);
       setFiles([]);
       onPublished?.(created.post);
     } catch (cause) {
@@ -171,8 +183,10 @@ export function BlogComposer({
       <BlogPostMarksFields
         category={category}
         lineage={lineage}
+        audience={audience}
         onCategoryChange={setCategory}
         onLineageChange={setLineage}
+        onAudienceChange={setAudience}
         disabled={pending}
       />
 

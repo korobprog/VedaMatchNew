@@ -1,6 +1,5 @@
 "use client";
 
-import { useId } from "react";
 import type { BlogPostCategory } from "@vedamatch/shared";
 import { blogCategoryAssignOptions } from "./blog-feed-filters";
 
@@ -9,43 +8,44 @@ import { blogCategoryAssignOptions } from "./blog-feed-filters";
  * кто добавляет пост. Обычный список: пунктов четыре, и на телефоне
  * системный выбор удобнее своего меню. `""` — ещё не выбрана: пункт-подсказка
  * виден, но не выбирается — без категории пост не публикуется.
+ *
+ * Подпись «Категория» ставит форма (`BlogPostMarksFields`): она выравнивает
+ * подписи всех трёх полей в одну колонку (VED-633).
  */
 export function BlogCategorySelect({
+  id,
   value,
   onChange,
   disabled = false,
+  className,
 }: {
+  id: string;
   value: BlogPostCategory | "";
   onChange: (value: BlogPostCategory | "") => void;
   disabled?: boolean;
+  className: string;
 }) {
-  const id = useId();
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <label htmlFor={id} className="text-xs text-text-1">
-        Категория
-      </label>
-      <select
-        id={id}
-        value={value}
-        disabled={disabled}
-        onChange={(event) =>
-          onChange(event.target.value as BlogPostCategory | "")
-        }
-        aria-required
-        className="min-h-11 rounded-lg border border-glass-brd bg-bg-1 px-3 text-sm text-text-0 disabled:opacity-60"
-      >
-        {value === "" && (
-          <option value="" disabled>
-            Выберите категорию
-          </option>
-        )}
-        {blogCategoryAssignOptions().map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
+    <select
+      id={id}
+      value={value}
+      disabled={disabled}
+      onChange={(event) =>
+        onChange(event.target.value as BlogPostCategory | "")
+      }
+      aria-required
+      className={className}
+    >
+      {value === "" && (
+        <option value="" disabled>
+          Выберите категорию
+        </option>
+      )}
+      {blogCategoryAssignOptions().map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }

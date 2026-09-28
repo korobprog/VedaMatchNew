@@ -7,7 +7,10 @@ import {
 import { Prisma } from '@prisma/client';
 import {
   BLOG_MAX_POSTS_PER_DAY,
+  effectiveAudienceStages,
   resolveDisplayName,
+  resolveMaterialFilters,
+  toAudienceStages,
   toLineageId,
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
@@ -22,6 +25,7 @@ import {
   type BlogPostUpdatedResponse,
   type BlogSettingsDto,
   type CreateBlogPostRequest,
+  type SpiritualStage,
   type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
 import type { BlogLinkPostInput } from './blog-link-post';
@@ -29,6 +33,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
 import {
+  BLOG_VIEWER_FILTERS_SELECT,
+  blogAudienceStagesChoice,
+  blogAudienceStagesWhere,
   blogCategoryChoice,
   blogFilterConditions,
   blogLineageInput,
@@ -100,6 +107,7 @@ const POST_SELECT_BASE = {
   editedAt: true,
   lineage: true,
   category: true,
+  audienceStages: true,
   // Нужен не карточке, а праву на правку: репост не правится никем.
   repostOfId: true,
   linkUrl: true,
@@ -215,7 +223,10 @@ export class BlogService {
   ): Promise<BlogHomeFeedResponse> {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const now = new Date();
-    const where = this.feedWhere(viewer, now, true);
+    const where = combineBlogWhere(
+      this.feedWhere(viewer, now, true),
+      await this.stageConditions(userId),
+    );
 
     const [rows, total] = await Promise.all([
       this.prisma.blogPost.findMany({
@@ -245,10 +256,12 @@ export class BlogService {
     const currentOnly = params.scope !== 'all';
     const base = this.feedWhere(viewer, now, currentOnly);
 
-    // Фильтры читателя: категория (VED-590) и линия (VED-596) из адреса.
+    // Фильтры читателя: категория (VED-590) и линия (VED-596) из адреса,
+    // ступени — из «Фильтров материалов» (VED-590).
     const cursor = decodeBlogCursor(params.cursor);
     const where = combineBlogWhere(base, [
       ...blogFilterConditions(params),
+      ...(await this.stageConditions(userId)),
       ...(cursor ? [blogCursorFilter(cursor)] : []),
     ]);
 
@@ -376,6 +389,7 @@ export class BlogService {
         text,
         category: marks.category ?? null,
         lineage: marks.lineage ?? null,
+        audienceStages: marks.audienceStages ?? [],
         feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
       },
       select: { id: true },
@@ -530,7 +544,12 @@ export class BlogService {
   ): Promise<BlogPostDto> {
     const source = await this.prisma.blogPost.findUnique({
       where: { id },
-      select: { id: true, authorId: true, repostOfId: true },
+      select: {
+        id: true,
+        authorId: true,
+        repostOfId: true,
+        audienceStages: true,
+      },
     });
     if (!source) throw new NotFoundException('post_not_found');
 
@@ -561,6 +580,9 @@ export class BlogService {
           title,
           text,
           repostOfId: rootId,
+          // Своих ступеней у репоста нет: он для тех же, что и пост, иначе
+          // репост проводил бы пост мимо фильтра ступеней (VED-590).
+          audienceStages: source.audienceStages ?? [],
           feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
         },
         select: postSelect(viewer.userId),
@@ -775,6 +797,44 @@ export class BlogService {
     return this.postDto(updated, viewer, new Date());
   }
 
+  /**
+   * Ступени самоидентификации своего поста одной кнопкой (VED-590). Право то
+   * же, что у категории и линии: автор или администратор, репост — никто.
+   * Непустой список или `'all'` — для всех; пустота — 400: пост без ступеней
+   * не публикуется, и снять их потом нельзя.
+   */
+  async setAudienceStages(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    value: unknown,
+  ): Promise<BlogPostDto> {
+    const choice = blogAudienceStagesChoice(value);
+    if (choice === 'invalid') {
+      throw new BadRequestException('invalid_audience_stages');
+    }
+    if (choice === 'required' || choice === undefined) {
+      throw new BadRequestException('audience_stages_required');
+    }
+    const audienceStages: SpiritualStage[] = choice;
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true, repostOfId: true },
+    });
+    if (!row) throw new NotFoundException('post_not_found');
+    const denial = blogEditDenial(row, { userId, isAdmin: viewerIsAdmin });
+    if (denial === 'repost_not_editable') throw new BadRequestException(denial);
+    if (denial) throw new ForbiddenException(denial);
+
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: { audienceStages },
+      select: postSelect(userId),
+    });
+    const viewer = await this.viewer(userId, viewerIsAdmin);
+    return this.postDto(updated, viewer, new Date());
+  }
+
   // ---- «Нравится» (VED-505) --------------------------------------------
 
   /**
@@ -893,6 +953,7 @@ export class BlogService {
     const decoded = decodeBlogCursor(cursor);
     const where = combineBlogWhere(base, [
       ...blogFilterConditions(filters),
+      ...(await this.stageConditions(userId)),
       ...(decoded ? [blogCursorFilter(decoded)] : []),
     ]);
 
@@ -1011,6 +1072,23 @@ export class BlogService {
     // обязана действовать и здесь.
     const hiddenUserIds = await this.moderation.hiddenUserIds(userId, 'all');
     return { userId, isAdmin, hiddenUserIds };
+  }
+
+  /**
+   * Условие ленты по ступеням зрителя (VED-590): «Фильтры материалов» с
+   * главной, а без ручного выбора — своя ступень из анкеты, как в
+   * Образовании и Медиатеке. Пустой список — фильтра нет.
+   */
+  private async stageConditions(
+    userId: string,
+  ): Promise<Prisma.BlogPostWhereInput[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: BLOG_VIEWER_FILTERS_SELECT,
+    });
+    const stages = effectiveAudienceStages(resolveMaterialFilters(user));
+    const where = blogAudienceStagesWhere(stages, userId);
+    return where ? [where] : [];
   }
 
   private feedWhere(
@@ -1183,5 +1261,6 @@ function toPostDto(
     likeCount: row.likeCount,
     lineage: toLineageId(row.lineage),
     category: row.category,
+    audienceStages: toAudienceStages(row.audienceStages),
   };
 }

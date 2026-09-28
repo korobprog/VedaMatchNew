@@ -19,6 +19,7 @@ import {
   BLOG_POST_MAX_IMAGES,
   BLOG_VIDEO_MAX_BYTES,
   type AccessTokenPayload,
+  type BlogPostAudienceStagesRequest,
   type BlogPostCategoryRequest,
   type BlogPostLineageRequest,
   type CreateBlogPostRequest,
@@ -182,6 +183,25 @@ export class BlogController {
       isAdmin(user),
       id,
       body?.lineage ?? null,
+    );
+  }
+
+  /**
+   * Ступени самоидентификации своего поста (VED-590): автор или
+   * администратор, как категория. Список ступеней или `'all'` — для всех.
+   */
+  @Patch('posts/:id/audience-stages')
+  @Throttle({ default: { ttl: 3_600_000, limit: 240 } })
+  setAudienceStages(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: BlogPostAudienceStagesRequest,
+  ) {
+    return this.blog.setAudienceStages(
+      user.sub,
+      isAdmin(user),
+      id,
+      body?.audienceStages ?? null,
     );
   }
 

@@ -10,6 +10,7 @@
 // точечный у поста. Участник срок не трогает — он просто постит один за
 // другим (VED-238).
 
+import type { SpiritualStage } from './index';
 import type { LINEAGE_ALL, LineageId } from './lineage';
 
 /** Заголовок поста: он виден в ленте рядом с картинкой, поэтому короткий. */
@@ -232,6 +233,13 @@ export interface BlogPostDto {
   lineage?: LineageId | null;
   /** Категория поста (VED-590); `null` — без категории. */
   category?: BlogPostCategory | null;
+  /**
+   * Ступени самоидентификации, для которых пост (VED-590), в порядке пути;
+   * `[]` — для всех. Лента показывает зрителю посты его ступеней и посты
+   * для всех, как в Образовании и Медиатеке. Необязательное — установленные
+   * сборки приложения поля не знают.
+   */
+  audienceStages?: SpiritualStage[];
 }
 
 export interface BlogFeedResponse {
@@ -286,6 +294,15 @@ export interface CreateBlogPostRequest {
    * приложения), прежняя линия при правке.
    */
   lineage?: LineageId | typeof LINEAGE_ALL | null;
+  /**
+   * Ступени самоидентификации (VED-590): непустой список ступеней или
+   * `'all'` — «для всех» (все четыре ступени — то же самое). В multipart —
+   * повторяющееся поле, по ступени на значение. Передано пустым (`null`,
+   * `[]`, пустая строка) — 400 `audience_stages_required`: пустота не
+   * считается выбором «для всех». Поля нет вовсе — «для всех» при
+   * публикации (старые сборки приложения), прежние ступени при правке.
+   */
+  audienceStages?: SpiritualStage[] | typeof LINEAGE_ALL | null;
 }
 
 /**
@@ -322,6 +339,14 @@ export interface BlogPostCategoryRequest {
  */
 export interface BlogPostLineageRequest {
   lineage: LineageId | typeof LINEAGE_ALL | null;
+}
+
+/**
+ * Ступени поста одной кнопкой (VED-590): автор или администратор. Непустой
+ * список или `'all'` — для всех; пустой — 400 `audience_stages_required`.
+ */
+export interface BlogPostAudienceStagesRequest {
+  audienceStages: SpiritualStage[] | typeof LINEAGE_ALL | null;
 }
 
 /** Файл, который не доехал: имя для человека и код причины. */

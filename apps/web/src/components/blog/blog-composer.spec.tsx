@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createBlogPost } from "@/lib/blog-client-api";
@@ -21,13 +21,49 @@ describe("BlogComposer: категория и линия", () => {
     const publish = screen.getByRole("button", { name: "Опубликовать" });
     expect(publish).toBeDisabled();
     expect(publish).toHaveAccessibleDescription(
-      "Чтобы опубликовать пост, выберите категорию и линию (или «Для всех»).",
+      "Чтобы опубликовать пост, выберите категорию, линию и ступень (или «Для всех»).",
     );
 
     await user.selectOptions(screen.getByLabelText("Категория"), "Новости");
     expect(publish).toBeDisabled();
     expect(publish).toHaveAccessibleDescription(
-      "Чтобы опубликовать пост, выберите линию (или «Для всех»).",
+      "Чтобы опубликовать пост, выберите линию и ступень (или «Для всех»).",
+    );
+
+    await user.selectOptions(screen.getByLabelText("Линия"), "Для всех");
+    expect(publish).toBeDisabled();
+    expect(publish).toHaveAccessibleDescription(
+      "Чтобы опубликовать пост, выберите ступень (или «Для всех»).",
+    );
+  });
+
+  // VED-590: «обязательно нужно определить ступень самоидентификации для
+  // поста прежде, чем его публиковать».
+  it("ступеней можно выбрать несколько, ступень снимает «Для всех»", async () => {
+    const user = userEvent.setup();
+    vi.mocked(createBlogPost).mockClear();
+    vi.mocked(createBlogPost).mockResolvedValue({
+      post: { id: "p" } as never,
+      failed: [],
+    });
+    render(<BlogComposer />);
+
+    await user.type(screen.getByLabelText("Текст поста"), "Для практикующих");
+    await user.selectOptions(screen.getByLabelText("Категория"), "Знания");
+    await user.selectOptions(screen.getByLabelText("Линия"), "Для всех");
+    const stages = screen.getByRole("group", { name: "Ступень" });
+    const forAll = within(stages).getByRole("checkbox", { name: "Для всех" });
+    await user.click(forAll);
+    await user.click(within(stages).getByRole("checkbox", { name: "Йог" }));
+    expect(forAll).not.toBeChecked();
+    await user.click(
+      within(stages).getByRole("checkbox", { name: "Практикующий" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Опубликовать" }));
+
+    expect(createBlogPost).toHaveBeenCalledWith(
+      expect.objectContaining({ audienceStages: ["practitioner", "yogi"] }),
+      [],
     );
   });
 
@@ -43,6 +79,7 @@ describe("BlogComposer: категория и линия", () => {
     await user.type(screen.getByLabelText("Текст поста"), "Экадаши в среду");
     await user.selectOptions(screen.getByLabelText("Категория"), "Календарь");
     await user.selectOptions(screen.getByLabelText("Линия"), "Для всех");
+    await user.click(screen.getByRole("checkbox", { name: "Для всех" }));
     await user.click(screen.getByRole("button", { name: "Опубликовать" }));
 
     expect(createBlogPost).toHaveBeenCalledWith(
@@ -51,12 +88,16 @@ describe("BlogComposer: категория и линия", () => {
         text: "Экадаши в среду",
         category: "calendar",
         lineage: "all",
+        audienceStages: "all",
       },
       [],
     );
     // После публикации форма чистая — и категория, и линия тоже.
     expect(screen.getByLabelText("Категория")).toHaveValue("");
     expect(screen.getByLabelText("Линия")).toHaveValue("");
+    expect(
+      screen.getByRole("checkbox", { name: "Для всех" }),
+    ).not.toBeChecked();
   });
 
   it("линия выбирается в два шага: группа, затем какой именно матх", async () => {
@@ -76,6 +117,7 @@ describe("BlogComposer: категория и линия", () => {
 
     const detail = screen.getByRole("combobox", { name: /^Линия: / });
     await user.selectOptions(detail, "ipbys");
+    await user.click(screen.getByRole("checkbox", { name: "Преданный" }));
     await user.click(screen.getByRole("button", { name: "Опубликовать" }));
 
     expect(createBlogPost).toHaveBeenCalledWith(

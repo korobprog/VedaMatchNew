@@ -24,9 +24,12 @@ import {
 } from "./blog-file-pick";
 import { blogMediaPreviewUrl, postMedia } from "./blog-media-list";
 import {
+  blogAudienceFromPost,
+  blogAudienceRequestValue,
   blogCategoryRequestValue,
   blogLineageRequestValue,
   blogPostMarksHint,
+  type BlogAudienceValue,
 } from "./blog-post-marks";
 import { BlogPostMarksFields } from "./blog-post-marks-fields";
 import { BlogTextCounter } from "./blog-text-counter";
@@ -58,6 +61,10 @@ export function BlogPostEditor({
   // Пост без линии — «для всех» (так его и показывает лента), поэтому в
   // форме правки это уже выбранный вариант, а не пустота (VED-590).
   const [lineage, setLineage] = useState(lineageToSelect(post.lineage));
+  // Так же и ступени: пост без них — для всех (VED-590).
+  const [audience, setAudience] = useState<BlogAudienceValue>(
+    blogAudienceFromPost(post.audienceStages),
+  );
   const [kept, setKept] = useState<BlogMediaDto[]>(() => postMedia(post));
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
@@ -69,7 +76,7 @@ export function BlogPostEditor({
   const marksHintId = useId();
   const limit = blogTextLimitState(text);
   // Старый пост без категории сохраняется только с ней — как и новый.
-  const marksHint = blogPostMarksHint(category, lineage, "save");
+  const marksHint = blogPostMarksHint({ category, lineage, audience }, "save");
   /** Человек уже что-то поменял — обновлением с сервера это не затираем. */
   const touched = useRef(false);
 
@@ -93,6 +100,7 @@ export function BlogPostEditor({
         setText(fresh.text);
         setCategory(fresh.category ?? "");
         setLineage(lineageToSelect(fresh.lineage));
+        setAudience(blogAudienceFromPost(fresh.audienceStages));
         setKept(postMedia(fresh));
       })
       .catch(() => {
@@ -140,7 +148,8 @@ export function BlogPostEditor({
     }
     const chosenCategory = blogCategoryRequestValue(category);
     const chosenLineage = blogLineageRequestValue(lineage);
-    if (!chosenCategory || !chosenLineage) return;
+    const chosenAudience = blogAudienceRequestValue(audience);
+    if (!chosenCategory || !chosenLineage || !chosenAudience) return;
 
     setPending(true);
     try {
@@ -151,6 +160,7 @@ export function BlogPostEditor({
           text,
           category: chosenCategory,
           lineage: chosenLineage,
+          audienceStages: chosenAudience,
           keepImageIds: kept.map((image) => image.id),
         },
         files,
@@ -249,6 +259,11 @@ export function BlogPostEditor({
         onLineageChange={(next) => {
           touched.current = true;
           setLineage(next);
+        }}
+        audience={audience}
+        onAudienceChange={(next) => {
+          touched.current = true;
+          setAudience(next);
         }}
       />
 
