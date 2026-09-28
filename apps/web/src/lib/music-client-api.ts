@@ -18,6 +18,7 @@ import type {
   MusicReportResultDto,
   MusicStorageUsageDto,
   MusicUploadRightsBasis,
+  MusicUploadStateDto,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 
@@ -45,6 +46,21 @@ export async function fetchMusicUploadUsage(): Promise<MusicStorageUsageDto> {
   if (!res.ok)
     throw new Error(`Не удалось узнать свободное место (${res.status})`);
   return (await res.json()) as MusicStorageUsageDto;
+}
+
+/**
+ * Где загрузка сейчас — форма спрашивает, пока FLAC, WAV или OGG
+ * перекодируется на сервере (VED-244).
+ */
+export async function fetchMusicUploadState(
+  uploadId: string,
+): Promise<MusicUploadStateDto> {
+  const res = await apiFetch(
+    `${API_URL}/music/uploads/${encodeURIComponent(uploadId)}`,
+  );
+  if (!res.ok)
+    throw new Error(`Не удалось узнать, что с загрузкой (${res.status})`);
+  return (await res.json()) as MusicUploadStateDto;
 }
 
 /**

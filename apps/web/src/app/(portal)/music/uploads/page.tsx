@@ -113,6 +113,10 @@ export default async function MyMusicUploadsPage({
             ? "Для редакции без ограничения объёма"
             : `На проверке и отклонённое: ${formatBytes(data.usage.usedBytes)} из ${formatBytes(data.usage.quotaBytes)}`}{" "}
           · один файл до {formatBytes(data.usage.maxUploadBytes)}
+          {/* Старый API без поля — строку не показываем, а не «до NaN». */}
+          {data.usage.maxTranscodeSourceBytes
+            ? `, FLAC, WAV и OGG — до ${formatBytes(data.usage.maxTranscodeSourceBytes)}`
+            : ""}
         </p>
       )}
 

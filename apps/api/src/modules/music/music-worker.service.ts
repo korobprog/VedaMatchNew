@@ -4,17 +4,21 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 import { MusicIngestProcessService } from './music-ingest-process.service';
 import { MusicUploadsService } from './music-uploads.service';
 import { MusicReportsService } from './music-reports.service';
 import { MusicPlaybackService } from './music-playback.service';
 import { MusicDurationRecountService } from './music-duration-recount.service';
+import { MusicTranscodeService } from './music-transcode.service';
 
 /**
  * Фоновая стадия сервиса: чистка брошенных загрузок, записи, по которым
  * редакция не решила в срок, протухшее «слушает сейчас» и ретеншен истории.
  *
- * Образец — `MotivationWorkerService`, но без Redis-лиза. Лиз там нужен,
+ * Образец — `MotivationWorkerService`, но без Redis-лиза (кроме
+ * перекодирования — см. `transcodeTick`). Лиз там нужен,
  * потому что стадия тратит деньги на внешние модели, и второй экземпляр
  * оплатил бы ту же генерацию дважды. Здесь худшее, что делают два процесса
  * одновременно, — пытаются удалить один и тот же объект; клейм строки через
@@ -41,6 +45,22 @@ const INGEST_TICK_MS = 15 * 1000;
  */
 const DURATION_TICK_MS = 60 * 1000;
 
+/**
+ * Перекодирование FLAC, WAV и OGG (VED-244) — раз в тридцать секунд, как у
+ * `MotivationWorkerService`: человек ждёт на экране «перекодируется…».
+ */
+const TRANSCODE_TICK_MS = 30 * 1000;
+
+/**
+ * Лиз перекодирования. Здесь он нужен, в отличие от уборки: ffmpeg съедает
+ * ядро целиком, и два экземпляра API, взявшиеся разом за две записи, отняли
+ * бы процессор у запросов. Длиннее худшего честного захода — скачать
+ * гигабайт, полчаса ffmpeg, залить результат, — иначе второй процесс
+ * получил бы лиз посреди работы первого.
+ */
+const TRANSCODE_LEASE_KEY = 'music:transcode-worker:lease';
+const TRANSCODE_LEASE_MS = 90 * 60 * 1000;
+
 @Injectable()
 export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MusicWorkerService.name);
@@ -50,6 +70,9 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
   private ingestRunning = false;
   private durationTimer?: NodeJS.Timeout;
   private durationRunning = false;
+  private transcodeTimer?: NodeJS.Timeout;
+  private transcodeRunning = false;
+  private readonly redis: Redis | null;
 
   constructor(
     private readonly uploads: MusicUploadsService,
@@ -57,9 +80,31 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly playback: MusicPlaybackService,
     private readonly ingest: MusicIngestProcessService,
     private readonly durations: MusicDurationRecountService,
-  ) {}
+    private readonly transcode: MusicTranscodeService,
+    config: ConfigService,
+  ) {
+    const host = config.get<string>('REDIS_HOST');
+    this.redis = host
+      ? new Redis({
+          host,
+          port: Number(config.get('REDIS_PORT') || 6379),
+          db: Number(config.get('REDIS_DB') || 0),
+          password: config.get<string>('REDIS_PASSWORD') || undefined,
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+        })
+      : null;
+  }
 
-  onModuleInit() {
+  async onModuleInit() {
+    if (this.redis) {
+      await this.redis
+        .connect()
+        .catch((error) =>
+          this.logger.warn(`Redis unavailable: ${String(error)}`),
+        );
+    }
+
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     // `unref`, иначе таймер держит процесс и тесты не завершаются.
     this.timer.unref();
@@ -77,12 +122,59 @@ export class MusicWorkerService implements OnModuleInit, OnModuleDestroy {
       DURATION_TICK_MS,
     );
     this.durationTimer.unref();
+
+    this.transcodeTimer = setInterval(
+      () => void this.transcodeTick(),
+      TRANSCODE_TICK_MS,
+    );
+    this.transcodeTimer.unref();
   }
 
-  onModuleDestroy() {
+  async onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
     if (this.ingestTimer) clearInterval(this.ingestTimer);
     if (this.durationTimer) clearInterval(this.durationTimer);
+    if (this.transcodeTimer) clearInterval(this.transcodeTimer);
+    if (this.redis?.status === 'ready') await this.redis.quit();
+  }
+
+  /**
+   * Перекодирование FLAC, WAV и OGG (VED-244) под лизом в Redis. Без Redis
+   * (локальная разработка) — без лиза: процесс один, и от параллельной
+   * работы защищает клейм строки.
+   */
+  private async transcodeTick(): Promise<void> {
+    if (this.transcodeRunning) return;
+    this.transcodeRunning = true;
+    const token = crypto.randomUUID();
+    const redis = this.redis?.status === 'ready' ? this.redis : null;
+    try {
+      if (redis) {
+        const acquired = await redis
+          .set(TRANSCODE_LEASE_KEY, token, 'PX', TRANSCODE_LEASE_MS, 'NX')
+          .catch(() => null);
+        if (!acquired) return;
+      }
+      await this.stage('возврат зависших перекодирований', () =>
+        this.transcode.reviveStale(),
+      );
+      await this.stage('перекодирование загрузок', () =>
+        this.transcode.processOnce(),
+      );
+    } finally {
+      if (redis?.status === 'ready') {
+        // Снимаем только свой лиз: чужой мог появиться, если наш истёк.
+        await redis
+          .eval(
+            "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end",
+            1,
+            TRANSCODE_LEASE_KEY,
+            token,
+          )
+          .catch(() => undefined);
+      }
+      this.transcodeRunning = false;
+    }
   }
 
   /** Сверка длительности по файлу (VED-310), пачкой в несколько записей. */

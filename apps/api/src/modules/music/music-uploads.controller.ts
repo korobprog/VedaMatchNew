@@ -59,6 +59,17 @@ export class MusicUploadsController {
     return this.uploads.createUpload(user.sub, body, isAdmin(user));
   }
 
+  /**
+   * Где загрузка сейчас: форма спрашивает, пока FLAC, WAV или OGG
+   * перекодируется (VED-244). Свой лимит, мягче общего: опрос раз в
+   * несколько секунд за час выбрал бы сорок запросов класса за минуты.
+   */
+  @Get(':id')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  state(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.uploads.uploadState(user.sub, id);
+  }
+
   @Post(':id/complete')
   complete(
     @CurrentUser() user: AccessTokenPayload,

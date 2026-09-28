@@ -38,8 +38,30 @@ describe('validateMusicUploadRequest', () => {
       ).toBeNull();
     });
 
-    it('отклоняет то, что играет не везде', () => {
-      for (const mime of ['audio/flac', 'audio/wav', 'audio/ogg']) {
+    it('принимает FLAC, WAV и OGG — их перекодирует сервер (VED-244)', () => {
+      for (const mime of [
+        'audio/flac',
+        'audio/x-flac',
+        'audio/wav',
+        'audio/x-wav',
+        'audio/vnd.wave',
+        'audio/ogg',
+        'audio/opus',
+        'application/ogg',
+      ]) {
+        expect(
+          validateMusicUploadRequest(request({ mime }), limits),
+        ).toBeNull();
+      }
+    });
+
+    it('отклоняет то, что перекодировать нечем', () => {
+      for (const mime of [
+        'audio/aac',
+        'audio/webm',
+        'video/mp4',
+        'image/png',
+      ]) {
         expect(validateMusicUploadRequest(request({ mime }), limits)).toBe(
           'mime_not_accepted',
         );
@@ -210,7 +232,7 @@ describe('validateMusicUploadCompletion', () => {
 describe('MUSIC_UPLOAD_REJECTION_TEXT', () => {
   it('у каждой причины есть текст для человека', () => {
     const rejections = [
-      validateMusicUploadRequest(request({ mime: 'audio/flac' }), limits),
+      validateMusicUploadRequest(request({ mime: 'audio/aac' }), limits),
       validateMusicUploadRequest(request({ sizeBytes: 0 }), limits),
       validateMusicUploadRequest(request({ sizeBytes: 1001 }), limits),
       validateMusicUploadRequest(request({ rightsBasis: null }), limits),
@@ -317,7 +339,7 @@ describe('validateMusicUploadRequest: как браузеры называют �
   it('расширение не спасает заявленный чужой тип', () => {
     expect(
       validateMusicUploadRequest(
-        request({ mime: 'audio/flac', fileName: 'trick.mp3' }),
+        request({ mime: 'audio/aac', fileName: 'trick.mp3' }),
         limits,
       ),
     ).toBe('mime_not_accepted');
@@ -328,7 +350,10 @@ describe('validateMusicUploadRequest: как браузеры называют �
       validateMusicUploadRequest(request({ mime: '', fileName: 'kirtan' }), limits),
     ).toBe('mime_not_accepted');
     expect(
-      validateMusicUploadRequest(request({ mime: '', fileName: 'a.wav' }), limits),
+      validateMusicUploadRequest(
+        request({ mime: '', fileName: 'a.aiff' }),
+        limits,
+      ),
     ).toBe('mime_not_accepted');
   });
 
@@ -340,5 +365,65 @@ describe('validateMusicUploadRequest: как браузеры называют �
         batchUsedBytes: 0,
       }),
     ).toBeNull();
+  });
+});
+
+describe('validateMusicUploadRequest: исходник под перекодирование (VED-244)', () => {
+  const withSource = { ...limits, maxTranscodeSourceBytes: 4000 };
+
+  it('FLAC больше обычного потолка, но в пределах своего — принимается', () => {
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'audio/flac', sizeBytes: 3000 }),
+        withSource,
+      ),
+    ).toBeNull();
+  });
+
+  it('больше предела исходника — отказ', () => {
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'audio/wav', sizeBytes: 4001 }),
+        withSource,
+      ),
+    ).toBe('file_too_large');
+  });
+
+  it('mp3 держит обычный потолок и при большом пределе исходника', () => {
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'audio/mpeg', sizeBytes: 3000 }),
+        withSource,
+      ),
+    ).toBe('file_too_large');
+  });
+
+  it('квоту аккаунта исходник занимает целиком', () => {
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'audio/flac', sizeBytes: 3000, usedBytes: 2500 }),
+        { ...withSource, accountQuotaBytes: 5000 },
+      ),
+    ).toBe('quota_exceeded');
+  });
+
+  it('без явного предела — гигабайт по умолчанию', () => {
+    expect(MUSIC_UPLOAD_DEFAULT_LIMITS.maxTranscodeSourceBytes).toBe(
+      1024 * 1024 * 1024,
+    );
+    expect(
+      validateMusicUploadRequest(
+        request({ mime: 'audio/flac', sizeBytes: 3000 }),
+        limits,
+      ),
+    ).toBeNull();
+  });
+
+  it('тип не узнан, но расширение .flac/.wav/.ogg/.opus — принимается', () => {
+    for (const fileName of ['k.flac', 'k.WAV', 'k.ogg', 'k.oga', 'k.opus']) {
+      expect(
+        validateMusicUploadRequest(request({ mime: '', fileName }), limits),
+      ).toBeNull();
+    }
   });
 });
