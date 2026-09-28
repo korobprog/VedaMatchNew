@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, CalendarHeart, EyeOff, Film, FolderTree, ImagePlus, ListChecks, Music4, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
+import { BarChart3, CalendarHeart, Clapperboard, EyeOff, Film, FolderTree, ImagePlus, ListChecks, Music4, Newspaper, PenLine, PlusCircle, Radar, SlidersHorizontal } from "lucide-react";
 
 export type MotivationAdminTab =
   | "queue"
@@ -11,6 +11,7 @@ export type MotivationAdminTab =
   | "create"
   | "add"
   | "pictures"
+  | "videos"
   | "search"
   | "categories"
   | "audio"
@@ -37,6 +38,8 @@ const ITEMS: Array<{
   { key: "add", href: "/admin/motivation/add", label: "Цитата", icon: PlusCircle },
   // Третий путь: и текст, и картинку сделали без нас — открытка готова (VED-87).
   { key: "pictures", href: "/admin/motivation/pictures", label: "Картинки", icon: ImagePlus },
+  // Короткие ролики — своя лента «Видео» (VED-246), грузятся так же, файлом.
+  { key: "videos", href: "/admin/motivation/videos", label: "Видео", icon: Clapperboard },
   { key: "search", href: "/admin/motivation/search", label: "Поиск", icon: Radar },
   { key: "categories", href: "/admin/motivation/categories", label: "Категории", icon: FolderTree },
   { key: "events", href: "/admin/motivation/events", label: "Праздники", icon: CalendarHeart },

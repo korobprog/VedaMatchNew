@@ -72,6 +72,7 @@ export const PORTAL_PATH_CONTAINERS: readonly string[] = [
   "union/users",
   "vedabase/books",
   "vedabase/books/*",
+  "wellness/knowledge/article",
   "wellness/products",
   "work/act",
   "work/join",

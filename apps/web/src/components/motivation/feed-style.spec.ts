@@ -67,6 +67,7 @@ describe("parseReelsTab", () => {
   it("знает открытки и избранное, остальное — «Для вас»", () => {
     expect(parseReelsTab("cards")).toBe("cards");
     expect(parseReelsTab("saved")).toBe("saved");
+    expect(parseReelsTab("video")).toBe("video");
     expect(parseReelsTab(undefined)).toBe("forYou");
     expect(parseReelsTab("что-то")).toBe("forYou");
   });
@@ -219,5 +220,15 @@ describe("меню категорий у каждой ленты (VED-139)", () 
     expect(
       categoriesAcceptingStyle(list, "art").map((item) => item.id),
     ).toEqual(["a", "a1", "b", "old"]);
+  });
+});
+
+describe("лента «Видео» (VED-246)", () => {
+  it("своя вкладка, папка едет вместе с ней, стиля постов нет", () => {
+    expect(reelsHref({ tab: "video" })).toBe("/motivation?tab=video");
+    expect(reelsHref({ tab: "video", category: "vedy" })).toBe(
+      "/motivation?tab=video&category=vedy",
+    );
+    expect(feedStyleOf("video")).toBeUndefined();
   });
 });

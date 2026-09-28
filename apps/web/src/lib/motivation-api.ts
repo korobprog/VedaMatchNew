@@ -18,7 +18,11 @@ import type {
   MotivationReelDto,
   MotivationSourceWatchDto,
   MotivationStatsDto,
-  MotivationAudioDto,} from "@vedamatch/shared";
+  MotivationAudioDto,
+  MotivationVideoCategoryDto,
+  MotivationVideoPage,
+  MotivationQuizDto,
+} from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
 
@@ -56,6 +60,15 @@ export const getMotivationStats = () =>
   motivationGet<MotivationStatsDto>("/motivation/stats");
 
 /**
+ * Раунд викторины (VED-243). Семя в адресе собирает тот же раунд заново:
+ * перезагрузка страницы не перетасовывает вопросы посреди игры.
+ */
+export const getMotivationQuiz = (seed?: string) =>
+  motivationGet<MotivationQuizDto>(
+    `/motivation/quiz${seed ? `?seed=${encodeURIComponent(seed)}` : ""}`,
+  );
+
+/**
  * Разделы вдохновения для читателя: дерево категорий. С `style` — меню одной
  * ленты (VED-139): только её категории и её счётчики.
  */
@@ -63,6 +76,24 @@ export const getMotivationCategories = (style?: "art" | "cards") =>
   motivationGet<MotivationCategoryDto[]>(
     `/motivation/categories${style ? `?style=${style}` : ""}`,
   );
+
+/**
+ * Лента «Видео» (VED-246): первая страница роликов, `category` — папка из
+ * справочника афоризмов.
+ */
+export const getMotivationVideos = (category?: string, limit?: number) => {
+  const query = new URLSearchParams();
+  if (category) query.set("category", category);
+  if (limit) query.set("limit", String(limit));
+  const suffix = query.toString();
+  return motivationGet<MotivationVideoPage>(
+    `/motivation/videos${suffix ? `?${suffix}` : ""}`,
+  );
+};
+
+/** Меню папок ленты «Видео»: только те, где ролики есть. */
+export const getMotivationVideoCategories = () =>
+  motivationGet<MotivationVideoCategoryDto[]>("/motivation/videos/categories");
 
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",

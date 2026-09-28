@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/wellness/scan", label: "Сканер" },
   { href: "/wellness/basket", label: "Корзина" },
   { href: "/wellness/recipes", label: "Рецепты" },
+  { href: "/wellness/knowledge", label: "Знания" },
   { href: "/wellness/diet", label: "Мои ограничения" },
   { href: "/wellness/history", label: "История" },
 ];
@@ -19,7 +20,11 @@ export function WellnessNav() {
     <nav aria-label="Разделы сервиса «Здоровье»" className="mb-6">
       <ul className="flex flex-wrap gap-2">
         {LINKS.map((link) => {
-          const active = pathname === link.href;
+          // «Знания» вложены глубже: рубрика и статья — тоже этот раздел.
+          const active =
+            pathname === link.href ||
+            (link.href === "/wellness/knowledge" &&
+              pathname.startsWith(`${link.href}/`));
           return (
             <li key={link.href}>
               <Link

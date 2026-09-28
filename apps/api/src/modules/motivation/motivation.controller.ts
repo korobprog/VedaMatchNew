@@ -56,7 +56,9 @@ import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
 import { MotivationAnalyticsService } from './motivation-analytics.service';
 import { MotivationPicturesService } from './motivation-pictures.service';
+import { MotivationQuizService } from './motivation-quiz.service';
 import { MAX_REEL_IMAGE_BYTES, type UploadedReelImage } from './reel-image';
+import { MotivationVideosService } from './motivation-videos.service';
 
 @Controller()
 export class MotivationController {
@@ -74,6 +76,8 @@ export class MotivationController {
     private readonly postcards: MotivationPostcardsService,
     private readonly analytics: MotivationAnalyticsService,
     private readonly pictures: MotivationPicturesService,
+    private readonly videos: MotivationVideosService,
+    private readonly quiz: MotivationQuizService,
   ) {}
 
   /**
@@ -98,6 +102,16 @@ export class MotivationController {
     return this.categories.publicTree(
       style === 'art' || style === 'cards' ? style : undefined,
     );
+  }
+
+  /**
+   * Раунд викторины «какой стих на картинке» (VED-243). `?seed=` собирает
+   * тот же раунд заново — перезагрузка страницы не перетасовывает вопросы.
+   */
+  @Get('motivation/quiz')
+  @UseGuards(AuthGuard)
+  quizRound(@Query('seed') seed?: string) {
+    return this.quiz.round(seed);
   }
 
   @Get('motivation/posts/:slug') publicPost(
@@ -297,6 +311,26 @@ export class MotivationController {
   @Get('motivation/audio')
   audio() {
     return this.audio_.list();
+  }
+
+  /**
+   * Лента «Видео» (VED-246): короткие ролики редакции, от новых к старым.
+   * `?category=` — папка из справочника афоризмов (несколько — через запятую).
+   */
+  @Get('motivation/videos')
+  @UseGuards(AuthGuard)
+  videoFeed(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('category') category?: string,
+  ) {
+    return this.videos.list({ cursor, limit, category });
+  }
+  /** Меню категорий ленты «Видео»: только папки с роликами. */
+  @Get('motivation/videos/categories')
+  @UseGuards(AuthGuard)
+  videoCategories() {
+    return this.videos.categoryMenu();
   }
 
   /** Справочники объявлены до `:id`: иначе «music» уедет в параметр. */

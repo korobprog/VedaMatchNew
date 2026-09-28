@@ -470,6 +470,7 @@ model User {
   wellnessReportsMade                WellnessProductReport[]       @relation("WellnessReportsMade")
   wellnessReportsDecided             WellnessProductReport[]       @relation("WellnessReportsDecided")
   wellnessBasketItems                WellnessBasketItem[]          @relation("WellnessBasketItems")
+  wellnessArticles                   WellnessArticle[]             @relation("WellnessArticleAuthor")
   travelStaysManaged                 TravelStayManager[]           @relation("TravelStaysManaged")
   travelBookings                     TravelBooking[]               @relation("TravelBookingsPlaced")
   travelReviews                      TravelReview[]                @relation("TravelReviewsWritten")
@@ -7827,4 +7828,82 @@ model MotivationSpeakerFolder {
   speakerKey String                      @id
   folder     MotivationSpeakerFolderKind
   updatedAt  DateTime                    @updatedAt
+}
+
+// ===== Wellness service: «Здоровье», раздел «Знания» (VED-229) =====
+
+enum WellnessArticleStatus {
+  draft
+  published
+}
+
+/// Рубрика архива знаний «Здоровья». Корни («Аюрведа», «Западная медицина»)
+/// заводит миграция, подрубрики — администраторы сервиса. Слаг уникален
+/// глобально: адрес `/wellness/knowledge/<slug>` не зависит от места в дереве.
+model WellnessKnowledgeCategory {
+  id       String                      @id @default(uuid())
+  parentId String?
+  parent   WellnessKnowledgeCategory?  @relation("WellnessKnowledgeTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children WellnessKnowledgeCategory[] @relation("WellnessKnowledgeTree")
+
+  slug          String  @unique
+  titleRu       String
+  titleEn       String?
+  descriptionRu String?
+  position      Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  articles WellnessArticle[]
+
+  @@index([parentId, position])
+}
+
+/// Текстовая статья архива знаний с необязательной обложкой.
+model WellnessArticle {
+  id         String                    @id @default(uuid())
+  categoryId String
+  category   WellnessKnowledgeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  title String
+  body  String
+
+  /// Ключ объекта в S3 и его публичный адрес; оба пусты, пока обложки нет.
+  coverKey String?
+  coverUrl String?
+
+  authorId String?
+  author   User?                 @relation("WellnessArticleAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  status   WellnessArticleStatus @default(draft)
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([categoryId, status, createdAt])
+}
+
+/// Короткие видео Вдохновения (VED-246) — отдельная лента «Видео» рядом с
+/// «Открытками». Файл загружает редакция, как картинки; категория — слаг из
+/// того же справочника `MotivationCategory`, что у афоризмов (FK нет, как и у
+/// `MotivationPost.category`: удалённая категория не должна уносить ролики).
+model MotivationVideo {
+  id              String   @id @default(uuid())
+  /// Слаг категории из `MotivationCategory`.
+  category        String
+  title           String   @default("")
+  /// Публичный адрес файла в хранилище — тот же путь, что у кадров рилсов.
+  url             String
+  /// С каким типом файл отдаётся из хранилища.
+  contentType     String
+  sizeBytes       Int
+  durationSeconds Int
+  /// Кто загрузил. Без FK: ролик редакции переживает удаление аккаунта.
+  uploadedById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdAt, id])
+  @@index([category, createdAt, id])
 }

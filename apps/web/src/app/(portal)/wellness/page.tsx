@@ -42,6 +42,12 @@ const SECTIONS = [
     text: "Вайшнавская кухня и подбор блюд из того, что уже в корзине.",
     ready: true,
   },
+  {
+    href: "/wellness/knowledge",
+    title: "Знания",
+    text: "Архив статей: аюрведа и западная медицина по рубрикам.",
+    ready: true,
+  },
 ];
 
 export default function WellnessPage() {

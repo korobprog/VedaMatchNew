@@ -1,8 +1,9 @@
 /**
  * Ряд кнопок под афоризмом: что в нём бывает и как он настраивается.
  *
- * Ряд один на всю ленту и делит ширину экрана поровну, поэтому каждая лишняя
- * кнопка отнимает у остальных. Кому-то нужен «Озвучить» каждый день, кто-то
+ * Ряд один на всю ленту и делит ширину экрана поровну; не влезающие кнопки
+ * уезжают в горизонтальную прокрутку (VED-243), но каждая лишняя всё равно
+ * отодвигает остальные. Кому-то нужен «Озвучить» каждый день, кто-то
  * не пользуется им ни разу, а редакции важнее «Править» — угадать за всех
  * нельзя, поэтому набор и порядок выбирает человек.
  *
@@ -21,7 +22,8 @@ export type RailActionId =
   | "create"
   | "categories"
   | "random"
-  | "settings";
+  | "settings"
+  | "quiz";
 
 export interface RailActionMeta {
   id: RailActionId;
@@ -94,14 +96,19 @@ export const RAIL_ACTIONS: readonly RailActionMeta[] = [
     label: "Настройки",
     hint: "Настройки ленты — язык, доля вайшнавского, этот же ряд",
   },
+  {
+    id: "quiz",
+    label: "Викторина",
+    hint: "Угадать по рисунку, какой стих Бхагавад-гиты на нём",
+  },
 ];
 
 const KNOWN = new Set<string>(RAIL_ACTIONS.map((action) => action.id));
 
 /**
- * Что стоит в ряду у того, кто ничего не настраивал, — ровно то, что стояло
- * до появления настройки. Новая возможность не должна на пустом месте
- * переставлять кнопки под пальцем у тех, кто её не просил.
+ * Что стоит в ряду у того, кто ничего не настраивал: то, что стояло до
+ * появления настройки, и «Викторина» в конце (VED-243). Новая кнопка встаёт
+ * последней, чтобы не переставлять прежние под пальцем.
  */
 export const DEFAULT_RAIL: readonly RailActionId[] = [
   "like",
@@ -111,12 +118,45 @@ export const DEFAULT_RAIL: readonly RailActionId[] = [
   "speak",
   "edit",
   "create",
+  "quiz",
 ];
+
+/**
+ * Кнопки, которые существовали, когда раскладку хранили голым массивом, —
+ * до «Викторины». Сохранённый тогда ряд про новую кнопку не знал: её там нет
+ * не потому, что её убрали, а потому что её ещё не было.
+ */
+const LEGACY_KNOWN: readonly RailActionId[] = [
+  "like",
+  "save",
+  "share",
+  "hide",
+  "speak",
+  "edit",
+  "create",
+  "categories",
+  "random",
+  "settings",
+];
+
+function knownIds(raw: unknown): RailActionId[] {
+  return Array.isArray(raw)
+    ? raw.filter(
+        (item): item is RailActionId =>
+          typeof item === "string" && KNOWN.has(item),
+      )
+    : [];
+}
 
 /**
  * Разбор сохранённой раскладки. Всё непонятное — молча мимо: в хранилище
  * лежит набор с прошлой версии портала, где кнопка могла называться иначе
  * или не существовать вовсе, и падать на этом ленте незачем.
+ *
+ * Рядом с рядом хранится, какие кнопки человек видел в настройке, когда его
+ * сохранял (`known`). Кнопка из заводского ряда, которой тогда не было,
+ * добавляется в конец — иначе новинку увидели бы только те, кто ни разу не
+ * трогал настройку. Убранная после этого кнопка больше не возвращается.
  */
 export function parseRailConfig(raw: string | null | undefined): RailActionId[] {
   if (!raw) return [...DEFAULT_RAIL];
@@ -126,17 +166,36 @@ export function parseRailConfig(raw: string | null | undefined): RailActionId[] 
   } catch {
     return [...DEFAULT_RAIL];
   }
-  if (!Array.isArray(parsed)) return [...DEFAULT_RAIL];
-  const kept = parsed.filter(
-    (item): item is RailActionId => typeof item === "string" && KNOWN.has(item),
-  );
+  let ids: unknown;
+  let known: readonly RailActionId[];
+  if (Array.isArray(parsed)) {
+    ids = parsed;
+    known = LEGACY_KNOWN;
+  } else if (
+    parsed &&
+    typeof parsed === "object" &&
+    Array.isArray((parsed as { ids?: unknown }).ids)
+  ) {
+    ids = (parsed as { ids: unknown }).ids;
+    const saved = (parsed as { known?: unknown }).known;
+    known = Array.isArray(saved) ? knownIds(saved) : LEGACY_KNOWN;
+  } else {
+    return [...DEFAULT_RAIL];
+  }
   // Дубли убираем: две одинаковые кнопки в ряду — это сбой хранилища, а не
   // выбор человека. Пустой ряд оставляем пустым: убрать всё — тоже выбор.
-  return [...new Set(kept)];
+  const kept = [...new Set(knownIds(ids))];
+  const added = DEFAULT_RAIL.filter(
+    (id) => !known.includes(id) && !kept.includes(id),
+  );
+  return [...kept, ...added];
 }
 
 export function serializeRailConfig(ids: readonly RailActionId[]): string {
-  return JSON.stringify(ids);
+  return JSON.stringify({
+    ids,
+    known: RAIL_ACTIONS.map((action) => action.id),
+  });
 }
 
 /** Включить или выключить кнопку. Включённая встаёт в конец — туда, куда её и кладут. */

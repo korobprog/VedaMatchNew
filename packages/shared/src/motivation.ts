@@ -73,6 +73,38 @@ export interface MotivationAudioDto {
   sortOrder: number;
 }
 
+/**
+ * Короткое видео ленты «Видео» (VED-246). Загружает редакция; категория — из
+ * того же справочника, что у афоризмов.
+ */
+export interface MotivationVideoDto {
+  id: string;
+  url: string;
+  title: string;
+  category: string;
+  /** Название категории для показа; пусто — справочник её не знает. */
+  categoryTitle: string;
+  durationSeconds: number;
+  createdAt: string;
+}
+
+export interface MotivationVideoPage {
+  items: MotivationVideoDto[];
+  nextCursor: string | null;
+}
+
+/**
+ * Категория в меню ленты «Видео»: только те, где есть ролики, и их
+ * родители — иначе подкатегории не к чему крепиться.
+ */
+export interface MotivationVideoCategoryDto {
+  id: string;
+  slug: string;
+  title: string;
+  parentId: string | null;
+  videoCount: number;
+}
+
 export interface MotivationPostDto {
   id: string;
   slug: string;
@@ -373,6 +405,32 @@ export type MotivationPostStatus =
 /** Сколько вдохновений в сервисе — цифра над лентой. */
 export interface MotivationStatsDto {
   published: number;
+}
+
+/**
+ * Вопрос викторины (VED-243): иллюстрация к шлоке Гиты и четыре номера
+ * стиха. Сам вопрос всегда один — «какой стих отображает картинка?» — и в
+ * данных не хранится.
+ */
+export interface MotivationQuizQuestionDto {
+  /** Публикация, из которой взята картинка. */
+  id: string;
+  slug: string;
+  imageUrl: string;
+  /** Правильный номер: «2.11» или «1.16-18». */
+  answer: string;
+  /** Четыре номера вперемешку, среди них `answer`. */
+  options: string[];
+  /** Цитата — показывается после ответа. Может быть пустой. */
+  text: string;
+}
+
+export interface MotivationQuizDto {
+  /** Семя раунда: по нему тот же раунд собирается заново. */
+  seed: string;
+  /** Сколько иллюстраций Гиты годится в вопросы всего. */
+  available: number;
+  questions: MotivationQuizQuestionDto[];
 }
 
 export interface MotivationAdminPostDto extends MotivationPostDto {
