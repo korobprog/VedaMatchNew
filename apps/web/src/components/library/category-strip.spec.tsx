@@ -90,6 +90,9 @@ describe("CategoryStrip", () => {
     expect(info.nextElementSibling).toBe(
       screen.getByLabelText("Материалов: 4"),
     );
+    // Зона нажатия прежняя, 40px, но число подтянуто ближе к значку (VED-610).
+    expect(info.className).toContain("size-10");
+    expect(info.className).toContain("-mr-1.5");
   });
 
   it("без заполненных разделов читатель «i» не видит (VED-553)", () => {

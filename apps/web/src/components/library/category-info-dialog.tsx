@@ -150,7 +150,7 @@ export function CategoryInfoButton({
         title={label}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="-my-1 grid size-10 shrink-0 place-items-center rounded-lg text-text-2 transition-colors hover:text-text-0"
+        className="-my-1 -mr-1.5 grid size-10 shrink-0 place-items-center rounded-lg text-text-2 transition-colors hover:text-text-0"
       >
         <Info aria-hidden className="size-4" />
       </button>
