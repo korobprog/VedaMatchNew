@@ -812,7 +812,9 @@ describe("QuickPanel: промежутки у колокольчика", () => {
     const slot = screen.getByTestId("header-avatar-slot");
     expect(slot).toContainElement(screen.getByRole("link", { name: "Профиль" }));
     expect(slot).toHaveClass("ml-2", "sm:ml-0");
-    // Крайний аватар к краю не отодвигается: он и так на месте (VED-439).
+    // Крайний аватар — в 17px от правого края, как видимый край логотипа от
+    // левого (VED-439): 16px поля шапки и 1px своего.
+    expect(slot).toHaveClass("mr-px");
     expect(slot).not.toHaveClass("mx-2");
     expect(
       screen
