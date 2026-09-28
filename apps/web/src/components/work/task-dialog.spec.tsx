@@ -677,6 +677,37 @@ describe("WorkTaskDialog — индикатор вложений (VED-431)", () 
     });
     expect(link).toHaveAttribute("href", "#work-task-attachments");
   });
+
+  it("скрепка и крестик — в панели над заголовком, а не сбоку от него (VED-602)", async () => {
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      attachments: [
+        {
+          id: "a1",
+          name: "shot.png",
+          mime: "image/png",
+          sizeBytes: 1,
+          width: null,
+          height: null,
+          url: "",
+          createdAt: "2026-09-09T00:00:00.000Z",
+        },
+      ],
+    } as unknown as WorkTaskDto);
+    open();
+    const link = await screen.findByRole("link", {
+      name: "Вложения: 1. Перейти к ним",
+    });
+    const close = screen.getByRole("button", { name: "Закрыть" });
+    const title = screen.getByLabelText("Название задачи");
+    // Одна строка-панель на номер, скрепку и крестик…
+    expect(close.closest("div")).toBe(link.parentElement);
+    // …и заголовок под ней, отдельным блоком во всю ширину.
+    expect(title.closest("div")?.contains(link)).toBe(false);
+    expect(
+      link.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });
 
 describe("WorkTaskDialog — несохранённое переживает уход в другое окно (VED-520)", () => {

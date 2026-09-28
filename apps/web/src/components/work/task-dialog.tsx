@@ -428,81 +428,88 @@ export function WorkTaskDialog({
           </p>
         ) : (
           <>
-            <div className="mb-3 flex items-start gap-2">
-              <span className="mt-1 flex shrink-0 flex-col items-start gap-1">
-                <span className="font-mono text-xs text-text-2">{task.key}</span>
-                {/* Индикатор вложений (VED-431): скриншоты лежат внизу окна,
-                    под чек-листом, и об их существовании было не узнать, не
-                    долистав. Скрепка с числом у номера — и переход к ним. */}
-                {task.attachments.length > 0 && (
-                  <a
-                    href="#work-task-attachments"
-                    aria-label={`Вложения: ${task.attachments.length}. Перейти к ним`}
-                    title="Перейти к вложениям"
-                    className="-mx-1 inline-flex min-h-6 items-center gap-0.5 rounded px-1 text-xs text-text-1 hover:text-text-0"
-                  >
-                    <Paperclip aria-hidden className="size-3.5" />
-                    {task.attachments.length}
-                  </a>
-                )}
-                {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
-                    нажать: пуск и пауза — здесь (VED-577). Под номером мятным
-                    кругом (VED-600), а не у крестика; пузырь плеера поверх
-                    окна при ней не показывается — см. `hasForeignModal`. */}
-                <CompactSoundButton tone="mint" className="mt-1" />
+            {/* Шапка окна — две строки (VED-602): сверху панель кнопок
+                (номер, скрепка вложений, звук, крестик), под ней заголовок во
+                всю ширину окна. Раньше заголовок стоял между номером и
+                крестиком узкой колонкой, и длинное название вытягивалось в
+                столбик на пол-экрана. */}
+            <div className="mb-2 flex items-center gap-2">
+              <span className="font-mono text-xs text-text-2">{task.key}</span>
+              {/* Индикатор вложений (VED-431): скриншоты лежат внизу окна,
+                  под чек-листом, и об их существовании было не узнать, не
+                  долистав. Скрепка с числом — в верхней панели рядом с
+                  номером (VED-602), и переход к ним. */}
+              {task.attachments.length > 0 && (
+                <a
+                  href="#work-task-attachments"
+                  aria-label={`Вложения: ${task.attachments.length}. Перейти к ним`}
+                  title="Перейти к вложениям"
+                  className="inline-flex min-h-6 items-center gap-0.5 rounded px-1 text-xs text-text-1 hover:text-text-0"
+                >
+                  <Paperclip aria-hidden className="size-3.5" />
+                  {task.attachments.length}
+                </a>
+              )}
+              {/* Окно накрывает шапку затемнением, и её «Плеер / Радио» не
+                  нажать: пуск и пауза — здесь (VED-577), мятным кругом
+                  (VED-600); пузырь плеера поверх окна при ней не
+                  показывается — см. `hasForeignModal`. */}
+              <span className="ml-auto flex items-center gap-2">
+                <CompactSoundButton tone="mint" />
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  aria-label="Закрыть"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-lg text-text-1 hover:text-text-0"
+                >
+                  <X aria-hidden className="size-5" />
+                </button>
               </span>
-              {/* Название целиком, а не первой строкой. В однострочном поле
-                  длинное название обрывалось на середине слова, и карточка
-                  открывалась так, будто текста в ней нет. Поле растёт под текст
-                  и обведено — иначе заголовок не читается как правимый. */}
-              {/* ✖ — стереть заголовок одним нажатием (VED-488), как в поле
-                  «Заголовок» новой задачи. Кнопка поверх правого верхнего
-                  угла поля, вне его: поле растёт вниз под длинный текст. */}
-              <div className="relative min-w-0 flex-1">
-                <DraftTextarea
-                  key={`title-${textKey}-${titleKey}`}
-                  ref={titleRef}
-                  initialValue={latestText.current.title}
-                  onValueChange={(value) => editText("title", value)}
-                  readOnly={!canEdit}
-                  rows={1}
-                  maxLength={200}
-                  aria-label="Название задачи"
-                  onInput={(event) => growToText(event.currentTarget)}
-                  onKeyDown={(event) => {
-                    // Enter в заголовке — это «готово»: сохранить, а не новая
-                    // строка.
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      save();
-                    }
-                  }}
-                  className={`block w-full resize-none overflow-hidden rounded-lg py-1 pl-2 font-display text-lg font-bold text-text-0 ${
-                    canEdit
-                      ? "border border-glass-brd bg-bg-1 pr-10"
-                      : "bg-transparent pr-2"
-                  }`}
-                />
-                {canEdit && draft.title && (
-                  <button
-                    type="button"
-                    onClick={clearTitle}
-                    aria-label="Очистить заголовок"
-                    title="Очистить заголовок"
-                    className="absolute right-0.5 top-0.5 flex size-8 items-center justify-center rounded-md text-text-2 hover:text-text-0"
-                  >
-                    <X aria-hidden className="size-4" />
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={requestClose}
-                aria-label="Закрыть"
-                className="rounded-lg p-1 text-text-1"
-              >
-                <X aria-hidden className="size-5" />
-              </button>
+            </div>
+            {/* Название целиком, а не первой строкой. В однострочном поле
+                длинное название обрывалось на середине слова, и карточка
+                открывалась так, будто текста в ней нет. Поле растёт под текст
+                и обведено — иначе заголовок не читается как правимый. Шрифт
+                на ступень меньше (VED-602): поле не должно занимать пол-окна. */}
+            {/* ✖ — стереть заголовок одним нажатием (VED-488), как в поле
+                «Заголовок» новой задачи. Кнопка поверх правого верхнего угла
+                поля, вне его: поле растёт вниз под длинный текст. */}
+            <div className="relative mb-3">
+              <DraftTextarea
+                key={`title-${textKey}-${titleKey}`}
+                ref={titleRef}
+                initialValue={latestText.current.title}
+                onValueChange={(value) => editText("title", value)}
+                readOnly={!canEdit}
+                rows={1}
+                maxLength={200}
+                aria-label="Название задачи"
+                onInput={(event) => growToText(event.currentTarget)}
+                onKeyDown={(event) => {
+                  // Enter в заголовке — это «готово»: сохранить, а не новая
+                  // строка.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    save();
+                  }
+                }}
+                className={`block w-full resize-none overflow-hidden rounded-lg py-1 pl-2 font-display text-base font-bold leading-snug text-text-0 ${
+                  canEdit
+                    ? "border border-glass-brd bg-bg-1 pr-10"
+                    : "bg-transparent pr-2"
+                }`}
+              />
+              {canEdit && draft.title && (
+                <button
+                  type="button"
+                  onClick={clearTitle}
+                  aria-label="Очистить заголовок"
+                  title="Очистить заголовок"
+                  className="absolute right-0.5 top-0.5 flex size-8 items-center justify-center rounded-md text-text-2 hover:text-text-0"
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+              )}
             </div>
 
             {error && (
