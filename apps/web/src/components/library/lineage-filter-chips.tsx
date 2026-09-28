@@ -12,6 +12,7 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 import { AnchoredPopover } from "@/components/anchored-popover";
+import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import { t } from "./i18n";
 import { LIBRARY_ICON_BUTTON } from "./icon-button";
@@ -137,12 +138,7 @@ export function LibraryLineageFilter({
     }
   }
 
-  const optionClass = (pressed: boolean) =>
-    `flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm transition-colors ${
-      pressed
-        ? "bg-magenta/10 font-semibold text-text-0"
-        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-    }`;
+  const optionClass = menuOptionClass;
 
   return (
     // Меню — портальный `AnchoredPopover` (VED-604): от кнопки и целиком в
@@ -188,7 +184,9 @@ export function LibraryLineageFilter({
                 onClick={() => void choose(item.option.value)}
                 className={optionClass(item.option.value === current)}
               >
-                {item.option.label}
+                <MenuOptionLabel pressed={item.option.value === current}>
+                  {item.option.label}
+                </MenuOptionLabel>
               </button>
             ) : (
               <div key={item.group}>
@@ -230,7 +228,9 @@ export function LibraryLineageFilter({
                         onClick={() => void choose(option.value)}
                         className={optionClass(option.value === current)}
                       >
-                        {option.label}
+                        <MenuOptionLabel pressed={option.value === current}>
+                          {option.label}
+                        </MenuOptionLabel>
                       </button>
                     ))}
                   </div>

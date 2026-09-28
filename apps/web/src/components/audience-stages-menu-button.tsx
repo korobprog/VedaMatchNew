@@ -9,6 +9,7 @@ import {
 } from "@vedamatch/shared";
 import { Button } from "@/components/ui/button";
 import { AnchoredPopover } from "@/components/anchored-popover";
+import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   audienceStagesButtonLabel,
@@ -75,12 +76,10 @@ export function AudienceStagesMenuButton({
     }
   }
 
-  const optionClass = (pressed: boolean) =>
-    `flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-3 text-left text-sm transition-colors disabled:opacity-50 ${
-      pressed
-        ? "bg-magenta/10 font-semibold text-text-0"
-        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-    }`;
+  const optionClass = menuOptionClass;
+  // «Для всех» — пустая разметка или все четыре ступени: выбор виден в
+  // окне так же, как отмеченная ступень (VED-596).
+  const forAll = draft.length === 0 || draft.length === AUDIENCE_STAGES.length;
 
   return (
     <div className={`relative ${className}`}>
@@ -143,8 +142,9 @@ export function AudienceStagesMenuButton({
                 }
                 className={optionClass(pressed)}
               >
-                {AUDIENCE_STAGE_LABELS[stage]}
-                {pressed && <Check aria-hidden className="size-4 shrink-0" />}
+                <MenuOptionLabel pressed={pressed}>
+                  {AUDIENCE_STAGE_LABELS[stage]}
+                </MenuOptionLabel>
               </button>
             );
           })}
@@ -152,9 +152,17 @@ export function AudienceStagesMenuButton({
             <button
               type="button"
               disabled={pending}
+              aria-pressed={forAll}
               onClick={() => void save([])}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-glass-brd px-3 text-sm text-text-1 transition-colors hover:text-text-0 disabled:opacity-50"
+              className={`inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-sm transition-colors disabled:opacity-50 ${
+                forAll
+                  ? "border-magenta bg-magenta/10 font-semibold text-text-0"
+                  : "border-glass-brd text-text-1 hover:text-text-0"
+              }`}
             >
+              {forAll && (
+                <Check aria-hidden className="size-4 shrink-0 text-magenta" />
+              )}
               Для всех
             </button>
             <Button

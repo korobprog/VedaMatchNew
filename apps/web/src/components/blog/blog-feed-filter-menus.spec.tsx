@@ -32,6 +32,10 @@ describe("BlogCategoryFilter", () => {
       "aria-pressed",
       "true",
     );
+    // Выбор виден в окне галочкой, не только оттенком (VED-596).
+    expect(
+      screen.getByRole("button", { name: "Все" }).querySelector("svg"),
+    ).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Жизнь преданных" }));
 
     expect(push).toHaveBeenCalledWith("/blog?category=devotee_life", {

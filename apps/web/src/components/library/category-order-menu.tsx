@@ -11,6 +11,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDownAZ, ArrowUpDown, Check, ListTree } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
 import { AnchoredPopover } from "@/components/anchored-popover";
+import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   CATEGORY_ORDER_PARAM,
@@ -98,12 +99,7 @@ export function CategoryOrderMenu({
     );
   }
 
-  const optionClass = (pressed: boolean) =>
-    `flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm transition-colors ${
-      pressed
-        ? "bg-magenta/10 font-semibold text-text-0"
-        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-    }`;
+  const optionClass = menuOptionClass;
 
   return (
     <div>
@@ -143,7 +139,9 @@ export function CategoryOrderMenu({
             onClick={() => choose(false)}
             className={optionClass(!alphabetical)}
           >
-            {t(locale, "sort.custom")}
+            <MenuOptionLabel pressed={!alphabetical}>
+              {t(locale, "sort.custom")}
+            </MenuOptionLabel>
           </button>
           <button
             type="button"
@@ -151,7 +149,9 @@ export function CategoryOrderMenu({
             onClick={() => choose(true)}
             className={optionClass(alphabetical)}
           >
-            {t(locale, "sort.title")}
+            <MenuOptionLabel pressed={alphabetical}>
+              {t(locale, "sort.title")}
+            </MenuOptionLabel>
           </button>
           {canOrganize && (
             <>

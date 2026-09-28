@@ -8,6 +8,7 @@ import {
   type LineageId,
 } from "@vedamatch/shared";
 import { AnchoredPopover } from "@/components/anchored-popover";
+import { MenuOptionLabel, menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   lineageButtonLabel,
@@ -81,12 +82,7 @@ export function LineageMenuButton({
     }
   }
 
-  const optionClass = (pressed: boolean) =>
-    `flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm transition-colors disabled:opacity-50 ${
-      pressed
-        ? "bg-magenta/10 font-semibold text-text-0"
-        : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-    }`;
+  const optionClass = menuOptionClass;
 
   return (
     <div className={`relative ${className}`}>
@@ -126,7 +122,9 @@ export function LineageMenuButton({
                 onClick={() => void choose(item.option.value)}
                 className={optionClass(item.option.value === value)}
               >
-                {item.option.label}
+                <MenuOptionLabel pressed={item.option.value === value}>
+                  {item.option.label}
+                </MenuOptionLabel>
               </button>
             ) : (
               <div key={item.group}>
@@ -173,7 +171,9 @@ export function LineageMenuButton({
                         onClick={() => void choose(option.value)}
                         className={optionClass(option.value === value)}
                       >
-                        {option.label}
+                        <MenuOptionLabel pressed={option.value === value}>
+                          {option.label}
+                        </MenuOptionLabel>
                       </button>
                     ))}
                   </div>

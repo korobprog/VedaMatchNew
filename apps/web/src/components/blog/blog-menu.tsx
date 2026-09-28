@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnchoredPopover } from "@/components/anchored-popover";
+import { menuOptionClass } from "@/components/menu-option";
 import { useDismissable } from "@/lib/use-dismissable";
 
 /**
@@ -22,13 +23,8 @@ import { useDismissable } from "@/lib/use-dismissable";
 export const BLOG_ICON_BUTTON =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-lg border transition-colors";
 
-export function blogMenuOptionClass(pressed: boolean): string {
-  return `flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm transition-colors disabled:opacity-50 ${
-    pressed
-      ? "bg-magenta/10 font-semibold text-text-0"
-      : "text-text-1 hover:bg-bg-1 hover:text-text-0"
-  }`;
-}
+/** Пункт меню: выбранный — с рамкой и галочкой (VED-596), как везде. */
+export const blogMenuOptionClass = menuOptionClass;
 
 export function BlogMenuButton({
   label,
