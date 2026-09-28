@@ -260,22 +260,81 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
   });
 
-  it("смена статуса уходит сразу, без «Сохранить» (VED-526)", async () => {
+  it("смена статуса уходит сразу, и «Сохранить» не появляется (VED-526, VED-611)", async () => {
     const user = userEvent.setup();
     const props = open();
     await screen.findByDisplayValue("Кнопка сохранить");
 
     await user.selectOptions(screen.getByLabelText("Статус"), "c2");
 
-    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
+    expect(moveWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { columnId: "c2" },
+      { keepalive: true },
+    );
     expect(updateWorkTask).not.toHaveBeenCalled();
-    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
-    expect(props.onChanged).toHaveBeenCalled();
-    // VED-400: «Сохранить» есть и после того, что ушло само, — им окно и
-    // закрывают.
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(screen.getByLabelText("Статус")).toHaveValue("c2");
+    // Ни пока летит, ни после: ни «Сохранить», ни полосы «Сохранено».
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(screen.queryByText("Есть несохранённые правки")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
     expect(props.onClose).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(props.onClose).toHaveBeenCalled();
+  });
+
+  it("пока статус летит, «Сохранить» не показывается (VED-611)", async () => {
+    const user = userEvent.setup();
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(moveWorkTask).mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
+
+    expect(screen.getByLabelText("Статус")).toHaveValue("c2");
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    finish({ ...task, columnId: "c2" } as WorkTaskDto);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Статус")).toHaveValue("c2"),
+    );
+  });
+
+  it("сервер не принял статус — выбор откатывается, окно говорит почему (VED-611)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(moveWorkTask).mockRejectedValue(new Error("Нет прав"));
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет прав");
+    expect(screen.getByLabelText("Статус")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+  });
+
+  it("окно закрыли сразу после выбора — перенос всё равно доходит (VED-611)", async () => {
+    const user = userEvent.setup();
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(moveWorkTask).mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const props = { onClose: vi.fn(), onChanged: vi.fn() };
+    const view = render(
+      <WorkTaskDialog taskId="t1" board={board} {...props} />,
+    );
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    await user.selectOptions(screen.getByLabelText("Статус"), "c2");
+    await user.keyboard("{Escape}");
+    view.unmount();
+
+    // Закрытие не отправило перенос второй раз и не отменило первый.
+    expect(moveWorkTask).toHaveBeenCalledTimes(1);
+    finish({ ...task, columnId: "c2" } as WorkTaskDto);
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(updateWorkTask).not.toHaveBeenCalled();
   });
 
   it("появляется после смены срока", async () => {
@@ -308,7 +367,11 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
     await user.selectOptions(screen.getByLabelText("Статус"), "c2");
 
     // Перенос ушёл один, без правки названия.
-    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" });
+    expect(moveWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { columnId: "c2" },
+      { keepalive: true },
+    );
     expect(updateWorkTask).not.toHaveBeenCalled();
 
     const save = await screen.findByRole("button", { name: "Сохранить" });
@@ -343,8 +406,13 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
 
     expect(props.onClose).toHaveBeenCalledTimes(1);
     await waitFor(() =>
-      expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c2" }),
+      expect(moveWorkTask).toHaveBeenCalledWith(
+        "t1",
+        { columnId: "c2" },
+        { keepalive: true },
+      ),
     );
+    expect(moveWorkTask).toHaveBeenCalledTimes(1);
     expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
   });
 
@@ -651,12 +719,14 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
     await screen.findByDisplayValue("Кнопка сохранить");
 
     await user.selectOptions(screen.getByLabelText("Раздел"), "c3");
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
-    expect(moveWorkTask).toHaveBeenCalledWith("t1", {
-      columnId: "c3",
-      sectionColumnId: "c3",
-    });
+    // Уходит сразу, без «Сохранить» (VED-611).
+    expect(moveWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { columnId: "c3", sectionColumnId: "c3" },
+      { keepalive: true },
+    );
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
   });
 
   it("новый раздел у задачи в статусе — статус остаётся, меняется поле", async () => {
@@ -673,7 +743,11 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
     await user.selectOptions(screen.getByLabelText("Раздел"), "c3");
 
     // Уходит сразу, без «Сохранить» (VED-526).
-    expect(updateWorkTask).toHaveBeenCalledWith("t1", { sectionColumnId: "c3" });
+    expect(updateWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { sectionColumnId: "c3" },
+      { keepalive: true },
+    );
     expect(moveWorkTask).not.toHaveBeenCalled();
   });
 
@@ -689,7 +763,11 @@ describe("WorkTaskDialog — раздел отдельно от статуса (
 
     await user.selectOptions(screen.getByLabelText("Статус"), "");
 
-    expect(moveWorkTask).toHaveBeenCalledWith("t1", { columnId: "c3" });
+    expect(moveWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { columnId: "c3" },
+      { keepalive: true },
+    );
   });
 });
 
