@@ -5,11 +5,16 @@ import {
   ChangelogController,
 } from './changelog.controller';
 import { AnnouncementImagesService } from './announcement-images.service';
+import { AnnouncementTranslationService } from './announcement-translation.service';
 import { ChangelogService } from './changelog.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [ChangelogController, AdminChangelogController],
-  providers: [ChangelogService, AnnouncementImagesService],
+  providers: [
+    ChangelogService,
+    AnnouncementImagesService,
+    AnnouncementTranslationService,
+  ],
 })
 export class ChangelogModule {}

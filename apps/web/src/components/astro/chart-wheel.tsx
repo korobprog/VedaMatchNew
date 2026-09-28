@@ -1,10 +1,18 @@
-import {
-  GRAHA_ABBR,
-  RASHI_NAMES,
-  type VedicChart,
-} from "@vedamatch/shared";
+import { RASHI_NAMES, type VedicChart } from "@vedamatch/shared";
 import { formatDegrees } from "@/lib/astro-degrees";
-import { CHART_CELLS, bhavaOf, grahasByRashi } from "./chart-layout";
+import { CHART_CELLS, bhavaOf } from "./chart-layout";
+import {
+  CHART_LABEL_OPACITY,
+  CHART_LINE_OPACITY,
+  PlacementLines,
+} from "./chart-placements";
+import {
+  VARGA_LABELS,
+  buildChartView,
+  packPlacementLines,
+  placementsByRashi,
+  type ChartView,
+} from "./chart-view";
 
 // Формат градусов живёт в lib: им же пользуется карточка на главной.
 export { formatDegrees };
@@ -21,35 +29,39 @@ export { formatDegrees };
 const CELL = 100;
 const SIZE = CELL * 4;
 
-/**
- * Прозрачность линий и подписей карты. Числа не на глаз: цвет здесь —
- * `currentColor`, то есть --vm-text-0, и на светлой теме прежние 0.35 и 0.4
- * давали 2.25:1 и 2.58:1 — ниже порогов WCAG (3:1 для графики, 4.5:1 для
- * мелкого текста). Карта на светлой теме читалась с трудом.
- *
- * 0.5 даёт линиям 3.46:1, 0.62 подписям — 5.11:1. На тёмной теме те же доли
- * только добавляют контраста: там текст светлый на тёмном фоне.
- */
-export const CHART_LINE_OPACITY = 0.5;
-export const CHART_LABEL_OPACITY = 0.62;
+// Доли прозрачности живут рядом с подписями грах: ими пользуются обе сетки.
+export { CHART_LABEL_OPACITY, CHART_LINE_OPACITY };
 
-export function ChartWheel({ chart }: { chart: VedicChart }) {
-  const byRashi = grahasByRashi(chart);
-  const lagnaRashi = chart.lagna?.rashi ?? null;
+/** Столько грах помещается в клетку столбиком с градусами. */
+const MAX_SINGLE_LINES = 5;
+
+/**
+ * `view` — что рисовать: варга, отсчёт домов, транзиты. Без него рисуется
+ * натальная D1 от лагны — как карта выглядела всегда.
+ */
+export function ChartWheel({
+  chart,
+  view = buildChartView(chart),
+}: {
+  chart: VedicChart;
+  view?: ChartView;
+}) {
+  const byRashi = placementsByRashi(view);
+  const firstRashi = view.firstRashi;
 
   return (
     <svg
       viewBox={`0 0 ${SIZE} ${SIZE}`}
       className="w-full max-w-md text-text-0"
       role="img"
-      aria-label="Ведическая карта рождения, южноиндийский стиль"
+      aria-label={`Ведическая карта рождения, южноиндийский стиль, ${VARGA_LABELS[view.varga]}`}
     >
       {CHART_CELLS.map((cell) => {
         const x = cell.column * CELL;
         const y = cell.row * CELL;
-        const grahas = byRashi.get(cell.rashi)!;
-        const bhava = bhavaOf(cell.rashi, lagnaRashi);
-        const isLagna = cell.rashi === lagnaRashi;
+        const placements = byRashi.get(cell.rashi)!;
+        const bhava = bhavaOf(cell.rashi, firstRashi);
+        const isFirst = cell.rashi === firstRashi;
 
         return (
           <g key={cell.rashi}>
@@ -64,8 +76,9 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
               strokeWidth={1}
             />
 
-            {/* Лагна выделяется диагональю в углу — так её метят в традиции. */}
-            {isLagna && (
+            {/* Первый дом выделяется диагональю в углу — так метят лагну в
+                традиции; при отсчёте от Луны так же метится Чандра-лагна. */}
+            {isFirst && (
               <path
                 d={`M ${x} ${y + 22} L ${x + 22} ${y}`}
                 stroke="currentColor"
@@ -97,22 +110,11 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
               </text>
             )}
 
-            {grahas.map((graha, index) => (
-              <text
-                key={graha.graha}
-                x={x + 8}
-                y={y + 34 + index * 13}
-                fontSize={11}
-                fill="currentColor"
-              >
-                {GRAHA_ABBR[graha.graha]}
-                <tspan fontSize={9} fillOpacity={CHART_LABEL_OPACITY}>
-                  {" "}
-                  {Math.floor(graha.degreeInRashi)}°
-                  {graha.retrograde ? " R" : ""}
-                </tspan>
-              </text>
-            ))}
+            <PlacementLines
+              lines={packPlacementLines(placements, MAX_SINGLE_LINES)}
+              x={x + 8}
+              y={y + 34}
+            />
           </g>
         );
       })}
@@ -126,8 +128,20 @@ export function ChartWheel({ chart }: { chart: VedicChart }) {
         fill="currentColor"
         fillOpacity={CHART_LABEL_OPACITY}
       >
-        Раши D1
+        {VARGA_LABELS[view.varga]}
       </text>
+      {view.reference === "moon" && (
+        <text
+          x={SIZE / 2}
+          y={SIZE / 2 + 28}
+          fontSize={10}
+          textAnchor="middle"
+          fill="currentColor"
+          fillOpacity={CHART_LABEL_OPACITY}
+        >
+          от Луны
+        </text>
+      )}
       <text
         x={SIZE / 2}
         y={SIZE / 2 + 12}

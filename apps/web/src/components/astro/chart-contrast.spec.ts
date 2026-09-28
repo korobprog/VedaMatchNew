@@ -113,4 +113,17 @@ describe("контраст карты рождения", () => {
     expect(contrastAt(light.fg, light.bg, 0.35)).toBeLessThan(3);
     expect(contrastAt(light.fg, light.bg, 0.4)).toBeLessThan(4.5);
   });
+
+  for (const theme of THEMES) {
+    it(`транзиты цветом --vm-cyan проходят 4.5:1 на ${theme.name} теме`, () => {
+      // Транзитные грахи и их градусы — 9–11px, мелкий текст, без
+      // прозрачности: полупрозрачный акцент порога бы не прошёл.
+      const ratio = contrastAt(
+        tokenIn(theme.selector, "--vm-cyan"),
+        tokenIn(theme.selector, "--vm-bg-0"),
+        1,
+      );
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+  }
 });

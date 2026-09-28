@@ -1,4 +1,4 @@
-import type { GrahaPosition, RashiIndex, VedicChart } from "@vedamatch/shared";
+import type { RashiIndex } from "@vedamatch/shared";
 
 /**
  * Раскладка северноиндийской карты — ромба.
@@ -8,9 +8,10 @@ import type { GrahaPosition, RashiIndex, VedicChart } from "@vedamatch/shared";
  * привыкший к стилю читает не «где Меша», а «что в первом доме», и подпись в
  * клетке — номер знака, а не его имя.
  *
- * Отсюда же следует главное ограничение: без времени рождения нет лагны, а без
- * лагны нет домов — и ромб рисовать нечем. Южная карта в этом случае остаётся,
- * северная честно уступает место объяснению.
+ * Отсюда же следует главное ограничение: дома считаются от первого дома, а
+ * его даёт лагна (нужно время рождения) или, в виде «от Луны», знак Луны.
+ * Когда отсчитывать не от чего, ромб рисовать нечем — северная карта честно
+ * уступает место южной и объяснению.
  */
 
 /** Сторона квадрата в координатах viewBox. */
@@ -37,6 +38,11 @@ export interface NorthCell {
  * сторон; получаются четыре ромбовидные клетки по центрам сторон (дома 1, 4, 7,
  * 10 — кендры) и восемь треугольников по углам.
  *
+ * Грахи выкладываются столбиком вниз от `grahaY`, поэтому в угловых
+ * треугольниках столбик начинается там, где клетка ещё достаточно широка, и
+ * у нижних углов (дома 6 и 8) — выше подписи знака, а не над ней впритык:
+ * иначе третья строка налезала на номер знака.
+ *
  * Координаты заданы явным списком, а не выведены формулой: формула для
  * двенадцати несимметричных фигур вышла бы длиннее списка и куда хуже читалась
  * бы при правке.
@@ -45,7 +51,7 @@ const CELLS: ReadonlyArray<Omit<NorthCell, "bhava">> = [
   // 1 — верхний центр
   { points: `${HALF},0 ${HALF + QUARTER},${QUARTER} ${HALF},${HALF} ${QUARTER},${QUARTER}`, labelX: HALF, labelY: 22, grahaX: HALF, grahaY: 60 },
   // 2 — верхний левый угол
-  { points: `0,0 ${HALF},0 ${QUARTER},${QUARTER}`, labelX: QUARTER, labelY: 18, grahaX: QUARTER, grahaY: 46 },
+  { points: `0,0 ${HALF},0 ${QUARTER},${QUARTER}`, labelX: QUARTER, labelY: 18, grahaX: QUARTER, grahaY: 38 },
   // 3 — левый верхний
   { points: `0,0 ${QUARTER},${QUARTER} 0,${HALF}`, labelX: 22, labelY: HALF - QUARTER + 6, grahaX: 34, grahaY: HALF - QUARTER + 34 },
   // 4 — левый центр
@@ -53,11 +59,11 @@ const CELLS: ReadonlyArray<Omit<NorthCell, "bhava">> = [
   // 5 — левый нижний
   { points: `0,${HALF} ${QUARTER},${HALF + QUARTER} 0,${NORTH_SIZE}`, labelX: 22, labelY: HALF + QUARTER - 6, grahaX: 34, grahaY: HALF + QUARTER + 22 },
   // 6 — нижний левый угол
-  { points: `0,${NORTH_SIZE} ${QUARTER},${HALF + QUARTER} ${HALF},${NORTH_SIZE}`, labelX: QUARTER, labelY: NORTH_SIZE - 8, grahaX: QUARTER, grahaY: NORTH_SIZE - 34 },
+  { points: `0,${NORTH_SIZE} ${QUARTER},${HALF + QUARTER} ${HALF},${NORTH_SIZE}`, labelX: QUARTER, labelY: NORTH_SIZE - 8, grahaX: QUARTER, grahaY: HALF + QUARTER + 40 },
   // 7 — нижний центр
   { points: `${HALF},${NORTH_SIZE} ${HALF + QUARTER},${HALF + QUARTER} ${HALF},${HALF} ${QUARTER},${HALF + QUARTER}`, labelX: HALF, labelY: NORTH_SIZE - 22, grahaX: HALF, grahaY: HALF + 40 },
   // 8 — нижний правый угол
-  { points: `${HALF},${NORTH_SIZE} ${HALF + QUARTER},${HALF + QUARTER} ${NORTH_SIZE},${NORTH_SIZE}`, labelX: HALF + QUARTER, labelY: NORTH_SIZE - 8, grahaX: HALF + QUARTER, grahaY: NORTH_SIZE - 34 },
+  { points: `${HALF},${NORTH_SIZE} ${HALF + QUARTER},${HALF + QUARTER} ${NORTH_SIZE},${NORTH_SIZE}`, labelX: HALF + QUARTER, labelY: NORTH_SIZE - 8, grahaX: HALF + QUARTER, grahaY: HALF + QUARTER + 40 },
   // 9 — правый нижний
   { points: `${NORTH_SIZE},${NORTH_SIZE} ${HALF + QUARTER},${HALF + QUARTER} ${NORTH_SIZE},${HALF}`, labelX: NORTH_SIZE - 22, labelY: HALF + QUARTER - 6, grahaX: NORTH_SIZE - 34, grahaY: HALF + QUARTER + 22 },
   // 10 — правый центр
@@ -65,7 +71,7 @@ const CELLS: ReadonlyArray<Omit<NorthCell, "bhava">> = [
   // 11 — правый верхний
   { points: `${NORTH_SIZE},${HALF} ${HALF + QUARTER},${QUARTER} ${NORTH_SIZE},0`, labelX: NORTH_SIZE - 22, labelY: HALF - QUARTER + 6, grahaX: NORTH_SIZE - 34, grahaY: HALF - QUARTER + 34 },
   // 12 — верхний правый угол
-  { points: `${NORTH_SIZE},0 ${HALF + QUARTER},${QUARTER} ${HALF},0`, labelX: HALF + QUARTER, labelY: 18, grahaX: HALF + QUARTER, grahaY: 46 },
+  { points: `${NORTH_SIZE},0 ${HALF + QUARTER},${QUARTER} ${HALF},0`, labelX: HALF + QUARTER, labelY: 18, grahaX: HALF + QUARTER, grahaY: 38 },
 ];
 
 export const NORTH_CELLS: ReadonlyArray<NorthCell> = CELLS.map((cell, index) => ({
@@ -86,19 +92,4 @@ export function rashiOfBhava(
   lagnaRashi: RashiIndex,
 ): RashiIndex {
   return (((lagnaRashi - 1 + bhava - 1) % 12) + 1) as RashiIndex;
-}
-
-/**
- * Грахи по домам. Раскладывается по `bhava` самой грахи, а не пересчитывается
- * из знака: в карте бхава уже посчитана сервером, и второй расчёт рядом однажды
- * разойдётся с первым.
- */
-export function grahasByBhava(chart: VedicChart): Map<number, GrahaPosition[]> {
-  const map = new Map<number, GrahaPosition[]>();
-  for (let bhava = 1; bhava <= 12; bhava += 1) map.set(bhava, []);
-  for (const graha of chart.grahas) {
-    if (graha.bhava === null) continue;
-    map.get(graha.bhava)?.push(graha);
-  }
-  return map;
 }

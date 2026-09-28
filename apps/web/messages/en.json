@@ -26,6 +26,7 @@
     }
   },
   "Header": {
+    "breadcrumbs": "Path",
     "adminContact": "Admin",
     "beta": "Beta",
     "services": "Services",

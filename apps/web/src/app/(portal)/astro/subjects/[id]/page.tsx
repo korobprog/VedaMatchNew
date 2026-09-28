@@ -5,9 +5,10 @@ import {
   getAstroSubject,
   getAstroSubjectChart,
   getAstroSubjects,
+  getAstroTransits,
 } from "@/lib/astro-api";
-import { ChartWheel, formatDegrees } from "@/components/astro/chart-wheel";
-import { ChartWheelNorth } from "@/components/astro/chart-wheel-north";
+import { formatDegrees } from "@/components/astro/chart-wheel";
+import { ChartPanel } from "@/components/astro/chart-panel";
 import { DashaPanel } from "@/components/astro/dasha-panel";
 import { GrahaTable } from "@/components/astro/graha-table";
 import { formatUtcOffset } from "@/components/astro/utc-offset";
@@ -21,10 +22,11 @@ export default async function AstroSubjectChartPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [subject, chart, all] = await Promise.all([
+  const [subject, chart, all, transits] = await Promise.all([
     getAstroSubject(id),
     getAstroSubjectChart(id),
     getAstroSubjects(),
+    getAstroTransits(),
   ]);
   // Чужая запись не находится вовсе — для страницы это обычный 404.
   if (!subject || !chart) notFound();
@@ -62,28 +64,7 @@ export default async function AstroSubjectChartPage({
       )}
 
       <div className="mt-6 grid gap-8 md:grid-cols-[minmax(0,20rem)_1fr]">
-        <div className="space-y-6">
-          <figure>
-            <ChartWheel chart={chart} />
-            <figcaption className="mt-2 text-xs text-text-2">
-              Южноиндийская: знаки закреплены, дома подписаны числом
-            </figcaption>
-          </figure>
-
-          {chart.lagna ? (
-            <figure>
-              <ChartWheelNorth chart={chart} />
-              <figcaption className="mt-2 text-xs text-text-2">
-                Северноиндийская: дома закреплены, знак в клетке — числом
-              </figcaption>
-            </figure>
-          ) : (
-            <p className="text-xs text-text-2">
-              Северноиндийская карта строится по домам, а дома считаются от
-              лагны — для неё нужно время рождения.
-            </p>
-          )}
-        </div>
+        <ChartPanel chart={chart} transits={transits} />
 
         <dl className="space-y-3 text-sm">
           {chart.lagna && (

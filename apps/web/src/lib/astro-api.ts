@@ -8,6 +8,7 @@ import type {
   AstroSubjectDto,
   AstroSubjectsDto,
   AstroTodayDto,
+  AstroTransitPositionsDto,
   AstroTransitPreferenceDto,
   VedicChart,
 } from "@vedamatch/shared";
@@ -44,6 +45,14 @@ export const getAstroState = () => astroGet<AstroStateDto>("/astro/birth-data");
 /** Карта. null — данные рождения ещё не заполнены. */
 export const getAstroChart = () =>
   astroGet<VedicChart>("/astro/chart", { emptyOn404: true });
+
+/**
+ * Транзиты на сейчас — поверх карты. Небо общее для всех, поэтому запрос не
+ * зависит от карты. Сбой расчёта не должен ронять страницу карты: без
+ * транзитов она остаётся полной, пропадает только переключатель.
+ */
+export const getAstroTransits = () =>
+  astroGet<AstroTransitPositionsDto>("/astro/transits").catch(() => null);
 
 /** Разборы: готовые тексты из кэша плюс состояние квоты. */
 export const getAstroReadings = () =>

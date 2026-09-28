@@ -148,3 +148,29 @@ export interface VedicChart {
   fingerprint: string;
   engineVersion: string;
 }
+
+/**
+ * Положение транзитной грахи — где она стоит на заданный момент, без привязки
+ * к чьей-либо карте. Дома не считаются: бхава транзита зависит от того, от чего
+ * её отсчитывать (лагна, Луна, навамша), и это решает тот, кто рисует.
+ */
+export interface TransitGrahaPosition {
+  graha: GrahaId;
+  /** Сидерическая долгота, градусы [0, 360). */
+  longitude: number;
+  /** Градусы внутри знака, [0, 30). */
+  degreeInRashi: number;
+  rashi: RashiIndex;
+  nakshatra: NakshatraIndex;
+  /** Знак в варге D9 — туда транзит ставится на навамша-карте. */
+  navamsaRashi: RashiIndex;
+  retrograde: boolean;
+}
+
+/** Ответ `GET /astro/transits?at=…`: небо на момент, общее для всех. */
+export interface AstroTransitPositionsDto {
+  /** Момент, на который посчитаны положения, ISO UTC. */
+  at: string;
+  ayanamsa: number;
+  grahas: TransitGrahaPosition[];
+}
