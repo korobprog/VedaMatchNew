@@ -102,7 +102,7 @@ describe("«Линия» поста", () => {
     expect(screen.getByText("Гаудия-матх — IPBYS")).toBeInTheDocument();
   });
 
-  it("админ назначает линию в окне разметки, и значок показывает её", async () => {
+  it("админ назначает линию в окне домика, и значок показывает её (VED-632)", async () => {
     const user = userEvent.setup();
     vi.mocked(setBlogPostLineage).mockResolvedValue(
       makePost({ canModerate: true, lineage: "iskcon" }),
@@ -111,7 +111,7 @@ describe("«Линия» поста", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Разметка. Линия: для всех линий",
+        name: "Линия. Пост: Для всех линий",
       }),
     );
     await user.click(screen.getByRole("button", { name: "ISKCON" }));
@@ -119,7 +119,7 @@ describe("«Линия» поста", () => {
 
     expect(setBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
     expect(
-      await screen.findByRole("button", { name: "Разметка. Линия: ISKCON" }),
+      await screen.findByRole("button", { name: "Линия. Пост: ISKCON" }),
     ).toBeInTheDocument();
   });
 
@@ -135,7 +135,7 @@ describe("«Линия» поста", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Разметка. Линия: для всех линий",
+        name: "Линия. Пост: Для всех линий",
       }),
     );
     await user.click(screen.getByRole("button", { name: "ISKCON" }));

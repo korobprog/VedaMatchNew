@@ -1,7 +1,7 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EntryMarksButton } from "./entry-marks-button";
+import { EntryMarksButtons } from "./entry-marks-button";
 
 const refresh = vi.fn();
 const setLibraryEntryAudienceStages = vi.fn();
@@ -24,42 +24,41 @@ afterEach(() => {
   setLibraryEntryLineage.mockReset();
 });
 
-/* VED-616: «Раздели данное окно на ДВЕ КОЛОНКИ. Во второй колонке справа
-   продублируй … все духовные линии, организации. Кнопка с отпечатком
-   пальца будет только для админов». */
-describe("EntryMarksButton (VED-616)", () => {
-  it("не видна без права", () => {
-    const { container } = render(
-      <EntryMarksButton entryId="e-1" audienceStages={[]} lineage={null} />,
-    );
-    expect(container.innerHTML).toBe("");
-  });
-
-  it("админу называет ступени и линию", () => {
+/* VED-632: «на всех материалах должно присутствовать две кнопки-значка —
+   домик … духовной линии и отпечаток пальца … самоидентификации. Для
+   админов то же самое, только помимо отображения они могут менять и
+   сохранять это отображение». */
+describe("EntryMarksButtons (VED-632)", () => {
+  it("участнику — оба значка, только показывают", async () => {
     render(
-      <EntryMarksButton
+      <EntryMarksButtons
+        locale="ru"
         entryId="e-1"
         audienceStages={["yogi", "seeker"]}
         lineage="iskcon"
-        canSet
       />,
     );
     expect(
       screen.getByRole("button", {
-        name: "Разметка. Ступени: Ищущий, Йог. Линия: ISKCON",
+        name: "Самоидентификация: Ищущий, Йог",
       }),
     ).toBeDefined();
+    const house = screen.getByRole("button", { name: /^Линия/ });
+    expect(house.getAttribute("aria-label")).toContain("ISKCON");
+
+    await userEvent.click(house);
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
   });
 
-  it("две колонки: ступени слева, линии справа; сохраняется одним нажатием", async () => {
+  it("админ меняет ступени в отпечатке — пишутся только ступени", async () => {
     setLibraryEntryAudienceStages.mockResolvedValue({
       id: "e-1",
       audienceStages: ["seeker", "devotee"],
     });
-    setLibraryEntryLineage.mockResolvedValue({ id: "e-1", lineage: "ipbys" });
     const onChanged = vi.fn();
     render(
-      <EntryMarksButton
+      <EntryMarksButtons
+        locale="ru"
         entryId="e-1"
         audienceStages={["seeker"]}
         lineage="iskcon"
@@ -68,47 +67,33 @@ describe("EntryMarksButton (VED-616)", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /^Разметка/ }));
-    const stages = screen.getByRole("group", {
-      name: "Ступени самоидентификации",
-    });
-    const lineages = screen.getByRole("group", { name: "Духовная линия" });
-    expect(stages.parentElement).toBe(lineages.parentElement);
-    expect(stages.parentElement?.className).toContain("grid-cols-2");
-
     await userEvent.click(
-      within(stages).getByRole("button", { name: "Преданный" }),
+      screen.getByRole("button", { name: /^Самоидентификация/ }),
     );
-    await userEvent.click(
-      within(lineages).getByRole("button", { name: "Гаудия-матх" }),
-    );
-    await userEvent.click(
-      within(lineages).getByRole("button", { name: "IPBYS" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Преданный" }));
     // Отметки — только черновик: до «Сохранить» запросов нет.
     expect(setLibraryEntryAudienceStages).not.toHaveBeenCalled();
-    expect(setLibraryEntryLineage).not.toHaveBeenCalled();
-
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() =>
       expect(onChanged).toHaveBeenCalledWith({
         stages: ["seeker", "devotee"],
-        lineage: "ipbys",
+        lineage: "iskcon",
       }),
     );
     expect(setLibraryEntryAudienceStages).toHaveBeenCalledWith("e-1", [
       "seeker",
       "devotee",
     ]);
-    expect(setLibraryEntryLineage).toHaveBeenCalledWith("e-1", "ipbys");
+    expect(setLibraryEntryLineage).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("меняется только линия — ступени не пишутся", async () => {
-    setLibraryEntryLineage.mockResolvedValue({ id: "e-1", lineage: null });
+  it("админ меняет линию в домике — пишется только линия", async () => {
+    setLibraryEntryLineage.mockResolvedValue({ id: "e-1", lineage: "ipbys" });
     render(
-      <EntryMarksButton
+      <EntryMarksButtons
+        locale="ru"
         entryId="e-1"
         audienceStages={["yogi"]}
         lineage="iskcon"
@@ -116,44 +101,21 @@ describe("EntryMarksButton (VED-616)", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /^Разметка/ }));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Без линии — для всех" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /^Линия/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
+    await userEvent.click(screen.getByRole("button", { name: "IPBYS" }));
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(setLibraryEntryLineage).toHaveBeenCalledWith("e-1", null);
+    expect(setLibraryEntryLineage).toHaveBeenCalledWith("e-1", "ipbys");
     expect(setLibraryEntryAudienceStages).not.toHaveBeenCalled();
-  });
-
-  it("«Для всех» снимает и ступени, и линию", async () => {
-    setLibraryEntryAudienceStages.mockResolvedValue({
-      id: "e-1",
-      audienceStages: [],
-    });
-    setLibraryEntryLineage.mockResolvedValue({ id: "e-1", lineage: null });
-    render(
-      <EntryMarksButton
-        entryId="e-1"
-        audienceStages={["yogi"]}
-        lineage="iskcon"
-        canSet
-      />,
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: /^Разметка/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Для всех" }));
-
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(setLibraryEntryAudienceStages).toHaveBeenCalledWith("e-1", []);
-    expect(setLibraryEntryLineage).toHaveBeenCalledWith("e-1", null);
   });
 
   it("ошибка сохранения видна в окне, окно остаётся открытым", async () => {
     setLibraryEntryAudienceStages.mockRejectedValue(new Error("403"));
     render(
-      <EntryMarksButton
+      <EntryMarksButtons
+        locale="ru"
         entryId="e-1"
         audienceStages={[]}
         lineage={null}
@@ -161,12 +123,14 @@ describe("EntryMarksButton (VED-616)", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /^Разметка/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Самоидентификация/ }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Йог" }));
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Не удалось сохранить разметку",
+      "Не удалось сохранить ступени",
     );
   });
 });

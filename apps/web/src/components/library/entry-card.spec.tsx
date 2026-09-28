@@ -272,7 +272,7 @@ describe("EntryCard", () => {
     expect(article?.className).toContain("relative");
     expect(article?.className).toContain("has-[[aria-expanded=true]]:z-40");
   });
-  it("«Разметка» стоит в одной паре с домиком «Линия», слева от него (VED-607, VED-616)", () => {
+  it("отпечаток стоит в одной паре с домиком «Линия», слева от него (VED-607, VED-632)", () => {
     render(
       <EntryCard
         entry={{ ...entry, canEdit: true, canSetLineage: true }}
@@ -284,18 +284,21 @@ describe("EntryCard", () => {
     expect(group).toHaveClass("ml-auto", "flex", "shrink-0");
     const buttons = within(group).getAllByRole("button");
     expect(buttons).toHaveLength(2);
-    expect(buttons[0]).toHaveAccessibleName(/^Разметка/);
+    expect(buttons[0]).toHaveAccessibleName(/^Самоидентификация/);
     expect(buttons[1]).toHaveAccessibleName(/^Линия/);
     // 40px, чтобы пара влезала в строку с «Редактировать» и «Удалить».
     for (const button of buttons) expect(button).toHaveClass("size-10");
   });
 
-  it("читателю — только домик «Линия», без «Разметки» (VED-616)", () => {
+  /* VED-632: «на всех материалах должно присутствовать две кнопки-значка»
+     — и у участников, только для показа. */
+  it("читателю — та же пара: отпечаток и домик (VED-632)", () => {
     render(<EntryCard entry={entry} locale="ru" />);
 
     const group = screen.getByTestId("entry-admin-marks");
     const buttons = within(group).getAllByRole("button");
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0]).toHaveAccessibleName(/^Линия/);
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleName(/^Самоидентификация/);
+    expect(buttons[1]).toHaveAccessibleName(/^Линия/);
   });
 });

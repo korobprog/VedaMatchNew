@@ -1,8 +1,4 @@
-import {
-  lineageFilterLabel,
-  lineageOption,
-  type LineageId,
-} from "@vedamatch/shared";
+import { lineageFilterLabel, type LineageId } from "@vedamatch/shared";
 
 /**
  * Строки окна «Линия» с домиком (VED-616): к какой линии относится материал
@@ -21,10 +17,11 @@ export interface LineageInfoSubject {
 
 export interface LineageInfoRow {
   title: string;
-  /** «ISKCON», «Гаудия-матх — IPBYS» или подпись пустого значения. */
+  /**
+   * «ISKCON», «Гаудия-матх — IPBYS» или подпись пустого значения.
+   * Расшифровку аббревиатуры показывает «?» рядом (VED-634).
+   */
   value: string;
-  /** Расшифровка аббревиатуры, если она есть. */
-  hint: string | null;
 }
 
 export function lineageInfoRows(
@@ -36,6 +33,5 @@ export function lineageInfoRows(
       lineageFilterLabel(subject.lineage) ??
       subject.emptyLabel ??
       "Для всех линий",
-    hint: lineageOption(subject.lineage)?.hint ?? null,
   }));
 }
