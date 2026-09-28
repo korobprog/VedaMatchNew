@@ -9,8 +9,19 @@ import { planCompactSound } from "./compact-sound";
  * «Пуск / пауза» звука портала одним значком (VED-577) — для окон, которые
  * накрывают шапку с горячими кнопками «Плеер» и «Радио». Что делает нажатие,
  * решает `planCompactSound`.
+ *
+ * `tone="mint"` — мятный круг, как пуск в полосе плеера (VED-600): тёмный
+ * значок `--vm-on-mint` на мяте, 7,48:1. Метка `data-sound-control` говорит
+ * плееру, что у окна своя пауза и его пузырь поверх окна не нужен
+ * (`hasForeignModal`).
  */
-export function CompactSoundButton({ className = "" }: { className?: string }) {
+export function CompactSoundButton({
+  className = "",
+  tone = "plain",
+}: {
+  className?: string;
+  tone?: "plain" | "mint";
+}) {
   const player = useMusicPlayer();
   const radio = useMusicRadio();
   const plan = planCompactSound({
@@ -43,7 +54,12 @@ export function CompactSoundButton({ className = "" }: { className?: string }) {
       onClick={run}
       aria-label={plan.label}
       title={plan.label}
-      className={`flex size-11 shrink-0 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0 ${className}`}
+      data-sound-control=""
+      className={`flex shrink-0 items-center justify-center ${
+        tone === "mint"
+          ? "btn-mint size-10 rounded-full"
+          : "size-11 rounded-lg text-text-1 transition-colors hover:bg-glass hover:text-text-0"
+      } ${className}`}
     >
       <Icon aria-hidden className="size-5" />
     </button>

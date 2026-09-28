@@ -28,4 +28,22 @@ describe("hasForeignModal (VED-499)", () => {
     ).toBe(false);
     expect(hasForeignModal(dom("<main></main>"))).toBe(false);
   });
+
+  it("окно со своей кнопкой звука не в счёт (VED-600)", () => {
+    expect(
+      hasForeignModal(
+        dom(
+          '<div role="dialog" aria-modal="true"><button data-sound-control></button></div>',
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      hasForeignModal(
+        dom(
+          '<div aria-modal="true"><button data-sound-control></button></div>' +
+            '<div aria-modal="true"></div>',
+        ),
+      ),
+    ).toBe(true);
+  });
 });
