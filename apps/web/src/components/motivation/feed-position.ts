@@ -131,3 +131,26 @@ export function isSameFeedHref(current: string, target: string): boolean {
   };
   return parse(current) === parse(target);
 }
+
+/**
+ * «К началу ленты» из меню ☰ (VED-639): адрес начала той ленты, что открыта
+ * сейчас. Те же вкладка, папка, автор, источник и порядок, но без того, что
+ * сдвигает начало: `post` (открыли на конкретной картинке), `from` (с поста
+ * на главной) и `resume` (с места остановки).
+ */
+const START_SHIFTING_PARAMS = ["post", "from", "resume"] as const;
+
+export function feedStartHref(current: string): string {
+  const url = new URL(current, "http://feed.local");
+  for (const key of START_SHIFTING_PARAMS) url.searchParams.delete(key);
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ""}`;
+}
+
+/**
+ * Событие «К началу ленты» (VED-639). Меню ☰ живёт рядом с лентой, а не в
+ * ней, и прокрутить её само не может: оно просит, а открытая лента —
+ * картинок, открыток или видео — уходит к первому посту. Когда начало
+ * ленты — другой адрес (`feedStartHref`), меню просто переходит по нему.
+ */
+export const FEED_RESTART_EVENT = "motivation:feed-restart";

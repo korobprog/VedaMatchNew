@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationVideoDto } from "@vedamatch/shared";
 import { VideoFeed } from "./video-feed";
+import { FEED_RESTART_EVENT } from "./feed-position";
 
 vi.mock("@/components/quick/quick-panel", () => ({ QuickPanel: () => null }));
 
@@ -70,6 +71,30 @@ describe("VideoFeed", () => {
     expect(
       screen.queryByRole("link", { name: "Категории" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("по «К началу ленты» из меню уходит к первому ролику (VED-639)", () => {
+    mockReducedMotion(false);
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    try {
+      render(
+        <VideoFeed
+          initial={{ items: [video], nextCursor: null }}
+          categories={[]}
+        />,
+      );
+      act(() => {
+        window.dispatchEvent(new Event(FEED_RESTART_EVENT));
+      });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+      expect(screen.getByRole("feed", { name: "Лента видео" })).toHaveFocus();
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
   });
 
   it("активный ролик стартует сам без звука", () => {

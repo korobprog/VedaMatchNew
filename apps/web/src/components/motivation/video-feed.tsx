@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 import { Tabs } from "./reels-feed";
 import { reelsHref } from "./feed-style";
+import { FEED_RESTART_EVENT } from "./feed-position";
 import {
   appendVideos,
   shouldAutoplay,
@@ -61,6 +62,20 @@ export function VideoFeed({
   // как в больших лентах. Жест уже был, браузер это разрешит.
   const [soundOn, setSoundOn] = useState(false);
   const pendingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  /* «К началу ленты» из меню ☰ (VED-639): к первому ролику открытой ленты.
+     Активным его сделает наблюдатель слайда, когда тот доедет до экрана. */
+  useEffect(() => {
+    const onRestart = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      container.scrollTo({ top: 0 });
+      container.focus({ preventScroll: true });
+    };
+    window.addEventListener(FEED_RESTART_EVENT, onRestart);
+    return () => window.removeEventListener(FEED_RESTART_EVENT, onRestart);
+  }, []);
 
   const loadMore = useCallback(async () => {
     if (!cursor || pendingRef.current) return;
@@ -145,9 +160,11 @@ export function VideoFeed({
         </div>
       ) : (
         <div
+          ref={containerRef}
           role="feed"
           aria-label="Лента видео"
           aria-busy={pending}
+          tabIndex={-1}
           className="h-full snap-y snap-mandatory overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {items.map((video, index) => (

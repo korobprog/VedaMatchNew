@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 export type MotivationSection =
@@ -14,6 +15,7 @@ export function MotivationNav({
   isAdmin,
   compact = false,
   reelsMenu = false,
+  leading,
 }: {
   active: MotivationSection;
   isAdmin?: boolean;
@@ -26,6 +28,11 @@ export function MotivationNav({
    * узнали под прежним именем.
    */
   reelsMenu?: boolean;
+  /**
+   * Клавиша перед разделами — первой, в левом верхнем углу меню. В меню ☰
+   * ленты это «К началу ленты» (VED-639).
+   */
+  leading?: ReactNode;
 }) {
   const links = [
     ["feed", "/motivation", "Лента"],
@@ -33,7 +40,11 @@ export function MotivationNav({
     // категории — на «покажи про Веды». Слово «категории» привычнее
     // «подборок»: адрес раздела остался прежним, менять его ради надписи
     // значит ломать чужие ссылки.
-    ["collections", "/motivation/collections", "Категории"],
+    // В меню ☰ ленты «Категории» не повторяем (VED-639): та же клавиша уже
+    // стоит в верхнем ряду, над лентой.
+    ...(reelsMenu
+      ? []
+      : ([["collections", "/motivation/collections", "Категории"]] as const)),
     ["favorites", reelsMenu ? "/motivation?tab=saved" : "/motivation/favorites", "Избранное"],
     // Угадать стих Гиты по рисунку (VED-243). Главный вход — кнопка в
     // нижнем ряду ленты; здесь — для тех, кто её убрал из ряда.
@@ -51,6 +62,7 @@ export function MotivationNav({
     // Перенос по строкам, а не горизонтальная прокрутка: на телефоне последний
     // раздел иначе прячется за краем, и о нём надо догадаться.
     <nav className={`flex flex-wrap gap-2 ${compact ? "" : "mb-6"}`} aria-label="Разделы вдохновения">
+      {leading}
       {links.map(([key, href, label]) => (
         <Link
           key={key}
