@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
 import type { Metadata } from "next";
-import {
-  isLineagePreference,
-  resolveContentLineage,
-} from "@vedamatch/shared";
+import { effectiveLineageIds, isLineagePreference } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { LineagePrompt } from "@/components/lineage-prompt";
 import { LineageStatus } from "@/components/lineage-status";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
+import { currentLineageChoice } from "@/components/library/lineage-filter";
+import { profileMaterialFilters } from "@/lib/material-filters";
 import { LibraryOrganizeButton } from "@/components/library/organize-button";
 import {
   getLibraryCategoryTree,
@@ -52,16 +51,23 @@ export default async function LibraryPage({
   const locale = preferences?.uiLanguage ?? "ru";
   const roots = tree ?? [];
   // Та же арифметика, что на сервере: явный `?lineage=` в адресе сильнее
-  // настройки Образования, та — сильнее профиля. Подпись обязана говорить
-  // ровно то, что применил API.
+  // настройки Образования, та — сильнее «Фильтров материалов» с главной
+  // (VED-617). Подпись обязана говорить ровно то, что применил API.
   const explicitLineage =
     typeof params.lineage === "string" && isLineagePreference(params.lineage)
       ? params.lineage
       : null;
-  const appliedLineage = explicitLineage
-    ? resolveContentLineage(null, explicitLineage)
-    : // Без настройки — «Все» (VED-483), профиль фильтр не включает.
-      resolveContentLineage(null, preferences?.lineage ?? null);
+  const preference = preferences?.lineage ?? null;
+  const materialFilters = profileMaterialFilters(user);
+  const appliedLineageIds = effectiveLineageIds(
+    explicitLineage ?? preference,
+    materialFilters,
+  );
+  const lineageChoice = currentLineageChoice({
+    explicit: explicitLineage,
+    preference,
+    portalLineages: materialFilters.lineages,
+  });
   // Кнопки линий видны всем (VED-395): у ищущего без настройки нажата «все
   // линии», и выдача та же, что была, — но сузить её он теперь может в одно
   // касание, а не через профиль.
@@ -88,7 +94,7 @@ export default async function LibraryPage({
           </div>
           <p className="mt-1 text-sm text-text-2">{t(locale, "service.subtitle")}</p>
           <LineageStatus
-            lineage={appliedLineage}
+            lineageIds={appliedLineageIds}
             settingsHref="#lineage-switch"
             className="mt-1"
           />
@@ -121,8 +127,9 @@ export default async function LibraryPage({
           <div id="lineage-switch" className="scroll-mt-24">
             <LibraryLineageFilter
               locale={locale}
-              applied={appliedLineage}
-              preference={preferences?.lineage ?? null}
+              current={lineageChoice}
+              preference={preference}
+              portalLineages={materialFilters.lineages}
             />
           </div>
           {canOrganize && <LibraryOrganizeButton locale={locale} />}
@@ -160,11 +167,11 @@ export default async function LibraryPage({
             // Линия — в ключе: кнопка линии меняет настройку, а не адрес, и
             // без неё лента после router.refresh() держала бы старую выдачу
             // в своём состоянии — подпись новая, материалы прежние.
-            key={`${JSON.stringify(params)}|${appliedLineage ?? "all"}`}
+            key={`${JSON.stringify(params)}|${appliedLineageIds?.join(",") ?? "all"}`}
             initialFeed={feed}
             locale={locale}
             query={params}
-            lineageFiltered={appliedLineage !== null}
+            lineageFiltered={appliedLineageIds !== null}
           />
         )}
       </main>

@@ -71,14 +71,6 @@ const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
   ).where;
 
 /** Линию из профиля каталог не берёт; профиль читается только ради ступени. */
-function expectNoLineageFromProfile(prisma: ReturnType<typeof prismaMock>) {
-  for (const [args] of prisma.user.findUnique.mock.calls as unknown as Array<
-    [{ select: Record<string, boolean> }]
-  >) {
-    expect(args.select).not.toHaveProperty('lineage');
-  }
-}
-
 describe('lineageCondition', () => {
   it('без линии не добавляет в where ничего', () => {
     expect(lineageCondition(null)).toEqual({});
@@ -124,9 +116,10 @@ describe('MusicCatalogService — линия слушателя', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('линию из профиля Музыка не наследует — преданный слышит весь каталог', async () => {
-    // VED-82: наследованный фильтр прятал записи, а строка «Показываем
-    // линию…» возвращалась над каталогом при каждом заходе.
+  it('без настройки Музыки у преданного — линия из «Фильтров материалов» (VED-617)', async () => {
+    // Фильтры по анкете: своя линия у преданного. Их видно и можно снять
+    // одной кнопкой на главной — в отличие от прежнего наследования из
+    // профиля, от которого отказались в VED-82.
     const prisma = prismaMock();
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
@@ -137,8 +130,36 @@ describe('MusicCatalogService — линия слушателя', () => {
 
     await catalog.listTracks(query, 'u1');
 
-    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
-    expectNoLineageFromProfile(prisma);
+    expect(whereOf(prisma).AND).toEqual([
+      { OR: [{ lineage: 'sri_gopinath_gaudiya_math' }, { lineage: null }] },
+      NOT_AUDIOBOOK,
+    ]);
+  });
+
+  it('«Фильтры материалов» руками: несколько линий и ступеней', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'devotee',
+      lineage: 'iskcon',
+      showAllStages: false,
+      materialFiltersSetAt: new Date(),
+      materialStages: ['practitioner', 'devotee'],
+      materialLineages: ['iskcon', 'ipbys'],
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.listTracks(query, 'u1');
+
+    expect(whereOf(prisma).AND).toEqual([
+      { OR: [{ lineage: { in: ['iskcon', 'ipbys'] } }, { lineage: null }] },
+      {
+        OR: [
+          { audienceStages: { isEmpty: true } },
+          { audienceStages: { hasSome: ['practitioner', 'devotee'] } },
+        ],
+      },
+      NOT_AUDIOBOOK,
+    ]);
   });
 
   it('линия, выбранная в настройках Музыки, фильтрует каталог', async () => {
@@ -171,7 +192,7 @@ describe('MusicCatalogService — линия слушателя', () => {
     expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
   });
 
-  it('явная линия в запросе сильнее всего и не ходит в базу за профилем', async () => {
+  it('явная линия в запросе сильнее всего и не ходит в настройки', async () => {
     const prisma = prismaMock();
     const { service: catalog } = service(prisma);
 
@@ -181,7 +202,6 @@ describe('MusicCatalogService — линия слушателя', () => {
       { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
       NOT_AUDIOBOOK,
     ]);
-    expectNoLineageFromProfile(prisma);
     expect(prisma.musicSettings.findUnique).not.toHaveBeenCalled();
   });
 

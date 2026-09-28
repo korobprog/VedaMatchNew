@@ -16,11 +16,10 @@ import type {
   LibraryEntryDto,
   LibraryEntryType,
   LibraryFeedResponse,
-  LineageFilterValue,
   LineageId,
   LineageViewer,
   PortalActivityEvent,
-  SpiritualStage,
+  MaterialFilters,
   UpdateLibraryEntryRequest,
 } from '@vedamatch/shared';
 import {
@@ -29,8 +28,9 @@ import {
   defaultLineageFor,
   isLineageId,
   isLineagePreference,
-  resolveAudienceStage,
-  resolveContentLineage,
+  effectiveAudienceStages,
+  effectiveLineageIds,
+  resolveMaterialFilters,
   resolveDisplayName,
   toAudienceStages,
   toLineageId,
@@ -38,7 +38,10 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { lineageFeedCondition } from './lineage-feed-filter';
-import { audienceStageCondition } from './audience-stage-filter';
+import {
+  MATERIAL_FILTERS_SELECT,
+  audienceStageCondition,
+} from './audience-stage-filter';
 import { CommunitiesService } from '../communities/communities.service';
 import {
   decodeCursor,
@@ -215,41 +218,43 @@ export class LibraryEntriesService {
   }
 
   /**
-   * Ступень самоидентификации зрителя для ленты (VED-575). Из `User` — ровно
-   * `spiritualStage` и портальный переключатель `showAllStages` с главной;
-   * пишет их портал. `null` — не фильтровать.
+   * «Фильтры материалов» зрителя (VED-617): ступени и линии с главной, а без
+   * ручного выбора — по анкете. Из `User` — ровно поля фильтров, анкеты и
+   * прежнего переключателя «Все ступени»; пишет их портал. Гость — без
+   * фильтров.
    */
-  private async viewerAudienceStage(
+  private async viewerMaterialFilters(
     viewerId: string | undefined,
-  ): Promise<SpiritualStage | null> {
-    if (!viewerId) return null;
+  ): Promise<MaterialFilters> {
+    if (!viewerId) return { stages: [], lineages: [] };
     const user = await this.prisma.user.findUnique({
       where: { id: viewerId },
-      select: { spiritualStage: true, showAllStages: true },
+      select: MATERIAL_FILTERS_SELECT,
     });
-    return resolveAudienceStage(user);
+    return resolveMaterialFilters(user);
   }
 
   /**
-   * Какую линию показать в ленте. Явный параметр запроса сильнее настройки
-   * Образования. Без настройки — «Все» (VED-483): линия из профиля больше
-   * не включает фильтр сама, как и в Медиатеке. `null` — не фильтровать.
+   * Какие линии показать в ленте: `null` — все. Явный параметр запроса
+   * сильнее настройки Образования, та — сильнее «Фильтров материалов» с
+   * главной; без настройки действуют они (VED-617).
    */
-  private async viewerLineage(
+  private async viewerLineageIds(
     viewerId: string | undefined,
     explicit: string | undefined,
-  ): Promise<LineageFilterValue | null> {
+    filters: MaterialFilters,
+  ): Promise<LineageId[] | null> {
     if (explicit !== undefined && isLineagePreference(explicit) && explicit) {
-      return resolveContentLineage(null, explicit);
+      return effectiveLineageIds(explicit, filters);
     }
     if (!viewerId) return null;
     const preference = await this.prisma.libraryPreference.findUnique({
       where: { userId: viewerId },
       select: { lineage: true },
     });
-    return resolveContentLineage(
-      null,
+    return effectiveLineageIds(
       toLineagePreference(preference?.lineage),
+      filters,
     );
   }
 
@@ -921,15 +926,17 @@ export class LibraryEntriesService {
     // Линия (или вся группа, VED-568) плюс материалы «для всех» (`null`).
     // Через `AND`, а не `OR` напрямую — `OR` ниже занят курсором, и второй
     // перетёр бы первый.
-    const [lineageFilter, audienceStage] = await Promise.all([
-      this.viewerLineage(viewerId, filters.lineage),
-      this.viewerAudienceStage(viewerId),
-    ]);
-    // Ступень самоидентификации (VED-575) — туда же, в `AND`, по той же
-    // причине: у неё свой `OR` «ступень или для всех».
+    const materialFilters = await this.viewerMaterialFilters(viewerId);
+    const lineageIds = await this.viewerLineageIds(
+      viewerId,
+      filters.lineage,
+      materialFilters,
+    );
+    // Ступени самоидентификации (VED-575, VED-617) — туда же, в `AND`, по
+    // той же причине: у них свой `OR` «ступени или для всех».
     const conditions = [
-      lineageFeedCondition(lineageFilter),
-      audienceStageCondition(audienceStage),
+      lineageFeedCondition(lineageIds),
+      audienceStageCondition(effectiveAudienceStages(materialFilters)),
     ].filter((condition) => condition !== null);
     if (conditions.length) {
       where.AND = conditions;

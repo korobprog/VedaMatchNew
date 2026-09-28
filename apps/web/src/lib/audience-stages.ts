@@ -6,7 +6,7 @@ import {
 
 /**
  * Логика кнопок фильтра по самоидентификации (VED-575) без разметки: меню
- * «Ступени» у админа и переключатель «Моя ступень / Все ступени» на главной.
+ * «Разметка» у админа и «Фильтры материалов» на главной (VED-616, VED-617).
  */
 
 /** Отметить/снять ступень в черновике меню. Порядок — всегда по пути. */
@@ -40,27 +40,4 @@ export function audienceStagesSummary(
   return AUDIENCE_STAGES.filter((stage) => stages.includes(stage))
     .map((stage) => AUDIENCE_STAGE_LABELS[stage])
     .join(", ");
-}
-
-/** Имя и подсказка кнопки «Ступени» у админа. */
-export function audienceStagesButtonLabel(
-  stages: readonly SpiritualStage[],
-): string {
-  return `Ступени самоидентификации: ${audienceStagesSummary(stages)}`;
-}
-
-/**
- * Подсказка переключателя на главной: что человек видит сейчас и что будет
- * по нажатию. Имя кнопки при этом постоянное («Материалы всех ступеней»),
- * а состояние передаёт `aria-pressed` — так скринридер не слышит двойного
- * «включено».
- */
-export function stageScopeTitle(
-  stage: SpiritualStage,
-  showAll: boolean,
-): string {
-  const mine = AUDIENCE_STAGE_LABELS[stage];
-  return showAll
-    ? `Показаны материалы всех ступеней. Нажмите, чтобы видеть только для ступени «${mine}»`
-    : `Показаны материалы для ступени «${mine}» и для всех. Нажмите, чтобы видеть материалы всех ступеней`;
 }

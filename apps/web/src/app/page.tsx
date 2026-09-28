@@ -16,7 +16,8 @@ import {
   parseFeaturedColors,
 } from "@/components/featured-accents";
 import { FeaturedServicesEditor } from "@/components/featured-services-editor";
-import { StageScopeToggle } from "@/components/stage-scope-toggle";
+import { MaterialFiltersButton } from "@/components/material-filters-button";
+import { profileMaterialFilters } from "@/lib/material-filters";
 import {
   HOME_FEATURED_COOKIE,
   homeFeaturedOptions,
@@ -421,12 +422,13 @@ export default async function Home({
           }
           toolbarEnd={
             <>
-              {/* «Моя ступень / Все ступени» (VED-575) — первой в правой
-                  группе, перед «Кнопками»: открывает в Образовании и
-                  Медиатеке материалы других ступеней самоидентификации. */}
-              <StageScopeToggle
+              {/* «Фильтры материалов» (VED-617) — первой в правой группе,
+                  перед «Кнопками», на месте прежнего «Моя ступень / Все
+                  ступени» (VED-575): какие ступени и линии видеть в
+                  Образовании и Медиатеке. Для всех участников. */}
+              <MaterialFiltersButton
                 stage={user.spiritualStage}
-                showAll={user.showAllStages ?? false}
+                initial={profileMaterialFilters(user)}
               />
               <FeaturedServicesEditor
                 userId={user.id}

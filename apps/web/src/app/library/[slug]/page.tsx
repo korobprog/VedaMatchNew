@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
-import { isLineagePreference, resolveContentLineage } from "@vedamatch/shared";
+import { effectiveLineageIds, isLineagePreference } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { LineagePrompt } from "@/components/lineage-prompt";
 import {
@@ -34,6 +34,9 @@ import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
 import { LibraryContents } from "@/components/library/library-contents";
 import { EntryList } from "@/components/library/entry-list";
 import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
+import { currentLineageChoice } from "@/components/library/lineage-filter";
+import { profileMaterialFilters } from "@/lib/material-filters";
+import { LineageInfoButton } from "@/components/lineage-info-button";
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
 import { ShlokaRootPanel } from "@/components/library/shloka/shloka-root-panel";
 import { ShlokaSourcePanel } from "@/components/library/shloka/shloka-source-panel";
@@ -128,20 +131,29 @@ export default async function LibraryCategoryPage({
     typeof query.lineage === "string" && isLineagePreference(query.lineage)
       ? query.lineage
       : null;
-  const appliedLineage = explicitLineage
-    ? resolveContentLineage(null, explicitLineage)
-    : // Без настройки — «Все» (VED-483), профиль фильтр не включает.
-      resolveContentLineage(null, preferences?.lineage ?? null);
+  // Настройка Образования сильнее «Фильтров материалов» с главной
+  // (VED-617); без неё действуют они — та же арифметика, что на сервере.
+  const preference = preferences?.lineage ?? null;
+  const materialFilters = profileMaterialFilters(user ?? null);
+  const appliedLineageIds = effectiveLineageIds(
+    explicitLineage ?? preference,
+    materialFilters,
+  );
+  const lineageChoice = currentLineageChoice({
+    explicit: explicitLineage,
+    preference,
+    portalLineages: materialFilters.lineages,
+  });
   // Кнопки линий — те же, что на главной Образования (VED-395): выбор
   // сохраняется в настройке и действует во всех рубриках.
   // Линия — в ключе ленты: кнопка меняет настройку, а не адрес, и без неё
   // лента после router.refresh() держала бы прежнюю выдачу.
-  const lineageKey = appliedLineage ?? "all";
+  const lineageKey = appliedLineageIds?.join(",") ?? "all";
   // Фильтр ленты применён (VED-396) — число в шапке следует за лентой.
   // В окне шлок лента без самих шлок, и её число шапке не годится.
   const headerFiltered =
     shlokaMode === null &&
-    (appliedLineage !== null ||
+    (appliedLineageIds !== null ||
       typeof query.type === "string" ||
       typeof query.language === "string");
   const { category, ancestors, children } = page;
@@ -229,6 +241,17 @@ export default async function LibraryCategoryPage({
                 iconOnly
               />
               <EntryFilterMenu kind="type" locale={locale} />
+              {/* «Линия» с домиком (VED-616) — всем: к какой линии автор. */}
+              <LineageInfoButton
+                subjects={[
+                  {
+                    title: t(locale, "lineage.infoAuthor"),
+                    lineage: category.lineage ?? null,
+                    emptyLabel: t(locale, "lineage.infoAuthorNone"),
+                  },
+                ]}
+                buttonClassName="rounded-xl"
+              />
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
             </>
           ) : (
@@ -241,8 +264,9 @@ export default async function LibraryCategoryPage({
               <div id="lineage-switch" className="scroll-mt-24">
                 <LibraryLineageFilter
                   locale={locale}
-                  applied={appliedLineage}
-                  preference={preferences?.lineage ?? null}
+                  current={lineageChoice}
+                  preference={preference}
+                  portalLineages={materialFilters.lineages}
                   iconOnly
                 />
               </div>
@@ -327,7 +351,7 @@ export default async function LibraryCategoryPage({
                 initialFeed={feed}
                 locale={locale}
                 query={feedQuery}
-                lineageFiltered={appliedLineage !== null}
+                lineageFiltered={appliedLineageIds !== null}
               />
             </section>
           )
@@ -353,7 +377,7 @@ export default async function LibraryCategoryPage({
                 initialFeed={feed}
                 locale={locale}
                 query={{ ...query, categorySlug: slug }}
-                lineageFiltered={appliedLineage !== null}
+                lineageFiltered={appliedLineageIds !== null}
                 // Родительские рубрики уже названы крошками, и их чипы на
                 // карточках лишние (VED-573): у автора «Проповедники»
                 // выталкивали его имя на отдельную строку.

@@ -6,6 +6,7 @@ import {
   lineageGroupOf,
   type LineageFilterValue,
   type LineageGroup,
+  type LineageId,
   type LineagePreference,
 } from "@vedamatch/shared";
 
@@ -24,7 +25,15 @@ import {
  * меню больше не предлагается (VED-568), но сохранённая раньше настройка
  * остаётся рабочей: API её понимает, а меню подсвечивает её группу.
  */
-export type LineageChoice = LineageFilterValue | typeof LINEAGE_ALL;
+export type LineageChoice =
+  LineageFilterValue | typeof LINEAGE_ALL | typeof LINEAGE_PORTAL;
+
+/**
+ * Пункт «Как в фильтрах материалов» (VED-617): настройки Образования нет, и
+ * лента следует «Фильтрам материалов» с главной. Появляется, только когда
+ * те сужают линии, — иначе он ничем не отличался бы от «Всё».
+ */
+export const LINEAGE_PORTAL = "portal" as const;
 
 export interface LineageFilterOption {
   value: LineageChoice;
@@ -67,10 +76,23 @@ export type LineageMenuItem =
 
 export function lineageFilterMenu(labels: {
   all: string;
+  /** Подпись пункта «Как в фильтрах материалов»; без неё пункта нет. */
+  portal?: string;
   groups: Record<LineageGroup, string>;
 }): LineageMenuItem[] {
   const [all, ...lineages] = lineageFilterOptions(labels.all);
-  const items: LineageMenuItem[] = [{ kind: "choice", option: all }];
+  const items: LineageMenuItem[] = [];
+  if (labels.portal) {
+    items.push({
+      kind: "choice",
+      option: {
+        value: LINEAGE_PORTAL,
+        label: labels.portal,
+        title: labels.portal,
+      },
+    });
+  }
+  items.push({ kind: "choice", option: all });
   for (const group of LINEAGE_GROUPS) {
     const options = lineages.filter(
       (option) => lineageGroupOf(option.value) === group,
@@ -98,26 +120,45 @@ export function lineageFilterMenu(labels: {
  * меню подсвечена.
  */
 export function lineageChoiceGroup(choice: LineageChoice): LineageGroup | null {
-  if (choice === LINEAGE_ALL) return null;
+  if (choice === LINEAGE_ALL || choice === LINEAGE_PORTAL) return null;
   return lineageGroupOf(choice) ?? lineageGroupFromFilter(choice);
 }
 
-/** Какая кнопка нажата: применённый фильтр, а без фильтра — «все линии». */
-export function activeLineageChoice(
-  applied: LineageFilterValue | null,
-): LineageChoice {
-  return applied ?? LINEAGE_ALL;
+/**
+ * Какой пункт меню нажат (VED-617): явный `?lineage=` в адресе, иначе
+ * настройка Образования, а без неё — «Как в фильтрах материалов», если те
+ * сужают линии, или «Всё».
+ */
+export function currentLineageChoice({
+  explicit,
+  preference,
+  portalLineages,
+}: {
+  explicit: LineagePreference;
+  preference: LineagePreference;
+  portalLineages: readonly LineageId[];
+}): LineageChoice {
+  const chosen = explicit ?? preference;
+  if (chosen) return chosen;
+  return portalLineages.length ? LINEAGE_PORTAL : LINEAGE_ALL;
 }
 
 /**
  * Что записать в настройку Образования по нажатию кнопки.
  *
- * Без настройки Образование показывает «Все» (VED-483): линия из профиля
- * фильтр сама не включает. Поэтому «Все» — это пустая настройка, а линия —
- * явная, и держится во всём Образовании, пока человек её не сменит.
+ * Пустая настройка — «как в фильтрах материалов» с главной (VED-617). Линия
+ * — явная и держится во всём Образовании, пока человек её не сменит. «Всё»
+ * пишется явным `all`, только когда фильтры материалов сужают линии: иначе
+ * пустая настройка и так показывает всё, и незачем отрывать Образование от
+ * фильтров.
  */
-export function preferenceForChoice(choice: LineageChoice): LineagePreference {
-  return choice === LINEAGE_ALL ? null : choice;
+export function preferenceForChoice(
+  choice: LineageChoice,
+  portalLineages: readonly LineageId[] = [],
+): LineagePreference {
+  if (choice === LINEAGE_PORTAL) return null;
+  if (choice === LINEAGE_ALL) return portalLineages.length ? LINEAGE_ALL : null;
+  return choice;
 }
 
 /**

@@ -5,8 +5,8 @@ import { ChevronDown, ListFilter } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
   LibraryLocale,
-  LineageFilterValue,
   LineageGroup,
+  LineageId,
   LineagePreference,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
@@ -17,7 +17,6 @@ import { useDismissable } from "@/lib/use-dismissable";
 import { t } from "./i18n";
 import { LIBRARY_ICON_BUTTON } from "./icon-button";
 import {
-  activeLineageChoice,
   hrefWithoutLineage,
   lineageChoiceGroup,
   lineageFilterMenu,
@@ -42,19 +41,22 @@ const API_URL = apiBase();
  */
 export function LibraryLineageFilter({
   locale,
-  applied,
+  current: appliedChoice,
   preference,
+  portalLineages = [],
   className = "",
   iconOnly = false,
 }: {
   locale: LibraryLocale;
   /**
-   * Линия или группа (`group:<группа>`, VED-568), по которой API
-   * отфильтровал выдачу, — та же, что в подписи.
+   * Нажатый пункт: явный `?lineage=`, настройка Образования или «Как в
+   * фильтрах материалов» — см. `currentLineageChoice`.
    */
-  applied: LineageFilterValue | null;
+  current: LineageChoice;
   /** Сохранённая настройка Образования. */
   preference: LineagePreference;
+  /** Линии из «Фильтров материалов» с главной (VED-617); пусто — все. */
+  portalLineages?: readonly LineageId[];
   /** Раскладка снаружи: в ряду кнопок Образования кнопка тянется на ячейку. */
   className?: string;
   /**
@@ -81,10 +83,12 @@ export function LibraryLineageFilter({
     }
   }, [isRefreshing]);
 
-  const current = pendingChoice ?? activeLineageChoice(applied);
+  const current = pendingChoice ?? appliedChoice;
   const busy = pendingChoice !== null || isRefreshing;
   const menu = lineageFilterMenu({
     all: t(locale, "lineage.menuAll"),
+    // «Как в фильтрах материалов» — когда те сужают линии (VED-617).
+    portal: portalLineages.length ? t(locale, "lineage.menuPortal") : undefined,
     groups: {
       iskcon: t(locale, "lineage.group.iskcon"),
       gaudiya_math: t(locale, "lineage.group.gaudiya_math"),
@@ -114,7 +118,7 @@ export function LibraryLineageFilter({
     setOpen(false);
     setFailed(false);
     setPendingChoice(choice);
-    const next = preferenceForChoice(choice);
+    const next = preferenceForChoice(choice, portalLineages);
     try {
       if (next !== preference) {
         const response = await apiFetch(`${API_URL}/library/me/preferences`, {

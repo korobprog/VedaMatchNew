@@ -6,10 +6,8 @@ import {
   toAudienceStages,
 } from "@vedamatch/shared";
 import {
-  audienceStagesButtonLabel,
   audienceStagesSummary,
   sameAudienceStages,
-  stageScopeTitle,
   toggleAudienceStage,
 } from "./audience-stages";
 
@@ -77,17 +75,6 @@ describe("меню «Ступени»", () => {
     expect(
       audienceStagesSummary(["seeker", "practitioner", "yogi", "devotee"]),
     ).toBe("для всех");
-    expect(audienceStagesButtonLabel(["devotee", "yogi"])).toBe(
-      "Ступени самоидентификации: Йог, Преданный",
-    );
-  });
-});
-
-describe("переключатель на главной", () => {
-  it("подсказка говорит, что видно сейчас", () => {
-    expect(stageScopeTitle("yogi", false)).toContain("«Йог» и для всех");
-    expect(stageScopeTitle("yogi", true)).toContain(
-      "Показаны материалы всех ступеней",
-    );
+    expect(audienceStagesSummary(["devotee", "yogi"])).toBe("Йог, Преданный");
   });
 });

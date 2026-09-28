@@ -267,6 +267,17 @@ model User {
   /// человек видит своё (`spiritualStage`) и материалы «для всех». Портальное
   /// поле: пишет `PATCH /profile`, сервисы только читают.
   showAllStages                Boolean                    @default(false)
+  /// «Фильтры материалов» на главной (VED-617): какие ступени
+  /// самоидентификации и духовные линии человек видит в Образовании и
+  /// Медиатеке. Пустой массив — все. Действуют, только когда выбраны руками
+  /// (`materialFiltersSetAt`); до того фильтры выводятся из анкеты
+  /// (`spiritualStage`, `lineage`, `showAllStages`) — см.
+  /// `resolveMaterialFilters` в @vedamatch/shared. Строками, как
+  /// `LibraryEntry.audienceStages` и `lineage`. Портальные поля: пишет
+  /// `PATCH /profile`, сервисы только читают.
+  materialStages               String[]                   @default([])
+  materialLineages             String[]                   @default([])
+  materialFiltersSetAt         DateTime?
   // Последняя активность; наружу отдаётся огрублённой (UnionActivityLevel)
   lastSeenAt                   DateTime?
   // Администрация сверила публичные фото с живым человеком

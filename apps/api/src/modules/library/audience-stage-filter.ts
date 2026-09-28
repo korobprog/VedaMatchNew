@@ -2,20 +2,36 @@ import type { Prisma } from '@prisma/client';
 import type { SpiritualStage } from '@vedamatch/shared';
 
 /**
- * Условие ленты по ступени самоидентификации (VED-575): материалы этой
- * ступени плюс материалы «для всех» (пустая разметка). `null` — фильтра нет:
- * человек без самоидентификации или выбравший на главной «Все ступени».
- * Кто зритель — решает общая `resolveAudienceStage` из `@vedamatch/shared`,
- * условие Prisma — своё у Образования.
+ * Поля `User`, из которых собираются «Фильтры материалов» зрителя (VED-617):
+ * ручной выбор, анкета и прежний переключатель «Все ступени». Портальные
+ * поля — сервис их только читает, см. `resolveMaterialFilters`.
+ */
+export const MATERIAL_FILTERS_SELECT = {
+  spiritualStage: true,
+  lineage: true,
+  showAllStages: true,
+  materialFiltersSetAt: true,
+  materialStages: true,
+  materialLineages: true,
+} as const satisfies Prisma.UserSelect;
+
+/**
+ * Условие ленты по ступеням самоидентификации (VED-575, VED-617): материалы
+ * любой из выбранных ступеней плюс материалы «для всех» (пустая разметка).
+ * `null` — фильтра нет: выбраны все ступени, человек без самоидентификации
+ * или гость. Какие ступени — решает общая `resolveMaterialFilters` из
+ * `@vedamatch/shared`, условие Prisma — своё у Образования.
  */
 export function audienceStageCondition(
-  stage: SpiritualStage | null,
+  stages: readonly SpiritualStage[] | null,
 ): Prisma.LibraryEntryWhereInput | null {
-  if (!stage) return null;
+  if (!stages?.length) return null;
   return {
     OR: [
       { audienceStages: { isEmpty: true } },
-      { audienceStages: { has: stage } },
+      stages.length === 1
+        ? { audienceStages: { has: stages[0] } }
+        : { audienceStages: { hasSome: [...stages] } },
     ],
   };
 }

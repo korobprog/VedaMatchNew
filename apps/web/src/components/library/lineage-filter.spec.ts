@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LINEAGES } from "@vedamatch/shared";
 import {
-  activeLineageChoice,
+  currentLineageChoice,
   hrefWithoutLineage,
   lineageChoiceGroup,
   lineageFilterMenu,
@@ -27,19 +27,47 @@ describe("lineageFilterOptions", () => {
   });
 });
 
-describe("activeLineageChoice", () => {
-  it("без фильтра нажата «все линии»", () => {
-    expect(activeLineageChoice(null)).toBe("all");
+describe("currentLineageChoice (VED-617)", () => {
+  it("без настройки и фильтров — «Всё»", () => {
+    expect(
+      currentLineageChoice({ explicit: null, preference: null, portalLineages: [] }),
+    ).toBe("all");
   });
-  it("с фильтром — кнопка этой линии или группы", () => {
-    expect(activeLineageChoice("ipbys")).toBe("ipbys");
-    expect(activeLineageChoice("group:gaudiya_math")).toBe("group:gaudiya_math");
+  it("без настройки, но с линиями в фильтрах материалов — «как в фильтрах»", () => {
+    expect(
+      currentLineageChoice({
+        explicit: null,
+        preference: null,
+        portalLineages: ["iskcon"],
+      }),
+    ).toBe("portal");
+  });
+  it("адрес сильнее настройки, настройка — сильнее фильтров", () => {
+    expect(
+      currentLineageChoice({
+        explicit: "ipbys",
+        preference: "group:gaudiya_math",
+        portalLineages: ["iskcon"],
+      }),
+    ).toBe("ipbys");
+    expect(
+      currentLineageChoice({
+        explicit: null,
+        preference: "all",
+        portalLineages: ["iskcon"],
+      }),
+    ).toBe("all");
   });
 });
 
-describe("preferenceForChoice (VED-483)", () => {
-  it("«Все» — пустая настройка: так Образование и показывает по умолчанию", () => {
+describe("preferenceForChoice (VED-483, VED-617)", () => {
+  it("«Все» без линий в фильтрах материалов — пустая настройка", () => {
     expect(preferenceForChoice("all")).toBeNull();
+  });
+
+  it("«Все» при линиях в фильтрах — явное all, «как в фильтрах» — пусто", () => {
+    expect(preferenceForChoice("all", ["iskcon"])).toBe("all");
+    expect(preferenceForChoice("portal", ["iskcon"])).toBeNull();
   });
 
   it("линия записывается явно — и у преданного, и у ищущего", () => {

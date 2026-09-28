@@ -1,4 +1,8 @@
 import type { LineageId } from './lineage';
+import type {
+  MaterialFilters,
+  MaterialFiltersState,
+} from './material-filters';
 export * from './vedabase';
 export * from './gitabase';
 export * from './union';
@@ -33,6 +37,7 @@ export * from './assistant';
 export * from './lineage';
 export * from './spiritual-stage';
 export * from './audience-stage';
+export * from './material-filters';
 export * from './task-status';
 export * from './work';
 export * from './wellness';
@@ -210,8 +215,16 @@ export interface UserProfile {
    * «Все ступени» (VED-575): Образование и Медиатека показывают и материалы,
    * размеченные для других ступеней самоидентификации. Переключается кнопкой
    * на главной. Необязательное: у старого ответа поля нет — значит `false`.
+   * С VED-617 — только умолчание для `materialFilters`, пока их не выбрали
+   * руками; кнопка на главной пишет уже фильтры.
    */
   showAllStages?: boolean;
+  /**
+   * «Фильтры материалов» (VED-617): какие ступени и линии человек видит в
+   * Образовании и Медиатеке; без ручного выбора — по анкете. Необязательное:
+   * у старого ответа поля нет.
+   */
+  materialFilters?: MaterialFiltersState;
   subscription: SubscriptionState;
   accountStatus: UserAccountStatus;
   /** Задано, если пользователь сам запросил удаление аккаунта. */
@@ -345,6 +358,11 @@ export interface ProfileUpdateRequest {
   detectedTimeZone?: string;
   /** Переключатель «Моя ступень / Все ступени» на главной (VED-575). */
   showAllStages?: boolean;
+  /**
+   * «Фильтры материалов» (VED-617): выбор руками; `null` — вернуться к
+   * фильтрам по анкете.
+   */
+  materialFilters?: MaterialFilters | null;
 }
 
 /**
