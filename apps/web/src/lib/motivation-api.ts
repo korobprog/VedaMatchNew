@@ -18,7 +18,10 @@ import type {
   MotivationReelDto,
   MotivationSourceWatchDto,
   MotivationStatsDto,
-  MotivationAudioDto,} from "@vedamatch/shared";
+  MotivationAudioDto,
+  MotivationVideoCategoryDto,
+  MotivationVideoPage,
+} from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
 
@@ -63,6 +66,24 @@ export const getMotivationCategories = (style?: "art" | "cards") =>
   motivationGet<MotivationCategoryDto[]>(
     `/motivation/categories${style ? `?style=${style}` : ""}`,
   );
+
+/**
+ * Лента «Видео» (VED-246): первая страница роликов, `category` — папка из
+ * справочника афоризмов.
+ */
+export const getMotivationVideos = (category?: string, limit?: number) => {
+  const query = new URLSearchParams();
+  if (category) query.set("category", category);
+  if (limit) query.set("limit", String(limit));
+  const suffix = query.toString();
+  return motivationGet<MotivationVideoPage>(
+    `/motivation/videos${suffix ? `?${suffix}` : ""}`,
+  );
+};
+
+/** Меню папок ленты «Видео»: только те, где ролики есть. */
+export const getMotivationVideoCategories = () =>
+  motivationGet<MotivationVideoCategoryDto[]>("/motivation/videos/categories");
 
 export const getMotivationFeed = (
   filter: "all" | "favorites" = "all",

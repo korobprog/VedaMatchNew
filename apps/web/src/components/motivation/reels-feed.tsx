@@ -848,7 +848,7 @@ type Slide =
   | { kind: "divider" }
   | { kind: "end" };
 
-function Tabs({
+export function Tabs({
   tab,
   order,
   category,
@@ -948,6 +948,11 @@ function Tabs({
           пословицами. */}
       {link("forYou", reelsHref({ order, category }), "Лента")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
+      {/* Короткие ролики редакции (VED-246) — своя лента с теми же папками,
+          что у афоризмов, поэтому папка переезжает и сюда. Порядок — нет:
+          ролики идут от новых к старым. На 360px ряд с «Видео» (≈44px)
+          по-прежнему в одну строку: 244 + 44 = 288 ≤ 304. */}
+      {link("video", reelsHref({ tab: "video", category }), "Видео")}
       {filterState && <FeedAttributionFilter state={filterState} isAdmin={isAdmin} />}
       {/* VED-387: «Избранное» и «Мои» ушли в меню ☰ (там «Избранное» и
           «Мои · Студия»), на их местах — «Категории» той ленты, что открыта,
@@ -955,9 +960,13 @@ function Tabs({
           портала, и без неё до панели отсюда было не дотянуться. */}
       {/* В самой ленте избранного вкладка остаётся на месте «Категорий»:
           иначе в ряду не было бы ни одной текущей, и где ты — не видно. */}
+      {/* У «Видео» папки — рядом с лентой, строкой под рядом вкладок:
+          оглавление «Категорий» считает посты, а не ролики. */}
       {tab === "saved"
         ? link("saved", "/motivation?tab=saved", "Избранное")
-        : link("collections", collectionsHref(tab), "Категории")}
+        : tab === "video"
+          ? null
+          : link("collections", collectionsHref(tab), "Категории")}
       <ReelsQuickPanel />
     </nav>
   );

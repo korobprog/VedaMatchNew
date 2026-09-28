@@ -8,6 +8,7 @@ import { MotivationFeed } from "@/components/motivation/motivation-feed";
 import { MotivationTopBar } from "@/components/motivation/motivation-top-bar";
 import { ReelsChrome } from "@/components/motivation/reels-chrome";
 import { ReelsFeed } from "@/components/motivation/reels-feed";
+import { VideoFeed } from "@/components/motivation/video-feed";
 import {
   feedStyleOf,
   isPinnedCard,
@@ -20,6 +21,8 @@ import {
   getMotivationCategories,
   getMotivationFeed,
   getMotivationStats,
+  getMotivationVideoCategories,
+  getMotivationVideos,
 } from "@/lib/motivation-api";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
@@ -66,6 +69,37 @@ export default async function MotivationPage({
     from: text(params.from),
     resume: params.resume === "1",
   };
+  /* Лента «Видео» (VED-246) — не посты, а ролики редакции: своя выдача и
+     своё меню папок, поэтому уходим раньше, чем просить ленту постов. */
+  if (view === "reels" && tab === "video") {
+    const [user, videos, videoCategories, stats] = await Promise.all([
+      getProfile(),
+      getMotivationVideos(category),
+      getMotivationVideoCategories(),
+      getMotivationStats(),
+    ]);
+    if (!user) redirectToLogin("/motivation?tab=video");
+    if (needsWelcome(user)) redirect("/welcome");
+    const isAdmin = user.role === "admin" || user.role === "service-admin";
+    return (
+      <div className="relative h-dvh min-h-[560px] bg-bg-0">
+        <BackgroundOrbs />
+        <NoiseOverlay />
+        <div className="relative mx-auto h-full w-full max-w-[480px]">
+          <VideoFeed
+            // Другая папка — другая лента: без ключа на экране осталась бы
+            // прежняя (см. ключ у ReelsFeed ниже).
+            key={category ?? ""}
+            initial={videos ?? { items: [], nextCursor: null }}
+            categories={videoCategories ?? []}
+            category={category}
+          />
+          <ReelsChrome isAdmin={isAdmin} count={stats?.published} tab={tab} />
+        </div>
+      </div>
+    );
+  }
+
   /* Две ленты (VED-121): «Для вас» — нейросеть и цитата поверх, «Открытки» —
      готовые картинки с напечатанным текстом. Список остаётся общим: у него
      нет вкладок, и прятать там половину публикаций было бы нечем объяснить. */

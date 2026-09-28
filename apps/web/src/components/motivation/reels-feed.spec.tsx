@@ -157,7 +157,7 @@ describe("ReelsFeed", () => {
 
   // VED-252: «Для вас» переименована в «Ленту», значок фильтра встал в тот
   // же ряд между «Открытки» и «Избранное», подписи у него нет.
-  it("верхний ряд — пять пунктов, вкладка называется «Лента», у значка фильтра нет подписи", () => {
+  it("верхний ряд — шесть пунктов, вкладка называется «Лента», у значка фильтра нет подписи", () => {
     fetchOk({});
     render(
       <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />,
@@ -166,8 +166,13 @@ describe("ReelsFeed", () => {
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = tabRowLabels(tabs);
     // VED-387: «Избранное» и «Мои» ушли в меню ☰, на их местах —
-    // «Категории» и звёздочка панели горячих кнопок.
-    expect(labels).toEqual(["Лента", "Открытки", "", "Категории", ""]);
+    // «Категории» и звёздочка панели горячих кнопок. VED-246: за
+    // «Открытками» — «Видео».
+    expect(labels).toEqual(["Лента", "Открытки", "Видео", "", "Категории", ""]);
+    expect(within(tabs).getByRole("link", { name: "Видео" })).toHaveAttribute(
+      "href",
+      "/motivation?tab=video",
+    );
     expect(within(tabs).getByRole("link", { name: "Категории" })).toHaveAttribute(
       "href",
       "/motivation/collections",
@@ -182,8 +187,8 @@ describe("ReelsFeed", () => {
 
   // VED-252, круг 2: у избранного фильтров нет — значок должен молча
   // исчезнуть из самого ряда `Tabs()` (не только у `FeedAttributionFilter`
-  // в изоляции), оставляя ровно четыре пункта без дыры на его месте.
-  it("на вкладке «Избранное» в ряду вкладок нет значка фильтра — четыре пункта", () => {
+  // в изоляции), оставляя ровно пять пунктов (с «Видео», VED-246) без дыры на его месте.
+  it("на вкладке «Избранное» в ряду вкладок нет значка фильтра — пять пунктов", () => {
     fetchOk({});
     render(
       <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="saved" donation={null} />,
@@ -191,7 +196,7 @@ describe("ReelsFeed", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = tabRowLabels(tabs);
-    expect(labels).toEqual(["Лента", "Открытки", "Избранное", ""]);
+    expect(labels).toEqual(["Лента", "Открытки", "Видео", "Избранное", ""]);
     expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
       "aria-current",
       "page",

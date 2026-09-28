@@ -7,17 +7,21 @@
  * Избранное остаётся одним списком: там человек сам решил, что сохранить.
  */
 
-export type ReelsTab = "forYou" | "cards" | "saved";
+/**
+ * `video` — отдельная лента коротких роликов редакции (VED-246): не посты, а
+ * свои записи, поэтому ни стиля, ни избранного у неё нет.
+ */
+export type ReelsTab = "forYou" | "cards" | "saved" | "video";
 
 /** `art` — нейросеть, ролики и фото с цитатой поверх; `cards` — открытки. */
 export type FeedStyle = "art" | "cards";
 
 export function parseReelsTab(value: string | undefined): ReelsTab {
-  if (value === "saved" || value === "cards") return value;
+  if (value === "saved" || value === "cards" || value === "video") return value;
   return "forYou";
 }
 
-/** Какую ленту просить у сервера. Избранное — без разделения. */
+/** Какую ленту просить у сервера. Избранное — без разделения, видео — не посты. */
 export function feedStyleOf(tab: ReelsTab): FeedStyle | undefined {
   if (tab === "cards") return "cards";
   if (tab === "forYou") return "art";
