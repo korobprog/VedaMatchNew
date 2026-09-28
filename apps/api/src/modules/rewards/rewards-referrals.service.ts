@@ -175,7 +175,12 @@ export class RewardsReferralsService {
         createdAt: true,
         qualifiedAt: true,
         invitee: {
-          select: { name: true, avatarUrl: true, homeLocation: true },
+          select: {
+            name: true,
+            avatarUrl: true,
+            avatarKey: true,
+            homeLocation: true,
+          },
         },
       },
     });
@@ -192,6 +197,7 @@ export class RewardsReferralsService {
           profile: {
             name: referral.invitee.name,
             avatarUrl: referral.invitee.avatarUrl,
+            avatarKey: referral.invitee.avatarKey,
             city: cityOfHomeLocation(referral.invitee.homeLocation),
           },
           activityAt: referral.activityAt,

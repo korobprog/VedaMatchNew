@@ -31,6 +31,19 @@ describe('isProfileComplete', () => {
     expect(isProfileComplete({ ...FULL_PROFILE, name: null })).toBe(false);
   });
 
+  it('засчитывает загруженное фото: у него ссылки нет, только ключ', () => {
+    expect(
+      isProfileComplete({
+        ...FULL_PROFILE,
+        avatarUrl: null,
+        avatarKey: 'avatars/u1.webp',
+      }),
+    ).toBe(true);
+    expect(
+      isProfileComplete({ ...FULL_PROFILE, avatarUrl: null, avatarKey: null }),
+    ).toBe(false);
+  });
+
   it('не считает пробелы заполненным полем', () => {
     expect(isProfileComplete({ ...FULL_PROFILE, city: '   ' })).toBe(false);
   });

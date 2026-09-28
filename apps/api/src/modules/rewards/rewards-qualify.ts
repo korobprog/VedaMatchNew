@@ -13,6 +13,11 @@
 export interface ReferralProfileSnapshot {
   name: string | null;
   avatarUrl: string | null;
+  /**
+   * Ключ загруженного фото в приватном бакете. У загруженного фото
+   * `avatarUrl` пуст, и без ключа профиль считался незаполненным.
+   */
+  avatarKey?: string | null;
   /** Город из `User.homeLocation`; null — не заполнен. */
   city: string | null;
 }
@@ -57,7 +62,9 @@ const HOUR_MS = 60 * 60 * 1000;
 /** Заполнен ли профиль настолько, чтобы человек выглядел живым. */
 export function isProfileComplete(profile: ReferralProfileSnapshot): boolean {
   return Boolean(
-    profile.name?.trim() && profile.avatarUrl?.trim() && profile.city?.trim(),
+    profile.name?.trim() &&
+    (profile.avatarUrl?.trim() || profile.avatarKey?.trim()) &&
+    profile.city?.trim(),
   );
 }
 
