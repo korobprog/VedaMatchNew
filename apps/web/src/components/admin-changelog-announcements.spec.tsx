@@ -1,12 +1,15 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminAnnouncementDto } from "@vedamatch/shared";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("@/lib/http-client", () => ({ apiFetch: vi.fn() }));
+vi.mock("@/lib/http-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/http-client")>()),
+  apiFetch: vi.fn(),
+}));
 vi.mock("@/lib/api-base", () => ({ apiBase: () => "http://api.test" }));
 
 import { apiFetch } from "@/lib/http-client";
@@ -153,5 +156,84 @@ describe("AdminChangelogAnnouncements — картинки", () => {
 
     expect(await screen.findByRole("img", { name: "Картинка 1" })).toBeInTheDocument();
     expect(paste.defaultPrevented).toBe(true);
+  });
+});
+
+// VED-144: автоперевод на английский в форме новости.
+describe("AdminChangelogAnnouncements — перевод на английский", () => {
+  const translated = () =>
+    new Response(JSON.stringify({ titleEn: "News", bodyEn: "Text" }), { status: 200 });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("кнопка неактивна, пока нет русской версии", () => {
+    render(<AdminChangelogAnnouncements announcements={[]} startCreating />);
+
+    expect(screen.getByRole("button", { name: "Перевести на английский" })).toBeDisabled();
+  });
+
+  it("заполняет пустые EN-поля переводом русских", async () => {
+    const user = userEvent.setup();
+    request.mockResolvedValueOnce(translated());
+    render(<AdminChangelogAnnouncements announcements={[]} startCreating />);
+
+    await user.type(screen.getByPlaceholderText("Заголовок (RU)"), "Новость");
+    await user.type(screen.getByPlaceholderText("Текст (RU)"), "Текст");
+    await user.click(screen.getByRole("button", { name: "Перевести на английский" }));
+
+    expect(await screen.findByDisplayValue("News")).toBe(
+      screen.getByPlaceholderText("Заголовок (EN)"),
+    );
+    expect(screen.getByPlaceholderText("Текст (EN)")).toHaveValue("Text");
+    expect(screen.getByRole("status")).toHaveTextContent("проверьте");
+    const [url, init] = request.mock.calls[0];
+    expect(url).toBe("http://api.test/admin/changelog/announcements/translate");
+    expect(JSON.parse(String(init?.body))).toEqual({ titleRu: "Новость", bodyRu: "Текст" });
+  });
+
+  it("заполненную английскую версию без подтверждения не трогает", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<AdminChangelogAnnouncements announcements={[news]} />);
+
+    await user.click(screen.getByRole("button", { name: "Редактировать" }));
+    await user.click(screen.getByRole("button", { name: "Перевести на английский" }));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText("Заголовок (EN)")).toHaveValue(
+      "Media library and more",
+    );
+  });
+
+  it("с подтверждением заменяет английскую версию", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    request.mockResolvedValueOnce(translated());
+    render(<AdminChangelogAnnouncements announcements={[news]} />);
+
+    await user.click(screen.getByRole("button", { name: "Редактировать" }));
+    await user.click(screen.getByRole("button", { name: "Перевести на английский" }));
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText("Заголовок (EN)")).toHaveValue("News"),
+    );
+  });
+
+  it("показывает понятную ошибку, если переводчик недоступен", async () => {
+    const user = userEvent.setup();
+    request.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ statusCode: 503, message: "Переводчик не ответил за 30 секунд." }),
+        { status: 503 },
+      ),
+    );
+    render(<AdminChangelogAnnouncements announcements={[]} startCreating />);
+
+    await user.type(screen.getByPlaceholderText("Заголовок (RU)"), "Новость");
+    await user.click(screen.getByRole("button", { name: "Перевести на английский" }));
+
+    expect(await screen.findByText("Переводчик не ответил за 30 секунд.")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Заголовок (EN)")).toHaveValue("");
   });
 });

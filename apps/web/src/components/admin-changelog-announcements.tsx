@@ -8,12 +8,14 @@ import type {
   AnnouncementAudienceStage,
   AnnouncementStatus,
   BroadcastAnnouncementResult,
+  TranslateAnnouncementRequest,
+  TranslateAnnouncementResponse,
 } from "@vedamatch/shared";
 import {
   ANNOUNCEMENT_AUDIENCE_LABELS,
   ANNOUNCEMENT_AUDIENCE_STAGES,
 } from "@vedamatch/shared";
-import { apiFetch } from "@/lib/http-client";
+import { apiFetch, readErrorMessage } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 import { AnnouncementImagesField } from "@/components/announcement-images-field";
 import { NewsImages } from "@/components/news-images";
@@ -305,6 +307,48 @@ function AnnouncementForm({
   const [expiresAt, setExpiresAt] = useState(toLocalInput(item?.expiresAt));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translateNote, setTranslateNote] = useState<string | null>(null);
+
+  /**
+   * Автоперевод (VED-144): черновик EN-полей из русских. Уже написанное
+   * по-английски молча не затирается — сначала спрашиваем. Сохраняется
+   * перевод обычной кнопкой «Сохранить», вместе с правками человека.
+   */
+  async function translate() {
+    if (
+      (titleEn.trim() || bodyEn.trim()) &&
+      !confirm("Английская версия уже заполнена. Заменить её переводом?")
+    )
+      return;
+    setTranslating(true);
+    setTranslateNote(null);
+    setError(null);
+    try {
+      const payload: TranslateAnnouncementRequest = { titleRu, bodyRu };
+      const res = await apiFetch(
+        `${API_URL}/admin/changelog/announcements/translate`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!res.ok)
+        throw new Error(
+          await readErrorMessage(res, "Не удалось перевести новость"),
+        );
+      const result = (await res.json()) as TranslateAnnouncementResponse;
+      if (titleRu.trim()) setTitleEn(result.titleEn);
+      if (bodyRu.trim()) setBodyEn(result.bodyEn);
+      setTranslateNote("Перевод готов — проверьте его перед сохранением.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось перевести новость");
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   async function submit() {
     setPending(true);
@@ -370,6 +414,21 @@ function AnnouncementForm({
         rows={3}
         className="w-full rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
       />
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={
+            translating || pending || (!titleRu.trim() && !bodyRu.trim())
+          }
+          onClick={translate}
+          className="rounded-xl border border-glass-brd px-3 py-1.5 text-xs font-medium text-text-1 hover:text-text-0 disabled:opacity-50"
+        >
+          {translating ? "Переводим…" : "Перевести на английский"}
+        </button>
+        <span role="status" className="text-xs text-text-2">
+          {translateNote ?? "Заполнит поля EN по русской версии"}
+        </span>
+      </div>
       {/* Картинки — сразу под текстом (VED-137): это часть самой новости,
           а не её настройки, как статус и сроки ниже. */}
       <AnnouncementImagesField images={images} onChange={setImages} />
@@ -427,7 +486,9 @@ function AnnouncementForm({
       <div className="flex gap-2">
         <button
           type="button"
-          disabled={pending || !titleRu || !titleEn || !bodyRu || !bodyEn}
+          disabled={
+            pending || translating || !titleRu || !titleEn || !bodyRu || !bodyEn
+          }
           onClick={submit}
           className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >

@@ -168,6 +168,20 @@ export interface AnnouncementImageInput {
 export type UpdateAnnouncementRequest = Partial<CreateAnnouncementRequest>;
 
 /**
+ * Черновик английской версии новости: POST /admin/changelog/announcements/translate.
+ * Ничего не сохраняет — перевод попадает в форму и сохраняется вместе с ней.
+ */
+export interface TranslateAnnouncementRequest {
+  titleRu: string;
+  bodyRu: string;
+}
+
+export interface TranslateAnnouncementResponse {
+  titleEn: string;
+  bodyEn: string;
+}
+
+/**
  * Кому разослать новость. Пустой список ступеней — всем участникам портала;
  * рассылка не публикует новость сама, это отдельное решение администратора.
  */

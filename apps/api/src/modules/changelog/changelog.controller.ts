@@ -19,6 +19,7 @@ import type {
   CreateAnnouncementRequest,
   CreateReleaseRequest,
   CreateRoadmapItemRequest,
+  TranslateAnnouncementRequest,
   UpdateAnnouncementRequest,
   UpdateReleaseRequest,
   UpdateRoadmapItemRequest,
@@ -28,6 +29,7 @@ import {
   MAX_ANNOUNCEMENT_UPLOAD_BYTES,
   type UploadedAnnouncementImage,
 } from './announcement-images.service';
+import { AnnouncementTranslationService } from './announcement-translation.service';
 import { ChangelogService, type Lang } from './changelog.service';
 
 function resolveLang(value?: string): Lang {
@@ -95,7 +97,10 @@ export class ChangelogController {
 @Controller('admin/changelog')
 @UseGuards(AuthGuard)
 export class AdminChangelogController {
-  constructor(private readonly changelog: ChangelogService) {}
+  constructor(
+    private readonly changelog: ChangelogService,
+    private readonly translation: AnnouncementTranslationService,
+  ) {}
 
   @Get('releases')
   listReleases(@CurrentUser() user: AccessTokenPayload) {
@@ -152,6 +157,18 @@ export class AdminChangelogController {
     @UploadedFiles() files?: UploadedAnnouncementImage[],
   ) {
     return this.changelog.adminUploadAnnouncementImages(user.role, files ?? []);
+  }
+
+  /**
+   * Черновик английской версии из русской (VED-144). Ничего не сохраняет:
+   * перевод возвращается в форму и сохраняется обычным сохранением новости.
+   */
+  @Post('announcements/translate')
+  translateAnnouncement(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: TranslateAnnouncementRequest,
+  ) {
+    return this.translation.translate(user.role, body);
   }
 
   @Post('announcements')
