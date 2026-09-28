@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { HomeFeaturedOption } from "@/lib/home-featured";
-import { distinctAccents, type FeaturedAccent } from "./featured-accents";
+import {
+  resolveFeaturedAccents,
+  type FeaturedAccent,
+} from "./featured-accents";
+import { FeaturedColorPicker } from "./featured-color-picker";
 
 /**
  * Три ходовых сервиса крупным планом, над общей сеткой.
@@ -38,7 +42,8 @@ interface FeaturedLook {
   Icon: IconComponent;
   /**
    * Любимый цвет знака. Совпадёт с соседом — возьмёт свободный
-   * (`distinctAccents`, VED-452): кнопки различаются не только словом.
+   * (`resolveFeaturedAccents`, VED-452): кнопки различаются не только
+   * словом. Человек может перекрасить кнопку кружком в её углу.
    */
   accent: FeaturedAccent;
 }
@@ -100,13 +105,19 @@ const FALLBACK_LOOK: FeaturedLook = { Icon: LayoutGrid, accent: "text-cyan" };
 export function FeaturedServices({
   items,
   unread = 0,
+  userId,
+  savedColors = null,
 }: {
   /** Что стоит наверху сейчас — ровно то, что отсеяно из сетки ниже. */
   items: HomeFeaturedOption[];
   unread?: number;
+  userId: string;
+  /** Цвета, выбранные человеком по местам кнопок (VED-452). */
+  savedColors?: (FeaturedAccent | null)[] | null;
 }) {
-  const accents = distinctAccents(
+  const accents = resolveFeaturedAccents(
     items.map(({ key }) => (LOOKS[key] ?? FALLBACK_LOOK).accent),
+    savedColors,
   );
   return (
     <section aria-label="Ходовые сервисы" className="mb-4">
@@ -118,7 +129,7 @@ export function FeaturedServices({
           const label =
             badge > 0 ? `${name}, непрочитанных: ${badge}` : undefined;
           return (
-            <li key={key}>
+            <li key={key} className="relative">
               <Link
                 href={href}
                 aria-label={label}
@@ -147,6 +158,12 @@ export function FeaturedServices({
                   </span>
                 )}
               </Link>
+              <FeaturedColorPicker
+                userId={userId}
+                serviceName={name}
+                index={index}
+                accents={accents}
+              />
             </li>
           );
         })}

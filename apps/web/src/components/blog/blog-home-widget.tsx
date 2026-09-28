@@ -52,6 +52,7 @@ import {
 } from "./blog-media-list";
 import { useBlogSpeech } from "./blog-speak-button";
 import { homeLikeOf, toggleHomeLike, type HomeLikeState } from "./home-like";
+import { shareBlogPost } from "./blog-share";
 import {
   HOME_PANEL_DEFAULT_ORDER,
   readPanelOrder,
@@ -195,19 +196,13 @@ export function BlogHomeWidget({
   const [shared, setShared] = useState(false);
   async function share() {
     if (!currentPost) return;
-    const url = `${window.location.origin}/blog/posts/${encodeURIComponent(currentPost.id)}`;
-    const title = spokenSource?.title ?? "Блог-лента VedaMatch";
-    try {
-      if (typeof navigator.share === "function") {
-        await navigator.share({ title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setShared(true);
-      window.setTimeout(() => setShared(false), 2000);
-    } catch {
-      // Человек закрыл окно «Поделиться» — это не ошибка.
-    }
+    const result = await shareBlogPost(
+      { id: currentPost.id, title: spokenSource?.title },
+      window.location.origin,
+    );
+    if (result !== "copied") return;
+    setShared(true);
+    window.setTimeout(() => setShared(false), 2000);
   }
 
   /* Второе нажатие — пауза, а не «стоп» (VED-514): третье продолжает с того

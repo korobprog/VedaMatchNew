@@ -35,11 +35,14 @@ export function ReelsChrome({
           держит тот же drop-shadow, что у текста вкладок (Tabs() ниже).
           Видимая иконка мельче (size-4), но кликабельная область — весь
           size-10 (40×40) в невидимом hit-area, ширины ряда вкладок это не
-          трогает: кнопки стоят абсолютно, вне общего flex-потока. */}
+          трогает: кнопки стоят абсолютно, вне общего flex-потока.
+          VED-599: обе кнопки придвинуты к краям — поле 40×40 вплотную к
+          краю, значок в 12px от него (было 20). От внутреннего края значков
+          (28px) ряд вкладок `Tabs()` отмеряет свои равные промежутки. */}
       <Link
         href="/"
         aria-label="Назад на портал"
-        className="absolute left-2 top-2 z-50 flex size-10 items-center justify-center text-white drop-shadow transition hover:opacity-80"
+        className="absolute left-0 top-2 z-50 flex size-10 items-center justify-center text-white drop-shadow transition hover:opacity-80"
       >
         <ArrowLeft className="size-4" aria-hidden />
       </Link>
@@ -50,7 +53,7 @@ export function ReelsChrome({
         aria-expanded={open}
         aria-controls="reels-sections"
         aria-label={open ? "Закрыть разделы" : "Разделы Вдохновения"}
-        className="absolute right-2 top-2 z-50 flex size-10 items-center justify-center text-white drop-shadow transition hover:opacity-80"
+        className="absolute right-0 top-2 z-50 flex size-10 items-center justify-center text-white drop-shadow transition hover:opacity-80"
       >
         {open ? <X className="size-4" aria-hidden /> : <Menu className="size-4" aria-hidden />}
       </button>

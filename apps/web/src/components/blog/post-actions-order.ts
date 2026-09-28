@@ -16,6 +16,7 @@ export type PostAction =
   | "speak"
   | "copy"
   | "favorite"
+  | "share"
   | "repost"
   | "edit"
   | "pin"
@@ -28,6 +29,9 @@ export const POST_ACTIONS_DEFAULT_ORDER: readonly PostAction[] = [
   "speak",
   "copy",
   "favorite",
+  // «Поделиться» (VED-442) — перед «Репостом». У тех, кто уже менял
+  // порядок, встанет в конец, как всё новое.
+  "share",
   "repost",
   "edit",
   "pin",
@@ -39,6 +43,7 @@ export const POST_ACTION_LABELS: Record<PostAction, string> = {
   speak: "Слушать",
   copy: "Копировать",
   favorite: "Избранное",
+  share: "Поделиться",
   repost: "Репост",
   edit: "Изменить",
   pin: "Закрепить",

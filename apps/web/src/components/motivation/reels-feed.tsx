@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import Link from "next/link";
+import { RotateCcw } from "lucide-react";
 import type {
   DonationSettingsDto,
   MotivationAudioDto,
@@ -672,24 +673,8 @@ export function ReelsFeed({
         category={category}
         filterState={filterState}
         isAdmin={isAdmin}
+        restartHref={initial.resumed ? ending.restartHref : null}
       />
-      {/* Лента открыта с места, где человек остановился, или с цитаты с
-          главной (VED-432). Листать можно только вперёд, поэтому на первой
-          картинке — дорога к началу ленты. Дальше не мешает кадру. */}
-      {initial.resumed && ending.restartHref && activeIndex === 0 && onPost && (
-        /* На экране уже 360px ряд вкладок переносится на две строки
-           (звёздочка уходит вниз, до 96px) — плашка встаёт под ним. */
-        <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center max-[359px]:top-24">
-          <Link
-            href={ending.restartHref}
-            aria-label="Лента открыта с места, где вы остановились. Открыть с начала"
-            className="pointer-events-auto inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/25 bg-black/55 px-4 text-xs font-medium text-white backdrop-blur transition hover:bg-black/70"
-          >
-            <span aria-hidden="true">↺</span>
-            С начала
-          </Link>
-        </div>
-      )}
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -844,6 +829,7 @@ function Tabs({
   category,
   filterState,
   isAdmin = false,
+  restartHref = null,
 }: {
   tab: ReelsTab;
   order?: "random";
@@ -852,6 +838,11 @@ function Tabs({
   filterState?: FeedFilterState;
   /** Администратор раскладывает авторов фильтра по папкам (VED-584). */
   isAdmin?: boolean;
+  /**
+   * Начало ленты, когда она открыта с места остановки (VED-432): значок ↺
+   * первым в ряду, сразу за ←. `null` — значка нет.
+   */
+  restartHref?: string | null;
 }) {
   const link = (key: ReelsTab | "collections", href: string, label: string) => (
     <Link
@@ -886,7 +877,7 @@ function Tabs({
     //   390px+ (`min-[390px]:gap-x-3`, 4×12=48): при 390px доступно
     //   390−96=294, 227+48=275 ≤ 294, запас 19px; при 412px доступно
     //   412−96=316, запас 41px.
-    // `top-2` — тот же отступ, что у ←/меню (`ReelsChrome`, `left-2 top-2`),
+    // `top-2` — тот же отступ, что у ←/меню (`ReelsChrome`, `left-0 top-2`),
     // ряд `items-center` по высоте самого высокого пункта (значок, `h-10`) —
     // так центр ряда совпадает с центром кнопок по краям.
     // `flex-wrap` — страховка на экранах у́же 360px, не расчёт на неё здесь.
@@ -897,20 +888,36 @@ function Tabs({
     // переносится: звёздочка уходит на вторую строку.
     //
     // VED-581: звёздочка — ровно посередине между «Категориями» и значком ☰.
-    // Ряд из двух частей — вкладки и звёздочка — и `justify-evenly`: равные
-    // промежутки ← · вкладки · звёздочка · ☰. Края ряда (`left-9 right-9`,
-    // 36px) — по видимым значкам ← и ☰, а не по их полям 40×40 (`left-2`
-    // + `size-10` − поле 12px): иначе промежуток до ☰ мерился бы не до
-    // значка, а до пустого края его кнопки. На 360px коридор 288px: вкладки
-    // 220 + звёздочка 28 = 248, три промежутка по 13px; на 412px — по 27px.
+    //
+    // VED-599: все клавиши ряда — на равном расстоянии друг от друга, от ←
+    // до ☰. Поэтому пункты — прямые дети ряда, без вложенной группы со своим
+    // промежутком, и `justify-evenly` раздаёт свободное место поровну между
+    // ними и краями. Края ряда (`left-7 right-7`, 28px) — по видимым значкам
+    // ← и ☰: их кнопки 40×40 стоят вплотную к краям (`ReelsChrome`,
+    // `left-0`/`right-0`), значок 16px — в 12px от края, его внутренний
+    // край — в 28px. У значков ряда (↺, фильтр, звёздочка) в раскладке
+    // только сам значок, поле нажатия раздвинуто вне потока — иначе
+    // промежуток мерился бы до пустого края кнопки. На 360px коридор 304px:
+    // ↺ 28 + «Лента» 39 + «Открытки» 62 + фильтр 28 + «Категории» 67 +
+    // звёздочка 20 = 244, семь промежутков по 8½px; на 412px — по 16px.
+    // Без ↺ — шесть промежутков, каждый чуть шире.
     <nav
       aria-label="Вкладки ленты"
-      className="absolute left-9 right-9 top-2 z-20 flex flex-wrap items-center justify-evenly gap-y-1"
+      className="absolute left-7 right-7 top-2 z-20 flex flex-wrap items-center justify-evenly gap-y-1"
     >
-      <div
-        data-testid="reels-tabs-links"
-        className="flex items-center gap-x-2 min-[390px]:gap-x-3"
-      >
+      {/* «С начала» (VED-432) — значком в ряду, сразу за ← (VED-599):
+          раньше это была плашка с надписью под рядом, на первой картинке.
+          Цвет — как у звёздочки (`text-text-1`, см. `ReelsQuickPanel`). */}
+      {restartHref && (
+        <Link
+          href={restartHref}
+          aria-label="Лента открыта с места, где вы остановились. Открыть с начала"
+          title="Начать сначала"
+          className="relative flex h-10 w-7 shrink-0 items-center justify-center text-text-1 drop-shadow transition-colors before:absolute before:-inset-x-1.5 before:inset-y-0 before:content-[''] hover:text-text-0"
+        >
+          <RotateCcw className="size-5" aria-hidden />
+        </Link>
+      )}
       {/* Две ленты разного стиля (VED-121): порядок и папка переезжают
           вместе с человеком — «Открытки» из папки «Пословицы» остаются
           пословицами. */}
@@ -926,7 +933,6 @@ function Tabs({
       {tab === "saved"
         ? link("saved", "/motivation?tab=saved", "Избранное")
         : link("collections", collectionsHref(tab), "Категории")}
-      </div>
       <ReelsQuickPanel />
     </nav>
   );
@@ -935,18 +941,27 @@ function Tabs({
 /**
  * Звёздочка панели горячих кнопок в ряду вкладок (VED-387).
  *
- * Сама панель портальная и не меняется: здесь только её кнопка, перекрашенная
- * под ряд поверх кадра. Остальной ряд шапки («История», «Плеер» и что ещё
- * человек поставил в верхнюю панель) в ленте не рисуем — просили одну
- * кнопку (VED-472: «убери подчёркнутые кнопки»). В раскладке звёздочка
- * занимает 28px (`-mx-2` от её 44px): столько же, сколько значок фильтра,
- * чтобы ряд влез между ← и ☰ на 360px (см. расчёт у `Tabs`). Сама
- * область нажатия остаётся 44×44 и заходит в промежутки соседей, а не в их
- * подписи. `-my-0.5` держит высоту ряда 40px, как у значка фильтра.
+ * Сама панель портальная и не меняется: здесь только её кнопка. Остальной
+ * ряд шапки («История», «Плеер» и что ещё человек поставил в верхнюю
+ * панель) в ленте не рисуем — просили одну кнопку (VED-472: «убери
+ * подчёркнутые кнопки»).
+ *
+ * Цвет — портальный `text-text-1` кнопки шапки, тёмный на светлой теме:
+ * таким его и просили оставить, и тем же цветом нарисован значок ↺ рядом с
+ * ← (VED-599).
+ *
+ * В раскладке звёздочка занимает ровно свой значок, 20px, — чтобы
+ * промежутки ряда у `Tabs` мерились от значка. Кнопка шапки 44px с полями
+ * −4px занимает 36, `-mx-2` снимает ещё 16. Панель подтягивает крайнюю
+ * кнопку своего ряда к краю экрана (`-mr-2.5`, VED-439) — здесь ряд из
+ * одной звёздочки, и подтяжка сдвигала бы значок на 10px вправо от его
+ * места, поэтому она снята (`[&>div>span]:mr-0`). Область нажатия
+ * остаётся 44×44 и заходит в промежутки соседей, а не в их подписи.
+ * `-my-0.5` держит высоту ряда 40px, как у значка фильтра.
  */
 function ReelsQuickPanel() {
   return (
-    <div className="-mx-2 -my-0.5 [&>div>button]:text-white [&>div>button]:drop-shadow [&>div>button:hover]:bg-white/10">
+    <div className="-mx-2 -my-0.5 [&>div>span]:mr-0">
       <QuickPanel starOnly />
     </div>
   );

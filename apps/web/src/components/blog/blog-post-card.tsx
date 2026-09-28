@@ -7,7 +7,8 @@ import {
   Check,
   Heart,
   Pencil,
-  Repeat2,
+  Forward,
+  Share2,
   Trash2,
   Pin,
   Star,
@@ -38,6 +39,7 @@ import { blogEditedLabel, blogPostDate } from "./blog-format";
 import { blogCategoryLabel } from "./blog-feed-filters";
 import type { PostAction } from "./post-actions-order";
 import { usePostActionsOrder } from "./use-post-actions-order";
+import { shareBlogPost } from "./blog-share";
 
 /**
  * Кнопки под постом. Общий класс, чтобы правка встала в тот же ряд, что
@@ -87,6 +89,7 @@ export function BlogPostCard({
   editRequest?: number;
 }) {
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
   // Правка по кнопке снаружи — подстройкой состояния при смене пропа, без
@@ -125,6 +128,21 @@ export function BlogPostCard({
     }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  /** «Поделиться» (VED-442): в мессенджеры системным окном, иначе ссылкой. */
+  async function share() {
+    const result = await shareBlogPost(
+      { id: post.id, title: (source ?? post).title },
+      window.location.origin,
+    );
+    if (result === "failed") {
+      setError("Буфер обмена недоступен.");
+      return;
+    }
+    if (result !== "copied") return;
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
   }
 
   async function repost() {
@@ -264,6 +282,26 @@ export function BlogPostCard({
         <span className={ACTION_LABEL}>Избранное</span>
       </button>
     ),
+    // «Поделиться» (VED-442) — в мессенджеры и куда угодно: у всех, не
+    // только у админов, и у репоста тоже (ссылка — на сам репост).
+    share: (
+      <button
+        key="share"
+        type="button"
+        onClick={() => void share()}
+        title={linkCopied ? "Ссылка скопирована" : "Поделиться"}
+        className={`${ACTION} hover:border-cyan/60`}
+      >
+        {linkCopied ? (
+          <Check aria-hidden className="size-3.5" />
+        ) : (
+          <Share2 aria-hidden className="size-3.5" />
+        )}
+        <span className={ACTION_LABEL}>
+          {linkCopied ? "Ссылка скопирована" : "Поделиться постом"}
+        </span>
+      </button>
+    ),
     // Репост — только админам (VED-544), как и «Закрепить»: у участников
     // ряд короче на две кнопки.
     repost: post.canModerate ? (
@@ -274,7 +312,11 @@ export function BlogPostCard({
         disabled={pending}
         className={`${ACTION} hover:border-cyan/60`}
       >
-        <Repeat2 aria-hidden className="size-3.5" />
+        {/* Стрелка «переслать», а не две по кругу (VED-442): «на более
+            привычный — стрелочка, как в Озоне». Заказчик сперва попросил
+            вернуть прежний значок (#663), затем отменил и это: «перепутал
+            их назначения». */}
+        <Forward aria-hidden className="size-3.5" />
         <span className={ACTION_LABEL}>Репост</span>
         {post.repostCount > 0 && (
           <span className="text-text-2">{post.repostCount}</span>

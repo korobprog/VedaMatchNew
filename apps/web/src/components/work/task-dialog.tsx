@@ -51,7 +51,7 @@ import {
 } from "./task-section";
 import { workPersonLabel } from "./person-label";
 import { PRIORITY_TITLE } from "./task-priority";
-import { DUE_PRESETS, duePresetInput, type DuePreset } from "./task-due";
+import { formatTaskDate } from "./task-date";
 import {
   draftFromTask,
   hasTaskEdits,
@@ -588,30 +588,26 @@ export function WorkTaskDialog({
                 </select>
               </label>
 
-              {/* Срок живёт здесь, в карточке (VED-378): из формы новой
-                  задачи он убран. */}
-              <label className="min-w-0 text-xs text-text-1">
-                Срок
-                {/* Пустой срок — выбор из трёх вариантов (VED-529), а не
-                    голое поле даты: срок чаще всего «сегодня» или «завтра».
-                    Выбрали — появляется поле с датой, где её можно уточнить. */}
-                {draft.due === "" && canEdit ? (
-                  <select
-                    value=""
-                    onChange={(event) => {
-                      const preset = event.target.value as DuePreset;
-                      if (preset) edit({ due: duePresetInput(preset, new Date()) });
-                    }}
-                    className={FIELD_CLASS}
-                  >
-                    <option value="">Без срока</option>
-                    {DUE_PRESETS.map((preset) => (
-                      <option key={preset.value} value={preset.value}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
+              {/* «Дата» на месте прежней графы «Срок» (VED-598): когда
+                  задачу завели. Её не выбирают — только показывают, как
+                  «Задачу поставил». */}
+              <div className="min-w-0 text-xs text-text-1">
+                Дата
+                <p className="mt-1 truncate rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0">
+                  <time dateTime={task.createdAt}>
+                    {formatTaskDate(task.createdAt)}
+                  </time>
+                </p>
+              </div>
+
+              {/* Срок новой задаче больше не ставят (VED-598), но уже
+                  поставленный остаётся виден и правится: он красит карточку
+                  на доске и раскладывает «Мой день», а убрать его иначе
+                  негде. Держимся за сохранённый срок, а не за черновик —
+                  иначе поле исчезало бы, пока его стирают. */}
+              {(task.dueAt || draft.due !== "") && (
+                <label className="min-w-0 text-xs text-text-1">
+                  Срок
                   <input
                     type="datetime-local"
                     value={draft.due}
@@ -619,8 +615,8 @@ export function WorkTaskDialog({
                     onChange={(event) => edit({ due: event.target.value })}
                     className={FIELD_CLASS}
                   />
-                )}
-              </label>
+                </label>
+              )}
 
               {/* Люди — на всю строку на телефоне и в конце сетки (VED-445):
                   в половине строки «Станислав Санкаршан» в списке обрезался
