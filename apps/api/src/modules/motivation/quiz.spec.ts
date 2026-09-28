@@ -33,6 +33,7 @@ function candidate(id: string, ref: string): QuizCandidate {
     id,
     slug: id,
     imageUrl: `https://cdn/${id}.webp`,
+    imageThumbUrl: '',
     ref: parseGitaRef(ref)!,
     text: '',
   };
@@ -84,6 +85,17 @@ describe('пост → вопрос', () => {
       imageUrl: 'https://cdn/p1.webp',
       ref: { chapter: 2, verse: 11, verseEnd: null },
     });
+  });
+
+  it('лёгкая копия едет в вопрос, без неё — пустая строка (VED-629)', () => {
+    expect(
+      quizCandidate(post({ imageThumbUrl: ' https://cdn/p1-w720.webp ' }))
+        ?.imageThumbUrl,
+    ).toBe('https://cdn/p1-w720.webp');
+    expect(quizCandidate(post())?.imageThumbUrl).toBe('');
+    expect(quizCandidate(post({ imageThumbUrl: null }))?.imageThumbUrl).toBe(
+      '',
+    );
   });
 
   it('без картинки вопроса нет', () => {
@@ -223,6 +235,18 @@ describe('раунд', () => {
       expect(new Set(question.options).size).toBe(4);
       expect(question.options).toContain(question.answer);
     });
+  });
+
+  it('вопрос несёт копию картинки своего поста', () => {
+    const quiz = buildQuiz(
+      [
+        { ...candidate('a', '2.11'), imageThumbUrl: 'https://cdn/a-w720.webp' },
+        candidate('b', '4.7'),
+      ],
+      'seed',
+    );
+    const byId = Object.fromEntries(quiz.map((q) => [q.id, q.imageThumbUrl]));
+    expect(byId).toEqual({ a: 'https://cdn/a-w720.webp', b: '' });
   });
 
   it('один стих — один вопрос в раунде', () => {

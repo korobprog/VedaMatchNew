@@ -51,6 +51,22 @@ describe('MotivationQuizService', () => {
     expect(a.text).toBe('Цитата a');
   });
 
+  it('отдаёт лёгкую копию картинки, если она есть (VED-629)', async () => {
+    const { quiz, findMany } = service([
+      row('a', '2.11', { imageThumbUrl: 'https://cdn/a-w720.webp' }),
+      row('b', '4.7', { imageThumbUrl: null }),
+    ]);
+    const result = await quiz.round('seed1');
+    const [query] = findMany.mock.calls[0] as [
+      { select: Record<string, unknown> },
+    ];
+    expect(query.select.imageThumbUrl).toBe(true);
+    const thumbs = Object.fromEntries(
+      result.questions.map((q) => [q.id, q.imageThumbUrl]),
+    );
+    expect(thumbs).toEqual({ a: 'https://cdn/a-w720.webp', b: '' });
+  });
+
   it('без семени заводит новое', async () => {
     const { quiz } = service([]);
     const result = await quiz.round(undefined);

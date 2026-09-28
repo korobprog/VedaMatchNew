@@ -1854,6 +1854,8 @@ export class MotivationService {
       // Slug наружу не показываем: человеку нужно название из справочника.
       categoryTitle: post.categoryTitle ?? post.category,
       imageUrl: post.imageUrl ?? '',
+      imageThumbUrl:
+        (post as { imageThumbUrl?: string | null }).imageThumbUrl ?? '',
       storyImageUrl: post.storyImageUrl ?? '',
       // Наружу — только принятое видео: в review оно ещё не просмотрено.
       videoUrl:

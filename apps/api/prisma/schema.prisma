@@ -617,6 +617,15 @@ model MotivationPost {
   textApprovedAt       DateTime?
   imageApprovedAt      DateTime?
   imageUrl             String?
+  /// Лёгкая копия `imageUrl` для показа: WebP шириной 720 (VED-629). Оригинал
+  /// PNG 1024×1536 весит мегабайты, и лента с викториной ждали его на каждом
+  /// слайде. Пусто — копии ещё нет, клиент берёт оригинал. Пишется вместе с
+  /// картинкой; старые посты доделывает `MotivationThumbWorkerService`.
+  imageThumbUrl        String?
+  /// Попытки бэкфилла копии и время последней: битый файл не крутится вечно,
+  /// а пост, брошенный упавшим процессом, возвращается в очередь после паузы.
+  imageThumbAttempts   Int                           @default(0)
+  imageThumbAttemptAt  DateTime?
   storyImageUrl        String?
   /// Кадр-открытка: та же картинка с поздравлением сверху. Появляется по
   /// кнопке, поэтому необязательное поле.

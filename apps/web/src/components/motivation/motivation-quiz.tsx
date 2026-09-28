@@ -16,6 +16,7 @@ import {
   quizVerdict,
   type OptionLook,
 } from "./quiz-session";
+import { displayImageUrl } from "./display-image";
 
 /**
  * Викторина (VED-243): иллюстрация к шлоке Бхагавад-гиты и четыре номера
@@ -160,7 +161,9 @@ export function MotivationQuiz({ quiz }: { quiz: MotivationQuizDto }) {
         <img
           ref={imageRef}
           key={question.id}
-          src={question.imageUrl}
+          // Лёгкая копия (VED-629): оригинал PNG — мегабайты, а рамке
+          // хватает 720 по ширине. Копии нет — показываем оригинал.
+          src={displayImageUrl(question)}
           // Описание не выдаёт ответ: текст стиха в alt — это подсказка.
           alt="Иллюстрация к стиху Бхагавад-гиты"
           // Главное на экране: грузится первой и без ленивой отсрочки.

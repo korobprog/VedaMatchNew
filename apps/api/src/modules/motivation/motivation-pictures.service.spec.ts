@@ -41,11 +41,13 @@ function build({
   policy = null,
   usedToday = 0,
   settings = { userReelsEnabled: true, userDailyLimit: 1 },
+  thumbs,
 }: {
   resolveSlug?: jest.Mock;
   policy?: { dailyLimit: number | null; blocked: boolean } | null;
   usedToday?: number;
   settings?: { userReelsEnabled: boolean; userDailyLimit: number };
+  thumbs?: { forNewImage: jest.Mock };
 } = {}) {
   const create = jest
     .fn()
@@ -71,11 +73,32 @@ function build({
     { resolveSlug } as never,
     { uploadStory } as never,
     { read: jest.fn().mockResolvedValue(settings) } as never,
+    thumbs as never,
   );
   return { service, create, audit, count, uploadStory, resolveSlug };
 }
 
 describe('MotivationPicturesService.create', () => {
+  it('кладёт рядом лёгкую копию и пишет её в пост (VED-629)', async () => {
+    const thumbs = {
+      forNewImage: jest
+        .fn()
+        .mockImplementation((key: string) =>
+          Promise.resolve(`https://cdn/${key.replace('.webp', '-w720.webp')}`),
+        ),
+    };
+    const { service, create, uploadStory } = build({ thumbs });
+
+    await service.create(admin, await png(800, 1000), { text: 'Шлока' });
+
+    const [imageKey, prepared] = uploadStory.mock.calls[0] as [string, Buffer];
+    expect(thumbs.forNewImage).toHaveBeenCalledWith(imageKey, prepared);
+    expect(createdData(create)).toMatchObject({
+      imageThumbUrl: `https://cdn/${imageKey.replace('.webp', '-w720.webp')}`,
+      imageThumbAttempts: 0,
+    });
+  });
+
   it('lets only a motivation admin in', async () => {
     const { service, create } = build();
 

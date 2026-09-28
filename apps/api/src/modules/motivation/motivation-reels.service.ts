@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -74,6 +75,10 @@ import {
 import { fundingMessage } from './funding-error';
 import { videoRejectionMessage } from './video-rejection';
 import { PROVIDER_BUSY } from './motivation-worker.service';
+import {
+  MotivationImageThumbService,
+  thumbFields,
+} from './motivation-image-thumb.service';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
 const MAX_TEXT = 600;
@@ -124,6 +129,8 @@ export class MotivationReelsService {
     private readonly events: EventEmitter2,
     private readonly audio: FalAudioService,
     private readonly video: FalVideoService,
+    // Без него кадр уходит без лёгкой копии — её доделает бэкфилл.
+    @Optional() private readonly thumbs?: MotivationImageThumbService,
   ) {}
 
   /** Персональные правила автора; у большинства их нет — тогда null. */
@@ -379,7 +386,10 @@ export class MotivationReelsService {
         'Рилс уже опубликован: картинку можно поменять только до публикации',
       );
 
-    const { url, crop } = await this.prepareUploadedImage(postId, file!);
+    const { url, thumbUrl, crop } = await this.prepareUploadedImage(
+      postId,
+      file!,
+    );
 
     /* Загруженный кадр обычно смотрит человек: vision-шлюза у нас нет. Но
        когда загрузил администратор, смотреть его будет он же — а значит
@@ -390,6 +400,7 @@ export class MotivationReelsService {
       where: { id: postId },
       data: {
         imageUrl: url,
+        ...thumbFields(thumbUrl),
         // Кадр для Stories пока тот же файл: он уже вертикальный.
         storyImageUrl: url,
         imageSource: 'uploaded',
@@ -451,11 +462,15 @@ export class MotivationReelsService {
     });
     if (!post) throw new NotFoundException('Публикация не найдена');
 
-    const { url, crop } = await this.prepareUploadedImage(postId, file!);
+    const { url, thumbUrl, crop } = await this.prepareUploadedImage(
+      postId,
+      file!,
+    );
     await this.prisma.motivationPost.update({
       where: { id: postId },
       data: {
         imageUrl: url,
+        ...thumbFields(thumbUrl),
         // Кадр для Stories пока тот же файл: он уже вертикальный.
         storyImageUrl: url,
         imageSource: 'uploaded',
@@ -486,7 +501,11 @@ export class MotivationReelsService {
   private async prepareUploadedImage(
     postId: string,
     file: UploadedReelImage,
-  ): Promise<{ url: string; crop: ReturnType<typeof coverCrop> }> {
+  ): Promise<{
+    url: string;
+    thumbUrl: string | null;
+    crop: ReturnType<typeof coverCrop>;
+  }> {
     const image = sharp(file.buffer, {
       failOn: 'error',
       limitInputPixels: true,
@@ -504,12 +523,11 @@ export class MotivationReelsService {
       .resize(REEL_IMAGE_WIDTH, REEL_IMAGE_HEIGHT, { fit: 'cover' })
       .webp({ quality: 82 })
       .toBuffer();
-    const url = await this.generation.uploadStory(
-      reelImageKey(postId, Date.now()),
-      prepared,
-      'image/webp',
-    );
-    return { url, crop };
+    const key = reelImageKey(postId, Date.now());
+    const url = await this.generation.uploadStory(key, prepared, 'image/webp');
+    // Копия для ленты (VED-629): кадр 1080×1920, на слайде хватает 720.
+    const thumbUrl = (await this.thumbs?.forNewImage(key, prepared)) ?? null;
+    return { url, thumbUrl, crop };
   }
 
   /**
@@ -980,6 +998,7 @@ export class MotivationReelsService {
       reviewStatus: string;
       generationStage: string | null;
       imageUrl: string | null;
+      imageThumbUrl?: string | null;
       storyImageUrl: string | null;
       videoUrl: string | null;
       videoStatus: string;
@@ -1070,6 +1089,7 @@ export class MotivationReelsService {
         // подпись, а лента подставит название из справочника.
         categoryTitle: post.category,
         imageUrl: post.imageUrl ?? '',
+        imageThumbUrl: post.imageThumbUrl ?? '',
         storyImageUrl: post.storyImageUrl ?? '',
         videoUrl: post.videoStatus === 'ready' ? (post.videoUrl ?? '') : '',
         videoHasSound: Boolean(post.videoVoice || post.videoTrackId),

@@ -45,6 +45,7 @@ export class MotivationQuizService {
         id: true,
         slug: true,
         imageUrl: true,
+        imageThumbUrl: true,
         attributionWork: true,
         attributionLocator: true,
         quote: {
@@ -62,6 +63,7 @@ export class MotivationQuizService {
         id: row.id,
         slug: row.slug,
         imageUrl: row.imageUrl,
+        imageThumbUrl: row.imageThumbUrl,
         attributionWork: row.attributionWork,
         attributionLocator: row.attributionLocator,
         title: t?.title ?? null,

@@ -85,6 +85,7 @@ import {
   isSameFeedHref,
 } from "./feed-position";
 import { SourceLink } from "./source-link";
+import { displayImageUrl } from "./display-image";
 import {
   attributionParts,
   formatCount,
@@ -1269,9 +1270,12 @@ function ReelSlide({
         // и плечи. Кадр мельче, зато на нём всё, что нарисовано, — в том числе
         // у картинок, сделанных до этой правки.
         <div className="absolute inset-0">
+          {/* Оба слоя — лёгкая копия (VED-629): оригинал PNG весит мегабайты,
+              а слайду хватает 720 по ширине. Файл один и тот же, так что
+              браузер качает его один раз. Копии нет — оригинал. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={post.imageUrl}
+            src={displayImageUrl(post)}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
@@ -1281,7 +1285,7 @@ function ReelSlide({
               набрана поверх слайда, и повторять её в alt незачем. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={post.imageUrl}
+            src={displayImageUrl(post)}
             alt={printed ? quote || post.title : ""}
             loading={position < 2 ? "eager" : "lazy"}
             className="absolute inset-x-0 bottom-[4.5rem] top-0 h-[calc(100%-4.5rem)] w-full object-contain"
