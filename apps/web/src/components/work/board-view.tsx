@@ -601,6 +601,8 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
       draft.description,
       draft.title,
     );
+    // Без заголовка задачу не заводим (VED-637): форма это уже не пускает.
+    if (!title) return false;
     const watcher = { watching: () => mounted.current };
     try {
       await workUploads.createWithFiles({
