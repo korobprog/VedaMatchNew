@@ -5,6 +5,7 @@ import {
   getAstroSubject,
   getAstroSubjectChart,
   getAstroSubjects,
+  getAstroTransits,
 } from "@/lib/astro-api";
 import { formatDegrees } from "@/components/astro/chart-wheel";
 import { ChartPanel } from "@/components/astro/chart-panel";
@@ -21,10 +22,11 @@ export default async function AstroSubjectChartPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [subject, chart, all] = await Promise.all([
+  const [subject, chart, all, transits] = await Promise.all([
     getAstroSubject(id),
     getAstroSubjectChart(id),
     getAstroSubjects(),
+    getAstroTransits(),
   ]);
   // Чужая запись не находится вовсе — для страницы это обычный 404.
   if (!subject || !chart) notFound();
@@ -62,7 +64,7 @@ export default async function AstroSubjectChartPage({
       )}
 
       <div className="mt-6 grid gap-8 md:grid-cols-[minmax(0,20rem)_1fr]">
-        <ChartPanel chart={chart} />
+        <ChartPanel chart={chart} transits={transits} />
 
         <dl className="space-y-3 text-sm">
           {chart.lagna && (

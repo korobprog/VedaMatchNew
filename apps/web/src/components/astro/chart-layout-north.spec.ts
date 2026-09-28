@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { GrahaPosition, VedicChart } from "@vedamatch/shared";
 import {
   NORTH_CELLS,
   NORTH_LINES,
   NORTH_SIZE,
-  grahasByBhava,
   rashiOfBhava,
 } from "./chart-layout-north";
 
@@ -114,27 +112,52 @@ describe("rashiOfBhava", () => {
   });
 });
 
-describe("grahasByBhava", () => {
-  const graha = (name: string, bhava: number | null) =>
-    ({ graha: name, bhava }) as unknown as GrahaPosition;
+/** Точка внутри выпуклого многоугольника (все клетки ромба выпуклые). */
+function inside([x, y]: [number, number], polygon: [number, number][]) {
+  let sign = 0;
+  for (let i = 0; i < polygon.length; i += 1) {
+    const [x1, y1] = polygon[i];
+    const [x2, y2] = polygon[(i + 1) % polygon.length];
+    const cross = (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1);
+    if (cross === 0) continue;
+    if (sign === 0) sign = Math.sign(cross);
+    else if (Math.sign(cross) !== sign) return false;
+  }
+  return true;
+}
 
-  const chart = (grahas: GrahaPosition[]) => ({ grahas }) as VedicChart;
+describe("место под грахи", () => {
+  const LINE = 13;
 
-  it("заводит все двенадцать домов, даже пустые — они рисуются", () => {
-    expect(grahasByBhava(chart([])).size).toBe(12);
+  it("подпись знака лежит внутри своей клетки", () => {
+    for (const cell of NORTH_CELLS) {
+      expect(inside([cell.labelX, cell.labelY], pointsOf(cell))).toBe(true);
+    }
   });
 
-  it("раскладывает грахи по их бхаве", () => {
-    const map = grahasByBhava(
-      chart([graha("sun", 11), graha("moon", 6), graha("mars", 11)]),
-    );
-    expect(map.get(11)!.map((g) => g.graha)).toEqual(["sun", "mars"]);
-    expect(map.get(6)!).toHaveLength(1);
-    expect(map.get(1)!).toHaveLength(0);
+  it("три строки грах помещаются в клетку", () => {
+    for (const cell of NORTH_CELLS) {
+      for (let line = 0; line < 3; line += 1) {
+        const point: [number, number] = [
+          cell.grahaX,
+          cell.grahaY + line * LINE,
+        ];
+        expect(inside(point, pointsOf(cell))).toBe(true);
+      }
+    }
   });
 
-  it("пропускает грахи без бхавы — при неизвестном времени домов нет", () => {
-    const map = grahasByBhava(chart([graha("sun", null)]));
-    expect([...map.values()].flat()).toHaveLength(0);
+  it("столбик из трёх строк не налезает на номер знака", () => {
+    // Номер знака либо выше первой строки, либо ниже последней с запасом
+    // на высоту строки.
+    for (const cell of NORTH_CELLS) {
+      const top = cell.grahaY - LINE;
+      const bottom = cell.grahaY + 2 * LINE;
+      const clear = cell.labelY <= top || cell.labelY >= bottom + LINE;
+      expect({ bhava: cell.bhava, clear }).toEqual({
+        bhava: cell.bhava,
+        clear: true,
+      });
+    }
   });
 });

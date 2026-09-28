@@ -1,40 +1,56 @@
-import { GRAHA_ABBR, type VedicChart } from "@vedamatch/shared";
+import type { VedicChart } from "@vedamatch/shared";
 import {
   NORTH_CELLS,
   NORTH_LINES,
   NORTH_SIZE,
-  grahasByBhava,
   rashiOfBhava,
 } from "./chart-layout-north";
 import {
   CHART_LABEL_OPACITY,
   CHART_LINE_OPACITY,
-  formatDegrees,
-} from "./chart-wheel";
+  PlacementLines,
+} from "./chart-placements";
+import {
+  VARGA_LABELS,
+  buildChartView,
+  northCenterLabel,
+  packPlacementLines,
+  placementsByBhava,
+  type ChartView,
+} from "./chart-view";
+
+/**
+ * Столько грах помещается в клетку ромба столбиком с градусами. Меньше, чем в
+ * южной сетке: угловые треугольники сужаются книзу.
+ */
+const MAX_SINGLE_LINES = 3;
 
 /**
  * Северноиндийская карта — ромб. Тот же расчёт, другой способ смотреть:
  * здесь закреплены дома, а знаки двигаются, и первый дом всегда наверху.
  *
- * Рисуется рядом с южной, а не вместо неё: школы читают по-разному, и
- * заставлять человека переучиваться ради нашего выбора незачем.
- *
- * Без лагны не рисуется вовсе — возвращает null. Дома в этом стиле и есть
- * сетка, а без времени рождения их не существует; нарисовать пустой ромб
- * значило бы показать двенадцать выдуманных клеток.
+ * Без первого дома не рисуется вовсе — возвращает null. Дома в этом стиле и
+ * есть сетка; нарисовать ромб без отсчёта значило бы показать двенадцать
+ * выдуманных клеток. Отсчёт даёт лагна (нужно время рождения) или Луна.
  */
-export function ChartWheelNorth({ chart }: { chart: VedicChart }) {
-  const lagnaRashi = chart.lagna?.rashi ?? null;
-  if (lagnaRashi === null) return null;
+export function ChartWheelNorth({
+  chart,
+  view = buildChartView(chart),
+}: {
+  chart: VedicChart;
+  view?: ChartView;
+}) {
+  const firstRashi = view.firstRashi;
+  if (firstRashi === null) return null;
 
-  const byBhava = grahasByBhava(chart);
+  const byBhava = placementsByBhava(view);
 
   return (
     <svg
       viewBox={`0 0 ${NORTH_SIZE} ${NORTH_SIZE}`}
       className="w-full max-w-md text-text-0"
       role="img"
-      aria-label="Ведическая карта рождения, северноиндийский стиль"
+      aria-label={`Ведическая карта рождения, северноиндийский стиль, ${VARGA_LABELS[view.varga]}`}
     >
       <rect
         x={0}
@@ -58,8 +74,8 @@ export function ChartWheelNorth({ chart }: { chart: VedicChart }) {
       ))}
 
       {NORTH_CELLS.map((cell) => {
-        const rashi = rashiOfBhava(cell.bhava, lagnaRashi);
-        const grahas = byBhava.get(cell.bhava)!;
+        const rashi = rashiOfBhava(cell.bhava, firstRashi);
+        const placements = byBhava.get(cell.bhava)!;
 
         return (
           <g key={cell.bhava}>
@@ -76,26 +92,18 @@ export function ChartWheelNorth({ chart }: { chart: VedicChart }) {
               {rashi}
             </text>
 
-            {grahas.map((graha, index) => (
-              <text
-                key={graha.graha}
-                x={cell.grahaX}
-                y={cell.grahaY + index * 13}
-                fontSize={11}
-                textAnchor="middle"
-                fill="currentColor"
-              >
-                {GRAHA_ABBR[graha.graha]}
-                <tspan fontSize={9} fillOpacity={CHART_LABEL_OPACITY}>
-                  {" "}
-                  {Math.floor(graha.degreeInRashi)}°{graha.retrograde ? " R" : ""}
-                </tspan>
-              </text>
-            ))}
+            <PlacementLines
+              lines={packPlacementLines(placements, MAX_SINGLE_LINES)}
+              x={cell.grahaX}
+              y={cell.grahaY}
+              anchor="middle"
+            />
           </g>
         );
       })}
 
+      {/* В центре — то, что отличает эту карту от соседней: аянамша для D1,
+          название варги для D9 и отсчёт от Луны, когда он выбран. */}
       <text
         x={NORTH_SIZE / 2}
         y={NORTH_SIZE / 2 + 4}
@@ -104,7 +112,7 @@ export function ChartWheelNorth({ chart }: { chart: VedicChart }) {
         fill="currentColor"
         fillOpacity={CHART_LABEL_OPACITY}
       >
-        аянамша {formatDegrees(chart.ayanamsa)}
+        {northCenterLabel(view, chart.ayanamsa)}
       </text>
     </svg>
   );

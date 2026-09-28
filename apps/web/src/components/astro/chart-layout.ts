@@ -1,4 +1,4 @@
-import type { GrahaPosition, RashiIndex, VedicChart } from "@vedamatch/shared";
+import type { RashiIndex } from "@vedamatch/shared";
 
 /**
  * Раскладка южноиндийской карты.
@@ -42,18 +42,6 @@ export const CHART_CELLS: ReadonlyArray<ChartCell> = CELL_POSITIONS.map(
 /** Клетка знака. */
 export function cellOf(rashi: RashiIndex): ChartCell {
   return CHART_CELLS[rashi - 1];
-}
-
-/** Грахи, стоящие в каждом знаке. Пустые знаки в карте тоже нужны — они рисуются. */
-export function grahasByRashi(
-  chart: VedicChart,
-): Map<RashiIndex, GrahaPosition[]> {
-  const map = new Map<RashiIndex, GrahaPosition[]>();
-  for (const cell of CHART_CELLS) map.set(cell.rashi, []);
-  for (const graha of chart.grahas) {
-    map.get(graha.rashi)!.push(graha);
-  }
-  return map;
 }
 
 /**

@@ -6,7 +6,12 @@ import {
   RASHI_NAMES,
 } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
-import { getAstroChart, getAstroReadings, getAstroToday } from "@/lib/astro-api";
+import {
+  getAstroChart,
+  getAstroReadings,
+  getAstroToday,
+  getAstroTransits,
+} from "@/lib/astro-api";
 import { formatDegrees } from "@/components/astro/chart-wheel";
 import { ChartPanel } from "@/components/astro/chart-panel";
 import { DashaPanel } from "@/components/astro/dasha-panel";
@@ -20,11 +25,12 @@ export const metadata = {
 };
 
 export default async function AstroChartPage() {
-  const [user, chart, readings, today] = await Promise.all([
+  const [user, chart, readings, today, transits] = await Promise.all([
     getProfile(),
     getAstroChart(),
     getAstroReadings(),
     getAstroToday(),
+    getAstroTransits(),
   ]);
   if (!chart) redirect("/astro");
 
@@ -84,7 +90,7 @@ export default async function AstroChartPage() {
       )}
 
       <div className="mt-6 grid gap-8 md:grid-cols-[minmax(0,20rem)_1fr]">
-        <ChartPanel chart={chart} />
+        <ChartPanel chart={chart} transits={transits} />
 
         <dl className="space-y-3 text-sm">
           {chart.lagna && (
