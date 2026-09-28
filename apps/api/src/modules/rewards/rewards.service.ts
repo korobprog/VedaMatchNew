@@ -12,6 +12,7 @@ import { RewardsAccountsService } from './rewards-accounts.service';
 import { RewardsLedgerService } from './rewards-ledger.service';
 import { RewardsSettingsService } from './rewards-settings.service';
 import { RewardsAvatarService } from './rewards-avatar.service';
+import { INVITE_TEXT_DEFAULT, buildInviteMessage } from './rewards-invite-text';
 import { revokedIds } from './rewards-balance';
 
 const PAGE_SIZE = 20;
@@ -27,7 +28,8 @@ export class RewardsService {
     private readonly avatars: RewardsAvatarService,
   ) {}
 
-  async me(userId: string): Promise<RewardsMeDto> {
+  /** `isAdmin` — из токена: править текст приглашения может только админ. */
+  async me(userId: string, isAdmin = false): Promise<RewardsMeDto> {
     const [account, mode, balance, earnedThisMonth, settings] =
       await Promise.all([
         this.accounts.ensure(userId),
@@ -39,11 +41,12 @@ export class RewardsService {
 
     const { direct, second } = await this.chain(userId);
     const all = [...direct, ...second];
+    const link = this.accounts.referralLink(account.code);
 
     return {
       ...balance,
       code: account.code,
-      link: this.accounts.referralLink(account.code),
+      link,
       mode,
       // В бете тратить некуда: платёжного контура нет, и эндпоинта списания
       // тоже. Флаг говорит вебу, показывать ли пояснение про накопление.
@@ -55,6 +58,11 @@ export class RewardsService {
       qualifiedTotal: all.filter(
         (r) => r.status === 'qualified' || r.status === 'awarded',
       ).length,
+      inviteMessage: buildInviteMessage(
+        settings.inviteText ?? INVITE_TEXT_DEFAULT,
+        link,
+      ),
+      canEditInviteText: isAdmin,
     };
   }
 

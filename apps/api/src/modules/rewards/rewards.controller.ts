@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import type {
   AccessTokenPayload,
   AdminRewardsLedgerQuery,
   AdminRewardsRevokeRequest,
+  AdminUpdateRewardsInviteTextRequest,
   AdminUpdateRewardsSettingsRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
@@ -31,7 +33,7 @@ export class RewardsController {
 
   @Get('me')
   me(@CurrentUser() user: AccessTokenPayload) {
-    return this.rewards.me(user.sub);
+    return this.rewards.me(user.sub, user.role === 'admin');
   }
 
   @Get('me/referrals')
@@ -108,5 +110,21 @@ export class AdminRewardsController {
   ) {
     assertRewardsAdmin(user);
     return this.admin.updateSettings(user.sub, body ?? {});
+  }
+
+  /** Шаблон текста «Пригласить» (VED-618): правится из окна кнопки. */
+  @Get('invite-text')
+  inviteText(@CurrentUser() user: AccessTokenPayload) {
+    assertRewardsAdmin(user);
+    return this.admin.inviteTextDto();
+  }
+
+  @Put('invite-text')
+  updateInviteText(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: AdminUpdateRewardsInviteTextRequest,
+  ) {
+    assertRewardsAdmin(user);
+    return this.admin.updateInviteText(user.sub, body?.text);
   }
 }

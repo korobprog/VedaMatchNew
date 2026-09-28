@@ -59,7 +59,11 @@ function stubFetch(overrides: Record<string, unknown> = {}) {
     if (String(url).includes("/rewards/me"))
       return Promise.resolve({
         ok: true,
-        json: async () => ({ link: "https://vedamatch.ru/?ref=abc" }),
+        json: async () => ({
+          link: "https://vedamatch.ru/?ref=abc",
+          inviteMessage: "Заходи: https://vedamatch.ru/?ref=abc",
+          canEditInviteText: false,
+        }),
       });
     return Promise.resolve({ ok: true, json: async () => overrides });
   });
@@ -339,7 +343,8 @@ describe("QuickPanel", () => {
     expect(screen.getByLabelText("Результат")).toHaveTextContent("42");
   });
 
-  it("копирует ссылку-приглашение в буфер", async () => {
+  // VED-618: в буфер уходит полный текст приглашения с личной ссылкой.
+  it("копирует текст приглашения в буфер", async () => {
     window.localStorage.setItem(STORAGE_KEY, '{"v":2,"ids":["invite"]}');
     const user = await openPanel();
 
@@ -350,7 +355,7 @@ describe("QuickPanel", () => {
     expect(await screen.findByText("Скопировано")).toBeInTheDocument();
     await waitFor(async () =>
       expect(await navigator.clipboard.readText()).toBe(
-        "https://vedamatch.ru/?ref=abc",
+        "Заходи: https://vedamatch.ru/?ref=abc",
       ),
     );
   });
