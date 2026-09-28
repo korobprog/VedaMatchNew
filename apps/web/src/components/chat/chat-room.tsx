@@ -495,8 +495,9 @@ export function ChatRoom({
          плеера приходится вычитать самим: `padding` на `body` такой
          раскладке ничего не даёт, и поле ввода уходило под полосу — на
          телефоне целиком. Переменную задаёт `globals.css` рядом с отступом,
-         и она же исчезает вместе с полосой. */
-      className="flex h-[calc(100dvh-9rem-var(--vm-player-space,0px))] flex-col"
+         и она же исчезает вместе с полосой. Так же вычитается строка пути
+         портала под шапкой (VED-92). */
+      className="flex h-[calc(100dvh-9rem-var(--vm-player-space,0px)-var(--vm-crumbs-space,0px))] flex-col"
       style={{ ...themeStyle, background: "var(--chat-bg, transparent)" }}
     >
       <header className="flex items-center gap-2.5 border-b border-glass-brd pb-3">

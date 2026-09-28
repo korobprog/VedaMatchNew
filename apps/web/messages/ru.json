@@ -26,6 +26,7 @@
     }
   },
   "Header": {
+    "breadcrumbs": "Путь",
     "adminContact": "Админ",
     "beta": "Beta",
     "services": "Сервисы",

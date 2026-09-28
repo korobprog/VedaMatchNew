@@ -48,6 +48,7 @@ import {
 } from "@/components/quick/header-toolbar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
+import { PortalBreadcrumbs } from "@/components/portal-breadcrumbs";
 import { VedaMatchMark } from "@/components/icons/vedamatch-mark";
 import { useServiceNames } from "@/components/service-catalog-provider";
 import { SERVICE_CONTENT } from "@/lib/service-content";
@@ -331,6 +332,11 @@ export function Header({ user }: { user: UserProfile }) {
           </div>
         </div>
       </header>
+
+      {/* Путь по порталу (VED-92) — сразу под шапкой и только там, где она
+          есть: полноэкранные режимы (лента Вдохновения) шапку не рисуют, и
+          пути в них тоже нет. Не липкий: уезжает вместе со страницей. */}
+      <PortalBreadcrumbs />
 
       {/*
         Боковое меню (VED-191). Появляется и исчезает мгновенно, без

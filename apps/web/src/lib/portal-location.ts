@@ -221,6 +221,20 @@ const PORTAL_STEPS: Readonly<Record<string, Readonly<Record<string, string>>>> =
   },
 };
 
+/**
+ * Имя раздела портала без записи в каталоге («Блог», «Админка») или `null`.
+ * Нужно хлебным крошкам (VED-92): тот же словарь, что и у окон, — чтобы
+ * одно место не называлось на кнопке окна и в пути по-разному.
+ */
+export function portalSectionName(slug: string): string | null {
+  return PORTAL_SECTIONS[slug] ?? null;
+}
+
+/** Имя известной ступени `/<root>/<step>` или `null` (VED-92). */
+export function portalStepName(root: string, step: string): string | null {
+  return PORTAL_STEPS[root]?.[step] ?? null;
+}
+
 export interface PortalLocation {
   /** Сервис или раздел портала: «Блог», «Работа», «Портал». */
   root: string;
