@@ -32,6 +32,7 @@ export function LineageMenuButton({
   onSelect,
   className = "",
   buttonClassName = "rounded-full",
+  sizeClassName = "size-11",
   menuLabel = "Линия материала",
 }: {
   value: LineageId | null;
@@ -44,6 +45,11 @@ export function LineageMenuButton({
    * Медиатеке, со скруглёнными углами в ряду Блог-ленты (VED-596).
    */
   buttonClassName?: string;
+  /**
+   * Размер кнопки. По умолчанию 44px; в тесном ряду карточки Образования —
+   * `size-10`, чтобы встать в строку с «Редактировать» и «Удалить» (VED-607).
+   */
+  sizeClassName?: string;
   /** Имя панели для скринридера: «Линия материала», «Линия поста». */
   menuLabel?: string;
 }) {
@@ -98,7 +104,7 @@ export function LineageMenuButton({
           if (!open) setExpanded(lineageMenuOpenGroup(value));
           setOpen(!open);
         }}
-        className={`inline-flex size-11 shrink-0 items-center justify-center border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 ${buttonClassName}`}
+        className={`inline-flex ${sizeClassName} shrink-0 items-center justify-center border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 ${buttonClassName}`}
       >
         <Landmark aria-hidden className="size-4" />
       </button>

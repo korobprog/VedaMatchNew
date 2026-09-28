@@ -19,12 +19,15 @@ export function EntryLineageButton({
   canSetLineage,
   onChanged,
   className,
+  sizeClassName,
 }: {
   entryId: string;
   lineage: LineageId | null;
   canSetLineage?: boolean;
   onChanged?: (lineage: LineageId | null) => void;
   className?: string;
+  /** Размер кнопки; по умолчанию 44px. */
+  sizeClassName?: string;
 }) {
   const router = useRouter();
   if (!canSetLineage) return null;
@@ -33,6 +36,7 @@ export function EntryLineageButton({
     <LineageMenuButton
       value={lineage}
       className={className}
+      sizeClassName={sizeClassName}
       onSelect={async (next) => {
         const saved = await setLibraryEntryLineage(entryId, next);
         if (onChanged) onChanged(saved.lineage);

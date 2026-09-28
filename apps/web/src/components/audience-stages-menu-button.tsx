@@ -35,12 +35,15 @@ export function AudienceStagesMenuButton({
   value,
   onSave,
   className = "",
+  sizeClassName = "size-11",
 }: {
   value: readonly SpiritualStage[];
   /** Сохранить выбор. Ошибка показывается под меню, выбор не меняется. */
   onSave: (stages: SpiritualStage[]) => Promise<void>;
   /** Классы обёртки: место в ряду. */
   className?: string;
+  /** Размер кнопки, по умолчанию 44px (см. `LineageMenuButton`, VED-607). */
+  sizeClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -98,7 +101,7 @@ export function AudienceStagesMenuButton({
           }
           setOpen(!open);
         }}
-        className={`relative inline-flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors hover:text-text-0 ${
+        className={`relative inline-flex ${sizeClassName} shrink-0 items-center justify-center rounded-full border transition-colors hover:text-text-0 ${
           marked
             ? "border-cyan/60 text-text-0"
             : "border-glass-brd text-text-1 hover:border-cyan/60"

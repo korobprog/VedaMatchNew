@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { LibraryEntryDto } from "@vedamatch/shared";
 import { EntryCard } from "./entry-card";
@@ -271,5 +271,28 @@ describe("EntryCard", () => {
     const article = container.querySelector("article");
     expect(article?.className).toContain("relative");
     expect(article?.className).toContain("has-[[aria-expanded=true]]:z-40");
+  });
+  it("«Ступени» стоят в одной паре с «Линией», слева от неё (VED-607)", () => {
+    render(
+      <EntryCard
+        entry={{ ...entry, canEdit: true, canSetLineage: true }}
+        locale="ru"
+      />,
+    );
+
+    const group = screen.getByTestId("entry-admin-marks");
+    expect(group).toHaveClass("ml-auto", "flex", "shrink-0");
+    const buttons = within(group).getAllByRole("button");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleName(/^Ступени/);
+    expect(buttons[1]).toHaveAccessibleName(/^Линия/);
+    // 40px, чтобы пара влезала в строку с «Редактировать» и «Удалить».
+    for (const button of buttons) expect(button).toHaveClass("size-10");
+  });
+
+  it("читателю пары «Ступени» и «Линия» нет", () => {
+    render(<EntryCard entry={entry} locale="ru" />);
+
+    expect(screen.queryByTestId("entry-admin-marks")).toBeNull();
   });
 });
