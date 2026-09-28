@@ -147,3 +147,41 @@ describe("ряд кнопок над постом (VED-590)", () => {
     expect(screen.getByText(/· Новости/)).toBeInTheDocument();
   });
 });
+
+/* VED-442: «Сделай в ряде этих кнопок клавишу-значок Поделиться (в
+   мессенджеры и т.д.)» — в ряду под постом, у всех, не только у админов. */
+describe("«Поделиться» в ряду кнопок под постом (VED-442)", () => {
+  it("кнопка есть у участника и отдаёт ссылку на пост системному окну", async () => {
+    const user = userEvent.setup();
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      value: share,
+      configurable: true,
+    });
+    try {
+      render(<BlogPostView initial={makePost()} />);
+      const button = screen.getByRole("button", { name: "Поделиться постом" });
+      expect(button.closest("footer")).not.toBeNull();
+      await user.click(button);
+      expect(share).toHaveBeenCalledWith({
+        title: "Праздник в храме",
+        url: `${window.location.origin}/blog/posts/post-1`,
+      });
+    } finally {
+      delete (navigator as { share?: unknown }).share;
+    }
+  });
+
+  it("у админа «Поделиться» стоит перед «Репостом»", () => {
+    render(<BlogPostView initial={makePost({ canModerate: true })} />);
+    const footer = screen
+      .getByRole("button", { name: "Поделиться постом" })
+      .closest("footer")!;
+    const names = [...footer.querySelectorAll("button")].map(
+      (node) => node.textContent,
+    );
+    expect(names.indexOf("Поделиться постом")).toBe(
+      names.indexOf("Репост") - 1,
+    );
+  });
+});

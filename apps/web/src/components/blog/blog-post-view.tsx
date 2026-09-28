@@ -9,6 +9,7 @@ import { LineageMenuButton } from "@/components/lineage-menu-button";
 import { setBlogPostCategory, setBlogPostLineage } from "@/lib/blog-client-api";
 import { BlogCategoryButton } from "./blog-category-button";
 import { BlogPostCard } from "./blog-post-card";
+import { shareBlogPost } from "./blog-share";
 import { PostActionsOrderButton } from "./post-actions-order-button";
 
 /**
@@ -29,21 +30,13 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
      значком, без подписи: в ряд встали «Категория» и «Линия». */
   async function share() {
     const shown = post.repostOf ?? post;
-    const url = `${window.location.origin}/blog/posts/${encodeURIComponent(post.id)}`;
-    try {
-      if (typeof navigator.share === "function") {
-        await navigator.share({
-          title: shown.title ?? "Блог-лента VedaMatch",
-          url,
-        });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Окно «Поделиться» закрыли — это не ошибка.
-    }
+    const result = await shareBlogPost(
+      { id: post.id, title: shown.title },
+      window.location.origin,
+    );
+    if (result !== "copied") return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   }
 
   return (
