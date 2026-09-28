@@ -52,6 +52,18 @@ describe("CategoryOrderMenu", () => {
     );
   });
 
+  /* VED-631: «Когда меняешь отображение на „По алфавиту“, на кнопке
+     „Упорядочить“ не должна появляться красная полоска». */
+  it("при «По алфавиту» кнопка без розовой каёмки", () => {
+    search = "order=alpha";
+    render(<CategoryOrderMenu locale="ru" canOrganize />);
+    const trigger = screen.getByRole("button", {
+      name: "Упорядочить: По алфавиту",
+    });
+    expect(trigger).toHaveClass("border-glass-brd");
+    expect(trigger.className).not.toMatch(/border-magenta/);
+  });
+
   it("«Свой порядок» убирает order из адреса", () => {
     search = "order=alpha";
     render(<CategoryOrderMenu locale="ru" canOrganize={false} />);

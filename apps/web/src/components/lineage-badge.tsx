@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { lineageBadge, type LineageGroup } from "@vedamatch/shared";
+import { LineageLabel } from "@/components/abbr-help";
 
 /**
  * Метка духовной линии на карточках (VED-568). Портальный компонент, как и
@@ -10,7 +11,8 @@ import { lineageBadge, type LineageGroup } from "@vedamatch/shared";
  * Снаружи видна только группа — «ISKCON», «Гаудия-матх», «Паривары»: у
  * всех матхов одна метка, у всех паривар — тоже. Какой именно матх или
  * паривар, раскрывается нажатием на метку и сворачивается повторным. У
- * ISKCON раскрывать нечего, и метка остаётся простым текстом.
+ * ISKCON раскрывать нечего, и метка остаётся простым текстом — со значком
+ * «?», открывающим расшифровку аббревиатуры (VED-634), как и у IPBYS.
  *
  * Раскрывается на месте, а не всплывающим окном: карточки идут лентой, и
  * поповер над соседней карточкой закрывал бы её, а текст в строке читается
@@ -38,7 +40,7 @@ export function LineageBadge({
     return fallback ? <span className={className}>{fallback}</span> : null;
   }
   const label = groupLabels?.[badge.group] ?? badge.label;
-  if (!badge.detail) return <span className={className}>{label}</span>;
+  if (!badge.detail) return <LineageLabel text={label} className={className} />;
 
   return (
     <span className={`inline-flex flex-wrap items-center gap-1 ${className}`}>
@@ -54,7 +56,7 @@ export function LineageBadge({
       </button>
       <span id={detailId} hidden={!open} className="text-text-0">
         <span aria-hidden>· </span>
-        {badge.detail}
+        <LineageLabel text={badge.detail} />
       </span>
     </span>
   );

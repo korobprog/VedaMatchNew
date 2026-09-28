@@ -13,6 +13,7 @@ import {
 } from "@vedamatch/shared";
 import { lineageDetailOptions, lineageGroupOptions } from "@/lib/lineage-steps";
 import { MenuOptionLabel } from "@/components/menu-option";
+import { WithLineageHelp } from "@/components/abbr-help";
 import {
   blogCategoryFilterLabel,
   blogCategoryFilterOptions,
@@ -130,19 +131,22 @@ export function BlogLineageFilter({
             const group = option.value as LineageGroup;
             const sole = soleLineageOfGroup(group);
             if (sole) {
+              // «?» у аббревиатуры (VED-634) — соседняя кнопка: нажатие
+              // на неё раскрывает расшифровку и ничего не выбирает.
               return (
-                <button
-                  key={group}
-                  type="button"
-                  title={option.title}
-                  aria-pressed={current === sole}
-                  onClick={() => choose(sole, close)}
-                  className={blogMenuOptionClass(current === sole)}
-                >
-                  <MenuOptionLabel pressed={current === sole}>
-                    {option.label}
-                  </MenuOptionLabel>
-                </button>
+                <WithLineageHelp key={group} text={option.label}>
+                  <button
+                    type="button"
+                    title={option.title}
+                    aria-pressed={current === sole}
+                    onClick={() => choose(sole, close)}
+                    className={blogMenuOptionClass(current === sole)}
+                  >
+                    <MenuOptionLabel pressed={current === sole}>
+                      {option.label}
+                    </MenuOptionLabel>
+                  </button>
+                </WithLineageHelp>
               );
             }
             const open = openGroup === group;
@@ -169,18 +173,21 @@ export function BlogLineageFilter({
                     className="ml-3 border-l border-glass-brd pl-2"
                   >
                     {lineageDetailOptions(group).map((detail) => (
-                      <button
-                        key={detail.value}
-                        type="button"
-                        title={detail.title}
-                        aria-pressed={detail.value === current}
-                        onClick={() => choose(detail.value, close)}
-                        className={blogMenuOptionClass(detail.value === current)}
-                      >
-                        <MenuOptionLabel pressed={detail.value === current}>
-                          {detail.label}
-                        </MenuOptionLabel>
-                      </button>
+                      <WithLineageHelp key={detail.value} text={detail.label}>
+                        <button
+                          type="button"
+                          title={detail.title}
+                          aria-pressed={detail.value === current}
+                          onClick={() => choose(detail.value, close)}
+                          className={blogMenuOptionClass(
+                            detail.value === current,
+                          )}
+                        >
+                          <MenuOptionLabel pressed={detail.value === current}>
+                            {detail.label}
+                          </MenuOptionLabel>
+                        </button>
+                      </WithLineageHelp>
                     ))}
                   </div>
                 )}

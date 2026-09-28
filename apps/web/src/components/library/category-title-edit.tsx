@@ -72,10 +72,8 @@ export function CategoryTitleEdit({
         title={iconOnly ? label : undefined}
         className={
           iconOnly
-            ? `${LIBRARY_ICON_BUTTON} ${
-                open
-                  ? "border-magenta text-text-0"
-                  : "border-glass-brd text-text-1 hover:text-text-0"
+            ? `${LIBRARY_ICON_BUTTON} border-glass-brd ${
+                open ? "text-text-0" : "text-text-1 hover:text-text-0"
               }`
             : "inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-glass-brd px-4 text-sm text-text-1 hover:text-text-0"
         }

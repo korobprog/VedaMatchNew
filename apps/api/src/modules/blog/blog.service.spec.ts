@@ -59,6 +59,10 @@ function build(post: ReturnType<typeof storedPost> | null) {
       ),
       update: fn(() => Promise.resolve(post)),
     },
+    // Зритель без самоидентификации — фильтра ступеней нет (VED-590).
+    user: {
+      findUnique: fn(() => Promise.resolve(null)),
+    },
     blogPostImage: {
       deleteMany: fn(() => Promise.resolve({ count: 0 })),
       update: fn(() => Promise.resolve({})),
@@ -855,6 +859,154 @@ describe('BlogService category (VED-590)', () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { AND: [{}, { category: 'news' }] } }),
+    );
+  });
+});
+
+describe('BlogService audience stages (VED-590)', () => {
+  function lastData(mock: jest.Mock): Record<string, unknown> {
+    const calls = mock.mock.calls as Array<[{ data: Record<string, unknown> }]>;
+    return calls[calls.length - 1][0].data;
+  }
+
+  function withCreate(post: ReturnType<typeof storedPost> | null) {
+    const built = build(post);
+    const blogPost = built.prisma.blogPost as Record<string, jest.Mock>;
+    blogPost.create = fn(() => Promise.resolve({ id: 'post-1' }));
+    blogPost.count = fn(() => Promise.resolve(0));
+    const prisma = built.prisma as unknown as Record<
+      string,
+      Record<string, jest.Mock>
+    >;
+    prisma.blogSettings = {
+      findUnique: fn(() => Promise.resolve({ feedLifetimeHours: 0 })),
+    };
+    return { ...built, blogPost };
+  }
+
+  it('the author picks the stages when publishing', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await service.create('author', false, {
+      text: 'Пост',
+      category: 'news',
+      lineage: 'all',
+      audienceStages: ['devotee', 'seeker'],
+    });
+
+    expect(lastData(blogPost.create).audienceStages).toEqual([
+      'seeker',
+      'devotee',
+    ]);
+  });
+
+  it('«for everyone» and all four stages are stored as an empty list', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await service.create('author', false, {
+      text: 'Пост',
+      audienceStages: 'all',
+    });
+    expect(lastData(blogPost.create).audienceStages).toEqual([]);
+
+    await service.create('author', false, {
+      text: 'Пост',
+      audienceStages: ['seeker', 'practitioner', 'yogi', 'devotee'],
+    });
+    expect(lastData(blogPost.create).audienceStages).toEqual([]);
+  });
+
+  it('an old app build without the field publishes for everyone', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await service.create('author', false, { text: 'Пост' });
+
+    expect(lastData(blogPost.create).audienceStages).toEqual([]);
+  });
+
+  it('refuses a sent but empty or unknown choice', async () => {
+    const { service, blogPost } = withCreate(storedPost());
+
+    await expect(
+      service.create('author', false, { text: 'Пост', audienceStages: [] }),
+    ).rejects.toMatchObject({ message: 'audience_stages_required' });
+    await expect(
+      service.create('author', false, {
+        text: 'Пост',
+        audienceStages: ['guru' as never],
+      }),
+    ).rejects.toMatchObject({ message: 'invalid_audience_stages' });
+    expect(blogPost.create).not.toHaveBeenCalled();
+  });
+
+  it('an edit without the field keeps the stages', async () => {
+    const { service, prisma } = build(storedPost());
+
+    await service.update('author', false, 'post-1', { text: 'Новый' });
+    expect(lastData(prisma.blogPost.update)).not.toHaveProperty(
+      'audienceStages',
+    );
+
+    await service.update('author', false, 'post-1', {
+      text: 'Новый',
+      audienceStages: 'yogi' as never,
+    });
+    expect(lastData(prisma.blogPost.update).audienceStages).toEqual(['yogi']);
+  });
+
+  it('the author sets the stages with one button, a stranger cannot', async () => {
+    const { service, prisma } = build(storedPost());
+    prisma.blogPost.update.mockResolvedValue(
+      storedPost({ audienceStages: ['yogi'] }),
+    );
+
+    await expect(
+      service.setAudienceStages('someone', false, 'post-1', ['yogi']),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.setAudienceStages('author', false, 'post-1', null),
+    ).rejects.toMatchObject({ message: 'audience_stages_required' });
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+
+    const dto = await service.setAudienceStages('author', false, 'post-1', [
+      'yogi',
+    ]);
+    expect(lastData(prisma.blogPost.update)).toEqual({
+      audienceStages: ['yogi'],
+    });
+    expect(dto.audienceStages).toEqual(['yogi']);
+  });
+
+  it('shows the viewer posts of the stages chosen and posts for everyone', async () => {
+    const { service, prisma } = build(storedPost());
+    const findMany = fn(() => Promise.resolve([]));
+    (prisma.blogPost as Record<string, jest.Mock>).findMany = findMany;
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      lineage: null,
+      showAllStages: false,
+      materialFiltersSetAt: null,
+      materialStages: [],
+      materialLineages: [],
+    });
+
+    await service.feed('viewer', false, { scope: 'all' });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            {},
+            {
+              OR: [
+                { audienceStages: { isEmpty: true } },
+                { audienceStages: { has: 'yogi' } },
+                { authorId: 'viewer' },
+              ],
+            },
+          ],
+        },
+      }),
     );
   });
 });

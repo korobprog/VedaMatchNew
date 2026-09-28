@@ -1,11 +1,14 @@
 import type { Prisma } from '@prisma/client';
 import {
+  AUDIENCE_STAGES,
   LINEAGE_ALL,
   isBlogPostCategory,
+  parseAudienceStages,
   isLineageId,
   lineageFilterIds,
   type BlogPostCategory,
   type LineageId,
+  type SpiritualStage,
 } from '@vedamatch/shared';
 
 /**
@@ -64,17 +67,49 @@ export function blogLineageChoice(
   return isLineageId(value) ? value : 'invalid';
 }
 
-/** Категория и линия поста, разобранные из тела публикации или правки. */
+/**
+ * Ступени самоидентификации поста (VED-590) из формы, тела запроса или
+ * кнопки. «Для всех» — явный вариант `'all'`, как у линии; все четыре
+ * ступени — то же «для всех» и хранятся пустым массивом.
+ *
+ * - `undefined` — поля нет: при правке ступени прежние;
+ * - `'required'` — `null`, пустая строка или пустой список: не выбрали;
+ * - `[]` — для всех; иначе ступени в порядке пути или `'invalid'`.
+ *
+ * Multipart присылает одно значение строкой, а несколько — массивом, поэтому
+ * одиночная строка читается как список из одной ступени.
+ */
+export function blogAudienceStagesChoice(
+  value: unknown,
+): SpiritualStage[] | undefined | 'required' | 'invalid' {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return 'required';
+  if (value === LINEAGE_ALL) return [];
+  const list = typeof value === 'string' ? [value] : value;
+  if (Array.isArray(list) && list.length === 0) return 'required';
+  // «Для всех» в списке вместе со ступенями — противоречие, а не выбор.
+  if (Array.isArray(list) && list.length === 1 && list[0] === LINEAGE_ALL) {
+    return [];
+  }
+  const stages = parseAudienceStages(list);
+  if (!stages) return 'invalid';
+  return stages.length === AUDIENCE_STAGES.length ? [] : stages;
+}
+
+/** Категория, линия и ступени поста из тела публикации или правки. */
 export interface BlogPostMarks {
   category?: BlogPostCategory;
   lineage?: LineageId | null;
+  audienceStages?: SpiritualStage[];
 }
 
 export type BlogPostMarksError =
   | 'category_required'
   | 'invalid_category'
   | 'lineage_required'
-  | 'invalid_lineage';
+  | 'invalid_lineage'
+  | 'audience_stages_required'
+  | 'invalid_audience_stages';
 
 /**
  * Категория и линия из тела публикации или правки (VED-590).
@@ -93,7 +128,10 @@ export type BlogPostMarksError =
  * сделать ошибкой. Репост сюда не заходит — у него своих полей нет.
  */
 export function blogPostMarksInput(
-  body: { category?: unknown; lineage?: unknown } | null | undefined,
+  body:
+    | { category?: unknown; lineage?: unknown; audienceStages?: unknown }
+    | null
+    | undefined,
 ): BlogPostMarks | { error: BlogPostMarksError } {
   const category = blogCategoryChoice(body?.category);
   if (category === 'invalid') return { error: 'invalid_category' };
@@ -101,9 +139,15 @@ export function blogPostMarksInput(
   const lineage = blogLineageChoice(body?.lineage);
   if (lineage === 'invalid') return { error: 'invalid_lineage' };
   if (lineage === 'required') return { error: 'lineage_required' };
+  const audienceStages = blogAudienceStagesChoice(body?.audienceStages);
+  if (audienceStages === 'invalid') return { error: 'invalid_audience_stages' };
+  if (audienceStages === 'required') {
+    return { error: 'audience_stages_required' };
+  }
   const marks: BlogPostMarks = {};
   if (category) marks.category = category;
   if (lineage !== undefined) marks.lineage = lineage;
+  if (audienceStages !== undefined) marks.audienceStages = audienceStages;
   return marks;
 }
 
@@ -132,6 +176,44 @@ export function blogLineageWhere(
   const match: Prisma.BlogPostWhereInput =
     ids.length === 1 ? { lineage: ids[0] } : { lineage: { in: ids } };
   return { OR: [match, { lineage: null }] };
+}
+
+/**
+ * Поля `User`, из которых собираются «Фильтры материалов» зрителя (VED-617):
+ * ручной выбор, анкета и прежний переключатель «Все ступени». Портальная
+ * модель, только чтение; копия выборки Образования — модуль не импортирует
+ * чужие (контракт сервисов).
+ */
+export const BLOG_VIEWER_FILTERS_SELECT = {
+  spiritualStage: true,
+  lineage: true,
+  showAllStages: true,
+  materialFiltersSetAt: true,
+  materialStages: true,
+  materialLineages: true,
+} as const satisfies Prisma.UserSelect;
+
+/**
+ * Условие ленты по ступеням зрителя (VED-590) — то же правило, что в
+ * Образовании и Медиатеке: посты его ступеней и посты для всех (пустой
+ * массив). Свои посты автор видит всегда: пост, пропавший из ленты сразу
+ * после публикации, выглядит потерянным. `null` у ступеней — фильтра нет
+ * (выбраны все ступени, нет самоидентификации).
+ */
+export function blogAudienceStagesWhere(
+  stages: readonly SpiritualStage[] | null,
+  viewerId: string,
+): Prisma.BlogPostWhereInput | null {
+  if (!stages?.length) return null;
+  return {
+    OR: [
+      { audienceStages: { isEmpty: true } },
+      stages.length === 1
+        ? { audienceStages: { has: stages[0] } }
+        : { audienceStages: { hasSome: [...stages] } },
+      { authorId: viewerId },
+    ],
+  };
 }
 
 /** Фильтры читателя из адреса ленты. */

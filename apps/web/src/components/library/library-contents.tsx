@@ -30,17 +30,23 @@ const API_URL = apiBase();
  * `iconOnly` (VED-521) — кнопка значком прямо в ряду действий автора. Тогда
  * компонент отдаёт кнопку и список соседями, без обёртки: список —
  * `order-last w-full` и в переносящемся ряду встаёт своей строкой под ним.
+ * `inRow` — так же соседями, но кнопкой с подписью: на главной Образования
+ * «Содержание» встало в ряд с «Упорядочить» на место убранных «Фильтров»
+ * (VED-628).
  */
 export function LibraryContents({
   locale,
   categorySlug,
   iconOnly = false,
+  inRow = false,
 }: {
   locale: LibraryLocale;
   /** Рубрика или автор; без неё — всё Образование. */
   categorySlug?: string;
   /** Значком в чужом переносящемся ряду, см. выше. */
   iconOnly?: boolean;
+  /** Кнопкой с подписью в чужом переносящемся ряду, см. выше. */
+  inRow?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<LibraryEntryDto[] | null>(null);
@@ -122,7 +128,7 @@ export function LibraryContents({
     <div
       id="library-contents"
       className={`rounded-2xl border border-glass-brd bg-bg-1 p-2 ${
-        iconOnly ? "order-last w-full" : "mt-2"
+        iconOnly || inRow ? "order-last w-full" : "mt-2"
       }`}
     >
       {items === null ? (
@@ -199,7 +205,7 @@ export function LibraryContents({
     </div>
   );
 
-  if (iconOnly)
+  if (iconOnly || inRow)
     return (
       <>
         {button}

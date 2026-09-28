@@ -25,10 +25,20 @@ describe("LineageBadge (VED-568)", () => {
     ).toBeInTheDocument();
   });
 
-  it("ISKCON — просто текст, раскрывать нечего", () => {
+  /* VED-634: «рядом с аббревиатурой значок вопроса, при нажатии на него
+     появляется расшифровка». */
+  it("ISKCON — аббревиатура, расшифровка по «?»", async () => {
     render(<LineageBadge lineage="iskcon" />);
     expect(screen.getByText("ISKCON")).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    const help = screen.getByRole("button", { name: "Что такое ISKCON" });
+    expect(
+      screen.getByText("Международное общество сознания Кришны"),
+    ).not.toBeVisible();
+    await userEvent.click(help);
+    expect(help).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByText("Международное общество сознания Кришны"),
+    ).toBeVisible();
   });
 
   it("без линии — запасная подпись, подписи групп — на языке страницы", () => {

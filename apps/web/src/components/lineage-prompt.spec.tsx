@@ -215,13 +215,17 @@ describe("LineageCards", () => {
     render(<LineageCards value="" onChange={onChange} />);
     expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(
-      screen.getByRole("radio", { name: /ISKCON.*сознания Кришны/ }),
+      screen.getByRole("radio", { name: "ISKCON" }),
+    ).toBeInTheDocument();
+    // VED-634: расшифровка — не в подписи, а по «?» рядом.
+    expect(
+      screen.getByRole("button", { name: "Что такое ISKCON" }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "Гаудия-матх" }));
     expect(onChange).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("radio", { name: /IPBYS.*чистой бхакти-йоги/ }),
+      screen.getByRole("radio", { name: "IPBYS" }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("radio")).toHaveLength(7);
 

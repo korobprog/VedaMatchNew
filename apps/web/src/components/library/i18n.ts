@@ -240,7 +240,7 @@ const ui = {
     "add.lineageAll": "Для всех линий",
     "add.lineageHint":
       "Преданные видят материалы своей линии и «для всех». По умолчанию — ваша линия либо ISKCON",
-    "lineage.group.iskcon": "ИСККОН",
+    "lineage.group.iskcon": "ISKCON",
     "lineage.group.gaudiya_math": "Гаудия-матх",
     "lineage.group.parivara": "Паривары",
     "lineage.badgeAll": "Для всех линий",

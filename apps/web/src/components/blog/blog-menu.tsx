@@ -30,6 +30,8 @@ export function BlogMenuButton({
   label,
   menuLabel,
   icon,
+  text,
+  disabled = false,
   busy = false,
   children,
 }: {
@@ -38,6 +40,13 @@ export function BlogMenuButton({
   /** Имя панели для скринридера. */
   menuLabel: string;
   icon: ReactNode;
+  /**
+   * Видимая подпись рядом со значком — у кнопки-действия, а не фильтра
+   * («Убрать пустые строки» в форме поста, VED-633). Имя кнопки — всё
+   * равно `label`.
+   */
+  text?: ReactNode;
+  disabled?: boolean;
   busy?: boolean;
   /** Пункты меню; `close` закрывает меню и возвращает фокус на кнопку. */
   children: (close: () => void) => ReactNode;
@@ -71,12 +80,18 @@ export function BlogMenuButton({
         aria-busy={busy || undefined}
         aria-label={label}
         title={label}
+        disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         /* Без подсветки выбранного (VED-613): цветом выбор показывает только
            «Фильтры материалов» на главной, значение — в имени кнопки. */
-        className={`${BLOG_ICON_BUTTON} border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0`}
+        className={
+          text
+            ? "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-glass-brd px-3 text-xs text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 disabled:opacity-60"
+            : `${BLOG_ICON_BUTTON} border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0`
+        }
       >
         {icon}
+        {text}
       </button>
       {open && (
         <AnchoredPopover

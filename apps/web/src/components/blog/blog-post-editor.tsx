@@ -24,9 +24,12 @@ import {
 } from "./blog-file-pick";
 import { blogMediaPreviewUrl, postMedia } from "./blog-media-list";
 import {
+  blogAudienceFromPost,
+  blogAudienceRequestValue,
   blogCategoryRequestValue,
   blogLineageRequestValue,
   blogPostMarksHint,
+  type BlogAudienceValue,
 } from "./blog-post-marks";
 import { BlogPostMarksFields } from "./blog-post-marks-fields";
 import { BlogTextCounter } from "./blog-text-counter";
@@ -58,6 +61,10 @@ export function BlogPostEditor({
   // Пост без линии — «для всех» (так его и показывает лента), поэтому в
   // форме правки это уже выбранный вариант, а не пустота (VED-590).
   const [lineage, setLineage] = useState(lineageToSelect(post.lineage));
+  // Так же и ступени: пост без них — для всех (VED-590).
+  const [audience, setAudience] = useState<BlogAudienceValue>(
+    blogAudienceFromPost(post.audienceStages),
+  );
   const [kept, setKept] = useState<BlogMediaDto[]>(() => postMedia(post));
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
@@ -69,7 +76,7 @@ export function BlogPostEditor({
   const marksHintId = useId();
   const limit = blogTextLimitState(text);
   // Старый пост без категории сохраняется только с ней — как и новый.
-  const marksHint = blogPostMarksHint(category, lineage, "save");
+  const marksHint = blogPostMarksHint({ category, lineage, audience }, "save");
   /** Человек уже что-то поменял — обновлением с сервера это не затираем. */
   const touched = useRef(false);
 
@@ -93,6 +100,7 @@ export function BlogPostEditor({
         setText(fresh.text);
         setCategory(fresh.category ?? "");
         setLineage(lineageToSelect(fresh.lineage));
+        setAudience(blogAudienceFromPost(fresh.audienceStages));
         setKept(postMedia(fresh));
       })
       .catch(() => {
@@ -140,7 +148,8 @@ export function BlogPostEditor({
     }
     const chosenCategory = blogCategoryRequestValue(category);
     const chosenLineage = blogLineageRequestValue(lineage);
-    if (!chosenCategory || !chosenLineage) return;
+    const chosenAudience = blogAudienceRequestValue(audience);
+    if (!chosenCategory || !chosenLineage || !chosenAudience) return;
 
     setPending(true);
     try {
@@ -151,6 +160,7 @@ export function BlogPostEditor({
           text,
           category: chosenCategory,
           lineage: chosenLineage,
+          audienceStages: chosenAudience,
           keepImageIds: kept.map((image) => image.id),
         },
         files,
@@ -226,18 +236,22 @@ export function BlogPostEditor({
         aria-invalid={limit.over || undefined}
         className="mt-2 w-full rounded-lg border border-glass-brd bg-bg-1 px-3 py-2 text-sm leading-6 text-text-0 placeholder:text-text-2"
       />
-      <BlogTextCounter id={counterId} state={limit} />
       {/* Уборка пустых строк (VED-372) стоит именно в правке: разорванный
           текст на скриншоте заказчика уже опубликован, и чинить его надо
-          здесь. */}
-      <BlogBlankLinesTool
-        value={text}
-        onChange={(next) => {
-          touched.current = true;
-          setText(next);
-        }}
-        disabled={pending}
-      />
+          здесь. Одной строкой со счётчиком (VED-633). */}
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-x-2">
+        <div className="flex min-h-11 items-center [&>p]:mt-0">
+          <BlogTextCounter id={counterId} state={limit} />
+        </div>
+        <BlogBlankLinesTool
+          value={text}
+          onChange={(next) => {
+            touched.current = true;
+            setText(next);
+          }}
+          disabled={pending}
+        />
+      </div>
       <BlogPostMarksFields
         category={category}
         lineage={lineage}
@@ -249,6 +263,11 @@ export function BlogPostEditor({
         onLineageChange={(next) => {
           touched.current = true;
           setLineage(next);
+        }}
+        audience={audience}
+        onAudienceChange={(next) => {
+          touched.current = true;
+          setAudience(next);
         }}
       />
 

@@ -19,8 +19,7 @@ import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicAdminArtists } from "@/lib/music-admin-api";
 import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
-import { MusicTrackMarksButton } from "@/components/music/track-marks-button";
-import { LineageInfoButton } from "@/components/lineage-info-button";
+import { MusicTrackMarksButtons } from "@/components/music/track-marks-button";
 import { MusicTrackHeroLayout } from "@/components/music/track-hero-layout";
 
 export async function generateMetadata({
@@ -108,29 +107,17 @@ export default async function MusicTrackPage({
         }
         actions={
           <>
-            {/* «Разметка» (VED-616) — ступени и линия в одном окне, только
-                редакции Музыки. */}
-            <MusicTrackMarksButton
+            {/* Отпечаток и домик (VED-616, VED-632) — у всех: ступени,
+                линия записи и её исполнителя; редакция Музыки в тех же
+                окнах меняет и сохраняет. */}
+            <MusicTrackMarksButtons
               trackId={track.id}
               audienceStages={track.audienceStages ?? []}
               lineage={track.lineage}
+              artistLineage={
+                track.artist ? (track.artist.lineage ?? null) : undefined
+              }
               canEdit={canEdit}
-            />
-            {/* «Линия» с домиком (VED-616) — всем: чья запись и чей
-                исполнитель. */}
-            <LineageInfoButton
-              subjects={[
-                { title: "Запись", lineage: track.lineage },
-                ...(track.artist
-                  ? [
-                      {
-                        title: "Исполнитель",
-                        lineage: track.artist.lineage ?? null,
-                        emptyLabel: "Линия не указана",
-                      },
-                    ]
-                  : []),
-              ]}
             />
             {/* «Поделиться» (VED-281). */}
             <MusicShareTrackButton

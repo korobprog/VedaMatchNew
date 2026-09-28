@@ -237,16 +237,17 @@ export function BlogHomeWidget({
       </a>
     ) : null,
     /* «Написать пост» — плюсом, а не карандашом (VED-626): карандаш на
-       портале означает «изменить». Акцентный цвет выделяет единственную
-       кнопку, которая создаёт, а не листает; маджента на фоне — 4,8:1. */
+       портале означает «изменить». Цветом не выделяется (VED-630: «не надо
+       выделять красным, сделай как остальные») — рамка и цвет как у
+       соседей по ряду. */
     write: (
       <Link
         href="/blog?new=1"
         aria-label="Написать пост"
         title="Написать пост"
-        className={`${iconShape} border-magenta/40 text-magenta hover:border-magenta hover:bg-magenta/10`}
+        className={`${iconButton} hover:border-cyan/60`}
       >
-        <Plus aria-hidden strokeWidth={2.5} className="size-5" />
+        <Plus aria-hidden className="size-4" />
       </Link>
     ),
     feed: (
@@ -333,9 +334,8 @@ export function BlogHomeWidget({
         aria-pressed={like?.liked ?? false}
         aria-label={likeLabel}
         title={likeLabel}
-        className={`${iconButton} hover:border-magenta/60 disabled:opacity-50 ${
-          like?.liked ? "border-magenta" : ""
-        }`}
+        /* Лайк виден закрашенным сердцем, без розовой каёмки (VED-623). */
+        className={`${iconButton} hover:border-magenta/60 disabled:opacity-50`}
       >
         <Heart
           aria-hidden

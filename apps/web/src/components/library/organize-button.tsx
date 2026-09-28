@@ -41,10 +41,9 @@ export function LibraryOrganizeButton({
         aria-pressed={organizing}
         aria-label={t(locale, "tree.organize")}
         title={label}
-        className={`${LIBRARY_ICON_BUTTON} ${
-          organizing
-            ? "border-magenta text-text-0"
-            : "border-glass-brd text-text-2 hover:text-text-0"
+        /* Режим виден по значку «Готово», без розовой каёмки (VED-623). */
+        className={`${LIBRARY_ICON_BUTTON} border-glass-brd ${
+          organizing ? "text-text-0" : "text-text-2 hover:text-text-0"
         } ${className}`}
       >
         {organizing ? (

@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
-import { MaterialMarksMenuButton } from "@/components/material-marks-menu-button";
 import { LineageInfoButton } from "@/components/lineage-info-button";
+import { MaterialStagesButton } from "@/components/material-stages-button";
 import {
+  setBlogPostAudienceStages,
   setBlogPostCategory,
   setBlogPostLineage,
-  setOwnBlogPostLineage,
 } from "@/lib/blog-client-api";
 import { BlogCategoryButton } from "./blog-category-button";
 import { BlogPostCard } from "./blog-post-card";
@@ -86,30 +86,37 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
               }}
             />
           )}
-          {/* «Разметка» (VED-596, VED-616) — отпечаток пальца, как в
-              Образовании и Медиатеке: линия решает, кому пост виден в
-              отфильтрованной ленте. С VED-590 линию своему посту назначает
-              и автор (`canEdit`), администратор — любому. Ступеней у постов
-              нет — в окне одна колонка линии. У репоста линия своя, не
-              оригинала, и менять её может только администратор. */}
-          {(post.canEdit || post.canModerate) && (
-            <MaterialMarksMenuButton
-              lineage={post.lineage ?? null}
-              buttonClassName="rounded-lg"
-              menuLabel="Разметка поста"
-              onSave={async ({ lineage }) => {
-                setPost(
-                  await (post.canModerate
-                    ? setBlogPostLineage(post.id, lineage)
-                    : setOwnBlogPostLineage(post.id, lineage)),
-                );
-              }}
-            />
-          )}
-          {/* «Линия» с домиком (VED-616) — всем: к какой линии пост. */}
+          {/* «Линия» с домиком и ступени с отпечатком (VED-616, VED-632) —
+              у всех: к какой линии и каким ступеням пост. Менять в этих
+              окнах может только администратор (VED-632: «участники ничего
+              менять не могут»); автор выбирает линию и ступень в форме
+              публикации и правки (VED-590). */}
           <LineageInfoButton
             subjects={[{ title: "Пост", lineage: post.lineage ?? null }]}
             buttonClassName="rounded-lg"
+            onSave={
+              post.canModerate
+                ? async (lineage) => {
+                    setPost(await setBlogPostLineage(post.id, lineage));
+                  }
+                : undefined
+            }
+          />
+          <MaterialStagesButton
+            stages={post.audienceStages ?? []}
+            buttonClassName="rounded-lg"
+            onSave={
+              post.canModerate
+                ? async (stages) => {
+                    setPost(
+                      await setBlogPostAudienceStages(
+                        post.id,
+                        stages.length === 0 ? "all" : stages,
+                      ),
+                    );
+                  }
+                : undefined
+            }
           />
           <button
             type="button"

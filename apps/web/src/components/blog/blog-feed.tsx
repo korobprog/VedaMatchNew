@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import type { BlogFeedResponse, BlogPostDto } from "@vedamatch/shared";
 import {
   BlogApiError,
@@ -14,6 +14,7 @@ import {
   BlogLineageFilter,
 } from "./blog-feed-filter-menus";
 import type { BlogFeedFilterValues } from "./blog-feed-filters";
+import { BLOG_ICON_BUTTON } from "./blog-menu";
 import { BlogPostCard } from "./blog-post-card";
 
 /**
@@ -100,24 +101,31 @@ export function BlogFeed({
           </>
         )}
         {showComposer && (
+          /* Одна кнопка на оба состояния: сменись она другим элементом,
+             клавиатура после нажатия осталась бы ни на чём. Открытая форма
+             сворачивается значком-стрелкой в том же ряду (VED-633): кнопка-
+             надпись «Свернуть» в ряд не вставала и уезжала на отдельную
+             строку над формой. */
           <button
             type="button"
             onClick={() => setComposing((open) => !open)}
             aria-expanded={composing}
             aria-controls="blog-compose"
-            className="btn-mint ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold sm:gap-1.5 sm:px-3"
+            aria-label={composing ? "Свернуть форму поста" : undefined}
+            title={composing ? "Свернуть" : undefined}
+            className={
+              composing
+                ? `${BLOG_ICON_BUTTON} ml-auto border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0`
+                : "btn-mint ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold sm:gap-1.5 sm:px-3"
+            }
           >
             {composing ? (
-              <X aria-hidden className="size-4" />
-            ) : (
-              <Plus aria-hidden className="size-4" />
-            )}
-            {/* На телефоне короче: полная подпись с двумя вкладками в строку
-                360 точек не встаёт. */}
-            {composing ? (
-              "Свернуть"
+              <ChevronDown aria-hidden className="size-5" />
             ) : (
               <>
+                <Plus aria-hidden className="size-4" />
+                {/* На телефоне короче: полная подпись с двумя вкладками в
+                    строку 360 точек не встаёт. */}
                 <span className="sm:hidden">Новый пост</span>
                 <span className="hidden sm:inline">Создать новый пост</span>
               </>

@@ -1,4 +1,6 @@
 import {
+  blogAudienceStagesChoice,
+  blogAudienceStagesWhere,
   blogCategoryChoice,
   blogCategoryWhere,
   blogFilterConditions,
@@ -186,6 +188,54 @@ describe('combineBlogWhere', () => {
     const lineage = { OR: [{ lineage: 'iskcon' }, { lineage: null }] };
     expect(combineBlogWhere(base, [lineage])).toEqual({
       AND: [base, lineage],
+    });
+  });
+});
+
+describe('blogAudienceStagesChoice (VED-590)', () => {
+  it('tells «not sent» from «cleared»', () => {
+    expect(blogAudienceStagesChoice(undefined)).toBeUndefined();
+    expect(blogAudienceStagesChoice(null)).toBe('required');
+    expect(blogAudienceStagesChoice('')).toBe('required');
+    expect(blogAudienceStagesChoice([])).toBe('required');
+  });
+
+  it('reads «all» and all four stages as «for everyone»', () => {
+    expect(blogAudienceStagesChoice('all')).toEqual([]);
+    expect(blogAudienceStagesChoice(['all'])).toEqual([]);
+    expect(
+      blogAudienceStagesChoice(['devotee', 'yogi', 'practitioner', 'seeker']),
+    ).toEqual([]);
+  });
+
+  it('keeps the stages in the order of the path; one multipart value is a string', () => {
+    expect(blogAudienceStagesChoice(['devotee', 'seeker', 'devotee'])).toEqual([
+      'seeker',
+      'devotee',
+    ]);
+    expect(blogAudienceStagesChoice('yogi')).toEqual(['yogi']);
+  });
+
+  it('refuses garbage and «all» mixed with stages', () => {
+    expect(blogAudienceStagesChoice('guru')).toBe('invalid');
+    expect(blogAudienceStagesChoice(['all', 'yogi'])).toBe('invalid');
+    expect(blogAudienceStagesChoice({ stage: 'yogi' })).toBe('invalid');
+  });
+});
+
+describe('blogAudienceStagesWhere (VED-590)', () => {
+  it('does not filter without stages', () => {
+    expect(blogAudienceStagesWhere(null, 'me')).toBeNull();
+    expect(blogAudienceStagesWhere([], 'me')).toBeNull();
+  });
+
+  it('keeps posts of the stages, for everyone and the viewer’s own', () => {
+    expect(blogAudienceStagesWhere(['seeker', 'yogi'], 'me')).toEqual({
+      OR: [
+        { audienceStages: { isEmpty: true } },
+        { audienceStages: { hasSome: ['seeker', 'yogi'] } },
+        { authorId: 'me' },
+      ],
     });
   });
 });

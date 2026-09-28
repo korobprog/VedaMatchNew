@@ -5,7 +5,6 @@ import type { BlogPostDto } from "@vedamatch/shared";
 import {
   setBlogPostCategory,
   setBlogPostLineage,
-  setOwnBlogPostLineage,
 } from "@/lib/blog-client-api";
 import { BlogPostView } from "./blog-post-view";
 
@@ -16,7 +15,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/blog-client-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/blog-client-api")>()),
   setBlogPostLineage: vi.fn(),
-  setOwnBlogPostLineage: vi.fn(),
   setBlogPostCategory: vi.fn(),
 }));
 
@@ -102,7 +100,7 @@ describe("«Линия» поста", () => {
     expect(screen.getByText("Гаудия-матх — IPBYS")).toBeInTheDocument();
   });
 
-  it("админ назначает линию в окне разметки, и значок показывает её", async () => {
+  it("админ назначает линию в окне домика, и значок показывает её (VED-632)", async () => {
     const user = userEvent.setup();
     vi.mocked(setBlogPostLineage).mockResolvedValue(
       makePost({ canModerate: true, lineage: "iskcon" }),
@@ -111,7 +109,7 @@ describe("«Линия» поста", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Разметка. Линия: для всех линий",
+        name: "Линия. Пост: Для всех линий",
       }),
     );
     await user.click(screen.getByRole("button", { name: "ISKCON" }));
@@ -119,30 +117,23 @@ describe("«Линия» поста", () => {
 
     expect(setBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
     expect(
-      await screen.findByRole("button", { name: "Разметка. Линия: ISKCON" }),
+      await screen.findByRole("button", { name: "Линия. Пост: ISKCON" }),
     ).toBeInTheDocument();
   });
 
-  /* VED-590: «добавь возможность тем, кто публикует, назначать посту
-     линию, но только своим постам». */
-  it("автор назначает линию своему посту через свой адрес", async () => {
+  /* VED-632: «участники ничего менять в этих фильтрах не могут» — автор
+     выбирает линию в форме публикации (VED-590), а домик у него только
+     показывает. */
+  it("автор своего поста видит линию, но не меняет её в домике", async () => {
     const user = userEvent.setup();
-    vi.mocked(setOwnBlogPostLineage).mockResolvedValue(
-      makePost({ canEdit: true, lineage: "iskcon" }),
-    );
-    vi.mocked(setBlogPostLineage).mockClear();
     render(<BlogPostView initial={makePost({ canEdit: true })} />);
 
     await user.click(
       screen.getByRole("button", {
-        name: "Разметка. Линия: для всех линий",
+        name: "Линия. Пост: Для всех линий",
       }),
     );
-    await user.click(screen.getByRole("button", { name: "ISKCON" }));
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
-
-    expect(setOwnBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
-    expect(setBlogPostLineage).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
   });
 });
 

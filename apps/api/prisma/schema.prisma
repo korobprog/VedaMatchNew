@@ -7232,6 +7232,12 @@ model BlogPost {
   /// Категория поста (VED-590): назначает автор, читатель фильтрует ленту.
   /// `null` — без категории, пост виден только во «Все».
   category BlogPostCategory?
+  /// Ступени самоидентификации, для которых пост (VED-590), как
+  /// `LibraryEntry.audienceStages`: `seeker` / `practitioner` / `yogi` /
+  /// `devotee`, пусто — для всех. Автор выбирает их при публикации; лента
+  /// показывает зрителю посты его ступеней («Фильтры материалов») и посты
+  /// для всех.
+  audienceStages String[] @default([])
 
   images    BlogPostImage[]
   favorites BlogFavorite[]

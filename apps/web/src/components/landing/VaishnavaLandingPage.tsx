@@ -28,6 +28,7 @@ import type {
   PricingPlan,
 } from "@vedamatch/shared";
 import { LINEAGES, LINEAGE_GROUP_LABELS } from "@vedamatch/shared";
+import { LineageLabel } from "@/components/abbr-help";
 import type { AppManifest } from "@/lib/app-download";
 import { AppDownloadSection } from "./AppDownloadSection";
 import { ServiceIcon } from "@/components/icons/service-icons";
@@ -535,10 +536,10 @@ export function VaishnavaLandingPage({
                         (item) => (
                           <span
                             key={item.id}
-                            title={item.hint}
                             className="inline-flex items-center rounded-full border border-glass-brd bg-bg-1/70 px-3 py-1.5 text-sm text-text-0"
                           >
-                            {item.label}
+                            {/* Аббревиатура с «?» (VED-634). */}
+                            <LineageLabel text={item.label} />
                           </span>
                         ),
                       )}

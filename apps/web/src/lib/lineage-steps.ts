@@ -85,27 +85,33 @@ export function lineageDetailValue(
 
 export interface LineageStepOption {
   value: string;
+  /**
+   * Подпись пункта. Аббревиатура — без расшифровки (VED-634): «ISKCON»,
+   * «IPBYS»; расшифровку показывает значок «?» рядом (`LineageLabel`).
+   */
   label: string;
-  /** Полное название с расшифровкой — для подсказки и скринридера. */
+  /** Полное название с расшифровкой — для всплывающей подсказки. */
   title: string;
+}
+
+function withHint(label: string, hint: string | undefined): string {
+  return hint ? `${label} — ${hint}` : label;
 }
 
 /**
  * Пункты первого шага: группы по порядку справочника. У группы из одной
- * линии подпись — сама линия (ISKCON с расшифровкой), и надпись «ISKCON» в
- * списке одна, а не заголовок группы плюс строка под ним (VED-568).
+ * линии подпись — сама линия (ISKCON), и надпись «ISKCON» в списке одна, а
+ * не заголовок группы плюс строка под ним (VED-568).
  */
 export function lineageGroupOptions(compact = false): LineageStepOption[] {
   return LINEAGE_GROUPS.map((group) => {
     const sole = lineagesOfGroup(group);
     const item = sole.length === 1 ? sole[0] : null;
-    const full = item?.hint
-      ? `${item.label} — ${item.hint}`
-      : LINEAGE_GROUP_LABELS[group];
+    const label = item && !compact ? item.label : LINEAGE_GROUP_LABELS[group];
     return {
       value: group,
-      label: compact ? LINEAGE_GROUP_LABELS[group] : full,
-      title: full,
+      label,
+      title: withHint(label, item?.hint),
     };
   });
 }
@@ -115,14 +121,11 @@ export function lineageDetailOptions(
   group: LineageGroup,
   { compact = false } = {},
 ): LineageStepOption[] {
-  return lineagesOfGroup(group).map((item) => {
-    const full = item.hint ? `${item.label} — ${item.hint}` : item.label;
-    return {
-      value: item.id as string,
-      label: compact ? item.shortLabel : full,
-      title: full,
-    };
-  });
+  return lineagesOfGroup(group).map((item) => ({
+    value: item.id as string,
+    label: compact ? item.shortLabel : item.label,
+    title: withHint(item.label, item.hint),
+  }));
 }
 
 /** Как спросить второй шаг: «Какой именно матх». */

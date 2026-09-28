@@ -15,8 +15,7 @@ import { BookmarkButton } from "./bookmark-button";
 import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
-import { EntryMarksButton } from "./entry-marks-button";
-import { LineageInfoButton } from "@/components/lineage-info-button";
+import { EntryMarksButtons } from "./entry-marks-button";
 import { EntryBlogStatus, EntryShareActions } from "./entry-share-actions";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -294,9 +293,9 @@ export function EntryCard({
             />
           </>
         )}
-        {/* Справа парой (VED-616): «Разметка» с отпечатком — только
-            администратору Образования, ступени и линия в одном окне;
-            «Линия» с домиком — всем, к какой линии относится материал.
+        {/* Справа парой (VED-616, VED-632), у всех: отпечаток — для каких
+            ступеней самоидентификации материал, домик — к какой линии.
+            Администратор Образования в тех же окнах меняет и сохраняет.
             Меню раскрываются влево и не уходят за экран. Пара не
             разрывается (VED-607); кнопки по 40px, чтобы влезть в строку с
             «Редактировать» и «Удалить» на телефоне шириной 412. */}
@@ -304,7 +303,8 @@ export function EntryCard({
           data-testid="entry-admin-marks"
           className="ml-auto flex shrink-0 items-center gap-1.5"
         >
-          <EntryMarksButton
+          <EntryMarksButtons
+            locale={locale}
             entryId={entry.id}
             audienceStages={audienceStages}
             lineage={lineage}
@@ -313,16 +313,6 @@ export function EntryCard({
               setAudienceStages(marks.stages);
               setLineage(marks.lineage);
             }}
-            sizeClassName="size-10"
-          />
-          <LineageInfoButton
-            subjects={[
-              {
-                title: t(locale, "lineage.infoMaterial"),
-                lineage,
-                emptyLabel: t(locale, "lineage.badgeAll"),
-              },
-            ]}
             sizeClassName="size-10"
           />
         </div>
