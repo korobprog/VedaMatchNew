@@ -14,7 +14,9 @@ import type { TaskDraft } from "./task-edits";
  *   не даёт сохранить выбранный файл, их придётся выбрать заново);
  * - открытую карточку — только пока она открыта: закрытая не вернётся сама
  *   (ровно на этом ловился «старый косяк» VED-500);
- * - несохранённые правки карточки и недописанный комментарий.
+ * - несохранённые правки карточки и недописанный комментарий;
+ * - недописанный пункт чек-листа и пункт, который не дошёл до сервера
+ *   (VED-624).
  *
  * Сохранили, отправили или отменили — запись стирается.
  */
@@ -33,6 +35,8 @@ export interface BoardSession {
   taskDrafts: Record<string, TaskDraft>;
   /** Недописанные комментарии, по id задачи. */
   comments: Record<string, string>;
+  /** Недописанные или не дошедшие пункты чек-листа, по id задачи (VED-624). */
+  checklist: Record<string, string>;
 }
 
 export type SessionStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -42,6 +46,7 @@ const EMPTY: BoardSession = {
   openTaskId: null,
   taskDrafts: {},
   comments: {},
+  checklist: {},
 };
 
 export function boardSessionKey(boardId: string): string {
@@ -78,6 +83,10 @@ export function readBoardSession(
         parsed.comments && typeof parsed.comments === "object"
           ? parsed.comments
           : {},
+      checklist:
+        parsed.checklist && typeof parsed.checklist === "object"
+          ? parsed.checklist
+          : {},
     };
   } catch {
     // Испорченная запись — начинаем с чистого листа, а не падаем.
@@ -98,7 +107,8 @@ export function patchBoardSession(
       !next.composer &&
       !next.openTaskId &&
       Object.keys(next.taskDrafts).length === 0 &&
-      Object.keys(next.comments).length === 0;
+      Object.keys(next.comments).length === 0 &&
+      Object.keys(next.checklist).length === 0;
     if (empty) store.removeItem(boardSessionKey(boardId));
     else store.setItem(boardSessionKey(boardId), JSON.stringify(next));
   } catch {

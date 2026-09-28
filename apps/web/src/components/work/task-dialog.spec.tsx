@@ -239,9 +239,12 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     await user.type(description, " и ещё строка");
     await user.keyboard("{Escape}");
 
-    expect(updateWorkTask).toHaveBeenCalledWith("t1", {
-      description: "Старое описание и ещё строка",
-    });
+    // С keepalive (VED-624): правка доходит, даже если следом закрыли вкладку.
+    expect(updateWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { description: "Старое описание и ещё строка" },
+      { keepalive: true },
+    );
     expect(props.onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
   });
@@ -433,7 +436,11 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
       ),
     );
     expect(moveWorkTask).toHaveBeenCalledTimes(1);
-    expect(updateWorkTask).toHaveBeenCalledWith("t1", { assigneeId: "u2" });
+    expect(updateWorkTask).toHaveBeenCalledWith(
+      "t1",
+      { assigneeId: "u2" },
+      { keepalive: true },
+    );
   });
 
   it("галочка чек-листа уходит сразу и полосу «Сохранено / Сохранить» не вызывает (VED-603)", async () => {
@@ -1176,5 +1183,185 @@ describe("WorkTaskDialog — графа «Дата» (VED-598)", () => {
     expect(screen.getByText("9 сентября 2026 г.")).toBeInTheDocument();
     // У задачи без срока графы «Срок» нет вовсе.
     expect(screen.queryByLabelText("Срок")).toBeNull();
+  });
+});
+
+/**
+ * VED-624: «Я нажал на загрузить скриншот, а потом написал ещё один пункт в
+ * чек-листе и вышел из окна этой задачи. Новый пункт не сохранился. Надо,
+ * чтобы ничего не терялось». Пункт уходит очередью вне окна, с keepalive, не
+ * дожидаясь загрузки; недописанный уходит при закрытии окна.
+ */
+describe("WorkTaskDialog — пункт чек-листа не теряется (VED-624)", () => {
+  const shot = (name: string) => new File(["x"], name, { type: "image/png" });
+  const withItem = (text: string) =>
+    ({
+      ...task,
+      checklist: [{ id: "i1", text, done: false, position: 0 }],
+      checklistTotal: 1,
+    }) as unknown as WorkTaskDto;
+
+  /** Скриншот, который грузится, пока тест не отпустит. */
+  function slowUpload() {
+    let finish: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(attachWorkFile).mockReset();
+    vi.mocked(attachWorkFile).mockImplementation(
+      () =>
+        new Promise<WorkTaskDto>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    return (value: WorkTaskDto) => finish(value);
+  }
+
+  function cleanUploads() {
+    for (const job of workUploads.getSnapshot()) workUploads.dismiss(job.id);
+  }
+
+  beforeEach(() => {
+    vi.mocked(addWorkChecklistItem).mockReset();
+  });
+
+  it("загрузка идёт → добавил пункт → закрыл окно → пункт дошёл", async () => {
+    const finishUpload = slowUpload();
+    let finishItem: (value: WorkTaskDto) => void = () => {};
+    vi.mocked(addWorkChecklistItem).mockImplementation(
+      () => new Promise((resolve) => (finishItem = resolve)),
+    );
+    const user = userEvent.setup();
+    const props = { onClose: vi.fn(), onChanged: vi.fn() };
+    const view = render(
+      <WorkTaskDialog taskId="t1" board={board} {...props} />,
+    );
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+    expect(workUploads.isBusy()).toBe(true);
+
+    await user.type(
+      screen.getByLabelText("Новый пункт чек-листа"),
+      "Проверить на телефоне{Enter}",
+    );
+
+    // Ушёл сразу, не дожидаясь скриншота, и виден в списке, пока летит.
+    expect(addWorkChecklistItem).toHaveBeenCalledWith(
+      "t1",
+      { text: "Проверить на телефоне" },
+      { keepalive: true },
+    );
+    expect(screen.getByText("Проверить на телефоне")).toBeInTheDocument();
+    expect(screen.getByLabelText("Новый пункт чек-листа")).toHaveValue("");
+
+    await user.keyboard("{Escape}");
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    view.unmount();
+
+    finishItem(withItem("Проверить на телефоне"));
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    expect(addWorkChecklistItem).toHaveBeenCalledTimes(1);
+    finishUpload(task);
+    await waitFor(() => expect(workUploads.isBusy()).toBe(false));
+    cleanUploads();
+  });
+
+  it("загрузка идёт → написал пункт, не нажав «Добавить» → закрыл окно → пункт дошёл", async () => {
+    const finishUpload = slowUpload();
+    vi.mocked(addWorkChecklistItem).mockResolvedValue(withItem("Недописанный"));
+    const user = userEvent.setup();
+    const props = open();
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+
+    await user.type(
+      screen.getByLabelText("Новый пункт чек-листа"),
+      "Недописанный",
+    );
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(addWorkChecklistItem).toHaveBeenCalledWith(
+      "t1",
+      { text: "Недописанный" },
+      { keepalive: true },
+    );
+    await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
+    // Отправленное из памяти вкладки стёрто: при новом открытии не вернётся.
+    expect(sessionStorage.getItem("vedamatch:work-board:b1")).toBeNull();
+    finishUpload(task);
+    await waitFor(() => expect(workUploads.isBusy()).toBe(false));
+    cleanUploads();
+  });
+
+  it("ушли в другое окно портала — недописанный пункт вернулся в поле", async () => {
+    const user = userEvent.setup();
+    const first = render(
+      <WorkTaskDialog
+        taskId="t1"
+        board={board}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Вернусь и допишу",
+    );
+    first.unmount();
+
+    open();
+
+    expect(await screen.findByLabelText("Новый пункт чек-листа")).toHaveValue(
+      "Вернусь и допишу",
+    );
+    expect(addWorkChecklistItem).not.toHaveBeenCalled();
+  });
+
+  it("сервер не принял пункт — текст возвращается в поле, окно говорит почему", async () => {
+    vi.mocked(addWorkChecklistItem).mockRejectedValue(
+      new Error("Сеть недоступна"),
+    );
+    const user = userEvent.setup();
+    open();
+
+    await user.type(
+      await screen.findByLabelText("Новый пункт чек-листа"),
+      "Не потеряй меня{Enter}",
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Пункт «Не потеряй меня» не сохранился: Сеть недоступна",
+    );
+    expect(screen.getByLabelText("Новый пункт чек-листа")).toHaveValue(
+      "Не потеряй меня",
+    );
+  });
+
+  it("ответ загрузки без нового пункта не прячет его — карточка берётся заново", async () => {
+    const finishUpload = slowUpload();
+    vi.mocked(addWorkChecklistItem).mockResolvedValue(withItem("Пункт"));
+    const user = userEvent.setup();
+    open();
+    await user.upload(
+      await screen.findByLabelText("Прикрепить картинки или файлы"),
+      shot("1.png"),
+    );
+    await user.type(screen.getByLabelText("Новый пункт чек-листа"), "Пункт{Enter}");
+    expect(await screen.findByText("0 из 1")).toBeInTheDocument();
+
+    // Сервер собрал ответ загрузки до пункта — в нём чек-лист пуст.
+    vi.mocked(getWorkTask).mockResolvedValue(withItem("Пункт"));
+    const loads = vi.mocked(getWorkTask).mock.calls.length;
+    finishUpload(task);
+
+    await waitFor(() =>
+      expect(getWorkTask).toHaveBeenCalledTimes(loads + 1),
+    );
+    expect(await screen.findByText("0 из 1")).toBeInTheDocument();
+    expect(screen.getByText("Пункт")).toBeInTheDocument();
+    await waitFor(() => expect(workUploads.isBusy()).toBe(false));
+    cleanUploads();
   });
 });
