@@ -20,6 +20,16 @@ describe("ReelsChrome", () => {
     expect(menu.className).toMatch(/size-10/);
   });
 
+  // VED-599: ← и ☰ придвинуты к краям — поле нажатия вплотную к краю.
+  it("кнопки «←» и меню стоят вплотную к краям", () => {
+    render(<ReelsChrome isAdmin={false} />);
+
+    expect(screen.getByRole("link", { name: "Назад на портал" })).toHaveClass("left-0");
+    expect(screen.getByRole("button", { name: "Разделы Вдохновения" })).toHaveClass(
+      "right-0",
+    );
+  });
+
   it("открывает разделы по нажатию на кнопку меню", async () => {
     const user = userEvent.setup();
     render(<ReelsChrome isAdmin={false} />);

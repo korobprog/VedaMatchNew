@@ -122,37 +122,33 @@ describe("ReelsFeed", () => {
     expect(within(feed).getByRole("region", { name: "Конец ленты" })).toBeInTheDocument();
   });
 
-  /** Пункты ряда вкладок по порядку: вкладки группой, затем звёздочка (VED-581). */
+  /** Пункты ряда вкладок по порядку — все прямые дети ряда (VED-599). */
   function tabRowLabels(tabs: HTMLElement) {
-    const links = within(tabs).getByTestId("reels-tabs-links");
-    return [...links.children, ...[...tabs.children].filter((node) => node !== links)].map(
-      (node) => node.textContent,
-    );
+    return [...tabs.children].map((node) => node.textContent);
   }
 
-  /* VED-581: звёздочка — посередине между «Категориями» и ☰. Ряд делится на
-     две части с равными промежутками, края ряда — по значкам ← и ☰. */
-  it("звёздочка стоит отдельно от вкладок, промежутки ряда равные", () => {
+  /* VED-581, VED-599: все клавиши ряда — на равных промежутках от ← до ☰.
+     Пункты — прямые дети ряда с `justify-evenly`, без вложенной группы со
+     своим промежутком; края ряда — по значкам ← и ☰. */
+  it("все пункты ряда — прямые дети ряда с равными промежутками", () => {
     fetchOk({});
     render(
       <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />,
     );
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    expect(tabs.children).toHaveLength(2);
-    expect(tabs).toHaveClass("justify-evenly", "left-9", "right-9");
+    expect(tabs).toHaveClass("justify-evenly", "left-7", "right-7");
     expect(tabs).not.toHaveClass("justify-center");
-    const links = within(tabs).getByTestId("reels-tabs-links");
-    expect(tabs.firstElementChild).toBe(links);
-    expect(within(links).getByRole("link", { name: "Категории" })).toBeInTheDocument();
+    expect(within(tabs).queryByTestId("reels-tabs-links")).not.toBeInTheDocument();
+    const star = within(tabs).getByRole("button", { name: "Горячие кнопки" });
+    expect(tabs.lastElementChild).toContainElement(star);
+    // Подтяжка крайней кнопки шапки к краю экрана (VED-439) звёздочку в ряду
+    // не сдвигает.
+    expect(tabs.lastElementChild).toHaveClass("[&>div>span]:mr-0");
+    // В личной ленте начала, к которому вернуться, нет — и значка ↺ тоже.
     expect(
-      within(links).queryByRole("button", { name: "Горячие кнопки" }),
+      within(tabs).queryByRole("link", { name: /Открыть с начала/ }),
     ).not.toBeInTheDocument();
-    expect(
-      within(tabs.lastElementChild as HTMLElement).getByRole("button", {
-        name: "Горячие кнопки",
-      }),
-    ).toBeInTheDocument();
   });
 
   // VED-252: «Для вас» переименована в «Ленту», значок фильтра встал в тот
@@ -243,7 +239,7 @@ describe("ReelsFeed", () => {
     }
   });
 
-  it("лента, открытая с места остановки, предлагает «С начала»", () => {
+  it("лента, открытая с места остановки, предлагает ↺ «С начала» в ряду вкладок", () => {
     fetchOk({});
     render(
       <ReelsFeed
@@ -253,9 +249,34 @@ describe("ReelsFeed", () => {
         category="filosofiya-2"
       />,
     );
+    // VED-599: не плашка с надписью под рядом, а значок ↺ первым в ряду
+    // вкладок — сразу за ←, тем же цветом, что звёздочка.
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
+    const restart = within(tabs).getByRole("link", {
+      name: "Лента открыта с места, где вы остановились. Открыть с начала",
+    });
+    expect(restart).toHaveAttribute("href", "/motivation?tab=cards&category=filosofiya-2");
+    expect(tabs.firstElementChild).toBe(restart);
+    expect(restart).toHaveTextContent("");
+    expect(restart).toHaveClass("text-text-1");
+    expect(restart).not.toHaveClass("text-white");
+    expect(screen.queryByText("С начала")).not.toBeInTheDocument();
+  });
+
+  it("лента раздела, открытая с начала, значка ↺ в ряду не ставит", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{ items: [post("c"), post("d")], nextCursor: null }}
+        tab="cards"
+        donation={null}
+        category="filosofiya-2"
+      />,
+    );
+    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     expect(
-      screen.getByRole("link", { name: "Лента открыта с места, где вы остановились. Открыть с начала" }),
-    ).toHaveAttribute("href", "/motivation?tab=cards&category=filosofiya-2");
+      within(tabs).queryByRole("link", { name: /Открыть с начала/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
