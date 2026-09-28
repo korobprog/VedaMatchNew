@@ -13,6 +13,10 @@ import {
   missingRussianVoice,
   nextRateIndex,
   nothingPhrase,
+  searchingPhrase,
+  showSearching,
+  EYE_STALE_MS,
+  phraseFontSize,
   pickEyeFrameSize,
   samePhrase,
   shouldSpeak,
@@ -85,6 +89,27 @@ describe('shouldSpeak', () => {
 
   it('пустое не говорится', () => {
     expect(shouldSpeak({ ...base, speech: '  ', last: null, asked: true })).toBe(false);
+  });
+});
+
+describe('phraseFontSize', () => {
+  it('короткий ответ — крупнее всего, длинный — мельче', () => {
+    expect(phraseFontSize('Автобус 47, до вокзала.').fontSize).toBe(28);
+    expect(phraseFontSize('а'.repeat(100)).fontSize).toBe(24);
+    expect(phraseFontSize('а'.repeat(200)).fontSize).toBe(20);
+  });
+});
+
+describe('поиск на экране', () => {
+  it('старая фраза уступает «Ищу…» через несколько секунд без находок', () => {
+    expect(showSearching({ shownAt: 0, now: EYE_STALE_MS - 1 })).toBe(false);
+    expect(showSearching({ shownAt: 0, now: EYE_STALE_MS })).toBe(true);
+  });
+
+  it('у каждого режима своя подпись поиска', () => {
+    const all = EYE_MODES.map((item) => searchingPhrase(item.mode));
+    expect(new Set(all).size).toBe(EYE_MODES.length);
+    expect(searchingPhrase('transport')).toBe('Ищу транспорт…');
   });
 });
 

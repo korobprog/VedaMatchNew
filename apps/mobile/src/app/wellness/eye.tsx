@@ -37,7 +37,10 @@ import {
   missingRussianVoice,
   nextRateIndex,
   nothingPhrase,
+  phraseFontSize,
   pickEyeFrameSize,
+  searchingPhrase,
+  showSearching,
   shouldSpeak,
   shouldSpeakFailure,
   type EyeFailure,
@@ -111,6 +114,8 @@ export default function WellnessEyeScreen() {
   const lastSpoken = useRef<SpokenPhrase | null>(null);
   const lastFailure = useRef<EyeFailure | null>(null);
   const lastFoundAt = useRef(Date.now());
+  /** Когда на экране в последний раз сменилась фраза. */
+  const shownAt = useRef(Date.now());
   const askPending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const welcomed = useRef(false);
@@ -169,6 +174,7 @@ export default function WellnessEyeScreen() {
   const speak = useCallback(async (text: string) => {
     const token = ++speechToken.current;
     setPhrase(text);
+    shownAt.current = Date.now();
     speaking.current = true;
     try {
       await say(text, current.current.rate);
@@ -227,7 +233,6 @@ export default function WellnessEyeScreen() {
           {
             mode: lookMode,
             imageDataUrl: dataUrl,
-            previous: lastSpoken.current?.text ?? null,
           },
           controller.signal,
         );
@@ -235,9 +240,18 @@ export default function WellnessEyeScreen() {
         lastFailure.current = null;
         if (answer.nothing) {
           if (asked) await speak(nothingPhrase(lookMode));
+          else if (showSearching({ shownAt: shownAt.current, now: Date.now() })) {
+            // Старая фраза не висит вечно: экран показывает, что поиск идёт.
+            setPhrase(searchingPhrase(lookMode));
+          }
         } else {
           const at = Date.now();
           lastFoundAt.current = at;
+          // На экране — всегда свежий ответ, даже когда голос его не
+          // повторяет: тот же автобус дважды за 20 секунд не произносится,
+          // но видно, что помощник его по-прежнему видит.
+          setPhrase(answer.speech);
+          shownAt.current = at;
           if (
             shouldSpeak({
               speech: answer.speech,
@@ -300,7 +314,11 @@ export default function WellnessEyeScreen() {
     if (!cameraOn || !ready) return;
     if (!welcomed.current) {
       welcomed.current = true;
-      void speak(`${EYE_WELCOME} ${info.announce}`);
+      // Предупреждение звучит, но на экране остаётся только подсказка режима:
+      // длинный текст в карточке съедал видоискатель.
+      void speak(`${EYE_WELCOME} ${info.announce}`).then(() =>
+        setPhrase((shown) => (shown.startsWith(EYE_WELCOME) ? info.announce : shown)),
+      );
     }
     if (info.live && !paused) schedule(300);
     return () => {
@@ -427,7 +445,17 @@ export default function WellnessEyeScreen() {
           </Text>
           {/* Без live region намеренно: фразу уже произнёс наш голос, и
               TalkBack повторил бы её вторым голосом поверх. */}
-          <Text style={[styles.phrase, { color: colors.text0 }]}>{phrase || info.announce}</Text>
+          <ScrollView style={styles.phraseScroll} contentContainerStyle={styles.phraseScrollBody}>
+            <Text
+              style={[
+                styles.phrase,
+                phraseFontSize(phrase || info.announce),
+                { color: colors.text0 },
+              ]}
+            >
+              {phrase || info.announce}
+            </Text>
+          </ScrollView>
         </View>
 
         {voiceMissing ? (
@@ -567,6 +595,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.displayBold, fontSize: 24 },
   body: { fontFamily: fonts.body, fontSize: 16, lineHeight: 23 },
   phraseCard: {
+    maxHeight: '34%',
     marginHorizontal: 16,
     borderWidth: 1,
     borderRadius: radius.md,
@@ -577,7 +606,11 @@ const styles = StyleSheet.create({
   status: { fontFamily: fonts.bodySemiBold, fontSize: 16 },
   // Самый крупный текст экрана: при глаукоме центр поля зрения обычно
   // сохранён, и фразу можно дочитать глазами, если её не расслышали.
-  phrase: { fontFamily: fonts.bodyBold, fontSize: 28, lineHeight: 36 },
+  phrase: { fontFamily: fonts.bodyBold },
+  // Карточка не выше трети экрана: под ней видоискатель и есть кнопка
+  // «Спросить сейчас». Длинный ответ прокручивается, а не обрезается.
+  phraseScroll: { flexGrow: 0 },
+  phraseScrollBody: { flexGrow: 0 },
   warnCard: {
     marginHorizontal: 16,
     marginTop: 12,

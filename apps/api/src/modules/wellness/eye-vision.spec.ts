@@ -7,7 +7,6 @@ import {
   parseEyeFrame,
   parseEyeMode,
   parseEyeResponse,
-  parsePrevious,
 } from './eye-vision';
 
 const FRAME = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
@@ -54,18 +53,6 @@ describe('parseEyeFrame', () => {
   });
 });
 
-describe('parsePrevious', () => {
-  it('склеивает пробелы и срезает пустое', () => {
-    expect(parsePrevious('  Автобус\n 47 ')).toBe('Автобус 47');
-    expect(parsePrevious('   ')).toBeNull();
-    expect(parsePrevious(47)).toBeNull();
-  });
-
-  it('не пускает в промпт простыню', () => {
-    expect(parsePrevious('а'.repeat(1000))?.length).toBe(EYE_SPEECH_MAX_CHARS);
-  });
-});
-
 function taskText(body: ReturnType<typeof buildEyeRequest>): string {
   const user = body.messages[1];
   return user.role === 'user' && user.content[0].type === 'text'
@@ -75,7 +62,7 @@ function taskText(body: ReturnType<typeof buildEyeRequest>): string {
 
 describe('buildEyeRequest', () => {
   it('тело chat/completions: системная роль, задание и кадр', () => {
-    const body = buildEyeRequest('gemini-3.6-flash', 'transport', FRAME, null);
+    const body = buildEyeRequest('gemini-3.6-flash', 'transport', FRAME);
     expect(body.model).toBe('gemini-3.6-flash');
     expect(body.temperature).toBe(0);
     expect(body.max_tokens).toBeLessThanOrEqual(150);
@@ -90,33 +77,41 @@ describe('buildEyeRequest', () => {
     });
   });
 
+  it('к человеку — на «вы»', () => {
+    const system = buildEyeRequest('m', 'scene', FRAME).messages[0];
+    expect(system.role === 'system' ? system.content : '').toContain('на «вы»');
+  });
+
   it('у каждого режима своё задание', () => {
-    expect(taskText(buildEyeRequest('m', 'transport', FRAME, null))).toMatch(
+    expect(taskText(buildEyeRequest('m', 'transport', FRAME))).toMatch(
       /номер маршрута/,
     );
-    expect(taskText(buildEyeRequest('m', 'shop', FRAME, null))).toMatch(
-      /ценник/,
-    );
-    expect(taskText(buildEyeRequest('m', 'scene', FRAME, null))).toMatch(
-      /ступеньки/,
-    );
+    expect(taskText(buildEyeRequest('m', 'shop', FRAME))).toMatch(/ценник/);
+    expect(taskText(buildEyeRequest('m', 'scene', FRAME))).toMatch(/ступеньки/);
   });
 
   it('обзору сцены мелочи не нужны — детализация низкая', () => {
-    const user = buildEyeRequest('m', 'scene', FRAME, null).messages[1];
+    const user = buildEyeRequest('m', 'scene', FRAME).messages[1];
     if (user.role !== 'user' || user.content[1].type !== 'image_url') {
       throw new Error('ожидался кадр');
     }
     expect(user.content[1].image_url.detail).toBe('low');
   });
 
-  it('прошлая фраза уходит в задание, чтобы модель не пересказывала её иначе', () => {
-    expect(
-      taskText(buildEyeRequest('m', 'transport', FRAME, 'Автобус 47')),
-    ).toContain('«Автобус 47»');
-    expect(
-      taskText(buildEyeRequest('m', 'transport', FRAME, null)),
-    ).not.toContain('Перед этим');
+  it('прошлая фраза в задание не уходит: с ней модель повторяла старое', () => {
+    expect(taskText(buildEyeRequest('m', 'transport', FRAME))).not.toContain(
+      'Перед этим',
+    );
+  });
+
+  it('модель не рассуждает о кадре и не называет госномер', () => {
+    const system = buildEyeRequest('m', 'transport', FRAME).messages[0];
+    expect(system.role === 'system' ? system.content : '').toContain(
+      'Не рассуждай о кадре',
+    );
+    expect(taskText(buildEyeRequest('m', 'transport', FRAME))).toMatch(
+      /Госномер.*не номер маршрута/,
+    );
   });
 });
 

@@ -12,7 +12,6 @@ import {
   EyeInputError,
   parseEyeFrame,
   parseEyeMode,
-  parsePrevious,
   type EyeMode,
 } from './eye-vision';
 import { WellnessEyeService } from './wellness-eye.service';
@@ -39,14 +38,10 @@ export class WellnessEyeController {
   @Post('look')
   @HttpCode(200)
   @Throttle({ default: { ttl: 60_000, limit: 40 } })
-  async look(
-    @Body()
-    body: {
-      mode?: unknown;
-      imageDataUrl?: unknown;
-      previous?: unknown;
-    },
-  ) {
+  // `previous` (прошлую фразу) первая сборка приложения ещё присылает, но
+  // модели она больше не уходит: с ней модель повторяла старую фразу слово
+  // в слово, хотя в кадре уже был автобус. Повторы отсекает телефон.
+  async look(@Body() body: { mode?: unknown; imageDataUrl?: unknown }) {
     let mode: EyeMode;
     let image: string;
     try {
@@ -58,6 +53,6 @@ export class WellnessEyeController {
       }
       throw error;
     }
-    return this.eye.look(mode, image, parsePrevious(body.previous));
+    return this.eye.look(mode, image);
   }
 }

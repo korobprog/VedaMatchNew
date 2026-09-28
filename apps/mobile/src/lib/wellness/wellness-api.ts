@@ -53,11 +53,11 @@ export function createWellnessApi(api: ApiClient) {
       }),
     /**
      * «Третий глаз»: кадр с камеры → фраза для синтезатора речи. Кадр на
-     * сервере не сохраняется. `previous` — что уже прозвучало: модель по нему
-     * не пересказывает тот же автобус другими словами.
+     * сервере не сохраняется. Прошлую фразу не шлём: с ней модель повторяла
+     * старое слово в слово, хотя в кадре было уже другое.
      */
     look: (
-      body: { mode: EyeMode; imageDataUrl: string; previous: string | null },
+      body: { mode: EyeMode; imageDataUrl: string },
       signal?: AbortSignal,
     ) =>
       api.request<{ speech: string; nothing: boolean }>('/wellness/eye/look', {

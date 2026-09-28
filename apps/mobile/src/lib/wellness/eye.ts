@@ -133,6 +133,42 @@ export function nothingPhrase(mode: EyeMode): string {
   }
 }
 
+/**
+ * Размер шрифта фразы на экране. Короткий ответ («Автобус 47») — самым
+ * крупным, чтобы дочитать его глазами. Длинный крупным не влезает: на
+ * телефоне пользователя приветствие шрифтом 28 закрыло весь видоискатель, и
+ * зона «Спросить сейчас» сжалась в полоску.
+ */
+export function phraseFontSize(text: string): { fontSize: number; lineHeight: number } {
+  const length = text.trim().length;
+  if (length <= 60) return { fontSize: 28, lineHeight: 36 };
+  if (length <= 140) return { fontSize: 24, lineHeight: 31 };
+  return { fontSize: 20, lineHeight: 27 };
+}
+
+/**
+ * Сколько старая фраза держится на экране, пока новых находок нет. Дольше —
+ * и экран выглядит зависшим: на телефоне фраза про ноутбук висела, пока в
+ * кадре уже был автобус, и казалось, что помощник застыл на одной картинке.
+ */
+export const EYE_STALE_MS = 8_000;
+
+/** Что показать на экране, пока ничего не найдено. Не произносится. */
+export function searchingPhrase(mode: EyeMode): string {
+  switch (mode) {
+    case 'transport':
+      return 'Ищу транспорт…';
+    case 'shop':
+      return 'Ищу товар или ценник…';
+    case 'scene':
+      return 'Нажмите «Что вокруг?»';
+  }
+}
+
+export function showSearching(input: { shownAt: number; now: number }): boolean {
+  return input.now - input.shownAt >= EYE_STALE_MS;
+}
+
 /* ------------------------------------------------------------------ */
 /* Кадр                                                                */
 /* ------------------------------------------------------------------ */
