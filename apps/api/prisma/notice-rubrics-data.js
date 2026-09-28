@@ -62,6 +62,15 @@ const noticeRubrics = [
     nameEn: 'Teaching and mentoring',
   },
   {
+    slug: 'medicine',
+    kinds: ['offer', 'request', 'event', 'info'],
+    nameRu: 'Медицина',
+    nameEn: 'Medicine',
+    // Имя иконки lucide. Сейчас рубрики рисуются без значков, ключ лежит
+    // в `NoticeRubric.iconKey` про запас.
+    iconKey: 'stethoscope',
+  },
+  {
     slug: 'books-sadhana',
     kinds: ['offer', 'request'],
     nameRu: 'Книги и садхана-инвентарь',
