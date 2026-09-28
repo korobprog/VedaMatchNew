@@ -46,11 +46,7 @@ export class WellnessEyeService {
     return { baseUrl, apiKey, model };
   }
 
-  async look(
-    mode: EyeMode,
-    imageDataUrl: string,
-    previous: string | null,
-  ): Promise<EyeAnswer> {
+  async look(mode: EyeMode, imageDataUrl: string): Promise<EyeAnswer> {
     const settings = this.config();
     if (!settings) {
       throw new ServiceUnavailableException('Распознавание не настроено');
@@ -65,7 +61,7 @@ export class WellnessEyeService {
           Authorization: `Bearer ${settings.apiKey}`,
         },
         body: JSON.stringify(
-          buildEyeRequest(settings.model, mode, imageDataUrl, previous),
+          buildEyeRequest(settings.model, mode, imageDataUrl),
         ),
         // Не 45 секунд, как у состава: через 20 секунд автобус уже уехал, и
         // ответ про него хуже, чем свежий кадр. Телефон повторит сам.

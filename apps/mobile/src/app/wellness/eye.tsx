@@ -39,6 +39,8 @@ import {
   nothingPhrase,
   phraseFontSize,
   pickEyeFrameSize,
+  searchingPhrase,
+  showSearching,
   shouldSpeak,
   shouldSpeakFailure,
   type EyeFailure,
@@ -112,6 +114,8 @@ export default function WellnessEyeScreen() {
   const lastSpoken = useRef<SpokenPhrase | null>(null);
   const lastFailure = useRef<EyeFailure | null>(null);
   const lastFoundAt = useRef(Date.now());
+  /** Когда на экране в последний раз сменилась фраза. */
+  const shownAt = useRef(Date.now());
   const askPending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const welcomed = useRef(false);
@@ -170,6 +174,7 @@ export default function WellnessEyeScreen() {
   const speak = useCallback(async (text: string) => {
     const token = ++speechToken.current;
     setPhrase(text);
+    shownAt.current = Date.now();
     speaking.current = true;
     try {
       await say(text, current.current.rate);
@@ -228,7 +233,6 @@ export default function WellnessEyeScreen() {
           {
             mode: lookMode,
             imageDataUrl: dataUrl,
-            previous: lastSpoken.current?.text ?? null,
           },
           controller.signal,
         );
@@ -236,9 +240,18 @@ export default function WellnessEyeScreen() {
         lastFailure.current = null;
         if (answer.nothing) {
           if (asked) await speak(nothingPhrase(lookMode));
+          else if (showSearching({ shownAt: shownAt.current, now: Date.now() })) {
+            // Старая фраза не висит вечно: экран показывает, что поиск идёт.
+            setPhrase(searchingPhrase(lookMode));
+          }
         } else {
           const at = Date.now();
           lastFoundAt.current = at;
+          // На экране — всегда свежий ответ, даже когда голос его не
+          // повторяет: тот же автобус дважды за 20 секунд не произносится,
+          // но видно, что помощник его по-прежнему видит.
+          setPhrase(answer.speech);
+          shownAt.current = at;
           if (
             shouldSpeak({
               speech: answer.speech,
