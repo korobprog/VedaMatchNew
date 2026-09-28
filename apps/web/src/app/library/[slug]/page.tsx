@@ -33,9 +33,11 @@ import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
 import { LibraryContents } from "@/components/library/library-contents";
 import { EntryList } from "@/components/library/entry-list";
-import { LibraryLineageFilter } from "@/components/library/lineage-filter-chips";
-import { currentLineageChoice } from "@/components/library/lineage-filter";
-import { profileMaterialFilters } from "@/lib/material-filters";
+import {
+  MATERIAL_FILTERS_HREF,
+  MATERIAL_FILTERS_LABEL,
+  profileMaterialFilters,
+} from "@/lib/material-filters";
 import { LineageInfoButton } from "@/components/lineage-info-button";
 import { shlokaSectionMode } from "@/components/library/shloka/shloka-mode";
 import { ShlokaRootPanel } from "@/components/library/shloka/shloka-root-panel";
@@ -134,23 +136,15 @@ export default async function LibraryCategoryPage({
   if (folderKey && !folder) notFound();
 
   const locale = preferences?.uiLanguage ?? "ru";
-  // Настройка Образования сильнее «Фильтров материалов» с главной
-  // (VED-617); без неё действуют они — та же арифметика, что на сервере.
-  const preference = preferences?.lineage ?? null;
-  const materialFilters = profileMaterialFilters(user ?? null);
+  // Линии — из «Фильтров материалов» с главной (VED-617), явный `?lineage=`
+  // сильнее; своей кнопки линии у Образования нет (VED-628). Та же
+  // арифметика, что на сервере.
   const appliedLineageIds = effectiveLineageIds(
-    explicitLineage ?? preference,
-    materialFilters,
+    explicitLineage,
+    profileMaterialFilters(user ?? null),
   );
-  const lineageChoice = currentLineageChoice({
-    explicit: explicitLineage,
-    preference,
-    portalLineages: materialFilters.lineages,
-  });
-  // Кнопки линий — те же, что на главной Образования (VED-395): выбор
-  // сохраняется в настройке и действует во всех рубриках.
-  // Линия — в ключе ленты: кнопка меняет настройку, а не адрес, и без неё
-  // лента после router.refresh() держала бы прежнюю выдачу.
+  // Линия — в ключе ленты: «Фильтры материалов» меняют профиль, а не адрес,
+  // и без неё лента держала бы прежнюю выдачу.
   const lineageKey = appliedLineageIds?.join(",") ?? "all";
   // Фильтр ленты применён (VED-396) — число в шапке следует за лентой.
   // В окне шлок лента без самих шлок, и её число шапке не годится.
@@ -217,13 +211,10 @@ export default async function LibraryCategoryPage({
         </div>
 
         {/* Ряд действий (VED-511): «Добавить», а справа значками — «Закладки»,
-            «Фильтры», «Редактировать», «Упорядочить», в этом порядке. Подписи у значков
+            «Редактировать», «Упорядочить», в этом порядке. Подписи у значков
             — в `aria-label` и подсказке. Кнопки — прямо в ряду, без обёртки:
             форма правки названия встаёт под ним на всю ширину. Ряд — точка
-            отсчёта для меню фильтров: оно раскрывается у его правого края.
-            Кнопка линий заменила блок «Для вашей линии здесь пока ничего
-            нет» под лентой (VED-396): выбранная линия видна сразу, а не
-            когда лента уже опустела. */}
+            отсчёта для меню фильтров: оно раскрывается у его правого края. */}
         <div className="relative mb-4 flex flex-wrap items-center gap-2">
           <Link
             href={`/library/add?category=${encodeURIComponent(category.slug)}`}
@@ -277,20 +268,13 @@ export default async function LibraryCategoryPage({
             </>
           ) : (
             <>
-              {/* «Закладки» (VED-511) — перед «Фильтрами». Раньше вела на
+              {/* «Закладки» (VED-511). Раньше вела на
                   страницу «Избранное» — ту же ленту карточек; теперь
                   открывает окно со списком названий всех закладок
                   Образования (VED-539). */}
               <LibraryBookmarksDialog locale={locale} className="ml-auto" />
-              <div id="lineage-switch" className="scroll-mt-24">
-                <LibraryLineageFilter
-                  locale={locale}
-                  current={lineageChoice}
-                  preference={preference}
-                  portalLineages={materialFilters.lineages}
-                  iconOnly
-                />
-              </div>
+              {/* Кнопки «Фильтры» по линиям здесь нет (VED-628): линии
+                  выбирают «Фильтры материалов» на главной. */}
               <CategoryTitleEdit locale={locale} category={category} iconOnly />
               {/* Рядом — название в общем списке (VED-614): плитка у
                   родителя, путь, чипы. */}
@@ -317,8 +301,8 @@ export default async function LibraryCategoryPage({
           <LineagePrompt
             user={user}
             serviceName="Образования"
-            settingsHref="#lineage-switch"
-            settingsLabel="кнопкой «Фильтры»"
+            settingsHref={MATERIAL_FILTERS_HREF}
+            settingsLabel={MATERIAL_FILTERS_LABEL}
           />
         )}
 

@@ -38,10 +38,7 @@ import {
   pickCategoryPageTitle,
 } from './category-page-title';
 import { hiddenCategoryIds } from './category-visibility';
-import {
-  loadViewerLineageIds,
-  loadViewerMaterialFilters,
-} from './viewer-lineage';
+import { loadViewerMaterialFilters, viewerLineageIds } from './viewer-lineage';
 
 /**
  * Прятать ли от зрителя авторов чужих линий (VED-621). Только там, где
@@ -237,12 +234,7 @@ export class LibraryCategoriesService {
   ): Promise<Set<string>> {
     if (!options.byViewerFilters) return new Set();
     const filters = await loadViewerMaterialFilters(this.prisma, viewerId);
-    const allowed = await loadViewerLineageIds(
-      this.prisma,
-      viewerId,
-      options.lineage,
-      filters,
-    );
+    const allowed = viewerLineageIds(options.lineage, filters);
     return hiddenCategoryIds(rows, allowed);
   }
 

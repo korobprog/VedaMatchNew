@@ -16,6 +16,16 @@ import {
  * страницы. Сами правила фильтра — в `@vedamatch/shared`.
  */
 
+/**
+ * Куда ведёт «настроить линию» из сервисов с материалами: к кнопке
+ * «Фильтры материалов» на главной (`id="material-filters"`). Своей кнопки
+ * линии у Образования нет (VED-628).
+ */
+export const MATERIAL_FILTERS_HREF = "/#material-filters";
+
+/** Подпись той же ссылки в подсказке «Другую … можно выбрать …». */
+export const MATERIAL_FILTERS_LABEL = "в «Фильтрах материалов» на главной";
+
 /** Отметить/снять линию. Порядок — всегда по справочнику. */
 export function toggleLineage(
   current: readonly LineageId[],

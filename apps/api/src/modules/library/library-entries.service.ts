@@ -34,10 +34,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { lineageFeedCondition } from './lineage-feed-filter';
-import {
-  loadViewerLineageIds,
-  loadViewerMaterialFilters,
-} from './viewer-lineage';
+import { loadViewerMaterialFilters, viewerLineageIds } from './viewer-lineage';
 import { audienceStageCondition } from './audience-stage-filter';
 import { CommunitiesService } from '../communities/communities.service';
 import {
@@ -219,15 +216,6 @@ export class LibraryEntriesService {
     viewerId: string | undefined,
   ): Promise<MaterialFilters> {
     return loadViewerMaterialFilters(this.prisma, viewerId);
-  }
-
-  /** Линии ленты: `null` — все (VED-617), см. `viewer-lineage.ts`. */
-  private viewerLineageIds(
-    viewerId: string | undefined,
-    explicit: string | undefined,
-    filters: MaterialFilters,
-  ): Promise<LineageId[] | null> {
-    return loadViewerLineageIds(this.prisma, viewerId, explicit, filters);
   }
 
   /**
@@ -899,11 +887,8 @@ export class LibraryEntriesService {
     // Через `AND`, а не `OR` напрямую — `OR` ниже занят курсором, и второй
     // перетёр бы первый.
     const materialFilters = await this.viewerMaterialFilters(viewerId);
-    const lineageIds = await this.viewerLineageIds(
-      viewerId,
-      filters.lineage,
-      materialFilters,
-    );
+    // Линии ленты: `null` — все (VED-617), см. `viewer-lineage.ts`.
+    const lineageIds = viewerLineageIds(filters.lineage, materialFilters);
     // Ступени самоидентификации (VED-575, VED-617) — туда же, в `AND`, по
     // той же причине: у них свой `OR` «ступени или для всех».
     const conditions = [
