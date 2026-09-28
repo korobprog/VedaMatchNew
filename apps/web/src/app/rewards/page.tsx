@@ -7,7 +7,6 @@ import { RewardsInviteMessage } from "@/components/rewards/rewards-invite-messag
 import { RewardsReferralList } from "@/components/rewards/rewards-referral-list";
 import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
-import { buildInviteMessage } from "@/lib/rewards-share";
 import {
   getRewardsLedger,
   getRewardsMe,
@@ -28,8 +27,9 @@ export default async function RewardsPage() {
   if (!user) redirectToLogin("/rewards");
   if (!me) throw new Error("Не удалось загрузить баллы");
 
-  // Текст приглашения — дословно от заказчика (VED-423), с личной ссылкой.
-  const inviteMessage = buildInviteMessage({ link: me.link });
+  // Текст приглашения тот же, что у горячей кнопки «Пригласить» (VED-618):
+  // шаблон правит администратор, личную ссылку в него ставит сервер.
+  const inviteMessage = me.inviteMessage;
 
   return (
     <div className="relative min-h-dvh bg-bg-0">

@@ -55,6 +55,7 @@ import {
   useDonationSettings,
 } from "@/lib/donation-settings";
 import { DonateButton } from "@/components/donate-sheet";
+import { InviteSheet } from "./invite-sheet";
 import { BookmarksSheet } from "@/components/bookmarks/bookmarks-sheet";
 import { ServiceIcon } from "@/components/icons/service-icons";
 import {
@@ -893,19 +894,22 @@ function HeaderInviteButton({ icon }: { icon: ReactNode }) {
   const invite = useInviteCopy();
   const label = inviteCopyLabel(invite.state);
   return (
-    <button
-      type="button"
-      onClick={() => void invite.copy()}
-      aria-label={label}
-      title={label}
-      className={headerButtonClass}
-    >
-      {icon}
-      {/* Значок не говорит «скопировано» — говорит живая область. */}
-      <span aria-live="polite" className="sr-only">
-        {invite.state === "idle" ? "" : label}
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => void invite.copy()}
+        aria-label={label}
+        title={label}
+        className={headerButtonClass}
+      >
+        {icon}
+        {/* Значок не говорит «скопировано» — говорит живая область. */}
+        <span aria-live="polite" className="sr-only">
+          {invite.state === "idle" ? "" : label}
+        </span>
+      </button>
+      <InviteSheet invite={invite} />
+    </>
   );
 }
 
@@ -1338,15 +1342,18 @@ function RadioTile({ meta }: { meta: QuickActionMeta }) {
   );
 }
 
-/** Ссылка-приглашение в буфер — см. `useInviteCopy`. */
+/** Приглашение в буфер и окно с ним — см. `useInviteCopy`. */
 function InviteTile() {
   const invite = useInviteCopy();
 
   return (
-    <button type="button" onClick={() => void invite.copy()} className={tileClass}>
-      <Share2 className={TILE_ICON} />
-      <span className="line-clamp-2">{inviteCopyLabel(invite.state)}</span>
-    </button>
+    <>
+      <button type="button" onClick={() => void invite.copy()} className={tileClass}>
+        <Share2 className={TILE_ICON} />
+        <span className="line-clamp-2">{inviteCopyLabel(invite.state)}</span>
+      </button>
+      <InviteSheet invite={invite} />
+    </>
   );
 }
 

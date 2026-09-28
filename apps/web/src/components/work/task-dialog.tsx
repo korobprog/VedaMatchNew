@@ -1247,8 +1247,12 @@ export function WorkTaskDialog({
                 звука нет): в конце прокрутки кнопка стоит под содержимым, а
                 не поверх него. Полоса
                 «Сохранить» при ней отступает слева. Пузырь плеера поверх
-                окна не показывается — см. `hasForeignModal`. */}
-            <div className="pointer-events-none sticky bottom-3 z-20 flex h-0 items-end has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10">
+                окна не показывается — см. `hasForeignModal`.
+                VED-612: «опусти немного» — `bottom-0` вместо `bottom-3`.
+                Липкий отступ считается от края внутренних полей окна (p-4),
+                так что круг теперь в 16px от низа окна, а не в 28px, и
+                меньше заслоняет содержимое над собой. */}
+            <div className="pointer-events-none sticky bottom-0 z-20 flex h-0 items-end has-[[data-sound-control]]:mt-2 has-[[data-sound-control]]:h-10">
               <CompactSoundButton
                 tone="mint"
                 className="pointer-events-auto shadow-lg"

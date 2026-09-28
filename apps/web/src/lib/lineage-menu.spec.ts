@@ -3,6 +3,7 @@ import { LINEAGES } from "@vedamatch/shared";
 import {
   LINEAGE_MENU_NONE,
   lineageButtonLabel,
+  lineageButtonToneClass,
   lineageMenuItems,
   lineageMenuOpenGroup,
 } from "./lineage-menu";
@@ -64,5 +65,19 @@ describe("lineageButtonLabel", () => {
 
   it("без линии — «для всех линий»", () => {
     expect(lineageButtonLabel(null)).toBe("Линия: для всех линий");
+  });
+});
+
+/* VED-613: «Если выбрана конкретная линия — каёмка легко-розовая, как внутри
+   окна при выборе вариантов. Если „Для всех“ — зелёная, как у соседней». */
+describe("lineageButtonToneClass", () => {
+  it("конкретная линия — светло-малиновая каёмка, как у выбранного пункта", () => {
+    expect(lineageButtonToneClass("iskcon")).toContain("border-magenta/50");
+    expect(lineageButtonToneClass("ipbys")).not.toContain("border-cyan");
+  });
+
+  it("без линии — зелёная каёмка, как у «Ступеней»", () => {
+    expect(lineageButtonToneClass(null)).toContain("border-cyan/60");
+    expect(lineageButtonToneClass(null)).not.toContain("border-magenta");
   });
 });

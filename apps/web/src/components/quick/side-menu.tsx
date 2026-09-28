@@ -10,6 +10,7 @@ import {
   usePlayerHotkey,
   usePortalWindowSwitch,
 } from "./quick-action-hooks";
+import { InviteSheet } from "./invite-sheet";
 import {
   QUICK_PANEL_STORAGE_KEY,
   QuickActionIcon,
@@ -261,17 +262,23 @@ function PlayerItem({
   );
 }
 
-/** Приглашение копируется, не закрывая меню: ответ «Скопировано» — здесь же. */
+/**
+ * Приглашение копируется, не закрывая меню: ответ «Скопировано» и окно с
+ * текстом (VED-618) — здесь же.
+ */
 function InviteItem() {
   const invite = useInviteCopy();
   const meta = quickActionMeta("invite")!;
   return (
-    <button type="button" onClick={() => void invite.copy()} className={rowClass}>
-      <QuickActionIcon meta={meta} className="h-5 w-5 shrink-0" />
-      <span aria-live="polite" className="min-w-0 truncate font-medium">
-        {inviteCopyLabel(invite.state)}
-      </span>
-    </button>
+    <>
+      <button type="button" onClick={() => void invite.copy()} className={rowClass}>
+        <QuickActionIcon meta={meta} className="h-5 w-5 shrink-0" />
+        <span aria-live="polite" className="min-w-0 truncate font-medium">
+          {inviteCopyLabel(invite.state)}
+        </span>
+      </button>
+      <InviteSheet invite={invite} />
+    </>
   );
 }
 

@@ -4768,6 +4768,9 @@ model RewardsSettings {
   accrualDelayHours Int @default(24)
   /// Сколько дней должно пройти с регистрации приглашённого.
   qualifyMinDays    Int @default(3)
+  /// Текст горячей кнопки «Пригласить» (VED-618), правит администратор.
+  /// null — текст по умолчанию из rewards-invite-text.ts.
+  inviteText        String?
 
   updatedAt DateTime @updatedAt
 }

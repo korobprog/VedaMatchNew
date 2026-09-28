@@ -5,7 +5,6 @@ import {
   REFERRAL_STATUS_LABELS,
   REWARDS_SHARE_TEXT,
   balanceNote,
-  buildInviteMessage,
   formatLedgerAmount,
   shareLink,
 } from "./rewards-share";
@@ -53,37 +52,6 @@ describe("balanceNote", () => {
   });
 });
 
-describe("buildInviteMessage", () => {
-  const text = buildInviteMessage({ link: LINK });
-  const lines = text.split("\n");
-
-  // VED-423: текст — слово в слово от заказчика.
-  it("открывается шапкой портала и списком сервисов", () => {
-    expect(lines.slice(0, 5)).toEqual([
-      "🌎 VEDAMATCH.ru",
-      "Глобальный Портал Саморазвития.",
-      "",
-      "🌄 СЕРВИСЫ ПОРТАЛА:",
-      "⦁ Общение, мессенджер;",
-    ]);
-    expect(text).toContain("⦁ Работа;\nи многое другое в будущих обновлениях.");
-    expect(text).toContain("📤 ПРИСОЕДИНЯЙСЯ и делись!");
-  });
-
-  // Вместо адреса сайта — личная ссылка: без реферальной метки баллы не
-  // начислятся ни приглашённому, ни пригласившему.
-  it("ставит личную ссылку сразу за строкой про регистрацию", () => {
-    const at = lines.findIndex((line) => line.startsWith("📲 Зарегистрируйся"));
-    expect(at).toBeGreaterThan(0);
-    expect(lines[at + 1]).toBe(LINK);
-  });
-
-  it("заканчивается Телеграм-каналом", () => {
-    expect(lines[lines.length - 1]).toBe(
-      "👥 А также Телеграм-канал: https://t.me/vedamatch",
-    );
-  });
-});
 describe("подписи", () => {
   // Сверяемся со списком из @vedamatch/shared: новый тип операции обязан
   // получить подпись, иначе в истории появится пустая строка.

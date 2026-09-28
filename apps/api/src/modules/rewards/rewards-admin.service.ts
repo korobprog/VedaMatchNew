@@ -10,6 +10,7 @@ import {
   resolveDisplayName,
   type AdminAuditEvent,
   type AdminRewardsFraudResponse,
+  type AdminRewardsInviteTextDto,
   type AdminRewardsLedgerQuery,
   type AdminRewardsLedgerResponse,
   type AdminRewardsSettingsDto,
@@ -23,6 +24,11 @@ import {
   RewardsSettingsService,
 } from './rewards-settings.service';
 import { revokedIds } from './rewards-balance';
+import {
+  INVITE_TEXT_DEFAULT,
+  INVITE_TEXT_MAX_LENGTH,
+  normalizeInviteText,
+} from './rewards-invite-text';
 import { toLedgerDto } from './rewards.service';
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -240,6 +246,50 @@ export class RewardsAdminService {
     };
     this.events.emit('admin.action', event);
     return this.settings.dto();
+  }
+
+  /** Действующий шаблон текста «Пригласить» (VED-618). */
+  async inviteTextDto(): Promise<AdminRewardsInviteTextDto> {
+    const row = await this.settings.read();
+    return {
+      text: row.inviteText ?? INVITE_TEXT_DEFAULT,
+      isDefault: row.inviteText === null,
+      maxLength: INVITE_TEXT_MAX_LENGTH,
+    };
+  }
+
+  /** Пустой текст возвращает текст по умолчанию. */
+  async updateInviteText(
+    adminId: string,
+    raw: unknown,
+  ): Promise<AdminRewardsInviteTextDto> {
+    const check = normalizeInviteText(raw);
+    if (!check.ok) throw new BadRequestException(check.error);
+    // Сохранить ровно текст по умолчанию — то же, что вернуть его: иначе
+    // будущая правка дефолта в коде до этой строки не доедет.
+    const next = check.text === INVITE_TEXT_DEFAULT ? null : check.text;
+
+    const before = await this.settings.read();
+    if (before.inviteText === next) return this.inviteTextDto();
+
+    await this.prisma.rewardsSettings.update({
+      where: { id: REWARDS_SETTINGS_ID },
+      data: { inviteText: next },
+    });
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: 'rewards.settings-changed',
+      targetType: 'platform',
+      targetId: null,
+      details: {
+        to:
+          next === null
+            ? 'inviteText: текст по умолчанию'
+            : `inviteText: ${next.length} симв.`,
+      },
+    };
+    this.events.emit('admin.action', event);
+    return this.inviteTextDto();
   }
 
   /** Сводка раздела: приглашений, конверсия, баллы, топ приглашающих. */

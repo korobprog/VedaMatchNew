@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RewardsMeDto } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -82,29 +82,81 @@ export function inviteCopyLabel(state: InviteCopyState): string {
       : "Пригласить";
 }
 
+/** Что показывает окно «Пригласить» (VED-618). */
+export interface InviteSheetData {
+  /** Готовый текст с личной ссылкой — ровно то, что ушло в буфер. */
+  message: string;
+  /** Скопировалось ли: нет — текст в окне, его можно выделить руками. */
+  copied: boolean;
+  /** Администратор — в окне есть «Изменить текст». */
+  canEdit: boolean;
+}
+
+async function fetchInvite(): Promise<RewardsMeDto> {
+  const response = await apiFetch(`${API_URL}/rewards/me`);
+  if (!response.ok) throw new Error("rewards");
+  return (await response.json()) as RewardsMeDto;
+}
+
+/** Текст приглашения из ответа; старый API без поля — одна ссылка. */
+function inviteMessageOf(me: RewardsMeDto): string {
+  return me.inviteMessage || me.link;
+}
+
 /**
- * Ссылка-приглашение в буфер, не уводя со страницы: за ней и приходят —
- * скинуть другу в мессенджер. Полный текст приглашения остаётся в «Баллах»,
- * его собирает сервер из каталога сервисов.
+ * Приглашение в буфер, не уводя со страницы: за ним и приходят — скинуть
+ * другу в мессенджер. VED-618: копируется уже не голая ссылка, а полный
+ * текст приглашения с личной ссылкой (шаблон — на сервере, правит
+ * администратор), и тут же открывается окно с этим текстом: человек видит,
+ * что отправит, а администратор правит текст прямо там.
+ *
+ * `dialogRef` вешается на `<InviteSheet>` рядом с кнопкой.
  */
 export function useInviteCopy() {
   const [state, setState] = useState<InviteCopyState>("idle");
+  const [sheet, setSheet] = useState<InviteSheetData | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const copy = useCallback(async () => {
+    let me: RewardsMeDto;
     try {
-      const response = await apiFetch(`${API_URL}/rewards/me`);
-      if (!response.ok) throw new Error("rewards");
-      const me = (await response.json()) as RewardsMeDto;
-      if (!(await copyText(me.link))) throw new Error("clipboard");
-      setState("copied");
-      window.setTimeout(() => setState("idle"), 2000);
+      me = await fetchInvite();
     } catch {
       setState("failed");
+      return;
+    }
+    const message = inviteMessageOf(me);
+    const copied = await copyText(message);
+    setSheet({ message, copied, canEdit: Boolean(me.canEditInviteText) });
+    setState(copied ? "copied" : "failed");
+    if (copied) window.setTimeout(() => setState("idle"), 2000);
+    // jsdom и старые браузеры без `showModal`: кнопка всё равно копирует.
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open && typeof dialog.showModal === "function") {
+      dialog.showModal();
     }
   }, []);
 
-  return { state, copy };
+  /** После правки шаблона: текст с личной ссылкой собирает сервер. */
+  const reload = useCallback(async () => {
+    const me = await fetchInvite();
+    setSheet((prev) => ({
+      message: inviteMessageOf(me),
+      copied: prev?.copied ?? false,
+      canEdit: Boolean(me.canEditInviteText),
+    }));
+  }, []);
+
+  const recopy = useCallback(async () => {
+    if (!sheet) return;
+    const copied = await copyText(sheet.message);
+    setSheet({ ...sheet, copied });
+  }, [sheet]);
+
+  return { state, copy, sheet, dialogRef, reload, recopy };
 }
+
+export type InviteCopy = ReturnType<typeof useInviteCopy>;
 
 /**
  * Горячая кнопка «Плеер» (VED-416): полоса плеера выкатывается свёрнутой и

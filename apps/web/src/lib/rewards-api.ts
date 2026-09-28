@@ -6,9 +6,11 @@
 // импортировать отсюда команды, не ломая сборку.
 import type {
   AdminRewardsFraudResponse,
+  AdminRewardsInviteTextDto,
   AdminRewardsLedgerResponse,
   AdminRewardsSettingsDto,
   AdminRewardsSummaryDto,
+  AdminUpdateRewardsInviteTextRequest,
   AdminUpdateRewardsSettingsRequest,
   RewardsLedgerResponse,
   RewardsMeDto,
@@ -104,4 +106,26 @@ export async function updateRewardsSettings(
   });
   if (!response.ok) throw new Error(await response.text());
   return (await response.json()) as AdminRewardsSettingsDto;
+}
+
+/** Шаблон текста «Пригласить» (VED-618) — правится из окна кнопки. */
+export async function getRewardsInviteText(): Promise<AdminRewardsInviteTextDto> {
+  const response = await apiFetch(`${API_URL}/admin/rewards/invite-text`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return (await response.json()) as AdminRewardsInviteTextDto;
+}
+
+export async function saveRewardsInviteText(
+  body: AdminUpdateRewardsInviteTextRequest,
+): Promise<AdminRewardsInviteTextDto> {
+  const response = await apiFetch(`${API_URL}/admin/rewards/invite-text`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return (await response.json()) as AdminRewardsInviteTextDto;
 }

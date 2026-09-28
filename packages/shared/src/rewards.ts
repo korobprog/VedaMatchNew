@@ -75,6 +75,13 @@ export interface RewardsMeDto extends RewardsBalance {
   welcomePoints: number;
   invitedTotal: number;
   qualifiedTotal: number;
+  /**
+   * Готовый текст горячей кнопки «Пригласить» (VED-618): шаблон из
+   * настроек с личной ссылкой на своём месте.
+   */
+  inviteMessage: string;
+  /** Может ли смотрящий править шаблон — только администратор портала. */
+  canEditInviteText: boolean;
 }
 
 export interface RewardsReferralDto {
@@ -123,6 +130,20 @@ export interface AdminRewardsSettingsDto {
   /** Сколько дней должно пройти с регистрации приглашённого. */
   qualifyMinDays: number;
   updatedAt: string | null;
+}
+
+/** Шаблон текста приглашения для правки (VED-618). */
+export interface AdminRewardsInviteTextDto {
+  /** Что сейчас действует: сохранённый текст или текст по умолчанию. */
+  text: string;
+  /** true — сохранённого нет, действует текст по умолчанию. */
+  isDefault: boolean;
+  maxLength: number;
+}
+
+/** Пустая строка — вернуть текст по умолчанию. */
+export interface AdminUpdateRewardsInviteTextRequest {
+  text: string;
 }
 
 export type AdminUpdateRewardsSettingsRequest =

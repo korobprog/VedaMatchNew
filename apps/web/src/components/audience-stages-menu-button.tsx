@@ -109,11 +109,14 @@ export function AudienceStagesMenuButton({
       >
         <Fingerprint aria-hidden className="size-4" />
         {/* Сколько ступеней отмечено — чтобы размеченное было видно, не
-            открывая меню. Число дублирует имя кнопки и скрыто от чтения. */}
+            открывая меню. Число дублирует имя кнопки и скрыто от чтения.
+            Кружок светло-малиновый, как выбранный пункт меню (VED-613):
+            непрозрачная смесь 20% --vm-magenta с --vm-bg-0 и рамка
+            magenta/50. Цифра --vm-text-0: 12,9:1 светлая · 14,5:1 тёмная. */}
         {marked && (
           <span
             aria-hidden
-            className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-magenta font-mono text-[10px] font-bold leading-none text-white tabular-nums"
+            className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--vm-magenta)_20%,var(--vm-bg-0))] font-mono text-[10px] font-bold leading-none text-text-0 tabular-nums ring-1 ring-magenta/50"
           >
             {value.length}
           </span>
