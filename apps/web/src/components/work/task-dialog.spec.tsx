@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkBoardDto, WorkTaskDto } from "@vedamatch/shared";
 import { WorkTaskDialog } from "./task-dialog";
-import { duePresetInput } from "./task-due";
+import { dueToInput } from "./task-due";
 import {
   attachWorkFile,
   deleteWorkTaskForever,
@@ -279,14 +279,16 @@ describe("WorkTaskDialog — кнопка «Сохранить» после лю
 
   it("появляется после смены срока", async () => {
     const user = userEvent.setup();
+    const dueAt = "2026-09-10T20:59:00.000Z";
+    vi.mocked(getWorkTask).mockResolvedValue({ ...task, dueAt });
     open();
     await screen.findByDisplayValue("Кнопка сохранить");
 
-    // Пустой срок — выбор из вариантов (VED-529); выбранный становится
-    // полем даты, которое можно уточнить.
-    await user.selectOptions(screen.getByLabelText("Срок"), "tomorrow");
-    const expected = duePresetInput("tomorrow", new Date());
-    expect(screen.getByLabelText("Срок")).toHaveValue(expected);
+    // Поставленный срок по-прежнему правится (VED-598).
+    const due = screen.getByLabelText("Срок");
+    expect(due).toHaveValue(dueToInput(dueAt));
+    const expected = "2026-09-12T23:59";
+    fireEvent.change(due, { target: { value: expected } });
 
     expect(screen.getByText("Есть несохранённые правки")).toBeInTheDocument();
     expect(updateWorkTask).not.toHaveBeenCalled();
@@ -800,5 +802,21 @@ describe("WorkTaskDialog — «Читать далее» у описания (VE
     } finally {
       restore();
     }
+  });
+});
+
+describe("WorkTaskDialog — графа «Дата» (VED-598)", () => {
+  it("на месте «Срока» показывает дату создания с годом", async () => {
+    vi.mocked(getWorkTask).mockResolvedValue({
+      ...task,
+      createdAt: "2026-09-09T12:00:00.000Z",
+    });
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+
+    expect(screen.getByText("Дата")).toBeInTheDocument();
+    expect(screen.getByText("9 сентября 2026 г.")).toBeInTheDocument();
+    // У задачи без срока графы «Срок» нет вовсе.
+    expect(screen.queryByLabelText("Срок")).toBeNull();
   });
 });
