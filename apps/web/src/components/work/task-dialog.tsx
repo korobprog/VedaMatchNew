@@ -10,7 +10,7 @@ import {
   useState,
   type ComponentProps,
 } from "react";
-import { FileText, Loader2, Paperclip, Pencil, Trash2, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
 import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
 import { CompactSoundButton } from "@/components/quick/compact-sound-button";
 import type {
@@ -71,6 +71,13 @@ import {
 const FIELD_CLASS =
   "mt-1 block w-full min-w-0 rounded-xl border border-glass-brd bg-bg-1 px-2 py-1.5 text-sm text-text-0";
 
+/** Вид текста пункта чек-листа: зачёркнут, если выполнен; свёрнут до трёх строк. */
+function checklistTextClass(done: boolean, clamped: boolean): string {
+  return `whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
+    done ? "text-text-2 line-through" : "text-text-0"
+  } ${clamped ? "line-clamp-3" : "block"}`;
+}
+
 /** Высота поля под текст: длинное название видно целиком, а не первой строкой. */
 function growToText(element: HTMLTextAreaElement): void {
   element.style.height = "auto";
@@ -124,6 +131,19 @@ export function WorkTaskDialog({
   const [titleKey, setTitleKey] = useState(0);
   /** Пункт чек-листа, который правят на месте (VED-524). */
   const [editingItem, setEditingItem] = useState<string | null>(null);
+  /** Кнопка-текст пункта, куда вернуть фокус после правки (VED-603): поле
+   *  исчезает, и без этого фокус падал бы на `body`. */
+  const itemTextButtons = useRef(new Map<string, HTMLButtonElement>());
+  const focusItemAfterEdit = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingItem !== null || !focusItemAfterEdit.current) return;
+    itemTextButtons.current.get(focusItemAfterEdit.current)?.focus();
+    focusItemAfterEdit.current = null;
+  }, [editingItem]);
+  function finishItemEdit(itemId: string) {
+    focusItemAfterEdit.current = itemId;
+    setEditingItem(null);
+  }
   /** Какие длинные пункты чек-листа раскрыты кнопкой «Далее» (VED-375). */
   const [expandedItems, setExpandedItems] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -746,6 +766,9 @@ export function WorkTaskDialog({
                     checked={item.done}
                     disabled={!canEdit}
                     id={`check-${item.id}`}
+                    // Имя галочки — текст пункта: у правящего он внутри
+                    // кнопки «Изменить пункт», а не в `label` (VED-603).
+                    aria-labelledby={`check-text-${item.id}`}
                     onChange={(event) => {
                       const done = event.target.checked;
                       void run(() =>
@@ -766,30 +789,59 @@ export function WorkTaskDialog({
                           const next = await updateWorkChecklistItem(item.id, {
                             text,
                           });
-                          setEditingItem(null);
+                          finishItemEdit(item.id);
                           return next;
                         })
                       }
-                      onCancel={() => setEditingItem(null)}
+                      onCancel={() => finishItemEdit(item.id)}
                     />
                   ) : (
                     <div className="min-w-0 flex-1">
-                      <label
-                        htmlFor={`check-${item.id}`}
-                        id={`check-text-${item.id}`}
-                        // `line-clamp-3` сам задаёт display: вместе с `block`
-                        // побеждал `block`, и свёрнутый пункт не сворачивался.
-                        className={`whitespace-pre-wrap text-sm [overflow-wrap:anywhere] ${
-                          item.done ? "text-text-2 line-through" : "text-text-0"
-                        } ${
-                          isLongChecklistText(item.text) &&
-                          !expandedItems.has(item.id)
-                            ? "line-clamp-3"
-                            : "block"
-                        }`}
-                      >
-                        {item.text}
-                      </label>
+                      {/* Правка — нажатием на сам текст пункта (VED-603),
+                          без отдельной кнопки-карандаша. Текст — кнопка:
+                          с клавиатуры до правки доходят Tab и Enter, а
+                          галочку по-прежнему ставит чекбокс слева. Длинный
+                          пункт свёрнут до трёх строк (VED-375);
+                          `line-clamp-3` сам задаёт display, поэтому он на
+                          внутреннем span, а не на кнопке. */}
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          ref={(element) => {
+                            if (element) {
+                              itemTextButtons.current.set(item.id, element);
+                            } else {
+                              itemTextButtons.current.delete(item.id);
+                            }
+                          }}
+                          onClick={() => setEditingItem(item.id)}
+                          aria-label={`Изменить пункт: ${item.text}`}
+                          className="block w-full cursor-text rounded text-left hover:bg-glass"
+                        >
+                          <span
+                            id={`check-text-${item.id}`}
+                            className={checklistTextClass(
+                              item.done,
+                              isLongChecklistText(item.text) &&
+                                !expandedItems.has(item.id),
+                            )}
+                          >
+                            {item.text}
+                          </span>
+                        </button>
+                      ) : (
+                        <label
+                          htmlFor={`check-${item.id}`}
+                          id={`check-text-${item.id}`}
+                          className={checklistTextClass(
+                            item.done,
+                            isLongChecklistText(item.text) &&
+                              !expandedItems.has(item.id),
+                          )}
+                        >
+                          {item.text}
+                        </label>
+                      )}
                       {isLongChecklistText(item.text) && (
                         <button
                           type="button"
@@ -809,19 +861,6 @@ export function WorkTaskDialog({
                         </button>
                       )}
                     </div>
-                  )}
-                  {/* «Изменить» — рядом с «Убрать» (VED-524): опечатку в
-                      пункте правят на месте, а не удаляют и заводят заново. */}
-                  {canEdit && editingItem !== item.id && (
-                    <button
-                      type="button"
-                      aria-label={`Изменить пункт «${item.text}»`}
-                      disabled={busy}
-                      onClick={() => setEditingItem(item.id)}
-                      className="text-text-2 hover:text-text-0 disabled:opacity-50"
-                    >
-                      <Pencil aria-hidden className="size-4" />
-                    </button>
                   )}
                   {canEdit && (
                     <button
@@ -1209,14 +1248,11 @@ function DescriptionField({
 }
 
 /**
- * Новый пункт чек-листа. Текст живёт здесь, а не в окне: иначе каждая буква
- * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
- * дошёл до сервера.
- */
-/**
- * Правка пункта чек-листа на месте (VED-524). Enter — сохранить, Shift+Enter
- * — новая строка, Escape — отменить: только правку, окно карточки остаётся
- * открытым.
+ * Правка пункта на месте (VED-524, VED-603): поле встаёт вместо текста.
+ * Enter или уход из поля — сохранить, Shift+Enter — новая строка, Escape —
+ * отменить только правку: окно карточки остаётся открытым. Кнопок «Сохранить /
+ * Отменить» нет: правку открывают нажатием на сам текст, и лишняя строка
+ * кнопок под ним сбивала. Неизменённый текст ничего не отправляет.
  */
 function ChecklistEditForm({
   initial,
@@ -1230,15 +1266,34 @@ function ChecklistEditForm({
   onCancel: () => void;
 }) {
   const [text, setText] = useState(initial);
-  const trimmed = text.trim();
+  /* Правка уже завершена: Enter, а за ним blur от исчезновения поля, иначе
+     отправили бы пункт дважды. */
+  const finished = useRef(false);
+  // Сервер не принял правку — поле остаётся, и её можно завершить заново.
+  useEffect(() => {
+    if (!busy) finished.current = false;
+  }, [busy]);
+
+  function finish(value: string) {
+    if (finished.current || busy) return;
+    const trimmed = value.trim();
+    // Стёртый текст — не правка: пустой пункт сервер не примет, а удаляют
+    // корзиной.
+    if (!trimmed || trimmed === initial) {
+      finished.current = true;
+      onCancel();
+      return;
+    }
+    finished.current = true;
+    onSave(trimmed);
+  }
+
   return (
     <form
-      className="flex min-w-0 flex-1 flex-col gap-2"
+      className="flex min-w-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!trimmed) return;
-        if (trimmed === initial) onCancel();
-        else onSave(trimmed);
+        finish(text);
       }}
     >
       <textarea
@@ -1248,10 +1303,12 @@ function ChecklistEditForm({
         onChange={(event) => setText(event.target.value)}
         onInput={(event) => growToText(event.currentTarget)}
         onFocus={(event) => growToText(event.currentTarget)}
+        onBlur={(event) => finish(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             // Иначе Escape долетел бы до окна и закрыл карточку.
             event.stopPropagation();
+            finished.current = true;
             onCancel();
             return;
           }
@@ -1262,28 +1319,22 @@ function ChecklistEditForm({
         }}
         maxLength={WORK_CHECKLIST_TEXT_MAX}
         aria-label="Текст пункта чек-листа"
+        aria-describedby="work-checklist-edit-hint"
+        disabled={busy}
         className="w-full resize-none overflow-hidden rounded-xl border border-glass-brd bg-bg-1 px-3 py-2 text-sm text-text-0"
       />
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="min-h-9 rounded-xl px-3 text-sm text-text-1 hover:text-text-0"
-        >
-          Отменить
-        </button>
-        <button
-          type="submit"
-          disabled={busy || !trimmed}
-          className="min-h-9 rounded-xl bg-glass px-3 text-sm text-text-0 disabled:opacity-50"
-        >
-          Сохранить
-        </button>
-      </div>
+      <span id="work-checklist-edit-hint" className="sr-only">
+        Enter — сохранить, Escape — отменить
+      </span>
     </form>
   );
 }
 
+/**
+ * Новый пункт чек-листа. Текст живёт здесь, а не в окне: иначе каждая буква
+ * перерисовывала всю карточку (VED-453). `clear` — очистить поле, когда пункт
+ * дошёл до сервера.
+ */
 function ChecklistAddForm({
   busy,
   onAdd,
