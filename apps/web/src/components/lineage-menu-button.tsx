@@ -29,12 +29,21 @@ export function LineageMenuButton({
   value,
   onSelect,
   className = "",
+  buttonClassName = "rounded-full",
+  menuLabel = "Линия материала",
 }: {
   value: LineageId | null;
   /** Сохранить выбор. Ошибка показывается под меню, выбор не меняется. */
   onSelect: (lineage: LineageId | null) => Promise<void>;
   /** Классы обёртки: место в ряду, например `ml-auto`. */
   className?: string;
+  /**
+   * Скругление кнопки под соседей по ряду: круглая в Образовании и
+   * Медиатеке, со скруглёнными углами в ряду Блог-ленты (VED-596).
+   */
+  buttonClassName?: string;
+  /** Имя панели для скринридера: «Линия материала», «Линия поста». */
+  menuLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -92,7 +101,7 @@ export function LineageMenuButton({
           if (!open) setExpanded(lineageMenuOpenGroup(value));
           setOpen(!open);
         }}
-        className="inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0"
+        className={`inline-flex size-11 shrink-0 items-center justify-center border border-glass-brd text-text-1 transition-colors hover:border-cyan/60 hover:text-text-0 ${buttonClassName}`}
       >
         <Landmark aria-hidden className="size-4" />
       </button>
@@ -101,7 +110,7 @@ export function LineageMenuButton({
           ref={panelRef}
           id={panelId}
           role="group"
-          aria-label="Линия материала"
+          aria-label={menuLabel}
           aria-busy={pending}
           className="absolute right-0 top-full z-30 mt-2 max-h-[60vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >

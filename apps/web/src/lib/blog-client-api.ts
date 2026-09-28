@@ -18,6 +18,8 @@ import type {
   BlogSettingsDto,
   CreateBlogPostRequest,
   UpdateBlogPostRequest,
+  BlogPostCategory,
+  LineageId,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 
@@ -60,6 +62,8 @@ const MESSAGES: Record<string, string> = {
   repost_not_editable:
     "Репост не правится — поправить можно только исходный пост, и делает это его автор.",
   admin_only: "Доступно только администратору.",
+  invalid_lineage: "Такой линии нет в списке.",
+  invalid_category: "Такой категории нет в списке.",
 };
 
 function mb(bytes: number): number {
@@ -102,19 +106,40 @@ function json(body: unknown): RequestInit {
   };
 }
 
+/** Фильтры читателя (VED-590, VED-596): категория и линия из адреса ленты. */
+export interface BlogFeedFilterParams {
+  category?: string | null;
+  lineage?: string | null;
+}
+
+function filterQuery(
+  filters: BlogFeedFilterParams,
+  cursor?: string,
+): URLSearchParams {
+  const query = new URLSearchParams();
+  if (filters.category) query.set("category", filters.category);
+  if (filters.lineage) query.set("lineage", filters.lineage);
+  if (cursor) query.set("cursor", cursor);
+  return query;
+}
+
 export function fetchBlogFeed(
   scope: "current" | "all",
   cursor?: string,
+  filters: BlogFeedFilterParams = {},
 ): Promise<BlogFeedResponse> {
-  const query = new URLSearchParams({ scope });
-  if (cursor) query.set("cursor", cursor);
+  const query = filterQuery(filters, cursor);
+  query.set("scope", scope);
   return request<BlogFeedResponse>(`/blog/feed?${query.toString()}`);
 }
 
 /** «Избранное» того, кто смотрит (VED-238). */
-export function fetchBlogFavorites(cursor?: string): Promise<BlogFeedResponse> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-  return request<BlogFeedResponse>(`/blog/favorites${query}`);
+export function fetchBlogFavorites(
+  cursor?: string,
+  filters: BlogFeedFilterParams = {},
+): Promise<BlogFeedResponse> {
+  const query = filterQuery(filters, cursor).toString();
+  return request<BlogFeedResponse>(`/blog/favorites${query ? `?${query}` : ""}`);
 }
 
 /** «Нравится» и его снятие (VED-505). */
@@ -166,6 +191,7 @@ export function createBlogPost(
   const form = new FormData();
   if (body.title) form.append("title", body.title);
   form.append("text", body.text ?? "");
+  if (body.category) form.append("category", body.category);
   for (const file of files) form.append("files", file);
   return request<BlogPostCreatedResponse>("/blog/posts", {
     method: "POST",
@@ -203,6 +229,11 @@ export function updateBlogPost(
   const form = new FormData();
   if (body.title) form.append("title", body.title);
   form.append("text", body.text ?? "");
+  // Пустая строка — «Без категории»: multipart не умеет передать null, а
+  // молчание сервер читает как «категория прежняя» (VED-590).
+  if (body.category !== undefined) {
+    form.append("category", body.category ?? "");
+  }
   if (body.keepImageIds) {
     // Поле обязано доехать даже пустым: на сервере молчание про картинки
     // означает «не трогать их», а пустой список — «убрал все».
@@ -251,6 +282,28 @@ export function setBlogPostPinned(
   return request<BlogPostDto>(
     `/blog/admin/posts/${encodeURIComponent(id)}/pin`,
     { method: "PATCH", ...json({ pinned }) },
+  );
+}
+
+/** Категория поста одной кнопкой (VED-590): автор или администратор. */
+export function setBlogPostCategory(
+  id: string,
+  category: BlogPostCategory | null,
+): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/posts/${encodeURIComponent(id)}/category`,
+    { method: "PATCH", ...json({ category }) },
+  );
+}
+
+/** Линия поста (VED-596): только администратор; `null` — для всех линий. */
+export function setBlogPostLineage(
+  id: string,
+  lineage: LineageId | null,
+): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/admin/posts/${encodeURIComponent(id)}/lineage`,
+    { method: "PATCH", ...json({ lineage }) },
   );
 }
 

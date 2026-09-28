@@ -16,6 +16,7 @@ import { CoverPicture } from "./cover-picture";
 import { CoverViewer } from "./cover-viewer";
 import { DeleteEntryButton } from "./delete-entry-button";
 import { EntryLineageButton } from "./entry-lineage-button";
+import { EntryAudienceButton } from "./entry-audience-button";
 import { EntryBlogStatus, EntryShareActions } from "./entry-share-actions";
 import { OutsideLink } from "./outside-link";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -46,6 +47,10 @@ export function EntryCard({
   // Линия меняется кнопкой «Линия» прямо в ленте (VED-561): чип обновляется
   // сразу, без перечитывания всей ленты.
   const [lineage, setLineage] = useState(entry.lineage);
+  // Ступени самоидентификации (VED-575) — так же: меню держит разметку здесь.
+  const [audienceStages, setAudienceStages] = useState(
+    entry.audienceStages ?? [],
+  );
   const title = pickLocalized(locale, {
     ru: entry.titleRu,
     en: entry.titleEn,
@@ -297,6 +302,13 @@ export function EntryCard({
           canSetLineage={entry.canSetLineage}
           onChanged={setLineage}
           className="ml-auto"
+        />
+        {/* «Ступени» (VED-575) — рядом с «Линией», те же права. */}
+        <EntryAudienceButton
+          entryId={entry.id}
+          audienceStages={audienceStages}
+          canSet={entry.canSetLineage}
+          onChanged={setAudienceStages}
         />
       </div>
     </article>

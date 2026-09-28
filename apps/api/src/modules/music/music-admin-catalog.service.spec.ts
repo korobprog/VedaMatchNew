@@ -791,6 +791,42 @@ describe('MusicAdminCatalogService', () => {
       const data = mock.tx.musicTrack.update.mock.calls[0][0].data;
       expect(data).not.toHaveProperty('storageKey');
     });
+
+    it('ступени самоидентификации сохраняет без повторов, по порядку (VED-575)', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicTrack.findUnique.mockResolvedValue(existing);
+
+      await service(mock).updateTrack(true, 't1', {
+        audienceStages: ['devotee', 'seeker', 'devotee'],
+      });
+
+      expect(
+        mock.tx.musicTrack.update.mock.calls[0][0].data.audienceStages,
+      ).toEqual(['seeker', 'devotee']);
+    });
+
+    it('неизвестную ступень отклоняет', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicTrack.findUnique.mockResolvedValue(existing);
+
+      await expect(
+        service(mock).updateTrack(true, 't1', {
+          audienceStages: ['guru'] as never,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mock.tx.musicTrack.update).not.toHaveBeenCalled();
+    });
+
+    it('без поля ступени не трогает', async () => {
+      const mock = prismaMock();
+      mock.prisma.musicTrack.findUnique.mockResolvedValue(existing);
+
+      await service(mock).updateTrack(true, 't1', { title: 'Киртан' });
+
+      expect(
+        mock.tx.musicTrack.update.mock.calls[0][0].data,
+      ).not.toHaveProperty('audienceStages');
+    });
   });
 
   describe('deleteTrack', () => {

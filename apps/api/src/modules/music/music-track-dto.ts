@@ -9,7 +9,7 @@ import type {
   MusicTrackDto,
   MusicTrackStatus,
 } from '@vedamatch/shared';
-import { toLineageId } from '@vedamatch/shared';
+import { toAudienceStages, toLineageId } from '@vedamatch/shared';
 
 /**
  * Сборка карточек каталога. Отдельным модулем и на своих типах, а не на
@@ -69,6 +69,8 @@ export interface MusicTrackRow extends MusicCoverSource {
   language: string | null;
   isLiveRecording: boolean;
   lineage: string | null;
+  /** Ступени самоидентификации (VED-575). `undefined` — поле не выбрано. */
+  audienceStages?: string[];
   playCount: number;
   publishedAt: Date | null;
   artist: MusicArtistRow | null;
@@ -177,6 +179,7 @@ export function toMusicTrackDetailDto(
     sizeBytes: row.sizeBytes,
     bitrateKbps: row.bitrateKbps,
     moderationNote: row.moderationNote,
+    audienceStages: toAudienceStages(row.audienceStages),
     lyrics: {
       lyrics: row.lyrics,
       transliteration: row.transliteration,

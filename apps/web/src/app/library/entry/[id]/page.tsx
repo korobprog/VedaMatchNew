@@ -16,6 +16,7 @@ import { CoverPicture } from "@/components/library/cover-picture";
 import { CoverViewer } from "@/components/library/cover-viewer";
 import { DeleteEntryButton } from "@/components/library/delete-entry-button";
 import { EntryLineageButton } from "@/components/library/entry-lineage-button";
+import { EntryAudienceButton } from "@/components/library/entry-audience-button";
 import {
   ENTRY_ICON_BUTTON,
   EntryShareActions,
@@ -189,6 +190,12 @@ export default async function LibraryEntryPage({
                   entryId={entry.id}
                   lineage={entry.lineage}
                   canSetLineage={entry.canSetLineage}
+                />
+                {/* «Ступени» (VED-575) — те же права, что у «Линии». */}
+                <EntryAudienceButton
+                  entryId={entry.id}
+                  audienceStages={entry.audienceStages ?? []}
+                  canSet={entry.canSetLineage}
                 />
               </>
             }

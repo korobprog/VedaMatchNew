@@ -32,6 +32,7 @@ export * from './profile-name';
 export * from './assistant';
 export * from './lineage';
 export * from './spiritual-stage';
+export * from './audience-stage';
 export * from './task-status';
 export * from './work';
 export * from './wellness';
@@ -205,6 +206,12 @@ export interface UserProfile {
   timeZone: string | null;
   /** Пояс выбран руками: автоопределение с устройства его не перезаписывает. */
   timeZoneLocked: boolean;
+  /**
+   * «Все ступени» (VED-575): Образование и Медиатека показывают и материалы,
+   * размеченные для других ступеней самоидентификации. Переключается кнопкой
+   * на главной. Необязательное: у старого ответа поля нет — значит `false`.
+   */
+  showAllStages?: boolean;
   subscription: SubscriptionState;
   accountStatus: UserAccountStatus;
   /** Задано, если пользователь сам запросил удаление аккаунта. */
@@ -336,6 +343,8 @@ export interface ProfileUpdateRequest {
    * зафиксирован руками: у кого VPN врёт, тот выбрал сам.
    */
   detectedTimeZone?: string;
+  /** Переключатель «Моя ступень / Все ступени» на главной (VED-575). */
+  showAllStages?: boolean;
 }
 
 /**

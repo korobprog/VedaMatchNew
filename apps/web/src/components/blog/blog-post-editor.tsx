@@ -6,6 +6,7 @@ import {
   BLOG_POST_MAX_IMAGES,
   BLOG_POST_TITLE_MAX_LENGTH,
   type BlogMediaDto,
+  type BlogPostCategory,
   type BlogPostDto,
 } from "@vedamatch/shared";
 import {
@@ -15,6 +16,7 @@ import {
   updateBlogPost,
 } from "@/lib/blog-client-api";
 import { BlogBlankLinesTool } from "./blog-blank-lines-tool";
+import { BlogCategorySelect } from "./blog-category-select";
 import {
   BLOG_MEDIA_ACCEPT,
   isBlogVideoFile,
@@ -44,6 +46,9 @@ export function BlogPostEditor({
 }) {
   const [title, setTitle] = useState(post.title ?? "");
   const [text, setText] = useState(post.text);
+  const [category, setCategory] = useState<BlogPostCategory | "">(
+    post.category ?? "",
+  );
   const [kept, setKept] = useState<BlogMediaDto[]>(() => postMedia(post));
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
@@ -74,6 +79,7 @@ export function BlogPostEditor({
         if (!alive || touched.current) return;
         setTitle(fresh.title ?? "");
         setText(fresh.text);
+        setCategory(fresh.category ?? "");
         setKept(postMedia(fresh));
       })
       .catch(() => {
@@ -124,7 +130,12 @@ export function BlogPostEditor({
     try {
       const saved = await updateBlogPost(
         post.id,
-        { title, text, keepImageIds: kept.map((image) => image.id) },
+        {
+          title,
+          text,
+          category: category || null,
+          keepImageIds: kept.map((image) => image.id),
+        },
         files,
       );
       if (saved.failed.length > 0) {
@@ -209,6 +220,14 @@ export function BlogPostEditor({
           setText(next);
         }}
         disabled={pending}
+      />
+      <BlogCategorySelect
+        value={category}
+        disabled={pending}
+        onChange={(next) => {
+          touched.current = true;
+          setCategory(next);
+        }}
       />
 
       {kept.length > 0 && (

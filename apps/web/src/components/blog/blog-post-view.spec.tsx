@@ -2,10 +2,17 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { BlogPostDto } from "@vedamatch/shared";
+import { setBlogPostCategory, setBlogPostLineage } from "@/lib/blog-client-api";
 import { BlogPostView } from "./blog-post-view";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
+vi.mock("@/lib/blog-client-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/blog-client-api")>()),
+  setBlogPostLineage: vi.fn(),
+  setBlogPostCategory: vi.fn(),
 }));
 
 function makePost(overrides: Partial<BlogPostDto> = {}): BlogPostDto {
@@ -73,5 +80,70 @@ describe("ряд действий поста: только для админов
     expect(
       screen.getByRole("button", { name: "Закрепить" }),
     ).toBeInTheDocument();
+  });
+});
+
+/* VED-596: «в меню кнопок поста значок „Линия“, только для админов». */
+describe("«Линия» поста", () => {
+  it("участник значка не видит", () => {
+    render(<BlogPostView initial={makePost()} />);
+    expect(screen.queryByRole("button", { name: /^Линия:/ })).toBeNull();
+  });
+
+  it("админ назначает линию, и значок показывает её", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setBlogPostLineage).mockResolvedValue(
+      makePost({ canModerate: true, lineage: "iskcon" }),
+    );
+    render(<BlogPostView initial={makePost({ canModerate: true })} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Линия: для всех линий" }),
+    );
+    await user.click(screen.getByRole("button", { name: "ISKCON" }));
+
+    expect(setBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
+    expect(
+      screen.getByRole("button", { name: "Линия: ISKCON" }),
+    ).toBeInTheDocument();
+  });
+});
+
+/* VED-590: «Сократи кнопку-надпись Поделиться до кнопки-значка»; «у каждого,
+   кто добавляет пост, должна быть кнопка — Назначить категорию». */
+describe("ряд кнопок над постом (VED-590)", () => {
+  it("«Поделиться» — значок без подписи на экране, с именем для скринридера", () => {
+    render(<BlogPostView initial={makePost()} />);
+    const share = screen.getByRole("button", { name: "Поделиться" });
+    expect(share).toHaveTextContent("");
+    expect(share).toHaveAttribute("title", "Поделиться");
+  });
+
+  it("чужой пост — без «Назначить категорию»", () => {
+    render(<BlogPostView initial={makePost()} />);
+    expect(
+      screen.queryByRole("button", { name: /^Назначить категорию/ }),
+    ).toBeNull();
+  });
+
+  it("автор назначает категорию, и она видна в строке даты", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setBlogPostCategory).mockResolvedValue(
+      makePost({ canEdit: true, category: "news" }),
+    );
+    render(<BlogPostView initial={makePost({ canEdit: true })} />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Назначить категорию: без категории",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Новости" }));
+
+    expect(setBlogPostCategory).toHaveBeenCalledWith("post-1", "news");
+    expect(
+      screen.getByRole("button", { name: "Назначить категорию: Новости" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/· Новости/)).toBeInTheDocument();
   });
 });

@@ -262,6 +262,11 @@ model User {
   /// Пояс выбран человеком руками: автоопределение с устройства его не
   /// трогает. Нужно тем, у кого VPN или системные настройки врут о зоне.
   timeZoneLocked               Boolean                    @default(false)
+  /// «Все ступени» на главной (VED-575): показывать материалы Образования и
+  /// Медиатеки, размеченные для других ступеней самоидентификации. `false` —
+  /// человек видит своё (`spiritualStage`) и материалы «для всех». Портальное
+  /// поле: пишет `PATCH /profile`, сервисы только читают.
+  showAllStages                Boolean                    @default(false)
   // Последняя активность; наружу отдаётся огрублённой (UnionActivityLevel)
   lastSeenAt                   DateTime?
   // Администрация сверила публичные фото с живым человеком
@@ -1992,6 +1997,12 @@ model LibraryEntry {
   /// и материал без пометки почти наверняка оттуда. Заполняется сервисом
   /// всегда явно; умолчание колонки — на старые строки и на сырые вставки.
   lineage          String?                  @default("iskcon")
+  /// Для каких ступеней самоидентификации материал (VED-575): значения
+  /// `SpiritualStage` строками, от одной до четырёх. Пусто — для всех, и это
+  /// умолчание. Строками, а не портальным энумом — как `lineage`: список
+  /// общий (`AUDIENCE_STAGES` в @vedamatch/shared), а энум у сервиса свой
+  /// заводить незачем. Ставит только админ Образования.
+  audienceStages   String[]                 @default([])
   status           LibraryEntryStatus       @default(published)
   needsReview      Boolean                  @default(false)
   usefulCount      Int                      @default(0)
@@ -5065,6 +5076,11 @@ model MusicTrack {
   /// «загрузить».
   lineage String?
 
+  /// Для каких ступеней самоидентификации запись (VED-575): значения
+  /// `SpiritualStage` строками, от одной до четырёх; пусто — для всех.
+  /// Ставит редакция Музыки, см. `AUDIENCE_STAGES` в @vedamatch/shared.
+  audienceStages String[] @default([])
+
   /// Тексты бхаджанов. Поля заложены сразу, показываются с этапа 9: добавлять
   /// три колонки в живую таблицу дороже, чем завести их пустыми.
   lyrics          String?
@@ -7159,6 +7175,15 @@ model BlogPost {
   /// которого автор не трогал.
   editedAt  DateTime?
 
+  /// Духовная линия поста (VED-596): идентификатор справочника
+  /// `@vedamatch/shared/lineage`, строкой, как `LibraryEntry.lineage`.
+  /// `null` — пост для всех линий. Ставит администратор ленты; читатель,
+  /// отфильтровавший ленту по линии, видит её посты и посты «для всех».
+  lineage  String?
+  /// Категория поста (VED-590): назначает автор, читатель фильтрует ленту.
+  /// `null` — без категории, пост виден только во «Все».
+  category BlogPostCategory?
+
   images    BlogPostImage[]
   favorites BlogFavorite[]
   likes     BlogLike[]
@@ -7201,6 +7226,14 @@ model BlogPostImage {
 enum BlogMediaKind {
   photo
   video
+}
+
+/// Категория поста Блог-ленты (VED-590). Порядок — как в меню фильтра.
+enum BlogPostCategory {
+  knowledge
+  news
+  devotee_life
+  calendar
 }
 
 /// «Избранное» участника (VED-238): пост, отмеченный звёздочкой, виден в

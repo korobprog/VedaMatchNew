@@ -175,6 +175,7 @@ export class UsersService {
       lineage: toLineageId(user.lineage),
       timeZone: user.timeZone,
       timeZoneLocked: user.timeZoneLocked,
+      showAllStages: user.showAllStages,
       subscription: toSubscriptionState(user, new Date(), billingMode),
       accountStatus: user.accountStatus,
       pendingDeletionAt: user.pendingDeletionAt?.toISOString() ?? null,
@@ -351,6 +352,10 @@ export class UsersService {
         });
         if (!current?.timeZoneLocked) data.timeZone = detected;
       }
+    }
+    if ('showAllStages' in payload) {
+      // Переключатель, а не текст: всё, кроме `true`, — «моя ступень».
+      data.showAllStages = payload.showAllStages === true;
     }
     if ('languages' in payload) {
       data.languages = normalizeLanguages(payload.languages);

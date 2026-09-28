@@ -6,6 +6,7 @@ import type {
   LibraryAdminEntryDto,
   LibrarySectionRequestDto,
   LineageId,
+  SpiritualStage,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -72,6 +73,17 @@ export const setLibraryCategoryLineage = (
 export const applyLibraryAuthorLineage = (id: string) =>
   command<ApplyLibraryAuthorLineageResponse>(
     `/library/admin/categories/${encodeURIComponent(id)}/lineage/apply`,
+  );
+
+/** Кнопка «Ступени» на карточке и странице материала (VED-575). */
+export const setLibraryEntryAudienceStages = (
+  id: string,
+  audienceStages: SpiritualStage[],
+) =>
+  command<{ id: string; audienceStages: SpiritualStage[] }>(
+    `/library/admin/entries/${encodeURIComponent(id)}/audience-stages`,
+    { audienceStages },
+    "PATCH",
   );
 
 /** Кнопка «Линия» на карточке материала (VED-561). */

@@ -38,10 +38,27 @@ export function getBlogHomeFeed(): Promise<BlogHomeFeedResponse | null> {
   return blogGet<BlogHomeFeedResponse>("/blog/home?view=carousel");
 }
 
+/** Фильтры читателя (VED-590, VED-596): категория и линия из адреса ленты. */
+export interface BlogFeedFilterParams {
+  category?: string | null;
+  lineage?: string | null;
+}
+
+function filterSuffix(filters: BlogFeedFilterParams): string {
+  const query = new URLSearchParams();
+  if (filters.category) query.set("category", filters.category);
+  if (filters.lineage) query.set("lineage", filters.lineage);
+  return query.toString();
+}
+
 export function getBlogFeed(
   scope: "current" | "all" = "all",
+  filters: BlogFeedFilterParams = {},
 ): Promise<BlogFeedResponse | null> {
-  return blogGet<BlogFeedResponse>(`/blog/feed?scope=${scope}`);
+  const suffix = filterSuffix(filters);
+  return blogGet<BlogFeedResponse>(
+    `/blog/feed?scope=${scope}${suffix ? `&${suffix}` : ""}`,
+  );
 }
 
 export function getBlogAuthorFeed(
@@ -56,8 +73,13 @@ export function getBlogPost(id: string): Promise<BlogPostDto | null> {
   return blogGet<BlogPostDto>(`/blog/posts/${encodeURIComponent(id)}`);
 }
 
-export function getBlogFavorites(): Promise<BlogFeedResponse | null> {
-  return blogGet<BlogFeedResponse>("/blog/favorites");
+export function getBlogFavorites(
+  filters: BlogFeedFilterParams = {},
+): Promise<BlogFeedResponse | null> {
+  const suffix = filterSuffix(filters);
+  return blogGet<BlogFeedResponse>(
+    `/blog/favorites${suffix ? `?${suffix}` : ""}`,
+  );
 }
 
 /** null и для не-администратора: эндпоинт отвечает ему 403. */

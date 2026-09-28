@@ -13,6 +13,7 @@ import type {
   AccessTokenPayload,
   LibraryAdminEntryQuery,
   MergeLibraryCategoryRequest,
+  SetAudienceStagesRequest,
   SetLibraryCategoryLineageRequest,
   SetLibraryEntryLineageRequest,
 } from '@vedamatch/shared';
@@ -90,6 +91,17 @@ export class LibraryAdminController {
   ) {
     this.assertAdmin(user);
     return this.admin.setEntryLineage(id, body);
+  }
+
+  /** Кнопка «Ступени» на карточке и странице материала (VED-575). */
+  @Patch('entries/:id/audience-stages')
+  setEntryAudienceStages(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: SetAudienceStagesRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.admin.setEntryAudienceStages(id, body);
   }
 
   @Get('entries')

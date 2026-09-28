@@ -70,6 +70,15 @@ const whereOf = (prisma: ReturnType<typeof prismaMock>) =>
     }
   ).where;
 
+/** Линию из профиля каталог не берёт; профиль читается только ради ступени. */
+function expectNoLineageFromProfile(prisma: ReturnType<typeof prismaMock>) {
+  for (const [args] of prisma.user.findUnique.mock.calls as unknown as Array<
+    [{ select: Record<string, boolean> }]
+  >) {
+    expect(args.select).not.toHaveProperty('lineage');
+  }
+}
+
 describe('lineageCondition', () => {
   it('без линии не добавляет в where ничего', () => {
     expect(lineageCondition(null)).toEqual({});
@@ -122,13 +131,14 @@ describe('MusicCatalogService — линия слушателя', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
       lineage: 'sri_gopinath_gaudiya_math',
+      showAllStages: true,
     });
     const { service: catalog } = service(prisma);
 
     await catalog.listTracks(query, 'u1');
 
     expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expectNoLineageFromProfile(prisma);
   });
 
   it('линия, выбранная в настройках Музыки, фильтрует каталог', async () => {
@@ -151,6 +161,7 @@ describe('MusicCatalogService — линия слушателя', () => {
     prisma.user.findUnique.mockResolvedValue({
       spiritualStage: 'devotee',
       lineage: 'iskcon',
+      showAllStages: true,
     });
     prisma.musicSettings.findUnique.mockResolvedValue({ lineage: 'all' });
     const { service: catalog } = service(prisma);
@@ -170,7 +181,7 @@ describe('MusicCatalogService — линия слушателя', () => {
       { OR: [{ lineage: 'ipbys' }, { lineage: null }] },
       NOT_AUDIOBOOK,
     ]);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expectNoLineageFromProfile(prisma);
     expect(prisma.musicSettings.findUnique).not.toHaveBeenCalled();
   });
 
@@ -369,5 +380,74 @@ describe('MusicCatalogService — раздел «Аудиокниги»', () => 
     expect(firstCallArg(prisma.musicArtist.findMany)).toMatchObject({
       where: { isAudiobook: false },
     });
+  });
+});
+
+describe('MusicCatalogService — ступень самоидентификации (VED-575)', () => {
+  const STAGE = {
+    OR: [
+      { audienceStages: { isEmpty: true } },
+      { audienceStages: { has: 'yogi' } },
+    ],
+  };
+
+  it('каталог показывает свою ступень и записи «для всех»', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      showAllStages: false,
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.listTracks(query, 'u1');
+
+    expect(whereOf(prisma).AND).toEqual([STAGE, NOT_AUDIOBOOK]);
+  });
+
+  it('витрина: «новое» и число над ним — с тем же фильтром', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      showAllStages: false,
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.showcase('u1');
+
+    const countWhere = (
+      firstCallArg(prisma.musicTrack.count) as {
+        where: Record<string, unknown>;
+      }
+    ).where;
+    expect(whereOf(prisma).AND).toEqual([STAGE, NOT_AUDIOBOOK]);
+    expect(countWhere.AND).toEqual([STAGE, NOT_AUDIOBOOK]);
+  });
+
+  it('«Все ступени» с главной снимают фильтр', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      showAllStages: true,
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.listTracks(query, 'u1');
+
+    expect(whereOf(prisma).AND).toEqual([NOT_AUDIOBOOK]);
+  });
+
+  it('поиск по слову не перетирает условие ступени', async () => {
+    const prisma = prismaMock();
+    prisma.user.findUnique.mockResolvedValue({
+      spiritualStage: 'yogi',
+      showAllStages: false,
+    });
+    const { service: catalog } = service(prisma);
+
+    await catalog.listTracks({ ...query, q: 'гаура' }, 'u1');
+
+    const where = whereOf(prisma);
+    expect(where.OR).toHaveLength(2);
+    expect(where.AND).toEqual([STAGE, NOT_AUDIOBOOK]);
   });
 });

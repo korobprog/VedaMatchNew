@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import {
   BLOG_MAX_POSTS_PER_DAY,
   resolveDisplayName,
+  toLineageId,
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
   type BlogFavoriteResponse,
@@ -27,6 +28,13 @@ import type { BlogLinkPostInput } from './blog-link-post';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { blogEditDenial, parseKeepImageIds, planBlogImages } from './blog-edit';
+import {
+  blogCategoryInput,
+  blogFilterConditions,
+  blogLineageInput,
+  combineBlogWhere,
+  type BlogFeedFilters,
+} from './blog-filters';
 import {
   BLOG_PAGE_SIZE,
   blogCursorFilter,
@@ -89,6 +97,8 @@ const POST_SELECT_BASE = {
   likeCount: true,
   createdAt: true,
   editedAt: true,
+  lineage: true,
+  category: true,
   // Нужен не карточке, а праву на правку: репост не правится никем.
   repostOfId: true,
   linkUrl: true,
@@ -227,17 +237,19 @@ export class BlogService {
   async feed(
     userId: string,
     viewerIsAdmin: boolean,
-    params: { scope?: string; cursor?: string },
+    params: { scope?: string; cursor?: string } & BlogFeedFilters,
   ): Promise<BlogFeedResponse> {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const now = new Date();
     const currentOnly = params.scope !== 'all';
     const base = this.feedWhere(viewer, now, currentOnly);
 
+    // Фильтры читателя: категория (VED-590) и линия (VED-596) из адреса.
     const cursor = decodeBlogCursor(params.cursor);
-    const where: Prisma.BlogPostWhereInput = cursor
-      ? { AND: [base, blogCursorFilter(cursor)] }
-      : base;
+    const where = combineBlogWhere(base, [
+      ...blogFilterConditions(params),
+      ...(cursor ? [blogCursorFilter(cursor)] : []),
+    ]);
 
     const rows = await this.prisma.blogPost.findMany({
       where,
@@ -343,6 +355,11 @@ export class BlogService {
       imageCount: files.length,
     });
     if (error) throw new BadRequestException(error);
+    // Категорию назначает автор прямо в форме (VED-590).
+    const category = blogCategoryInput(body?.category);
+    if (category === 'invalid') {
+      throw new BadRequestException('invalid_category');
+    }
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
     }
@@ -356,6 +373,7 @@ export class BlogService {
         authorId: userId,
         title,
         text,
+        category: category ?? null,
         feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
       },
       select: { id: true },
@@ -436,6 +454,11 @@ export class BlogService {
       imageCount: plan.kept.length + files.length,
     });
     if (error) throw new BadRequestException(error);
+    // Нет поля — категория прежняя: правка из старого клиента её не снимет.
+    const category = blogCategoryInput(body?.category);
+    if (category === 'invalid') {
+      throw new BadRequestException('invalid_category');
+    }
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
     }
@@ -475,7 +498,12 @@ export class BlogService {
       }
       await tx.blogPost.update({
         where: { id },
-        data: { title, text, editedAt: now },
+        data: {
+          title,
+          text,
+          editedAt: now,
+          ...(category === undefined ? {} : { category }),
+        },
       });
     });
 
@@ -676,6 +704,39 @@ export class BlogService {
     return null;
   }
 
+  /**
+   * Категория поста одной кнопкой (VED-590), без формы правки. Право то же,
+   * что у правки: автор или администратор, репост — никто. Отметку
+   * «изменено» не ставит: текст поста не менялся.
+   */
+  async setCategory(
+    userId: string,
+    viewerIsAdmin: boolean,
+    id: string,
+    value: unknown,
+  ): Promise<BlogPostDto> {
+    const category = blogCategoryInput(value);
+    if (category === 'invalid') {
+      throw new BadRequestException('invalid_category');
+    }
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true, repostOfId: true },
+    });
+    if (!row) throw new NotFoundException('post_not_found');
+    const denial = blogEditDenial(row, { userId, isAdmin: viewerIsAdmin });
+    if (denial === 'repost_not_editable') throw new BadRequestException(denial);
+    if (denial) throw new ForbiddenException(denial);
+
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: { category: category ?? null },
+      select: postSelect(userId),
+    });
+    const viewer = await this.viewer(userId, viewerIsAdmin);
+    return this.postDto(updated, viewer, new Date());
+  }
+
   // ---- «Нравится» (VED-505) --------------------------------------------
 
   /**
@@ -783,6 +844,7 @@ export class BlogService {
     userId: string,
     viewerIsAdmin: boolean,
     cursor?: string,
+    filters: BlogFeedFilters = {},
   ): Promise<BlogFeedResponse> {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     const now = new Date();
@@ -791,9 +853,10 @@ export class BlogService {
       favorites: { some: { userId } },
     };
     const decoded = decodeBlogCursor(cursor);
-    const where: Prisma.BlogPostWhereInput = decoded
-      ? { AND: [base, blogCursorFilter(decoded)] }
-      : base;
+    const where = combineBlogWhere(base, [
+      ...blogFilterConditions(filters),
+      ...(decoded ? [blogCursorFilter(decoded)] : []),
+    ]);
 
     const rows = await this.prisma.blogPost.findMany({
       where,
@@ -870,6 +933,33 @@ export class BlogService {
     const updated = await this.prisma.blogPost.update({
       where: { id },
       data: { pinned: Boolean(pinned) },
+      select: postSelect(userId),
+    });
+    const viewer: Viewer = { userId, isAdmin: true, hiddenUserIds: new Set() };
+    return this.postDto(updated, viewer, new Date());
+  }
+
+  /**
+   * Линия поста (VED-596) — право администратора, как срок и закрепление:
+   * линия решает, кому пост виден в отфильтрованной ленте. `null` — «без
+   * линии, для всех».
+   */
+  async setLineage(
+    userId: string,
+    id: string,
+    value: unknown,
+  ): Promise<BlogPostDto> {
+    const lineage = blogLineageInput(value);
+    if (lineage === 'invalid') throw new BadRequestException('invalid_lineage');
+    const exists = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('post_not_found');
+
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: { lineage },
       select: postSelect(userId),
     });
     const viewer: Viewer = { userId, isAdmin: true, hiddenUserIds: new Set() };
@@ -1053,5 +1143,7 @@ function toPostDto(
     favorited: row.favorites.length > 0,
     liked: row.likes.length > 0,
     likeCount: row.likeCount,
+    lineage: toLineageId(row.lineage),
+    category: row.category,
   };
 }

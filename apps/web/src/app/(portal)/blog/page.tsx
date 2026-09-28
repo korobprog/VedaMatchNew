@@ -5,6 +5,10 @@ import { getBlogFavorites, getBlogFeed, getBlogSettings } from "@/lib/blog-api";
 import { requireUser } from "@/lib/require-user";
 import { BlogFeed } from "@/components/blog/blog-feed";
 import { BlogSettingsForm } from "@/components/blog/blog-settings-form";
+import {
+  blogFeedHref,
+  parseBlogFeedFilters,
+} from "@/components/blog/blog-feed-filters";
 
 export const metadata = {
   title: "Блог-лента — что происходит на портале",
@@ -25,6 +29,7 @@ function first(value: string | string[] | undefined): string | undefined {
  *
  * Вкладка «Избранное» — посты, отмеченные звёздочкой (VED-238). `?new=1`
  * ставит курсор в форму нового поста: туда ведёт карандаш с главной.
+ * `?category=` и `?lineage=` — фильтры читателя (VED-590, VED-596).
  */
 export default async function BlogPage({
   searchParams,
@@ -44,13 +49,17 @@ export default async function BlogPage({
     { role: user.role, adminServices: user.adminServices },
     "blog",
   );
+  const filters = parseBlogFeedFilters(params);
   const [feed, settings] = await Promise.all([
-    favorites ? getBlogFavorites() : getBlogFeed("all"),
+    favorites ? getBlogFavorites(filters) : getBlogFeed("all", filters),
     isAdmin && !favorites ? getBlogSettings() : Promise.resolve(null),
   ]);
 
   const tab =
     "inline-flex min-h-11 items-center rounded-lg border px-3 text-sm";
+  // Вкладки не сбрасывают фильтры: «Новости» во «Всех постах» остаются
+  // «Новостями» и в «Избранном».
+  const allHref = blogFeedHref("/blog", "", filters);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 pb-28">
@@ -67,7 +76,9 @@ export default async function BlogPage({
       {/* Вкладки и «Создать новый пост» — одной строкой (VED-519): форма и
           настройки срока свёрнуты в кнопку справа от вкладок. */}
       <BlogFeed
-        key={favorites ? "favorites" : "all"}
+        key={`${favorites ? "favorites" : "all"}:${filters.category ?? ""}:${
+          filters.lineage ?? ""
+        }`}
         initial={feed ?? { posts: [], nextCursor: null }}
         scope={favorites ? "favorites" : "all"}
         showComposer={!favorites}
@@ -75,7 +86,7 @@ export default async function BlogPage({
         nav={
           <nav aria-label="Разделы ленты" className="flex gap-1.5 sm:gap-2">
             <Link
-              href="/blog"
+              href={allHref}
               aria-current={favorites ? undefined : "page"}
               className={`${tab} ${
                 favorites
@@ -86,7 +97,7 @@ export default async function BlogPage({
               Все посты
             </Link>
             <Link
-              href="/blog?view=favorites"
+              href={blogFeedHref("/blog", "view=favorites", filters)}
               aria-current={favorites ? "page" : undefined}
               className={`${tab} ${
                 favorites
@@ -99,6 +110,7 @@ export default async function BlogPage({
           </nav>
         }
         beforeComposer={settings && <BlogSettingsForm initial={settings} />}
+        filters={filters}
       />
     </main>
   );

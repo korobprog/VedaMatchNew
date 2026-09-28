@@ -10,9 +10,11 @@ import type {
   MusicPlaylistCardDto,
   MusicTrackDetailDto,
   MusicTrackListDto,
+  SpiritualStage,
 } from '@vedamatch/shared';
 import {
   lineageFilterIds,
+  resolveAudienceStage,
   resolveContentLineage,
   toLineagePreference,
 } from '@vedamatch/shared';
@@ -23,6 +25,7 @@ import {
   catalogOnlyCondition,
 } from './music-audiobook-scope';
 import { countTracksByCategory } from './music-category-counts';
+import { audienceStageAndConditions } from './music-audience-stage';
 import {
   buildCoverUrl,
   toMusicAlbumDto,
@@ -116,19 +119,26 @@ export class MusicCatalogService {
      */
     rootSlug: string | null = null,
   ): Promise<MusicCatalogDto> {
-    const lineage = await this.viewerLineage(viewerId, null);
+    const [lineage, audienceStage] = await Promise.all([
+      this.viewerLineage(viewerId, null),
+      this.viewerAudienceStage(viewerId),
+    ]);
     // Аудиокниги живут отдельным разделом (VED-237, VED-297) и в витрину не
     // идут ни главами, ни карточками чтецов, ни числом над заголовком.
     const notAudiobook = catalogOnlyCondition();
+    // Линия и ступень самоидентификации (VED-575) — одним списком: «новое»
+    // и число над ним обязаны видеть одно и то же.
+    const visible = [
+      ...lineageAndConditions(lineage),
+      ...audienceStageAndConditions(audienceStage),
+      notAudiobook,
+    ];
 
     const [categories, fresh, artists, systemPlaylists, totalTracks] =
       await Promise.all([
         this.listCategories(rootSlug),
         this.prisma.musicTrack.findMany({
-          where: {
-            status: 'published',
-            AND: [...lineageAndConditions(lineage), notAudiobook],
-          },
+          where: { status: 'published', AND: visible },
           include: TRACK_CARD_INCLUDE,
           orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
           take: SHOWCASE_FRESH,
@@ -138,10 +148,7 @@ export class MusicCatalogService {
         // Тот же фильтр, что у «нового»: число отвечает на «сколько я
         // реально вижу», а не «сколько есть в базе вообще».
         this.prisma.musicTrack.count({
-          where: {
-            status: 'published',
-            AND: [...lineageAndConditions(lineage), notAudiobook],
-          },
+          where: { status: 'published', AND: visible },
         }),
       ]);
 
@@ -235,7 +242,10 @@ export class MusicCatalogService {
     query: NormalizedMusicTrackQuery,
     viewerId: string | null = null,
   ): Promise<MusicTrackListDto> {
-    const lineage = await this.viewerLineage(viewerId, query.lineage);
+    const [lineage, audienceStage] = await Promise.all([
+      this.viewerLineage(viewerId, query.lineage),
+      this.viewerAudienceStage(viewerId),
+    ]);
 
     // Корневая категория (VED-165-2) переехала на исполнителя: фильтр по ней
     // — условие на связь `artist.rootCategory`, а не на `categories`, как у
@@ -251,6 +261,7 @@ export class MusicCatalogService {
     // условие вторым спредом значило бы молча стереть первое.
     const andConditions = [
       ...lineageAndConditions(lineage),
+      ...audienceStageAndConditions(audienceStage),
       // Аудиокниги (VED-237, VED-297) не показываются ни в выдаче фильтров,
       // ни в поиске: их «отображение находится внутри кнопки».
       catalogOnlyCondition(),
@@ -321,6 +332,23 @@ export class MusicCatalogService {
       select: { lineage: true },
     });
     return resolveContentLineage(null, toLineagePreference(settings?.lineage));
+  }
+
+  /**
+   * Ступень самоидентификации слушателя (VED-575). Из `User` — ровно
+   * `spiritualStage` и портальный переключатель «Все ступени» с главной;
+   * пишет их портал. `null` — не фильтровать: гость, человек без
+   * самоидентификации или выбравший «Все ступени».
+   */
+  private async viewerAudienceStage(
+    viewerId: string | null,
+  ): Promise<SpiritualStage | null> {
+    if (!viewerId) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { spiritualStage: true, showAllStages: true },
+    });
+    return resolveAudienceStage(user);
   }
 
   /**
