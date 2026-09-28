@@ -11,6 +11,7 @@ import type {
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 import { t } from "./i18n";
 import { LIBRARY_ICON_BUTTON } from "./icon-button";
@@ -56,9 +57,7 @@ export function LibraryLineageFilter({
   /** Раскладка снаружи: в ряду кнопок Образования кнопка тянется на ячейку. */
   className?: string;
   /**
-   * Значком, без подписи на экране (VED-511) — ряд действий рубрики. Меню
-   * тогда открывается от правого края ряда, а не от кнопки: кнопка стоит в
-   * ряду справа, и панель в 288 точек от её края уезжала бы за экран.
+   * Значком, без подписи на экране (VED-511) — ряд действий рубрики.
    */
   iconOnly?: boolean;
 }) {
@@ -146,9 +145,9 @@ export function LibraryLineageFilter({
     }`;
 
   return (
-    // Значком — без своей точки отсчёта: меню встаёт под рядом действий
-    // целиком, у его правого края (ряд — `relative`).
-    <div className={`${iconOnly ? "" : "relative"} ${className}`}>
+    // Меню — портальный `AnchoredPopover` (VED-604): от кнопки и целиком в
+    // пределах экрана, где бы она ни стояла.
+    <div className={className}>
       <button
         ref={triggerRef}
         type="button"
@@ -172,11 +171,12 @@ export function LibraryLineageFilter({
         {!iconOnly && t(locale, "lineage.menu")}
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align={iconOnly ? "end" : "start"}
           role="group"
           aria-label={t(locale, "lineage.filter")}
-          className={`absolute ${iconOnly ? "right-0" : "left-0"} top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg`}
         >
           {menu.map((item) =>
             item.kind === "choice" ? (
@@ -238,7 +238,7 @@ export function LibraryLineageFilter({
               </div>
             ),
           )}
-        </div>
+        </AnchoredPopover>
       )}
       <p role="status" className="text-xs text-text-1">
         {failed ? t(locale, "lineage.filterFailed") : ""}

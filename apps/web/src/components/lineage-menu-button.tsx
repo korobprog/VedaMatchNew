@@ -7,6 +7,7 @@ import {
   type LineageGroup,
   type LineageId,
 } from "@vedamatch/shared";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   lineageButtonLabel,
@@ -22,8 +23,8 @@ import {
  * `onSelect`. Показывать ли кнопку (только админам сервиса), тоже решает
  * сервис — здесь проверки прав нет.
  *
- * Меню раскрывается у правого края обёртки: у кнопки в конце ряда слева
- * место есть всегда, а вправо на телефоне оно уехало бы за экран.
+ * Меню — `AnchoredPopover` (VED-604): порталом поверх страницы и целиком в
+ * пределах экрана, где бы ни стояла кнопка.
  */
 export function LineageMenuButton({
   value,
@@ -106,13 +107,14 @@ export function LineageMenuButton({
         <Landmark aria-hidden className="size-4" />
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
           id={panelId}
           role="group"
           aria-label={menuLabel}
           aria-busy={pending}
-          className="absolute right-0 top-full z-30 mt-2 max-h-[60vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           {lineageMenuItems().map((item) =>
             item.kind === "choice" ? (
@@ -184,7 +186,7 @@ export function LineageMenuButton({
               {error}
             </p>
           )}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

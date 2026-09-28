@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 
 /**
@@ -15,9 +16,8 @@ import { useDismissable } from "@/lib/use-dismissable";
  * «Назначить категорию» у поста. Высота и рамка — как у соседей по ряду
  * («Новый пост», «Порядок кнопок»), размер пальца 44px.
  *
- * Меню встаёт от правого края ряда, а не кнопки: у обёртки своей точки
- * отсчёта нет, ряд — `relative`. Кнопка на телефоне стоит где угодно, и
- * панель в 288 точек от её края уезжала бы за экран.
+ * Меню — портальный `AnchoredPopover` (VED-604): встаёт от кнопки и целиком
+ * в пределах экрана, где бы кнопка ни оказалась в ряду.
  */
 export const BLOG_ICON_BUTTON =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-lg border transition-colors";
@@ -88,16 +88,17 @@ export function BlogMenuButton({
         {icon}
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
           id={panelId}
           role="group"
           aria-label={menuLabel}
           aria-busy={busy || undefined}
-          className="absolute right-0 top-full z-30 mt-2 max-h-[60vh] w-72 max-w-full overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           {children(close)}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Shapes } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 import { ENTRY_FILTER_LANGUAGES, ENTRY_FILTER_TYPES } from "./entry-filters";
 import { entryTypeLabel, t } from "./i18n";
@@ -19,8 +20,8 @@ import { LIBRARY_ICON_BUTTON } from "./icon-button";
  * «Все» (VED-546). Код языка читается сразу, значок «文A» приходилось
  * угадывать.
  *
- * Меню раскрывается у правого края ряда — ряд `relative`, у обёртки своей
- * точки отсчёта нет: от кнопки на телефоне оно уезжало бы за экран.
+ * Меню — портальный `AnchoredPopover` (VED-604): от кнопки и целиком в
+ * пределах экрана.
  */
 export function EntryFilterMenu({
   kind,
@@ -100,11 +101,13 @@ export function EntryFilterMenu({
         )}
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
+          width={256}
           role="group"
           aria-label={label}
-          className="absolute right-0 top-full z-30 mt-2 max-h-[60vh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           <p className="px-3 pb-1 text-xs text-text-2">{label}</p>
           <button
@@ -126,7 +129,7 @@ export function EntryFilterMenu({
               {option.label}
             </button>
           ))}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

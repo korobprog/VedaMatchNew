@@ -10,6 +10,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDownAZ, ArrowUpDown, Check, ListTree } from "lucide-react";
 import type { LibraryLocale } from "@vedamatch/shared";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   CATEGORY_ORDER_PARAM,
@@ -33,7 +34,8 @@ import {
  * Пока режим открыт, кнопка становится «Готово» и закрывает его одним
  * нажатием.
  *
- * Меню раскрывается у правого края ряда действий — ряд `relative`.
+ * Меню — портальный `AnchoredPopover` (VED-604): от кнопки и целиком в
+ * пределах экрана.
  */
 export function CategoryOrderMenu({
   locale,
@@ -126,11 +128,13 @@ export function CategoryOrderMenu({
         )}
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
+          width={256}
           role="group"
           aria-label={label}
-          className="absolute right-0 top-full z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           <p className="px-3 pb-1 text-xs text-text-2">{label}</p>
           <button
@@ -162,7 +166,7 @@ export function CategoryOrderMenu({
               </button>
             </>
           )}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

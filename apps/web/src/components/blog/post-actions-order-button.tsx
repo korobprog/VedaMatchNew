@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { ArrowDownUp, ChevronDown, ChevronUp } from "lucide-react";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   POST_ACTION_LABELS,
@@ -66,9 +67,8 @@ export function PostActionsOrderButton() {
     );
   }
 
-  // Без своей точки отсчёта: панель раскрывается у правого края ряда
-  // шапки (он — `relative`). От самой кнопки она в 288 точек уезжала бы за
-  // левый край телефона — справа от кнопки ещё «Поделиться».
+  // Панель — портальный `AnchoredPopover` (VED-604): от кнопки и целиком в
+  // пределах экрана.
   return (
     <div>
       <button
@@ -86,12 +86,13 @@ export function PostActionsOrderButton() {
         <ArrowDownUp aria-hidden className="size-4" />
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
           id="blog-post-actions-order"
           role="group"
           aria-label="Порядок кнопок"
-          className="absolute right-0 top-full z-30 mt-2 max-h-[70vh] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           <p className="px-1 pb-1 text-xs text-text-1">
             Порядок кнопок под постами — стрелками. Действует во всей ленте.
@@ -163,7 +164,7 @@ export function PostActionsOrderButton() {
           <p role="status" className="sr-only">
             {status}
           </p>
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );

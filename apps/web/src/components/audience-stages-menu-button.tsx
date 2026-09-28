@@ -8,6 +8,7 @@ import {
   type SpiritualStage,
 } from "@vedamatch/shared";
 import { Button } from "@/components/ui/button";
+import { AnchoredPopover } from "@/components/anchored-popover";
 import { useDismissable } from "@/lib/use-dismissable";
 import {
   audienceStagesButtonLabel,
@@ -117,13 +118,14 @@ export function AudienceStagesMenuButton({
         )}
       </button>
       {open && (
-        <div
-          ref={panelRef}
+        <AnchoredPopover
+          anchorRef={triggerRef}
+          panelRef={panelRef}
+          align="end"
           id={panelId}
           role="group"
           aria-label="Ступени самоидентификации материала"
           aria-busy={pending}
-          className="absolute right-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-glass-brd bg-bg-0 p-2 shadow-lg"
         >
           <p className="px-3 pb-1 pt-1 text-xs text-text-1">
             Кому показывать: от одной до четырёх ступеней. Без отметок — всем.
@@ -169,7 +171,7 @@ export function AudienceStagesMenuButton({
               {error}
             </p>
           )}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );
