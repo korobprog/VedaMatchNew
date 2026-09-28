@@ -83,11 +83,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-function send<T>(path: string, method: string, body?: unknown): Promise<T> {
+/**
+ * `keepalive` — запрос доходит, даже если вкладку или приложение закрыли сразу
+ * после него (VED-611). Только для маленьких тел: у браузера лимит 64 КБ.
+ */
+export interface WorkSendOptions {
+  keepalive?: boolean;
+}
+
+function send<T>(
+  path: string,
+  method: string,
+  body?: unknown,
+  options: WorkSendOptions = {},
+): Promise<T> {
   return request<T>(path, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    ...(options.keepalive ? { keepalive: true } : {}),
   });
 }
 
@@ -203,11 +217,17 @@ export const createWorkTask = (boardId: string, body: CreateWorkTaskRequest) =>
 export const getWorkTask = (taskId: string) =>
   request<WorkTaskDto>(`/work/tasks/${taskId}`);
 
-export const updateWorkTask = (taskId: string, body: UpdateWorkTaskRequest) =>
-  send<WorkTaskDto>(`/work/tasks/${taskId}`, "PATCH", body);
+export const updateWorkTask = (
+  taskId: string,
+  body: UpdateWorkTaskRequest,
+  options?: WorkSendOptions,
+) => send<WorkTaskDto>(`/work/tasks/${taskId}`, "PATCH", body, options);
 
-export const moveWorkTask = (taskId: string, body: MoveWorkTaskRequest) =>
-  send<WorkTaskDto>(`/work/tasks/${taskId}/move`, "POST", body);
+export const moveWorkTask = (
+  taskId: string,
+  body: MoveWorkTaskRequest,
+  options?: WorkSendOptions,
+) => send<WorkTaskDto>(`/work/tasks/${taskId}/move`, "POST", body, options);
 
 /** «Просмотрено» на карточке (VED-365): своя отметка, в обе стороны. */
 export const setWorkTaskViewed = (

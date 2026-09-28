@@ -50,11 +50,19 @@ import { PRIORITY_TITLE } from "./task-priority";
 import { formatTaskDate } from "./task-date";
 import {
   draftFromTask,
-  hasTaskEdits,
   pendingTaskEdits,
   taskEditsProblem,
   type TaskDraft,
 } from "./task-edits";
+import {
+  createTaskPlacer,
+  hasFormEdits,
+  pendingFormEdits,
+  placeOf,
+  withPlace,
+  type PlaceOutcome,
+  type TaskPlace,
+} from "./task-place";
 import { WorkTaskFinance } from "./task-finance";
 import {
   browserSessionStore,
@@ -75,6 +83,23 @@ const openTaskDialogs = new Map<
 >();
 
 const NO_UPLOADS: readonly WorkUploadJob[] = [];
+
+/**
+ * Раздел и статус (VED-611) уходят очередью вне окна: закрыли окно, ушли в
+ * другое окно портала — запрос летит дальше; `keepalive` доносит его, даже
+ * если закрыли вкладку или приложение. Обёртки, а не сами функции: запрос
+ * берётся в момент вызова.
+ */
+const taskPlacer = createTaskPlacer<WorkTaskDto>({
+  update: (taskId, body) => updateWorkTask(taskId, body, { keepalive: true }),
+  move: (taskId, body) => moveWorkTask(taskId, body, { keepalive: true }),
+});
+
+/** Окна, открытые на задаче сейчас, — им итог выбора места. */
+const openTaskPlaces = new Map<
+  string,
+  (outcome: PlaceOutcome<WorkTaskDto>) => void
+>();
 
 /** Поле карточки: одинаковое у всех списков и у срока. */
 const FIELD_CLASS =
@@ -110,12 +135,25 @@ export function WorkTaskDialog({
   onChanged: () => void | Promise<void>;
 }) {
   const [task, setTask] = useState<WorkTaskDto | null>(null);
+  /**
+   * Карточка, как её знает сервер, — без выбранного, но ещё не дошедшего
+   * места (VED-611). От неё очередь считает, что отправить.
+   */
+  const confirmedTask = useRef<WorkTaskDto | null>(null);
+  /** Показать карточку от сервера; место, которое ещё летит, — поверх. */
+  const showTask = useCallback((next: WorkTaskDto) => {
+    confirmedTask.current = next;
+    const pending = taskPlacer.pendingPlace(next.id);
+    setTask(pending ? withPlace(next, pending) : next);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /* Черновик всех полей карточки (VED-56): название, описание, раздел,
-     исполнитель, важность и срок. Сохраняет кнопка «Сохранить» или закрытие
-     окна — ни потеря фокуса, ни выбор в списке на сервер сами не уходят,
-     иначе кнопка после такой правки не появлялась. */
+  /* Черновик полей карточки (VED-56): название, описание, исполнитель,
+     важность и срок. Раздел и статус в него не входят — уходят сразу
+     (VED-611), место в черновике всегда то, что на карточке. Остальное
+     сохраняет кнопка «Сохранить» или закрытие окна — ни потеря фокуса, ни
+     выбор в списке на сервер сами не уходят, иначе кнопка после такой
+     правки не появлялась. */
   const [draft, setDraft] = useState<TaskDraft>({
     title: "",
     description: "",
@@ -179,7 +217,7 @@ export function WorkTaskDialog({
     (outcome: AttachOutcome<WorkTaskDto>) => void
   >(() => {});
   takeUploadOutcome.current = (outcome) => {
-    if (outcome.last) setTask(outcome.last);
+    if (outcome.last) showTask(outcome.last);
     void Promise.resolve(onChanged()).then(() => {
       if (outcome.problem) setError(outcome.problem);
       else setJustSaved(true);
@@ -208,12 +246,14 @@ export function WorkTaskDialog({
     getWorkTask(taskId)
       .then((loaded) => {
         if (!alive) return;
-        setTask(loaded);
+        showTask(loaded);
         // Правки, не сохранённые до ухода в другое окно портала (VED-520),
-        // возвращаются в поля — с кнопкой «Сохранить», как были.
+        // возвращаются в поля — с кнопкой «Сохранить», как были. Место — с
+        // карточки: оно в черновик не входит (VED-611).
         const kept = readBoardSession(browserSessionStore(), board.id)
           .taskDrafts[loaded.id];
-        resetDraft(kept ?? draftFromTask(loaded));
+        const fresh = draftFromTask(loaded);
+        resetDraft(kept ? withPlace(kept, placeOf(fresh)) : fresh);
       })
       .catch((cause: unknown) => {
         if (alive) {
@@ -225,7 +265,7 @@ export function WorkTaskDialog({
     return () => {
       alive = false;
     };
-  }, [taskId, board.id]);
+  }, [taskId, board.id, showTask]);
 
   // Высоту заголовка считаем после загрузки: до неё в поле пусто и оно
   // осталось бы в одну строку.
@@ -248,7 +288,9 @@ export function WorkTaskDialog({
   }
 
   const saved = task ? draftFromTask(task) : draft;
-  const dirty = Boolean(task) && hasTaskEdits(saved, draft);
+  /* Место (раздел и статус) не делает черновик «грязным» (VED-611): оно
+     уходит само, и «Сохранить» из-за него не появляется. */
+  const dirty = Boolean(task) && hasFormEdits(saved, draft);
 
   // Несохранённое — в память вкладки (VED-520): уход в другое окно портала
   // снимает окно карточки, и без этого правка пропадала. Сохранили или
@@ -256,7 +298,7 @@ export function WorkTaskDialog({
   useEffect(() => {
     if (!task) return;
     const next = { ...draft, ...latestText.current };
-    const unsaved = hasTaskEdits(draftFromTask(task), next);
+    const unsaved = hasFormEdits(draftFromTask(task), next);
     patchBoardSession(browserSessionStore(), board.id, (session) => ({
       ...session,
       taskDrafts: unsaved
@@ -280,7 +322,7 @@ export function WorkTaskDialog({
         latest = await updateWorkTask(base.id, pending.update);
         // Поля уже на сервере: если следом не пройдёт перенос, окно не должно
         // показывать их несохранёнными.
-        setTask(latest);
+        showTask(latest);
       }
       if (pending.columnId) {
         latest = await moveWorkTask(base.id, {
@@ -293,7 +335,7 @@ export function WorkTaskDialog({
       }
       return latest;
     },
-    [],
+    [showTask],
   );
 
   /**
@@ -302,8 +344,11 @@ export function WorkTaskDialog({
    * правка пропадала.
    */
   const requestClose = useCallback(() => {
-    const next = { ...draft, ...latestText.current };
-    if (task && canEdit && pendingTaskEdits(draftFromTask(task), next)) {
+    // Место в черновик не входит (VED-611): оно уже ушло своей очередью.
+    const next = task
+      ? withPlace({ ...draft, ...latestText.current }, placeOf(task))
+      : { ...draft, ...latestText.current };
+    if (task && canEdit && pendingFormEdits(draftFromTask(task), next)) {
       void commit(task, next)
         .then(() => onChanged())
         .catch(() => undefined);
@@ -343,7 +388,7 @@ export function WorkTaskDialog({
     setError(null);
     try {
       const next = await action();
-      if (next) setTask(next);
+      if (next) showTask(next);
       await onChanged();
       // Дошло — окно так и говорит. Правок в черновике это не касается: пока
       // они есть, полоса показывает их, а не «Сохранено».
@@ -416,29 +461,56 @@ export function WorkTaskDialog({
     if (changed) setTextKey((key) => key + 1);
   }
 
+  /** Итог выбора места — в это окно, пока оно открыто (VED-611). */
+  const takePlaceOutcome = useRef<
+    (outcome: PlaceOutcome<WorkTaskDto>) => void
+  >(() => {});
+  takePlaceOutcome.current = (outcome) => {
+    if (outcome.last) {
+      // Последний выбор дошёл — карточка как на сервере; не дошёл — место
+      // откатывается к тому, что на сервере.
+      showTask(outcome.task);
+    } else {
+      confirmedTask.current = outcome.task;
+    }
+    if (outcome.problem) {
+      setError(`Раздел или статус не сохранились: ${outcome.problem}`);
+    }
+  };
+  useEffect(() => {
+    const take = (outcome: PlaceOutcome<WorkTaskDto>) =>
+      takePlaceOutcome.current(outcome);
+    openTaskPlaces.set(taskId, take);
+    return () => {
+      if (openTaskPlaces.get(taskId) === take) openTaskPlaces.delete(taskId);
+    };
+  }, [taskId]);
+
   /**
-   * Раздел и статус уходят сразу, без «Сохранить» (VED-526): перенос —
-   * действие, как галочка в чек-листе, а не правка текста, и кнопка после
-   * него только сбивала. Отправляется одно место — от сохранённой карточки,
-   * а не от черновика: несохранённые правки полей остаются в черновике и
-   * ждут своей кнопки.
+   * Раздел и статус уходят сразу, без «Сохранить» (VED-526, VED-611):
+   * перенос — действие, как галочка в чек-листе, а не правка текста.
+   * Оптимистично: список показывает выбор тут же, а при отказе сервера место
+   * откатывается и окно говорит почему. Ни черновик, ни «Сохранить», ни
+   * «Сохранено» выбор не трогает, окно не блокирует. Запрос — очередью вне
+   * окна (`taskPlacer`): закрытие окна или уход со страницы его не отменяют.
    */
-  function place(choice: Pick<TaskDraft, "columnId" | "sectionId">) {
-    if (!task) return;
-    // Выбор строится от черновика и несёт его поля целиком — берём из него
-    // только место.
-    const spot = { columnId: choice.columnId, sectionId: choice.sectionId };
-    setDraft((current) => ({ ...current, ...spot }));
-    void run(async () => {
-      const updated = await commit(task, { ...draftFromTask(task), ...spot });
-      return updated ?? undefined;
+  function place(choice: TaskPlace) {
+    const base = confirmedTask.current;
+    if (!task || !base) return;
+    const spot = placeOf(choice);
+    setError(null);
+    setTask((current) => (current ? withPlace(current, spot) : current));
+    void taskPlacer.place(base, spot).then((outcome) => {
+      openTaskPlaces.get(taskId)?.(outcome);
+      // Доску обновляем, даже если окно уже закрыли: карточка переехала.
+      if (outcome.last) void Promise.resolve(onChanged()).catch(() => {});
     });
   }
 
   /** «Сохранить»: все правки черновика разом. */
   function save() {
-    const next = { ...draft, ...latestText.current };
-    if (!task || taskEditsProblem(next) || !pendingTaskEdits(saved, next)) {
+    const next = withPlace({ ...draft, ...latestText.current }, saved);
+    if (!task || taskEditsProblem(next) || !pendingFormEdits(saved, next)) {
       return;
     }
     void run(async () => {
@@ -574,17 +646,23 @@ export function WorkTaskDialog({
                 <label className="min-w-0 text-xs text-text-1">
                   Раздел
                   <select
-                    value={draft.sectionId ?? ""}
+                    value={task.sectionId ?? ""}
                     disabled={!canEdit}
                     onChange={(event) =>
                       // Задача без статуса переезжает в выбранный раздел,
                       // задача в статусе остаётся там — меняется только
-                      // раздел. Уходит сразу (VED-526).
-                      place(chooseSection(draft, event.target.value, board.columns))
+                      // раздел. Уходит сразу (VED-526, VED-611).
+                      place(
+                        chooseSection(
+                          placeOf(task),
+                          event.target.value,
+                          board.columns,
+                        ),
+                      )
                     }
                     className={FIELD_CLASS}
                   >
-                    {draft.sectionId === null && (
+                    {!task.sectionId && (
                       <option value="" disabled>
                         Не указан
                       </option>
@@ -602,12 +680,19 @@ export function WorkTaskDialog({
                 <label className="min-w-0 text-xs text-text-1">
                   Статус
                   <select
-                    value={placeStatusId(draft, board.columns)}
+                    value={placeStatusId(placeOf(task), board.columns)}
                     disabled={!canEdit}
                     onChange={(event) =>
                       // Статус — та же колонка доски: задача переезжает в
-                      // неё, а раздел остаётся прежним. Уходит сразу (VED-526).
-                      place(chooseStatus(draft, event.target.value, board.columns))
+                      // неё, а раздел остаётся прежним. Уходит сразу
+                      // (VED-526, VED-611).
+                      place(
+                        chooseStatus(
+                          placeOf(task),
+                          event.target.value,
+                          board.columns,
+                        ),
+                      )
                     }
                     className={FIELD_CLASS}
                   >
@@ -755,7 +840,7 @@ export function WorkTaskDialog({
                     <p role="status" className="text-sm text-text-1 sm:mr-auto">
                       Сохранено
                     </p>
-                    {/* Всё уже на сервере (скриншот, чек-лист, раздел уходят
+                    {/* Всё уже на сервере (скриншот, чек-лист уходят
                         сразу), но кнопка «Сохранить» есть и здесь (VED-400):
                         ею окно и закрывают, как после правки полей. */}
                     <button
