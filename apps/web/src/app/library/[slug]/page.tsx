@@ -226,15 +226,19 @@ export default async function LibraryCategoryPage({
           {authorPage ? (
             <>
               {/* У автора слева направо (VED-521, второй круг): «Содержание»
-                  значком, «Тип материала», «Упорядочить», «Редактировать».
-                  Список «Содержания» раскрывается под рядом (VED-538).
+                  значком, «Тип материала», «Линия». Список «Содержания»
+                  раскрывается под рядом (VED-538).
+
+                  Значки встают сразу за «Добавить», без отступа к правому
+                  краю (VED-614, по скриншоту заказчика): пустая распорка
+                  `ml-auto` съедала ещё один `gap`, и на телефоне последняя
+                  кнопка правки переносилась на вторую строку.
 
                   «Язык» с подписью «Все» убран (VED-573): на телефоне он
                   один переносился на вторую строку и отодвигал ленту вниз.
 
                   «Упорядочить» здесь нет (VED-573): заказчик просил его в
                   списке всех авторов, а у отдельного автора — убрать. */}
-              <div className="ml-auto" />
               <LibraryContents
                 locale={locale}
                 categorySlug={category.slug}
@@ -252,15 +256,16 @@ export default async function LibraryCategoryPage({
                 ]}
                 buttonClassName="rounded-xl"
               />
-              <CategoryTitleEdit locale={locale} category={category} iconOnly />
-              {/* Рядом — название в общем списке (VED-614): плитка у
-                  родителя, путь, чипы. */}
+              {/* Правка названия (VED-614): сначала — в общем списке
+                  (плитка у родителя, путь, чипы), последней — заголовок
+                  только этой страницы. Порядок — по скриншоту заказчика. */}
               <CategoryTitleEdit
                 locale={locale}
                 category={category}
                 iconOnly
                 target="title"
               />
+              <CategoryTitleEdit locale={locale} category={category} iconOnly />
             </>
           ) : (
             <>
