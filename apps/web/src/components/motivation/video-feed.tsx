@@ -12,6 +12,8 @@ import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 import { Tabs } from "./reels-feed";
 import { reelsHref } from "./feed-style";
+import { FEED_RESTART_EVENT } from "./feed-position";
+import { RemainingBadge } from "./remaining-badge";
 import {
   appendVideos,
   shouldAutoplay,
@@ -61,6 +63,20 @@ export function VideoFeed({
   // как в больших лентах. Жест уже был, браузер это разрешит.
   const [soundOn, setSoundOn] = useState(false);
   const pendingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  /* «К началу ленты» из меню ☰ (VED-639): к первому ролику открытой ленты.
+     Активным его сделает наблюдатель слайда, когда тот доедет до экрана. */
+  useEffect(() => {
+    const onRestart = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      container.scrollTo({ top: 0 });
+      container.focus({ preventScroll: true });
+    };
+    window.addEventListener(FEED_RESTART_EVENT, onRestart);
+    return () => window.removeEventListener(FEED_RESTART_EVENT, onRestart);
+  }, []);
 
   const loadMore = useCallback(async () => {
     if (!cursor || pendingRef.current) return;
@@ -127,6 +143,13 @@ export function VideoFeed({
         </nav>
       )}
 
+      {/* Сколько роликов осталось (VED-640) — вспышкой на секунду, под ☰;
+          когда там строка папок — под ней. */}
+      <RemainingBadge
+        total={initial.total}
+        index={activeIndex}
+        placement={chips.length > 1 ? "right-3 top-[6.5rem]" : undefined}
+      />
       {items.length === 0 ? (
         <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
           <p className="font-display text-lg">
@@ -145,9 +168,11 @@ export function VideoFeed({
         </div>
       ) : (
         <div
+          ref={containerRef}
           role="feed"
           aria-label="Лента видео"
           aria-busy={pending}
+          tabIndex={-1}
           className="h-full snap-y snap-mandatory overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {items.map((video, index) => (
@@ -155,7 +180,7 @@ export function VideoFeed({
               key={video.id}
               video={video}
               position={index + 1}
-              total={cursor ? -1 : items.length}
+              total={initial.total ?? (cursor ? -1 : items.length)}
               active={index === activeIndex}
               soundOn={soundOn}
               onSound={setSoundOn}

@@ -62,6 +62,7 @@ import {
   decodeMotivationCursor,
   encodeMotivationCursor,
   feedPage,
+  feedTotal,
 } from './motivation-feed';
 import { rankFeed, shuffleFeed } from './feed-ranking';
 import { feedCategories, feedCategoryWhere } from './feed-categories';
@@ -567,6 +568,12 @@ export class MotivationService {
       items: { post: Loaded; tier?: MotivationFeedTier }[];
       cursor: ReturnType<typeof feedPage>['cursor'];
     };
+    /* Вся лента по порядку и место начала первой страницы — для счётчика
+       «сколько осталось» (VED-640). Считается по той же выборке, что и
+       страницы, а не отдельным count: лента обрезана и упорядочена в
+       памяти, и count по `where` разошёлся бы с тем, что листают. */
+    let orderedIds: string[] = [];
+    let startAt = 0;
     if (verseOrder) {
       const slice = await this.verseOrderSlice(
         where,
@@ -576,6 +583,8 @@ export class MotivationService {
         startId,
       );
       resumed = slice.resumed;
+      orderedIds = slice.orderedIds;
+      startAt = slice.from;
       const loaded = slice.ids.length
         ? await this.prisma.motivationPost.findMany({
             where: { id: { in: slice.ids } },
@@ -597,6 +606,8 @@ export class MotivationService {
         startId,
       );
       resumed = offset !== null && offset > 0;
+      orderedIds = ordered.map(({ post }) => post.id);
+      startAt = offset ?? cursor.universal;
       page = feedPage(
         ordered,
         offset === null ? cursor : { ...cursor, universal: offset },
@@ -640,6 +651,9 @@ export class MotivationService {
             })
           : null,
       ...(resumed ? { resumed: true } : {}),
+      ...(cursor.since === undefined
+        ? { total: feedTotal(orderedIds, startAt, pinned?.id ?? null) }
+        : {}),
     };
   }
 
@@ -754,6 +768,8 @@ export class MotivationService {
       ids: slice.items.map((post) => post.id),
       cursor: slice.cursor,
       resumed: offset !== null && offset > 0,
+      orderedIds: sorted.map((post) => post.id),
+      from: offset ?? cursor.universal,
     };
   }
 

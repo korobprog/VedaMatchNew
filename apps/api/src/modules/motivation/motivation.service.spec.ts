@@ -630,6 +630,8 @@ describe('MotivationService feed tiers', () => {
 
     expect(page.items.map((item) => item.id)).toEqual(['c']);
     expect(page.resumed).toBe(true);
+    // VED-640: осталось считать от места остановки — «c» и «d».
+    expect(page.total).toBe(2);
     expect(prisma.motivationFeedPosition.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -645,6 +647,8 @@ describe('MotivationService feed tiers', () => {
       cursor: page.nextCursor ?? undefined,
     });
     expect(next.items.map((item) => item.id)).toEqual(['d']);
+    // Число — только у первой страницы.
+    expect(next.total).toBeUndefined();
   });
 
   it('starts from the beginning for a newcomer or a hidden saved post', async () => {
@@ -713,6 +717,7 @@ describe('MotivationService feed tiers', () => {
 
     expect(page.items.map((item) => item.id)).toEqual(['v27', 'v47']);
     expect(page.resumed).toBe(true);
+    expect(page.total).toBe(2);
   });
 
   it('pins `from` first when the post is not in this feed', async () => {
@@ -731,6 +736,8 @@ describe('MotivationService feed tiers', () => {
 
     expect(page.items.map((item) => item.id)).toEqual(['elsewhere', 'a', 'b']);
     expect(page.resumed).toBeUndefined();
+    // Закреплённый пост не из ленты — плюс один к ней.
+    expect(page.total).toBe(3);
   });
 
   it('shows an empty feed for an unknown work instead of the whole feed', async () => {

@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Menu, Shuffle, X } from "lucide-react";
+import { ArrowLeft, ArrowUpToLine, Menu, Shuffle, X } from "lucide-react";
 import { reelsHref, type ReelsTab } from "./feed-style";
+import {
+  FEED_RESTART_EVENT,
+  feedStartHref,
+  isSameFeedHref,
+} from "./feed-position";
 import { MotivationNav } from "./motivation-nav";
 
 /**
@@ -28,6 +34,21 @@ export function ReelsChrome({
   count?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+
+  /* «К началу ленты» (VED-639) — только для открытой ленты. Начало — тот же
+     адрес: лента уходит к первому посту сама, по событию. Лента открыта с
+     места остановки или с конкретного поста — её начало по другому адресу,
+     туда и переходим: страница с другим ключом загрузит ленту с первой
+     картинки. */
+  function restartFeed() {
+    setOpen(false);
+    const current = window.location.pathname + window.location.search;
+    const start = feedStartHref(current);
+    if (isSameFeedHref(current, start))
+      window.dispatchEvent(new Event(FEED_RESTART_EVENT));
+    else router.push(start);
+  }
 
   return (
     <>
@@ -63,7 +84,26 @@ export function ReelsChrome({
           id="reels-sections"
           className="absolute right-2 top-14 z-50 w-60 rounded-2xl border border-white/15 bg-black/80 p-3 backdrop-blur-lg"
         >
-          <MotivationNav active="feed" isAdmin={isAdmin} compact reelsMenu />
+          <MotivationNav
+            active="feed"
+            isAdmin={isAdmin}
+            compact
+            reelsMenu
+            leading={
+              /* VED-639: первой, в левом верхнем углу, и другим цветом —
+                 мятной заливкой, как «Создать» в ряду ленты: это действие
+                 над открытой лентой, а не раздел, и спутать его с
+                 янтарной текущей вкладкой нельзя. */
+              <button
+                type="button"
+                onClick={restartFeed}
+                className="btn-mint inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              >
+                <ArrowUpToLine className="size-3.5" aria-hidden />
+                К началу ленты
+              </button>
+            }
+          />
 
           {/* Полноэкранная лента шапки не показывает, а число «а много ли тут
               вообще» спрашивают именно здесь — в единственном месте, где

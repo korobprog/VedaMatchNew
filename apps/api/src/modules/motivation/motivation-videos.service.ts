@@ -76,19 +76,23 @@ export class MotivationVideosService {
   }): Promise<MotivationVideoPage> {
     const limit = videoPageSize(query.limit);
     const after = videoCursorWhere(decodeVideoCursor(query.cursor));
-    const rows = await this.prisma.motivationVideo.findMany({
-      where: {
-        ...(feedCategoryWhere(feedCategories(query.category)) ?? {}),
-        ...(after ?? {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      select: VIDEO_SELECT,
-    });
+    const inCategory = feedCategoryWhere(feedCategories(query.category)) ?? {};
+    const [rows, total] = await Promise.all([
+      this.prisma.motivationVideo.findMany({
+        where: { ...inCategory, ...(after ?? {}) },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        select: VIDEO_SELECT,
+      }),
+      // Сколько роликов в ленте (VED-640) — только к первой странице:
+      // дальше лента считает остаток сама.
+      after ? null : this.prisma.motivationVideo.count({ where: inCategory }),
+    ]);
     const page = videoPage(rows, limit);
     return {
       items: await this.toDtos(page.items),
       nextCursor: page.nextCursor,
+      ...(total === null ? {} : { total }),
     };
   }
 

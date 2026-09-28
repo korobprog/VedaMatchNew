@@ -11,7 +11,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import Link from "next/link";
-import { RotateCcw } from "lucide-react";
 import type {
   DonationSettingsDto,
   MotivationAudioDto,
@@ -80,12 +79,13 @@ import { FeedAttributionFilter } from "./feed-attribution-filter";
 import { postShareHref } from "./post-share";
 import {
   FEED_POSITION_DELAY_MS,
+  FEED_RESTART_EVENT,
   feedEnding,
   feedPositionBody,
   isSameFeedHref,
 } from "./feed-position";
 import { SourceLink } from "./source-link";
-import { displayImageUrl } from "./display-image";
+import { RemainingBadge } from "./remaining-badge";
 import {
   attributionParts,
   formatCount,
@@ -402,6 +402,11 @@ export function ReelsFeed({
   function restartFromEnd(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
     if (!isSameFeedHref(window.location.pathname + window.location.search, href)) return;
     event.preventDefault();
+    scrollToStart();
+  }
+
+  /** К первому посту уже загруженной ленты: её первая страница и есть начало. */
+  function scrollToStart() {
     stopSpeaking();
     const container = containerRef.current;
     if (!container) return;
@@ -410,6 +415,20 @@ export function ReelsFeed({
     setActiveIndex(0);
     syncCurrentSlide();
   }
+
+  /* «К началу ленты» из меню ☰ (VED-639): меню стоит рядом с лентой и
+     прокрутить её не может — оно шлёт событие, лента уходит к первому посту.
+     Подписка через ref: обработчику нужны свежие замыкания, а
+     переподписываться на каждую перерисовку незачем. */
+  const scrollToStartRef = useRef(scrollToStart);
+  useEffect(() => {
+    scrollToStartRef.current = scrollToStart;
+  });
+  useEffect(() => {
+    const onRestart = () => scrollToStartRef.current();
+    window.addEventListener(FEED_RESTART_EVENT, onRestart);
+    return () => window.removeEventListener(FEED_RESTART_EVENT, onRestart);
+  }, []);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowDown" || event.key === "j") {
@@ -708,8 +727,10 @@ export function ReelsFeed({
         category={category}
         filterState={filterState}
         isAdmin={isAdmin}
-        restartHref={initial.resumed ? ending.restartHref : null}
       />
+      {/* Сколько ещё осталось в этой ленте (VED-640) — вспышкой на секунду
+          при перелистывании, под ☰. */}
+      <RemainingBadge total={initial.total} index={activeIndex} hidden={!onPost} />
       {/* Звук выключен, пока его не попросили: иначе лента заговорит сама,
           стоит открыть страницу. Кнопка живёт над слайдами — как и ряд
           действий внизу, она одна на всю ленту. У немого ролика её нет вовсе:
@@ -867,7 +888,6 @@ export function Tabs({
   category,
   filterState,
   isAdmin = false,
-  restartHref = null,
 }: {
   tab: ReelsTab;
   order?: "random";
@@ -876,11 +896,6 @@ export function Tabs({
   filterState?: FeedFilterState;
   /** Администратор раскладывает авторов фильтра по папкам (VED-584). */
   isAdmin?: boolean;
-  /**
-   * Начало ленты, когда она открыта с места остановки (VED-432): значок ↺
-   * первым в ряду, сразу за ←. `null` — значка нет.
-   */
-  restartHref?: string | null;
 }) {
   const link = (key: ReelsTab | "collections", href: string, label: string) => (
     <Link
@@ -933,33 +948,26 @@ export function Tabs({
     // ними и краями. Края ряда (`left-7 right-7`, 28px) — по видимым значкам
     // ← и ☰: их кнопки 40×40 стоят вплотную к краям (`ReelsChrome`,
     // `left-0`/`right-0`), значок 16px — в 12px от края, его внутренний
-    // край — в 28px. У значков ряда (↺, фильтр, звёздочка) в раскладке
+    // край — в 28px. У значков ряда (фильтр, звёздочка) в раскладке
     // только сам значок, поле нажатия раздвинуто вне потока — иначе
-    // промежуток мерился бы до пустого края кнопки. На 360px коридор 304px:
-    // ↺ 28 + «Лента» 39 + «Открытки» 62 + фильтр 28 + «Категории» 67 +
-    // звёздочка 20 = 244, семь промежутков по 8½px; на 412px — по 16px.
-    // Без ↺ — шесть промежутков, каждый чуть шире.
+    // промежуток мерился бы до пустого края кнопки.
+    //
+    // VED-639, финальная редакция: значка ↺ «С начала» в ряду больше нет
+    // (начало ленты — клавишей «К началу ленты» в меню ☰), «Лента» теперь
+    // «Картинки». На 360px коридор 304px: «Картинки» ≈62 + «Открытки» 62 +
+    // «Видео» 44 + фильтр 28 + «Категории» 67 + звёздочка 20 = 283, семь
+    // промежутков по 3px; на 412px — по 10px. У́же — ряд переносится
+    // (`flex-wrap`).
     <nav
       aria-label="Вкладки ленты"
       className="absolute left-7 right-7 top-2 z-20 flex flex-wrap items-center justify-evenly gap-y-1"
     >
-      {/* «С начала» (VED-432) — значком в ряду, сразу за ← (VED-599):
-          раньше это была плашка с надписью под рядом, на первой картинке.
-          Цвет — как у звёздочки (`text-text-1`, см. `ReelsQuickPanel`). */}
-      {restartHref && (
-        <Link
-          href={restartHref}
-          aria-label="Лента открыта с места, где вы остановились. Открыть с начала"
-          title="Начать сначала"
-          className="relative flex h-10 w-7 shrink-0 items-center justify-center text-text-1 drop-shadow transition-colors before:absolute before:-inset-x-1.5 before:inset-y-0 before:content-[''] hover:text-text-0"
-        >
-          <RotateCcw className="size-5" aria-hidden />
-        </Link>
-      )}
       {/* Две ленты разного стиля (VED-121): порядок и папка переезжают
           вместе с человеком — «Открытки» из папки «Пословицы» остаются
           пословицами. */}
-      {link("forYou", reelsHref({ order, category }), "Лента")}
+      {/* VED-639: вкладка «Лента» называется «Картинки» — рядом с
+          «Открытками» и «Видео» она и есть лента картинок. */}
+      {link("forYou", reelsHref({ order, category }), "Картинки")}
       {link("cards", reelsHref({ tab: "cards", order, category }), "Открытки")}
       {/* Короткие ролики редакции (VED-246) — своя лента с теми же папками,
           что у афоризмов, поэтому папка переезжает и сюда. Порядок — нет:
@@ -994,8 +1002,7 @@ export function Tabs({
  * подчёркнутые кнопки»).
  *
  * Цвет — портальный `text-text-1` кнопки шапки, тёмный на светлой теме:
- * таким его и просили оставить, и тем же цветом нарисован значок ↺ рядом с
- * ← (VED-599).
+ * таким его и просили оставить.
  *
  * В раскладке звёздочка занимает ровно свой значок, 20px, — чтобы
  * промежутки ряда у `Tabs` мерились от значка. Кнопка шапки 44px с полями
@@ -1270,12 +1277,11 @@ function ReelSlide({
         // и плечи. Кадр мельче, зато на нём всё, что нарисовано, — в том числе
         // у картинок, сделанных до этой правки.
         <div className="absolute inset-0">
-          {/* Оба слоя — лёгкая копия (VED-629): оригинал PNG весит мегабайты,
-              а слайду хватает 720 по ширине. Файл один и тот же, так что
-              браузер качает его один раз. Копии нет — оригинал. */}
+          {/* Оба слоя — оригинал: лёгкая копия только для викторины
+              (VED-629), во Вдохновении просили качество. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={displayImageUrl(post)}
+            src={post.imageUrl}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
@@ -1285,7 +1291,7 @@ function ReelSlide({
               набрана поверх слайда, и повторять её в alt незачем. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={displayImageUrl(post)}
+            src={post.imageUrl}
             alt={printed ? quote || post.title : ""}
             loading={position < 2 ? "eager" : "lazy"}
             className="absolute inset-x-0 bottom-[4.5rem] top-0 h-[calc(100%-4.5rem)] w-full object-contain"

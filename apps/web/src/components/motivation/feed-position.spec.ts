@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { feedEnding, feedPositionBody, isSameFeedHref } from "./feed-position";
+import {
+  feedEnding,
+  feedPositionBody,
+  feedStartHref,
+  isSameFeedHref,
+} from "./feed-position";
 
 describe("feedPositionBody", () => {
   it("запоминает ленту раздела, источника и автора", () => {
@@ -140,5 +145,27 @@ describe("isSameFeedHref", () => {
     expect(
       isSameFeedHref("/motivation?tab=cards", "/motivation?category=a"),
     ).toBe(false);
+  });
+});
+
+describe("feedStartHref", () => {
+  it("оставляет вкладку, папку, фильтры и порядок, но снимает сдвиг начала", () => {
+    expect(
+      feedStartHref(
+        "/motivation?tab=cards&category=guru&work=Гита&order=random&resume=1",
+      ),
+    ).toBe(
+      "/motivation?tab=cards&category=guru&work=%D0%93%D0%B8%D1%82%D0%B0&order=random",
+    );
+    expect(feedStartHref("/motivation?post=abc")).toBe("/motivation");
+    expect(feedStartHref("/motivation?category=guru&from=abc")).toBe(
+      "/motivation?category=guru",
+    );
+  });
+
+  it("у ленты без сдвига начало — тот же адрес", () => {
+    const current = "/motivation?tab=video&category=guru";
+    expect(isSameFeedHref(current, feedStartHref(current))).toBe(true);
+    expect(feedStartHref("/motivation")).toBe("/motivation");
   });
 });

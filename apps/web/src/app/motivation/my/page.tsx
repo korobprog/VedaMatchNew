@@ -10,7 +10,6 @@ import { getProfile } from "@/lib/api";
 import { getMotivationCurrentEvent, getMyMotivationReels } from "@/lib/motivation-api";
 import { PostcardButton } from "@/components/motivation/postcard-button";
 import { DeleteOwnReelButton } from "@/components/motivation/delete-own-reel";
-import { displayImageUrl } from "@/components/motivation/display-image";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 
@@ -92,7 +91,7 @@ function ReelCard({ reel }: { reel: MotivationReelDto }) {
     <Link href={href} className="glass flex gap-4 rounded-2xl p-4 transition hover:bg-glass">
       {reel.post.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={displayImageUrl(reel.post)} alt="" className="h-24 w-20 flex-none rounded-xl object-cover" />
+        <img src={reel.post.imageUrl} alt="" className="h-24 w-20 flex-none rounded-xl object-cover" />
       ) : (
         <div aria-hidden="true" className="h-24 w-20 flex-none rounded-xl bg-bg-2" />
       )}

@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationPostDto } from "@vedamatch/shared";
 import { ReelsFeed } from "./reels-feed";
+import { FEED_RESTART_EVENT } from "./feed-position";
 import { resetScriptureChapterCache } from "@/lib/motivation-client-api";
 
 // jsdom не знает IntersectionObserver; активный слайд в тестах не нужен.
@@ -150,15 +151,11 @@ describe("ReelsFeed", () => {
     // Подтяжка крайней кнопки шапки к краю экрана (VED-439) звёздочку в ряду
     // не сдвигает.
     expect(tabs.lastElementChild).toHaveClass("[&>div>span]:mr-0");
-    // В личной ленте начала, к которому вернуться, нет — и значка ↺ тоже.
-    expect(
-      within(tabs).queryByRole("link", { name: /Открыть с начала/ }),
-    ).not.toBeInTheDocument();
   });
 
   // VED-252: «Для вас» переименована в «Ленту», значок фильтра встал в тот
   // же ряд между «Открытки» и «Избранное», подписи у него нет.
-  it("верхний ряд — шесть пунктов, вкладка называется «Лента», у значка фильтра нет подписи", () => {
+  it("верхний ряд — шесть пунктов, вкладка называется «Картинки», у значка фильтра нет подписи", () => {
     fetchOk({});
     render(
       <ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />,
@@ -169,7 +166,8 @@ describe("ReelsFeed", () => {
     // VED-387: «Избранное» и «Мои» ушли в меню ☰, на их местах —
     // «Категории» и звёздочка панели горячих кнопок. VED-246: за
     // «Открытками» — «Видео».
-    expect(labels).toEqual(["Лента", "Открытки", "Видео", "", "Категории", ""]);
+    // VED-639: «Лента» переименована в «Картинки».
+    expect(labels).toEqual(["Картинки", "Открытки", "Видео", "", "Категории", ""]);
     expect(within(tabs).getByRole("link", { name: "Видео" })).toHaveAttribute(
       "href",
       "/motivation?tab=video",
@@ -197,7 +195,7 @@ describe("ReelsFeed", () => {
 
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
     const labels = tabRowLabels(tabs);
-    expect(labels).toEqual(["Лента", "Открытки", "Видео", "Избранное", ""]);
+    expect(labels).toEqual(["Картинки", "Открытки", "Видео", "Избранное", ""]);
     expect(within(tabs).getByRole("link", { name: "Избранное" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -249,7 +247,10 @@ describe("ReelsFeed", () => {
     }
   });
 
-  it("лента, открытая с места остановки, предлагает ↺ «С начала» в ряду вкладок", () => {
+  // VED-639: значка ↺ «С начала» в ряду вкладок нет (его просили не
+  // добавлять) — даже у ленты, открытой с места остановки. Начало ленты —
+  // клавишей «К началу ленты» в меню ☰.
+  it("ряд вкладок без значка ↺ и у ленты, открытой с места остановки", () => {
     fetchOk({});
     render(
       <ReelsFeed
@@ -259,34 +260,49 @@ describe("ReelsFeed", () => {
         category="filosofiya-2"
       />,
     );
-    // VED-599: не плашка с надписью под рядом, а значок ↺ первым в ряду
-    // вкладок — сразу за ←, тем же цветом, что звёздочка.
     const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    const restart = within(tabs).getByRole("link", {
-      name: "Лента открыта с места, где вы остановились. Открыть с начала",
-    });
-    expect(restart).toHaveAttribute("href", "/motivation?tab=cards&category=filosofiya-2");
-    expect(tabs.firstElementChild).toBe(restart);
-    expect(restart).toHaveTextContent("");
-    expect(restart).toHaveClass("text-text-1");
-    expect(restart).not.toHaveClass("text-white");
-    expect(screen.queryByText("С начала")).not.toBeInTheDocument();
+    expect(tabRowLabels(tabs)).toEqual(["Картинки", "Открытки", "Видео", "", "Категории", ""]);
+    expect(within(tabs).queryByRole("link", { name: /с начала/i })).not.toBeInTheDocument();
   });
 
-  it("лента раздела, открытая с начала, значка ↺ в ряду не ставит", () => {
+  it("по «К началу ленты» из меню уходит к первому посту (VED-639)", () => {
+    fetchOk({});
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+    try {
+      render(
+        <ReelsFeed
+          initial={{ items: [post("a"), post("b")], nextCursor: null }}
+          tab="forYou"
+          donation={null}
+        />,
+      );
+      act(() => {
+        window.dispatchEvent(new Event(FEED_RESTART_EVENT));
+      });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+      expect(screen.getByRole("feed", { name: "Лента вдохновения" })).toHaveFocus();
+    } finally {
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
+  });
+
+  it("держит под ☰ число оставшихся в ленте, пока не листали — погашенным (VED-640)", () => {
     fetchOk({});
     render(
       <ReelsFeed
-        initial={{ items: [post("c"), post("d")], nextCursor: null }}
-        tab="cards"
+        initial={{ items: [post("a"), post("b")], nextCursor: "next", total: 12 }}
+        tab="forYou"
         donation={null}
-        category="filosofiya-2"
       />,
     );
-    const tabs = screen.getByRole("navigation", { name: "Вкладки ленты" });
-    expect(
-      within(tabs).queryByRole("link", { name: /Открыть с начала/ }),
-    ).not.toBeInTheDocument();
+    const badge = screen.getByTestId("remaining-badge");
+    expect(badge).toHaveTextContent("11");
+    expect(badge).toHaveAttribute("aria-hidden", "true");
+    expect(badge).toHaveAttribute("data-visible", "false");
   });
 
   it("ставит кнопки категорий на разделитель и в конец ленты", () => {
@@ -532,6 +548,25 @@ describe("ReelsFeed", () => {
     expect(frame).toHaveAttribute("alt", "");
   });
 
+  it("показывает оригинал картинки, а не лёгкую копию викторины (VED-629)", () => {
+    fetchOk({});
+    render(
+      <ReelsFeed
+        initial={{
+          items: [post("a", { imageThumbUrl: "https://cdn/a-w720.webp" })],
+          nextCursor: null,
+        }}
+        tab="forYou"
+        donation={null}
+      />,
+    );
+
+    const slide = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0];
+    const sources = [...slide.querySelectorAll("img")].map((img) => img.getAttribute("src"));
+    expect(sources).toContain("https://cdn/a.webp");
+    expect(sources).not.toContain("https://cdn/a-w720.webp");
+  });
+
   it("отправка своим живёт внутри «Поделиться», а не соседней кнопкой", () => {
     fetchOk({});
     render(<ReelsFeed initial={{ items: [post("a")], nextCursor: null }} tab="forYou" donation={null} />);
@@ -742,7 +777,7 @@ describe("ReelsFeed", () => {
       "aria-current",
       "page",
     );
-    expect(within(tabs).getByRole("link", { name: "Лента" })).toHaveAttribute(
+    expect(within(tabs).getByRole("link", { name: "Картинки" })).toHaveAttribute(
       "href",
       "/motivation?category=poslovitsy&order=random",
     );
