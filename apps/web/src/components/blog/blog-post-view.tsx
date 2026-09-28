@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
 import { LineageInfoButton } from "@/components/lineage-info-button";
+import { MaterialStagesButton } from "@/components/material-stages-button";
 import {
+  setBlogPostAudienceStages,
   setBlogPostCategory,
   setBlogPostLineage,
-  setOwnBlogPostLineage,
 } from "@/lib/blog-client-api";
 import { BlogCategoryButton } from "./blog-category-button";
 import { BlogPostCard } from "./blog-post-card";
@@ -85,23 +86,33 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
               }}
             />
           )}
-          {/* «Линия» с домиком (VED-616, VED-632) — у всех: к какой линии
-              пост. Кто может его править — автор (VED-590) и администратор
-              (любому посту), — в том же окне меняет и сохраняет линию. У
-              репоста линия своя, не оригинала, и менять её может только
-              администратор. Отпечатка (`MaterialStagesButton`) у поста пока
-              нет: ступеней у постов Блога ещё нет — подключается рядом, как
-              у материалов Образования. */}
+          {/* «Линия» с домиком и ступени с отпечатком (VED-616, VED-632) —
+              у всех: к какой линии и каким ступеням пост. Менять в этих
+              окнах может только администратор (VED-632: «участники ничего
+              менять не могут»); автор выбирает линию и ступень в форме
+              публикации и правки (VED-590). */}
           <LineageInfoButton
             subjects={[{ title: "Пост", lineage: post.lineage ?? null }]}
             buttonClassName="rounded-lg"
             onSave={
-              post.canEdit || post.canModerate
+              post.canModerate
                 ? async (lineage) => {
+                    setPost(await setBlogPostLineage(post.id, lineage));
+                  }
+                : undefined
+            }
+          />
+          <MaterialStagesButton
+            stages={post.audienceStages ?? []}
+            buttonClassName="rounded-lg"
+            onSave={
+              post.canModerate
+                ? async (stages) => {
                     setPost(
-                      await (post.canModerate
-                        ? setBlogPostLineage(post.id, lineage)
-                        : setOwnBlogPostLineage(post.id, lineage)),
+                      await setBlogPostAudienceStages(
+                        post.id,
+                        stages.length === 0 ? "all" : stages,
+                      ),
                     );
                   }
                 : undefined
