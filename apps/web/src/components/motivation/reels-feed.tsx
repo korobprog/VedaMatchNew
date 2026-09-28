@@ -677,6 +677,16 @@ export function ReelsFeed({
             <SlidersIcon />
           </RailLink>
         ),
+        // Викторина (VED-243): угадать по рисунку, какой это стих Гиты.
+        quiz: (
+          <RailLink
+            label="Викторина: угадать стих Гиты по рисунку"
+            caption="Викторина"
+            href="/motivation/quiz"
+          >
+            <QuizIcon />
+          </RailLink>
+        ),
       }
     : {};
 
@@ -816,9 +826,11 @@ export function ReelsFeed({
       {activePost && onPost && (
         /* Кнопки делят строку поровну, а не встают по содержимому: подписи
            разной длины («Поделиться» против «Скрыть») разводили промежутки
-           так, что ряд читался как случайный набор. Равные доли держат сетку
-           и при седьмой кнопке — она появляется у автора и у админа. */
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex items-stretch border-t border-white/15 bg-white/10 px-1 py-2 backdrop-blur-md">
+           так, что ряд читался как случайный набор. Равные доли держат сетку,
+           пока влезают; дальше у каждой минимальная ширина, и ряд листается
+           вбок (VED-243) — у админа кнопкой «Править» больше, и на узком
+           телефоне восьмая уже не помещалась. */
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex items-stretch overflow-x-auto overscroll-x-contain border-t border-white/15 bg-white/10 px-1 py-2 backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {rail.map((id) => (
             <Fragment key={id}>{railNodes[id] ?? null}</Fragment>
           ))}
@@ -1705,7 +1717,7 @@ function FullQuoteToggle({
  * подняла бы ряд и съела нижний край кадра.
  */
 const railItemClass =
-  "flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 text-[9px] font-semibold leading-tight drop-shadow sm:text-[10px]";
+  "flex min-w-[3.375rem] shrink-0 flex-1 flex-col items-center gap-0.5 px-1 text-[9px] font-semibold leading-tight drop-shadow sm:text-[10px]";
 
 /**
  * Пункт ряда, который уводит на другой экран. Ссылка, а не кнопка с
@@ -2077,6 +2089,17 @@ function ShuffleIcon() {
       <path d="M21 16v5h-5" />
       <path d="m15 15 6 6" />
       <path d="M4 4l5 5" />
+    </svg>
+  );
+}
+
+/** Знак вопроса в круге — викторина. */
+function QuizIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6" />
+      <path d="M12 17h.01" />
     </svg>
   );
 }

@@ -2,7 +2,11 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MotivationRailSettings } from "./rail-settings";
-import { RAIL_STORAGE_KEY, parseRailConfig } from "./rail-actions";
+import {
+  RAIL_STORAGE_KEY,
+  parseRailConfig,
+  serializeRailConfig,
+} from "./rail-actions";
 
 function stored() {
   return parseRailConfig(window.localStorage.getItem(RAIL_STORAGE_KEY));
@@ -38,7 +42,15 @@ describe("MotivationRailSettings", () => {
       screen.getByRole("button", { name: "Убрать «Озвучить» из ряда" }),
     );
 
-    expect(stored()).toEqual(["like", "save", "share", "hide", "edit", "create"]);
+    expect(stored()).toEqual([
+      "like",
+      "save",
+      "share",
+      "hide",
+      "edit",
+      "create",
+      "quiz",
+    ]);
     expect(
       screen.getByRole("button", { name: "Добавить «Озвучить» в ряд" }),
     ).toBeInTheDocument();
@@ -53,7 +65,7 @@ describe("MotivationRailSettings", () => {
     );
 
     expect(stored().at(-1)).toBe("random");
-    expect(screen.getByText("8. Случайный")).toBeInTheDocument();
+    expect(screen.getByText("9. Случайный")).toBeInTheDocument();
   });
 
   it("стрелка меняет порядок", async () => {
@@ -75,7 +87,7 @@ describe("MotivationRailSettings", () => {
       screen.getByRole("button", { name: "Передвинуть «Нравится» левее" }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Передвинуть «Создать» правее" }),
+      screen.getByRole("button", { name: "Передвинуть «Викторина» правее" }),
     ).toBeDisabled();
   });
 
@@ -99,12 +111,16 @@ describe("MotivationRailSettings", () => {
       "speak",
       "edit",
       "create",
+      "quiz",
     ]);
   });
 
   it("пустой ряд объясняется словами, а не пустым местом", async () => {
     const user = userEvent.setup();
-    window.localStorage.setItem(RAIL_STORAGE_KEY, JSON.stringify(["like"]));
+    window.localStorage.setItem(
+      RAIL_STORAGE_KEY,
+      serializeRailConfig(["like"]),
+    );
     render(<MotivationRailSettings />);
 
     await user.click(

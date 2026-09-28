@@ -407,6 +407,32 @@ export interface MotivationStatsDto {
   published: number;
 }
 
+/**
+ * Вопрос викторины (VED-243): иллюстрация к шлоке Гиты и четыре номера
+ * стиха. Сам вопрос всегда один — «какой стих отображает картинка?» — и в
+ * данных не хранится.
+ */
+export interface MotivationQuizQuestionDto {
+  /** Публикация, из которой взята картинка. */
+  id: string;
+  slug: string;
+  imageUrl: string;
+  /** Правильный номер: «2.11» или «1.16-18». */
+  answer: string;
+  /** Четыре номера вперемешку, среди них `answer`. */
+  options: string[];
+  /** Цитата — показывается после ответа. Может быть пустой. */
+  text: string;
+}
+
+export interface MotivationQuizDto {
+  /** Семя раунда: по нему тот же раунд собирается заново. */
+  seed: string;
+  /** Сколько иллюстраций Гиты годится в вопросы всего. */
+  available: number;
+  questions: MotivationQuizQuestionDto[];
+}
+
 export interface MotivationAdminPostDto extends MotivationPostDto {
   status: MotivationPostStatus;
   generationStage: string | null;

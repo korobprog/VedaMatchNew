@@ -10,7 +10,7 @@ import {
 } from "./rail-actions";
 
 describe("DEFAULT_RAIL", () => {
-  it("повторяет прежний ряд: настройка не переставляет кнопки сама", () => {
+  it("повторяет прежний ряд, «Викторина» — в конце (VED-243)", () => {
     expect(DEFAULT_RAIL).toEqual([
       "like",
       "save",
@@ -19,6 +19,7 @@ describe("DEFAULT_RAIL", () => {
       "speak",
       "edit",
       "create",
+      "quiz",
     ]);
   });
 
@@ -47,23 +48,59 @@ describe("parseRailConfig", () => {
   });
 
   it("кнопка из прошлой версии выбрасывается, свои остаются", () => {
-    expect(parseRailConfig('["like","прошлая","share"]')).toEqual([
-      "like",
-      "share",
-    ]);
+    const known = RAIL_ACTIONS.map((action) => action.id);
+    expect(
+      parseRailConfig(
+        JSON.stringify({ ids: ["like", "прошлая", "share"], known }),
+      ),
+    ).toEqual(["like", "share"]);
   });
 
   it("дубли схлопываются", () => {
-    expect(parseRailConfig('["like","like","save"]')).toEqual(["like", "save"]);
+    expect(
+      parseRailConfig(serializeRailConfig(["like", "like", "save"])),
+    ).toEqual(["like", "save"]);
   });
 
   it("пустой ряд — это выбор, а не поломка", () => {
-    expect(parseRailConfig("[]")).toEqual([]);
+    expect(parseRailConfig(serializeRailConfig([]))).toEqual([]);
   });
 
   it("читает то, что сама записала", () => {
     const ids = ["share", "like"] as const;
     expect(parseRailConfig(serializeRailConfig(ids))).toEqual([...ids]);
+  });
+
+  it("в ряд, сохранённый до «Викторины», она добавляется в конец", () => {
+    expect(parseRailConfig('["share","like"]')).toEqual([
+      "share",
+      "like",
+      "quiz",
+    ]);
+    expect(parseRailConfig("[]")).toEqual(["quiz"]);
+    // Старые необязательные кнопки сами не возвращаются: их убрали осознанно.
+    expect(parseRailConfig('["like"]')).not.toContain("save");
+  });
+
+  it("убранная после появления «Викторина» не возвращается", () => {
+    expect(parseRailConfig(serializeRailConfig(["like"]))).toEqual(["like"]);
+  });
+
+  it("новая кнопка ряда по умолчанию доезжает до тех, кто её ещё не видел", () => {
+    expect(
+      parseRailConfig(
+        JSON.stringify({ ids: ["like"], known: ["like", "save"] }),
+      ),
+    ).toEqual([
+      // «Сохранить» человек видел и убрал — она не возвращается.
+      "like",
+      "share",
+      "hide",
+      "speak",
+      "edit",
+      "create",
+      "quiz",
+    ]);
   });
 });
 

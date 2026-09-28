@@ -4,6 +4,7 @@ export type MotivationSection =
   | "feed"
   | "collections"
   | "favorites"
+  | "quiz"
   | "studio"
   | "settings"
   | "admin";
@@ -34,6 +35,9 @@ export function MotivationNav({
     // значит ломать чужие ссылки.
     ["collections", "/motivation/collections", "Категории"],
     ["favorites", reelsMenu ? "/motivation?tab=saved" : "/motivation/favorites", "Избранное"],
+    // Угадать стих Гиты по рисунку (VED-243). Главный вход — кнопка в
+    // нижнем ряду ленты; здесь — для тех, кто её убрал из ряда.
+    ["quiz", "/motivation/quiz", "Викторина"],
     // «Студия» — место, где живут свои рилсы: там их создают, там же ждут
     // готовый кадр и оживляют его в видео. Раньше раздел назывался «Мои
     // рилсы» и в меню его не было вовсе — попасть можно было только по

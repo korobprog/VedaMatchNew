@@ -21,6 +21,7 @@ import type {
   MotivationAudioDto,
   MotivationVideoCategoryDto,
   MotivationVideoPage,
+  MotivationQuizDto,
 } from "@vedamatch/shared";
 
 import { parseJsonBody } from "@/lib/json-body";
@@ -57,6 +58,15 @@ async function motivationGetPublic<T>(path: string): Promise<T | null> {
 /** Сколько вдохновений в сервисе — цифра над лентой. */
 export const getMotivationStats = () =>
   motivationGet<MotivationStatsDto>("/motivation/stats");
+
+/**
+ * Раунд викторины (VED-243). Семя в адресе собирает тот же раунд заново:
+ * перезагрузка страницы не перетасовывает вопросы посреди игры.
+ */
+export const getMotivationQuiz = (seed?: string) =>
+  motivationGet<MotivationQuizDto>(
+    `/motivation/quiz${seed ? `?seed=${encodeURIComponent(seed)}` : ""}`,
+  );
 
 /**
  * Разделы вдохновения для читателя: дерево категорий. С `style` — меню одной
