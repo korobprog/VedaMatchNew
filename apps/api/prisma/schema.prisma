@@ -7882,6 +7882,7 @@ model WellnessArticle {
   updatedAt   DateTime  @updatedAt
 
   @@index([categoryId, status, createdAt])
+}
 
 /// Короткие видео Вдохновения (VED-246) — отдельная лента «Видео» рядом с
 /// «Открытками». Файл загружает редакция, как картинки; категория — слаг из
