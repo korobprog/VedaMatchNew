@@ -22,6 +22,10 @@ import { estimateImageCostUsd, IMAGE_SIZE } from './image-cost';
 import { isAutonomousApproval } from './autonomous-approval';
 import { isMotivationAdminRow } from './author-admin';
 import { classifyAiFailure, isRetryableFailure } from './ai-failure';
+import {
+  MotivationImageThumbService,
+  thumbFields,
+} from './motivation-image-thumb.service';
 
 /**
  * Код «провайдер занят» и пауза перед следующей попыткой.
@@ -53,6 +57,9 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly discovery?: QuoteDiscoveryService,
     @Optional() private readonly settings?: MotivationSettingsService,
     @Optional() private readonly moderation?: MotivationModerationService,
+    // Необязательный: без него пост уходит без лёгкой копии, её доделает
+    // бэкфилл. Так же и в тестах, создающих воркер позиционно.
+    @Optional() private readonly thumbs?: MotivationImageThumbService,
   ) {
     const host = config.get<string>('REDIS_HOST');
     this.redis = host
@@ -303,6 +310,10 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
         `${baseKey}.png`,
         image.bytes,
       );
+      // Лёгкая копия для ленты и викторины (VED-629): оригинал PNG весит
+      // мегабайты. Не вышло — пост всё равно уходит, копию доделает бэкфилл.
+      const imageThumbUrl =
+        (await this.thumbs?.forNewImage(`${baseKey}.png`, image.bytes)) ?? null;
       // Сторис — отдельный файл: тот же фон, докадрированный до 9:16, плюс
       // текст и подпись. Раньше сюда клался тот же imageUrl, и «Скачать для
       // Stories» отдавало картинку без единого слова.
@@ -331,6 +342,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               generationStage: 'published',
               generationErrorCode: null,
               imageUrl,
+              ...thumbFields(imageThumbUrl),
               storyImageUrl,
               imageApprovedAt: now,
               publishedAt: now,
@@ -350,6 +362,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               generationStage: 'image_review',
               generationErrorCode: null,
               imageUrl,
+              ...thumbFields(imageThumbUrl),
               storyImageUrl,
               modelVersion: 'responses:image_generation',
               // Кадр — единственная платная стадия текстового конвейера,

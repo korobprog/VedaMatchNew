@@ -94,6 +94,8 @@ export interface QuizSourcePost {
   id: string;
   slug: string;
   imageUrl: string | null;
+  /** Лёгкая копия для показа (VED-629); может отсутствовать. */
+  imageThumbUrl?: string | null;
   attributionWork: string | null;
   attributionLocator: string | null;
   title: string | null;
@@ -110,6 +112,8 @@ export interface QuizCandidate {
   id: string;
   slug: string;
   imageUrl: string;
+  /** Пустая строка — копии нет, клиент покажет `imageUrl`. */
+  imageThumbUrl: string;
   ref: GitaRef;
   text: string;
 }
@@ -136,6 +140,7 @@ export function quizCandidate(post: QuizSourcePost): QuizCandidate | null {
     id: post.id,
     slug: post.slug,
     imageUrl,
+    imageThumbUrl: post.imageThumbUrl?.trim() ?? '',
     ref,
     text: clampText(post.text ?? ''),
   };
@@ -225,6 +230,7 @@ export interface QuizQuestion {
   id: string;
   slug: string;
   imageUrl: string;
+  imageThumbUrl: string;
   answer: string;
   options: string[];
   text: string;
@@ -255,6 +261,7 @@ export function buildQuiz(
       id: candidate.id,
       slug: candidate.slug,
       imageUrl: candidate.imageUrl,
+      imageThumbUrl: candidate.imageThumbUrl,
       answer,
       options: shuffle(
         [answer, ...distractors.map((ref) => formatGitaRef(ref))],

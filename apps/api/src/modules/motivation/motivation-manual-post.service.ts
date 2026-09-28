@@ -149,6 +149,7 @@ export class MotivationManualPostService {
           generationStage: 'text',
           promptVersion: 'manual-v1',
           imageUrl: null,
+          imageThumbUrl: null,
           storyImageUrl: null,
           imagePrompt: null,
           translations: {

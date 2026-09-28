@@ -107,6 +107,7 @@ export class MotivationCopyService {
           generationStage: 'text',
           promptVersion: 'verified-quote-v1',
           imageUrl: null,
+          imageThumbUrl: null,
           storyImageUrl: null,
           imagePrompt: null,
           translations: {

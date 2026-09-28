@@ -29,6 +29,8 @@ import { FalAudioService } from './fal-audio.service';
 import { MotivationSettingsService } from './motivation-settings.service';
 import { MotivationMusicService } from './motivation-music.service';
 import { MotivationVideoWorkerService } from './motivation-video-worker.service';
+import { MotivationImageThumbService } from './motivation-image-thumb.service';
+import { MotivationThumbWorkerService } from './motivation-thumb-worker.service';
 import { MotivationReelsService } from './motivation-reels.service';
 import { MotivationAdminReelsService } from './motivation-admin-reels.service';
 import { MotivationPostcardsService } from './motivation-postcards.service';
@@ -73,6 +75,8 @@ import { MotivationSavedImageController } from './motivation-saved-image.control
     MotivationSettingsService,
     MotivationMusicService,
     MotivationVideoWorkerService,
+    MotivationImageThumbService,
+    MotivationThumbWorkerService,
     MotivationHealthService,
     MotivationAssistantListener,
   ],

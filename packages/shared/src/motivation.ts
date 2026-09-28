@@ -115,6 +115,12 @@ export interface MotivationPostDto {
   /** Название категории для показа; пусто — справочник её не знает. */
   categoryTitle: string;
   imageUrl: string;
+  /**
+   * Лёгкая копия `imageUrl` для показа на слайде — WebP шириной 720
+   * (VED-629). Пустая строка — копии ещё нет: показывать `imageUrl`. Оригинал
+   * остаётся для «открыть полностью» и скачивания.
+   */
+  imageThumbUrl: string;
   storyImageUrl: string;
   /**
    * Ролик, оживляющий иллюстрацию. Пустая строка — ролика нет либо он ещё не
@@ -417,6 +423,8 @@ export interface MotivationQuizQuestionDto {
   id: string;
   slug: string;
   imageUrl: string;
+  /** Лёгкая копия для показа (VED-629); пустая — показывать `imageUrl`. */
+  imageThumbUrl: string;
   /** Правильный номер: «2.11» или «1.16-18». */
   answer: string;
   /** Четыре номера вперемешку, среди них `answer`. */

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Optional,
 } from '@nestjs/common';
 import type {
   AccessTokenPayload,
@@ -11,6 +12,10 @@ import type {
 } from '@vedamatch/shared';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  MotivationImageThumbService,
+  thumbFields,
+} from './motivation-image-thumb.service';
 import { isAdmin } from './is-admin';
 import { MotivationCategoriesService } from './motivation-categories.service';
 import { MotivationGenerationService } from './motivation-generation.service';
@@ -56,6 +61,8 @@ export class MotivationPicturesService {
     private readonly categories: MotivationCategoriesService,
     private readonly generation: MotivationGenerationService,
     private readonly settings: MotivationSettingsService,
+    // Без него картинка уходит без лёгкой копии — её доделает бэкфилл.
+    @Optional() private readonly thumbs?: MotivationImageThumbService,
   ) {}
 
   /** Картинка от редакции — из админки. */
@@ -138,7 +145,7 @@ export class MotivationPicturesService {
     });
 
     const id = randomUUID();
-    const imageUrl = await this.store(id, file!);
+    const { imageUrl, imageThumbUrl } = await this.store(id, file!);
     const title = pictureTitle(input.text, categoryRow?.title ?? category);
     const now = new Date();
 
@@ -168,6 +175,7 @@ export class MotivationPicturesService {
         attributionSpeaker: input.author || null,
         attributionWork: input.work || null,
         imageUrl,
+        ...thumbFields(imageThumbUrl),
         storyImageUrl: imageUrl,
         generationStage: 'uploaded',
         promptVersion: 'picture-v1',
@@ -224,7 +232,7 @@ export class MotivationPicturesService {
   private async store(
     postId: string,
     file: UploadedReelImage,
-  ): Promise<string> {
+  ): Promise<{ imageUrl: string; imageThumbUrl: string | null }> {
     const image = sharp(file.buffer, {
       failOn: 'error',
       limitInputPixels: true,
@@ -243,10 +251,16 @@ export class MotivationPicturesService {
       // букв появляется заметная рябь.
       .webp({ quality: 88 })
       .toBuffer();
-    return this.generation.uploadStory(
-      pictureImageKey(postId, Date.now()),
+    const key = pictureImageKey(postId, Date.now());
+    const imageUrl = await this.generation.uploadStory(
+      key,
       prepared,
       'image/webp',
     );
+    // Копия для ленты (VED-629): открытка до 2048 по стороне — это сотни
+    // килобайт даже в WebP, а на слайде хватает 720.
+    const imageThumbUrl =
+      (await this.thumbs?.forNewImage(key, prepared)) ?? null;
+    return { imageUrl, imageThumbUrl };
   }
 }

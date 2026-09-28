@@ -64,6 +64,16 @@ function createWorker(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Запись, которой воркер отправляет готовый кадр на проверку. */
+function imageReviewUpdate(updateMany: jest.Mock) {
+  const calls = updateMany.mock.calls as [{ data: Record<string, unknown> }][];
+  const found = calls.find(
+    ([input]) => input.data.reviewStatus === 'image_review',
+  );
+  if (!found) throw new Error('image_review update not found');
+  return found[0];
+}
+
 describe('MotivationWorkerService', () => {
   it('перегрузка провайдера не тратит попытку и откладывает кадр', async () => {
     // Провайдер картинок отвечает 429 «модель перегружена». Раньше три таких
@@ -382,6 +392,65 @@ describe('MotivationWorkerService', () => {
       ([input]) => input.data.reviewStatus === 'image_review',
     )?.[0];
     expect(update.data.storyImageUrl).toBe(update.data.imageUrl);
+  });
+
+  it('кладёт лёгкую копию рядом с картинкой и пишет её в пост (VED-629)', async () => {
+    const { prisma, generation, motivationPost } = createWorker();
+    const thumbs = {
+      forNewImage: jest
+        .fn()
+        .mockImplementation((key: string) =>
+          Promise.resolve(
+            `https://cdn.test/${key.replace(/\.png$/, '-w720.webp')}`,
+          ),
+        ),
+    };
+    const worker = new MotivationWorkerService(
+      prisma as never,
+      generation as never,
+      new ConfigService(),
+      { prepareCandidate: jest.fn() } as never,
+      undefined,
+      undefined,
+      undefined,
+      thumbs as never,
+    );
+
+    await worker.tick();
+
+    const [imageKey] = generation.uploadStory.mock.calls[0] as [string];
+    expect(thumbs.forNewImage).toHaveBeenCalledWith(
+      imageKey,
+      expect.any(Buffer),
+    );
+    const update = imageReviewUpdate(motivationPost.updateMany);
+    expect(update.data.imageThumbUrl).toBe(
+      `https://cdn.test/${imageKey.replace(/\.png$/, '-w720.webp')}`,
+    );
+    expect(update.data).toMatchObject({
+      imageThumbAttempts: 0,
+      imageThumbAttemptAt: null,
+    });
+  });
+
+  it('без копии пост всё равно уходит на проверку — её доделает бэкфилл', async () => {
+    const { prisma, generation, motivationPost } = createWorker();
+    const worker = new MotivationWorkerService(
+      prisma as never,
+      generation as never,
+      new ConfigService(),
+      { prepareCandidate: jest.fn() } as never,
+      undefined,
+      undefined,
+      undefined,
+      { forNewImage: jest.fn().mockResolvedValue(null) } as never,
+    );
+
+    await worker.tick();
+
+    const update = imageReviewUpdate(motivationPost.updateMany);
+    expect(update.data.imageUrl).toMatch(/\/v\d+\.png$/);
+    expect(update.data.imageThumbUrl).toBeNull();
   });
 
   it('claims only approved image jobs and stops at image review', async () => {

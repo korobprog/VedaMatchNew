@@ -337,6 +337,7 @@ export class MotivationModerationService {
         // не описывает то, что лежит в поле.
         ...(keepEdited ? {} : { imagePromptEditedAt: null }),
         imageUrl: null,
+        imageThumbUrl: null,
         storyImageUrl: null,
         imageApprovedAt: null,
         publishedAt: null,
