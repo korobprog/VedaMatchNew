@@ -1,5 +1,6 @@
 import type {
   VedabaseBookManifest,
+  VedabaseSearchResult,
   VedabaseSyncPullResponse,
   VedabaseSyncPushRequest,
   VedabaseSyncPushResponse,
@@ -46,6 +47,17 @@ export async function fetchVedabaseCover(
   signal?: AbortSignal,
 ): Promise<Blob> {
   return fetchBlob(`/vedabase/books/${encodeURIComponent(bookSlug)}/cover`, signal);
+}
+
+/** Полнотекстовый поиск по всем книгам на сервере — «Поиск» полки (VED-662). */
+export function searchVedabase(
+  query: string,
+  signal?: AbortSignal,
+): Promise<VedabaseSearchResult[]> {
+  return fetchJson(
+    `/vedabase/search?q=${encodeURIComponent(query)}&limit=30`,
+    { signal },
+  );
 }
 
 export function pushVedabaseMutations(

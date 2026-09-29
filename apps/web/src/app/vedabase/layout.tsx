@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Vedabase",
-  description: "Офлайн-библиотека ведических книг VedaMatch",
+  title: "Библиотека",
+  description: "Книги ачарьев для преданных: читайте онлайн и офлайн",
 };
 
 export default function VedabaseLayout({
