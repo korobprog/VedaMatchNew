@@ -6,10 +6,18 @@ import { SlidersHorizontal } from "lucide-react";
  * настроек справа, которая ведёт в редактирование анкеты. На десктопе разделы
  * подписаны обычным заголовком страницы, поэтому бар скрыт.
  */
-export function UnionTopBar({ title }: { title: string }) {
+export function UnionTopBar({
+  title,
+  aside,
+}: {
+  title: string;
+  /** Рядом с кнопкой настроек — например, «Найдено: 28» (VED-652). */
+  aside?: React.ReactNode;
+}) {
   return (
-    <div className="mb-3 flex items-center justify-between md:hidden">
+    <div className="mb-3 flex items-center gap-3 md:hidden">
       <h1 className="font-display text-xl font-bold text-text-0">{title}</h1>
+      <span className="ml-auto text-sm text-text-2">{aside}</span>
       <Link
         href="/union/profile"
         aria-label="Настройки анкеты"

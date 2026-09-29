@@ -41,12 +41,14 @@ function subscribeToMobileQuery(onChange: () => void): () => void {
  */
 export function RecommendationsView({
   items,
-  total,
+  toolbar,
 }: {
   items: UnionRecommendation[];
-  /** Сколько нашлось всего. Стоит в одном ряду с кнопками режима: отдельной
-   *  строкой это съедало высоту, которой на телефоне и так не хватает. */
-  total?: number;
+  /**
+   * Переключатели рядом со «Свайпами» — «Показать всех» и «Избранное»
+   * (VED-652). «Найдено» уехало в заголовок страницы.
+   */
+  toolbar?: React.ReactNode;
 }) {
   const isMobile = useSyncExternalStore(
     subscribeToMobileQuery,
@@ -98,16 +100,33 @@ export function RecommendationsView({
 
   useEffect(() => {
     if (!focusMode) return;
-    if (openedByTapRef.current) {
+    const push = () => {
+      if (pushedEntryRef.current) return;
       window.history.pushState({ unionFocusMode: true }, "");
       pushedEntryRef.current = true;
+    };
+    /*
+      Колода открылась сама (телефон, вход на страницу) — записи без жеста
+      не ставим (VED-470), но ставим её на первом касании внутри: тогда у
+      браузера уже есть жест, и системное «назад» на Android закрывает
+      анкету, а не уводит в Планировщик или Блог (VED-655).
+    */
+    const onFirstGesture = () => push();
+    if (openedByTapRef.current) push();
+    else {
+      // Касание, а не клавиша: «назад» с кнопки — забота телефона, а Esc на
+      // компьютере и так закрывает колоду без истории.
+      window.addEventListener("pointerup", onFirstGesture, { once: true });
     }
     const onPopState = () => {
       pushedEntryRef.current = false;
       setModeOverride("grid");
     };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("pointerup", onFirstGesture);
+    };
   }, [focusMode]);
 
   useEffect(() => {
@@ -135,10 +154,18 @@ export function RecommendationsView({
     // popstate-обработчик выше, и он переключает mode на "grid", без
     // лишней записи. Записи нет — просто закрываем, «назад» здесь ушёл бы
     // на чужую страницу.
-    if (pushedEntryRef.current) {
+    //
+    // «Назад» — только если наша запись и сейчас текущая (VED-655): после
+    // переходов внутри колоды (анкета, чат) верхней может оказаться чужая, и
+    // history.back() с крестика уносил в Блог-ленту.
+    const ours =
+      (window.history.state as { unionFocusMode?: boolean } | null)
+        ?.unionFocusMode === true;
+    if (pushedEntryRef.current && ours) {
       window.history.back();
       return;
     }
+    pushedEntryRef.current = false;
     setModeOverride("grid");
   }
 
@@ -187,16 +214,14 @@ export function RecommendationsView({
             Кнопка одна и переключает по кругу, подпись обещает результат
             нажатия. Только в списке на телефоне: на десктопе места хватает,
             а в колоде плотности нет вовсе. */}
-        {total !== undefined && (
-          <span className="ml-auto text-sm text-text-2">Найдено: {total}</span>
-        )}
+        {toolbar}
 
         {isMobile && (
           <IconButton
             icon={density === 2 ? <DenseGlyph /> : <LargeGlyph />}
             label={densityLabel(density)}
             pressable={false}
-            className={total === undefined ? "ml-auto" : ""}
+            className="ml-auto"
             onClick={() => chooseDensity(nextDensity(density))}
           />
         )}

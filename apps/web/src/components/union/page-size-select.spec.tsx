@@ -17,26 +17,26 @@ beforeEach(() => {
 
 describe("UnionPageSizeSelect", () => {
   it("показывает выбранный размер", () => {
-    render(<UnionPageSizeSelect params={{ pageSize: "48" }} />);
+    render(<UnionPageSizeSelect params={{ pageSize: "50" }} />);
 
-    expect(screen.getByLabelText("Показывать по")).toHaveValue("48");
+    expect(screen.getByLabelText("Показывать по")).toHaveValue("50");
   });
 
   it("мусор в адресе не показывает как выбор", () => {
     render(<UnionPageSizeSelect params={{ pageSize: "5000" }} />);
 
-    expect(screen.getByLabelText("Показывать по")).toHaveValue("12");
+    expect(screen.getByLabelText("Показывать по")).toHaveValue("100");
   });
 
-  it("возвращает на первую страницу: «страница 4 по 12» и «по 48» — разные места", async () => {
+  it("возвращает на первую страницу: «страница 4 по 12» и «по 50» — разные места", async () => {
     const user = userEvent.setup();
     search = "page=4&gender=female";
     render(<UnionPageSizeSelect params={{ page: "4", gender: "female" }} />);
 
-    await user.selectOptions(screen.getByLabelText("Показывать по"), "48");
+    await user.selectOptions(screen.getByLabelText("Показывать по"), "50");
 
     const url = new URL(push.mock.calls[0][0] as string, "https://vedamatch.ru");
-    expect(url.searchParams.get("pageSize")).toBe("48");
+    expect(url.searchParams.get("pageSize")).toBe("50");
     expect(url.searchParams.get("page")).toBe("1");
   });
 
@@ -45,7 +45,7 @@ describe("UnionPageSizeSelect", () => {
     search = "gender=female&city=Москва";
     render(<UnionPageSizeSelect params={{ gender: "female" }} />);
 
-    await user.selectOptions(screen.getByLabelText("Показывать по"), "24");
+    await user.selectOptions(screen.getByLabelText("Показывать по"), "25");
 
     const url = new URL(push.mock.calls[0][0] as string, "https://vedamatch.ru");
     expect(url.searchParams.get("gender")).toBe("female");

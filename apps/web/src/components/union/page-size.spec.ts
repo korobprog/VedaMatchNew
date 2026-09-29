@@ -23,13 +23,18 @@ describe("resolveUnionPageSize", () => {
     expect(resolveUnionPageSize("двенадцать")).toBe(DEFAULT_UNION_PAGE_SIZE);
   });
 
-  it("повторяющийся параметр берёт первым: ?pageSize=24&pageSize=48", () => {
-    expect(resolveUnionPageSize(["24", "48"])).toBe(24);
+  it("повторяющийся параметр берёт первым: ?pageSize=25&pageSize=50", () => {
+    expect(resolveUnionPageSize(["25", "50"])).toBe(25);
+  });
+
+  it("25, 50, 100 и 12 для телефона; по умолчанию — 100 (VED-654)", () => {
+    expect(UNION_PAGE_SIZES).toEqual([12, 25, 50, 100]);
+    expect(DEFAULT_UNION_PAGE_SIZE).toBe(100);
   });
 
   it("не просит больше, чем принимает API", () => {
-    // MAX_PAGE_SIZE в union-profile.service.ts — 50; выше него ответ молча
-    // обрезался бы, и подпись «показывать по 100» врала бы.
-    expect(Math.max(...UNION_PAGE_SIZES)).toBeLessThanOrEqual(50);
+    // MAX_PAGE_SIZE в union-profile.service.ts — 100 (VED-654); выше него
+    // ответ молча обрезался бы, и подпись «показывать по …» врала бы.
+    expect(Math.max(...UNION_PAGE_SIZES)).toBeLessThanOrEqual(100);
   });
 });

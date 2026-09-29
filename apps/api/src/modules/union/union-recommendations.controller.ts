@@ -48,6 +48,9 @@ function toFilters(query: QueryParams): UnionRecommendationFilters {
     includeSwiped:
       first(query.includeSwiped) === 'true' || first(query.includeSwiped) === '1',
     showAll: first(query.showAll) === 'true' || first(query.showAll) === '1',
+    favoritesOnly:
+      first(query.favoritesOnly) === 'true' ||
+      first(query.favoritesOnly) === '1',
     format: first(query.format) as UnionRecommendationFilters['format'],
     language: first(query.language),
     diet: first(query.diet) as UnionRecommendationFilters['diet'],

@@ -538,7 +538,11 @@ describe('UnionProfileService', () => {
       ]);
       prisma.unionSwipe.findMany.mockResolvedValue([]);
 
-      const narrowed = await service.getRecommendations('me');
+      // `gender: 'all'` — без отбора по полу по умолчанию (VED-652): тест
+      // про чужое ограничение семьи, а не про пол смотрящего.
+      const narrowed = await service.getRecommendations('me', {
+        gender: 'all',
+      });
       const everyone = await service.getRecommendations('me', {
         showAll: true,
       });
@@ -916,12 +920,33 @@ describe('UnionProfileService', () => {
     prisma.unionProfile.findMany.mockResolvedValue([man, woman]);
     prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
 
-    const result = await service.getRecommendations('me');
+    // Все полы явно (VED-652): по умолчанию лента — противоположный пол.
+    const result = await service.getRecommendations('me', { gender: 'all' });
 
     expect(result.items.map((item) => item.user.id).sort()).toEqual([
       'man',
       'woman',
     ]);
+  });
+
+  it('по умолчанию — противоположный пол, «Показать всех» — все (VED-652)', async () => {
+    const me = withGender(profile('me'), 'male');
+    const man = withGender(profile('man'), 'male');
+    const woman = withGender(profile('woman'), 'female');
+    prisma.unionProfile.findUnique.mockResolvedValue(me);
+    prisma.unionProfile.findMany.mockResolvedValue([man, woman]);
+    prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
+
+    const byDefault = await service.getRecommendations('me');
+    const everyone = await service.getRecommendations('me', { gender: 'all' });
+
+    expect(byDefault.items.map((item) => item.user.id)).toEqual(['woman']);
+    expect(byDefault.appliedGender).toBe('female');
+    expect(everyone.items.map((item) => item.user.id).sort()).toEqual([
+      'man',
+      'woman',
+    ]);
+    expect(everyone.appliedGender).toBeNull();
   });
 
   it('не сужает ленту, когда пол не выбран', async () => {
@@ -937,7 +962,8 @@ describe('UnionProfileService', () => {
     prisma.unionProfile.findMany.mockResolvedValue([man, woman]);
     prisma.unionConnectionRequest.findMany.mockResolvedValue([]);
 
-    const result = await service.getRecommendations('me');
+    // Все полы явно (VED-652): по умолчанию лента — противоположный пол.
+    const result = await service.getRecommendations('me', { gender: 'all' });
 
     expect(result.items.map((item) => item.user.id).sort()).toEqual([
       'man',

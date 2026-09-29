@@ -233,8 +233,10 @@ export function RecommendationFilters({
           name="gender"
           label="Пол"
           defaultValue={first(params.gender)}
+          /* По умолчанию — противоположный пол (VED-652); «Любой» — все. */
           options={[
-            ["", "Любой"],
+            ["", "Противоположный"],
+            ["all", "Любой"],
             ["male", "Мужской"],
             ["female", "Женский"],
           ]}
