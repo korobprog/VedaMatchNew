@@ -229,7 +229,11 @@ export function FeedAttributionFilter({
           промежутков, не отнимая их у текста вкладок (`before:absolute` —
           вне потока, ширины `<nav>` не трогает). По вертикали `h-10`
           (40px) — уже полная область без псевдоэлемента,
-          `before:inset-y-0` просто повторяет её. */}
+          `before:inset-y-0` просто повторяет её.
+          VED-639, доработка: «немного сократи расстояние между кнопкой
+          фильтров и соседними словами» — в раскладке теперь ровно значок,
+          16px (`w-4`), а поле нажатия раздвинуто на 12px в стороны
+          (`before:-inset-x-3`, 16+12+12=40). */}
       <button
         ref={triggerRef}
         type="button"
@@ -237,7 +241,7 @@ export function FeedAttributionFilter({
         {...triggerHandlers}
         aria-haspopup="dialog"
         aria-label={filterTriggerLabel(state)}
-        className="relative flex h-10 w-7 shrink-0 items-center justify-center text-white/70 drop-shadow transition before:absolute before:-inset-x-1.5 before:inset-y-0 before:content-[''] hover:text-white"
+        className="relative flex h-10 w-4 shrink-0 items-center justify-center text-white/70 drop-shadow transition before:absolute before:-inset-x-3 before:inset-y-0 before:content-[''] hover:text-white"
       >
         <FilterIcon />
         {/* Активный фильтр отмечен точкой — тем же приёмом, что активная

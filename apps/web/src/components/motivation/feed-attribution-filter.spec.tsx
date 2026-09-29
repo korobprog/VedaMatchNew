@@ -52,11 +52,12 @@ describe("FeedAttributionFilter", () => {
     const trigger = screen.getByRole("button", { name: "Фильтр по автору и источнику" });
     const classes = trigger.className.split(" ");
     // Раскладочный бокс — под иконку, не под всю хит-зону.
-    expect(classes).toEqual(expect.arrayContaining(["h-10", "w-7"]));
+    // VED-639: ровно значок, 16px — ближе к соседним словам.
+    expect(classes).toEqual(expect.arrayContaining(["h-10", "w-4"]));
     expect(trigger.className).not.toMatch(/\bw-10\b/);
-    // Хит-зона расширена псевдоэлементом до 40px по горизонтали (28+6+6)
+    // Хит-зона расширена псевдоэлементом до 40px по горизонтали (16+12+12)
     // и повторяет 40px по вертикали — обе стороны ≥40px.
-    expect(trigger.className).toMatch(/before:-inset-x-1\.5/);
+    expect(trigger.className).toMatch(/before:-inset-x-3\b/);
     expect(trigger.className).toMatch(/before:inset-y-0/);
     expect(trigger.className).toMatch(/before:content-\[['"]{2}\]/);
   });
