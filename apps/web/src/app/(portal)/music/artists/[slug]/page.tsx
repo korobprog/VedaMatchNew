@@ -119,12 +119,9 @@ export default async function MusicArtistPage({
         tracks={tracks}
         isMusicEditor={isMusicEditor}
         uploadHref={`/music/uploads?artist=${encodeURIComponent(artist.slug)}`}
+        artistId={artist.id}
+        bio={artist.bio}
       >
-        {artist.bio && (
-          <p className="mt-6 max-w-2xl text-sm leading-relaxed text-text-1">
-            {artist.bio}
-          </p>
-        )}
 
         {/* Книги в его чтении (VED-297) — у чтеца их может быть несколько,
             и каждая открывается своей страницей с главами по порядку. */}

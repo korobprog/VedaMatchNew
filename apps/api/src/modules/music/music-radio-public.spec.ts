@@ -124,3 +124,52 @@ describe('MusicRadioService.publicState', () => {
     ]);
   });
 });
+
+/* VED-661: «Поделиться» ведёт на публичное радио с этой записью. */
+describe('MusicRadioService.sharedTrack', () => {
+  function setup(row: unknown) {
+    const findFirst = jest.fn().mockResolvedValue(row);
+    const presignGet = jest.fn().mockResolvedValue('https://s/signed.mp3');
+    const service = new MusicRadioService(
+      { musicTrack: { findFirst } } as unknown as PrismaService,
+      { presignGet } as unknown as MusicStorageService,
+      {} as MusicMetadataReader,
+      new ConfigService({}),
+    );
+    return { service, findFirst };
+  }
+
+  it('отдаёт опубликованную запись каталога со ссылкой на звук', async () => {
+    const { service, findFirst } = setup({
+      id: 't1',
+      title: 'Maha Mantra',
+      storageKey: 'music/t1.mp3',
+      coverKey: null,
+      durationSeconds: 120,
+      language: null,
+      isLiveRecording: false,
+      lineage: null,
+      playCount: 0,
+      publishedAt: null,
+      artist: null,
+      album: null,
+      categories: [],
+    });
+
+    const result = await service.sharedTrack('t1');
+
+    expect(result.track.title).toBe('Maha Mantra');
+    expect(result.streamUrl).toBe('https://s/signed.mp3');
+    const [query] = findFirst.mock.calls[0] as [
+      { where: Record<string, unknown> },
+    ];
+    expect(query.where).toMatchObject({ id: 't1', status: 'published' });
+  });
+
+  it('нет такой опубликованной — 404', async () => {
+    const { service } = setup(null);
+    await expect(service.sharedTrack('nope')).rejects.toThrow(
+      'Запись не найдена',
+    );
+  });
+});

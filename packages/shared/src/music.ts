@@ -273,6 +273,11 @@ export interface MusicTrackDto {
   coverUrl: string | null;
   language: string | null;
   /** Значок «Запись с программы» на карточке рядом с чипом категории. */
+  /**
+   * Своя подпись исполнителя у записи (VED-660). Уже подставлена в
+   * `artist.name` — здесь для формы правки; `null` — подписи нет.
+   */
+  artistCredit?: string | null;
   isLiveRecording: boolean;
   /**
    * Духовная линия записи. `null` — для всех линий. Преданный слышит в
@@ -502,6 +507,11 @@ export interface UpdateMusicTrackRequest {
   translation?: string | null;
   /** Ключ залитой обложки. `null` — снять и вернуться к обложке альбома. */
   coverKey?: string | null;
+  /**
+   * Подпись исполнителя у этой записи (VED-660); `null` — снять и
+   * подписывать по исполнителю.
+   */
+  artistCredit?: string | null;
 }
 
 /**
@@ -1552,6 +1562,17 @@ export interface MusicRadioRecentDto {
   trackId: string;
   title: string;
   artistName: string | null;
+}
+
+/**
+ * Запись, которой поделились (VED-661): ссылка «Поделиться» ведёт на
+ * публичное радио `/radio?track=…`, и гость слушает её без входа, а потом —
+ * эфир.
+ */
+export interface MusicRadioSharedTrackDto {
+  track: MusicTrackDto;
+  /** Подписанная ссылка на звук; `null` — хранилище недоступно. */
+  streamUrl: string | null;
 }
 
 /** Сколько имён слушателей называет публичная страница радио. */

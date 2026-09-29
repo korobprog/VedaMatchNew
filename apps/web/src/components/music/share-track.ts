@@ -16,9 +16,13 @@ export type SharedTrack = {
   artist?: { name: string } | null;
 };
 
-/** Путь записи на нашем домене — его и открывает получатель. */
+/**
+ * Путь, который открывает получатель (VED-661): публичное радио с этой
+ * записью — «чтобы человеку не обязательно было сначала регистрироваться,
+ * а он сразу мог послушать трек и дальше другие в режиме Радио».
+ */
 export function trackSharePath(trackId: string): string {
-  return `/music/tracks/${encodeURIComponent(trackId)}`;
+  return `/radio?track=${encodeURIComponent(trackId)}`;
 }
 
 /** «Название — Исполнитель»; без исполнителя — одно название. */

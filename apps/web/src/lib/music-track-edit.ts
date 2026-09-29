@@ -8,6 +8,8 @@ export interface MusicTrackEditState {
   title: string;
   /** Пустая строка — «исполнитель не указан». */
   artistId: string;
+  /** Своя подпись исполнителя у записи (VED-660); пусто — по исполнителю. */
+  artistCredit: string;
   lyrics: string;
   transliteration: string;
   translation: string;
@@ -40,6 +42,11 @@ export function buildTrackEditPatch(
 
   if (draft.artistId !== initial.artistId) {
     patch.artistId = draft.artistId || null;
+  }
+
+  const credit = draft.artistCredit.trim();
+  if (credit !== initial.artistCredit.trim()) {
+    patch.artistCredit = credit || null;
   }
 
   for (const key of ["lyrics", "transliteration", "translation"] as const) {

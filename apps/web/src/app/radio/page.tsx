@@ -24,7 +24,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RadioPage() {
+export default async function RadioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ track?: string | string[] }>;
+}) {
+  // Запись, которой поделились (VED-661): `/radio?track=…`.
+  const { track } = await searchParams;
+  const rawTrack = Array.isArray(track) ? track[0] : track;
+  const sharedTrackId =
+    rawTrack && /^[\w-]{1,64}$/.test(rawTrack) ? rawTrack : null;
   const [appManifest, host] = await Promise.all([
     getAppManifest().catch(() => null),
     headers().then((h) => h.get("host")),
@@ -39,6 +48,7 @@ export default async function RadioPage() {
         <PublicRadio
           manifest={appManifest}
           showTelegram={isComContourHost(host)}
+          sharedTrackId={sharedTrackId}
         />
       </main>
       <Footer />

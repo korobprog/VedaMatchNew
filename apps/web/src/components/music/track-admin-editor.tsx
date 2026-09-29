@@ -23,6 +23,7 @@ function stateOf(track: MusicTrackDetailDto): MusicTrackEditState {
   return {
     title: track.title,
     artistId: track.artist?.id ?? "",
+    artistCredit: track.artistCredit ?? "",
     lyrics: track.lyrics.lyrics ?? "",
     transliteration: track.lyrics.transliteration ?? "",
     translation: track.lyrics.translation ?? "",
@@ -193,6 +194,27 @@ export function MusicTrackAdminEditor({
               </option>
             ))}
           </select>
+        </label>
+
+        {/* Подпись под названием только у этой записи (VED-660): папка
+            исполнителя и другие его записи не меняются. */}
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs text-text-2">
+            Подпись исполнителя у этой записи
+          </span>
+          <input
+            value={draft.artistCredit}
+            onChange={(event) => set("artistCredit", event.target.value)}
+            maxLength={200}
+            placeholder={
+              artists.find((artist) => artist.id === draft.artistId)?.name ??
+              "Как у исполнителя"
+            }
+            className={`${fieldClass} h-9`}
+          />
+          <span className="mt-1 block text-xs text-text-2">
+            Пусто — подпись по исполнителю.
+          </span>
         </label>
       </div>
 
