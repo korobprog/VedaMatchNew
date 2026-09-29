@@ -129,9 +129,9 @@ export interface TourVideo {
   desktopUrl: string | null;
   /** Вертикальное mp4 для телефона; `null` — ещё нет. */
   mobileUrl: string | null;
-  /** Кадр до запуска горизонтального видео; `null` — без обложки. */
+  /** Обложка горизонтальной версии (16:9); `null` — без обложки. */
   posterUrl: string | null;
-  /** Кадр до запуска вертикального видео; `null` — без обложки. */
+  /** Обложка вертикальной версии (9:16); `null` — берётся горизонтальная. */
   mobilePosterUrl: string | null;
 }
 
@@ -143,23 +143,19 @@ export const TOUR_MOBILE_QUERY = "(max-width: 767px)";
  * человек увидел презентацию. `null` — видео нет вовсе.
  */
 export function pickTourVideo(
-  presentation: Pick<TourVideo, "desktopUrl" | "mobileUrl">,
+  presentation: TourVideo,
   mobile: boolean,
-): { url: string; vertical: boolean } | null {
+): { url: string; vertical: boolean; poster: string | null } | null {
   const own = mobile ? presentation.mobileUrl : presentation.desktopUrl;
-  if (own) return { url: own, vertical: mobile };
   const other = mobile ? presentation.desktopUrl : presentation.mobileUrl;
-  return other ? { url: other, vertical: !mobile } : null;
-}
-
-/** Обложка под выбранную версию; своей нет — любая, лишь бы не чёрный кадр. */
-export function tourPoster(
-  video: Pick<TourVideo, "posterUrl" | "mobilePosterUrl">,
-  vertical: boolean,
-): string | null {
-  return vertical
-    ? (video.mobilePosterUrl ?? video.posterUrl)
-    : (video.posterUrl ?? video.mobilePosterUrl);
+  const url = own ?? other;
+  if (!url) return null;
+  const vertical = own ? mobile : !mobile;
+  // Обложка — в пропорциях той версии, что играет.
+  const poster = vertical
+    ? (presentation.mobilePosterUrl ?? presentation.posterUrl)
+    : presentation.posterUrl;
+  return { url, vertical, poster };
 }
 
 /**

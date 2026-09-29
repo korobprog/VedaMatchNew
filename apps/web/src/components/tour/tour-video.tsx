@@ -2,12 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Clapperboard } from "lucide-react";
-import {
-  TOUR_MOBILE_QUERY,
-  pickTourVideo,
-  tourPoster,
-  type TourVideo,
-} from "@/lib/tour";
+import { TOUR_MOBILE_QUERY, pickTourVideo, type TourVideo } from "@/lib/tour";
 import { cn } from "@/lib/utils";
 
 function subscribeMobile(onChange: () => void) {
@@ -55,7 +50,7 @@ export function TourVideoPlayer({
     <video
       key={picked.url}
       src={picked.url}
-      poster={tourPoster(video, picked.vertical) ?? undefined}
+      poster={picked.poster ?? undefined}
       controls
       playsInline
       autoPlay={autoPlay}

@@ -139,7 +139,11 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
             key={chapter.id}
             video={chapter.video}
             title={chapter.title}
-            onEnded={() => markWatched(chapter.id)}
+            onEnded={() => {
+              // Досмотрел — галочка и следующая глава (VED-653).
+              markWatched(chapter.id);
+              if (index < chapters.length - 1) open(index + 1);
+            }}
           />
           {chapter.promo && (
             <div className="glass flex flex-col gap-4 rounded-3xl border border-glass-brd p-5 sm:p-6">

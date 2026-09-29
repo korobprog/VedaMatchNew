@@ -33,6 +33,18 @@ const chapters: TourChapter[] = [
     },
     cta: { label: "Включить радио", href: "/radio" },
   },
+  {
+    id: "app",
+    title: "Приложение на телефон",
+    text: "Всё то же самое — в телефоне.",
+    video: {
+      desktopUrl: null,
+      mobileUrl: null,
+      posterUrl: null,
+      mobilePosterUrl: null,
+    },
+    cta: { label: "Установить приложение", href: "/app" },
+  },
 ];
 
 /* VED-651: туториал «Познакомиться с проектом». */
@@ -76,6 +88,11 @@ describe("ProjectTour", () => {
 
     expect(screen.getByLabelText("Просмотрено")).toBeInTheDocument();
     expect(window.localStorage.getItem("vm-tour-watched")).toBe('["music"]');
+    // VED-653: после ролика — следующая глава.
+    expect(
+      screen.getByRole("heading", { name: "Приложение на телефон" }),
+    ).toBeInTheDocument();
+    expect(window.location.hash).toBe("#app");
   });
 
   it("глава из якоря адреса открывается сразу", () => {
