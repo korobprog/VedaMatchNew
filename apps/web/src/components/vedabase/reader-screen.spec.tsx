@@ -262,8 +262,12 @@ describe("ReaderScreen", () => {
     expect(onNavigate).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: "ArrowLeft" });
     expect(onNavigate).not.toHaveBeenCalled();
-    fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(onNavigate).toHaveBeenCalledWith("chapter-2");
+    // Слушатель стрелок вешается эффектом после загрузки оглавления — на
+    // медленной машине чуть позже заголовка, поэтому ждём, а не проверяем сразу.
+    await waitFor(() => {
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      expect(onNavigate).toHaveBeenCalledWith("chapter-2");
+    });
     expect(screen.getByText("Глава 1 из 2")).toBeInTheDocument();
   });
 

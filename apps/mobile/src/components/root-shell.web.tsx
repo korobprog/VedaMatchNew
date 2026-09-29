@@ -12,6 +12,7 @@ import GestureHandlerRootView from 'react-native-gesture-handler/lib/module/comp
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/lib/auth/session';
 import { ChatStreamProvider } from '@/lib/chat/chat-stream';
+import { MediaPlayerProvider } from '@/lib/media/media-player-provider';
 import { ThemeProvider } from '@/theme/theme';
 import { RootStack } from './root-shell-stack';
 
@@ -102,7 +103,12 @@ export function RootProviders({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <SessionProvider>
             <ChatStreamProvider>
-              <CallGate>{children}</CallGate>
+              <CallGate>
+                {/* Плеер Медиатеки и в веб-сборке: в мини-приложении Telegram
+                    Медиатека своя, а не уход на сайт. `expo-audio` на вебе —
+                    обычный <audio> плюс Media Session для экрана блокировки. */}
+                <MediaPlayerProvider>{children}</MediaPlayerProvider>
+              </CallGate>
             </ChatStreamProvider>
           </SessionProvider>
         </ThemeProvider>
