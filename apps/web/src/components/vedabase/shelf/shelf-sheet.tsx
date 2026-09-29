@@ -13,6 +13,7 @@ export function ShelfSheet({
   onClose,
   children,
   surfaceClassName = "border-glass-brd bg-bg-0 text-text-0",
+  side = false,
 }: {
   open: boolean;
   title: string;
@@ -20,6 +21,8 @@ export function ShelfSheet({
   children: ReactNode;
   /** Подложка: портальная по умолчанию, у читалки — своя тема чтения. */
   surfaceClassName?: string;
+  /** Колонкой у правого края во всю высоту (VED-677), а не шторкой снизу. */
+  side?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -39,9 +42,15 @@ export function ShelfSheet({
         // Клик мимо содержимого — по самому <dialog>, то есть по подложке.
         if (event.target === event.currentTarget) onClose();
       }}
-      className={`m-0 mt-auto max-h-[85dvh] w-full max-w-none rounded-t-3xl border p-0 backdrop:bg-black/60 sm:m-auto sm:max-w-lg sm:rounded-3xl ${surfaceClassName}`}
+      className={`${
+        side
+          ? "m-0 ml-auto h-dvh max-h-dvh w-[min(90vw,22rem)] rounded-l-3xl"
+          : "m-0 mt-auto max-h-[85dvh] w-full max-w-none rounded-t-3xl sm:m-auto sm:max-w-lg sm:rounded-3xl"
+      } border p-0 backdrop:bg-black/60 ${surfaceClassName}`}
     >
-      <div className="flex max-h-[85dvh] flex-col">
+      <div
+        className={`flex flex-col [border-color:inherit] ${side ? "h-full" : "max-h-[85dvh]"}`}
+      >
         <header className="flex items-center gap-3 border-b [border-color:inherit] px-5 py-3">
           <h2 className="flex-grow font-display text-lg font-bold">{title}</h2>
           <button

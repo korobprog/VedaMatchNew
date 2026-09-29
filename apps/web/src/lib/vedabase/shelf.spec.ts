@@ -4,6 +4,11 @@ import {
   filterShelf,
   firstChapterSlug,
   latestProgress,
+  moveDockItem,
+  parseDockOrder,
+  recentProgress,
+  shelfHeading,
+  shelfSubtitle,
   readerPreferencesOf,
   SHELF_READER_DEFAULTS,
   stepFontSize,
@@ -211,5 +216,66 @@ describe("searchSnippet", () => {
 
   it("нет совпадения — начало текста", () => {
     expect(searchSnippet("Коротко", "zzz")).toBe("Коротко");
+  });
+});
+
+describe("recentProgress", () => {
+  const at = (bookSlug: string, lastReadAt: string) => ({
+    payload: {
+      bookSlug,
+      locator: { bookSlug, chapterSlug: "c1", unitId: "u" },
+      percentage: 10,
+      lastReadAt,
+    },
+  });
+
+  it("книги по свежести чтения", () => {
+    expect(
+      recentProgress([
+        at("a", "2026-09-01T00:00:00.000Z"),
+        { payload: "мусор" },
+        at("b", "2026-09-20T00:00:00.000Z"),
+      ]).map((item) => item.bookSlug),
+    ).toEqual(["b", "a"]);
+  });
+});
+
+describe("подписи полки (VED-676, VED-682)", () => {
+  it("преданному — архив ведической литературы, остальным — саморазвитие", () => {
+    expect(shelfSubtitle("devotee")).toMatch(/ведической/);
+    expect(shelfSubtitle(null)).toMatch(/ведической/);
+    expect(shelfSubtitle("seeker")).toBe("Архив книг для саморазвития");
+  });
+
+  it("заголовок с именем автора, если все книги его", () => {
+    const prabhupada = { author: "А. Ч. Бхактиведанта Свами Прабхупада" };
+    expect(shelfHeading([prabhupada, prabhupada])).toMatch(/Прабхупады/);
+    expect(shelfHeading([prabhupada, { author: null }])).toBe("Книги");
+    expect(shelfHeading([])).toBe("Книги");
+  });
+});
+
+describe("порядок кнопок нижней панели (VED-677)", () => {
+  it("сохранённый порядок, недостающие — в конец, мусор — прочь", () => {
+    expect(
+      parseDockOrder(JSON.stringify(["settings", "nope", "search", "search"])),
+    ).toEqual(["settings", "search", "bookmarks", "filters"]);
+    expect(parseDockOrder("{oops")).toEqual([
+      "bookmarks",
+      "search",
+      "filters",
+      "settings",
+    ]);
+  });
+
+  it("сдвиг на шаг, за край — без изменений", () => {
+    const order = parseDockOrder(null);
+    expect(moveDockItem(order, "search", -1)).toEqual([
+      "search",
+      "bookmarks",
+      "filters",
+      "settings",
+    ]);
+    expect(moveDockItem(order, "bookmarks", -1)).toEqual(order);
   });
 });

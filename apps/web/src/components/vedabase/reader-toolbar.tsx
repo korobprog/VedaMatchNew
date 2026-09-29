@@ -78,7 +78,8 @@ export function ReaderToolbar({
           type="button"
           onClick={onOpenContents}
           aria-label="Содержание"
-          className={`${icon} lg:hidden`}
+          // Вплотную к «назад» (VED-683): две кнопки навигации — одной парой.
+          className={`${icon} -ml-2 lg:hidden`}
         >
           <List aria-hidden className="size-5" />
         </button>

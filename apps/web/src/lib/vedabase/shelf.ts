@@ -86,13 +86,14 @@ function locatorOf(
 }
 
 /**
- * Что читали последним — для «Продолжить чтение». Записи читалки
- * (`progress` в IndexedDB) разбираются осторожно: битая строка пропускается.
+ * Что читали — по книге, свежее сверху: «История» в настройках полки и
+ * «Продолжить чтение» (VED-677). Записи читалки (`progress` в IndexedDB)
+ * разбираются осторожно: битая строка пропускается.
  */
-export function latestProgress(
+export function recentProgress(
   records: readonly { payload: unknown }[],
-): ShelfProgress | null {
-  let latest: ShelfProgress | null = null;
+): ShelfProgress[] {
+  const items: ShelfProgress[] = [];
   for (const { payload } of records) {
     if (!isRecord(payload)) continue;
     const locator = locatorOf(payload.locator);
@@ -103,14 +104,22 @@ export function latestProgress(
       typeof lastReadAt !== "string"
     )
       continue;
-    if (latest && latest.lastReadAt >= lastReadAt) continue;
-    latest = {
+    items.push({
       ...locator,
       percentage: Math.round(Math.min(100, Math.max(0, percentage))),
       lastReadAt,
-    };
+    });
   }
-  return latest;
+  return items.sort((left, right) =>
+    right.lastReadAt.localeCompare(left.lastReadAt),
+  );
+}
+
+/** Что читали последним — для «Продолжить чтение». */
+export function latestProgress(
+  records: readonly { payload: unknown }[],
+): ShelfProgress | null {
+  return recentProgress(records)[0] ?? null;
 }
 
 export interface ShelfBookmark {
@@ -233,4 +242,75 @@ export function searchSnippet(
   const start = Math.max(0, at - radius);
   const end = Math.min(flat.length, at + radius * 2);
   return `${start > 0 ? "…" : ""}${flat.slice(start, end).trim()}${end < flat.length ? "…" : ""}`;
+}
+
+/**
+ * Подпись под «Библиотекой» (VED-676): преданному — архив ведической
+ * литературы, остальным ступеням — книги для саморазвития. Без
+ * самоидентификации — как преданному: портал для преданных.
+ */
+export function shelfSubtitle(stage: SpiritualStage | null): string {
+  return stage === null || stage === "devotee"
+    ? "Архив ведической литературы — онлайн и офлайн"
+    : "Архив книг для саморазвития";
+}
+
+/**
+ * Заголовок полки (VED-682): если все видимые книги — Шрилы Прабхупады,
+ * так и сказать; иначе просто «Книги».
+ */
+export function shelfHeading(
+  books: readonly Pick<VedabaseBookManifest, "author">[],
+): string {
+  return books.length > 0 &&
+    books.every((book) => /прабхупад/i.test(book.author ?? ""))
+    ? "Книги Шрилы А. Ч. Бхактиведанты Свами Прабхупады"
+    : "Книги";
+}
+
+/** Кнопки нижней панели полки (VED-677). */
+export const DOCK_ITEMS = [
+  "bookmarks",
+  "search",
+  "filters",
+  "settings",
+] as const;
+export type DockItem = (typeof DOCK_ITEMS)[number];
+
+/** Ключ порядка кнопок в `localStorage` — удобство одного браузера. */
+export const DOCK_ORDER_KEY = "vm-library-dock";
+
+/**
+ * Сохранённый порядок кнопок: известные — в сохранённом порядке, новые и
+ * потерянные — дописываются в конец, мусор отбрасывается.
+ */
+export function parseDockOrder(raw: string | null): DockItem[] {
+  let saved: unknown = null;
+  try {
+    saved = raw ? JSON.parse(raw) : null;
+  } catch {
+    saved = null;
+  }
+  const known = Array.isArray(saved)
+    ? saved.filter(
+        (item, index): item is DockItem =>
+          (DOCK_ITEMS as readonly unknown[]).includes(item) &&
+          saved.indexOf(item) === index,
+      )
+    : [];
+  return [...known, ...DOCK_ITEMS.filter((item) => !known.includes(item))];
+}
+
+/** Сдвинуть кнопку на шаг влево (−1) или вправо (+1). */
+export function moveDockItem(
+  order: readonly DockItem[],
+  item: DockItem,
+  delta: -1 | 1,
+): DockItem[] {
+  const from = order.indexOf(item);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= order.length) return [...order];
+  const next = [...order];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
 }

@@ -1,7 +1,16 @@
-import { forwardRef, useCallback, useLayoutEffect, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { Bold } from "lucide-react";
 import type { VedabaseChapterDocument, VedabaseReadingUnit } from "@vedamatch/shared";
 import { applyMark, clearMarks, type ReaderMark } from "@/lib/vedabase/highlight-marks";
+import { BlockSpeakButton } from "./block-speak-button";
 import { CopyBlockButton } from "./copy-block-button";
+import { sanskritSegments, unitHeading } from "./reader-text";
 
 /** Выделение или заметка, привязанные к блоку стиха. */
 export interface ChapterMark extends ReaderMark {
@@ -53,6 +62,8 @@ export const ChapterContent = forwardRef<
   }
 >(function ChapterContent({ chapter, onUnitActivate, marks = [] }, ref) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  /** Стихи, где пословный перевод показан с санскритом жирным (VED-683). */
+  const [boldUnits, setBoldUnits] = useState<ReadonlySet<string>>(new Set());
   const setRoot = useCallback(
     (node: HTMLDivElement | null) => {
       rootRef.current = node;
@@ -80,7 +91,7 @@ export const ChapterContent = forwardRef<
       );
       if (block) applyMark(block, mark);
     }
-  }, [chapter, marks]);
+  }, [chapter, marks, boldUnits]);
 
   return (
     <div ref={setRoot} className="divide-y divide-[var(--reader-border)]">
@@ -95,7 +106,7 @@ export const ChapterContent = forwardRef<
           className="scroll-mt-32 py-8 first:pt-0 focus-visible:outline-offset-8"
         >
           <h2 className="reader-accent text-center text-xl font-semibold">
-            {unit.title}
+            {unitHeading(unit.title)}
           </h2>
           {fields.map(({ key, label }) => {
             const html = unit[key];
@@ -107,14 +118,63 @@ export const ChapterContent = forwardRef<
                   <h3 className="reader-muted text-xs font-semibold uppercase tracking-wide">
                     {label}
                   </h3>
-                  <CopyBlockButton html={safeHtml} label={`${unit.title}, ${label}`} />
+                  <div className="flex items-center gap-1.5">
+                    {(key === "transliterationHtml" || key === "synonymsHtml") && (
+                      <BlockSpeakButton
+                        id={`${unit.id}/${key}`}
+                        text={plainText(safeHtml)}
+                        label={`${unit.title}, ${label}`}
+                      />
+                    )}
+                    {key === "synonymsHtml" && (
+                      <button
+                        type="button"
+                        aria-pressed={boldUnits.has(unit.id)}
+                        aria-label="Санскрит жирным"
+                        title="Санскрит жирным"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setBoldUnits((current) => {
+                            const next = new Set(current);
+                            if (next.has(unit.id)) next.delete(unit.id);
+                            else next.add(unit.id);
+                            return next;
+                          });
+                        }}
+                        className="reader-muted reader-bordered reader-hover inline-flex size-8 flex-none items-center justify-center rounded-lg border aria-pressed:bg-[var(--reader-surface-2)] aria-pressed:text-[var(--reader-text)]"
+                      >
+                        <Bold aria-hidden className="size-4" />
+                      </button>
+                    )}
+                    <CopyBlockButton html={safeHtml} label={`${unit.title}, ${label}`} />
+                  </div>
                 </div>
-                <div
-                  data-vedabase-block={key}
-                  data-testid={`block-${unit.id}-${key}`}
-                  className="space-y-3 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: safeHtml }}
-                />
+                {key === "synonymsHtml" && boldUnits.has(unit.id) ? (
+                  // Тот же текст, что в разметке, — смещения выделений не
+                  // съезжают; курсив исходника тут не нужен, нужен санскрит.
+                  <div
+                    data-vedabase-block={key}
+                    data-testid={`block-${unit.id}-${key}`}
+                    className="leading-relaxed"
+                  >
+                    <p>
+                      {sanskritSegments(plainText(safeHtml)).map((segment, index) =>
+                        segment.bold ? (
+                          <strong key={index}>{segment.text}</strong>
+                        ) : (
+                          <span key={index}>{segment.text}</span>
+                        ),
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    data-vedabase-block={key}
+                    data-testid={`block-${unit.id}-${key}`}
+                    className="space-y-3 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: safeHtml }}
+                  />
+                )}
               </section>
             );
           })}
@@ -123,6 +183,11 @@ export const ChapterContent = forwardRef<
     </div>
   );
 });
+
+/** Текст блока как есть — то же, что видят смещения выделений. */
+function plainText(html: string): string {
+  return new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
+}
 
 export function sanitizeReaderHtml(html: string): string {
   const parsed = new DOMParser().parseFromString(html, "text/html");

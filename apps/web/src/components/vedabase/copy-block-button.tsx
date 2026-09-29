@@ -35,15 +35,17 @@ export function CopyBlockButton({ html, label }: { html: string; label: string }
       type="button"
       onClick={() => void copy()}
       aria-label={`Копировать: ${label}`}
-      className="reader-muted reader-bordered reader-hover inline-flex min-h-8 flex-none items-center gap-1 rounded-lg border px-2 text-xs font-medium"
+      title="Копировать"
+      className="reader-muted reader-bordered reader-hover inline-flex size-8 flex-none items-center justify-center rounded-lg border"
     >
       {state === "copied" ? (
-        <Check aria-hidden className="size-3.5" />
+        <Check aria-hidden className="size-4" />
       ) : (
-        <Copy aria-hidden className="size-3.5" />
+        <Copy aria-hidden className="size-4" />
       )}
       {/* Итог читается и скринридером: подпись меняется в живой области. */}
-      <span aria-live="polite">
+      {/* Значком (VED-683): подпись осталась для скринридера. */}
+      <span aria-live="polite" className="sr-only">
         {state === "copied"
           ? "Скопировано"
           : state === "failed"

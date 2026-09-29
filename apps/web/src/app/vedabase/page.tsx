@@ -26,6 +26,7 @@ export default async function VedabasePage() {
         userId={user.id}
         books={library.books}
         initialFilters={{ stages: filters.stages, lineages: filters.lineages }}
+        stage={user.spiritualStage ?? null}
       />
     </div>
   );
