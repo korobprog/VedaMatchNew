@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import QRCode from "qrcode";
 import {
+  Check,
   Download,
   ExternalLink,
   Music2,
@@ -10,6 +12,7 @@ import {
   Play,
   Radio,
   Send,
+  Share2,
   Smartphone,
 } from "lucide-react";
 import type {
@@ -33,7 +36,9 @@ import {
 } from "./radio-sync";
 import {
   radioAvatarStack,
+  radioClock,
   radioListenersLabel,
+  radioProgress,
   radioPromoIndex,
 } from "./public-radio-view";
 
@@ -83,6 +88,16 @@ export function PublicRadio({
     null,
   );
   const [device, setDevice] = useState<DownloadDevice | null>(null);
+  /** Часы устройства, раз в секунду, — для полосы прогресса. */
+  const [nowMs, setNowMs] = useState(0);
+  /** Баннер, выбранный точкой; `null` — меняется с записью. */
+  const [promoPick, setPromoPick] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     // Вложенной функцией, как в AppDownloadSection: устройство знает только
@@ -162,6 +177,18 @@ export function PublicRadio({
     startItem(plan.item, plan.offset);
   }
 
+  /** «Поделиться эфиром»: системное окно, а где его нет — ссылка в буфер. */
+  async function share() {
+    const url = `${window.location.origin}/radio`;
+    if (navigator.share) {
+      await navigator.share({ title: "Радио VedaMatch", url }).catch(() => {});
+      return;
+    }
+    await navigator.clipboard?.writeText(url).catch(() => {});
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
   function pause() {
     audioRef.current?.pause();
     setPlaying(false);
@@ -190,20 +217,30 @@ export function PublicRadio({
   }
 
   const state = loaded?.state ?? null;
-  // Что показывать, пока звук не включён: эфир на момент ответа. Ответ
-  // обновляется раз в 20 секунд — точнее для подписи не нужно.
+  // Серверное «сейчас» по часам из таймера: до первого тика — момент ответа.
+  const serverNow =
+    state && loaded
+      ? radioServerNow(
+          state,
+          loaded.receivedAt,
+          Math.max(nowMs, loaded.receivedAt),
+        )
+      : 0;
   const onAir: MusicRadioItemDto | null =
     (playing ? playingItem : null) ??
-    (state
-      ? (radioItemAt(state, new Date(state.serverTime).getTime()) ??
-        state.current)
-      : null);
+    (state ? (radioItemAt(state, serverNow) ?? state.current) : null);
+  const progress = radioProgress(onAir, serverNow);
+  // `?? []`: страница и API выкатываются вместе, но ответ старого API без
+  // поля не должен ронять страницу.
+  const recent = state?.recent ?? [];
   const listeners = state?.listeners ?? 0;
   const stack = radioAvatarStack(state?.listenerAvatars ?? [], listeners);
   const promos = PROMO_SLUGS.map((slug) => getServiceContent(slug)).filter(
     (service): service is ServiceContent => !!service,
   );
-  const promo = promos[radioPromoIndex(onAir?.slotId ?? null, promos.length)];
+  const promoIndex =
+    promoPick ?? radioPromoIndex(onAir?.slotId ?? null, promos.length);
+  const promo = promos[promoIndex];
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-12 px-4 pb-28 sm:px-6 sm:pb-16">
@@ -228,6 +265,13 @@ export function PublicRadio({
             Киртаны, бхаджаны и записи с программ — один эфир для всех, круглые
             сутки. Нажмите «Слушать»: вход не нужен.
           </p>
+          <a
+            href="#install"
+            className="inline-flex min-h-11 items-center gap-2 self-start rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 font-semibold text-white transition-transform hover:-translate-y-0.5"
+          >
+            <Download aria-hidden className="size-5" />
+            Установить приложение
+          </a>
 
           <div className="glass flex flex-col gap-5 rounded-3xl border border-glass-brd p-5 sm:p-6">
             <div className="flex items-center gap-4 sm:gap-5">
@@ -261,6 +305,20 @@ export function PublicRadio({
             </div>
 
             <div
+              role="progressbar"
+              aria-label="Сколько отзвучало из записи"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress * 100)}
+              className="h-1.5 overflow-hidden rounded-full bg-bg-2"
+            >
+              <div
+                className="h-full rounded-full bg-cyan"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+
+            <div
               className="flex flex-wrap items-center gap-4 rounded-2xl bg-bg-2 px-4 py-3"
               aria-live="polite"
             >
@@ -291,11 +349,29 @@ export function PublicRadio({
               </span>
             </div>
 
-            {state?.next && (
-              <p className="text-sm text-text-1">
-                Далее: {itemTitle(state.next, false)}
+            <div className="flex items-center gap-3">
+              {/* Следующая запись известна эфиру за несколько минут до
+                  конца текущей — до того строки нет. */}
+              <p className="flex-grow text-sm text-text-1">
+                {state?.next ? `Далее: ${itemTitle(state.next, false)}` : ""}
               </p>
-            )}
+              <button
+                type="button"
+                onClick={() => void share()}
+                aria-label={copied ? "Ссылка скопирована" : "Поделиться эфиром"}
+                title={copied ? "Ссылка скопирована" : "Поделиться эфиром"}
+                className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-glass-brd text-text-0 hover:border-cyan/60"
+              >
+                {copied ? (
+                  <Check aria-hidden className="size-4" />
+                ) : (
+                  <Share2 aria-hidden className="size-4" />
+                )}
+              </button>
+              <span role="status" className="sr-only">
+                {copied ? "Ссылка скопирована" : ""}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -327,6 +403,60 @@ export function PublicRadio({
             <span className="max-w-2xl text-text-1">{promo.description}</span>
             <span className="mt-2 font-semibold text-cyan">Подробнее →</span>
           </Link>
+          <div className="flex justify-center gap-1">
+            {promos.map((item, index) => (
+              <button
+                key={item.slug}
+                type="button"
+                onClick={() => setPromoPick(index)}
+                aria-label={`Баннер ${index + 1}: ${item.name}`}
+                aria-current={index === promoIndex}
+                className="flex size-11 items-center justify-center"
+              >
+                <span
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    index === promoIndex ? "w-6 bg-magenta" : "w-1.5 bg-text-2",
+                  )}
+                />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section aria-labelledby="radio-recent" className="flex flex-col gap-4">
+          <h2
+            id="radio-recent"
+            className="font-display text-2xl font-bold text-text-0"
+          >
+            Недавно в эфире
+          </h2>
+          <ul className="glass divide-y divide-glass-brd overflow-hidden rounded-2xl border border-glass-brd">
+            {recent.map((item) => (
+              <li
+                key={item.slotId}
+                className="flex items-center gap-4 px-5 py-3"
+              >
+                <span className="w-12 shrink-0 font-mono text-sm text-text-2">
+                  {radioClock(item.startsAt)}
+                </span>
+                <span className="min-w-0 flex-grow truncate text-text-0">
+                  {item.title}
+                  {item.artistName && (
+                    <span className="text-text-1"> — {item.artistName}</span>
+                  )}
+                </span>
+                <Link
+                  href={`/music/tracks/${item.trackId}`}
+                  className="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-cyan"
+                >
+                  В медиатеке
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -408,6 +538,26 @@ function InstallCard({
   showTelegram: boolean;
   device: DownloadDevice | null;
 }) {
+  const [qrSvg, setQrSvg] = useState<string | null>(null);
+
+  // QR — только с компьютера: навёл камеру телефона — открылась страница
+  // установки. Тот же код, что на `/app` (AppDownloadSection).
+  useEffect(() => {
+    if (device !== "desktop") return;
+    let cancelled = false;
+    void QRCode.toString(`${window.location.origin}/app`, {
+      type: "svg",
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: { dark: "#000000", light: "#ffffff" },
+    }).then((svg) => {
+      if (!cancelled) setQrSvg(svg);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [device]);
+
   const android = manifest ? (
     <a
       key="android"
@@ -488,12 +638,28 @@ function InstallCard({
           </span>
         </a>
       )}
+      {qrSvg && (
+        <div className="mt-1 flex items-center gap-4">
+          <div
+            className="w-24 shrink-0 rounded-xl bg-white p-2"
+            role="img"
+            aria-label="QR-код страницы установки приложения"
+            // SVG рисует библиотека qrcode — только геометрия кода, без
+            // чужого текста.
+            dangerouslySetInnerHTML={{ __html: qrSvg }}
+          />
+          <p className="text-sm text-text-1">
+            На компьютере? Наведите камеру телефона — откроется страница
+            установки.
+          </p>
+        </div>
+      )}
       <Link
         href="/app"
         className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-semibold text-cyan"
       >
         <ExternalLink aria-hidden className="size-4" />
-        Все способы установки и QR-код
+        Все способы установки
       </Link>
     </aside>
   );
