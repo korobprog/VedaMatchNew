@@ -958,6 +958,26 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
               )}
             </button>
           )}
+          {/* «Последние» (VED-485): свои задачи, которые открывал или
+              трогал, одним списком, свежие сверху. С VED-680 — сразу за
+              «Свернуть все», перед «По дате»: так просил тестировщик. */}
+          <button
+            type="button"
+            aria-pressed={groupMode === "recent"}
+            onClick={() => toggleGroupMode("recent")}
+            aria-label="Последние"
+            title={
+              groupMode === "recent"
+                ? "Показаны последние задачи, с которыми вы работали"
+                : "Последние задачи, которые вы открывали или меняли: свежие сверху"
+            }
+            className={workToolbarButtonClass({
+              pressed: groupMode === "recent",
+            })}
+          >
+            <Clock aria-hidden className="size-4 shrink-0" />
+            <span className="hidden sm:inline">Последние</span>
+          </button>
           <button
             type="button"
             aria-pressed={groupMode === "date"}
@@ -985,26 +1005,6 @@ export function WorkBoardView({ spaceId }: { spaceId: string }) {
             })}
           >
             По важности
-          </button>
-          {/* «Последние» (VED-485) — на месте «Архива», переехавшего к
-              названию среды: свои задачи, которые открывал или трогал,
-              одним списком, свежие сверху. */}
-          <button
-            type="button"
-            aria-pressed={groupMode === "recent"}
-            onClick={() => toggleGroupMode("recent")}
-            aria-label="Последние"
-            title={
-              groupMode === "recent"
-                ? "Показаны последние задачи, с которыми вы работали"
-                : "Последние задачи, которые вы открывали или меняли: свежие сверху"
-            }
-            className={workToolbarButtonClass({
-              pressed: groupMode === "recent",
-            })}
-          >
-            <Clock aria-hidden className="size-4 shrink-0" />
-            <span className="hidden sm:inline">Последние</span>
           </button>
           {/* «Архив» и «Пригласить» — в конце ряда вида (VED-525), а не
               отдельной строкой под названием: ряд выше освободился, и

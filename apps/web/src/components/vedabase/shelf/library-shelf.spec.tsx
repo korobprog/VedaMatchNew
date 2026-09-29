@@ -28,7 +28,7 @@ const books = [
 
 /* VED-662: полка Библиотеки. */
 describe("LibraryShelf", () => {
-  it("книги ведут в первую главу, внизу — панель из пяти действий", () => {
+  it("книги ведут в первую главу, внизу — панель из четырёх действий", () => {
     render(
       <LibraryShelf
         userId="u1"
@@ -40,9 +40,10 @@ describe("LibraryShelf", () => {
       screen.getByRole("link", { name: /Бхагавад-гита/ }).getAttribute("href"),
     ).toBe("/vedabase/books/bhagavad-gita/c1");
     const dock = screen.getByRole("navigation", { name: "Панель библиотеки" });
-    for (const label of ["Кто я", "Линия", "Закладки", "Поиск", "Викторина"]) {
-      expect(dock.textContent).toContain(label);
-    }
+    // VED-677: «Кто я» и «Линия» — в «Фильтрах», «Викторина» — в «Настройках».
+    expect(
+      [...dock.querySelectorAll("button")].map((button) => button.textContent),
+    ).toEqual(["Закладки", "Поиск", "Фильтры", "Настройки"]);
   });
 
   it("фильтр портала сразу сужает полку, «Показать все» его снимает", () => {
