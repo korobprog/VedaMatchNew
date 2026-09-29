@@ -12,6 +12,7 @@ const chapter: TourChapter = {
     desktopUrl: "https://v/union.mp4",
     mobileUrl: "https://v/union-vertical.mp4",
     posterUrl: null,
+    mobilePosterUrl: null,
   },
   cta: { label: "О Знакомствах", href: "/services/union" },
 };
