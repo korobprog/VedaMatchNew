@@ -2,11 +2,15 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { MusicRadioPublicStateDto } from "@vedamatch/shared";
-import { fetchPublicMusicRadio } from "@/lib/music-radio-client";
+import {
+  fetchPublicMusicRadio,
+  fetchPublicSharedTrack,
+} from "@/lib/music-radio-client";
 import { PublicRadio } from "./public-radio";
 
 vi.mock("@/lib/music-radio-client", () => ({
   fetchPublicMusicRadio: vi.fn(),
+  fetchPublicSharedTrack: vi.fn(),
 }));
 
 function makeState(
@@ -116,5 +120,28 @@ describe("PublicRadio", () => {
     expect(dots.length).toBeGreaterThan(1);
     await user.click(dots[1]);
     expect(dots[1]).toHaveAttribute("aria-current", "true");
+  });
+
+  it("запись по ссылке «Поделиться» — отдельной карточкой над эфиром (VED-661)", async () => {
+    vi.mocked(fetchPublicMusicRadio).mockResolvedValue(makeState());
+    vi.mocked(fetchPublicSharedTrack).mockResolvedValue({
+      track: {
+        id: "t9",
+        title: "Шикшаштака",
+        artist: { name: "Мантры" },
+        coverUrl: null,
+      } as never,
+      streamUrl: "https://s/t9.mp3",
+    });
+    render(
+      <PublicRadio manifest={null} showTelegram={false} sharedTrackId="t9" />,
+    );
+
+    expect(await screen.findByText("Вам прислали запись")).toBeInTheDocument();
+    expect(screen.getByText("Шикшаштака")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Слушать «Шикшаштака»" }),
+    ).toBeEnabled();
+    expect(fetchPublicSharedTrack).toHaveBeenCalledWith("t9");
   });
 });

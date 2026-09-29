@@ -2,6 +2,7 @@ import type {
   MusicArtistPageDto,
   MusicRadioInsertsDto,
   MusicRadioPublicStateDto,
+  MusicRadioSharedTrackDto,
   MusicRadioStateDto,
   MusicTrackDto,
 } from "@vedamatch/shared";
@@ -40,6 +41,18 @@ export async function fetchPublicMusicRadio(): Promise<MusicRadioPublicStateDto>
   });
   if (!res.ok) throw new Error(`Эфир недоступен (${res.status})`);
   return (await res.json()) as MusicRadioPublicStateDto;
+}
+
+/** Запись, которой поделились (VED-661), — гостю, без cookie. */
+export async function fetchPublicSharedTrack(
+  trackId: string,
+): Promise<MusicRadioSharedTrackDto> {
+  const res = await fetch(
+    `${API_URL}/music/radio/public/track/${encodeURIComponent(trackId)}`,
+    { credentials: "omit", cache: "no-store" },
+  );
+  if (!res.ok) throw new Error(`Запись недоступна (${res.status})`);
+  return (await res.json()) as MusicRadioSharedTrackDto;
 }
 
 /** «Слушаю»: раз в 20 секунд, ответ — свежий эфир. */

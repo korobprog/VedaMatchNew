@@ -65,6 +65,8 @@ export interface MusicCategoryRow {
 export interface MusicTrackRow extends MusicCoverSource {
   id: string;
   title: string;
+  /** Своя подпись исполнителя (VED-660). `undefined` — поле не выбрано. */
+  artistCredit?: string | null;
   durationSeconds: number;
   language: string | null;
   isLiveRecording: boolean;
@@ -134,12 +136,14 @@ export function hasTrackLyrics(
   );
 }
 
-function toArtistRef(artist: MusicArtistRow | null) {
+function toArtistRef(artist: MusicArtistRow | null, credit?: string | null) {
   if (!artist) return null;
   return {
     id: artist.id,
     slug: artist.slug,
-    name: artist.name,
+    // Своя подпись записи (VED-660) — только в карточке этой записи: папка
+    // исполнителя и его имя в других записях не меняются.
+    name: credit?.trim() || artist.name,
     // Линия исполнителя — окну «Линия» с домиком (VED-616). Только когда
     // строка её несёт: вложенные выборки без поля не выдумывают «не задана».
     ...(artist.lineage === undefined
@@ -160,7 +164,8 @@ export function toMusicTrackDto(
   return {
     id: row.id,
     title: row.title,
-    artist: toArtistRef(row.artist),
+    artist: toArtistRef(row.artist, row.artistCredit),
+    artistCredit: row.artistCredit ?? null,
     album: toAlbumRef(row.album),
     categories: row.categories.map(({ category }) => ({
       id: category.id,

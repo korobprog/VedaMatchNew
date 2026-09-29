@@ -751,6 +751,16 @@ export class MusicAdminCatalogService {
                 )!,
               }),
           ...(body.artistId === undefined ? {} : { artistId: body.artistId }),
+          ...(body.artistCredit === undefined
+            ? {}
+            : {
+                artistCredit: this.text(
+                  body.artistCredit,
+                  'Подпись исполнителя',
+                  MAX_NAME_LENGTH,
+                  false,
+                ),
+              }),
           ...(body.albumId === undefined ? {} : { albumId: body.albumId }),
           ...(body.language === undefined
             ? {}

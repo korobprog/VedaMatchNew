@@ -14,6 +14,7 @@ import {
   type MusicRadioInsertsDto,
   type MusicRadioItemDto,
   type MusicRadioPublicStateDto,
+  type MusicRadioSharedTrackDto,
   type MusicRadioStateDto,
 } from '@vedamatch/shared';
 import { Prisma } from '@prisma/client';
@@ -212,6 +213,19 @@ export class MusicRadioService {
             : [],
         )
         .slice(0, MUSIC_RADIO_PUBLIC_RECENT),
+    };
+  }
+
+  /** Запись по ссылке «Поделиться» (VED-661) — гостю, без входа. */
+  async sharedTrack(id: string): Promise<MusicRadioSharedTrackDto> {
+    const track = await this.prisma.musicTrack.findFirst({
+      where: { id, status: 'published', ...catalogOnlyCondition() },
+      include: TRACK_INCLUDE,
+    });
+    if (!track) throw new NotFoundException('Запись не найдена');
+    return {
+      track: toMusicTrackDto(track, this.publicBaseUrl),
+      streamUrl: await this.storage.presignGet(track.storageKey),
     };
   }
 

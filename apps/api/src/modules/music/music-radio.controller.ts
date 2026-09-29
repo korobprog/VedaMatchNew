@@ -72,6 +72,17 @@ export class MusicRadioPublicController {
   state() {
     return this.radio.publicState();
   }
+
+  /**
+   * Запись, которой поделились (VED-661): «Поделиться» ведёт сюда, на
+   * радио, чтобы человеку не нужно было сначала регистрироваться. Только
+   * опубликованная запись каталога — черновик и главу аудиокниги по ссылке
+   * не отдаём.
+   */
+  @Get('track/:id')
+  sharedTrack(@Param('id') id: string) {
+    return this.radio.sharedTrack(id);
+  }
 }
 
 /** Голосовые вставки в эфир — админка Музыки. */

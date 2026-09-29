@@ -138,7 +138,19 @@ describe('toMusicTrackDto', () => {
       playCount: 12,
       publishedAt: '2026-08-27T10:00:00.000Z',
       hasLyrics: false,
+      artistCredit: null,
     });
+  });
+
+  it('своя подпись исполнителя — только в этой записи (VED-660)', () => {
+    const dto = toMusicTrackDto({ ...track, artistCredit: 'Мантры' }, BASE);
+
+    expect(dto.artist).toEqual({
+      id: 'a1',
+      slug: 'audarya-dhama-das',
+      name: 'Мантры',
+    });
+    expect(dto.artistCredit).toBe('Мантры');
   });
 
   it('признак текста — без самого текста (VED-594)', () => {

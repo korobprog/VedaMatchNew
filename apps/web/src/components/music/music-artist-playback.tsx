@@ -13,6 +13,7 @@ import { MusicTrackRow } from "./music-track-row";
 import { sortTracks, type TrackSortMode } from "./sort-tracks";
 import { ARTIST_VIEW_KEY } from "./track-view";
 import { useTrackView } from "./use-track-view";
+import { MusicArtistBioButton } from "./artist-bio-button";
 
 /**
  * Верхние кнопки «Слушать»/«Перемешать» и секция «Записи» на странице
@@ -39,11 +40,16 @@ export function MusicArtistPlayback({
   tracks,
   isMusicEditor,
   uploadHref,
+  artistId,
+  bio = null,
   children,
 }: {
   tracks: MusicTrackDto[];
   isMusicEditor: boolean;
   uploadHref: string;
+  artistId?: string;
+  /** Биография — кнопкой в строке «Записи» (VED-661). */
+  bio?: string | null;
   children?: React.ReactNode;
 }) {
   // Выбор — в `useState`, не в `localStorage`: это не та же привычка, что
@@ -74,6 +80,11 @@ export function MusicArtistPlayback({
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <MusicPlayAllButton queue={queue} />
         <MusicPlayModeButtons queue={queue} showShuffle={false} />
+        {/* «Перемешать» — в этом ряду, у правого края (VED-661): его место
+            в строке «Записи» заняла «Биография». */}
+        <span className="ml-auto">
+          <MusicShuffleIconButton queue={queue} />
+        </span>
       </div>
 
       {children}
@@ -100,7 +111,13 @@ export function MusicArtistPlayback({
               Загрузить
             </Link>
           )}
-          <MusicShuffleIconButton queue={queue} />
+          {artistId && (
+            <MusicArtistBioButton
+              artistId={artistId}
+              bio={bio}
+              canEdit={isMusicEditor}
+            />
+          )}
           {tracks.length > 0 && (
             <button
               type="button"

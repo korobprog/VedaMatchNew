@@ -19,6 +19,7 @@ import {
 import type {
   MusicRadioItemDto,
   MusicRadioPublicStateDto,
+  MusicRadioSharedTrackDto,
 } from "@vedamatch/shared";
 import type { AppManifest } from "@/lib/app-download";
 import { formatApkSizeMb } from "@/lib/app-download";
@@ -26,7 +27,10 @@ import {
   resolveDownloadDevice,
   type DownloadDevice,
 } from "@/lib/app-download-device";
-import { fetchPublicMusicRadio } from "@/lib/music-radio-client";
+import {
+  fetchPublicMusicRadio,
+  fetchPublicSharedTrack,
+} from "@/lib/music-radio-client";
 import { getServiceContent, type ServiceContent } from "@/lib/service-content";
 import { cn } from "@/lib/utils";
 import {
@@ -76,11 +80,17 @@ interface Loaded {
 export function PublicRadio({
   manifest,
   showTelegram,
+  sharedTrackId = null,
 }: {
   manifest: AppManifest | null;
   showTelegram: boolean;
+  /** Запись по ссылке «Поделиться» (VED-661): сначала она, потом эфир. */
+  sharedTrackId?: string | null;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const sharedAudioRef = useRef<HTMLAudioElement>(null);
+  const [shared, setShared] = useState<MusicRadioSharedTrackDto | null>(null);
+  const [sharedPlaying, setSharedPlaying] = useState(false);
   const loadedRef = useRef<Loaded | null>(null);
   const playingItemRef = useRef<MusicRadioItemDto | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -100,6 +110,26 @@ export function PublicRadio({
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!sharedTrackId) return;
+    let cancelled = false;
+    fetchPublicSharedTrack(sharedTrackId)
+      .then((dto) => {
+        if (!cancelled) setShared(dto);
+      })
+      // Запись сняли или ссылка кривая — просто эфир, без карточки.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedTrackId]);
+
+  /** Запись по ссылке: эфир на паузу, играет она. */
+  function playShared() {
+    audioRef.current?.pause();
+    void sharedAudioRef.current?.play().catch(() => setSharedPlaying(false));
+  }
 
   useEffect(() => {
     // Вложенной функцией, как в AppDownloadSection: устройство знает только
@@ -166,6 +196,7 @@ export function PublicRadio({
   }, [refresh]);
 
   async function play() {
+    sharedAudioRef.current?.pause();
     const current = (await refresh()) ?? loadedRef.current;
     if (!current) return;
     const plan = radioSyncPlan(
@@ -258,6 +289,20 @@ export function PublicRadio({
         onPause={() => setPlaying(false)}
         onPlay={() => setPlaying(true)}
       />
+      {shared?.streamUrl && (
+        <audio
+          ref={sharedAudioRef}
+          src={shared.streamUrl}
+          preload="none"
+          onPlay={() => setSharedPlaying(true)}
+          onPause={() => setSharedPlaying(false)}
+          // Дослушал присланную запись — дальше эфир (VED-661).
+          onEnded={() => {
+            setSharedPlaying(false);
+            void play();
+          }}
+        />
+      )}
 
       <section className="grid gap-8 lg:grid-cols-12">
         <div className="flex flex-col gap-6 lg:col-span-7">
@@ -289,6 +334,58 @@ export function PublicRadio({
               Установить приложение
             </a>
           </div>
+
+          {shared && (
+            <section
+              aria-labelledby="radio-shared"
+              className="glass flex items-center gap-4 rounded-3xl border border-magenta/40 p-5 sm:gap-5 sm:p-6"
+            >
+              <Cover
+                item={
+                  {
+                    kind: "track",
+                    track: shared.track,
+                  } as MusicRadioItemDto
+                }
+              />
+              <div className="flex min-w-0 flex-grow flex-col gap-1">
+                <span
+                  id="radio-shared"
+                  className="text-xs font-semibold uppercase tracking-wider text-magenta"
+                >
+                  Вам прислали запись
+                </span>
+                <span className="truncate font-display text-lg text-text-0 sm:text-xl">
+                  {shared.track.title}
+                </span>
+                {shared.track.artist && (
+                  <span className="truncate text-sm text-text-1">
+                    {shared.track.artist.name}
+                  </span>
+                )}
+                <span className="text-xs text-text-2">
+                  После неё начнётся эфир радио.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  sharedPlaying ? sharedAudioRef.current?.pause() : playShared()
+                }
+                disabled={!shared.streamUrl}
+                aria-label={
+                  sharedPlaying ? "Пауза" : `Слушать «${shared.track.title}»`
+                }
+                className="flex size-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-magenta to-[#B23EFF] text-white transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+              >
+                {sharedPlaying ? (
+                  <Pause aria-hidden className="size-7" />
+                ) : (
+                  <Play aria-hidden className="size-7 translate-x-0.5" />
+                )}
+              </button>
+            </section>
+          )}
 
           <div className="glass flex flex-col gap-5 rounded-3xl border border-glass-brd p-5 sm:p-6">
             <div className="flex items-center gap-4 sm:gap-5">

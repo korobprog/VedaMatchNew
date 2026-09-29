@@ -4,6 +4,7 @@ import { buildTrackEditPatch, type MusicTrackEditState } from "./music-track-edi
 const initial: MusicTrackEditState = {
   title: "Maha Mantra",
   artistId: "a1",
+  artistCredit: "",
   lyrics: "Харе Кришна",
   transliteration: "",
   translation: "",
@@ -61,5 +62,17 @@ describe("buildTrackEditPatch", () => {
     expect(buildTrackEditPatch(initial, initial, null)).toEqual({
       coverKey: null,
     });
+  });
+
+  it("своя подпись исполнителя: вписали — уходит, стёрли — null (VED-660)", () => {
+    expect(
+      buildTrackEditPatch(initial, { ...initial, artistCredit: " Мантры " }),
+    ).toEqual({ artistCredit: "Мантры" });
+    expect(
+      buildTrackEditPatch(
+        { ...initial, artistCredit: "Мантры" },
+        { ...initial, artistCredit: "  " },
+      ),
+    ).toEqual({ artistCredit: null });
   });
 });
