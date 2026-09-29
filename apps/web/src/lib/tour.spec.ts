@@ -123,3 +123,17 @@ describe("глава «Знакомства»", () => {
     }
   });
 });
+
+describe("глава «Музыка и Радио»", () => {
+  const music = TOUR_CHAPTERS.find((chapter) => chapter.id === "music")!;
+
+  it("обе версии видео Медиатеки лежат в папке тура", () => {
+    expect(music.video.desktopUrl).toBe(`${TOUR_MEDIA_BASE}/music-v1-16x9.mp4`);
+    expect(music.video.mobileUrl).toBe(`${TOUR_MEDIA_BASE}/music-v1-9x16.mp4`);
+    expect(music.video.mobilePosterUrl).toBe(`${TOUR_MEDIA_BASE}/music-v1-9x16.jpg`);
+  });
+
+  it("рекламный текст без латиницы внутри русских слов", () => {
+    expect(music.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
+  });
+});
