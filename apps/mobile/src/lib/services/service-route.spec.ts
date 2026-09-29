@@ -20,11 +20,11 @@ describe('serviceTarget', () => {
     expect(hasInAppScreen('blog')).toBe(true);
   });
 
-  it('Медиатека в приложении — своими экранами, в веб-сборке — сайтом (VED-331)', () => {
+  it('Медиатека своими экранами и в приложении, и в веб-сборке — мини-приложении Telegram', () => {
     expect(serviceTarget({ slug: 'music', url: '/music' }, 'android')).toEqual({ kind: 'in-app', path: '/music' });
-    expect(serviceTarget({ slug: 'music', url: '/music' }, 'web')).toEqual({ kind: 'site', url: '/music' });
+    expect(serviceTarget({ slug: 'music', url: '/music' }, 'web')).toEqual({ kind: 'in-app', path: '/music' });
     expect(hasInAppScreen('music', 'android')).toBe(true);
-    expect(hasInAppScreen('music', 'web')).toBe(false);
+    expect(hasInAppScreen('music', 'web')).toBe(true);
     // Остальные свои экраны веб-сборка не теряет.
     expect(serviceTarget({ slug: 'blog', url: '/blog' }, 'web').kind).toBe('in-app');
   });
