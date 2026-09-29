@@ -52,6 +52,8 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
   "vedabase.book-updated": "Книга Библиотеки изменена",
   "blog.feed-approved": "Пост принят в общую ленту Блога",
   "blog.feed-rejected": "Пост отклонён для общей ленты Блога",
+  "vedabase.file-added": "К книге Библиотеки добавлен файл",
+  "vedabase.file-removed": "У книги Библиотеки убран файл",
   "contacts.tag-created": "Добавлен тег справочника",
   "contacts.tag-updated": "Изменён тег справочника",
   "contacts.tag-deleted": "Удалён тег справочника",

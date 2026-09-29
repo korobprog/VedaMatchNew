@@ -57,6 +57,8 @@ const ACTION_SERVICE: Record<AdminAuditAction, AdminServiceSlug | null> = {
   'vedabase.book-updated': 'vedabase',
   'blog.feed-approved': 'blog',
   'blog.feed-rejected': 'blog',
+  'vedabase.file-added': 'vedabase',
+  'vedabase.file-removed': 'vedabase',
   'contacts.tag-created': 'chat',
   'contacts.tag-updated': 'chat',
   'contacts.tag-deleted': 'chat',

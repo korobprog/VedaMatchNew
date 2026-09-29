@@ -14,8 +14,8 @@ import {
 
 /**
  * Тип содержимого по формату. Берём его сами, а не у браузера: для djvu,
- * fb2 и mobi браузер часто присылает пустую строку, а тип входит в подпись
- * ссылки на заливку — разойдётся, и S3 ответит 403.
+ * fb2 и mobi браузер часто присылает пустую строку. Этим же типом книга
+ * отдаётся при скачивании — он входит в подпись ссылки.
  */
 export const BOOK_MIME: Record<LibraryBookFormat, string> = {
   pdf: 'application/pdf',
@@ -150,4 +150,138 @@ export function contentDisposition(
     (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
   );
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/** Сколько первых байт объекта читаем, чтобы узнать формат по содержимому. */
+export const BOOK_SNIFF_BYTES = 1024;
+
+const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d]; // %PDF-
+const ZIP = [0x50, 0x4b, 0x03, 0x04]; // PK..
+const OLE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+const RTF = [0x7b, 0x5c, 0x72, 0x74, 0x66]; // {\rtf
+const DJVU = [0x41, 0x54, 0x26, 0x54, 0x46, 0x4f, 0x52, 0x4d]; // AT&TFORM
+const MOBI = [0x42, 0x4f, 0x4f, 0x4b, 0x4d, 0x4f, 0x42, 0x49]; // BOOKMOBI
+const MOBI_OFFSET = 60;
+const UTF8_BOM = [0xef, 0xbb, 0xbf];
+
+function hasAt(head: Uint8Array, signature: number[], offset = 0): boolean {
+  if (head.length < offset + signature.length) return false;
+  return signature.every((byte, index) => head[offset + index] === byte);
+}
+
+function indexOf(head: Uint8Array, signature: number[]): number {
+  for (let at = 0; at + signature.length <= head.length; at += 1) {
+    if (hasAt(head, signature, at)) return at;
+  }
+  return -1;
+}
+
+/** Текст без BOM и ведущих пробелов — начало XML-документа. */
+function leadingText(head: Uint8Array): string {
+  const from = hasAt(head, UTF8_BOM) ? UTF8_BOM.length : 0;
+  return Buffer.from(head.subarray(from, from + 256))
+    .toString('latin1')
+    .trimStart();
+}
+
+function isUtf16(head: Uint8Array): boolean {
+  return hasAt(head, [0xff, 0xfe]) || hasAt(head, [0xfe, 0xff]);
+}
+
+/**
+ * Похоже ли начало файла на заявленный формат.
+ *
+ * Формат приходит расширением имени, а `Content-Type` в подпись ссылки на
+ * заливку не входит — библиотека подписи исключает его сама. Без сверки по
+ * содержимому под видом `.pdf` в бакет ложится что угодно, и читатель
+ * скачивает это как книгу.
+ *
+ * Правила мягкие там, где формат размыт: `.doc` из старых редакторов часто
+ * оказывается RTF, а у `.txt` подписи нет вовсе — отбиваем только заведомо
+ * двоичное.
+ */
+export function bookContentMatches(
+  format: LibraryBookFormat,
+  head: Uint8Array,
+): boolean {
+  switch (format) {
+    case 'pdf':
+      // Стандарт разрешает мусор перед заголовком в пределах первого килобайта.
+      return indexOf(head, PDF) !== -1;
+    case 'epub':
+    case 'docx':
+    case 'odt':
+      return hasAt(head, ZIP);
+    case 'djvu':
+      return hasAt(head, DJVU);
+    case 'mobi':
+      return hasAt(head, MOBI, MOBI_OFFSET);
+    case 'doc':
+      return hasAt(head, OLE) || hasAt(head, RTF);
+    case 'rtf':
+      return hasAt(head, RTF);
+    case 'fb2': {
+      if (isUtf16(head)) return true;
+      const text = leadingText(head);
+      return text.startsWith('<?xml') || text.startsWith('<FictionBook');
+    }
+    case 'txt':
+      return isUtf16(head) || !head.includes(0);
+  }
+}
+
+/**
+ * Сколько объект должен пролежать без строки в базе, чтобы считаться
+ * брошенным. Ссылка на заливку живёт час; второй час — запас на завершение.
+ */
+export const BOOK_ORPHAN_MIN_AGE_MS = 2 * 60 * 60_000;
+
+const BOOK_KEY = new RegExp(
+  `^${KEY_PREFIX}/[^/]+/[0-9a-f-]{36}\\.(${LIBRARY_BOOK_FORMATS.join('|')})$`,
+);
+
+/** Префикс, под которым лежат файлы книг, — для обхода бакета. */
+export const BOOK_KEY_PREFIX = `${KEY_PREFIX}/`;
+
+/**
+ * Ключи объектов, брошенных в бакете: залиты по подписанной ссылке, а строка
+ * файла так и не появилась — вкладку закрыли, сеть оборвалась, удаление
+ * объекта не прошло.
+ *
+ * Берём только ключи своего вида и только старые: свежий объект может ждать
+ * завершения заливки, а чужой ключ под нашим префиксом — не наше дело.
+ */
+export function orphanBookKeys(
+  objects: ReadonlyArray<{ key: string; lastModified: Date | null }>,
+  knownKeys: ReadonlySet<string>,
+  now: Date,
+): string[] {
+  const border = now.getTime() - BOOK_ORPHAN_MIN_AGE_MS;
+  return objects
+    .filter(
+      (object) =>
+        BOOK_KEY.test(object.key) &&
+        !knownKeys.has(object.key) &&
+        object.lastModified !== null &&
+        object.lastModified.getTime() <= border,
+    )
+    .map((object) => object.key);
+}
+
+/**
+ * Что записать в журнал админа о файле книги. Формулировку для человека
+ * собирает журнал, здесь — только факт.
+ */
+export function bookFileAuditDetails(input: {
+  book: string;
+  name: string;
+  format: string;
+  sizeBytes: number;
+}): Record<string, string | number> {
+  return {
+    book: input.book,
+    file: input.name,
+    format: input.format,
+    sizeBytes: input.sizeBytes,
+  };
 }

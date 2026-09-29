@@ -24,13 +24,25 @@ export function BookFilesEditor({ slug }: { slug: string }) {
   const [files, setFiles] = useState<VedabaseBookFileDto[] | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [listFailed, setListFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetchVedabaseAdminBookFiles(slug)
-      .then(setFiles)
-      .catch(() => setMessage("Не удалось загрузить список файлов."));
-  }, [slug]);
+      .then((loaded) => {
+        if (cancelled) return;
+        setFiles(loaded);
+        setListFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setListFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, attempt]);
 
   async function upload(file: File) {
     const rejection = bookFileRejection(file, files?.length ?? 0);
@@ -68,7 +80,23 @@ export function BookFilesEditor({ slug }: { slug: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {files === null ? (
+      {listFailed ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p role="alert" className="text-sm text-text-1">
+            Не удалось загрузить список файлов.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setListFailed(false);
+              setAttempt((current) => current + 1);
+            }}
+            className="min-h-9 rounded-lg bg-bg-2 px-3 text-sm font-semibold text-text-0 hover:bg-bg-1"
+          >
+            Повторить
+          </button>
+        </div>
+      ) : files === null ? (
         <p className="text-sm text-text-2">Загружаем…</p>
       ) : files.length === 0 ? (
         <p className="text-sm text-text-2">
@@ -111,7 +139,8 @@ export function BookFilesEditor({ slug }: { slug: string }) {
           ref={input}
           type="file"
           accept={BOOK_FILE_ACCEPT}
-          disabled={progress !== null}
+          // Без списка не знаем, сколько файлов у книги уже есть.
+          disabled={progress !== null || files === null}
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) void upload(file);

@@ -98,7 +98,7 @@ export class VedabaseAdminController {
     @Param('fileId') fileId: string,
   ) {
     this.assertAdmin(user);
-    await this.files.remove(slug, fileId);
+    await this.files.remove(user.sub, slug, fileId);
   }
 
   /** Цветной перевод блока стиха (VED-683). */
