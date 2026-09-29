@@ -18,6 +18,7 @@ import {
 } from "@/lib/tour";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
+import { TourShare } from "./tour-share";
 import { TourVideoPlayer } from "./tour-video";
 
 /**
@@ -144,6 +145,18 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
               if (index < chapters.length - 1) open(index + 1);
             }}
           />
+          {chapter.promo && (
+            <div className="glass flex flex-col gap-4 rounded-3xl border border-glass-brd p-5 sm:p-6">
+              <p className="text-base leading-relaxed text-text-0">
+                {chapter.promo.text}
+              </p>
+              <TourShare
+                chapterId={chapter.id}
+                title={`${chapter.title} — VedaMatch`}
+                text={chapter.promo.share}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-3">
             <span className="text-xs font-bold uppercase tracking-widest text-magenta">
               Глава {index + 1} из {chapters.length}

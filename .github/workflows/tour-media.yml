@@ -1,0 +1,83 @@
+name: Tour media
+
+# Ролики и обложки тура /tour (VED-653) — в бакет портала, папка `tour/`.
+# В репозиторий 15-мегабайтные mp4 не коммитим: файлы прикладываются к
+# GitHub-релизу, а этот workflow перекладывает их в S3 с правильным типом и
+# долгим кэшем. Ключи S3 есть только в секретах, поэтому руками с машины
+# разработчика не выложить.
+#
+# Имена файлов версионные (union-v1-16x9.mp4): прокси media.vedamatch.ru и
+# браузер кэшируют их на год, новый монтаж выкладывается под новым именем.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Тег релиза с файлами (например, tour-media-union-v1)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Файлы из релиза
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Ввод — только через окружение: подставленный прямо в run: он
+          # исполнялся бы шеллом.
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir -p media
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir media
+          ls -la media
+
+      - name: Выкладка в S3
+        env:
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_REGION: ${{ secrets.S3_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+          # AWS CLI не знает корень сертификата хранилища — берём системный
+          # набор Ubuntu, проверка SSL остаётся включённой (см. mobile-apk.yml).
+          AWS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+        run: |
+          set -euo pipefail
+          if [ -z "$S3_ENDPOINT" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$S3_BUCKET_NAME" ] || [ -z "$S3_PUBLIC_URL" ]; then
+            echo "::error::Секреты S3 заданы не целиком"
+            exit 1
+          fi
+          export AWS_DEFAULT_REGION="${S3_REGION:-us-east-1}"
+          for file in media/*; do
+            name="$(basename "$file")"
+            case "$name" in
+              *.mp4) type=video/mp4 ;;
+              *.jpg|*.jpeg) type=image/jpeg ;;
+              *.webp) type=image/webp ;;
+              *.png) type=image/png ;;
+              *) echo "::warning::Пропущен $name — не видео и не картинка"; continue ;;
+            esac
+            aws s3 cp "$file" "s3://$S3_BUCKET_NAME/tour/$name" \
+              --endpoint-url "$S3_ENDPOINT" \
+              --acl public-read \
+              --content-type "$type" \
+              --cache-control "public, max-age=31536000, immutable"
+            echo "Выложено: ${S3_PUBLIC_URL%/}/tour/$name"
+          done
+
+      - name: Проверка через media.vedamatch.ru
+        env:
+          S3_PUBLIC_URL: ${{ secrets.S3_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          for file in media/*; do
+            url="${S3_PUBLIC_URL%/}/tour/$(basename "$file")"
+            # Видео без ответа 206 на Range не перематывается в Safari.
+            code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-1' "$url")"
+            echo "$code $url"
+            case "$code" in 200|206) ;; *) echo "::error::$url отвечает $code"; exit 1 ;; esac
+          done

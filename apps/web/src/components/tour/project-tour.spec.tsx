@@ -27,6 +27,10 @@ const chapters: TourChapter[] = [
       posterUrl: null,
       mobilePosterUrl: null,
     },
+    promo: {
+      text: "Эфир круглые сутки — включите и слушайте.",
+      share: "Радио VedaMatch:",
+    },
     cta: { label: "Включить радио", href: "/radio" },
   },
   {
@@ -118,5 +122,26 @@ describe("ProjectTour", () => {
     } finally {
       window.matchMedia = matchMedia;
     }
+  });
+
+  it("под видео — рекламный текст и «Поделиться»; у заглушки их нет", async () => {
+    const user = userEvent.setup();
+    render(<ProjectTour chapters={chapters} />);
+    expect(
+      screen.queryByRole("button", { name: "Поделиться" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Следующая/ }));
+
+    expect(
+      screen.getByText("Эфир круглые сутки — включите и слушайте."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Поделиться" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Поделиться в Telegram" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Скопировать ссылку" }),
+    ).toBeInTheDocument();
   });
 });
