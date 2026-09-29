@@ -1413,6 +1413,13 @@ model VedabaseBook {
   title           String
   author          String?
   kind            VedabaseBookKind      @default(teaching)
+  /// Для кого книга — ступени самоидентификации (VED-662): пусто — для всех.
+  /// Те же значения, что `LibraryEntry.audienceStages`.
+  audienceStages  String[]              @default([])
+  /// Духовные линии книги (`LineageId`): пусто — для всех линий.
+  lineages        String[]              @default([])
+  /// Заблокирована админом: пропадает с полки, из читалки и поиска.
+  blocked         Boolean               @default(false)
   language        String
   cover           Json?
   sourceUrl       String

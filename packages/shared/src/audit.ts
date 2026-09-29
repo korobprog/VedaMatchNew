@@ -43,6 +43,7 @@ export const ADMIN_AUDIT_ACTIONS = [
   'library.entry-removed',
   'library.entry-restored',
   'library.author-lineage-applied',
+  'vedabase.book-updated',
   'contacts.tag-created',
   'contacts.tag-updated',
   'contacts.tag-deleted',

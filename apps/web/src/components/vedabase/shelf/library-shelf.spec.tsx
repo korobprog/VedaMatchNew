@@ -7,10 +7,15 @@ vi.mock("@/lib/vedabase/local-db", () => ({
   openVedabaseDb: () => Promise.reject(new Error("нет IndexedDB")),
 }));
 
-function book(slug: string, title: string): VedabaseBookManifest {
+function book(
+  slug: string,
+  title: string,
+  audienceStages: string[] = [],
+): VedabaseBookManifest {
   return {
     slug,
     title,
+    audienceStages,
     author: "А. Ч. Бхактиведанта Свами Прабхупада",
     chapters: [{ slug: "c1", title: "Глава 1", order: 1, file: "c1.json" }],
   } as VedabaseBookManifest;
@@ -18,7 +23,7 @@ function book(slug: string, title: string): VedabaseBookManifest {
 
 const books = [
   book("bhagavad-gita", "Бхагавад-гита как она есть"),
-  book("chaitanya-charitamrita", "Шри Чайтанья-чаритамрита"),
+  book("chaitanya-charitamrita", "Шри Чайтанья-чаритамрита", ["devotee"]),
 ];
 
 /* VED-662: полка Библиотеки. */

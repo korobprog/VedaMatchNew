@@ -1,4 +1,6 @@
 import type {
+  VedabaseAdminBook,
+  VedabaseAdminBookPatch,
   VedabaseBookManifest,
   VedabaseSearchResult,
   VedabaseSyncPullResponse,
@@ -58,6 +60,22 @@ export function searchVedabase(
     `/vedabase/search?q=${encodeURIComponent(query)}&limit=30`,
     { signal },
   );
+}
+
+/** Книги для админки Библиотеки (VED-662). */
+export function fetchVedabaseAdminBooks(): Promise<VedabaseAdminBook[]> {
+  return fetchJson("/vedabase/admin/books", {});
+}
+
+export function updateVedabaseAdminBook(
+  slug: string,
+  patch: VedabaseAdminBookPatch,
+): Promise<VedabaseAdminBook> {
+  return fetchJson(`/vedabase/admin/books/${encodeURIComponent(slug)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
 }
 
 export function pushVedabaseMutations(
