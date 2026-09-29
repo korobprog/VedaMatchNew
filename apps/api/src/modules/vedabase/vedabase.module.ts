@@ -6,9 +6,11 @@ import { GitabaseSyncService } from '../gitabase/gitabase-sync.service';
 import { GitabaseUserStateService } from '../gitabase/gitabase-user-state.service';
 import { VedabaseAdminController } from './vedabase-admin.controller';
 import { VedabaseAdminService } from './vedabase-admin.service';
+import { VedabaseBookStorageService } from './book-storage.service';
 import { VedabaseContentController } from './vedabase-content.controller';
 import { VedabaseContentRepository } from './vedabase-content.repository';
 import { VedabaseContentService } from './vedabase-content.service';
+import { VedabaseFilesService } from './vedabase-files.service';
 
 @Module({
   imports: [AuthModule],
@@ -21,6 +23,8 @@ import { VedabaseContentService } from './vedabase-content.service';
     VedabaseContentRepository,
     VedabaseContentService,
     VedabaseAdminService,
+    VedabaseFilesService,
+    VedabaseBookStorageService,
     GitabaseSyncService,
     GitabaseUserStateService,
     VedabaseAssistantListener,

@@ -1,6 +1,7 @@
 import type {
   VedabaseAdminBook,
   VedabaseAdminBookPatch,
+  VedabaseBookFileDto,
   VedabaseBookManifest,
   VedabaseSearchResult,
   VedabaseSyncPullResponse,
@@ -76,6 +77,23 @@ export function updateVedabaseAdminBook(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
+}
+
+/** Файлы книги для скачивания — читателю (VED-662, часть 3б). */
+export function fetchVedabaseBookFiles(
+  slug: string,
+): Promise<VedabaseBookFileDto[]> {
+  return fetchJson(`/vedabase/books/${encodeURIComponent(slug)}/files`, {});
+}
+
+/** Файлы книги в админке — и у заблокированной. */
+export function fetchVedabaseAdminBookFiles(
+  slug: string,
+): Promise<VedabaseBookFileDto[]> {
+  return fetchJson(
+    `/vedabase/admin/books/${encodeURIComponent(slug)}/files`,
+    {},
+  );
 }
 
 export function pushVedabaseMutations(

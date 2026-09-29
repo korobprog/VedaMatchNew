@@ -120,3 +120,14 @@ export interface VedabaseClientMutation { clientMutationId: string; entity: Veda
 export interface VedabaseSyncPushRequest { mutations: VedabaseClientMutation[] }
 export interface VedabaseSyncPushResponse { accepted: Array<{ clientMutationId: string; revision: number }>; cursor: string }
 export interface VedabaseSyncPullResponse { changes: Array<{ entity: VedabaseMutationEntity; entityId: string; revision: number; payload: unknown }>; cursor: string }
+
+/**
+ * Файл книги Библиотеки для скачивания (VED-662, часть 3б). Та же форма и те
+ * же правила заливки, что у файлов Образования: подписанный PUT мимо API.
+ */
+export type {
+  LibraryEntryFileDto as VedabaseBookFileDto,
+  CreateLibraryBookUploadRequest as CreateVedabaseBookUploadRequest,
+  CompleteLibraryBookUploadRequest as CompleteVedabaseBookUploadRequest,
+  LibraryBookUploadResponse as VedabaseBookUploadResponse,
+} from "./library";
