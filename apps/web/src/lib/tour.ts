@@ -114,6 +114,17 @@ export function pickTourVideo(
   return other ? { url: other, vertical: !mobile } : null;
 }
 
+/**
+ * Глава тура для значка «?» на странице сервиса (VED-651). Только у глав,
+ * где видео обещано на странице сервиса, — сейчас это Знакомства.
+ */
+export const TOUR_SERVICE_HELP = new Set(["union"]);
+
+export function tourHelpChapter(slug: string): TourChapter | null {
+  if (!TOUR_SERVICE_HELP.has(slug)) return null;
+  return TOUR_CHAPTERS.find((chapter) => chapter.id === slug) ?? null;
+}
+
 /** Глава по якорю адреса (`#union`); неизвестный или пустой — первая. */
 export function tourChapterIndex(
   hash: string,

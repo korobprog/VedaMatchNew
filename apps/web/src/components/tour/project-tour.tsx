@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,15 +11,14 @@ import {
   Smartphone,
 } from "lucide-react";
 import {
-  TOUR_MOBILE_QUERY,
   TOUR_WATCHED_KEY,
   parseTourWatched,
-  pickTourVideo,
   tourChapterIndex,
   type TourChapter,
 } from "@/lib/tour";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
+import { TourVideoPlayer } from "./tour-video";
 
 /**
  * «Познакомиться с проектом» (VED-651): главы слева, текущая справа —
@@ -135,9 +134,10 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
           aria-labelledby="tour-chapter"
           className="flex flex-col gap-5 lg:col-span-8"
         >
-          <ChapterVideo
+          <TourVideoPlayer
             key={chapter.id}
-            chapter={chapter}
+            video={chapter.video}
+            title={chapter.title}
             onEnded={() => markWatched(chapter.id)}
           />
           <div className="flex flex-col gap-3">
@@ -216,61 +216,5 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
         </div>
       </section>
     </div>
-  );
-}
-
-function subscribeMobile(onChange: () => void) {
-  const query = window.matchMedia?.(TOUR_MOBILE_QUERY);
-  query?.addEventListener("change", onChange);
-  return () => query?.removeEventListener("change", onChange);
-}
-
-/**
- * Видео главы: вертикальная версия на телефоне, горизонтальная на
- * компьютере (`pickTourVideo`). До гидрации — компьютерная: сервер экрана
- * не знает.
- */
-function ChapterVideo({
-  chapter,
-  onEnded,
-}: {
-  chapter: TourChapter;
-  onEnded: () => void;
-}) {
-  const mobile = useSyncExternalStore(
-    subscribeMobile,
-    () => window.matchMedia?.(TOUR_MOBILE_QUERY).matches ?? false,
-    () => false,
-  );
-  const video = pickTourVideo(chapter.video, mobile);
-
-  if (!video) {
-    return (
-      <div className="glass flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-glass-brd text-center">
-        <Clapperboard aria-hidden className="size-10 text-text-2" />
-        <p className="font-semibold text-text-0">Видео готовится</p>
-        <p className="max-w-sm px-4 text-sm text-text-1">
-          Презентация этой главы скоро появится здесь. А пока — текст ниже.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <video
-      key={video.url}
-      src={video.url}
-      poster={chapter.video.posterUrl ?? undefined}
-      controls
-      playsInline
-      preload="metadata"
-      onEnded={onEnded}
-      aria-label={`Видео-презентация: ${chapter.title}`}
-      className={cn(
-        "rounded-3xl bg-bg-2",
-        video.vertical
-          ? "mx-auto aspect-[9/16] max-h-[80dvh] max-w-full"
-          : "aspect-video w-full",
-      )}
-    />
   );
 }

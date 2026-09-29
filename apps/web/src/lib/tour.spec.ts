@@ -4,6 +4,7 @@ import {
   parseTourWatched,
   pickTourVideo,
   tourChapterIndex,
+  tourHelpChapter,
 } from "./tour";
 
 /* VED-651: «Познакомиться с проектом» — туториал с видео. */
@@ -66,5 +67,13 @@ describe("pickTourVideo", () => {
     expect(
       pickTourVideo({ desktopUrl: null, mobileUrl: null }, true),
     ).toBeNull();
+  });
+});
+
+describe("tourHelpChapter", () => {
+  it("значок «?» — у Знакомств, у остальных нет", () => {
+    expect(tourHelpChapter("union")?.id).toBe("union");
+    expect(tourHelpChapter("market")).toBeNull();
+    expect(tourHelpChapter("chat")).toBeNull();
   });
 });

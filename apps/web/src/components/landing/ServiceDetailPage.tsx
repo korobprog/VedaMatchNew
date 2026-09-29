@@ -23,6 +23,8 @@ import {
   type ServiceContent,
 } from "@/lib/service-content";
 import { cn } from "@/lib/utils";
+import { tourHelpChapter } from "@/lib/tour";
+import { TourVideoHelp } from "@/components/tour/tour-video-help";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -58,6 +60,7 @@ export function ServiceDetailPage({
   const locale = useLocale();
   const names = useServiceNames();
   const name = names(service.slug, service.name);
+  const helpChapter = tourHelpChapter(service.slug);
   // Ведём на настоящий маршрут сервиса, а не на /login: вошедший попадает
   // сразу в сервис, гостя proxy отправит на "/?returnTo=…" — оттуда и кнопка
   // «Начать», и OAuth-колбэк вернут его на этот же маршрут.
@@ -107,14 +110,20 @@ export function ServiceDetailPage({
             </motion.span>
           )}
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="font-display text-3xl md:text-5xl font-bold text-text-0 mb-4 leading-tight"
-          >
-            {name}
-          </motion.h1>
+          {/* «?» у названия (VED-651) — видео-презентация сервиса в окне;
+              рядом с заголовком, а не внутри: имя заголовка не должно
+              включать подпись кнопки. */}
+          <div className="mb-4 flex items-center justify-center gap-3">
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="font-display text-3xl md:text-5xl font-bold text-text-0 leading-tight"
+            >
+              {name}
+            </motion.h1>
+            {helpChapter && <TourVideoHelp chapter={helpChapter} />}
+          </div>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}

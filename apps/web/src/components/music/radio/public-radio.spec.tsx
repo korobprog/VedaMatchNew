@@ -105,6 +105,12 @@ describe("PublicRadio", () => {
     expect(
       screen.getByRole("link", { name: "Установить приложение" }),
     ).toHaveAttribute("href", "#install");
+    // VED-651: приглашение в тур — с переливом.
+    const invite = screen.getByRole("link", {
+      name: "Познакомиться с VedaMatch",
+    });
+    expect(invite).toHaveAttribute("href", "/tour");
+    expect(invite).toHaveClass("vm-invite");
 
     const dots = screen.getAllByRole("button", { name: /^Баннер \d/ });
     expect(dots.length).toBeGreaterThan(1);

@@ -755,6 +755,52 @@
   animation: photo-skeleton 1.4s ease-in-out infinite;
 }
 
+/* Кнопка-приглашение «Познакомиться с VedaMatch» на радио (VED-651):
+   градиент медленно переливается, а по кнопке раз в несколько секунд
+   пробегает блик — зовёт, не мигая. Белый текст крупный и жирный (20px
+   bold), как у остальных градиентных кнопок портала. Блик лежит под
+   текстом: `isolation` + `z-index: -1`. */
+@keyframes vm-invite-flow {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+@keyframes vm-invite-sheen {
+  0% { transform: translateX(-120%) skewX(-18deg); }
+  45%, 100% { transform: translateX(320%) skewX(-18deg); }
+}
+
+.vm-invite {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-image: linear-gradient(
+    90deg,
+    var(--vm-magenta),
+    #b23eff,
+    var(--vm-magenta)
+  );
+  background-size: 200% 100%;
+  animation: vm-invite-flow 6s linear infinite;
+  box-shadow: 0 0 24px var(--vm-sheen);
+}
+
+.vm-invite::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 35%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.45),
+    transparent
+  );
+  animation: vm-invite-sheen 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Обезврежен целиком, а не замедлен: неподвижная светлая полоса поперёк
      карточки — это не «спокойнее», это дефект вёрстки. */
@@ -819,6 +865,14 @@
   }
   @keyframes preview-screen-in {
     from, to { opacity: 1; transform: none; }
+  }
+  /* Приглашение остаётся градиентной кнопкой, но стоит: блик спрятан за
+     краем, перелив замер. */
+  @keyframes vm-invite-flow {
+    from, to { background-position: 0% 50%; }
+  }
+  @keyframes vm-invite-sheen {
+    from, to { transform: translateX(-120%) skewX(-18deg); }
   }
 }
 

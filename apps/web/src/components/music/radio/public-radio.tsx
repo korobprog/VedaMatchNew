@@ -14,6 +14,7 @@ import {
   Send,
   Share2,
   Smartphone,
+  Sparkles,
 } from "lucide-react";
 import type {
   MusicRadioItemDto,
@@ -271,13 +272,23 @@ export function PublicRadio({
             Киртаны, бхаджаны и записи с программ — один эфир для всех, круглые
             сутки. Нажмите «Слушать»: вход не нужен.
           </p>
-          <a
-            href="#install"
-            className="inline-flex min-h-11 items-center gap-2 self-start rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 font-semibold text-white transition-transform hover:-translate-y-0.5"
-          >
-            <Download aria-hidden className="size-5" />
-            Установить приложение
-          </a>
+          <div className="flex flex-wrap gap-3">
+            {/* Приглашение в тур (VED-651) — с переливом, чтобы звало. */}
+            <Link
+              href="/tour"
+              className="vm-invite inline-flex min-h-12 items-center gap-2 rounded-xl px-5 text-xl font-bold text-white transition-transform hover:-translate-y-0.5"
+            >
+              <Sparkles aria-hidden className="size-5" />
+              Познакомиться с VedaMatch
+            </Link>
+            <a
+              href="#install"
+              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-glass-brd px-5 font-semibold text-text-0 hover:border-cyan/60"
+            >
+              <Download aria-hidden className="size-5" />
+              Установить приложение
+            </a>
+          </div>
 
           <div className="glass flex flex-col gap-5 rounded-3xl border border-glass-brd p-5 sm:p-6">
             <div className="flex items-center gap-4 sm:gap-5">
