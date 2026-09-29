@@ -95,6 +95,7 @@ const DEFAULT_SETTINGS: MusicSettingsDto = {
   autoplay: true,
   lineage: null,
   ...PLAYER_SETTINGS_DEFAULTS,
+  radioPublicPresence: true,
 };
 
 /** Что читаем из `MusicSettings` — один список на чтение и на запись. */
@@ -107,6 +108,7 @@ const SETTINGS_SELECT = {
   playerShowSeek: true,
   playerShowBookmark: true,
   playerShowHistory: true,
+  radioPublicPresence: true,
 } as const;
 
 type SettingsRow = {
@@ -118,6 +120,7 @@ type SettingsRow = {
   playerShowSeek: boolean;
   playerShowBookmark: boolean;
   playerShowHistory: boolean;
+  radioPublicPresence: boolean;
 };
 
 function settingsDto(row: SettingsRow): MusicSettingsDto {
@@ -126,6 +129,7 @@ function settingsDto(row: SettingsRow): MusicSettingsDto {
     autoplay: row.autoplay,
     lineage: toLineagePreference(row.lineage),
     ...playerSettingsFromRow(row),
+    radioPublicPresence: row.radioPublicPresence,
   };
 }
 
@@ -580,6 +584,12 @@ export class MusicPlaybackService {
     // Шаги перемотки и кнопки полосы плеера (VED-388).
     const player = parsePlayerSettingsPatch(body);
     if ('error' in player) throw new BadRequestException(player.error);
+    if (
+      body.radioPublicPresence !== undefined &&
+      typeof body.radioPublicPresence !== 'boolean'
+    ) {
+      throw new BadRequestException('radioPublicPresence — да или нет');
+    }
 
     const patch = {
       ...(body.nowPlayingVisibility === undefined
@@ -587,6 +597,9 @@ export class MusicPlaybackService {
         : { nowPlayingVisibility: body.nowPlayingVisibility }),
       ...(body.autoplay === undefined ? {} : { autoplay: body.autoplay }),
       ...(body.lineage === undefined ? {} : { lineage: body.lineage }),
+      ...(body.radioPublicPresence === undefined
+        ? {}
+        : { radioPublicPresence: body.radioPublicPresence }),
       ...player.patch,
     };
 

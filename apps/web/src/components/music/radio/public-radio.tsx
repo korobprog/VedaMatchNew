@@ -38,6 +38,7 @@ import {
   radioAvatarStack,
   radioClock,
   radioListenersLabel,
+  radioListenersNote,
   radioProgress,
   radioPromoIndex,
 } from "./public-radio-view";
@@ -235,6 +236,11 @@ export function PublicRadio({
   const recent = state?.recent ?? [];
   const listeners = state?.listeners ?? 0;
   const stack = radioAvatarStack(state?.listenerAvatars ?? [], listeners);
+  const note = radioListenersNote(
+    state?.listenerNames ?? [],
+    listeners,
+    state?.listenerCities ?? 0,
+  );
   const promos = PROMO_SLUGS.map((slug) => getServiceContent(slug)).filter(
     (service): service is ServiceContent => !!service,
   );
@@ -344,8 +350,11 @@ export function PublicRadio({
                   )}
                 </div>
               )}
-              <span className="text-sm font-semibold text-text-0">
-                {radioListenersLabel(listeners)}
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold text-text-0">
+                  {radioListenersLabel(listeners)}
+                </span>
+                {note && <span className="text-xs text-text-1">{note}</span>}
               </span>
             </div>
 

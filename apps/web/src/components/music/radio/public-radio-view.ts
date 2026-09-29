@@ -18,6 +18,33 @@ export function radioListenersLabel(listeners: number): string {
   return `Сейчас ${verb} ${listeners} ${plural(listeners, "человек", "человека", "человек")}`;
 }
 
+/**
+ * «Нитай, Радха и ещё 10 человек из 5 городов» — под счётчиком. Имена —
+ * только тех, кто не скрыл себя, поэтому «ещё» считается от всех
+ * слушателей. `null` — называть некого.
+ */
+export function radioListenersNote(
+  names: string[],
+  listeners: number,
+  cities: number,
+): string | null {
+  if (names.length === 0 || listeners < RADIO_AVATARS_MIN_LISTENERS) {
+    return null;
+  }
+  const rest = Math.max(0, listeners - names.length);
+  const who =
+    rest > 0
+      ? `${names.join(", ")} и ещё ${rest} ${plural(rest, "человек", "человека", "человек")}`
+      : names.length > 1
+        ? `${names.slice(0, -1).join(", ")} и ${names[names.length - 1]}`
+        : names[0];
+  const where =
+    cities > 1
+      ? ` из ${cities} ${plural(cities, "города", "городов", "городов")}`
+      : "";
+  return `${who}${where}`;
+}
+
 export interface RadioAvatarStack {
   /** Фото в ряду внахлёст. */
   avatars: string[];

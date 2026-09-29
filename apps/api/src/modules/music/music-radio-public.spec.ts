@@ -14,10 +14,11 @@ describe('MusicRadioService.publicState', () => {
     listeners: 12,
   };
 
-  function setup(
-    rows: { user: { avatarUrl: string | null } }[],
-    slots: unknown[] = [],
-  ) {
+  const user = (avatarUrl: string | null, name = 'Нитай') => ({
+    user: { avatarUrl, name, spiritualName: null, homeLocation: null },
+  });
+
+  function setup(rows: ReturnType<typeof user>[], slots: unknown[] = []) {
     const findMany = jest.fn().mockResolvedValue(rows);
     const slotsFindMany = jest.fn().mockResolvedValue(slots);
     const prisma = {
@@ -34,11 +35,11 @@ describe('MusicRadioService.publicState', () => {
     return { service, findMany, slotsFindMany };
   }
 
-  it('отдаёт эфир и фото слушателей без имён', async () => {
+  it('отдаёт эфир, фото и первые имена слушателей', async () => {
     const { service } = setup([
-      { user: { avatarUrl: 'https://a/1.jpg' } },
-      { user: { avatarUrl: null } },
-      { user: { avatarUrl: 'https://a/2.jpg' } },
+      user('https://a/1.jpg', 'Нитай Чаран дас'),
+      user(null, 'Радха'),
+      user('https://a/2.jpg', 'Гопал'),
     ]);
 
     const result = await service.publicState(new Date(state.serverTime));
@@ -46,11 +47,13 @@ describe('MusicRadioService.publicState', () => {
     expect(result).toEqual({
       ...state,
       listenerAvatars: ['https://a/1.jpg', 'https://a/2.jpg'],
+      listenerNames: ['Нитай', 'Радха'],
+      listenerCities: 0,
       recent: [],
     });
   });
 
-  it('берёт только живых слушателей с фото, без агента и заблокированных', async () => {
+  it('берёт только живых слушателей, кто не скрыл себя, без агента и заблокированных', async () => {
     const { service, findMany } = setup([]);
     const now = new Date(state.serverTime);
 
@@ -58,14 +61,22 @@ describe('MusicRadioService.publicState', () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        take: 8,
         where: {
           lastSeenAt: { gt: new Date(now.getTime() - 60_000) },
           user: {
-            avatarUrl: { not: null },
             deletedAt: null,
             accountStatus: 'active',
             isAgent: false,
+            NOT: {
+              musicSettings: {
+                is: {
+                  OR: [
+                    { radioPublicPresence: false },
+                    { nowPlayingVisibility: 'nobody' },
+                  ],
+                },
+              },
+            },
           },
         },
       }),

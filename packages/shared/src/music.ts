@@ -1081,6 +1081,12 @@ export interface MusicSettingsDto {
   playerShowBookmark: boolean;
   /** Кнопка «История» вынесена на полосу плеера. */
   playerShowHistory: boolean;
+  /**
+   * Показывать меня на публичной странице радио (VED-645): имя и фото,
+   * пока слушаю эфир. При `nowPlayingVisibility: 'nobody'` не показывает
+   * всё равно.
+   */
+  radioPublicPresence: boolean;
 }
 
 export type UpdateMusicSettingsRequest = Partial<MusicSettingsDto>;
@@ -1548,9 +1554,19 @@ export interface MusicRadioRecentDto {
   artistName: string | null;
 }
 
+/** Сколько имён слушателей называет публичная страница радио. */
+export const MUSIC_RADIO_PUBLIC_NAMES = 2;
+
 export interface MusicRadioPublicStateDto extends MusicRadioStateDto {
   /** Ссылки на фото слушателей, не больше `MUSIC_RADIO_PUBLIC_AVATARS`. */
   listenerAvatars: string[];
+  /**
+   * Имена слушателей — только первое слово отображаемого имени, не больше
+   * `MUSIC_RADIO_PUBLIC_NAMES`. Только тех, кто не скрыл себя.
+   */
+  listenerNames: string[];
+  /** Из скольких разных городов слушают — по городу в профиле. */
+  listenerCities: number;
   /** Отзвучавшие записи, свежие первыми, не больше `MUSIC_RADIO_PUBLIC_RECENT`. */
   recent: MusicRadioRecentDto[];
 }

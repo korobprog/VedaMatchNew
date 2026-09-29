@@ -31,6 +31,8 @@ function makeState(
     next: null,
     listeners: 12,
     listenerAvatars: ["https://a/1.jpg", "https://a/2.jpg", "https://a/3.jpg"],
+    listenerNames: ["Нитай", "Радха"],
+    listenerCities: 4,
     recent: [
       {
         slotId: "slot-0",
@@ -58,6 +60,9 @@ describe("PublicRadio", () => {
       3,
     );
     expect(screen.getByText("+9")).toBeInTheDocument();
+    expect(
+      screen.getByText("Нитай, Радха и ещё 10 человек из 4 городов"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Слушать эфир" })).toBeEnabled();
     expect(screen.getByRole("link", { name: /iPhone и iPad/ })).toHaveAttribute(
       "href",
