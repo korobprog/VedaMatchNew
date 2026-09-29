@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  Prisma,
-  type VedabaseBookKind,
-  type VedabaseBookVersion,
-} from '@prisma/client';
+import { Prisma, type VedabaseBookKind } from '@prisma/client';
 import type {
   VedabaseBookManifest,
   VedabaseChapter,
@@ -35,7 +31,7 @@ export class VedabaseContentRepository {
 
   async listActiveBooks(): Promise<VedabaseLibraryManifest> {
     const books = await this.prisma.vedabaseBook.findMany({
-      where: { activeVersionId: { not: null } },
+      where: { activeVersionId: { not: null }, blocked: false },
       include: { activeVersion: { include: { chapters: true } } },
       orderBy: { slug: 'asc' },
     });
@@ -68,7 +64,11 @@ export class VedabaseContentRepository {
       where: {
         slug: chapterSlug,
         version: {
-          book: { slug: bookSlug, activeVersionId: { not: null } },
+          book: {
+            slug: bookSlug,
+            activeVersionId: { not: null },
+            blocked: false,
+          },
           activeFor: { slug: bookSlug },
         },
       },
@@ -102,7 +102,7 @@ export class VedabaseContentRepository {
         ts_rank(to_tsvector('russian', u.text), plainto_tsquery('russian', ${query}))::float AS rank
       FROM "VedabaseSearchUnit" u
       JOIN "VedabaseBookVersion" v ON v.id = u."versionId"
-      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id AND NOT b.blocked
       WHERE to_tsvector('russian', u.text) @@ plainto_tsquery('russian', ${query})
       ORDER BY rank DESC, b.slug, u."chapterSlug"
       LIMIT ${limit}
@@ -142,7 +142,7 @@ export class VedabaseContentRepository {
         b.language AS "bookLanguage", c.slug AS "chapterSlug", c.payload
       FROM "VedabaseChapter" c
       JOIN "VedabaseBookVersion" v ON v.id = c."versionId"
-      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id AND NOT b.blocked
       WHERE b.slug = ${bookSlug} AND c.slug = ${chapterSlug}
       LIMIT 1
     `);
@@ -163,7 +163,7 @@ export class VedabaseContentRepository {
         0::float AS rank
       FROM "VedabaseSearchUnit" u
       JOIN "VedabaseBookVersion" v ON v.id = u."versionId"
-      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id AND NOT b.blocked
       WHERE b.slug = ${bookSlug} AND u."chapterSlug" = ${chapterSlug}
       -- Порядок внутри главы наводит вызывающий: локатор — JSON, и его форма
       -- у разных книг разная, поэтому сортировать им в SQL ненадёжно.
@@ -182,7 +182,7 @@ export class VedabaseContentRepository {
         ts_rank(to_tsvector('russian', u.text), websearch_to_tsquery('russian', ${query}))::float AS rank
       FROM "VedabaseSearchUnit" u
       JOIN "VedabaseBookVersion" v ON v.id = u."versionId"
-      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id
+      JOIN "VedabaseBook" b ON b."activeVersionId" = v.id AND NOT b.blocked
       WHERE to_tsvector('russian', u.text) @@ websearch_to_tsquery('russian', ${query})
         -- Биографии и прочее из подбора цитат исключены: там повествование
         -- ведёт биограф, а в поле author стоит герой книги, и его словами
@@ -196,7 +196,7 @@ export class VedabaseContentRepository {
   /** Книги с активной версией — только их и можно подбирать на цитаты. */
   async listBooksForQuoteMining() {
     return this.prisma.vedabaseBook.findMany({
-      where: { activeVersionId: { not: null } },
+      where: { activeVersionId: { not: null }, blocked: false },
       select: {
         id: true,
         slug: true,
@@ -255,7 +255,7 @@ export class VedabaseContentRepository {
 
   private async findActiveBook(slug: string): Promise<ActiveBook> {
     const book = await this.prisma.vedabaseBook.findFirst({
-      where: { slug, activeVersionId: { not: null } },
+      where: { slug, activeVersionId: { not: null }, blocked: false },
       include: { activeVersion: { include: { chapters: true } } },
     });
     if (!book?.activeVersion || book.activeVersion.bookId !== book.id)
@@ -284,6 +284,8 @@ export class VedabaseContentRepository {
       importedAt: version.importedAt.toISOString(),
       permissionRef: version.permissionRef,
       attribution: version.attribution,
+      audienceStages: book.audienceStages,
+      lineages: book.lineages,
       chapters: chapters.map((chapter) => ({
         slug: chapter.slug,
         title: chapter.title,

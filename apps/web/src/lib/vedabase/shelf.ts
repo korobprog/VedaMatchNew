@@ -5,41 +5,9 @@ import type {
 } from "@vedamatch/shared";
 
 /**
- * Полка Библиотеки (VED-662) — чистая часть: разметка книг по ступеням и
- * линиям, фильтр нижней панели, «Продолжить чтение» и закладки из
+ * Полка Библиотеки (VED-662) — чистая часть: фильтр нижней панели, «Продолжить чтение» и закладки из
  * локальной базы читалки. Экран — `components/vedabase/shelf/`.
  */
-
-/**
- * Для кого книга — редакционная разметка каталога, пока её нельзя задать
- * в админке (следующая часть VED-662). Пусто — для всех: такую книгу
- * фильтр «Кто я» не прячет, как и материалы Образования без разметки.
- */
-export const VEDABASE_BOOK_STAGES: Readonly<Record<string, SpiritualStage[]>> =
-  {
-    "bhagavad-gita": [],
-    isopanishad: [],
-    "prabhupada-lilamrita": [],
-    "srimad-bhagavatam": ["practitioner", "devotee"],
-    "chaitanya-charitamrita": ["devotee"],
-    "nectar-devotion": ["practitioner", "devotee"],
-    "nectar-instructions": ["practitioner", "devotee"],
-    "prayers-kunti": ["practitioner", "devotee"],
-    "raja-vidya": ["seeker", "practitioner", "yogi"],
-    "perfection-yoga": ["seeker", "practitioner", "yogi"],
-    "path-perfection": ["seeker", "practitioner", "yogi"],
-    "beyond-birth-death": ["seeker", "practitioner", "yogi"],
-    "journey-krishna": ["seeker", "practitioner", "yogi"],
-    "another-chance": ["seeker", "practitioner", "yogi"],
-    "light-bhagavata": ["seeker", "practitioner", "yogi"],
-  };
-
-/** Линия книги — по автору; неизвестный автор — для всех линий. */
-export function bookLineages(
-  book: Pick<VedabaseBookManifest, "author">,
-): LineageId[] {
-  return /прабхупад/i.test(book.author ?? "") ? ["iskcon"] : [];
-}
 
 export interface ShelfFilters {
   /** Пусто — все ступени. */
@@ -56,14 +24,17 @@ function matches<T>(marked: readonly T[], chosen: readonly T[]): boolean {
   );
 }
 
-/** Книги под выбор нижней панели; неразмеченные видны при любом выборе. */
+/**
+ * Книги под выбор нижней панели. Разметку «для кого» и линий задаёт админка
+ * Библиотеки (VED-662, часть 3); неразмеченные видны при любом выборе.
+ */
 export function filterShelf<
-  B extends Pick<VedabaseBookManifest, "slug" | "author">,
+  B extends Pick<VedabaseBookManifest, "audienceStages" | "lineages">,
 >(books: readonly B[], filters: ShelfFilters): B[] {
   return books.filter(
     (book) =>
-      matches(VEDABASE_BOOK_STAGES[book.slug] ?? [], filters.stages) &&
-      matches(bookLineages(book), filters.lineages),
+      matches<string>(book.audienceStages ?? [], filters.stages) &&
+      matches<string>(book.lineages ?? [], filters.lineages),
   );
 }
 

@@ -19,17 +19,24 @@ const books = [
     slug: "bhagavad-gita",
     title: "Бхагавад-гита как она есть",
     author: prabhupada,
+    audienceStages: [],
+    lineages: ["iskcon"],
   },
   {
     slug: "chaitanya-charitamrita",
     title: "Шри Чайтанья-чаритамрита",
     author: prabhupada,
+    audienceStages: ["devotee"],
+    lineages: ["iskcon"],
   },
   {
     slug: "beyond-birth-death",
     title: "По ту сторону рождения и смерти",
     author: prabhupada,
+    audienceStages: ["seeker", "practitioner", "yogi"],
+    lineages: ["iskcon"],
   },
+  // Старый пакет без разметки — виден всем.
   { slug: "unknown", title: "Новая книга", author: null },
 ];
 
@@ -45,7 +52,7 @@ describe("filterShelf", () => {
     expect(slugs).toEqual(["bhagavad-gita", "beyond-birth-death", "unknown"]);
   });
 
-  it("линия — по автору; книга без линии видна всем", () => {
+  it("линия — из разметки; книга без линии видна всем", () => {
     const slugs = filterShelf(books, {
       stages: [],
       lineages: ["sri_chaitanya_saraswat_math"],

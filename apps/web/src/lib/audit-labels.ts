@@ -47,6 +47,7 @@ export const auditActionLabels: Record<AdminAuditAction, string> = {
   "library.entry-removed": "Запись Образования снята с публикации",
   "library.entry-restored": "Запись Образования возвращена",
   "library.author-lineage-applied": "Линия автора проставлена его материалам",
+  "vedabase.book-updated": "Книга Библиотеки изменена",
   "contacts.tag-created": "Добавлен тег справочника",
   "contacts.tag-updated": "Изменён тег справочника",
   "contacts.tag-deleted": "Удалён тег справочника",

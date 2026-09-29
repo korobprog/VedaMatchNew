@@ -100,6 +100,12 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         scope: "library",
       },
       {
+        href: "/admin/vedabase",
+        label: "Библиотека",
+        hint: "Книги: для кого, линии, блокировка",
+        scope: "vedabase",
+      },
+      {
         href: "/admin/chat",
         label: "Общение",
         hint: "Жалобы на переписку, статистика бесед",

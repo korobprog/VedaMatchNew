@@ -53,6 +53,36 @@ export interface VedabaseBookManifest {
   attribution: string;
   chapters: Array<{ slug: string; title: string; order: number; file: string }>;
   files: VedabasePackageFile[];
+  /**
+   * Для кого книга (VED-662): ступени самоидентификации, пусто — для всех.
+   * Необязательное: скачанные раньше пакеты его не несут.
+   */
+  audienceStages?: string[];
+  /** Духовные линии книги (`LineageId`), пусто — для всех линий. */
+  lineages?: string[];
+}
+
+/** Книга в админке Библиотеки (VED-662): разметка и блокировка. */
+export interface VedabaseAdminBook {
+  slug: string;
+  title: string;
+  author: string | null;
+  kind: "scripture" | "teaching" | "biography" | "other";
+  audienceStages: string[];
+  lineages: string[];
+  blocked: boolean;
+  chapterCount: number;
+  /** Есть ли у книги опубликованная версия текста. */
+  active: boolean;
+}
+
+/** Правка книги админом: только переданные поля. */
+export interface VedabaseAdminBookPatch {
+  title?: string;
+  author?: string | null;
+  audienceStages?: string[];
+  lineages?: string[];
+  blocked?: boolean;
 }
 
 export interface VedabaseLibraryManifest {
