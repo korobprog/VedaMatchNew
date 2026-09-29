@@ -40,7 +40,8 @@ export function AnnotationToolbar({
   bookSlug: string;
   chapterSlug: string;
   onCreateHighlight(selection: VedabaseSelectionRange): void;
-  onCreateNote(selection: VedabaseSelectionRange, noteText: string): void;
+  /** Отклонённый промис — заметка не записалась: форма остаётся с текстом. */
+  onCreateNote(selection: VedabaseSelectionRange, noteText: string): Promise<void>;
 }) {
   const [selection, setSelection] = useState<{
     range: VedabaseSelectionRange;
@@ -49,6 +50,8 @@ export function AnnotationToolbar({
   const [noteRange, setNoteRange] = useState<VedabaseSelectionRange | null>(null);
   const [noteText, setNoteText] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [noteFailed, setNoteFailed] = useState(false);
 
   useEffect(() => {
     const capture = () => {
@@ -79,13 +82,24 @@ export function AnnotationToolbar({
     setSelection(null);
   };
 
-  const saveNote = () => {
+  // Форму закрываем и «сохранена» говорим только после записи: раньше текст
+  // стирался сразу, и при сбое хранилища человек терял написанное, успев
+  // увидеть подтверждение.
+  const saveNote = async () => {
     const value = noteText.trim();
-    if (!value || !noteRange) return;
-    onCreateNote(noteRange, value);
-    setNoteRange(null);
-    setNoteText("");
-    setStatus("Заметка сохранена");
+    if (!value || !noteRange || saving) return;
+    setSaving(true);
+    setNoteFailed(false);
+    try {
+      await onCreateNote(noteRange, value);
+      setNoteRange(null);
+      setNoteText("");
+      setStatus("Заметка сохранена");
+    } catch {
+      setNoteFailed(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (noteRange) {
@@ -102,12 +116,18 @@ export function AnnotationToolbar({
           onChange={(event) => setNoteText(event.target.value)}
           className="reader-field mt-3 min-h-24 w-full rounded-xl border p-3 text-base"
         />
+        {noteFailed && (
+          <p role="alert" className="reader-danger mt-2 text-sm">
+            Заметка не сохранилась. Текст на месте — попробуйте ещё раз.
+          </p>
+        )}
         <div className="mt-3 flex justify-end gap-2">
           <button
             type="button"
             onClick={() => {
               setNoteRange(null);
               setNoteText("");
+              setNoteFailed(false);
             }}
             className="reader-hover min-h-11 rounded-xl px-4 text-sm"
           >
@@ -115,8 +135,8 @@ export function AnnotationToolbar({
           </button>
           <button
             type="button"
-            onClick={saveNote}
-            disabled={!noteText.trim()}
+            onClick={() => void saveNote()}
+            disabled={!noteText.trim() || saving}
             className="min-h-11 rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             Сохранить заметку
@@ -177,6 +197,7 @@ export function AnnotationToolbar({
         onClick={() => {
           setNoteRange(selection.range);
           setNoteText("");
+          setNoteFailed(false);
           done();
         }}
         className={action}

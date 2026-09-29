@@ -44,12 +44,30 @@ export function ReaderNotesPanel({
   /** Название стиха, если он в открытой главе. */
   unitTitle(chapterSlug: string, unitId: string): string | null;
   onJump(chapterSlug: string, unitId: string): void;
-  onUpdateNote(id: string, noteText: string): void;
+  /** Отклонённый промис — правка не записалась: поле остаётся с текстом. */
+  onUpdateNote(id: string, noteText: string): Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>("notes");
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
     null,
   );
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  // Поле закрываем только после записи, иначе при сбое правка терялась.
+  const save = async (id: string, text: string) => {
+    if (saving) return;
+    setSaving(true);
+    setFailed(false);
+    try {
+      await onUpdateNote(id, text);
+      setEditing(null);
+    } catch {
+      setFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const where = (chapterSlug: string, unitId: string) =>
     [chapterTitle(chapterSlug), unitTitle(chapterSlug, unitId)]
@@ -135,21 +153,29 @@ export function ReaderNotesPanel({
                       }
                       className="reader-field min-h-20 w-full rounded-lg border p-2 text-sm"
                     />
+                    {failed && (
+                      <p role="alert" className="reader-danger text-sm">
+                        Заметка не сохранилась. Текст на месте — попробуйте
+                        ещё раз.
+                      </p>
+                    )}
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => setEditing(null)}
+                        onClick={() => {
+                          setEditing(null);
+                          setFailed(false);
+                        }}
                         className="reader-hover min-h-10 rounded-lg px-3 text-sm"
                       >
                         Отмена
                       </button>
                       <button
                         type="button"
-                        disabled={!editing.text.trim()}
-                        onClick={() => {
-                          onUpdateNote(note.id, editing.text.trim());
-                          setEditing(null);
-                        }}
+                        disabled={!editing.text.trim() || saving}
+                        onClick={() =>
+                          void save(note.id, editing.text.trim())
+                        }
                         className="min-h-10 rounded-lg bg-gradient-to-r from-magenta to-[#B23EFF] px-3 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         Сохранить заметку
@@ -162,9 +188,10 @@ export function ReaderNotesPanel({
                     <button
                       type="button"
                       aria-label={`Изменить заметку: ${note.noteText ?? ""}`}
-                      onClick={() =>
-                        setEditing({ id: note.id, text: note.noteText ?? "" })
-                      }
+                      onClick={() => {
+                        setFailed(false);
+                        setEditing({ id: note.id, text: note.noteText ?? "" });
+                      }}
                       className="reader-accent reader-hover min-h-9 shrink-0 rounded-lg px-2 text-xs font-semibold"
                     >
                       Изменить
