@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,8 +11,10 @@ import {
   Smartphone,
 } from "lucide-react";
 import {
+  TOUR_MOBILE_QUERY,
   TOUR_WATCHED_KEY,
   parseTourWatched,
+  pickTourVideo,
   tourChapterIndex,
   type TourChapter,
 } from "@/lib/tour";
@@ -217,6 +219,17 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
   );
 }
 
+function subscribeMobile(onChange: () => void) {
+  const query = window.matchMedia?.(TOUR_MOBILE_QUERY);
+  query?.addEventListener("change", onChange);
+  return () => query?.removeEventListener("change", onChange);
+}
+
+/**
+ * Видео главы: вертикальная версия на телефоне, горизонтальная на
+ * компьютере (`pickTourVideo`). До гидрации — компьютерная: сервер экрана
+ * не знает.
+ */
 function ChapterVideo({
   chapter,
   onEnded,
@@ -224,7 +237,14 @@ function ChapterVideo({
   chapter: TourChapter;
   onEnded: () => void;
 }) {
-  if (!chapter.videoUrl) {
+  const mobile = useSyncExternalStore(
+    subscribeMobile,
+    () => window.matchMedia?.(TOUR_MOBILE_QUERY).matches ?? false,
+    () => false,
+  );
+  const video = pickTourVideo(chapter.video, mobile);
+
+  if (!video) {
     return (
       <div className="glass flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-glass-brd text-center">
         <Clapperboard aria-hidden className="size-10 text-text-2" />
@@ -237,14 +257,20 @@ function ChapterVideo({
   }
   return (
     <video
-      src={chapter.videoUrl}
-      poster={chapter.posterUrl ?? undefined}
+      key={video.url}
+      src={video.url}
+      poster={chapter.video.posterUrl ?? undefined}
       controls
       playsInline
       preload="metadata"
       onEnded={onEnded}
       aria-label={`Видео-презентация: ${chapter.title}`}
-      className="aspect-video w-full rounded-3xl bg-bg-2"
+      className={cn(
+        "rounded-3xl bg-bg-2",
+        video.vertical
+          ? "mx-auto aspect-[9/16] max-h-[80dvh] max-w-full"
+          : "aspect-video w-full",
+      )}
     />
   );
 }
