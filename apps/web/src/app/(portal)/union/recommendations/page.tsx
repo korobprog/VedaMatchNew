@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Star, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 import { RecommendationsView } from "@/components/union/recommendations-view";
 import { RecommendationsEmpty } from "@/components/union/recommendations-empty";
@@ -7,8 +8,13 @@ import { RecommendationFilters } from "@/components/union/recommendation-filters
 import { UnionPageSizeSelect } from "@/components/union/page-size-select";
 import {
   DEFAULT_UNION_PAGE_SIZE,
+  SMALLEST_UNION_PAGE_SIZE,
   resolveUnionPageSize,
 } from "@/components/union/page-size";
+import {
+  UnionToggleLink,
+  toggledHref,
+} from "@/components/union/union-toggle-link";
 import { UnionNav } from "@/components/union/union-nav";
 import { UnionTabBar } from "@/components/union/union-tabbar";
 import { UnionTopBar } from "@/components/union/union-top-bar";
@@ -56,6 +62,40 @@ export default async function UnionRecommendationsPage({
         )?.total ?? 0)
       : 0;
 
+  // «Показать всех» и «Избранное» (VED-652): по умолчанию лента — анкеты
+  // противоположного пола; «Показать всех» снимает этот отбор, повторный
+  // клик возвращает его.
+  const path = "/union/recommendations";
+  const showEveryone = first(params.gender) === "all";
+  const favoritesOnly = first(params.favoritesOnly) === "true";
+  const toolbar = (
+    <>
+      <UnionToggleLink
+        href={toggledHref(path, params, "gender", "all")}
+        icon={<Users size={20} aria-hidden />}
+        label="Показать всех"
+        active={showEveryone}
+      />
+      <UnionToggleLink
+        href={toggledHref(path, params, "favoritesOnly", "true")}
+        icon={
+          <Star
+            size={20}
+            aria-hidden
+            fill={favoritesOnly ? "currentColor" : "none"}
+          />
+        }
+        label="Избранное"
+        active={favoritesOnly}
+      />
+    </>
+  );
+  // «Найдено» — в заголовке (VED-652), а не в ряду кнопок.
+  const found =
+    recommendations.items.length > 0
+      ? `Найдено: ${recommendations.total}`
+      : null;
+
   return (
     <>
       <BackgroundOrbs />
@@ -64,11 +104,14 @@ export default async function UnionRecommendationsPage({
           набирается три сотни пикселей служебной обвязки, а анкеты — то,
           ради чего человек пришёл. На десктопе места хватает. */}
       <main className="mx-auto max-w-6xl px-4 py-4 pb-28 md:py-8">
-        <UnionTopBar title="Знакомства" />
+        <UnionTopBar title="Знакомства" aside={found} />
         <div className="mb-6 hidden md:block">
-          <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
-            Знакомства
-          </h1>
+          <div className="flex items-baseline gap-4">
+            <h1 className="font-display text-2xl font-bold text-text-0 sm:text-3xl">
+              Знакомства
+            </h1>
+            {found && <span className="text-sm text-text-2">{found}</span>}
+          </div>
           <p className="mt-1 text-sm text-text-1">
             Люди, которые ближе всего вам по целям, ценностям и пути.
           </p>
@@ -83,12 +126,17 @@ export default async function UnionRecommendationsPage({
         <HistoryResetBanner restoredCount={first(params.historyReset)} />
 
         {recommendations.items.length === 0 ? (
-          <RecommendationsEmpty
-            params={params}
-            narrowingFilterCount={countNarrowingFilters(params)}
-            includeSwiped={includeSwiped}
-            viewedMatchCount={viewedMatchCount}
-          />
+          <>
+            {/* Переключатели и над пустой выдачей: включённое «Избранное» без
+              избранных иначе нечем было бы выключить. */}
+            <div className="mb-4 flex items-center gap-2">{toolbar}</div>
+            <RecommendationsEmpty
+              params={params}
+              narrowingFilterCount={countNarrowingFilters(params)}
+              includeSwiped={includeSwiped}
+              viewedMatchCount={viewedMatchCount}
+            />
+          </>
         ) : (
           <>
             {/* «Найдено» переехало в ряд кнопок режима — отдельной строкой
@@ -101,14 +149,14 @@ export default async function UnionRecommendationsPage({
             )}
             <RecommendationsView
               items={recommendations.items}
-              total={recommendations.total}
+              toolbar={toolbar}
             />
             {/* «Показывать по» — рядом с перелистыванием, там и возникает
                 вопрос. Не показываем, когда выбирать нечего: при выдаче
                 меньше самой мелкой страницы любое значение даёт один и тот
                 же экран. */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              {(recommendations.total > DEFAULT_UNION_PAGE_SIZE ||
+              {(recommendations.total > SMALLEST_UNION_PAGE_SIZE ||
                 resolveUnionPageSize(params.pageSize) !==
                   DEFAULT_UNION_PAGE_SIZE) && (
                 <UnionPageSizeSelect params={params} />

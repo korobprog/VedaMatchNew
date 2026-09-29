@@ -385,8 +385,13 @@ export interface UnionRecommendationFilters {
   lon?: number;
   radiusKm?: number;
   stage?: SpiritualStage;
-  /** Профили без указанного пола не проходят явно заданный фильтр. */
-  gender?: Gender;
+  /**
+   * Профили без указанного пола не проходят явно заданный фильтр. Не задан —
+   * противоположный пол смотрящего (VED-652); `all` — все полы.
+   */
+  gender?: Gender | "all";
+  /** Только анкеты из своего «Избранного» (VED-652). */
+  favoritesOnly?: boolean;
   ageMin?: number;
   ageMax?: number;
   /** Профили без указанного питания не проходят явно заданный фильтр. */
@@ -436,6 +441,11 @@ export interface UnionRecommendationsResponse {
   pageSize: number;
   totalPages: number;
   intentionCounts: UnionIntentionCounts;
+  /**
+   * По какому полу отобрана лента (VED-652): выбранный в фильтре или
+   * противоположный по умолчанию. `null` — все полы.
+   */
+  appliedGender: Gender | null;
 }
 
 export interface UnionConnectionSummary {

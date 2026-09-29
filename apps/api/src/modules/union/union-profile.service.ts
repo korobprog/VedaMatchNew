@@ -59,6 +59,7 @@ import {
 } from './union-matching.service';
 import { UnionArchiveService } from './union-archive.service';
 import { UnionSwipeService } from './union-swipe.service';
+import { resolveUnionGenderFilter } from './union-gender-default';
 
 const INTENTION_TYPES: UnionIntentionType[] = [
   'family',
@@ -132,7 +133,8 @@ const INCOME_VALUES: UnionIncomeLevel[] = [
   'prefer_not_say',
 ];
 const DEFAULT_PAGE_SIZE = 12;
-const MAX_PAGE_SIZE = 50;
+/** 100 — «25, 50, 100 человек, а не 12 за раз» (VED-654). */
+const MAX_PAGE_SIZE = 100;
 /**
  * Сколько анкет поднимать из БД под скоринг. Раньше грузилась вся таблица;
  * теперь грубые фильтры (пол, возраст, статусы, уже отсмотренные) уходят в
@@ -367,6 +369,22 @@ export class UnionProfileService {
     // молча отменяла бы осознанное «убрать совсем».
     const archived = await this.archive.archivedUserIds(userId);
     const normalizedFilters = this.normalizeFilters(filters);
+    // Пол: выбранный, «все» или противоположный по умолчанию (VED-652).
+    normalizedFilters.gender = resolveUnionGenderFilter(
+      filters.gender,
+      me.user.gender,
+      normalizedFilters.showAll === true,
+    );
+    // «Избранное» (VED-652): только свои избранные анкеты — отобранные уже
+    // людьми, поэтому и отсмотренные среди них показываются.
+    const favoriteIds = normalizedFilters.favoritesOnly
+      ? (
+          await this.prisma.unionFavorite.findMany({
+            where: { ownerId: userId },
+            select: { favoriteUserId: true },
+          })
+        ).map((row) => row.favoriteUserId)
+      : null;
     /*
       Мои молчаливые сужения. Желаемый возраст партнёра стоит в анкете, а
       режет он ленту — человек об этом не знает и ищет причину в фильтрах
@@ -386,6 +404,7 @@ export class UnionProfileService {
           : [...swiped, ...hidden, ...archived],
         filters: normalizedFilters,
         myAge: myAgePreference,
+        onlyUserIds: favoriteIds,
       }),
       // Потолок кандидатов: сначала недавно активные — им скоринг нужнее.
       orderBy: [
@@ -549,6 +568,7 @@ export class UnionProfileService {
       pageSize,
       totalPages,
       intentionCounts,
+      appliedGender: normalizedFilters.gender ?? null,
     };
   }
 
@@ -784,8 +804,13 @@ export class UnionProfileService {
       verifiedOnly: filters.verifiedOnly === true,
       photoVerifiedOnly: filters.photoVerifiedOnly === true,
       // «Показать всех» включает и отсмотренных: иначе кнопка обещает всех, а
-      // показывает тех, по кому решения ещё не приняты.
-      includeSwiped: filters.includeSwiped === true || filters.showAll === true,
+      // показывает тех, по кому решения ещё не приняты. «Избранное» — тоже:
+      // избранных обычно уже отсмотрели.
+      includeSwiped:
+        filters.includeSwiped === true ||
+        filters.showAll === true ||
+        filters.favoritesOnly === true,
+      favoritesOnly: filters.favoritesOnly === true,
       showAll: filters.showAll === true,
       format: ['online', 'offline', 'any'].includes(String(filters.format))
         ? filters.format
@@ -1476,6 +1501,8 @@ export function buildRecommendationCandidateWhere(input: {
   filters: UnionRecommendationFilters;
   myAge: MyAgePreference;
   now?: Date;
+  /** Только эти анкеты («Избранное», VED-652); `null` — без ограничения. */
+  onlyUserIds?: string[] | null;
 }): Prisma.UnionProfileWhereInput {
   const { userId, filters, myAge } = input;
   const now = input.now ?? new Date();
@@ -1487,7 +1514,7 @@ export function buildRecommendationCandidateWhere(input: {
     accountStatus: 'active',
     pendingDeletionAt: null,
   };
-  if (filters.gender) user.gender = filters.gender;
+  if (filters.gender && filters.gender !== 'all') user.gender = filters.gender;
   if (filters.stage) user.spiritualStage = filters.stage;
   if (filters.photoVerifiedOnly) user.photoVerifiedAt = { not: null };
   if (filters.verifiedOnly) {
@@ -1529,9 +1556,11 @@ export function buildRecommendationCandidateWhere(input: {
 
   const where: Prisma.UnionProfileWhereInput = {
     isActive: true,
-    userId: excluded.length
-      ? { not: userId, notIn: excluded }
-      : { not: userId },
+    userId: {
+      not: userId,
+      ...(excluded.length ? { notIn: excluded } : {}),
+      ...(input.onlyUserIds ? { in: input.onlyUserIds } : {}),
+    },
     user,
   };
   if (filters.diet) where.diet = filters.diet;

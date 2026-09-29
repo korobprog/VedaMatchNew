@@ -6,17 +6,19 @@
  * заканчивается, не дойдя до низа окна, и человек листает страницами то, что
  * поместилось бы целиком.
  *
- * Потолок — пятьдесят: столько принимает API (`MAX_PAGE_SIZE` в
+ * VED-654: «сделай 25, 50, 100 человек, а не 12 за раз. По умолчанию — 100».
+ * Потолок — сто: столько принимает API (`MAX_PAGE_SIZE` в
  * `union-profile.service.ts`), и просить больше значит молча получить
- * обрезанный ответ. Сорок восемь, а не пятьдесят, потому что делится и на
- * два, и на три, и на четыре — по стольку анкет стоит в ряду при разной
- * ширине, и последний ряд не остаётся щербатым.
+ * обрезанный ответ. Двенадцать осталось в списке — для телефона.
  */
-export const UNION_PAGE_SIZES = [12, 24, 48] as const;
+export const UNION_PAGE_SIZES = [12, 25, 50, 100] as const;
 
 export type UnionPageSize = (typeof UNION_PAGE_SIZES)[number];
 
-export const DEFAULT_UNION_PAGE_SIZE: UnionPageSize = 12;
+export const DEFAULT_UNION_PAGE_SIZE: UnionPageSize = 100;
+
+/** Меньше этого выбирать нечего: любое значение даёт один и тот же экран. */
+export const SMALLEST_UNION_PAGE_SIZE: UnionPageSize = UNION_PAGE_SIZES[0];
 
 /**
  * Значение из адреса — в размер страницы. Всё, чего нет в списке, считается
