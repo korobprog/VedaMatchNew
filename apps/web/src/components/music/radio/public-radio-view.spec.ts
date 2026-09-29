@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   radioAvatarStack,
+  radioClock,
+  radioProgress,
   radioListenersLabel,
   radioPromoIndex,
 } from "./public-radio-view";
@@ -47,5 +49,27 @@ describe("radioPromoIndex", () => {
   it("без эфира — первый баннер", () => {
     expect(radioPromoIndex(null, 5)).toBe(0);
     expect(radioPromoIndex("x", 0)).toBe(0);
+  });
+});
+
+describe("radioProgress", () => {
+  const item = { startsAt: "2026-09-29T10:00:00.000Z", durationMs: 200_000 };
+  const start = Date.parse(item.startsAt);
+
+  it("доля отзвучавшего", () => {
+    expect(radioProgress(item, start + 50_000)).toBe(0.25);
+  });
+
+  it("не выходит за 0…1 и терпит пустой эфир", () => {
+    expect(radioProgress(item, start - 5_000)).toBe(0);
+    expect(radioProgress(item, start + 999_000)).toBe(1);
+    expect(radioProgress(null, start)).toBe(0);
+  });
+});
+
+describe("radioClock", () => {
+  it("часы и минуты по местному времени", () => {
+    const local = new Date(2026, 8, 29, 9, 5);
+    expect(radioClock(local.toISOString())).toBe("09:05");
   });
 });

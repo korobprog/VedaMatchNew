@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import {
   MUSIC_RADIO_LISTENER_TTL_MS,
   MUSIC_RADIO_PUBLIC_AVATARS,
+  MUSIC_RADIO_PUBLIC_RECENT,
   resolveDisplayName,
   type MusicRadioInsertsDto,
   type MusicRadioItemDto,
@@ -122,13 +123,14 @@ export class MusicRadioService {
 
   /**
    * Эфир для публичной страницы `/radio` (VED-645): то же, что видит
-   * вошедший, плюс аватарки слушателей — «нас много». Только фото по
+   * вошедший, плюс аватарки слушателей — «нас много» — и три последние
+   * отзвучавшие записи. Только фото по
    * ссылке (`avatarUrl`): загруженное лежит в приватном бакете, а
    * подписывать его гостю незачем. Без удалённых, заблокированных и
    * служебного агента.
    */
   async publicState(now = new Date()): Promise<MusicRadioPublicStateDto> {
-    const [state, rows] = await Promise.all([
+    const [state, rows, aired] = await Promise.all([
       this.state(now),
       this.prisma.musicRadioListener.findMany({
         where: {
@@ -146,12 +148,46 @@ export class MusicRadioService {
         take: MUSIC_RADIO_PUBLIC_AVATARS,
         select: { user: { select: { avatarUrl: true } } },
       }),
+      // «Недавно в эфире»: записи, начавшиеся раньше «сейчас»; играющая
+      // отсекается ниже по слоту. Вставки редакции не показываем — это не
+      // запись, на которую можно перейти в медиатеку.
+      this.prisma.musicRadioSlot.findMany({
+        where: { trackId: { not: null }, startsAt: { lte: now } },
+        orderBy: { startsAt: 'desc' },
+        take: MUSIC_RADIO_PUBLIC_RECENT + 1,
+        select: {
+          id: true,
+          startsAt: true,
+          track: {
+            select: {
+              id: true,
+              title: true,
+              artist: { select: { name: true } },
+            },
+          },
+        },
+      }),
     ]);
     return {
       ...state,
       listenerAvatars: rows
         .map((row) => row.user.avatarUrl)
         .filter((url): url is string => !!url),
+      recent: aired
+        .flatMap(({ id, startsAt, track }) =>
+          track && id !== state.current?.slotId
+            ? [
+                {
+                  slotId: id,
+                  startsAt: startsAt.toISOString(),
+                  trackId: track.id,
+                  title: track.title,
+                  artistName: track.artist?.name ?? null,
+                },
+              ]
+            : [],
+        )
+        .slice(0, MUSIC_RADIO_PUBLIC_RECENT),
     };
   }
 

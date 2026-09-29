@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { MusicRadioPublicStateDto } from "@vedamatch/shared";
 import { fetchPublicMusicRadio } from "@/lib/music-radio-client";
@@ -30,6 +31,15 @@ function makeState(
     next: null,
     listeners: 12,
     listenerAvatars: ["https://a/1.jpg", "https://a/2.jpg", "https://a/3.jpg"],
+    recent: [
+      {
+        slotId: "slot-0",
+        startsAt: new Date(now.getTime() - 400_000).toISOString(),
+        trackId: "track-0",
+        title: "Нрисимха кавача",
+        artistName: "Хор общины",
+      },
+    ],
     ...overrides,
   };
 }
@@ -69,5 +79,31 @@ describe("PublicRadio", () => {
       0,
     );
     expect(screen.getByRole("link", { name: /Telegram/ })).toBeInTheDocument();
+  });
+
+  it("недавно в эфире, прогресс, «Поделиться» и точки баннера", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchPublicMusicRadio).mockResolvedValue(makeState());
+    render(<PublicRadio manifest={null} showTelegram={false} />);
+
+    expect(await screen.findByText("Нрисимха кавача")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "В медиатеке" })).toHaveAttribute(
+      "href",
+      "/music/tracks/track-0",
+    );
+    expect(
+      screen.getByRole("progressbar", { name: "Сколько отзвучало из записи" }),
+    ).toHaveAttribute("aria-valuenow", "3");
+    expect(
+      screen.getByRole("button", { name: "Поделиться эфиром" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Установить приложение" }),
+    ).toHaveAttribute("href", "#install");
+
+    const dots = screen.getAllByRole("button", { name: /^Баннер \d/ });
+    expect(dots.length).toBeGreaterThan(1);
+    await user.click(dots[1]);
+    expect(dots[1]).toHaveAttribute("aria-current", "true");
   });
 });

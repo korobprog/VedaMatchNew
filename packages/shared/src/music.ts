@@ -1535,9 +1535,24 @@ export const MUSIC_RADIO_PUBLIC_AVATARS = 8;
  * Рядом со счётчиком — аватарки тех, кто слушает сейчас, без имён и
  * без ссылок на профиль: гостю незачем знать, кто именно слушает.
  */
+/** Сколько отзвучавших записей показывает «Недавно в эфире». */
+export const MUSIC_RADIO_PUBLIC_RECENT = 3;
+
+/** Отзвучавшая запись эфира — строка «Недавно в эфире». */
+export interface MusicRadioRecentDto {
+  slotId: string;
+  /** Когда прозвучала, ISO. */
+  startsAt: string;
+  trackId: string;
+  title: string;
+  artistName: string | null;
+}
+
 export interface MusicRadioPublicStateDto extends MusicRadioStateDto {
   /** Ссылки на фото слушателей, не больше `MUSIC_RADIO_PUBLIC_AVATARS`. */
   listenerAvatars: string[];
+  /** Отзвучавшие записи, свежие первыми, не больше `MUSIC_RADIO_PUBLIC_RECENT`. */
+  recent: MusicRadioRecentDto[];
 }
 
 /** Состояние вставки для редакции. */

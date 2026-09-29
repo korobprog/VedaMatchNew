@@ -53,3 +53,22 @@ export function radioPromoIndex(slotId: string | null, count: number): number {
   }
   return hash % count;
 }
+
+/** Доля отзвучавшего в записи эфира, 0…1 — полоса прогресса. */
+export function radioProgress(
+  item: { startsAt: string; durationMs: number } | null,
+  serverNowMs: number,
+): number {
+  if (!item || item.durationMs <= 0) return 0;
+  const done =
+    (serverNowMs - new Date(item.startsAt).getTime()) / item.durationMs;
+  return Math.min(1, Math.max(0, done));
+}
+
+/** «14:05» — время строки «Недавно в эфире» по часам гостя. */
+export function radioClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
