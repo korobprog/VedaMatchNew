@@ -9,7 +9,6 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import {
   MUSIC_RADIO_LISTENER_TTL_MS,
-  MUSIC_RADIO_PUBLIC_AVATARS,
   MUSIC_RADIO_PUBLIC_RECENT,
   resolveDisplayName,
   type MusicRadioInsertsDto,
@@ -22,6 +21,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { catalogOnlyCondition } from './music-audiobook-scope';
 import { musicCoverBaseUrl } from './music-cover-file';
 import { MusicMetadataReader } from './music-metadata-reader';
+import { publicListenerSummary } from './music-radio-public';
 import {
   insertExtension,
   normalizeInsertMime,
@@ -47,6 +47,8 @@ const RESUME_GAP_MS = 60_000;
 const MAX_SLOTS_PER_PASS = 20;
 /** Сколько хранится отзвучавший эфир вне текущего круга. */
 const HISTORY_MS = 24 * 3_600_000;
+/** Предел слушателей, которых разбирает публичная страница радио. */
+const PUBLIC_LISTENERS_LIMIT = 1000;
 /** Сколько вставок показывает редакции список. */
 const INSERTS_LIMIT = 50;
 
@@ -123,8 +125,8 @@ export class MusicRadioService {
 
   /**
    * Эфир для публичной страницы `/radio` (VED-645): то же, что видит
-   * вошедший, плюс аватарки слушателей — «нас много» — и три последние
-   * отзвучавшие записи. Только фото по
+   * вошедший, плюс «нас много» — фото, два имени и число городов тех, кто
+   * не скрыл себя, — и три последние отзвучавшие записи. Только фото по
    * ссылке (`avatarUrl`): загруженное лежит в приватном бакете, а
    * подписывать его гостю незачем. Без удалённых, заблокированных и
    * служебного агента.
@@ -132,21 +134,42 @@ export class MusicRadioService {
   async publicState(now = new Date()): Promise<MusicRadioPublicStateDto> {
     const [state, rows, aired] = await Promise.all([
       this.state(now),
+      // Все живые слушатели, кто не скрыл себя: «Никому» в показе
+      // прослушиваний или выключенный показ на радио (VED-645) прячет и
+      // фото, и имя, и город. Предел — страховка: столько разом не бывает.
       this.prisma.musicRadioListener.findMany({
         where: {
           lastSeenAt: {
             gt: new Date(now.getTime() - MUSIC_RADIO_LISTENER_TTL_MS),
           },
           user: {
-            avatarUrl: { not: null },
             deletedAt: null,
             accountStatus: 'active',
             isAgent: false,
+            NOT: {
+              musicSettings: {
+                is: {
+                  OR: [
+                    { radioPublicPresence: false },
+                    { nowPlayingVisibility: 'nobody' },
+                  ],
+                },
+              },
+            },
           },
         },
         orderBy: { lastSeenAt: 'desc' },
-        take: MUSIC_RADIO_PUBLIC_AVATARS,
-        select: { user: { select: { avatarUrl: true } } },
+        take: PUBLIC_LISTENERS_LIMIT,
+        select: {
+          user: {
+            select: {
+              avatarUrl: true,
+              name: true,
+              spiritualName: true,
+              homeLocation: true,
+            },
+          },
+        },
       }),
       // «Недавно в эфире»: записи, начавшиеся раньше «сейчас»; играющая
       // отсекается ниже по слоту. Вставки редакции не показываем — это не
@@ -168,11 +191,12 @@ export class MusicRadioService {
         },
       }),
     ]);
+    const listeners = publicListenerSummary(rows.map((row) => row.user));
     return {
       ...state,
-      listenerAvatars: rows
-        .map((row) => row.user.avatarUrl)
-        .filter((url): url is string => !!url),
+      listenerAvatars: listeners.avatars,
+      listenerNames: listeners.names,
+      listenerCities: listeners.cities,
       recent: aired
         .flatMap(({ id, startsAt, track }) =>
           track && id !== state.current?.slotId

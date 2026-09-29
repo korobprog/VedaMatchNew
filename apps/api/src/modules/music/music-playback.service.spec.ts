@@ -262,6 +262,7 @@ describe('MusicPlaybackService.settings', () => {
       autoplay: true,
       lineage: null,
       ...PLAYER,
+      radioPublicPresence: true,
     });
   });
 

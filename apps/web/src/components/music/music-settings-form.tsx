@@ -129,6 +129,36 @@ export function MusicSettingsForm({
         </label>
       </div>
 
+      {/* VED-645: публичная страница радио называет слушателей по имени и
+          показывает фото — гостям, без входа. Скрыться оттуда можно, не
+          скрывая прослушивания от друзей. */}
+      <div className="glass rounded-2xl border border-glass-brd p-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={
+              settings.radioPublicPresence &&
+              settings.nowPlayingVisibility !== "nobody"
+            }
+            disabled={settings.nowPlayingVisibility === "nobody"}
+            onChange={(event) =>
+              void update({ radioPublicPresence: event.target.checked })
+            }
+            className="mt-0.5 h-4 w-4 shrink-0"
+          />
+          <span className="flex flex-col">
+            <span className="text-sm text-text-0">
+              Показывать меня на странице радио
+            </span>
+            <span className="text-xs text-text-2">
+              {settings.nowPlayingVisibility === "nobody"
+                ? "Выключено: прослушивания скрыты от всех"
+                : "Пока вы слушаете эфир, гости страницы vedamatch.ru/radio видят ваше фото, имя без фамилии и число городов слушателей"}
+            </span>
+          </span>
+        </label>
+      </div>
+
       {showsLineage && (
         <fieldset className="glass rounded-2xl border border-glass-brd p-4">
           <legend className="px-1 text-sm font-semibold text-text-0">

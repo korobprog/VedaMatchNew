@@ -5453,6 +5453,9 @@ model MusicSettings {
   playerShowSeek       Boolean                   @default(false)
   playerShowBookmark   Boolean                   @default(false)
   playerShowHistory    Boolean                   @default(false)
+  /// Показывать меня на публичной странице радио (VED-645): имя и фото,
+  /// пока слушаю эфир. «Никому» в `nowPlayingVisibility` прячет и отсюда.
+  radioPublicPresence  Boolean                   @default(true)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 }

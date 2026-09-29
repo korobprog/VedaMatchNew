@@ -4,6 +4,7 @@ import {
   radioClock,
   radioProgress,
   radioListenersLabel,
+  radioListenersNote,
   radioPromoIndex,
 } from "./public-radio-view";
 
@@ -71,5 +72,27 @@ describe("radioClock", () => {
   it("часы и минуты по местному времени", () => {
     const local = new Date(2026, 8, 29, 9, 5);
     expect(radioClock(local.toISOString())).toBe("09:05");
+  });
+});
+
+describe("radioListenersNote", () => {
+  it("два имени, остальные числом и города", () => {
+    expect(radioListenersNote(["Нитай", "Радха"], 12, 5)).toBe(
+      "Нитай, Радха и ещё 10 человек из 5 городов",
+    );
+    expect(radioListenersNote(["Нитай", "Радха"], 4, 21)).toBe(
+      "Нитай, Радха и ещё 2 человека из 21 города",
+    );
+  });
+
+  it("все названы — без «ещё»; один город — без городов", () => {
+    expect(radioListenersNote(["Нитай", "Радха", "Гопал"], 3, 1)).toBe(
+      "Нитай, Радха и Гопал",
+    );
+  });
+
+  it("мало слушателей или некого назвать — строки нет", () => {
+    expect(radioListenersNote(["Нитай"], 2, 3)).toBeNull();
+    expect(radioListenersNote([], 30, 3)).toBeNull();
   });
 });
