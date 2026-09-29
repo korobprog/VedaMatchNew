@@ -162,11 +162,20 @@ async function seedReader(options?: { withProgress?: boolean }) {
 
 function selectText(testId: string, start: number, end: number) {
   const block = screen.getByTestId(testId);
-  const text = block.querySelector("p")?.firstChild;
-  if (!text) throw new Error("Expected a text node in the reader block");
+  // По смещениям в тексте блока: подсветка режет текст на узлы (VED-662).
+  const point = (target: number): [Text, number] => {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    let offset = 0;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node as Text;
+      if (target <= offset + text.data.length) return [text, target - offset];
+      offset += text.data.length;
+    }
+    throw new Error("Expected a text node in the reader block");
+  };
   const range = document.createRange();
-  range.setStart(text, start);
-  range.setEnd(text, end);
+  range.setStart(...point(start));
+  range.setEnd(...point(end));
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
@@ -236,6 +245,28 @@ describe("ReaderScreen", () => {
     expect(onNavigate).toHaveBeenLastCalledWith("chapter-1");
   });
 
+  it("листает главы стрелками, но не из поля ввода (VED-662)", async () => {
+    await seedReader();
+    const onNavigate = vi.fn();
+    render(
+      <ReaderScreen
+        userId={userId}
+        bookSlug={bookSlug}
+        chapterSlug="chapter-1"
+        onNavigate={onNavigate}
+      />,
+    );
+    await screen.findByRole("heading", { name: "Chapter One" });
+
+    fireEvent.keyDown(screen.getByLabelText("Ширина строки"), { key: "ArrowRight" });
+    expect(onNavigate).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(onNavigate).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(onNavigate).toHaveBeenCalledWith("chapter-2");
+    expect(screen.getByText("Глава 1 из 2")).toBeInTheDocument();
+  });
+
   it("shows an offline message when the local chapter is unavailable", async () => {
     await seedReader();
     render(
@@ -263,12 +294,14 @@ describe("ReaderScreen", () => {
     );
     await screen.findByRole("heading", { name: "Chapter One" });
 
-    await user.selectOptions(screen.getByLabelText("Тема"), "dark");
-    expect(document.querySelector('[data-reader-theme="dark"]')).toHaveClass(
-      "reader-shell",
+    await user.click(screen.getByLabelText("Оформление"));
+    await user.click(screen.getByRole("button", { name: "Ночь" }));
+    expect(document.querySelector("main")).toHaveAttribute(
+      "data-reader-theme",
+      "dark",
     );
 
-    await user.selectOptions(screen.getByLabelText("Тема"), "sepia");
+    await user.click(screen.getByRole("button", { name: "Пергамент" }));
     await user.click(screen.getByRole("button", { name: "Увеличить шрифт" }));
     await user.selectOptions(screen.getByLabelText("Ширина строки"), "wide");
     await user.click(screen.getByRole("button", { name: "Добавить закладку" }));
@@ -312,14 +345,22 @@ describe("ReaderScreen", () => {
     await screen.findByRole("heading", { name: "Chapter One" });
 
     selectText("block-unit-1-translationHtml", 0, 4);
-    await user.click(screen.getByRole("button", { name: "Выделить цветом" }));
+    await user.click(screen.getByRole("button", { name: "Выделить" }));
+    // Выделение сразу видно в тексте (VED-662).
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("block-unit-1-translationHtml").querySelector("mark")?.textContent,
+      ).toBe("Yoga"),
+    );
     selectText("block-unit-1-translationHtml", 5, 11);
-    await user.click(screen.getByRole("button", { name: "Заметка к выделенному" }));
+    await user.click(screen.getByRole("button", { name: "Заметка" }));
     await user.type(screen.getByLabelText("Текст заметки"), "Initial note");
     await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
 
     expect(await screen.findByText("Initial note")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Edit Initial note" }));
+    await user.click(
+      screen.getByRole("button", { name: "Изменить заметку: Initial note" }),
+    );
     await user.clear(screen.getByLabelText("Текст заметки"));
     await user.type(screen.getByLabelText("Текст заметки"), "Edited note");
     await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));

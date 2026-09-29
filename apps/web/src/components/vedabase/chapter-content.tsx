@@ -1,6 +1,13 @@
-import { forwardRef } from "react";
+import { forwardRef, useCallback, useLayoutEffect, useRef } from "react";
 import type { VedabaseChapterDocument, VedabaseReadingUnit } from "@vedamatch/shared";
+import { applyMark, clearMarks, type ReaderMark } from "@/lib/vedabase/highlight-marks";
 import { CopyBlockButton } from "./copy-block-button";
+
+/** Выделение или заметка, привязанные к блоку стиха. */
+export interface ChapterMark extends ReaderMark {
+  unitId: string;
+  block: string;
+}
 
 const fields: Array<{
   key: Exclude<keyof VedabaseReadingUnit, "id" | "title" | "sourceUrl">;
@@ -41,10 +48,42 @@ export const ChapterContent = forwardRef<
   {
     chapter: VedabaseChapterDocument;
     onUnitActivate(unitId: string): void;
+    /** Выделения и заметки главы — подсвечиваются в тексте (VED-662). */
+    marks?: readonly ChapterMark[];
   }
->(function ChapterContent({ chapter, onUnitActivate }, ref) {
+>(function ChapterContent({ chapter, onUnitActivate, marks = [] }, ref) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const setRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      rootRef.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+
+  // Подсветка накладывается на готовый HTML главы и пересобирается целиком:
+  // выделений в главе немного, а частичное обновление легко оставило бы
+  // висящую обёртку от удалённого.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    clearMarks(root);
+    for (const mark of marks) {
+      const block = [
+        ...root.querySelectorAll<HTMLElement>("[data-vedabase-block]"),
+      ].find(
+        (element) =>
+          element.dataset.vedabaseBlock === mark.block &&
+          element.closest<HTMLElement>("[data-unit-id]")?.dataset.unitId ===
+            mark.unitId,
+      );
+      if (block) applyMark(block, mark);
+    }
+  }, [chapter, marks]);
+
   return (
-    <div ref={ref} className="space-y-8">
+    <div ref={setRoot} className="divide-y divide-[var(--reader-border)]">
       {chapter.units.map((unit) => (
         <article
           key={unit.id}
@@ -53,9 +92,11 @@ export const ChapterContent = forwardRef<
           tabIndex={0}
           onClick={() => onUnitActivate(unit.id)}
           onFocus={() => onUnitActivate(unit.id)}
-          className="reader-surface scroll-mt-24 rounded-2xl border p-5"
+          className="scroll-mt-32 py-8 first:pt-0 focus-visible:outline-offset-8"
         >
-          <h2 className="text-xl font-semibold">{unit.title}</h2>
+          <h2 className="reader-accent text-center text-xl font-semibold">
+            {unit.title}
+          </h2>
           {fields.map(({ key, label }) => {
             const html = unit[key];
             if (!html) return null;

@@ -333,7 +333,7 @@ function BookCover({
     <div
       aria-hidden
       className={cn(
-        "flex aspect-[5/7] flex-col justify-between rounded-l-md rounded-r-xl border-l-[6px] border-gold p-3 shadow-[0_10px_24px_rgba(0,0,0,0.25)]",
+        "flex aspect-[5/7] flex-col justify-between rounded-l-md rounded-r-xl border-l-[6px] border-gold p-2 shadow-[0_10px_24px_rgba(0,0,0,0.25)]",
         coverTint(book.slug),
         className,
       )}
@@ -341,7 +341,7 @@ function BookCover({
       <span className="line-clamp-1 text-[10px] uppercase tracking-widest text-text-2">
         {book.author?.split(" ").at(-1) ?? "Библиотека"}
       </span>
-      <span className="line-clamp-4 hyphens-auto break-words font-display text-[11px] font-bold leading-snug text-text-0 sm:text-xs">
+      <span className="line-clamp-4 hyphens-auto break-words font-display text-[10px] font-bold leading-snug text-text-0 sm:p-1 sm:text-xs">
         {book.title}
       </span>
     </div>

@@ -12,11 +12,14 @@ export function ShelfSheet({
   title,
   onClose,
   children,
+  surfaceClassName = "border-glass-brd bg-bg-0 text-text-0",
 }: {
   open: boolean;
   title: string;
   onClose(): void;
   children: ReactNode;
+  /** Подложка: портальная по умолчанию, у читалки — своя тема чтения. */
+  surfaceClassName?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -36,16 +39,16 @@ export function ShelfSheet({
         // Клик мимо содержимого — по самому <dialog>, то есть по подложке.
         if (event.target === event.currentTarget) onClose();
       }}
-      className="m-0 mt-auto max-h-[85dvh] w-full max-w-none rounded-t-3xl border border-glass-brd bg-bg-0 p-0 text-text-0 backdrop:bg-black/60 sm:m-auto sm:max-w-lg sm:rounded-3xl"
+      className={`m-0 mt-auto max-h-[85dvh] w-full max-w-none rounded-t-3xl border p-0 backdrop:bg-black/60 sm:m-auto sm:max-w-lg sm:rounded-3xl ${surfaceClassName}`}
     >
       <div className="flex max-h-[85dvh] flex-col">
-        <header className="flex items-center gap-3 border-b border-glass-brd px-5 py-3">
+        <header className="flex items-center gap-3 border-b [border-color:inherit] px-5 py-3">
           <h2 className="flex-grow font-display text-lg font-bold">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Закрыть"
-            className="flex size-11 items-center justify-center rounded-xl text-text-1 hover:bg-bg-2 hover:text-text-0"
+            className="flex size-11 items-center justify-center rounded-xl opacity-80 hover:opacity-100"
           >
             <X aria-hidden className="size-5" />
           </button>

@@ -1612,6 +1612,13 @@ body:has([data-music-player][data-measured="true"]) {
   color: var(--reader-mark-text);
 }
 
+/* Фрагмент с заметкой (VED-662): та же подложка плюс пунктир, чтобы его
+   отличали от простого выделения не только по цвету. */
+[data-reader-theme] mark[data-kind="note"] {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 /* Карта справочника «Контакты». Leaflet рисует свои панели с z-index до 800 и
    перекрыл бы шапку портала — придавливаем весь контейнер к нулю.
 

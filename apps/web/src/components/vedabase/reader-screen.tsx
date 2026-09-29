@@ -25,13 +25,20 @@ import {
   fetchVedabaseBookManifest,
   fetchVedabaseChapter,
 } from "@/lib/vedabase-client-api";
+import { AnnotationToolbar } from "./annotation-toolbar";
+import { ChapterContent, type ChapterMark } from "./chapter-content";
 import {
-  AnnotationToolbar,
-  type ReaderAnnotationView,
-} from "./annotation-toolbar";
-import { ChapterContent } from "./chapter-content";
-import { ReaderToolbar, type ReaderPreferences } from "./reader-toolbar";
+  ReaderNotesPanel,
+  type ReaderPanelBookmark,
+  type ReaderPanelNote,
+} from "./reader-notes-panel";
+import {
+  ChapterPager,
+  ReaderToolbar,
+  type ReaderPreferences,
+} from "./reader-toolbar";
 import { SearchDialog } from "./search-dialog";
+import { ShelfSheet } from "./shelf/shelf-sheet";
 import { TableOfContents } from "./table-of-contents";
 
 interface ProgressPayload {
@@ -65,8 +72,10 @@ type ReaderAnnotation = Omit<VedabaseLocalAnnotation, "payload"> & {
   payload: AnnotationPayload;
 };
 
+// Пергамент по умолчанию: тёплые тона Библиотеки (VED-662). Выбор человека
+// из настроек этим не перебивается.
 const defaultPreferences: ReaderPreferences = {
-  theme: "light",
+  theme: "sepia",
   fontSize: 18,
   lineWidth: "medium",
 };
@@ -235,11 +244,14 @@ export function ReaderScreen({
   bookSlug,
   chapterSlug,
   onNavigate,
+  back,
 }: {
   userId: string;
   bookSlug: string;
   chapterSlug: string;
   onNavigate?(chapterSlug: string, unitId?: string): void;
+  /** Куда ведёт «назад» в верхней панели; офлайн-читалка — без неё. */
+  back?: { href: string; label: string };
 }) {
   const repository = useMemo(() => new VedabaseReaderRepository(userId), [userId]);
   const readerRef = useRef<HTMLDivElement>(null);
@@ -252,6 +264,7 @@ export function ReaderScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [sheet, setSheet] = useState<"contents" | "notes" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -323,6 +336,52 @@ export function ReaderScreen({
     );
   const lineWidth = { narrow: "42rem", medium: "56rem", wide: "72rem" }[preferences.lineWidth];
 
+  // Мемо обязательно: подсветка пересобирается при каждой смене списка, а
+  // пересборка на каждом рендере сбивала бы выделение под пальцем.
+  const marks = useMemo<ChapterMark[]>(
+    () =>
+      annotations.flatMap((annotation) => {
+        const { payload } = annotation;
+        if (payload.deletedAt || payload.locator.chapterSlug !== chapterSlug) return [];
+        return [
+          {
+            id: annotation.id,
+            unitId: payload.locator.unitId,
+            block: payload.range.block,
+            start: payload.range.start,
+            end: payload.range.end,
+            kind: payload.kind,
+          },
+        ];
+      }),
+    [annotations, chapterSlug],
+  );
+  const panelNotes = useMemo<ReaderPanelNote[]>(
+    () =>
+      annotations
+        .filter((annotation) => !annotation.payload.deletedAt)
+        .map((annotation) => ({
+          id: annotation.id,
+          kind: annotation.payload.kind,
+          chapterSlug: annotation.payload.locator.chapterSlug,
+          unitId: annotation.payload.locator.unitId,
+          quote: annotation.payload.range.quote,
+          noteText: annotation.payload.noteText,
+        })),
+    [annotations],
+  );
+  const panelBookmarks = useMemo<ReaderPanelBookmark[]>(
+    () =>
+      bookmarks
+        .filter((bookmark) => bookmark.payload.deletedAt === null)
+        .map((bookmark) => ({
+          id: bookmark.id,
+          chapterSlug: bookmark.payload.locator.chapterSlug,
+          unitId: bookmark.payload.locator.unitId,
+        })),
+    [bookmarks],
+  );
+
   const navigate = (targetChapter: string, unitId?: string) => {
     if (onNavigate) {
       if (unitId === undefined) onNavigate(targetChapter);
@@ -390,6 +449,39 @@ export function ReaderScreen({
     }
   };
 
+  const previousSlug = previous?.slug;
+  const nextSlug = next?.slug;
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, select, [contenteditable=true], dialog[open]")
+      )
+        return;
+      if (window.getSelection()?.isCollapsed === false) return;
+      const slug =
+        event.key === "ArrowLeft" ? previousSlug : event.key === "ArrowRight" ? nextSlug : undefined;
+      if (!slug) return;
+      event.preventDefault();
+      navigateRef.current(slug);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previousSlug, nextSlug]);
+
+  const jumpTo = (targetChapter: string, unitId: string) => {
+    setSheet(null);
+    if (targetChapter === chapterSlug)
+      setActiveLocator({ bookSlug, chapterSlug, unitId });
+    else navigate(targetChapter, unitId);
+  };
+
   if (loading) return <p className="p-6 text-sm text-text-2">Загружаем главу…</p>;
   if (error && !chapter)
     return (
@@ -406,53 +498,114 @@ export function ReaderScreen({
     );
   }
 
-  const annotationViews: ReaderAnnotationView[] = annotations.map((annotation) => ({
-    id: annotation.id,
-    kind: annotation.payload.kind,
-    noteText: annotation.payload.noteText,
-    deletedAt: annotation.payload.deletedAt,
-  }));
+  const contents = (
+    <TableOfContents
+      variant="panel"
+      bookSlug={bookSlug}
+      chapters={orderedChapters}
+      currentChapterSlug={chapterSlug}
+      onNavigate={(slug) => {
+        setSheet(null);
+        navigate(slug);
+      }}
+    />
+  );
+  const notesPanel = (
+    <ReaderNotesPanel
+      notes={panelNotes}
+      bookmarks={panelBookmarks}
+      chapterTitle={(slug) =>
+        orderedChapters.find((item) => item.slug === slug)?.title ?? "Глава"
+      }
+      unitTitle={(slug, unitId) =>
+        slug === chapterSlug
+          ? (chapter.units.find((unit) => unit.id === unitId)?.title ?? null)
+          : null
+      }
+      onJump={jumpTo}
+      onUpdateNote={updateNote}
+    />
+  );
 
   return (
-    <main data-reader-theme={preferences.theme} className="reader-shell min-h-dvh">
-      <div className="mx-auto space-y-4 px-4 py-6" style={{ maxWidth: lineWidth, fontSize: preferences.fontSize }}>
-        <ReaderToolbar
-          preferences={preferences}
-          hasPrevious={Boolean(previous)}
-          hasNext={Boolean(next)}
-          bookmarked={bookmarked}
-          onPreferencesChange={updatePreferences}
-          onPrevious={() => previous && navigate(previous.slug)}
-          onNext={() => next && navigate(next.slug)}
-          onToggleBookmark={toggleBookmark}
-          onOpenSearch={() => setSearchOpen(true)}
-        />
-        <TableOfContents
-          bookSlug={bookSlug}
-          chapters={orderedChapters}
-          currentChapterSlug={chapterSlug}
-          onNavigate={navigate}
-        />
-        {error && (
-          <p role="alert" className="reader-danger reader-subtle rounded-xl p-3 text-sm">
-            {error}
-          </p>
-        )}
-        <header className="py-4">
-          <p className="reader-muted text-sm">{manifest.title}</p>
-          <h1 className="mt-1 text-3xl font-bold">{chapter.title}</h1>
-        </header>
-        <AnnotationToolbar
-          readerRef={readerRef}
-          bookSlug={bookSlug}
-          chapterSlug={chapterSlug}
-          annotations={annotationViews}
-          onCreateHighlight={(selection) => addAnnotation(selection, "highlight", null)}
-          onCreateNote={(selection, noteText) => addAnnotation(selection, "note", noteText)}
-          onUpdateNote={updateNote}
-        />
-        <ChapterContent ref={readerRef} chapter={chapter} onUnitActivate={activateUnit} />
+    <main data-reader-theme={preferences.theme} className="reader-shell flex min-h-dvh flex-col">
+      <ReaderToolbar
+        bookTitle={manifest.title}
+        chapterTitle={chapter.title}
+        back={back}
+        preferences={preferences}
+        bookmarked={bookmarked}
+        onPreferencesChange={updatePreferences}
+        onToggleBookmark={toggleBookmark}
+        onOpenSearch={() => setSearchOpen(true)}
+        onOpenContents={() => setSheet("contents")}
+        onOpenNotes={() => setSheet("notes")}
+      />
+      <div className="mx-auto grid w-full max-w-[1500px] flex-grow gap-6 px-3 sm:px-4 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+        <aside
+          aria-label="Содержание книги"
+          className="sticky top-[calc(var(--reader-top,0px)+4rem)] hidden max-h-[calc(100dvh-var(--reader-top,0px)-9rem)] self-start overflow-y-auto py-6 lg:block"
+        >
+          {contents}
+        </aside>
+        <div className="min-w-0 py-4 sm:py-6">
+          {error && (
+            <p role="alert" className="reader-danger reader-subtle mx-auto mb-4 max-w-3xl rounded-xl p-3 text-sm">
+              {error}
+            </p>
+          )}
+          <article
+            className="reader-surface mx-auto rounded-3xl border px-5 py-8 shadow-sm sm:px-10 sm:py-10"
+            style={{ maxWidth: lineWidth, fontSize: preferences.fontSize }}
+          >
+            <header className="mb-8 text-center">
+              <p className="reader-muted text-sm">{manifest.title}</p>
+              <h1 className="mt-1 text-3xl font-bold">{chapter.title}</h1>
+            </header>
+            <ChapterContent
+              ref={readerRef}
+              chapter={chapter}
+              marks={marks}
+              onUnitActivate={activateUnit}
+            />
+          </article>
+        </div>
+        <aside
+          aria-label="Заметки и закладки"
+          className="sticky top-[calc(var(--reader-top,0px)+4rem)] hidden max-h-[calc(100dvh-var(--reader-top,0px)-9rem)] self-start overflow-y-auto py-6 xl:block"
+        >
+          {notesPanel}
+        </aside>
       </div>
+      <ChapterPager
+        index={chapterIndex}
+        total={orderedChapters.length}
+        onPrevious={previous ? () => navigate(previous.slug) : undefined}
+        onNext={next ? () => navigate(next.slug) : undefined}
+      />
+      <AnnotationToolbar
+        readerRef={readerRef}
+        bookSlug={bookSlug}
+        chapterSlug={chapterSlug}
+        onCreateHighlight={(selection) => addAnnotation(selection, "highlight", null)}
+        onCreateNote={(selection, noteText) => addAnnotation(selection, "note", noteText)}
+      />
+      <ShelfSheet
+        open={sheet === "contents"}
+        title="Содержание"
+        onClose={() => setSheet(null)}
+        surfaceClassName="reader-surface"
+      >
+        {sheet === "contents" && contents}
+      </ShelfSheet>
+      <ShelfSheet
+        open={sheet === "notes"}
+        title="Мои записи"
+        onClose={() => setSheet(null)}
+        surfaceClassName="reader-surface"
+      >
+        {sheet === "notes" && notesPanel}
+      </ShelfSheet>
       <SearchDialog
         open={searchOpen}
         userId={userId}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { ReaderScreen } from "@/components/vedabase/reader-screen";
@@ -35,21 +34,15 @@ export default async function VedabaseReaderPage({
     : { href: "/vedabase", label: "← К библиотеке" };
 
   return (
-    <div className="min-h-dvh bg-bg-0">
+    // Высота шапки портала: панели читалки прилипают под ней, а не под ней прячутся.
+    <div className="min-h-dvh bg-bg-0 [--reader-top:3.5rem]">
       <Header user={user} />
-      {/* Липкая: глава длинная, а выход из неё нужен на любом стихе, не
-          только на первом экране. */}
-      <div className="sticky top-0 z-20 bg-bg-0/90 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 py-3">
-          <Link
-            href={back.href}
-            className="text-sm font-medium text-gold transition-colors hover:text-magenta"
-          >
-            {back.label}
-          </Link>
-        </div>
-      </div>
-      <ReaderScreen userId={user.id} bookSlug={bookSlug} chapterSlug={chapterSlug} />
+      <ReaderScreen
+        userId={user.id}
+        bookSlug={bookSlug}
+        chapterSlug={chapterSlug}
+        back={back}
+      />
     </div>
   );
 }

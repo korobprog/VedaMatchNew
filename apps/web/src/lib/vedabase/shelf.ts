@@ -194,7 +194,7 @@ export interface ShelfReaderPreferences {
 
 /** Те же умолчания, что у читалки (`reader-screen.tsx`). */
 export const SHELF_READER_DEFAULTS: ShelfReaderPreferences = {
-  theme: "light",
+  theme: "sepia",
   fontSize: 18,
   lineWidth: "medium",
 };
