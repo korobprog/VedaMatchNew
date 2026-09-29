@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { TOUR_CHAPTERS, parseTourWatched, tourChapterIndex } from "./tour";
+import {
+  TOUR_CHAPTERS,
+  parseTourWatched,
+  pickTourVideo,
+  tourChapterIndex,
+  tourHelpChapter,
+} from "./tour";
 
 /* VED-651: «Познакомиться с проектом» — туториал с видео. */
 describe("TOUR_CHAPTERS", () => {
@@ -37,5 +43,37 @@ describe("parseTourWatched", () => {
     expect(parseTourWatched(null, TOUR_CHAPTERS)).toEqual([]);
     expect(parseTourWatched("{oops", TOUR_CHAPTERS)).toEqual([]);
     expect(parseTourWatched('{"a":1}', TOUR_CHAPTERS)).toEqual([]);
+  });
+});
+
+describe("pickTourVideo", () => {
+  const both = { desktopUrl: "d.mp4", mobileUrl: "m.mp4" };
+
+  it("версия под экран", () => {
+    expect(pickTourVideo(both, true)).toEqual({ url: "m.mp4", vertical: true });
+    expect(pickTourVideo(both, false)).toEqual({
+      url: "d.mp4",
+      vertical: false,
+    });
+  });
+
+  it("нет своей — другая, с её ориентацией", () => {
+    expect(
+      pickTourVideo({ desktopUrl: "d.mp4", mobileUrl: null }, true),
+    ).toEqual({ url: "d.mp4", vertical: false });
+  });
+
+  it("нет никакой — null", () => {
+    expect(
+      pickTourVideo({ desktopUrl: null, mobileUrl: null }, true),
+    ).toBeNull();
+  });
+});
+
+describe("tourHelpChapter", () => {
+  it("значок «?» — у Знакомств, у остальных нет", () => {
+    expect(tourHelpChapter("union")?.id).toBe("union");
+    expect(tourHelpChapter("market")).toBeNull();
+    expect(tourHelpChapter("chat")).toBeNull();
   });
 });

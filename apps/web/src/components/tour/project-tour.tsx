@@ -18,6 +18,7 @@ import {
 } from "@/lib/tour";
 import { plural } from "@/lib/plural";
 import { cn } from "@/lib/utils";
+import { TourVideoPlayer } from "./tour-video";
 
 /**
  * «Познакомиться с проектом» (VED-651): главы слева, текущая справа —
@@ -133,9 +134,10 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
           aria-labelledby="tour-chapter"
           className="flex flex-col gap-5 lg:col-span-8"
         >
-          <ChapterVideo
+          <TourVideoPlayer
             key={chapter.id}
-            chapter={chapter}
+            video={chapter.video}
+            title={chapter.title}
             onEnded={() => markWatched(chapter.id)}
           />
           <div className="flex flex-col gap-3">
@@ -214,37 +216,5 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
         </div>
       </section>
     </div>
-  );
-}
-
-function ChapterVideo({
-  chapter,
-  onEnded,
-}: {
-  chapter: TourChapter;
-  onEnded: () => void;
-}) {
-  if (!chapter.videoUrl) {
-    return (
-      <div className="glass flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-glass-brd text-center">
-        <Clapperboard aria-hidden className="size-10 text-text-2" />
-        <p className="font-semibold text-text-0">Видео готовится</p>
-        <p className="max-w-sm px-4 text-sm text-text-1">
-          Презентация этой главы скоро появится здесь. А пока — текст ниже.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <video
-      src={chapter.videoUrl}
-      poster={chapter.posterUrl ?? undefined}
-      controls
-      playsInline
-      preload="metadata"
-      onEnded={onEnded}
-      aria-label={`Видео-презентация: ${chapter.title}`}
-      className="aspect-video w-full rounded-3xl bg-bg-2"
-    />
   );
 }

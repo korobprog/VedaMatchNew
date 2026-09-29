@@ -9,16 +9,18 @@ const chapters: TourChapter[] = [
     id: "about",
     title: "Что такое VedaMatch",
     text: "Портал для преданных.",
-    videoUrl: null,
-    posterUrl: null,
+    video: { desktopUrl: null, mobileUrl: null, posterUrl: null },
     cta: { label: "Все сервисы", href: "/#services" },
   },
   {
     id: "music",
     title: "Музыка и Радио",
     text: "Общий эфир круглые сутки.",
-    videoUrl: "https://v/music.mp4",
-    posterUrl: null,
+    video: {
+      desktopUrl: "https://v/music.mp4",
+      mobileUrl: "https://v/music-vertical.mp4",
+      posterUrl: null,
+    },
     cta: { label: "Включить радио", href: "/radio" },
   },
 ];
@@ -72,5 +74,26 @@ describe("ProjectTour", () => {
     expect(
       screen.getByRole("heading", { name: "Музыка и Радио" }),
     ).toBeInTheDocument();
+  });
+
+  it("на телефоне — вертикальная версия видео", async () => {
+    const user = userEvent.setup();
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { container } = render(<ProjectTour chapters={chapters} />);
+      await user.click(screen.getByRole("button", { name: /Следующая/ }));
+      expect(container.querySelector("video")).toHaveAttribute(
+        "src",
+        "https://v/music-vertical.mp4",
+      );
+    } finally {
+      window.matchMedia = matchMedia;
+    }
   });
 });
