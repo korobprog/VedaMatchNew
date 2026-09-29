@@ -187,7 +187,7 @@ export const SERVICE_CONTENT: ServiceContent[] = [
     slug: "motivation",
     route: "/motivation",
     name: "Вдохновение",
-    nameEn: "Inspiration",
+    nameEn: "Motivation",
     tagline: "Ежедневное вдохновение, подобранное под ваш путь",
     taglineEn: "Daily inspiration tailored to your path",
     description:
