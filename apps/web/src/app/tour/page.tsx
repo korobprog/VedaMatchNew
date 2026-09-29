@@ -13,7 +13,7 @@ import { TOUR_CHAPTERS } from "@/lib/tour";
 export const metadata: Metadata = {
   title: "Познакомьтесь с VedaMatch",
   description:
-    "Короткие видео-презентации: знакомства, общение, музыка и радио, книги и приложение — что есть на портале VedaMatch и как этим пользоваться.",
+    "Короткие видео-презентации: знакомства, астрология, общение, музыка и радио, книги и приложение — что есть на портале VedaMatch и как этим пользоваться.",
   openGraph: {
     title: "Познакомьтесь с VedaMatch",
     description:

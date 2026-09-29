@@ -151,3 +151,26 @@ describe("глава «Общение»", () => {
     expect(chat.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
   });
 });
+
+describe("глава «Астрология»", () => {
+  const index = TOUR_CHAPTERS.findIndex((chapter) => chapter.id === "astro");
+  const astro = TOUR_CHAPTERS[index];
+
+  it("идёт сразу после «Знакомств»: совместимость по звёздам открывается из анкет", () => {
+    expect(TOUR_CHAPTERS[index - 1]?.id).toBe("union");
+  });
+
+  it("обе версии видео Астрологии лежат в папке тура", () => {
+    expect(astro.video.desktopUrl).toBe(`${TOUR_MEDIA_BASE}/astro-v1-16x9.mp4`);
+    expect(astro.video.mobileUrl).toBe(`${TOUR_MEDIA_BASE}/astro-v1-9x16.mp4`);
+    expect(astro.video.mobilePosterUrl).toBe(`${TOUR_MEDIA_BASE}/astro-v1-9x16.jpg`);
+  });
+
+  it("кнопка ведёт на страницу сервиса — её видит и гость", () => {
+    expect(astro.cta.href).toBe("/services/astro");
+  });
+
+  it("рекламный текст без латиницы внутри русских слов", () => {
+    expect(astro.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
+  });
+});
