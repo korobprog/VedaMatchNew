@@ -29,14 +29,21 @@ export function ReelCategorySelect({
   if (categories.length === 0)
     return (
       <p className="text-sm text-text-2">
-        Категории не загрузились — рилс ляжет в категорию по умолчанию, её
-        можно будет поменять позже.
+        Категории не загрузились — рилс ляжет в категорию по умолчанию, её можно
+        будет поменять позже.
       </p>
     );
 
   const roots = categories.filter((category) => !category.parentId);
   const childrenOf = (parentId: string) =>
     categories.filter((category) => category.parentId === parentId);
+  // Разделы без подкатегорий — одной группой «Другие» после групп (VED-646):
+  // отдельными строками они стояли без отступа, левее подкатегорий, и
+  // список читался криво. Если групп нет вовсе — список плоский, как был.
+  const grouped = roots.some((root) => childrenOf(root.id).length > 0);
+  const single = grouped
+    ? roots.filter((root) => childrenOf(root.id).length === 0)
+    : [];
 
   return (
     <label className="block text-sm text-text-1">
@@ -51,7 +58,7 @@ export function ReelCategorySelect({
         {roots.map((root) => {
           const children = childrenOf(root.id);
           if (children.length === 0)
-            return (
+            return grouped ? null : (
               <option key={root.id} value={root.slug}>
                 {root.title}
               </option>
@@ -67,6 +74,15 @@ export function ReelCategorySelect({
             </optgroup>
           );
         })}
+        {single.length > 0 && (
+          <optgroup label="Другие">
+            {single.map((root) => (
+              <option key={root.id} value={root.slug}>
+                {root.title}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
       <span className="mt-1 block text-xs text-text-2">
         Там рилс будут искать в «Категориях».

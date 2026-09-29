@@ -332,7 +332,10 @@ export function LineageSelect({
   const steps = compact ? (
     fields
   ) : (
-    <WithLineageHelp text={pending ? null : lineageOption(value)?.label}>
+    <WithLineageHelp
+      text={pending ? null : lineageOption(value)?.label}
+      alignEnd
+    >
       {fields}
     </WithLineageHelp>
   );

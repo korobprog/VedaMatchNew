@@ -5,7 +5,6 @@ import type {
   LibraryCategoryDto,
   LibraryCommunityFacet,
   LibraryEntryType,
-  LibraryFeedSort,
   LibraryLocale,
 } from "@vedamatch/shared";
 import { entryTypeLabel, pickLocalized, t } from "./i18n";
@@ -26,7 +25,6 @@ export const ENTRY_FILTER_TYPES: LibraryEntryType[] = [
   "community",
   "other",
 ];
-const SORTS: LibraryFeedSort[] = ["new"];
 export const ENTRY_FILTER_LANGUAGES = ["ru", "en"];
 
 export function EntryFilters({
@@ -156,20 +154,7 @@ export function EntryFilters({
         </label>
       )}
 
-      <label className="text-sm text-text-1">
-        {t(locale, "filters.sort")}
-        <select
-          className="mt-1 w-full rounded-xl border border-glass-brd bg-bg-0 p-2 text-text-0"
-          value={params.get("sort") ?? "new"}
-          onChange={(event) => apply("sort", event.target.value)}
-        >
-          {SORTS.map((sort) => (
-            <option key={sort} value={sort}>
-              {t(locale, `sort.${sort}` as never)}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* «Сортировки» нет (VED-649): порядок всегда «Новое». */}
     </section>
   );
 }

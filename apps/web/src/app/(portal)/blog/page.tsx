@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { Star } from "lucide-react";
 import { redirect } from "next/navigation";
 import { canAdminService } from "@vedamatch/shared";
 import { getBlogFavorites, getBlogFeed, getBlogSettings } from "@/lib/blog-api";
 import { requireUser } from "@/lib/require-user";
 import { BlogFeed } from "@/components/blog/blog-feed";
 import { BlogSettingsForm } from "@/components/blog/blog-settings-form";
+import { PostActionsOrderButton } from "@/components/blog/post-actions-order-button";
 import {
   blogFeedHref,
   parseBlogFeedFilters,
@@ -96,17 +98,28 @@ export default async function BlogPage({
             >
               Все посты
             </Link>
+            {/* «Избранное» — звёздочкой (VED-650): ряд вкладок, фильтров и
+                «+» встаёт в одну строку и на телефоне. */}
             <Link
               href={blogFeedHref("/blog", "view=favorites", filters)}
               aria-current={favorites ? "page" : undefined}
+              aria-label="Избранное"
+              title="Избранное"
               className={`${tab} ${
                 favorites
-                  ? "border-gold bg-bg-1 font-semibold text-text-0"
+                  ? "border-gold bg-bg-1 text-gold"
                   : "border-glass-brd text-text-1 hover:border-gold/60"
               }`}
             >
-              Избранное
+              <Star
+                aria-hidden
+                className="size-5"
+                fill={favorites ? "currentColor" : "none"}
+              />
             </Link>
+            {/* Порядок кнопок под постами (VED-650) — здесь, рядом с
+                «Избранным», а не на странице поста. */}
+            <PostActionsOrderButton />
           </nav>
         }
         beforeComposer={settings && <BlogSettingsForm initial={settings} />}
