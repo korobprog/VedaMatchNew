@@ -100,33 +100,23 @@ export function RecommendationsView({
 
   useEffect(() => {
     if (!focusMode) return;
-    const push = () => {
-      if (pushedEntryRef.current) return;
+    /*
+      Запись в истории — только когда в колоду вошли нажатием. Колода,
+      открывшаяся сама (телефон, вход на страницу), записи не ставит вовсе:
+      Chrome помечает страницу, с которой запись добавлена без жеста, как
+      пропускаемую, и «назад» перескакивал через Знакомства на портал
+      (VED-470; повторилось с записью «на первом касании», VED-655).
+    */
+    if (openedByTapRef.current && !pushedEntryRef.current) {
       window.history.pushState({ unionFocusMode: true }, "");
       pushedEntryRef.current = true;
-    };
-    /*
-      Колода открылась сама (телефон, вход на страницу) — записи без жеста
-      не ставим (VED-470), но ставим её на первом касании внутри: тогда у
-      браузера уже есть жест, и системное «назад» на Android закрывает
-      анкету, а не уводит в Планировщик или Блог (VED-655).
-    */
-    const onFirstGesture = () => push();
-    if (openedByTapRef.current) push();
-    else {
-      // Касание, а не клавиша: «назад» с кнопки — забота телефона, а Esc на
-      // компьютере и так закрывает колоду без истории.
-      window.addEventListener("pointerup", onFirstGesture, { once: true });
     }
     const onPopState = () => {
       pushedEntryRef.current = false;
       setModeOverride("grid");
     };
     window.addEventListener("popstate", onPopState);
-    return () => {
-      window.removeEventListener("popstate", onPopState);
-      window.removeEventListener("pointerup", onFirstGesture);
-    };
+    return () => window.removeEventListener("popstate", onPopState);
   }, [focusMode]);
 
   useEffect(() => {

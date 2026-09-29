@@ -68,6 +68,23 @@ describe("RecommendationsView focus mode", () => {
     ).toBeInTheDocument();
   });
 
+  // Срочная доработка VED-655: касание внутри колоды, открывшейся самой,
+  // не должно ставить запись в истории — иначе Chrome помечает Знакомства
+  // пропускаемыми, и крестик через «назад» уводит на портал.
+  it("касание в колоде, открывшейся самой, историю не трогает, крестик остаётся в Знакомствах", () => {
+    mockMobile(true);
+    render(<RecommendationsView items={[item]} />);
+
+    fireEvent.pointerUp(window);
+    fireEvent.click(screen.getByRole("button", { name: "Выйти" }));
+
+    expect(pushState).not.toHaveBeenCalled();
+    expect(back).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Открыть анкету" }),
+    ).toBeInTheDocument();
+  });
+
   it("opens by tap with a history entry and closes by going back", () => {
     mockMobile(true);
     render(<RecommendationsView items={[item]} />);
