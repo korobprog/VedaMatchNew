@@ -48,12 +48,17 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
       {/* С переносом: у админа, который ещё и автор, в ряду шесть кнопок, и
           на 360 точках правая группа уходит второй строкой, а не за экран. */}
       <div className="relative mb-4 flex flex-wrap items-center justify-between gap-2">
+        {/* VED-650, доработка: «сделай кнопки в один ряд» — на телефоне «Вся
+            лента» значком, иначе пять кнопок справа уходили второй
+            строкой. Подпись остаётся для скринридера. */}
         <Link
           href="/blog"
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60"
+          aria-label="Вся лента"
+          title="Вся лента"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-glass-brd px-3 text-sm text-text-1 hover:border-cyan/60 max-sm:px-0"
         >
           <ArrowLeft aria-hidden className="size-4" />
-          Вся лента
+          <span className="hidden sm:inline">Вся лента</span>
         </Link>
         {/* «Порядок кнопок» (VED-509) — слева от «Поделиться»: кнопки под
             постом переставляются отсюда для всей ленты. */}
