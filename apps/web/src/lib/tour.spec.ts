@@ -174,3 +174,17 @@ describe("глава «Астрология»", () => {
     expect(astro.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
   });
 });
+
+describe("глава «Вдохновение и Библиотека»", () => {
+  const reading = TOUR_CHAPTERS.find((chapter) => chapter.id === "reading")!;
+
+  it("обе версии видео лежат в папке тура", () => {
+    expect(reading.video.desktopUrl).toBe(`${TOUR_MEDIA_BASE}/reading-v1-16x9.mp4`);
+    expect(reading.video.mobileUrl).toBe(`${TOUR_MEDIA_BASE}/reading-v1-9x16.mp4`);
+    expect(reading.video.mobilePosterUrl).toBe(`${TOUR_MEDIA_BASE}/reading-v1-9x16.jpg`);
+  });
+
+  it("рекламный текст без латиницы внутри русских слов", () => {
+    expect(reading.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
+  });
+});
