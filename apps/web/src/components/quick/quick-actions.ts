@@ -41,6 +41,7 @@ export type BuiltinQuickActionId =
   | "collections"
   | "calendar"
   | "telegram"
+  | "transits"
   | "calculator"
   | "invite"
   | "donate"
@@ -199,6 +200,16 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     href: TELEGRAM_CHANNEL_URL,
   },
   {
+    id: "transits",
+    kind: "builtin",
+    // VED-659: транзиты планет в D1 своего гороскопа. Кто не составил
+    // натальную карту, получает на две секунды «Сначала составьте свою
+    // натальную карту» — это решает страница карты (`?transits=1`).
+    label: "Транзиты",
+    hint: "Транзиты планет в вашей карте D1 — Астрология",
+    href: "/astro/chart?transits=1",
+  },
+  {
     id: "calculator",
     kind: "builtin",
     label: "Калькулятор",
@@ -320,8 +331,19 @@ const QUICK_ACTIONS_ADDED_IN_V8: readonly QuickActionId[] = ["radio", "blog"];
  */
 const QUICK_ACTIONS_ADDED_IN_V9: readonly QuickActionId[] = ["telegram"];
 
-/** Всё, что приехало после восьмой версии, — дописывается к старым записям. */
-const ADDED_SINCE_V8: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V9;
+/**
+ * «Транзиты» приехали в десятой версии (VED-659) — по тому же правилу:
+ * кнопку просили сделать в панели горячих клавиш.
+ */
+const QUICK_ACTIONS_ADDED_IN_V10: readonly QuickActionId[] = ["transits"];
+
+/** Всё, что приехало после девятой версии, — дописывается к старым записям. */
+const ADDED_SINCE_V9: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V10;
+/** Всё, что приехало после восьмой. */
+const ADDED_SINCE_V8: readonly QuickActionId[] = [
+  ...QUICK_ACTIONS_ADDED_IN_V9,
+  ...ADDED_SINCE_V9,
+];
 /** Всё, что приехало после седьмой. */
 const ADDED_SINCE_V7: readonly QuickActionId[] = [
   ...QUICK_ACTIONS_ADDED_IN_V8,
@@ -352,9 +374,10 @@ const ADDED_SINCE_V3: readonly QuickActionId[] = [
  * Версия записи в хранилище. Третья добавила кнопки из закладок (VED-345),
  * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392), шестая —
  * «Плеер» (VED-416), седьмая — «Приложение» (VED-448), восьмая — «Радио» и
- * «Блог-лента» (VED-502, VED-506), девятая — «Телеграм» (VED-562).
+ * «Блог-лента» (VED-502, VED-506), девятая — «Телеграм» (VED-562), десятая —
+ * «Транзиты» (VED-659).
  */
-const CONFIG_VERSION = 9;
+const CONFIG_VERSION = 10;
 
 /**
  * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
@@ -449,6 +472,7 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   "postcard",
   "calendar",
   "telegram",
+  "transits",
   "support",
 ];
 
@@ -584,6 +608,7 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
     // Восьмая, седьмая, шестая, пятая, четвёртая и третья версии: всё то
     // же, плюс кнопки, которых тогда не было.
     if (
+      record.v === 9 ||
       record.v === 8 ||
       record.v === 7 ||
       record.v === 6 ||
@@ -593,7 +618,9 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
     ) {
       const custom = parseCustom(record.custom);
       const added =
-        record.v === 8
+        record.v === 9
+          ? ADDED_SINCE_V9
+          : record.v === 8
           ? ADDED_SINCE_V8
           : record.v === 7
             ? ADDED_SINCE_V7

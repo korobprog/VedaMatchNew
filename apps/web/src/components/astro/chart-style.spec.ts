@@ -11,12 +11,17 @@ describe("parseChartStyle", () => {
     expect(parseChartStyle("south")).toBe("south");
   });
 
-  it("на всём неожиданном возвращает южный стиль по умолчанию", () => {
-    expect(DEFAULT_CHART_STYLE).toBe("south");
-    expect(parseChartStyle(null)).toBe("south");
-    expect(parseChartStyle("")).toBe("south");
-    expect(parseChartStyle("North")).toBe("south");
-    expect(parseChartStyle('"north"')).toBe("south");
+  it("на всём неожиданном — северный стиль по умолчанию (VED-658)", () => {
+    expect(DEFAULT_CHART_STYLE).toBe("north");
+    expect(parseChartStyle(null)).toBe("north");
+    expect(parseChartStyle("")).toBe("north");
+    expect(parseChartStyle("South")).toBe("north");
+    expect(parseChartStyle('"south"')).toBe("north");
+  });
+
+  it("сохранённый выбор уважается в обе стороны", () => {
+    expect(parseChartStyle("south")).toBe("south");
+    expect(parseChartStyle("north")).toBe("north");
   });
 });
 

@@ -97,14 +97,17 @@ function Segmented<T extends string>({
 export function ChartPanel({
   chart,
   transits = null,
+  initialTransits = false,
 }: {
   chart: VedicChart;
   transits?: AstroTransitPositionsDto | null;
+  /** Сразу с транзитами — с горячей кнопки «Транзиты» (VED-659). */
+  initialTransits?: boolean;
 }) {
   const [chosen, setChosen] = useState<ChartStyle>(DEFAULT_CHART_STYLE);
   const [varga, setVarga] = useState<ChartVarga>("d1");
   const [reference, setReference] = useState<ChartReference>("lagna");
-  const [showTransits, setShowTransits] = useState(false);
+  const [showTransits, setShowTransits] = useState(initialTransits);
 
   /* Читаем эффектом: на сервере `localStorage` нет, и ленивый `useState` дал
      бы расхождение гидратации. Так же устроены настройки ленты Motivation. */

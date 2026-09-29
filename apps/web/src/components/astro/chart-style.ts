@@ -10,7 +10,8 @@ export type ChartStyle = "south" | "north";
 
 export const CHART_STYLE_STORAGE_KEY = "astro.chart.style";
 
-export const DEFAULT_CHART_STYLE: ChartStyle = "south";
+/** По умолчанию — северный (VED-658): «по умолчанию должен стоять Северный». */
+export const DEFAULT_CHART_STYLE: ChartStyle = "north";
 
 export const CHART_STYLE_LABELS: Readonly<Record<ChartStyle, string>> = {
   south: "Южный",
@@ -19,7 +20,11 @@ export const CHART_STYLE_LABELS: Readonly<Record<ChartStyle, string>> = {
 
 /** Чужое или испорченное значение в хранилище не должно ломать страницу. */
 export function parseChartStyle(raw: string | null): ChartStyle {
-  return raw === "north" ? "north" : DEFAULT_CHART_STYLE;
+  return raw === "south"
+    ? "south"
+    : raw === "north"
+      ? "north"
+      : DEFAULT_CHART_STYLE;
 }
 
 /**
