@@ -49,7 +49,8 @@ const publicPrefixes = [
 // «Поддержать» (VED-11, VED-12, VED-62) — тоже точным адресом: просьба о
 // помощи за входом обращена только к тем, кто уже внутри, а ссылку на неё
 // пересылают и человеку без аккаунта.
-const publicPages = new Set(["/app", "/donate"]);
+// Радио (VED-645) — точным адресом: эфир для гостя по ссылке из рекламы.
+const publicPages = new Set(["/app", "/donate", "/radio"]);
 
 const publicFiles = new Set([
   "/gitabase",

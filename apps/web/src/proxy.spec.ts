@@ -38,6 +38,7 @@ describe("proxy", () => {
       "/travel/s/ABC234",
       "/app",
       "/donate",
+      "/radio",
     ]) {
       const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
 
