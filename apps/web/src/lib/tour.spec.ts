@@ -137,3 +137,17 @@ describe("глава «Музыка и Радио»", () => {
     expect(music.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
   });
 });
+
+describe("глава «Общение»", () => {
+  const chat = TOUR_CHAPTERS.find((chapter) => chapter.id === "chat")!;
+
+  it("обе версии видео Общения лежат в папке тура", () => {
+    expect(chat.video.desktopUrl).toBe(`${TOUR_MEDIA_BASE}/chat-v1-16x9.mp4`);
+    expect(chat.video.mobileUrl).toBe(`${TOUR_MEDIA_BASE}/chat-v1-9x16.mp4`);
+    expect(chat.video.mobilePosterUrl).toBe(`${TOUR_MEDIA_BASE}/chat-v1-9x16.jpg`);
+  });
+
+  it("рекламный текст без латиницы внутри русских слов", () => {
+    expect(chat.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
+  });
+});
