@@ -41,6 +41,7 @@ import {
   Sparkles,
   Users,
   X,
+  Orbit,
 } from "lucide-react";
 import {
   VCALENDAR_URL,
@@ -165,6 +166,8 @@ const ICONS: Record<
   calendar: CalendarDays,
   // VED-562: логотип мессенджера — самолётик в круге; в lucide его нет.
   telegram: TelegramIcon,
+  // VED-659: транзиты — орбита вокруг светила.
+  transits: Orbit,
   calculator: Calculator,
   invite: Share2,
   donate: HeartHandshake,

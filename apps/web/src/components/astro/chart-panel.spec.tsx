@@ -45,27 +45,28 @@ describe("ChartPanel", () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => window.localStorage.clear());
 
-  it("по умолчанию рисует одну карту — южную", () => {
+  // VED-658: «по умолчанию должен стоять Северный стиль».
+  it("по умолчанию рисует одну карту — северную", () => {
     render(<ChartPanel chart={chart()} />);
     expect(screen.getAllByRole("img")).toHaveLength(1);
-    expect(svgLabel()).toMatch(/южноиндийский/);
-    expect(screen.getByRole("button", { name: "Южный" })).toHaveAttribute(
+    expect(svgLabel()).toMatch(/северноиндийский/);
+    expect(screen.getByRole("button", { name: "Северный" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
   });
 
-  it("переключается на северную и запоминает выбор", () => {
+  it("переключается на южную и запоминает выбор", () => {
     render(<ChartPanel chart={chart()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Северный" }));
-    expect(svgLabel()).toMatch(/северноиндийский/);
-    expect(window.localStorage.getItem(CHART_STYLE_STORAGE_KEY)).toBe("north");
+    fireEvent.click(screen.getByRole("button", { name: "Южный" }));
+    expect(svgLabel()).toMatch(/южноиндийский/);
+    expect(window.localStorage.getItem(CHART_STYLE_STORAGE_KEY)).toBe("south");
   });
 
   it("поднимает сохранённый выбор при следующем открытии", () => {
-    window.localStorage.setItem(CHART_STYLE_STORAGE_KEY, "north");
+    window.localStorage.setItem(CHART_STYLE_STORAGE_KEY, "south");
     render(<ChartPanel chart={chart()} />);
-    expect(svgLabel()).toMatch(/северноиндийский/);
+    expect(svgLabel()).toMatch(/южноиндийский/);
   });
 
   it("без лагны показывает южную и объясняет почему", () => {
@@ -114,6 +115,22 @@ describe("ChartPanel", () => {
     ).toBeInTheDocument();
     // Карка — четвёртый знак, от лагны Вришабхи это третий дом.
     expect(screen.getByText(/Карка 5°, дом 3/)).toBeInTheDocument();
+  });
+
+  // VED-659: горячая кнопка «Транзиты» открывает карту сразу с ними — и в
+  // северном стиле, и в южном (VED-658).
+  it("с горячей кнопки транзиты включены сразу — в обоих стилях", () => {
+    const { container } = render(
+      <ChartPanel chart={chart()} transits={transits} initialTransits />,
+    );
+    expect(svgLabel()).toMatch(/северноиндийский/);
+    expect(container.querySelectorAll("[data-transit]")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "Транзиты" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Южный" }));
+    expect(container.querySelectorAll("[data-transit]")).toHaveLength(1);
   });
 
   it("в D9 транзит встаёт в свою навамшу", () => {

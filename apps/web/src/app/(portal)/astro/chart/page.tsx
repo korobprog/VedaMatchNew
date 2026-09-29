@@ -24,7 +24,15 @@ export const metadata = {
   description: "Ведическая карта рождения: раши, бхавы, накшатры и даши",
 };
 
-export default async function AstroChartPage() {
+export default async function AstroChartPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ transits?: string | string[] }>;
+}) {
+  // Горячая кнопка «Транзиты» (VED-659): карта D1 сразу с транзитами.
+  const { transits: transitsParam } = await searchParams;
+  const openTransits =
+    (Array.isArray(transitsParam) ? transitsParam[0] : transitsParam) === "1";
   const [user, chart, readings, today, transits] = await Promise.all([
     getProfile(),
     getAstroChart(),
@@ -32,7 +40,9 @@ export default async function AstroChartPage() {
     getAstroToday(),
     getAstroTransits(),
   ]);
-  if (!chart) redirect("/astro");
+  // Карты нет: с «Транзитов» — на страницу Астрологии с подсказкой на две
+  // секунды «Сначала составьте свою натальную карту».
+  if (!chart) redirect(openTransits ? "/astro?need=chart" : "/astro");
 
   const moon = chart.grahas.find((graha) => graha.graha === "moon")!;
 
@@ -90,7 +100,11 @@ export default async function AstroChartPage() {
       )}
 
       <div className="mt-6 grid gap-8 md:grid-cols-[minmax(0,20rem)_1fr]">
-        <ChartPanel chart={chart} transits={transits} />
+        <ChartPanel
+          chart={chart}
+          transits={transits}
+          initialTransits={openTransits}
+        />
 
         <dl className="space-y-3 text-sm">
           {chart.lagna && (

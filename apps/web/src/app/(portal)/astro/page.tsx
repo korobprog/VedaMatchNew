@@ -3,13 +3,21 @@ import { redirectToLogin } from "@/lib/require-user";
 import { getAstroState, getAstroTransitPreferences } from "@/lib/astro-api";
 import { BirthDataForm } from "@/components/astro/birth-data-form";
 import { TransitPushSettings } from "@/components/astro/transit-push-settings";
+import { NeedChartNotice } from "@/components/astro/need-chart-notice";
 
 export const metadata = {
   title: "Астрология",
   description: "Ведическая карта рождения и персональный день",
 };
 
-export default async function AstroPage() {
+export default async function AstroPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ need?: string | string[] }>;
+}) {
+  // «Транзиты» из горячей панели без своей карты (VED-659).
+  const { need } = await searchParams;
+  const needChart = (Array.isArray(need) ? need[0] : need) === "chart";
   // Вход проверяет PortalLayout; сюда доходит только вошедший. Остаётся
   // случай, когда сервис не отдал состояние, — тогда всё же на вход.
   const [state, pushPrefs] = await Promise.all([
@@ -21,6 +29,7 @@ export default async function AstroPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
+      {needChart && <NeedChartNotice />}
       <h1 className="text-2xl font-semibold">Астрология</h1>
       <p className="mt-2 max-w-2xl text-text-1">
         Ведическая карта строится по моменту и месту рождения. Чем точнее данные,
