@@ -50,7 +50,8 @@ const publicPrefixes = [
 // помощи за входом обращена только к тем, кто уже внутри, а ссылку на неё
 // пересылают и человеку без аккаунта.
 // Радио (VED-645) — точным адресом: эфир для гостя по ссылке из рекламы.
-const publicPages = new Set(["/app", "/donate", "/radio"]);
+// «Познакомиться с проектом» (VED-651) — туториал для тех, кого ещё нет.
+const publicPages = new Set(["/app", "/donate", "/radio", "/tour"]);
 
 const publicFiles = new Set([
   "/gitabase",
