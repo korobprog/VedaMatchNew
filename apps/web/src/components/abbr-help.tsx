@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type MouseEvent, type ReactNode } from "react";
-import { HelpCircle } from "lucide-react";
+import { Info } from "lucide-react";
 import {
   abbreviationHelpLabel,
   abbreviationIn,
@@ -57,7 +57,8 @@ function HelpToggle({
         large ? "size-9" : "size-6"
       }`}
     >
-      <HelpCircle aria-hidden className="size-4" />
+      {/* «i» — «информация», а не «?» (VED-648). */}
+      <Info aria-hidden className="size-4" />
     </button>
   );
 }
@@ -145,17 +146,26 @@ export function WithLineageHelp({
   text,
   children,
   className = "",
+  alignEnd = false,
 }: {
   /** Подпись пункта, в которой ищется аббревиатура. */
   text: string | null | undefined;
   children: ReactNode;
   className?: string;
+  /**
+   * Значок — напротив нижнего поля, а не посередине (VED-648): в выборе
+   * линии из двух списков аббревиатура стоит во втором — «IPBYS», — и
+   * значок посередине между списками не читался как пояснение к нему.
+   */
+  alignEnd?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const item = abbreviationIn(text);
   return (
-    <div className={`flex flex-wrap items-center gap-x-1 ${className}`}>
+    <div
+      className={`flex flex-wrap gap-x-1 ${alignEnd ? "items-end" : "items-center"} ${className}`}
+    >
       <div className="min-w-0 flex-1">{children}</div>
       {item && (
         <>

@@ -296,7 +296,11 @@ export function PeopleSearchView({ query = "" }: { query?: string }) {
                   : `Найдено: ${response.total}. Страница ${response.page}.`}
               </p>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              {/* `minmax(0, 1fr)`, а не просто сетка (VED-643): у колонки по
+                  умолчанию нижняя граница — самое широкое содержимое, и
+                  при крупном шрифте телефона карточки вылезали за правый
+                  край экрана. */}
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(2,minmax(0,1fr))]">
                 {response.items.map((card) => (
                   <PeopleSearchCard key={card.userId} card={card} />
                 ))}

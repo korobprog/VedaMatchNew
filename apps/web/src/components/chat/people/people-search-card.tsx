@@ -45,7 +45,7 @@ export function PeopleSearchCard({
   ].filter(Boolean) as string[];
 
   return (
-    <article className="glass flex flex-col gap-3 rounded-2xl border border-glass-brd p-4 transition hover:border-magenta/40">
+    <article className="glass flex min-w-0 flex-col gap-3 rounded-2xl border border-glass-brd p-4 transition hover:border-magenta/40">
       <div className="flex items-start gap-3">
         {card.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -87,9 +87,15 @@ export function PeopleSearchCard({
             )}
           </div>
           {card.headline && (
-            <p className="mt-0.5 text-sm text-text-1">{card.headline}</p>
+            <p className="mt-0.5 text-sm text-text-1 [overflow-wrap:anywhere]">
+              {card.headline}
+            </p>
           )}
-          {place && <p className="mt-0.5 text-xs text-text-2">{place}</p>}
+          {place && (
+            <p className="mt-0.5 text-xs text-text-2 [overflow-wrap:anywhere]">
+              {place}
+            </p>
+          )}
           {/* Точные дата и время последнего визита (VED-318). По этой же
               отметке сортирует порядок по умолчанию «Недавно заходили». */}
           {seen && card.lastSeenAt && (

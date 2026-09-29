@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Archive,
   CalendarClock,
+  CalendarPlus,
   Check,
   Clock,
   ChevronDown,
@@ -1771,6 +1772,22 @@ function TaskCard({
             {label.name}
           </span>
         ))}
+        {/* Дата создания (VED-642) — значком «календарь с плюсом», чтобы
+            не спутать со сроком (часы). */}
+        <span
+          className="flex items-center gap-1"
+          title={`Создана ${new Date(task.createdAt).toLocaleDateString(
+            "ru-RU",
+            { day: "numeric", month: "long", year: "numeric" },
+          )}`}
+        >
+          <CalendarPlus aria-hidden className="size-3.5" />
+          <span className="sr-only">Создана: </span>
+          {new Date(task.createdAt).toLocaleDateString("ru-RU", {
+            day: "numeric",
+            month: "short",
+          })}
+        </span>
         {task.dueAt && (
           <span
             className={`flex items-center gap-1 ${overdue ? "text-magenta" : ""}`}

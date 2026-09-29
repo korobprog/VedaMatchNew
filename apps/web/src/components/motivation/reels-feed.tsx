@@ -697,16 +697,6 @@ export function ReelsFeed({
             <SlidersIcon />
           </RailLink>
         ),
-        // Викторина (VED-243): угадать по рисунку, какой это стих Гиты.
-        quiz: (
-          <RailLink
-            label="Викторина: угадать стих Гиты по рисунку"
-            caption="Викторина"
-            href="/motivation/quiz"
-          >
-            <QuizIcon />
-          </RailLink>
-        ),
       }
     : {};
 
@@ -2099,17 +2089,6 @@ function ShuffleIcon() {
       <path d="M21 16v5h-5" />
       <path d="m15 15 6 6" />
       <path d="M4 4l5 5" />
-    </svg>
-  );
-}
-
-/** Знак вопроса в круге — викторина. */
-function QuizIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6" />
-      <path d="M12 17h.01" />
     </svg>
   );
 }

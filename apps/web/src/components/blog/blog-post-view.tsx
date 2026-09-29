@@ -15,7 +15,6 @@ import {
 import { BlogCategoryButton } from "./blog-category-button";
 import { BlogPostCard } from "./blog-post-card";
 import { shareBlogPost } from "./blog-share";
-import { PostActionsOrderButton } from "./post-actions-order-button";
 
 /**
  * Один пост целиком (VED-238): «нажатие на картинку или на заголовок должно
@@ -59,7 +58,6 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
         {/* «Порядок кнопок» (VED-509) — слева от «Поделиться»: кнопки под
             постом переставляются отсюда для всей ленты. */}
         <div className="ml-auto flex items-center gap-2">
-          <PostActionsOrderButton />
           {/* «Редактировать» и сверху (VED-495): под длинным постом до
               нижней кнопки «слишком долго мотать». На телефоне — значком,
               иначе ряд с «Поделиться» не влезает в 360 точек. */}

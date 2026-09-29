@@ -49,7 +49,6 @@ describe("MotivationRailSettings", () => {
       "hide",
       "edit",
       "create",
-      "quiz",
     ]);
     expect(
       screen.getByRole("button", { name: "Добавить «Озвучить» в ряд" }),
@@ -65,7 +64,7 @@ describe("MotivationRailSettings", () => {
     );
 
     expect(stored().at(-1)).toBe("random");
-    expect(screen.getByText("9. Случайный")).toBeInTheDocument();
+    expect(screen.getByText("8. Случайный")).toBeInTheDocument();
   });
 
   it("стрелка меняет порядок", async () => {
@@ -87,7 +86,7 @@ describe("MotivationRailSettings", () => {
       screen.getByRole("button", { name: "Передвинуть «Нравится» левее" }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Передвинуть «Викторина» правее" }),
+      screen.getByRole("button", { name: "Передвинуть «Создать» правее" }),
     ).toBeDisabled();
   });
 
@@ -111,7 +110,6 @@ describe("MotivationRailSettings", () => {
       "speak",
       "edit",
       "create",
-      "quiz",
     ]);
   });
 

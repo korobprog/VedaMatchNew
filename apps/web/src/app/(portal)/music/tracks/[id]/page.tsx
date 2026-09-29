@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
@@ -19,6 +20,7 @@ import { canAdminService } from "@vedamatch/shared";
 import { getProfile } from "@/lib/api";
 import { getMusicAdminArtists } from "@/lib/music-admin-api";
 import { MusicTrackAdminEditor } from "@/components/music/track-admin-editor";
+import { buildTrackEditHref } from "@/components/music/player/lyrics-edit-link";
 import { MusicTrackMarksButtons } from "@/components/music/track-marks-button";
 import { MusicTrackHeroLayout } from "@/components/music/track-hero-layout";
 
@@ -199,7 +201,23 @@ export default async function MusicTrackPage({
               <MusicQueueActions trackId={track.id} />
               <MusicOfflineButton track={track} />
               <MusicDownloadButton trackId={track.id} />
-              <MusicSleepTimerButton />
+              {/* «Редактировать запись» — в одном ряду с «Выключить через…»
+                  (VED-657); форма раскрывается ниже, над текстом. */}
+              <div
+                className={`grid items-start gap-2 ${canEdit ? "grid-cols-2" : "grid-cols-1"}`}
+              >
+                <MusicSleepTimerButton />
+                {canEdit && (
+                  <Link
+                    href={buildTrackEditHref(track.id)}
+                    scroll={false}
+                    className="flex h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 text-sm font-semibold text-text-1 hover:text-text-0"
+                  >
+                    <Pencil aria-hidden className="size-4 shrink-0" />
+                    <span className="truncate">Редактировать запись</span>
+                  </Link>
+                )}
+              </div>
             </div>
 
             <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">

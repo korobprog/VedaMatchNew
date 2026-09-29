@@ -13,6 +13,7 @@ import { MusicCoverField } from "./cover-field";
 import {
   MUSIC_LYRICS_EDIT_PARAM,
   wantsLyricsEdit,
+  wantsTrackEdit,
 } from "./player/lyrics-edit-link";
 
 const fieldClass =
@@ -59,12 +60,14 @@ export function MusicTrackAdminEditor({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const fromUrl = wantsLyricsEdit(params);
+  const forLyrics = wantsLyricsEdit(params);
+  // «Редактировать запись» в ряду действий (VED-657) — тоже адресом.
+  const fromUrl = forLyrics || wantsTrackEdit(params);
+  const sectionRef = useRef<HTMLElement | null>(null);
   const initial = stateOf(track);
   // Та же схема, что у `MusicAddToPlaylist`: открытость выводится из
-  // адреса или собственной кнопки, а не переносится в состояние эффектом.
-  const [openedByButton, setOpenedByButton] = useState(false);
-  const open = openedByButton || fromUrl;
+  // адреса, а не переносится в состояние эффектом.
+  const open = fromUrl;
   const [draft, setDraft] = useState<MusicTrackEditState>(initial);
   /** `undefined` — картинку не трогали, см. `buildTrackEditPatch`. */
   const [coverKey, setCoverKey] = useState<string | null | undefined>(
@@ -84,12 +87,18 @@ export function MusicTrackAdminEditor({
   // конкретно это поле.
   useEffect(() => {
     if (!fromUrl) return;
+    if (!forLyrics) {
+      // Кнопка стоит выше, в ряду действий, — форму надо показать.
+      sectionRef.current?.scrollIntoView({ block: "start" });
+      return;
+    }
     lyricsFieldRef.current?.scrollIntoView({ block: "center" });
     lyricsFieldRef.current?.focus();
     // Зависимость только от `fromUrl` — срабатывает один раз на переход по
     // ссылке, а не на каждый рендер: иначе любой ввод в поле (он тоже
     // меняет рендер формы) уводил бы фокус с текущей позиции курсора
     // обратно в начало поля.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- см. выше
   }, [fromUrl]);
 
   function set<K extends keyof MusicTrackEditState>(key: K, value: string) {
@@ -103,7 +112,6 @@ export function MusicTrackAdminEditor({
   // страницы открывало бы её заново — та же причина, что и в
   // `MusicAddToPlaylist`.
   function closeForm() {
-    setOpenedByButton(false);
     if (fromUrl) {
       const rest = new URLSearchParams(params.toString());
       rest.delete(MUSIC_LYRICS_EDIT_PARAM);
@@ -137,43 +145,19 @@ export function MusicTrackAdminEditor({
     }
   }
 
+  // Кнопка открытия — в ряду действий записи (VED-657, `TrackEditButton`);
+  // здесь, пока форма свёрнута, остаётся только отметка «Сохранено».
   if (!open) {
-    return (
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setDraft(stateOf(track));
-            setOpenedByButton(true);
-          }}
-          className="inline-flex h-9 items-center gap-2 rounded-xl border border-glass-brd px-3 text-sm font-semibold text-text-1 hover:text-text-0"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-          </svg>
-          Редактировать запись
-        </button>
-        {saved && (
-          <span role="status" className="text-xs text-cyan">
-            Сохранено
-          </span>
-        )}
-      </div>
-    );
+    return saved ? (
+      <p role="status" className="mt-6 text-xs text-cyan">
+        Сохранено
+      </p>
+    ) : null;
   }
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Правка записи"
       className="glass mt-6 rounded-2xl border border-glass-brd p-4"
     >

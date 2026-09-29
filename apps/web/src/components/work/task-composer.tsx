@@ -125,8 +125,8 @@ export function TaskComposer({
   /** Заголовок, который получится из написанного, — считаем на каждом нажатии
       клавиши: строка под полем должна показывать правду, а не обещание. */
   const autoTitle = deriveTaskTitle(draft);
-  /* Без заголовка задача не заводится (VED-637): он собирается только из
-     слов, выделенных ЗАГЛАВНЫМИ, либо вписывается руками. */
+  /* Без заголовка задача не заводится: он собирается из первого
+     предложения (VED-647) либо вписывается руками. */
   const canSubmit =
     draft.trim() !== "" &&
     (draftTitle === null ? autoTitle : normalizeTaskTitle(draftTitle)) !== "";
@@ -186,13 +186,11 @@ export function TaskComposer({
           вылезать за край колонки — но обычные слова от
           `break-all` рвались посередине («открывает о/кно»). */}
       {draft.trim() && draftTitle === null && !autoTitle && (
-        /* Выделения нет — заголовка нет (VED-637). Подсказка объясняет,
+        /* Заголовок не собрался (VED-647: первое предложение). Подсказка объясняет,
            почему «Добавить» неактивна, и её же читает скринридер у кнопки
            через `aria-describedby`. */
         <p className="mt-1 flex flex-wrap items-baseline gap-1 text-xs text-text-1">
-          <span id={titleHintId}>
-            Выделите БОЛЬШИМИ буквами слова для заголовка
-          </span>
+          <span id={titleHintId}>Заголовок не собрался — впишите его</span>
           <button
             type="button"
             ref={editTitleRef}

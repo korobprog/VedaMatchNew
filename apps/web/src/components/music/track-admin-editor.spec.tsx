@@ -42,29 +42,35 @@ beforeEach(() => {
 });
 
 describe("MusicTrackAdminEditor", () => {
-  it("свёрнут, пока не нажали «Редактировать запись»", () => {
-    render(<MusicTrackAdminEditor track={track} artists={artists} />);
-
+  /* VED-657: кнопка «Редактировать запись» — ссылкой `?edit=track` в ряду
+     действий записи; сама форма без неё свёрнута и кнопки не рисует. */
+  it("свёрнут без `?edit=track` и раскрыт с ним", () => {
+    const { unmount } = render(
+      <MusicTrackAdminEditor track={track} artists={artists} />,
+    );
     expect(screen.queryByLabelText("Название")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Редактировать запись" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Редактировать запись" }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    nav.search = "edit=track";
+    render(<MusicTrackAdminEditor track={track} artists={artists} />);
+    expect(screen.getByLabelText("Название")).toBeInTheDocument();
   });
 
-  it("без правок «Сохранить» не нажимается", async () => {
-    const user = userEvent.setup();
+  it("без правок «Сохранить» не нажимается", () => {
+    nav.search = "edit=track";
     render(<MusicTrackAdminEditor track={track} artists={artists} />);
-
-    await user.click(screen.getByRole("button", { name: "Редактировать запись" }));
 
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled();
   });
 
   it("уходит только изменённое: название, исполнитель и перевод (VED-102, VED-109)", async () => {
     const user = userEvent.setup();
+    nav.search = "edit=track";
     render(<MusicTrackAdminEditor track={track} artists={artists} />);
 
-    await user.click(screen.getByRole("button", { name: "Редактировать запись" }));
     await user.clear(screen.getByLabelText("Название"));
     await user.type(screen.getByLabelText("Название"), "Маха-мантра");
     await user.selectOptions(screen.getByLabelText("Исполнитель"), "a2");
@@ -79,7 +85,8 @@ describe("MusicTrackAdminEditor", () => {
       }),
     );
     expect(refresh).toHaveBeenCalled();
-    expect(await screen.findByRole("status")).toHaveTextContent("Сохранено");
+    // Сохранили — форма сворачивается: `?edit=track` уходит из адреса.
+    expect(replace).toHaveBeenCalledWith("/music/tracks/t1", { scroll: false });
   });
 
   // VED-269: кнопка-карандаш в панели текста плеера ведёт сюда по ссылке

@@ -44,7 +44,7 @@ describe("TaskComposer (VED-453)", () => {
     expect(onDraftChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ description: "КНОПКА не жмётся" }),
     );
-    expect(screen.getByText("«Кнопка»")).toBeInTheDocument();
+    expect(screen.getByText("«КНОПКА не жмётся»")).toBeInTheDocument();
   });
 
   it("начинает с переданного черновика — начатое переживает сворачивание", () => {
@@ -86,31 +86,22 @@ describe("TaskComposer (VED-453)", () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
-  /* VED-637: заголовок — только из слов ЗАГЛАВНЫМИ. Нет выделения — нет
-     заголовка, и задача не заводится, пока его не выделят или не впишут. */
-  it("без выделения подсказывает и не отправляет", async () => {
+  /* VED-647: заголовок снова — первое предложение описания. */
+  it("заголовок — первое предложение, «Добавить» активна сразу", async () => {
     const user = userEvent.setup();
-    const { onSubmit } = setup();
-    const description = screen.getByLabelText(
-      "Описание новой задачи в разделе «Разное»",
+    setup();
+    await user.type(
+      screen.getByLabelText("Описание новой задачи в разделе «Разное»"),
+      "Сломался поиск по доске задач. Подробности ниже.",
     );
 
-    await user.type(description, "Сломался поиск{Control>}{Enter}{/Control}");
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    const add = screen.getByRole("button", { name: "Добавить" });
-    expect(add).toBeDisabled();
-    expect(add).toHaveAccessibleDescription(
-      "Выделите БОЛЬШИМИ буквами слова для заголовка",
-    );
-
-    await user.clear(description);
-    await user.type(description, "Сломался ПОИСК");
-    expect(add).toBeEnabled();
-    expect(screen.getByText("«Поиск»")).toBeInTheDocument();
+    expect(
+      screen.getByText("«Сломался поиск по доске задач.»"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeEnabled();
   });
 
-  it("без выделения заголовок можно вписать руками", async () => {
+  it("заголовок можно вписать руками", async () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
     await user.type(
@@ -118,11 +109,9 @@ describe("TaskComposer (VED-453)", () => {
       "Сломался поиск",
     );
 
-    await user.click(screen.getByRole("button", { name: "Вписать вручную" }));
+    await user.click(screen.getByRole("button", { name: "Изменить" }));
     const title = screen.getByLabelText("Заголовок");
-    expect(title).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Добавить" })).toBeDisabled();
-
+    await user.clear(title);
     await user.type(title, "Поиск по доске");
     await user.click(screen.getByRole("button", { name: "Добавить" }));
 
@@ -157,7 +146,7 @@ describe("composerHasContent", () => {
     );
     await user.click(screen.getByRole("button", { name: "Изменить" }));
     const title = screen.getByLabelText("Заголовок");
-    expect(title).toHaveValue("Кнопка");
+    expect(title).toHaveValue("КНОПКА не жмётся");
 
     await user.click(
       screen.getByRole("button", { name: "Очистить заголовок" }),

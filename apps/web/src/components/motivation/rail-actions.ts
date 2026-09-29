@@ -22,8 +22,7 @@ export type RailActionId =
   | "create"
   | "categories"
   | "random"
-  | "settings"
-  | "quiz";
+  | "settings";
 
 export interface RailActionMeta {
   id: RailActionId;
@@ -96,19 +95,17 @@ export const RAIL_ACTIONS: readonly RailActionMeta[] = [
     label: "Настройки",
     hint: "Настройки ленты — язык, доля вайшнавского, этот же ряд",
   },
-  {
-    id: "quiz",
-    label: "Викторина",
-    hint: "Угадать по рисунку, какой стих Бхагавад-гиты на нём",
-  },
+  // «Викторины» в ряду больше нет (VED-656): «вообще убери её оттуда и
+  // помести в настройки». Вход — карточкой в настройках ленты и в меню ☰.
 ];
 
 const KNOWN = new Set<string>(RAIL_ACTIONS.map((action) => action.id));
 
 /**
  * Что стоит в ряду у того, кто ничего не настраивал: то, что стояло до
- * появления настройки, и «Викторина» в конце (VED-243). Новая кнопка встаёт
- * последней, чтобы не переставлять прежние под пальцем.
+ * появления настройки. Новая кнопка встаёт последней, чтобы не переставлять
+ * прежние под пальцем. «Викторина» (VED-243) из ряда ушла в настройки
+ * (VED-656): сохранённые ряды теряют её молча — id больше не известен.
  */
 export const DEFAULT_RAIL: readonly RailActionId[] = [
   "like",
@@ -118,7 +115,6 @@ export const DEFAULT_RAIL: readonly RailActionId[] = [
   "speak",
   "edit",
   "create",
-  "quiz",
 ];
 
 /**
@@ -158,7 +154,9 @@ function knownIds(raw: unknown): RailActionId[] {
  * добавляется в конец — иначе новинку увидели бы только те, кто ни разу не
  * трогал настройку. Убранная после этого кнопка больше не возвращается.
  */
-export function parseRailConfig(raw: string | null | undefined): RailActionId[] {
+export function parseRailConfig(
+  raw: string | null | undefined,
+): RailActionId[] {
   if (!raw) return [...DEFAULT_RAIL];
   let parsed: unknown;
   try {

@@ -28,7 +28,6 @@ import {
 import { headerEntriesCount } from "@/components/library/category-tree";
 import { CategoryTitleEdit } from "@/components/library/category-title-edit";
 import { categoryPageTitle } from "@/components/library/category-page-title";
-import { DescendantsToggle } from "@/components/library/descendants-toggle";
 import { EntryFilters } from "@/components/library/entry-filters";
 import { EntryFilterMenu } from "@/components/library/entry-filter-menu";
 import { LibraryContents } from "@/components/library/library-contents";
@@ -370,10 +369,8 @@ export default async function LibraryCategoryPage({
           )
         ) : (
           <>
-            {children.length > 0 && (
-              <DescendantsToggle locale={locale} enabled={withDescendants} />
-            )}
-
+            {/* «Со вложенными / Только здесь» убран (VED-649): раздел
+                всегда показывает и материалы подразделов. */}
             {/* У автора панели фильтров нет (VED-521): тип и порядок —
                 значками выше. */}
             {!authorPage && (

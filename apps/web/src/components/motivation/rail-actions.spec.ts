@@ -10,7 +10,7 @@ import {
 } from "./rail-actions";
 
 describe("DEFAULT_RAIL", () => {
-  it("повторяет прежний ряд, «Викторина» — в конце (VED-243)", () => {
+  it("повторяет прежний ряд; «Викторины» в нём нет (VED-656)", () => {
     expect(DEFAULT_RAIL).toEqual([
       "like",
       "save",
@@ -19,7 +19,6 @@ describe("DEFAULT_RAIL", () => {
       "speak",
       "edit",
       "create",
-      "quiz",
     ]);
   });
 
@@ -71,19 +70,17 @@ describe("parseRailConfig", () => {
     expect(parseRailConfig(serializeRailConfig(ids))).toEqual([...ids]);
   });
 
-  it("в ряд, сохранённый до «Викторины», она добавляется в конец", () => {
-    expect(parseRailConfig('["share","like"]')).toEqual([
-      "share",
-      "like",
-      "quiz",
-    ]);
-    expect(parseRailConfig("[]")).toEqual(["quiz"]);
-    // Старые необязательные кнопки сами не возвращаются: их убрали осознанно.
+  it("старый ряд читается как был: сами кнопки не возвращаются", () => {
+    expect(parseRailConfig('["share","like"]')).toEqual(["share", "like"]);
+    expect(parseRailConfig("[]")).toEqual([]);
     expect(parseRailConfig('["like"]')).not.toContain("save");
   });
 
-  it("убранная после появления «Викторина» не возвращается", () => {
-    expect(parseRailConfig(serializeRailConfig(["like"]))).toEqual(["like"]);
+  it("«Викторина» из сохранённого ряда уходит молча (VED-656)", () => {
+    const known = [...RAIL_ACTIONS.map((action) => action.id), "quiz"];
+    expect(
+      parseRailConfig(JSON.stringify({ ids: ["like", "quiz"], known })),
+    ).toEqual(["like"]);
   });
 
   it("новая кнопка ряда по умолчанию доезжает до тех, кто её ещё не видел", () => {
@@ -99,7 +96,6 @@ describe("parseRailConfig", () => {
       "speak",
       "edit",
       "create",
-      "quiz",
     ]);
   });
 });

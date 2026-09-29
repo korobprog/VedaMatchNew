@@ -7,7 +7,7 @@ import {
   Check,
   Heart,
   Pencil,
-  Forward,
+  Repeat2,
   Share2,
   Trash2,
   Pin,
@@ -312,11 +312,10 @@ export function BlogPostCard({
         disabled={pending}
         className={`${ACTION} hover:border-cyan/60`}
       >
-        {/* Стрелка «переслать», а не две по кругу (VED-442): «на более
-            привычный — стрелочка, как в Озоне». Заказчик сперва попросил
-            вернуть прежний значок (#663), затем отменил и это: «перепутал
-            их назначения». */}
-        <Forward aria-hidden className="size-3.5" />
+        {/* Две стрелки по кругу (VED-650): «поменяй эмблему кнопки репост
+            с одной стрелочки на две, как было раньше». Одна стрелка
+            «переслать» (VED-442) путалась с «Поделиться». */}
+        <Repeat2 aria-hidden className="size-3.5" />
         <span className={ACTION_LABEL}>Репост</span>
         {post.repostCount > 0 && (
           <span className="text-text-2">{post.repostCount}</span>

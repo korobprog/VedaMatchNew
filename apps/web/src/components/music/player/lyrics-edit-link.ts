@@ -23,6 +23,21 @@ export function buildTrackLyricsEditHref(trackId: string): string {
   return `/music/tracks/${trackId}?${MUSIC_LYRICS_EDIT_PARAM}=${MUSIC_LYRICS_EDIT_VALUE}`;
 }
 
+/**
+ * Форма правки записи целиком (VED-657): кнопка «Редактировать запись»
+ * стоит в ряду действий рядом с «Выключить через…», а форма — ниже, над
+ * текстом. Связь та же — адрес.
+ */
+export const MUSIC_TRACK_EDIT_VALUE = "track";
+
+export function buildTrackEditHref(trackId: string): string {
+  return `/music/tracks/${trackId}?${MUSIC_LYRICS_EDIT_PARAM}=${MUSIC_TRACK_EDIT_VALUE}`;
+}
+
+export function wantsTrackEdit(params: URLSearchParams): boolean {
+  return params.get(MUSIC_LYRICS_EDIT_PARAM) === MUSIC_TRACK_EDIT_VALUE;
+}
+
 /** Просит ли адрес открыть форму правки текста сразу. */
 export function wantsLyricsEdit(params: URLSearchParams): boolean {
   return params.get(MUSIC_LYRICS_EDIT_PARAM) === MUSIC_LYRICS_EDIT_VALUE;

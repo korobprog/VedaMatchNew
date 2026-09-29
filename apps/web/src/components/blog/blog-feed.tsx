@@ -111,24 +111,16 @@ export function BlogFeed({
             onClick={() => setComposing((open) => !open)}
             aria-expanded={composing}
             aria-controls="blog-compose"
-            aria-label={composing ? "Свернуть форму поста" : undefined}
-            title={composing ? "Свернуть" : undefined}
-            className={
-              composing
-                ? `${BLOG_ICON_BUTTON} ml-auto border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0`
-                : "btn-mint ml-auto inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold sm:gap-1.5 sm:px-3"
-            }
+            aria-label={composing ? "Свернуть форму поста" : "Новый пост"}
+            title={composing ? "Свернуть" : "Новый пост"}
+            /* «Новый пост» — значком «+» без заливки (VED-648): в своём ряду
+               кнопок, а не отдельной зелёной плашкой строкой ниже. */
+            className={`${BLOG_ICON_BUTTON} border-glass-brd text-text-1 hover:border-cyan/60 hover:text-text-0`}
           >
             {composing ? (
               <ChevronDown aria-hidden className="size-5" />
             ) : (
-              <>
-                <Plus aria-hidden className="size-4" />
-                {/* На телефоне короче: полная подпись с двумя вкладками в
-                    строку 360 точек не встаёт. */}
-                <span className="sm:hidden">Новый пост</span>
-                <span className="hidden sm:inline">Создать новый пост</span>
-              </>
+              <Plus aria-hidden className="size-5" />
             )}
           </button>
         )}
