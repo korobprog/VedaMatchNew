@@ -47,25 +47,43 @@ describe("parseTourWatched", () => {
 });
 
 describe("pickTourVideo", () => {
-  const both = { desktopUrl: "d.mp4", mobileUrl: "m.mp4" };
+  const both = {
+    desktopUrl: "d.mp4",
+    mobileUrl: "m.mp4",
+    posterUrl: "d.jpg",
+    mobilePosterUrl: "m.jpg",
+  };
 
-  it("версия под экран", () => {
-    expect(pickTourVideo(both, true)).toEqual({ url: "m.mp4", vertical: true });
+  it("версия под экран — со своей обложкой", () => {
+    expect(pickTourVideo(both, true)).toEqual({
+      url: "m.mp4",
+      vertical: true,
+      poster: "m.jpg",
+    });
     expect(pickTourVideo(both, false)).toEqual({
       url: "d.mp4",
       vertical: false,
+      poster: "d.jpg",
     });
   });
 
-  it("нет своей — другая, с её ориентацией", () => {
-    expect(
-      pickTourVideo({ desktopUrl: "d.mp4", mobileUrl: null }, true),
-    ).toEqual({ url: "d.mp4", vertical: false });
+  it("нет своей — другая, с её ориентацией и обложкой", () => {
+    expect(pickTourVideo({ ...both, mobileUrl: null }, true)).toEqual({
+      url: "d.mp4",
+      vertical: false,
+      poster: "d.jpg",
+    });
   });
 
-  it("нет никакой — null", () => {
+  it("нет вертикальной обложки — горизонтальная", () => {
     expect(
-      pickTourVideo({ desktopUrl: null, mobileUrl: null }, true),
+      pickTourVideo({ ...both, mobilePosterUrl: null }, true)?.poster,
+    ).toBe("d.jpg");
+  });
+
+  it("нет никакого видео — null", () => {
+    expect(
+      pickTourVideo({ ...both, desktopUrl: null, mobileUrl: null }, true),
     ).toBeNull();
   });
 });

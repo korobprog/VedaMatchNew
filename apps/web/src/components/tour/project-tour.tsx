@@ -138,7 +138,11 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
             key={chapter.id}
             video={chapter.video}
             title={chapter.title}
-            onEnded={() => markWatched(chapter.id)}
+            onEnded={() => {
+              // Досмотрел — галочка и следующая глава (VED-653).
+              markWatched(chapter.id);
+              if (index < chapters.length - 1) open(index + 1);
+            }}
           />
           <div className="flex flex-col gap-3">
             <span className="text-xs font-bold uppercase tracking-widest text-magenta">

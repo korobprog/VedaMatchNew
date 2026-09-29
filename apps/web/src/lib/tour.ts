@@ -23,6 +23,7 @@ const NO_VIDEO: TourVideo = {
   desktopUrl: null,
   mobileUrl: null,
   posterUrl: null,
+  mobilePosterUrl: null,
 };
 
 function serviceText(slug: string, fallback: string): string {
@@ -51,7 +52,13 @@ export const TOUR_CHAPTERS: TourChapter[] = [
     text: serviceText("union", "Знакомства для создания вайшнавской семьи."),
     // Видео Знакомств (VED-651) — готовится в двух версиях:
     // вертикальная для телефона и горизонтальная для компьютера.
-    video: { desktopUrl: null, mobileUrl: null, posterUrl: null },
+    // Адреса — на media.vedamatch.ru, не в репозитории (VED-653).
+    video: {
+      desktopUrl: null,
+      mobileUrl: null,
+      posterUrl: null,
+      mobilePosterUrl: null,
+    },
     cta: { label: "О Знакомствах", href: "/services/union" },
   },
   {
@@ -93,8 +100,10 @@ export interface TourVideo {
   desktopUrl: string | null;
   /** Вертикальное mp4 для телефона; `null` — ещё нет. */
   mobileUrl: string | null;
-  /** Кадр до запуска видео; `null` — без обложки. */
+  /** Обложка горизонтальной версии (16:9); `null` — без обложки. */
   posterUrl: string | null;
+  /** Обложка вертикальной версии (9:16); `null` — берётся горизонтальная. */
+  mobilePosterUrl: string | null;
 }
 
 /** Экран, с которого показывать вертикальную версию. */
@@ -105,13 +114,19 @@ export const TOUR_MOBILE_QUERY = "(max-width: 767px)";
  * человек увидел презентацию. `null` — видео нет вовсе.
  */
 export function pickTourVideo(
-  presentation: Pick<TourVideo, "desktopUrl" | "mobileUrl">,
+  presentation: TourVideo,
   mobile: boolean,
-): { url: string; vertical: boolean } | null {
+): { url: string; vertical: boolean; poster: string | null } | null {
   const own = mobile ? presentation.mobileUrl : presentation.desktopUrl;
-  if (own) return { url: own, vertical: mobile };
   const other = mobile ? presentation.desktopUrl : presentation.mobileUrl;
-  return other ? { url: other, vertical: !mobile } : null;
+  const url = own ?? other;
+  if (!url) return null;
+  const vertical = own ? mobile : !mobile;
+  // Обложка — в пропорциях той версии, что играет.
+  const poster = vertical
+    ? (presentation.mobilePosterUrl ?? presentation.posterUrl)
+    : presentation.posterUrl;
+  return { url, vertical, poster };
 }
 
 /**
