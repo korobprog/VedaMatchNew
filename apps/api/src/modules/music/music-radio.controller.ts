@@ -52,6 +52,28 @@ export class MusicRadioController {
   }
 }
 
+/**
+ * Эфир для публичной страницы `/radio` (VED-645) — без входа: страницу
+ * открывают по ссылке из рекламы и соцсетей, и звать там на вход до первой
+ * ноты значит потерять человека. Отдаёт и подписанные ссылки на звук —
+ * исключение из правила «гостю аудио не выдаётся» (`music-catalog.controller`)
+ * ровно для эфира: запись в нём не выбрать и не перемотать.
+ *
+ * Гость в счётчик не попадает: отметку слушателя ставит только вошедший.
+ * Страница спрашивает эфир раз в 20 секунд и при смене записи — лимит с
+ * запасом на несколько вкладок за одним адресом.
+ */
+@Controller('music/radio/public')
+@Throttle({ default: { ttl: 60_000, limit: 60 } })
+export class MusicRadioPublicController {
+  constructor(private readonly radio: MusicRadioService) {}
+
+  @Get()
+  state() {
+    return this.radio.publicState();
+  }
+}
+
 /** Голосовые вставки в эфир — админка Музыки. */
 @Controller('music/admin/radio/inserts')
 @UseGuards(AuthGuard)

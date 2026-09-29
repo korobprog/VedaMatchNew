@@ -9,9 +9,11 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import {
   MUSIC_RADIO_LISTENER_TTL_MS,
+  MUSIC_RADIO_PUBLIC_AVATARS,
   resolveDisplayName,
   type MusicRadioInsertsDto,
   type MusicRadioItemDto,
+  type MusicRadioPublicStateDto,
   type MusicRadioStateDto,
 } from '@vedamatch/shared';
 import { Prisma } from '@prisma/client';
@@ -115,6 +117,41 @@ export class MusicRadioService {
       current: current ? await this.toItem(current) : null,
       next: next ? await this.toItem(next) : null,
       listeners,
+    };
+  }
+
+  /**
+   * Эфир для публичной страницы `/radio` (VED-645): то же, что видит
+   * вошедший, плюс аватарки слушателей — «нас много». Только фото по
+   * ссылке (`avatarUrl`): загруженное лежит в приватном бакете, а
+   * подписывать его гостю незачем. Без удалённых, заблокированных и
+   * служебного агента.
+   */
+  async publicState(now = new Date()): Promise<MusicRadioPublicStateDto> {
+    const [state, rows] = await Promise.all([
+      this.state(now),
+      this.prisma.musicRadioListener.findMany({
+        where: {
+          lastSeenAt: {
+            gt: new Date(now.getTime() - MUSIC_RADIO_LISTENER_TTL_MS),
+          },
+          user: {
+            avatarUrl: { not: null },
+            deletedAt: null,
+            accountStatus: 'active',
+            isAgent: false,
+          },
+        },
+        orderBy: { lastSeenAt: 'desc' },
+        take: MUSIC_RADIO_PUBLIC_AVATARS,
+        select: { user: { select: { avatarUrl: true } } },
+      }),
+    ]);
+    return {
+      ...state,
+      listenerAvatars: rows
+        .map((row) => row.user.avatarUrl)
+        .filter((url): url is string => !!url),
     };
   }
 

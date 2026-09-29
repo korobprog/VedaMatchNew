@@ -1527,6 +1527,19 @@ export interface MusicRadioStateDto {
   listeners: number;
 }
 
+/** Сколько аватарок слушателей показывает публичная страница радио. */
+export const MUSIC_RADIO_PUBLIC_AVATARS = 8;
+
+/**
+ * Эфир для публичной страницы `/radio` (VED-645): её открывает гость.
+ * Рядом со счётчиком — аватарки тех, кто слушает сейчас, без имён и
+ * без ссылок на профиль: гостю незачем знать, кто именно слушает.
+ */
+export interface MusicRadioPublicStateDto extends MusicRadioStateDto {
+  /** Ссылки на фото слушателей, не больше `MUSIC_RADIO_PUBLIC_AVATARS`. */
+  listenerAvatars: string[];
+}
+
 /** Состояние вставки для редакции. */
 export type MusicRadioInsertStatus = "scheduled" | "on_air" | "aired";
 

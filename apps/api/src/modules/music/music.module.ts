@@ -50,6 +50,7 @@ import { MusicWorkerService } from './music-worker.service';
 import {
   MusicAdminRadioController,
   MusicRadioController,
+  MusicRadioPublicController,
 } from './music-radio.controller';
 import { MusicRadioService } from './music-radio.service';
 import { MusicDurationRecountService } from './music-duration-recount.service';
@@ -89,6 +90,7 @@ import { MusicTranscodeService } from './music-transcode.service';
     MusicAdminQueueController,
     MusicIngestController,
     MusicRadioController,
+    MusicRadioPublicController,
     MusicAdminRadioController,
   ],
   providers: [

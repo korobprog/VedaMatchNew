@@ -1,6 +1,7 @@
 import type {
   MusicArtistPageDto,
   MusicRadioInsertsDto,
+  MusicRadioPublicStateDto,
   MusicRadioStateDto,
   MusicTrackDto,
 } from "@vedamatch/shared";
@@ -25,6 +26,20 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export function fetchMusicRadio(): Promise<MusicRadioStateDto> {
   return call<MusicRadioStateDto>("/music/radio");
+}
+
+/**
+ * Эфир для публичной страницы `/radio` (VED-645) — без входа и без cookie:
+ * гостю нечего обновлять, а вошедшему отметку слушателя ставит плеер
+ * портала, не эта страница.
+ */
+export async function fetchPublicMusicRadio(): Promise<MusicRadioPublicStateDto> {
+  const res = await fetch(`${API_URL}/music/radio/public`, {
+    credentials: "omit",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Эфир недоступен (${res.status})`);
+  return (await res.json()) as MusicRadioPublicStateDto;
 }
 
 /** «Слушаю»: раз в 20 секунд, ответ — свежий эфир. */
