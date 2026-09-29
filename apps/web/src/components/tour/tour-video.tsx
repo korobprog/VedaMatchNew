@@ -50,7 +50,7 @@ export function TourVideoPlayer({
     <video
       key={picked.url}
       src={picked.url}
-      poster={video.posterUrl ?? undefined}
+      poster={picked.poster ?? undefined}
       controls
       playsInline
       autoPlay={autoPlay}

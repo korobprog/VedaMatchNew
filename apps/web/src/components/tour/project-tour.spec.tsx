@@ -9,7 +9,12 @@ const chapters: TourChapter[] = [
     id: "about",
     title: "Что такое VedaMatch",
     text: "Портал для преданных.",
-    video: { desktopUrl: null, mobileUrl: null, posterUrl: null },
+    video: {
+      desktopUrl: null,
+      mobileUrl: null,
+      posterUrl: null,
+      mobilePosterUrl: null,
+    },
     cta: { label: "Все сервисы", href: "/#services" },
   },
   {
@@ -20,8 +25,21 @@ const chapters: TourChapter[] = [
       desktopUrl: "https://v/music.mp4",
       mobileUrl: "https://v/music-vertical.mp4",
       posterUrl: null,
+      mobilePosterUrl: null,
     },
     cta: { label: "Включить радио", href: "/radio" },
+  },
+  {
+    id: "app",
+    title: "Приложение на телефон",
+    text: "Всё то же самое — в телефоне.",
+    video: {
+      desktopUrl: null,
+      mobileUrl: null,
+      posterUrl: null,
+      mobilePosterUrl: null,
+    },
+    cta: { label: "Установить приложение", href: "/app" },
   },
 ];
 
@@ -66,6 +84,11 @@ describe("ProjectTour", () => {
 
     expect(screen.getByLabelText("Просмотрено")).toBeInTheDocument();
     expect(window.localStorage.getItem("vm-tour-watched")).toBe('["music"]');
+    // VED-653: после ролика — следующая глава.
+    expect(
+      screen.getByRole("heading", { name: "Приложение на телефон" }),
+    ).toBeInTheDocument();
+    expect(window.location.hash).toBe("#app");
   });
 
   it("глава из якоря адреса открывается сразу", () => {
