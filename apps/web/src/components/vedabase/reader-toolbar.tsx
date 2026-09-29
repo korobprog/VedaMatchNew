@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Bookmark,
   BookmarkCheck,
+  Download,
   List,
   NotebookPen,
   Search,
@@ -45,6 +46,7 @@ export function ReaderToolbar({
   onOpenSearch,
   onOpenContents,
   onOpenNotes,
+  onOpenDownloads,
 }: {
   bookTitle: string;
   chapterTitle: string;
@@ -56,6 +58,7 @@ export function ReaderToolbar({
   onOpenSearch(): void;
   onOpenContents(): void;
   onOpenNotes(): void;
+  onOpenDownloads(): void;
 }) {
   const fontSize = (amount: number) =>
     onPreferencesChange({
@@ -90,6 +93,15 @@ export function ReaderToolbar({
           className={icon}
         >
           <Search aria-hidden className="size-5" />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenDownloads}
+          aria-label="Скачать книгу"
+          // На телефоне панель и так тесная: там «Скачать» — под содержанием.
+          className={`${icon} max-sm:hidden`}
+        >
+          <Download aria-hidden className="size-5" />
         </button>
         <details className="relative">
           <summary

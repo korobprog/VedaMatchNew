@@ -26,6 +26,7 @@ import {
   fetchVedabaseChapter,
 } from "@/lib/vedabase-client-api";
 import { AnnotationToolbar } from "./annotation-toolbar";
+import { BookDownloads } from "./book-downloads";
 import { ChapterContent, type ChapterMark } from "./chapter-content";
 import {
   ReaderNotesPanel,
@@ -264,7 +265,9 @@ export function ReaderScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sheet, setSheet] = useState<"contents" | "notes" | null>(null);
+  const [sheet, setSheet] = useState<
+    "contents" | "notes" | "downloads" | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -499,16 +502,25 @@ export function ReaderScreen({
   }
 
   const contents = (
-    <TableOfContents
-      variant="panel"
-      bookSlug={bookSlug}
-      chapters={orderedChapters}
-      currentChapterSlug={chapterSlug}
-      onNavigate={(slug) => {
-        setSheet(null);
-        navigate(slug);
-      }}
-    />
+    <>
+      <TableOfContents
+        variant="panel"
+        bookSlug={bookSlug}
+        chapters={orderedChapters}
+        currentChapterSlug={chapterSlug}
+        onNavigate={(slug) => {
+          setSheet(null);
+          navigate(slug);
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => setSheet("downloads")}
+        className="reader-hover reader-accent mt-3 min-h-11 w-full rounded-lg px-3 text-left text-sm font-semibold"
+      >
+        Скачать книгу
+      </button>
+    </>
   );
   const notesPanel = (
     <ReaderNotesPanel
@@ -540,6 +552,7 @@ export function ReaderScreen({
         onOpenSearch={() => setSearchOpen(true)}
         onOpenContents={() => setSheet("contents")}
         onOpenNotes={() => setSheet("notes")}
+        onOpenDownloads={() => setSheet("downloads")}
       />
       <div className="mx-auto grid w-full max-w-[1500px] flex-grow gap-6 px-3 sm:px-4 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_300px]">
         <aside
@@ -605,6 +618,14 @@ export function ReaderScreen({
         surfaceClassName="reader-surface"
       >
         {sheet === "notes" && notesPanel}
+      </ShelfSheet>
+      <ShelfSheet
+        open={sheet === "downloads"}
+        title="Скачать книгу"
+        onClose={() => setSheet(null)}
+        surfaceClassName="reader-surface"
+      >
+        {sheet === "downloads" && <BookDownloads bookSlug={bookSlug} />}
       </ShelfSheet>
       <SearchDialog
         open={searchOpen}

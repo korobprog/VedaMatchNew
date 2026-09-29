@@ -18,6 +18,7 @@ import {
   type AdminBookDraft,
 } from "@/lib/vedabase/admin-book";
 import { cn } from "@/lib/utils";
+import { BookFilesEditor } from "./book-files-editor";
 
 /**
  * Админка книг Библиотеки (VED-662, часть 3): для кого книга и каких линий —
@@ -231,6 +232,8 @@ function BookEditor({
         </div>
       </details>
 
+      <FilesSection slug={book.slug} />
+
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex min-h-11 items-center gap-2 text-sm text-text-0">
           <input
@@ -289,5 +292,25 @@ function Chip({
     >
       {children}
     </button>
+  );
+}
+
+/** Файлы для скачивания — раскрываются по требованию. */
+function FilesSection({ slug }: { slug: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="rounded-2xl border border-glass-brd px-4 py-3"
+    >
+      <summary className="cursor-pointer text-sm text-text-1">
+        Файлы для скачивания
+      </summary>
+      {open && (
+        <div className="mt-3">
+          <BookFilesEditor slug={slug} />
+        </div>
+      )}
+    </details>
   );
 }
