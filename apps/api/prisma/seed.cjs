@@ -47,6 +47,7 @@ const services = [
   {
     slug: 'union',
     name: 'Знакомства',
+    nameEn: 'Union',
     description:
       'Осознанные знакомства и сотрудничество: семья, дружба, служение, проекты',
     url: '/union',
@@ -62,6 +63,7 @@ const services = [
   {
     slug: 'vedabase',
     name: 'Библиотека',
+    nameEn: 'Library',
     description:
       'Архив развивающей и духовной литературы ведического канона и не только',
     url: '/vedabase',
@@ -77,6 +79,7 @@ const services = [
   {
     slug: 'motivation',
     name: 'Вдохновение',
+    nameEn: 'Motivation',
     description: 'Мудрость в афоризмах и шлоках на каждый день',
     url: '/motivation',
     status: 'active',
@@ -91,6 +94,7 @@ const services = [
   {
     slug: 'library',
     name: 'Образование',
+    nameEn: 'Education',
     description:
       'Общая база полезных материалов: статьи, видео, книги, курсы и каналы',
     url: '/library',
@@ -106,6 +110,7 @@ const services = [
   {
     slug: 'astro',
     name: 'Астрология',
+    nameEn: 'Astrology',
     description:
       'Ведическая карта рождения с разбором и совместимость по звёздам',
     url: '/astro',
@@ -124,6 +129,7 @@ const services = [
   {
     slug: 'market',
     name: 'Рынок',
+    nameEn: 'Market',
     description:
       'Коммерческие объявления и услуги в благости: товары, книги, мастерские, помощь',
     url: '/market',
@@ -141,6 +147,7 @@ const services = [
   {
     slug: 'chat',
     name: 'Общение',
+    nameEn: 'Chat',
     description:
       'Личные диалоги, группы и каналы общин: переписка со всеми, кого встретили на портале',
     url: '/chat',
@@ -197,6 +204,7 @@ const services = [
   {
     slug: 'notices',
     name: 'Объявления',
+    nameEn: 'Notices',
     description:
       'Некоммерческие объявления: отдам даром, нужны руки, попутчики, программы ятр',
     url: '/notices',
@@ -214,6 +222,7 @@ const services = [
   {
     slug: 'wellness',
     name: 'Здоровье',
+    nameEn: 'Wellness',
     description:
       'Сканер состава: за секунду видно, есть ли в продукте мясо, желатин, лук или чеснок',
     // В коде и маршрутах сервис зовётся `wellness`: имя `health` занято

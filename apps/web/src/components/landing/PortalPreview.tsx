@@ -257,7 +257,7 @@ export function PortalPreview({ className }: { className?: string }) {
                         )}
                       </span>
                       <span className="w-full break-words text-[10px] font-semibold leading-tight text-text-0">
-                        {name}
+                        {names(slug, name)}
                       </span>
                     </div>
                   ))}
