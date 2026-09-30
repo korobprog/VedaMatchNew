@@ -35,6 +35,7 @@ function placeRow(over: Record<string, unknown> = {}) {
     hiddenReason: 'дубль',
     verifiedAt: null,
     verifiedById: null,
+    lastConfirmedAt: null,
     createdById: 'u1',
     createdBy: { id: 'u1', name: 'Иван', spiritualName: null, isAgent: false },
     createdAt: new Date('2026-01-01'),
@@ -58,6 +59,17 @@ function setup() {
       findUnique: jest.fn(),
       create: jest.fn().mockResolvedValue({}),
       update: jest.fn().mockResolvedValue({}),
+    },
+    travelMapCheck: {
+      count: jest.fn().mockResolvedValue(0),
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({}),
+    },
+    travelMapNote: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn().mockResolvedValue({}),
     },
     community: { findMany: jest.fn().mockResolvedValue([]) },
     travelStay: { findMany: jest.fn().mockResolvedValue([]) },
@@ -201,6 +213,160 @@ describe('TravelMapService.getPlace', () => {
     expect(dto.photoUrl).toBe('u0');
     expect(dto.verified).toBe(false);
     expect(dto.author).toEqual({ id: 'u1', name: 'Иван', isAgent: false });
+    // updatedAt в январе 2026, а «сегодня» позже года — метка тусклая.
+    expect(dto.freshness).toEqual({
+      lastConfirmedAt: null,
+      confirmations: 0,
+      closedVotes: 0,
+      stale: dto.stale,
+      myVerdict: null,
+    });
+  });
+
+  it('freshness несёт счётчики и отметку смотрящего', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(
+      placeRow({ lastConfirmedAt: new Date('2026-03-01T00:00:00Z') }),
+    );
+    prisma.travelMapCheck.count
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(1);
+    prisma.travelMapCheck.findUnique.mockResolvedValue({ verdict: 'closed' });
+    const dto = await service.getPlace(stranger, 'p1');
+    expect(dto.freshness).toMatchObject({
+      lastConfirmedAt: '2026-03-01T00:00:00.000Z',
+      confirmations: 4,
+      closedVotes: 1,
+      myVerdict: 'closed',
+    });
+    const closedWhere = prisma.travelMapCheck.count.mock.calls[1][0].where;
+    expect(closedWhere.verdict).toBe('closed');
+    expect(closedWhere.updatedAt.gte).toBeInstanceOf(Date);
+  });
+});
+
+describe('TravelMapService.checkPlace', () => {
+  it('«был здесь» обновляет lastConfirmedAt', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    prisma.travelMapCheck.count.mockResolvedValue(1);
+    const res = await service.checkPlace(stranger, 'p1', {
+      verdict: 'confirmed',
+    });
+    expect(prisma.travelMapCheck.upsert).toHaveBeenCalled();
+    const upd = prisma.travelMapPlace.update.mock.calls[0][0];
+    expect(upd.where).toEqual({ id: 'p1' });
+    expect(upd.data.lastConfirmedAt).toBeInstanceOf(Date);
+    expect(res.stale).toBe(false);
+    expect(res.myVerdict).toBe('confirmed');
+    expect(res.lastConfirmedAt).not.toBeNull();
+  });
+
+  it('второй голос «закрылось» заводит жалобу, третий — нет', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    prisma.travelMapPlaceReport.findFirst.mockResolvedValue(null);
+
+    prisma.travelMapCheck.count.mockResolvedValue(1);
+    await service.checkPlace(stranger, 'p1', { verdict: 'closed' });
+    expect(prisma.travelMapPlaceReport.create).not.toHaveBeenCalled();
+    expect(prisma.travelMapPlace.update).not.toHaveBeenCalled();
+
+    prisma.travelMapCheck.count.mockResolvedValue(2);
+    await service.checkPlace(admin, 'p1', { verdict: 'closed' });
+    expect(prisma.travelMapPlaceReport.create).toHaveBeenCalledTimes(1);
+    expect(
+      prisma.travelMapPlaceReport.create.mock.calls[0][0].data,
+    ).toMatchObject({ placeId: 'p1', reporterId: null });
+
+    prisma.travelMapCheck.count.mockResolvedValue(3);
+    await service.checkPlace(author, 'p1', { verdict: 'closed' });
+    expect(prisma.travelMapPlaceReport.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('открытая системная жалоба не дублируется', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    prisma.travelMapCheck.count.mockResolvedValue(2);
+    prisma.travelMapPlaceReport.findFirst.mockResolvedValue({ id: 'r1' });
+    await service.checkPlace(stranger, 'p1', { verdict: 'closed' });
+    expect(prisma.travelMapPlaceReport.create).not.toHaveBeenCalled();
+  });
+
+  it('неверный вердикт — 400, скрытое место — 404', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    await expect(
+      service.checkPlace(stranger, 'p1', { verdict: 'meh' }),
+    ).rejects.toThrow(BadRequestException);
+    prisma.travelMapPlace.findUnique.mockResolvedValue(
+      placeRow({ status: 'hidden' }),
+    );
+    await expect(
+      service.checkPlace(stranger, 'p1', { verdict: 'confirmed' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('TravelMapService: заметки', () => {
+  const noteRow = (over: Record<string, unknown> = {}) => ({
+    id: 'n1',
+    placeId: 'p1',
+    authorId: 'u1',
+    text: 'Вход со двора',
+    createdAt: new Date('2026-05-01T00:00:00Z'),
+    author: { id: 'u1', name: 'Иван', spiritualName: null, isAgent: false },
+    ...over,
+  });
+
+  it('заметка короче двух символов — 400', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    await expect(
+      service.addNote(author, 'p1', { text: ' а ' }),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.travelMapNote.create).not.toHaveBeenCalled();
+  });
+
+  it('добавляет обрезанный текст, canDelete у автора', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    prisma.travelMapNote.create.mockResolvedValue(noteRow());
+    const dto = await service.addNote(author, 'p1', {
+      text: '  Вход со двора ',
+    });
+    expect(prisma.travelMapNote.create.mock.calls[0][0].data.text).toBe(
+      'Вход со двора',
+    );
+    expect(dto.canDelete).toBe(true);
+  });
+
+  it('список: свежие первыми, canDelete у чужого — false', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(placeRow());
+    prisma.travelMapNote.findMany.mockResolvedValue([noteRow()]);
+    const list = await service.listNotes(stranger, 'p1');
+    const args = prisma.travelMapNote.findMany.mock.calls[0][0];
+    expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    expect(args.take).toBe(50);
+    expect(list[0].canDelete).toBe(false);
+  });
+
+  it('чужую заметку не-админ удалить не может, админ — может', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapNote.findUnique.mockResolvedValue({
+      id: 'n1',
+      placeId: 'p1',
+      authorId: 'u1',
+    });
+    await expect(service.deleteNote(stranger, 'p1', 'n1')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.travelMapNote.delete).not.toHaveBeenCalled();
+    await service.deleteNote(admin, 'p1', 'n1');
+    expect(prisma.travelMapNote.delete).toHaveBeenCalledWith({
+      where: { id: 'n1' },
+    });
   });
 });
 

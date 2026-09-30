@@ -1954,6 +1954,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   border-width: 3px;
 }
 
+/* Давно не проверялось: тускнеют рамка и тень, фон и текст остаются
+   непрозрачными — контраст подписи не страдает в обеих темах. */
+.travel-map-pin.travel-map-pin--stale {
+  border-color: color-mix(in srgb, var(--vm-magenta) 45%, transparent);
+  box-shadow: none;
+}
+
 .travel-map-pin--active {
   background: var(--vm-bg-2);
   border-color: var(--vm-gold);

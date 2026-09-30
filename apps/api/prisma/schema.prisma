@@ -489,6 +489,8 @@ model User {
   travelMapPlaces                    TravelMapPlace[]              @relation("TravelMapPlacesCreated")
   travelMapPlacesVerified            TravelMapPlace[]              @relation("TravelMapPlacesVerified")
   travelMapReports                   TravelMapPlaceReport[]        @relation("TravelMapReportsFiled")
+  travelMapChecks                    TravelMapCheck[]              @relation("TravelMapChecks")
+  travelMapNotes                     TravelMapNote[]               @relation("TravelMapNotesWritten")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
@@ -7283,10 +7285,16 @@ model TravelMapPlace {
   createdById String?
   createdBy   User?   @relation("TravelMapPlacesCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
+  /// Последнее «был здесь, всё верно». Денормализовано: карта отдаёт сотни
+  /// точек, и считать по таблице подтверждений на каждую — лишний запрос.
+  lastConfirmedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   reports TravelMapPlaceReport[]
+  checks  TravelMapCheck[]
+  notes   TravelMapNote[]
 
   @@index([status, lat, lng])
   @@index([status, kind])
@@ -7315,6 +7323,48 @@ model TravelMapPlaceReport {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([placeId])
+}
+
+enum TravelMapCheckVerdict {
+  confirmed
+  closed
+}
+
+/// Отметка «был здесь»: подтверждение, что место на месте, или «закрылось».
+/// Одна на человека и место: повторная отметка перезаписывает прежнюю, а не
+/// копит голоса. Народные карты умирают от устаревания, а не от спама —
+/// это и есть защита от него.
+model TravelMapCheck {
+  id      String         @id @default(uuid())
+  placeId String
+  place   TravelMapPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User           @relation("TravelMapChecks", fields: [userId], references: [id], onDelete: Cascade)
+
+  verdict   TravelMapCheckVerdict
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@unique([placeId, userId])
+  @@index([placeId, verdict, updatedAt(sort: Desc)])
+}
+
+/// Короткая полезная заметка к месту: «вход со двора», «прасад по
+/// воскресеньям в 14:00». Не отзыв и не оценка: звёзды здесь ни к чему.
+model TravelMapNote {
+  id      String         @id @default(uuid())
+  placeId String
+  place   TravelMapPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  /// SetNull: удалённый аккаунт не уносит с собой подсказку про вход со двора.
+  authorId String?
+  author   User?          @relation("TravelMapNotesWritten", fields: [authorId], references: [id], onDelete: SetNull)
+
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([placeId, createdAt(sort: Desc)])
+  @@index([authorId])
 }
 
 /// Лента, к которой относится категория Вдохновения (VED-139). Открытки и

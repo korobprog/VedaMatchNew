@@ -3,6 +3,9 @@ import type {
   AdminTravelMapPlacesQuery,
   AdminTravelMapReportsQuery,
   CreateTravelMapPlaceRequest,
+  TravelMapCheckVerdict,
+  TravelMapFreshnessDto,
+  TravelMapNoteDto,
   GeoSearchResult,
   TravelMapPlaceDto,
   TravelMapPlacesQuery,
@@ -107,6 +110,26 @@ export const reportTravelMapPlace = (id: string, reason: string) =>
   request<{ ok: true }>(placePath(id, "/report"), {
     method: "POST",
     ...json({ reason }),
+  });
+
+export const checkTravelMapPlace = (id: string, verdict: TravelMapCheckVerdict) =>
+  request<TravelMapFreshnessDto>(placePath(id, "/check"), {
+    method: "POST",
+    ...json({ verdict }),
+  });
+
+export const getTravelMapNotes = (id: string, signal?: AbortSignal) =>
+  request<TravelMapNoteDto[]>(placePath(id, "/notes"), { method: "GET", signal });
+
+export const addTravelMapNote = (id: string, text: string) =>
+  request<TravelMapNoteDto>(placePath(id, "/notes"), {
+    method: "POST",
+    ...json({ text }),
+  });
+
+export const deleteTravelMapNote = (id: string, noteId: string) =>
+  request<void>(placePath(id, `/notes/${encodeURIComponent(noteId)}`), {
+    method: "DELETE",
   });
 
 /** Поиск адреса через общий геокодер портала. */
