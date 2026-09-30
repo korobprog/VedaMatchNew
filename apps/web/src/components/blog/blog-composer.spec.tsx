@@ -126,3 +126,35 @@ describe("BlogComposer: категория и линия", () => {
     );
   });
 });
+
+// VED-686: пост с личной страницы в общую ленту сам не попадает.
+describe("BlogComposer: личная страница", () => {
+  it("scope=personal уходит вместе с постом и под кнопкой стоит подсказка", async () => {
+    const user = userEvent.setup();
+    vi.mocked(createBlogPost).mockClear();
+    vi.mocked(createBlogPost).mockResolvedValue({
+      post: { id: "p" } as never,
+      failed: [],
+    });
+    render(<BlogComposer scope="personal" />);
+    expect(
+      screen.getByText(/Пост появится на вашей странице/),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Текст поста"), "Заметка");
+    await user.selectOptions(screen.getByLabelText("Категория"), "Знания");
+    await user.selectOptions(screen.getByLabelText("Линия"), "Для всех");
+    await user.click(screen.getByRole("checkbox", { name: "Для всех" }));
+    await user.click(screen.getByRole("button", { name: "Опубликовать" }));
+
+    expect(createBlogPost).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "personal" }),
+      [],
+    );
+  });
+
+  it("без scope подсказки нет и поле не отправляется", () => {
+    render(<BlogComposer />);
+    expect(screen.queryByText(/Пост появится на вашей странице/)).toBeNull();
+  });
+});

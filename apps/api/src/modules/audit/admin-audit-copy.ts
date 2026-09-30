@@ -44,6 +44,8 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'library.entry-restored': 'Запись Образования возвращена',
   'library.author-lineage-applied': 'Линия автора проставлена его материалам',
   'vedabase.book-updated': 'Книга Библиотеки изменена',
+  'blog.feed-approved': 'Пост принят в общую ленту Блога',
+  'blog.feed-rejected': 'Пост отклонён для общей ленты Блога',
   'contacts.tag-created': 'Добавлен тег справочника',
   'contacts.tag-updated': 'Изменён тег справочника',
   'contacts.tag-deleted': 'Удалён тег справочника',

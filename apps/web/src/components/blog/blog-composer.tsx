@@ -7,6 +7,7 @@ import {
   BLOG_POST_TITLE_MAX_LENGTH,
   type BlogPostCategory,
   type BlogPostDto,
+  type BlogPostScope,
 } from "@vedamatch/shared";
 import {
   BlogApiError,
@@ -40,10 +41,16 @@ import { blogTextLimitState } from "./blog-text-limit";
 export function BlogComposer({
   onPublished,
   autoFocus = false,
+  scope,
 }: {
   onPublished?: (post: BlogPostDto) => void;
   /** Пришли карандашом «Написать пост» с главной — курсор сразу в форму. */
   autoFocus?: boolean;
+  /**
+   * `personal` — форма личной страницы (VED-686): пост остаётся у автора, в
+   * общую ленту его предлагают отдельной кнопкой. Нет — сразу в общую ленту.
+   */
+  scope?: BlogPostScope;
 }) {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -116,6 +123,7 @@ export function BlogComposer({
           category: chosenCategory,
           lineage: chosenLineage,
           audienceStages: chosenAudience,
+          ...(scope ? { scope } : {}),
         },
         files,
       );
@@ -262,6 +270,12 @@ export function BlogComposer({
         </button>
       </div>
 
+      {scope === "personal" && (
+        <p className="mt-2 text-xs text-text-1">
+          Пост появится на вашей странице. В общую ленту — кнопкой «Предложить в
+          ленту», после одобрения администратора.
+        </p>
+      )}
       {marksHint && (
         <p id={marksHintId} className="mt-2 text-xs text-text-1">
           {marksHint}

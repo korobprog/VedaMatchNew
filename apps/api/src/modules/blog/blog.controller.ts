@@ -207,6 +207,29 @@ export class BlogController {
     return this.blog.authorFeed(user.sub, isAdmin(user), authorId, cursor);
   }
 
+  /**
+   * Предложить свой пост с личной страницы в общую ленту (VED-686): пост
+   * уходит в очередь администратора. Автор, а не админ: 404 для чужих.
+   */
+  @Post('posts/:id/feed-request')
+  @Throttle({ default: { ttl: 3_600_000, limit: 120 } })
+  requestFeed(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.blog.requestFeed(user.sub, id);
+  }
+
+  /** Забрать предложение назад, пока администратор не решил. */
+  @Delete('posts/:id/feed-request')
+  @Throttle({ default: { ttl: 3_600_000, limit: 120 } })
+  withdrawFeedRequest(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.blog.withdrawFeedRequest(user.sub, id);
+  }
+
   @Get('posts/:id')
   post(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
     return this.blog.post(user.sub, isAdmin(user), id);

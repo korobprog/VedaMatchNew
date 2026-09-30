@@ -54,6 +54,7 @@ export function BlogAuthorFeed({
     <div>
       {mine && (
         <BlogComposer
+          scope="personal"
           onPublished={(post) => setPosts((current) => [post, ...current])}
         />
       )}
@@ -70,6 +71,7 @@ export function BlogAuthorFeed({
             <BlogPostCard
               key={post.id}
               post={post}
+              showFeedStatus={mine}
               onChanged={replace}
               onRemoved={(id) =>
                 setPosts((current) => current.filter((item) => item.id !== id))

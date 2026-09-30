@@ -2,7 +2,12 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import { redirect } from "next/navigation";
 import { canAdminService } from "@vedamatch/shared";
-import { getBlogFavorites, getBlogFeed, getBlogSettings } from "@/lib/blog-api";
+import {
+  getBlogFavorites,
+  getBlogFeed,
+  getBlogFeedRequests,
+  getBlogSettings,
+} from "@/lib/blog-api";
 import { requireUser } from "@/lib/require-user";
 import { BlogFeed } from "@/components/blog/blog-feed";
 import { BlogSettingsForm } from "@/components/blog/blog-settings-form";
@@ -52,9 +57,10 @@ export default async function BlogPage({
     "blog",
   );
   const filters = parseBlogFeedFilters(params);
-  const [feed, settings] = await Promise.all([
+  const [feed, settings, requests] = await Promise.all([
     favorites ? getBlogFavorites(filters) : getBlogFeed("all", filters),
     isAdmin && !favorites ? getBlogSettings() : Promise.resolve(null),
+    isAdmin && !favorites ? getBlogFeedRequests() : Promise.resolve(null),
   ]);
 
   const tab =
@@ -123,7 +129,22 @@ export default async function BlogPage({
             <PostActionsOrderButton />
           </nav>
         }
-        beforeComposer={settings && <BlogSettingsForm initial={settings} />}
+        beforeComposer={
+          settings && (
+            <>
+              <BlogSettingsForm initial={settings} />
+              {/* Очередь постов с личных страниц (VED-686): у админа она
+                  рядом с настройками, а не отдельным пунктом меню. */}
+              <Link
+                href="/blog/review"
+                className="mb-3 inline-flex min-h-11 items-center rounded-lg border border-glass-brd px-3 text-sm font-semibold text-text-0 hover:border-cyan/60"
+              >
+                Предложено в ленту
+                {requests ? ` (${requests.total})` : ""}
+              </Link>
+            </>
+          )
+        }
         filters={filters}
       />
     </main>

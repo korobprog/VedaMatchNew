@@ -44,6 +44,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'library.entry-restored',
   'library.author-lineage-applied',
   'vedabase.book-updated',
+  'blog.feed-approved',
+  'blog.feed-rejected',
   'contacts.tag-created',
   'contacts.tag-updated',
   'contacts.tag-deleted',
@@ -65,6 +67,7 @@ export type AdminAuditTargetType =
   | 'report'
   | 'community'
   | 'listing'
+  | 'post'
   | 'notice'
   | 'broadcast'
   | 'platform';

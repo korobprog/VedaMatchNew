@@ -7307,6 +7307,16 @@ model BlogPost {
   /// для всех.
   audienceStages String[] @default([])
 
+  /// Где пост (VED-686): в общей ленте, только на личной странице, ждёт
+  /// администратора или отклонён. Все прежние посты — `feed`.
+  feedStatus      BlogPostFeedStatus @default(feed)
+  /// Когда автор предложил пост в общую ленту: очередь админа — старые сверху.
+  feedRequestedAt DateTime?
+  feedReviewedAt  DateTime?
+  feedReviewedById String?
+  /// Пояснение к отказу; видят только автор и администратор.
+  feedReviewNote  String?
+
   images    BlogPostImage[]
   favorites BlogFavorite[]
   likes     BlogLike[]
@@ -7315,6 +7325,7 @@ model BlogPost {
   @@index([feedUntil])
   @@index([authorId, createdAt(sort: Desc)])
   @@index([repostOfId])
+  @@index([feedStatus, feedRequestedAt])
 }
 
 /// Картинка поста. Лежит в публичном бакете — карточки ленты уходят в SSR и
@@ -7352,6 +7363,14 @@ enum BlogMediaKind {
 }
 
 /// Категория поста Блог-ленты (VED-590). Порядок — как в меню фильтра.
+/// Где пост блог-ленты (VED-686).
+enum BlogPostFeedStatus {
+  feed
+  personal
+  pending
+  rejected
+}
+
 enum BlogPostCategory {
   knowledge
   news

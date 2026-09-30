@@ -5,11 +5,14 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
+  BlogFeedRequestsResponse,
+  BlogFeedReviewRequest,
   BlogPinRequest,
   BlogPostLineageRequest,
   BlogPostLifetimeRequest,
@@ -81,6 +84,27 @@ export class BlogAdminController {
   ) {
     this.assertAdmin(user);
     return this.blog.setLineage(user.sub, id, body?.lineage ?? null);
+  }
+
+  /** Очередь постов, предложенных в общую ленту (VED-686). */
+  @Get('feed-requests')
+  feedRequests(
+    @CurrentUser() user: AccessTokenPayload,
+  ): Promise<BlogFeedRequestsResponse> {
+    this.assertAdmin(user);
+    return this.blog.feedRequests(user.sub);
+  }
+
+  /** Принять пост в общую ленту или отклонить с пояснением (VED-686). */
+  @Post('posts/:id/feed-review')
+  @Throttle({ default: { ttl: 3_600_000, limit: 240 } })
+  reviewFeed(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: BlogFeedReviewRequest,
+  ) {
+    this.assertAdmin(user);
+    return this.blog.reviewFeed(user.sub, id, body);
   }
 
   private assertAdmin(user: AccessTokenPayload): void {
