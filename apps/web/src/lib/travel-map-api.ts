@@ -238,3 +238,58 @@ export const unhideTravelMapRoute = (id: string) =>
   request<unknown>(`/travel/map/admin/routes/${encodeURIComponent(id)}/unhide`, {
     method: "POST",
   });
+
+// ----- Прогулка: рассказ, фото и видео остановок -----
+
+const stopPath = (routeId: string, stopId: string, suffix: string) =>
+  routePath(routeId, `/stops/${encodeURIComponent(stopId)}${suffix}`);
+
+const fileForm = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return form;
+};
+
+export const uploadTravelMapStopPhoto = (
+  routeId: string,
+  stopId: string,
+  file: File,
+) =>
+  request<TravelMapRouteDto>(stopPath(routeId, stopId, "/photos"), {
+    method: "POST",
+    body: fileForm(file),
+  });
+
+export const deleteTravelMapStopPhoto = (
+  routeId: string,
+  stopId: string,
+  index: number,
+) =>
+  request<TravelMapRouteDto>(stopPath(routeId, stopId, `/photos/${index}`), {
+    method: "DELETE",
+  });
+
+export const uploadTravelMapStopVideo = (
+  routeId: string,
+  stopId: string,
+  file: File,
+) =>
+  request<TravelMapRouteDto>(stopPath(routeId, stopId, "/video"), {
+    method: "POST",
+    body: fileForm(file),
+  });
+
+export const deleteTravelMapStopVideo = (routeId: string, stopId: string) =>
+  request<TravelMapRouteDto>(stopPath(routeId, stopId, "/video"), {
+    method: "DELETE",
+  });
+
+export const updateTravelMapStopStory = (
+  routeId: string,
+  stopId: string,
+  story: string,
+) =>
+  request<TravelMapRouteDto>(stopPath(routeId, stopId, "/story"), {
+    method: "PATCH",
+    ...json({ story }),
+  });

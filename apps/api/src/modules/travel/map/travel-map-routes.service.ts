@@ -8,6 +8,8 @@ import { Prisma } from '@prisma/client';
 import {
   resolveDisplayName,
   TRAVEL_MAP_ROUTE_KINDS,
+  TRAVEL_MAP_STOP_PHOTOS_MAX,
+  TRAVEL_MAP_STOP_STORY_MAX,
   type AccessTokenPayload,
   type TravelMapAuthorDto,
   type TravelMapRouteDto,
@@ -19,6 +21,10 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { isAdmin } from '../is-admin';
 import { isStale } from './map-freshness';
 import { parseHideReason } from './map-input';
+import {
+  TravelMapPhotosService,
+  type UploadedMapPhoto,
+} from './travel-map-photos.service';
 import { routeDistanceKm } from './route-geo';
 import {
   parseCreateRouteInput,
@@ -114,7 +120,10 @@ function denormalize(stops: RouteStopValue[]) {
 
 @Injectable()
 export class TravelMapRoutesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly photos: TravelMapPhotosService,
+  ) {}
 
   async list(
     _viewer: AccessTokenPayload,
@@ -191,6 +200,11 @@ export class TravelMapRoutesService {
         lat: s.lat,
         lng: s.lng,
         note: s.note,
+        media: {
+          photoUrls: s.photoUrls,
+          videoUrl: s.videoUrl,
+          story: s.story,
+        },
         place: s.place
           ? {
               kind: s.place.kind,
@@ -243,27 +257,30 @@ export class TravelMapRoutesService {
     const { stops, ...fields } = input;
     if (stops) await this.assertPlacesUsable(stops);
 
+    let orphanKeys: string[] = [];
     await this.prisma.$transaction(async (tx) => {
-      // Остановки пересоздаём целиком: порядок — часть маршрута, а
-      // @@unique([routeId, position]) не даёт сдвигать позиции по одной.
       if (stops) {
-        await tx.travelMapRouteStop.deleteMany({ where: { routeId: id } });
-        await tx.travelMapRouteStop.createMany({
-          data: this.stopRows(id, stops),
-        });
+        orphanKeys = await this.syncStops(tx, id, stops);
       }
       await tx.travelMapRoute.update({
         where: { id },
         data: { ...fields, ...(stops ? denormalize(stops) : {}) },
       });
     });
+    // Файлы удалённых остановок чистим после коммита: если транзакция
+    // откатилась, строки живы и ссылаются на эти ключи.
+    await this.removeKeys(orphanKeys);
     return this.get(viewer, id);
   }
 
   async remove(viewer: AccessTokenPayload, id: string): Promise<void> {
     const row = await this.prisma.travelMapRoute.findUnique({
       where: { id },
-      select: { id: true, authorId: true },
+      select: {
+        id: true,
+        authorId: true,
+        stops: { select: { photoKeys: true, videoKey: true } },
+      },
     });
     if (!row) throw new NotFoundException('Маршрут не найден');
     if (!this.canEdit(viewer, row)) {
@@ -271,6 +288,122 @@ export class TravelMapRoutesService {
     }
     // Остановки уйдут каскадом.
     await this.prisma.travelMapRoute.delete({ where: { id } });
+    // Ключи собрали до удаления, чистим S3 после: строки уже не вернуть.
+    await this.removeKeys(row.stops.flatMap((s) => this.stopKeys(s)));
+  }
+
+  // ===== Медиа остановки =====
+
+  async addStopPhoto(
+    viewer: AccessTokenPayload,
+    routeId: string,
+    stopId: string,
+    file: UploadedMapPhoto | undefined,
+  ): Promise<TravelMapRouteDto> {
+    const stop = await this.editableStop(viewer, routeId, stopId);
+    if (stop.photoKeys.length >= TRAVEL_MAP_STOP_PHOTOS_MAX) {
+      throw new BadRequestException(
+        `На остановке не больше ${TRAVEL_MAP_STOP_PHOTOS_MAX} фото`,
+      );
+    }
+    const { key, url } = await this.photos.uploadImage(
+      `travel/map/routes/${routeId}/${stopId}`,
+      file,
+    );
+    // Массивы дописываем атомарно (push), а не перезаписываем прочитанным
+    // списком: два одновременных фото не затрут друг друга.
+    await this.prisma.travelMapRouteStop.update({
+      where: { id: stopId },
+      data: { photoKeys: { push: key }, photoUrls: { push: url } },
+    });
+    return this.get(viewer, routeId);
+  }
+
+  async removeStopPhoto(
+    viewer: AccessTokenPayload,
+    routeId: string,
+    stopId: string,
+    index: number,
+  ): Promise<TravelMapRouteDto> {
+    const stop = await this.editableStop(viewer, routeId, stopId);
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= stop.photoKeys.length
+    ) {
+      throw new NotFoundException('Фото не найдено');
+    }
+    const key = stop.photoKeys[index];
+    await this.prisma.travelMapRouteStop.update({
+      where: { id: stopId },
+      data: {
+        photoKeys: stop.photoKeys.filter((_, i) => i !== index),
+        photoUrls: stop.photoUrls.filter((_, i) => i !== index),
+      },
+    });
+    await this.photos.remove(key);
+    return this.get(viewer, routeId);
+  }
+
+  async setStopVideo(
+    viewer: AccessTokenPayload,
+    routeId: string,
+    stopId: string,
+    file: UploadedMapPhoto | undefined,
+  ): Promise<TravelMapRouteDto> {
+    const stop = await this.editableStop(viewer, routeId, stopId);
+    const { key, url } = await this.photos.uploadVideo(
+      `travel/map/routes/${routeId}/${stopId}`,
+      file,
+    );
+    await this.prisma.travelMapRouteStop.update({
+      where: { id: stopId },
+      data: { videoKey: key, videoUrl: url },
+    });
+    // Старое видео убираем только после того, как новое записано.
+    await this.photos.remove(stop.videoKey);
+    return this.get(viewer, routeId);
+  }
+
+  async removeStopVideo(
+    viewer: AccessTokenPayload,
+    routeId: string,
+    stopId: string,
+  ): Promise<TravelMapRouteDto> {
+    const stop = await this.editableStop(viewer, routeId, stopId);
+    await this.prisma.travelMapRouteStop.update({
+      where: { id: stopId },
+      data: { videoKey: null, videoUrl: null },
+    });
+    await this.photos.remove(stop.videoKey);
+    return this.get(viewer, routeId);
+  }
+
+  async updateStopStory(
+    viewer: AccessTokenPayload,
+    routeId: string,
+    stopId: string,
+    body: unknown,
+  ): Promise<TravelMapRouteDto> {
+    await this.editableStop(viewer, routeId, stopId);
+    const raw =
+      body && typeof body === 'object'
+        ? (body as Record<string, unknown>).story
+        : undefined;
+    if (typeof raw !== 'string') {
+      throw new BadRequestException('Рассказ должен быть строкой');
+    }
+    const story = raw.trim();
+    if (story.length > TRAVEL_MAP_STOP_STORY_MAX) {
+      throw new BadRequestException(
+        `Рассказ — не длиннее ${TRAVEL_MAP_STOP_STORY_MAX} символов`,
+      );
+    }
+    await this.prisma.travelMapRouteStop.update({
+      where: { id: stopId },
+      data: { story },
+    });
+    return this.get(viewer, routeId);
   }
 
   // ===== Администрация =====
@@ -356,6 +489,110 @@ export class TravelMapRoutesService {
         'Одна из остановок ссылается на место, которого нет на карте',
       );
     }
+  }
+
+  /**
+   * Остановка маршрута для правки: маршрут есть, viewer — автор или админ,
+   * остановка принадлежит именно этому маршруту (чужая — 404, а не 403, чтобы
+   * не подтверждать существование).
+   */
+  private async editableStop(
+    viewer: AccessTokenPayload,
+    routeId: string,
+    stopId: string,
+  ) {
+    const route = await this.prisma.travelMapRoute.findUnique({
+      where: { id: routeId },
+      select: { id: true, authorId: true },
+    });
+    if (!route) throw new NotFoundException('Маршрут не найден');
+    if (!this.canEdit(viewer, route)) {
+      throw new ForbiddenException('Менять маршрут может только его автор');
+    }
+    const stop = await this.prisma.travelMapRouteStop.findUnique({
+      where: { id: stopId },
+      select: {
+        id: true,
+        routeId: true,
+        photoKeys: true,
+        photoUrls: true,
+        videoKey: true,
+      },
+    });
+    if (!stop || stop.routeId !== routeId) {
+      throw new NotFoundException('Остановка не найдена');
+    }
+    return stop;
+  }
+
+  private stopKeys(s: { photoKeys: string[]; videoKey: string | null }) {
+    return [...s.photoKeys, ...(s.videoKey ? [s.videoKey] : [])];
+  }
+
+  private async removeKeys(keys: string[]): Promise<void> {
+    for (const key of keys) await this.photos.remove(key);
+  }
+
+  /**
+   * Приводит остановки маршрута к присланному списку, не трогая медиа тех,
+   * что остались: с `id` — update, без — create, пропавшие — delete.
+   * Возвращает ключи S3 удалённых остановок.
+   *
+   * Конфликт @@unique([routeId, position]) при перестановке обходим так:
+   * после удаления лишних переводим оставшиеся в отрицательные позиции
+   * (-1, -2, …; они различны и не пересекаются с настоящими, которые >= 0),
+   * а затем одним проходом ставим итоговые. Два прохода по N строк — проще и
+   * надёжнее, чем вычислять безопасный порядок сдвигов.
+   */
+  private async syncStops(
+    tx: Prisma.TransactionClient,
+    routeId: string,
+    stops: RouteStopValue[],
+  ): Promise<string[]> {
+    const existing = await tx.travelMapRouteStop.findMany({
+      where: { routeId },
+      select: { id: true, photoKeys: true, videoKey: true },
+    });
+    const byId = new Map(existing.map((e) => [e.id, e]));
+    const seen = new Set<string>();
+    for (const s of stops) {
+      if (!s.id) continue;
+      if (!byId.has(s.id) || seen.has(s.id)) {
+        throw new BadRequestException(
+          'Остановка не принадлежит этому маршруту',
+        );
+      }
+      seen.add(s.id);
+    }
+    const removed = existing.filter((e) => !seen.has(e.id));
+    if (removed.length > 0) {
+      await tx.travelMapRouteStop.deleteMany({
+        where: { id: { in: removed.map((r) => r.id) } },
+      });
+    }
+    const kept = stops.filter((s) => s.id);
+    for (const [i, s] of kept.entries()) {
+      await tx.travelMapRouteStop.update({
+        where: { id: s.id as string },
+        data: { position: -(i + 1) },
+      });
+    }
+    for (const [position, s] of stops.entries()) {
+      const data = {
+        placeId: s.placeId,
+        name: s.name,
+        lat: s.lat,
+        lng: s.lng,
+        note: s.note,
+        position,
+      };
+      if (s.id) {
+        await tx.travelMapRouteStop.update({ where: { id: s.id }, data });
+      } else {
+        await tx.travelMapRouteStop.create({ data: { ...data, routeId } });
+      }
+    }
+    return removed.flatMap((r) => this.stopKeys(r));
   }
 
   private stopRows(routeId: string, stops: RouteStopValue[]) {

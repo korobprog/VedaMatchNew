@@ -145,6 +145,7 @@ const ROUTE_LABELS: Readonly<Record<string, string>> = {
   "travel/map/routes/new": "Новый маршрут",
   "travel/map/routes/*": "Маршрут",
   "travel/map/routes/*/edit": "Правка",
+  "travel/map/routes/*/walk": "Прогулка",
   "travel/s/*": "Приглашение",
   "travel/stays/*": "Жильё",
   "union/chats/*": "Переписка",

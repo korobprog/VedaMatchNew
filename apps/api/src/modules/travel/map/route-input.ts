@@ -12,6 +12,8 @@ import {
 const PLACE_TEXT_MAX = 120;
 
 export interface RouteStopValue {
+  /** id существующей остановки: по нему правка сохраняет фото и рассказ. */
+  id: string | null;
   placeId: string | null;
   name: string;
   lat: number;
@@ -92,7 +94,12 @@ function parseStops(value: unknown): RouteStopValue[] {
         throw new BadRequestException(`Остановка ${n}: место указано неверно`);
       }
     }
+    const id = stop.id;
+    if (id !== undefined && id !== null && (typeof id !== 'string' || !id)) {
+      throw new BadRequestException(`Остановка ${n}: id указан неверно`);
+    }
     return {
+      id: typeof id === 'string' ? id : null,
       placeId: typeof placeId === 'string' ? placeId : null,
       name: text(stop.name, `название остановки ${n}`, 1, PLACE_TEXT_MAX),
       lat: coord(stop.lat, `широта остановки ${n}`, 90),

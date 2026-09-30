@@ -7440,6 +7440,14 @@ model TravelMapRouteStop {
   lng      Float
   note     String @default("")
 
+  /// Режим прогулки: рассказ автора, фото и одно короткое видео на
+  /// остановке. Ключи и ссылки парами по индексу, как у фото места.
+  story     String   @default("")
+  photoKeys String[] @default([])
+  photoUrls String[] @default([])
+  videoKey  String?
+  videoUrl  String?
+
   @@unique([routeId, position])
   @@index([placeId])
 }

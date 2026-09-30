@@ -131,6 +131,7 @@ describe("buildPortalPath", () => {
       "Карта",
       "Новое место",
     ]);
+    expect(labels("/travel/map/routes/r1/walk").at(-1)).toBe("Прогулка");
     expect(labels("/travel/map/routes/r1/edit")).toEqual([
       "Главная",
       "Путешествия",

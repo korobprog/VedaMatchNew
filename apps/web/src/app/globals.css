@@ -1999,3 +1999,50 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   font-size: 0.75rem;
   line-height: 1;
 }
+
+/* Режим прогулки по маршруту («Карта»). Только токены: кнопка и значки живут
+   в обеих темах. Анимаций нет, поэтому prefers-reduced-motion не затронут. */
+.travel-map-walk-cta {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  border-radius: 0.75rem;
+  border: 2px solid var(--vm-magenta);
+  background: var(--vm-bg-2);
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  color: var(--vm-text-0);
+}
+
+.travel-map-media-badge {
+  position: absolute;
+  right: -0.25rem;
+  bottom: -0.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--vm-glass-brd, var(--vm-text-2));
+  background: var(--vm-bg-1);
+  padding: 0 0.2rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.travel-map-walk-nav {
+  display: flex;
+  min-height: 3rem;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 2px solid var(--vm-magenta);
+  background: var(--vm-bg-2);
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  color: var(--vm-text-0);
+}
+
+.travel-map-walk-nav:disabled {
+  border-color: var(--vm-text-2);
+  color: var(--vm-text-2);
+  opacity: 0.6;
+}

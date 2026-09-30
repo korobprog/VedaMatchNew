@@ -76,6 +76,7 @@ export function RouteForm({ routeId }: { routeId?: string }) {
         setStops(
           route.stops.map((s, i) => ({
             key: i + 1,
+            id: s.id,
             placeId: s.placeId,
             name: s.name,
             lat: s.lat,
@@ -190,6 +191,7 @@ export function RouteForm({ routeId }: { routeId?: string }) {
       city: city.trim() || null,
       country: country.trim() || null,
       stops: stops.map((s) => ({
+        id: s.id ?? undefined,
         placeId: s.placeId ?? null,
         name: s.name,
         lat: s.lat,
