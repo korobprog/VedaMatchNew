@@ -404,6 +404,7 @@ export class ChatConversationsService {
               contextTitle: place.title,
               contextStatus: 'active',
               contextMeta: {
+                kind: place.kind ?? 'place',
                 kindLabel: place.kindLabel,
                 lat: place.lat,
                 lng: place.lng,
@@ -1289,6 +1290,9 @@ function parsePlaceSnapshot(
   return {
     id: place.id,
     title: place.title,
+    // Набор на экскурсию помечается отдельно: ссылка из шапки беседы ведёт
+    // на набор, а не на место с тем же id (его и нет — uuid).
+    kind: place.kind === 'tour' ? 'tour' : 'place',
     kindLabel: typeof place.kindLabel === 'string' ? place.kindLabel : '',
     lat: place.lat,
     lng: place.lng,

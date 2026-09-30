@@ -7,6 +7,12 @@ import type {
   TravelMapCheckVerdict,
   TravelMapFreshnessDto,
   TravelMapGroupResponse,
+  TravelMapGuideDto,
+  TravelMapTourDto,
+  TravelMapToursQuery,
+  CreateTravelMapTourRequest,
+  UpdateTravelMapTourRequest,
+  UpsertTravelMapGuideRequest,
   TravelMapNoteDto,
   GeoSearchResult,
   TravelMapPlaceDto,
@@ -293,3 +299,81 @@ export const updateTravelMapStopStory = (
     method: "PATCH",
     ...json({ story }),
   });
+
+// ----- Экскурсоводы -----
+
+export const getTravelMapGuides = (signal?: AbortSignal) =>
+  request<TravelMapGuideDto[]>("/travel/map/guides", { method: "GET", signal });
+
+/** Свой профиль гида; нет профиля — `null` (204, пустое тело или 404). */
+export async function getMyTravelMapGuide(
+  signal?: AbortSignal,
+): Promise<TravelMapGuideDto | null> {
+  try {
+    const guide = await request<TravelMapGuideDto | null | undefined>(
+      "/travel/map/guides/me",
+      { method: "GET", signal },
+    );
+    return guide?.userId ? guide : null;
+  } catch (cause) {
+    if (cause instanceof TravelMapApiError && cause.status === 404) return null;
+    // Пустое тело при 200: res.json() падает — тоже «нет профиля».
+    if (cause instanceof SyntaxError) return null;
+    throw cause;
+  }
+}
+
+export const saveMyTravelMapGuide = (body: UpsertTravelMapGuideRequest) =>
+  request<TravelMapGuideDto>("/travel/map/guides/me", {
+    method: "PUT",
+    ...json(body),
+  });
+
+export const deleteMyTravelMapGuide = () =>
+  request<void>("/travel/map/guides/me", { method: "DELETE" });
+
+export const getTravelMapGuide = (userId: string, signal?: AbortSignal) =>
+  request<TravelMapGuideDto>(
+    `/travel/map/guides/${encodeURIComponent(userId)}`,
+    { method: "GET", signal },
+  );
+
+// ----- Наборы на дату -----
+
+const tourPath = (id: string, suffix = "") =>
+  `/travel/map/tours/${encodeURIComponent(id)}${suffix}`;
+
+export const getTravelMapTours = (
+  query: TravelMapToursQuery,
+  signal?: AbortSignal,
+) =>
+  request<TravelMapTourDto[]>(`/travel/map/tours${toQuery({ ...query })}`, {
+    method: "GET",
+    signal,
+  });
+
+export const getTravelMapTour = (id: string, signal?: AbortSignal) =>
+  request<TravelMapTourDto>(tourPath(id), { method: "GET", signal });
+
+export const createTravelMapTour = (body: CreateTravelMapTourRequest) =>
+  request<TravelMapTourDto>("/travel/map/tours", {
+    method: "POST",
+    ...json(body),
+  });
+
+export const updateTravelMapTour = (
+  id: string,
+  body: UpdateTravelMapTourRequest,
+) => request<TravelMapTourDto>(tourPath(id), { method: "PATCH", ...json(body) });
+
+const tourAction = (id: string, action: "cancel" | "complete" | "join" | "leave") =>
+  request<TravelMapTourDto>(tourPath(id, `/${action}`), { method: "POST" });
+
+export const cancelTravelMapTour = (id: string) => tourAction(id, "cancel");
+export const completeTravelMapTour = (id: string) => tourAction(id, "complete");
+export const joinTravelMapTour = (id: string) => tourAction(id, "join");
+export const leaveTravelMapTour = (id: string) => tourAction(id, "leave");
+
+/** Группа набора в «Общении»: создаёт беседу или возвращает существующую. */
+export const openTravelMapTourGroup = (id: string) =>
+  request<TravelMapGroupResponse>(tourPath(id, "/group"), { method: "POST" });

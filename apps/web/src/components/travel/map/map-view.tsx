@@ -227,6 +227,18 @@ export function MapView() {
         >
           Маршруты
         </Link>
+        <Link
+          href="/travel/map/guides"
+          className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+        >
+          Экскурсоводы
+        </Link>
+        <Link
+          href="/travel/map/tours"
+          className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+        >
+          Наборы
+        </Link>
       </div>
 
       {error ? (

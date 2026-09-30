@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ChatTravelMapContext } from "@vedamatch/shared";
-import { placeContextHref, placeContextLabel } from "./chat-place-context";
+import {
+  placeContextHref,
+  placeContextLabel,
+  placeContextTitle,
+} from "./chat-place-context";
 
 const context: ChatTravelMapContext = {
   service: "travel-map",
@@ -24,5 +28,20 @@ describe("placeContextLabel", () => {
   });
   it("ссылка экранирует id", () => {
     expect(placeContextHref(context)).toBe("/travel/map/places/p%201");
+  });
+});
+
+describe("группа набора", () => {
+  const tour: ChatTravelMapContext = {
+    ...context,
+    id: "t 1",
+    meta: { kind: "tour", kindLabel: "Прогулка", city: "Маяпур" },
+  };
+  it("ссылка ведёт на набор", () => {
+    expect(placeContextHref(tour)).toBe("/travel/map/tours/t%201");
+  });
+  it("подпись различает набор и место", () => {
+    expect(placeContextTitle(tour)).toBe("Группа набора");
+    expect(placeContextTitle(context)).toBe("Группа места");
   });
 });

@@ -8,6 +8,11 @@ import { TravelCashService } from './cash/travel-cash.service';
 import { TravelGuestPhotosService } from './guests/travel-guest-photos.service';
 import { TravelGuestsController } from './guests/travel-guests.controller';
 import { TravelGuestsService } from './guests/travel-guests.service';
+import { TravelMapGuidesController } from './map/travel-map-guides.controller';
+import { TravelMapGuidesService } from './map/travel-map-guides.service';
+import { TravelMapToursController } from './map/travel-map-tours.controller';
+import { TravelMapToursListener } from './map/travel-map-tours.listener';
+import { TravelMapToursService } from './map/travel-map-tours.service';
 import { TravelMapAdminController } from './map/travel-map-admin.controller';
 import { TravelMapController } from './map/travel-map.controller';
 import { TravelMapChatListener } from './map/travel-map-chat.listener';
@@ -37,6 +42,8 @@ import { TravelService } from './stays/travel.service';
     TravelAdminController,
     TravelMapAdminController,
     TravelMapRoutesController,
+    TravelMapGuidesController,
+    TravelMapToursController,
     TravelMapController,
     TravelCashController,
     TravelGuestsController,
@@ -56,6 +63,9 @@ import { TravelService } from './stays/travel.service';
     TravelMapRoutesService,
     TravelMapPhotosService,
     TravelMapChatListener,
+    TravelMapGuidesService,
+    TravelMapToursService,
+    TravelMapToursListener,
     TravelPurgeListener,
   ],
 })

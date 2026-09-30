@@ -11,7 +11,14 @@ export function placeContextLabel(context: ChatTravelMapContext): string {
     .join(" · ");
 }
 
-/** Ссылка на карточку места: просто путь, компонент чужого сервиса не нужен. */
+/** Набор на дату ведёт на страницу набора, остальное — на карточку места. */
 export function placeContextHref(context: ChatTravelMapContext): string {
-  return `/travel/map/places/${encodeURIComponent(context.id)}`;
+  const base =
+    context.meta?.kind === "tour" ? "/travel/map/tours" : "/travel/map/places";
+  return `${base}/${encodeURIComponent(context.id)}`;
+}
+
+/** Подпись над названием в шапке беседы. */
+export function placeContextTitle(context: ChatTravelMapContext): string {
+  return context.meta?.kind === "tour" ? "Группа набора" : "Группа места";
 }
