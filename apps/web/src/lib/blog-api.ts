@@ -5,6 +5,7 @@
 import { cookies } from "next/headers";
 import type {
   BlogAuthorFeedResponse,
+  BlogAuthorFilesResponse,
   BlogFeedResponse,
   BlogHomeFeedResponse,
   BlogPostDto,
@@ -70,6 +71,15 @@ export function getBlogAuthorFeed(
 ): Promise<BlogAuthorFeedResponse | null> {
   return blogGet<BlogAuthorFeedResponse>(
     `/blog/authors/${encodeURIComponent(authorId)}`,
+  );
+}
+
+/** Файлы личной страницы; null — нет автора, не авторизован или сбой. */
+export function getBlogAuthorFiles(
+  authorId: string,
+): Promise<BlogAuthorFilesResponse | null> {
+  return blogGet<BlogAuthorFilesResponse>(
+    `/blog/authors/${encodeURIComponent(authorId)}/files`,
   );
 }
 

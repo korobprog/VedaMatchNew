@@ -490,6 +490,7 @@ model User {
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
   blogAuthorProfile                  BlogAuthorProfile?
+  blogAuthorFiles                    BlogAuthorFile[]
   blogFavorites                      BlogFavorite[]
   blogLikes                          BlogLike[]
 
@@ -7395,6 +7396,23 @@ model BlogAuthorProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   about     String
   updatedAt DateTime @updatedAt
+}
+
+/// Файлы личной страницы автора (VED-686, часть 2): аудио, видео, тексты.
+/// Строка появляется только после сверки объекта в бакете.
+model BlogAuthorFile {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storageKey String   @unique
+  /// Имя при скачивании — очищенное, с расширением по формату.
+  name       String
+  /// Ключ `BLOG_AUTHOR_FILE_FORMATS`: строка, чтобы новый формат не требовал миграции.
+  format     String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // ===== Групповые звонки в беседах (VED-293) =====
