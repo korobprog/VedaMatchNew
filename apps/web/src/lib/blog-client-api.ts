@@ -1,6 +1,7 @@
 // Браузерный клиент сервиса «Блог-лента» поверх общего apiFetch.
 import {
   BLOG_ABOUT_MAX_LENGTH,
+  BLOG_FEED_REVIEW_NOTE_MAX_LENGTH,
   BLOG_IMAGE_MAX_BYTES,
   BLOG_POST_TEXT_MAX_LENGTH,
   BLOG_POST_TITLE_MAX_LENGTH,
@@ -12,6 +13,8 @@ import type {
   BlogAboutResponse,
   BlogAuthorFeedResponse,
   BlogFavoriteResponse,
+  BlogFeedRequestsResponse,
+  BlogFeedReviewRequest,
   BlogFeedResponse,
   BlogLikeResponse,
   BlogPostCreatedResponse,
@@ -74,6 +77,13 @@ const MESSAGES: Record<string, string> = {
   invalid_audience_stages: "Такой ступени нет в списке.",
   audience_stages_required:
     "Выберите ступень самоидентификации или «Для всех» — без неё пост не публикуется.",
+  scope_invalid: "Неизвестное место публикации поста.",
+  post_not_in_feed: "Этот пост ещё не в общей ленте.",
+  repost_cannot_be_offered:
+    "Репост в общую ленту не предлагается — предложить можно только свой пост.",
+  not_pending: "Пост уже рассмотрен — обновите страницу.",
+  note_too_long: `Пояснение длиннее ${BLOG_FEED_REVIEW_NOTE_MAX_LENGTH} знаков.`,
+  decision_invalid: "Такого решения нет: одобрить или отклонить.",
 };
 
 function mb(bytes: number): number {
@@ -225,6 +235,7 @@ export function createBlogPost(
   if (body.category) form.append("category", body.category);
   if (body.lineage) form.append("lineage", body.lineage);
   appendAudienceStages(form, body.audienceStages);
+  if (body.scope) form.append("scope", body.scope);
   for (const file of files) form.append("files", file);
   return request<BlogPostCreatedResponse>("/blog/posts", {
     method: "POST",
@@ -382,4 +393,35 @@ export function updateBlogAbout(about: string): Promise<BlogAboutResponse> {
     method: "PUT",
     ...json({ about }),
   });
+}
+
+/** Предложить свой пост с личной страницы в общую ленту (VED-686). */
+export function requestBlogFeed(id: string): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/posts/${encodeURIComponent(id)}/feed-request`,
+    { method: "POST" },
+  );
+}
+
+/** Отозвать предложение, пока администратор его не рассмотрел. */
+export function withdrawBlogFeedRequest(id: string): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/posts/${encodeURIComponent(id)}/feed-request`,
+    { method: "DELETE" },
+  );
+}
+
+/** Очередь предложенных постов, старые сверху; только администратору. */
+export function fetchBlogFeedRequests(): Promise<BlogFeedRequestsResponse> {
+  return request<BlogFeedRequestsResponse>("/blog/admin/feed-requests");
+}
+
+export function reviewBlogFeedRequest(
+  id: string,
+  body: BlogFeedReviewRequest,
+): Promise<BlogPostDto> {
+  return request<BlogPostDto>(
+    `/blog/admin/posts/${encodeURIComponent(id)}/feed-review`,
+    { method: "POST", ...json(body) },
+  );
 }

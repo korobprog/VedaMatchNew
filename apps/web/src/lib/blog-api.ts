@@ -7,6 +7,7 @@ import type {
   BlogAlbumResponse,
   BlogAuthorFeedResponse,
   BlogAuthorFilesResponse,
+  BlogFeedRequestsResponse,
   BlogFeedResponse,
   BlogHomeFeedResponse,
   BlogPostDto,
@@ -109,4 +110,9 @@ export function getBlogFavorites(
 /** null и для не-администратора: эндпоинт отвечает ему 403. */
 export function getBlogSettings(): Promise<BlogSettingsDto | null> {
   return blogGet<BlogSettingsDto>("/blog/admin/settings");
+}
+
+/** Очередь «предложено в ленту» (VED-686); null и для не-администратора. */
+export function getBlogFeedRequests(): Promise<BlogFeedRequestsResponse | null> {
+  return blogGet<BlogFeedRequestsResponse>("/blog/admin/feed-requests");
 }

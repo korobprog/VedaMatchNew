@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import {
   BLOG_MAX_POSTS_PER_DAY,
@@ -12,17 +14,20 @@ import {
   resolveMaterialFilters,
   toAudienceStages,
   toLineageId,
+  type AdminAuditEvent,
   type BlogAboutResponse,
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
   type BlogFavoriteResponse,
   type BlogLikeResponse,
+  type BlogFeedRequestsResponse,
   type BlogFeedResponse,
   type BlogHomeFeedResponse,
   type BlogImageRejection,
   type BlogPostCreatedResponse,
   type BlogPostDto,
   type BlogPostLinkDto,
+  type BlogFeedReviewRequest,
   type BlogPostUpdatedResponse,
   type BlogSettingsDto,
   type CreateBlogPostRequest,
@@ -64,6 +69,11 @@ import {
 } from './blog-media-rules';
 import { BlogVideoService } from './blog-video.service';
 import { parseBlogAbout } from './blog-about';
+import {
+  blogFeedRequestAction,
+  blogScopeStatus,
+  parseBlogFeedReview,
+} from './blog-feed-status';
 import {
   clampFeedLifetimeHours,
   feedUntilFrom,
@@ -110,6 +120,10 @@ const POST_SELECT_BASE = {
   lineage: true,
   category: true,
   audienceStages: true,
+  // Статус «в общей ленте / личная страница / на рассмотрении» и пояснение
+  // отказа (VED-686); пояснение уходит наружу только автору и админу.
+  feedStatus: true,
+  feedReviewNote: true,
   // Нужен не карточке, а праву на правку: репост не правится никем.
   repostOfId: true,
   linkUrl: true,
@@ -174,6 +188,7 @@ export class BlogService {
     private readonly images: BlogImagesService,
     private readonly video: BlogVideoService,
     private readonly avatars: BlogAvatarService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -396,6 +411,11 @@ export class BlogService {
     // старая сборка приложения, пост публикуется как раньше.
     const marks = blogPostMarksInput(body);
     if ('error' in marks) throw new BadRequestException(marks.error);
+    // Куда пост: в общую ленту (по умолчанию) или только на личную страницу
+    // (VED-686). Из личной страницы в ленту он попадает лишь через админа.
+    const feedStatus = blogScopeStatus((body as { scope?: unknown })?.scope);
+    if (feedStatus === 'invalid')
+      throw new BadRequestException('scope_invalid');
     if (files.length > 0 && !this.images.configured) {
       throw new BadRequestException('image_upload_unavailable');
     }
@@ -412,6 +432,7 @@ export class BlogService {
         category: marks.category ?? null,
         lineage: marks.lineage ?? null,
         audienceStages: marks.audienceStages ?? [],
+        feedStatus,
         feedUntil: feedUntilFrom(now, settings.feedLifetimeHours),
       },
       select: { id: true },
@@ -571,6 +592,7 @@ export class BlogService {
         authorId: true,
         repostOfId: true,
         audienceStages: true,
+        feedStatus: true,
       },
     });
     if (!source) throw new NotFoundException('post_not_found');
@@ -578,6 +600,11 @@ export class BlogService {
     const viewer = await this.viewer(userId, viewerIsAdmin);
     if (viewer.hiddenUserIds.has(source.authorId)) {
       throw new NotFoundException('post_not_found');
+    }
+    // Пост с личной страницы попадает в общую ленту только через
+    // администратора (VED-686): репост не должен быть обходом этой проверки.
+    if (source.feedStatus !== 'feed') {
+      throw new BadRequestException('post_not_in_feed');
     }
 
     const rootId = source.repostOfId ?? source.id;
@@ -1087,6 +1114,149 @@ export class BlogService {
     return this.postDto(updated, viewer, new Date());
   }
 
+  // ---- предложение в общую ленту (VED-686) -------------------------------
+
+  /**
+   * Автор предлагает пост со своей страницы в общую ленту. Из `personal` и
+   * `rejected` пост уходит в очередь администратора (`pending`), повтор на
+   * `pending`/`feed` ничего не меняет. Чужой пост и несуществующий — один
+   * и тот же 404: чужую страницу не подсвечиваем. Администратор без
+   * авторства предлагать не может — для него есть решение напрямую.
+   */
+  async requestFeed(userId: string, id: string): Promise<BlogPostDto> {
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true, repostOfId: true, feedStatus: true },
+    });
+    if (!row || row.authorId !== userId) {
+      throw new NotFoundException('post_not_found');
+    }
+    // Репост — чужие слова в своей карточке: предлагать в ленту нечего.
+    if (row.repostOfId !== null) {
+      throw new BadRequestException('repost_cannot_be_offered');
+    }
+    const viewer = await this.viewer(userId, false);
+    if (blogFeedRequestAction(row.feedStatus) === 'pending') {
+      const updated = await this.prisma.blogPost.update({
+        where: { id },
+        data: {
+          feedStatus: 'pending',
+          feedRequestedAt: new Date(),
+          feedReviewNote: null,
+        },
+        select: postSelect(userId),
+      });
+      return this.postDto(updated, viewer, new Date());
+    }
+    return this.reloadPost(id, viewer);
+  }
+
+  /** Автор забирает предложение назад: `pending` → `personal`. */
+  async withdrawFeedRequest(userId: string, id: string): Promise<BlogPostDto> {
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { authorId: true, feedStatus: true },
+    });
+    if (!row || row.authorId !== userId) {
+      throw new NotFoundException('post_not_found');
+    }
+    const viewer = await this.viewer(userId, false);
+    if (row.feedStatus !== 'pending') return this.reloadPost(id, viewer);
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: { feedStatus: 'personal', feedRequestedAt: null },
+      select: postSelect(userId),
+    });
+    return this.postDto(updated, viewer, new Date());
+  }
+
+  /**
+   * Очередь администратора: самые давние предложения сверху, чтобы никто не
+   * ждал вечно. Скрытых людей не отсеиваем — админ видит всё.
+   */
+  async feedRequests(userId: string): Promise<BlogFeedRequestsResponse> {
+    const where: Prisma.BlogPostWhereInput = { feedStatus: 'pending' };
+    const [rows, total] = await Promise.all([
+      this.prisma.blogPost.findMany({
+        where,
+        select: postSelect(userId),
+        orderBy: [{ feedRequestedAt: 'asc' }, { id: 'asc' }],
+        take: 50,
+      }),
+      this.prisma.blogPost.count({ where }),
+    ]);
+    const viewer: Viewer = {
+      userId,
+      isAdmin: true,
+      hiddenUserIds: new Set(),
+    };
+    return { posts: await this.postDtos(rows, viewer, new Date()), total };
+  }
+
+  /**
+   * Решение администратора по предложенному посту. Принятый пост получает
+   * срок жизни в ленте заново — от момента принятия, а не от публикации на
+   * личной странице: иначе давно написанный пост выпал бы из ленты сразу.
+   * Решение попадает в журнал действий админа.
+   */
+  async reviewFeed(
+    adminId: string,
+    id: string,
+    body: BlogFeedReviewRequest | undefined,
+  ): Promise<BlogPostDto> {
+    const review = parseBlogFeedReview(body);
+    if ('error' in review) throw new BadRequestException(review.error);
+
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: { feedStatus: true },
+    });
+    if (!row) throw new NotFoundException('post_not_found');
+    if (row.feedStatus !== 'pending') {
+      throw new ConflictException('not_pending');
+    }
+
+    const now = new Date();
+    const approved = review.decision === 'approve';
+    const settings = approved ? await this.settingsRow() : null;
+    const updated = await this.prisma.blogPost.update({
+      where: { id },
+      data: {
+        feedStatus: approved ? 'feed' : 'rejected',
+        feedReviewedAt: now,
+        feedReviewedById: adminId,
+        feedReviewNote: review.decision === 'reject' ? review.note : null,
+        ...(settings
+          ? { feedUntil: feedUntilFrom(now, settings.feedLifetimeHours) }
+          : {}),
+      },
+      select: postSelect(adminId),
+    });
+
+    const event: AdminAuditEvent = {
+      actorId: adminId,
+      action: approved ? 'blog.feed-approved' : 'blog.feed-rejected',
+      targetType: 'post',
+      targetId: id,
+    };
+    this.events.emit('admin.action', event);
+
+    const viewer: Viewer = {
+      userId: adminId,
+      isAdmin: true,
+      hiddenUserIds: new Set(),
+    };
+    return this.postDto(updated, viewer, now);
+  }
+
+  private async reloadPost(id: string, viewer: Viewer): Promise<BlogPostDto> {
+    const row = await this.prisma.blogPost.findUniqueOrThrow({
+      where: { id },
+      select: postSelect(viewer.userId),
+    });
+    return this.postDto(row, viewer, new Date());
+  }
+
   // ---- внутреннее -------------------------------------------------------
 
   private async viewer(userId: string, isAdmin: boolean): Promise<Viewer> {
@@ -1118,7 +1288,10 @@ export class BlogService {
     now: Date,
     currentOnly: boolean,
   ): Prisma.BlogPostWhereInput {
-    const where: Prisma.BlogPostWhereInput = {};
+    // В общей ленте, на главной и в избранном — только принятые посты
+    // (VED-686): личные, ожидающие и отклонённые видны лишь на странице
+    // автора, `authorFeed` этого условия намеренно не использует.
+    const where: Prisma.BlogPostWhereInput = { feedStatus: 'feed' };
     if (currentOnly) {
       where.OR = [{ feedUntil: null }, { feedUntil: { gt: now } }];
     }
@@ -1284,5 +1457,11 @@ function toPostDto(
     lineage: toLineageId(row.lineage),
     category: row.category,
     audienceStages: toAudienceStages(row.audienceStages),
+    feedStatus: row.feedStatus,
+    // Причину отказа читают автор и администратор, остальным она не нужна.
+    feedReviewNote:
+      row.authorId === viewer.userId || viewer.isAdmin
+        ? row.feedReviewNote
+        : null,
   };
 }

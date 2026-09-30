@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { BlogAvatarService } from './blog-avatar.service';
 import { BlogService } from './blog.service';
 import type { BlogImagesService } from './blog-images.service';
@@ -109,14 +111,16 @@ function build(post: ReturnType<typeof storedPost> | null) {
       Promise.resolve(`https://signed/${user.avatarKey}`),
     ),
   };
+  const events = { emit: fn() };
   const service = new BlogService(
     prisma as unknown as PrismaService,
     moderation as unknown as ModerationService,
     images as unknown as BlogImagesService,
     video as unknown as BlogVideoService,
     avatars as unknown as BlogAvatarService,
+    events as unknown as EventEmitter2,
   );
-  return { service, prisma, images, video, avatars };
+  return { service, prisma, images, video, avatars, events };
 }
 
 describe('BlogService.update', () => {
@@ -610,7 +614,10 @@ describe('BlogService lineage (VED-596)', () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          AND: [{}, { OR: [{ lineage: 'iskcon' }, { lineage: null }] }],
+          AND: [
+            { feedStatus: 'feed' },
+            { OR: [{ lineage: 'iskcon' }, { lineage: null }] },
+          ],
         },
       }),
     );
@@ -624,7 +631,7 @@ describe('BlogService lineage (VED-596)', () => {
     await service.feed('viewer', false, { scope: 'all', lineage: 'all' });
 
     expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} }),
+      expect.objectContaining({ where: { feedStatus: 'feed' } }),
     );
   });
 });
@@ -858,7 +865,9 @@ describe('BlogService category (VED-590)', () => {
     await service.feed('viewer', false, { scope: 'all', category: 'news' });
 
     expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { AND: [{}, { category: 'news' }] } }),
+      expect.objectContaining({
+        where: { AND: [{ feedStatus: 'feed' }, { category: 'news' }] },
+      }),
     );
   });
 });
@@ -996,7 +1005,7 @@ describe('BlogService audience stages (VED-590)', () => {
       expect.objectContaining({
         where: {
           AND: [
-            {},
+            { feedStatus: 'feed' },
             {
               OR: [
                 { audienceStages: { isEmpty: true } },
@@ -1008,5 +1017,184 @@ describe('BlogService audience stages (VED-590)', () => {
         },
       }),
     );
+  });
+});
+
+/** Первый аргумент первого вызова заглушки: у `mock.calls` тип `any`. */
+function firstCallArg(calls: readonly unknown[]): unknown {
+  const first = calls[0] as unknown[] | undefined;
+  return first?.[0];
+}
+
+describe('BlogService feed review (VED-686)', () => {
+  type PrismaMocks = Record<string, Record<string, jest.Mock>>;
+
+  function withFeed(post: ReturnType<typeof storedPost> | null) {
+    const built = build(post);
+    const prisma = built.prisma as unknown as PrismaMocks;
+    prisma.blogPost.findMany = fn(() => Promise.resolve([]));
+    prisma.blogPost.count = fn(() => Promise.resolve(0));
+    prisma.blogPost.create = fn(() => Promise.resolve({ id: 'post-1' }));
+    prisma.blogSettings = {
+      findUnique: fn(() => Promise.resolve({ feedLifetimeHours: 48 })),
+    };
+    return { ...built, prisma };
+  }
+
+  it('creates a personal post with feedStatus personal', async () => {
+    const { service, prisma } = withFeed(storedPost());
+    await service.create('author', false, {
+      text: 'Слова',
+      category: 'knowledge',
+      lineage: 'all',
+      audienceStages: 'all',
+      scope: 'personal',
+    } as never);
+    const arg = firstCallArg(prisma.blogPost.create.mock.calls) as {
+      data: { feedStatus: string };
+    };
+    expect(arg.data.feedStatus).toBe('personal');
+  });
+
+  it('rejects an unknown scope with 400', async () => {
+    const { service } = withFeed(storedPost());
+    await expect(
+      service.create('author', false, {
+        text: 'Слова',
+        category: 'knowledge',
+        lineage: 'all',
+        audienceStages: 'all',
+        scope: 'everywhere',
+      } as never),
+    ).rejects.toThrow('scope_invalid');
+  });
+
+  it('shows only feed posts in the general feed', async () => {
+    const { service, prisma } = withFeed(storedPost());
+    await service.feed('viewer', false, {});
+    const arg = firstCallArg(prisma.blogPost.findMany.mock.calls) as {
+      where: { AND?: unknown[]; feedStatus?: string };
+    };
+    expect(JSON.stringify(arg.where)).toContain('"feedStatus":"feed"');
+  });
+
+  it('moves a personal post to pending for its author', async () => {
+    const { service, prisma } = withFeed(
+      storedPost({ feedStatus: 'personal', feedReviewNote: null }),
+    );
+    await service.requestFeed('author', 'post-1');
+    const arg = firstCallArg(prisma.blogPost.update.mock.calls) as {
+      data: Record<string, unknown>;
+    };
+    expect(arg.data.feedStatus).toBe('pending');
+    expect(arg.data.feedRequestedAt).toBeInstanceOf(Date);
+    expect(arg.data.feedReviewNote).toBeNull();
+  });
+
+  it('answers 404 to a non-author feed request', async () => {
+    const { service, prisma } = withFeed(
+      storedPost({ feedStatus: 'personal' }),
+    );
+    await expect(
+      service.requestFeed('stranger', 'post-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a repost', async () => {
+    const { service } = withFeed(
+      storedPost({ feedStatus: 'personal', repostOfId: 'orig' }),
+    );
+    await expect(service.requestFeed('author', 'post-1')).rejects.toThrow(
+      'repost_cannot_be_offered',
+    );
+  });
+
+  it('refuses to repost a post that is not in the feed', async () => {
+    const { service, prisma } = withFeed(
+      storedPost({ feedStatus: 'personal', authorId: 'author' }),
+    );
+    await expect(
+      service.repost('viewer', false, 'post-1', { text: '' }),
+    ).rejects.toThrow('post_not_in_feed');
+    expect(prisma.blogPost.create).not.toHaveBeenCalled();
+  });
+
+  it('withdraws a pending request back to personal', async () => {
+    const { service, prisma } = withFeed(storedPost({ feedStatus: 'pending' }));
+    await service.withdrawFeedRequest('author', 'post-1');
+    const arg = firstCallArg(prisma.blogPost.update.mock.calls) as {
+      data: { feedStatus: string };
+    };
+    expect(arg.data.feedStatus).toBe('personal');
+  });
+
+  it('approve puts the post into the feed and restarts its lifetime', async () => {
+    const { service, prisma, events } = withFeed(
+      storedPost({ feedStatus: 'pending' }),
+    );
+    const before = Date.now();
+    await service.reviewFeed('admin', 'post-1', { decision: 'approve' });
+    const arg = firstCallArg(prisma.blogPost.update.mock.calls) as {
+      data: Record<string, unknown>;
+    };
+    expect(arg.data.feedStatus).toBe('feed');
+    expect(arg.data.feedReviewedById).toBe('admin');
+    expect(arg.data.feedReviewNote).toBeNull();
+    const until = (arg.data.feedUntil as Date).getTime();
+    expect(until).toBeGreaterThanOrEqual(before + 48 * 3_600_000);
+    expect(events.emit).toHaveBeenCalledWith(
+      'admin.action',
+      expect.objectContaining({
+        action: 'blog.feed-approved',
+        actorId: 'admin',
+        targetId: 'post-1',
+      }),
+    );
+  });
+
+  it('reject stores the trimmed note and audits it', async () => {
+    const { service, prisma, events } = withFeed(
+      storedPost({ feedStatus: 'pending' }),
+    );
+    await service.reviewFeed('admin', 'post-1', {
+      decision: 'reject',
+      note: '  Не по теме ',
+    });
+    const arg = firstCallArg(prisma.blogPost.update.mock.calls) as {
+      data: Record<string, unknown>;
+    };
+    expect(arg.data.feedStatus).toBe('rejected');
+    expect(arg.data.feedReviewNote).toBe('Не по теме');
+    expect(arg.data.feedUntil).toBeUndefined();
+    expect(events.emit).toHaveBeenCalledWith(
+      'admin.action',
+      expect.objectContaining({ action: 'blog.feed-rejected' }),
+    );
+  });
+
+  it('answers 409 when the post is not pending', async () => {
+    const { service, prisma } = withFeed(storedPost({ feedStatus: 'feed' }));
+    await expect(
+      service.reviewFeed('admin', 'post-1', { decision: 'approve' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.blogPost.update).not.toHaveBeenCalled();
+  });
+
+  it('hides the review note from strangers', async () => {
+    const post = storedPost({
+      feedStatus: 'rejected',
+      feedReviewNote: 'Не по теме',
+    });
+    const { service } = withFeed(post);
+    await expect(
+      service.post('author', false, 'post-1'),
+    ).resolves.toMatchObject({
+      feedStatus: 'rejected',
+      feedReviewNote: 'Не по теме',
+    });
+    await expect(
+      service.post('viewer', false, 'post-1'),
+    ).resolves.toMatchObject({ feedReviewNote: null });
   });
 });

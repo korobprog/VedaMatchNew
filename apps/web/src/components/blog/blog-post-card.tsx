@@ -20,9 +20,11 @@ import {
   BlogApiError,
   deleteBlogPost,
   repostBlogPost,
+  requestBlogFeed,
   setBlogFavorite,
   setBlogLike,
   setBlogPostPinned,
+  withdrawBlogFeedRequest,
 } from "@/lib/blog-client-api";
 import { BlogMedia } from "./blog-media";
 import { BlogPostLinkButton, BlogPostLinkCover } from "./blog-post-link";
@@ -62,6 +64,18 @@ const ACTION =
   "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-glass-brd px-0 py-1.5 text-xs text-text-1 disabled:opacity-60 max-sm:min-w-0 max-sm:max-w-14 max-sm:flex-1";
 const ACTION_LABEL = "sr-only";
 
+/** Подписи статуса «в общую ленту» на личной странице (VED-686). */
+const FEED_STATUS_LABEL: Record<string, string> = {
+  personal: "Только на вашей странице",
+  pending: "На проверке у администратора",
+  rejected: "Не принят в ленту",
+};
+const FEED_STATUS_ACTION: Record<string, string> = {
+  personal: "Предложить в общую ленту",
+  pending: "Отозвать",
+  rejected: "Предложить снова",
+};
+
 /**
  * Карточка поста блог-ленты.
  *
@@ -76,6 +90,7 @@ export function BlogPostCard({
   onRemoved,
   expanded = false,
   editRequest = 0,
+  showFeedStatus = false,
 }: {
   post: BlogPostDto;
   onChanged?: (post: BlogPostDto) => void;
@@ -87,6 +102,12 @@ export function BlogPostCard({
    * вверху страницы поста). Каждое новое значение открывает правку.
    */
   editRequest?: number;
+  /**
+   * Личная страница автора (VED-686): под постом — где он сейчас и кнопка
+   * «Предложить в общую ленту». В общей ленте статус не нужен: там все посты
+   * уже прошли отбор.
+   */
+  showFeedStatus?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -102,6 +123,11 @@ export function BlogPostCard({
   const [error, setError] = useState<string | null>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const source = post.repostOf;
+  const feedStatus = post.feedStatus ?? "feed";
+  // Предлагает только автор и только свой пост: репост в ленту не идёт, а
+  // `canEdit` у чужого поста и у репоста ложно (как у кнопки «Изменить»).
+  const showFeed =
+    showFeedStatus && post.canEdit === true && !source && feedStatus !== "feed";
   const edited = blogEditedLabel(post.editedAt, post.createdAt);
   const category = blogCategoryLabel(post.category);
   const { fold, attachBody, attachTitle } = useBlogTextFold(
@@ -209,6 +235,24 @@ export function BlogPostCard({
     }
   }
 
+  /** «Предложить в ленту» / «Отозвать»: пост обновляется из ответа сервера. */
+  async function changeFeedRequest(offer: boolean) {
+    setPending(true);
+    setError(null);
+    try {
+      // Запрос — до `onChanged?.(…)`: при необязательном вызове аргументы
+      // не вычисляются, и без колбэка запрос вообще не ушёл бы.
+      const saved = offer
+        ? await requestBlogFeed(post.id)
+        : await withdrawBlogFeedRequest(post.id);
+      onChanged?.(saved);
+    } catch (cause) {
+      setError(cause instanceof BlogApiError ? cause.message : "Не вышло.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function togglePin() {
     setPending(true);
     setError(null);
@@ -304,24 +348,26 @@ export function BlogPostCard({
     ),
     // Репост — только админам (VED-544), как и «Закрепить»: у участников
     // ряд короче на две кнопки.
-    repost: post.canModerate ? (
-      <button
-        key="repost"
-        type="button"
-        onClick={repost}
-        disabled={pending}
-        className={`${ACTION} hover:border-cyan/60`}
-      >
-        {/* Две стрелки по кругу (VED-650): «поменяй эмблему кнопки репост
+    // Репост выводит пост в общую ленту — только того, что уже в ней (VED-686).
+    repost:
+      post.canModerate && (post.feedStatus ?? "feed") === "feed" ? (
+        <button
+          key="repost"
+          type="button"
+          onClick={repost}
+          disabled={pending}
+          className={`${ACTION} hover:border-cyan/60`}
+        >
+          {/* Две стрелки по кругу (VED-650): «поменяй эмблему кнопки репост
             с одной стрелочки на две, как было раньше». Одна стрелка
             «переслать» (VED-442) путалась с «Поделиться». */}
-        <Repeat2 aria-hidden className="size-3.5" />
-        <span className={ACTION_LABEL}>Репост</span>
-        {post.repostCount > 0 && (
-          <span className="text-text-2">{post.repostCount}</span>
-        )}
-      </button>
-    ) : null,
+          <Repeat2 aria-hidden className="size-3.5" />
+          <span className={ACTION_LABEL}>Репост</span>
+          {post.repostCount > 0 && (
+            <span className="text-text-2">{post.repostCount}</span>
+          )}
+        </button>
+      ) : null,
     // Правка стоит среди тех же кнопок, где «Удалить» (VED-321): у репоста
     // её нет вовсе — правится оригинал его автором, и сервер отвечает тем же
     // отказом, даже если кнопку подделать.
@@ -458,6 +504,25 @@ export function BlogPostCard({
             {actionOrder.map((id) => actions[id])}
           </footer>
         </>
+      )}
+
+      {showFeed && !editing && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
+          <span className="rounded-lg border border-glass-brd bg-bg-1 px-2 py-1 text-xs text-text-1">
+            {FEED_STATUS_LABEL[feedStatus]}
+          </span>
+          <button
+            type="button"
+            onClick={() => void changeFeedRequest(feedStatus !== "pending")}
+            disabled={pending}
+            className="inline-flex min-h-11 items-center rounded-lg border border-glass-brd px-3 py-1.5 text-xs text-text-0 hover:border-cyan/60 disabled:opacity-60"
+          >
+            {FEED_STATUS_ACTION[feedStatus]}
+          </button>
+          {feedStatus === "rejected" && post.feedReviewNote && (
+            <p className="w-full text-xs text-text-1">{post.feedReviewNote}</p>
+          )}
+        </div>
       )}
 
       {post.canModerate && !editing && (

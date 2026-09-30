@@ -242,6 +242,15 @@ export interface BlogPostDto {
    * сборки приложения поля не знают.
    */
   audienceStages?: SpiritualStage[];
+  /**
+   * Где пост (VED-686): `feed` — в общей ленте; `personal` — только на
+   * личной странице автора; `pending` — предложен в общую ленту и ждёт
+   * администратора; `rejected` — администратор не взял. Необязательное —
+   * установленные сборки приложения поля не знают; нет поля — `feed`.
+   */
+  feedStatus?: BlogPostFeedStatus;
+  /** Пояснение администратора к отказу; видят только автор и админ. */
+  feedReviewNote?: string | null;
 }
 
 export interface BlogFeedResponse {
@@ -316,6 +325,12 @@ export interface CreateBlogPostRequest {
    * публикации (старые сборки приложения), прежние ступени при правке.
    */
   audienceStages?: SpiritualStage[] | typeof LINEAGE_ALL | null;
+  /**
+   * Куда публикуется (VED-686): `personal` — пост с личной страницы, в общую
+   * ленту попадает только после одобрения администратора. Нет поля или
+   * `feed` — сразу в общую ленту, как раньше. Репост поле не читает.
+   */
+  scope?: BlogPostScope;
 }
 
 /**
@@ -509,4 +524,25 @@ export interface BlogAlbumUploadResponse {
 /** Подпись к фото; пустая строка стирает. */
 export interface UpdateBlogAlbumPhotoRequest {
   caption: string;
+}
+
+// ===== Пост с личной страницы → в общую ленту через админа (VED-686, часть 4) =====
+
+export type BlogPostFeedStatus = "feed" | "personal" | "pending" | "rejected";
+export type BlogPostScope = "feed" | "personal";
+
+/** Пояснение администратора к отказу. */
+export const BLOG_FEED_REVIEW_NOTE_MAX_LENGTH = 500;
+
+/** Очередь «предложено в общую ленту» для администратора: старые сверху. */
+export interface BlogFeedRequestsResponse {
+  posts: BlogPostDto[];
+  total: number;
+}
+
+/** Решение администратора по предложенному посту. */
+export interface BlogFeedReviewRequest {
+  decision: "approve" | "reject";
+  /** Только для отказа; пусто — без пояснения. */
+  note?: string | null;
 }
