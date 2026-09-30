@@ -20,12 +20,15 @@ import {
   BLOG_VIDEO_MAX_BYTES,
   type AccessTokenPayload,
   type BlogPostAudienceStagesRequest,
+  type CompleteBlogAuthorFileUploadRequest,
+  type CreateBlogAuthorFileUploadRequest,
   type BlogPostCategoryRequest,
   type BlogPostLineageRequest,
   type CreateBlogPostRequest,
   type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { BlogAuthorFilesService } from './blog-author-files.service';
 import { BlogService } from './blog.service';
 import { isAdmin } from './is-admin';
 import { type UploadedImageFile } from './blog-images.service';
@@ -51,7 +54,10 @@ const UPLOAD_OPTIONS = {
 @Controller('blog')
 @UseGuards(AuthGuard)
 export class BlogController {
-  constructor(private readonly blog: BlogService) {}
+  constructor(
+    private readonly blog: BlogService,
+    private readonly authorFiles: BlogAuthorFilesService,
+  ) {}
 
   /** Виджет главной: несколько свежих постов и счётчик «и ещё N». */
   @Get('home')
@@ -110,6 +116,41 @@ export class BlogController {
   @Put('authors/me/about')
   updateAbout(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) {
     return this.blog.updateAbout(user.sub, body);
+  }
+
+  /** Заявка на заливку файла на свою страницу (VED-686): подписанный PUT. */
+  @Post('authors/me/files/upload')
+  createFileUpload(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: CreateBlogAuthorFileUploadRequest,
+  ) {
+    return this.authorFiles.createUpload(user.sub, body);
+  }
+
+  /** Заливка закончена: прикрепить файл к своей странице. */
+  @Post('authors/me/files')
+  completeFileUpload(
+    @CurrentUser() user: AccessTokenPayload,
+    @Body() body: CompleteBlogAuthorFileUploadRequest,
+  ) {
+    return this.authorFiles.complete(user.sub, body);
+  }
+
+  @Delete('authors/me/files/:fileId')
+  @HttpCode(204)
+  async removeFile(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('fileId') fileId: string,
+  ): Promise<void> {
+    await this.authorFiles.remove(user.sub, fileId);
+  }
+
+  @Get('authors/:authorId/files')
+  authorFilesList(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('authorId') authorId: string,
+  ) {
+    return this.authorFiles.forAuthor(user.sub, isAdmin(user), authorId);
   }
 
   @Get('authors/:authorId')

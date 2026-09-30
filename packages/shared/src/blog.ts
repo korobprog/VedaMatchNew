@@ -380,3 +380,97 @@ export interface BlogPostCreatedResponse {
 
 /** Ответ на правку: та же пара «пост и недоехавшие файлы», что у публикации. */
 export type BlogPostUpdatedResponse = BlogPostCreatedResponse;
+
+// ===== Файлы личной страницы (VED-686, часть 2) =====
+
+/** Что за файл на личной странице: от этого зависит, как его показать. */
+export type BlogAuthorFileKind = "audio" | "video" | "document";
+
+/** Принимаемые форматы (расширение) и их вид. */
+export const BLOG_AUTHOR_FILE_FORMATS = {
+  mp3: "audio",
+  m4a: "audio",
+  aac: "audio",
+  ogg: "audio",
+  oga: "audio",
+  opus: "audio",
+  wav: "audio",
+  flac: "audio",
+  mp4: "video",
+  m4v: "video",
+  webm: "video",
+  mov: "video",
+  pdf: "document",
+  epub: "document",
+  fb2: "document",
+  djvu: "document",
+  mobi: "document",
+  doc: "document",
+  docx: "document",
+  odt: "document",
+  rtf: "document",
+  txt: "document",
+  ppt: "document",
+  pptx: "document",
+  xls: "document",
+  xlsx: "document",
+} as const satisfies Record<string, BlogAuthorFileKind>;
+
+export type BlogAuthorFileFormat = keyof typeof BLOG_AUTHOR_FILE_FORMATS;
+
+/** Потолок размера по виду файла. */
+export const BLOG_AUTHOR_FILE_MAX_BYTES: Record<BlogAuthorFileKind, number> = {
+  audio: 200 * 1024 * 1024,
+  video: 1024 * 1024 * 1024,
+  document: 100 * 1024 * 1024,
+};
+
+/** Сколько файлов держит одна личная страница. */
+export const BLOG_AUTHOR_FILES_MAX = 50;
+
+/** Формат по имени файла; `null` — такой не принимаем. `.djv` — то же, что `.djvu`. */
+export function blogAuthorFileFormatOf(
+  fileName: string,
+): BlogAuthorFileFormat | null {
+  const ext = /\.([a-z0-9]{2,5})$/.exec(fileName.trim().toLowerCase())?.[1];
+  if (!ext) return null;
+  const format = ext === "djv" ? "djvu" : ext;
+  return Object.prototype.hasOwnProperty.call(BLOG_AUTHOR_FILE_FORMATS, format)
+    ? (format as BlogAuthorFileFormat)
+    : null;
+}
+
+export interface BlogAuthorFileDto {
+  id: string;
+  /** Имя для списка и скачивания — очищенное, с расширением по формату. */
+  name: string;
+  format: BlogAuthorFileFormat;
+  kind: BlogAuthorFileKind;
+  sizeBytes: number;
+  /** Подписанная ссылка: проигрывание аудио/видео и скачивание. */
+  url: string;
+  createdAt: string;
+}
+
+export interface BlogAuthorFilesResponse {
+  files: BlogAuthorFileDto[];
+}
+
+export interface CreateBlogAuthorFileUploadRequest {
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface BlogAuthorFileUploadResponse {
+  /** Ключ объекта — его возвращают на завершении. */
+  key: string;
+  url: string;
+  /** Ровно те заголовки, что вошли в подпись: разойдутся — S3 ответит 403. */
+  headers: Record<string, string>;
+  expiresInSeconds: number;
+}
+
+export interface CompleteBlogAuthorFileUploadRequest {
+  key: string;
+  fileName: string;
+}

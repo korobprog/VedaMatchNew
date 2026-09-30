@@ -33,12 +33,21 @@ export class BlogPurgeListener {
           : [image.storageKey],
       ),
     );
+    // Файлы личной страницы (VED-686) лежат в бакете отдельно от постов.
+    const files = await this.prisma.blogAuthorFile.findMany({
+      where: { userId: event.userId },
+      select: { storageKey: true },
+    });
+    storageKeys.push(...files.map((file) => file.storageKey));
     if (posts.length > 0) {
       this.logger.log(
         `С пользователем ${event.userId} уходят ${posts.length} постов блога и ${storageKeys.length} картинок`,
       );
     }
 
-    return { storageKeys, counts: { blogPosts: posts.length } };
+    return {
+      storageKeys,
+      counts: { blogPosts: posts.length, blogAuthorFiles: files.length },
+    };
   }
 }
