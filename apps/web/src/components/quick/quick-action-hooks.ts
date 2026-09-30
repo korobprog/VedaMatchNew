@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RewardsMeDto } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
@@ -116,6 +116,15 @@ export function useInviteCopy() {
   const [state, setState] = useState<InviteCopyState>("idle");
   const [sheet, setSheet] = useState<InviteSheetData | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Сброс «Скопировано» снимается при размонтировании: иначе таймер
+  // дёргает состояние уже снятого компонента (в тестах — после jsdom).
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    },
+    [],
+  );
 
   const copy = useCallback(async () => {
     let me: RewardsMeDto;
@@ -129,7 +138,10 @@ export function useInviteCopy() {
     const copied = await copyText(message);
     setSheet({ message, copied, canEdit: Boolean(me.canEditInviteText) });
     setState(copied ? "copied" : "failed");
-    if (copied) window.setTimeout(() => setState("idle"), 2000);
+    if (copied) {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => setState("idle"), 2000);
+    }
     // jsdom и старые браузеры без `showModal`: кнопка всё равно копирует.
     const dialog = dialogRef.current;
     if (dialog && !dialog.open && typeof dialog.showModal === "function") {
