@@ -3,10 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Briefcase } from "lucide-react";
-import type { ChatConversationContext } from "@vedamatch/shared";
+import type {
+  ChatConversationContext,
+  ChatVacancyContext,
+} from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { contextBarState } from "./chat-context-status";
 import { apiBase } from "@/lib/api-base";
+import { ChatPlaceContextBar } from "./chat-place-context-bar";
 
 const API_URL = apiBase();
 
@@ -26,6 +30,27 @@ export function ChatContextBar({
   onStatusChange,
 }: {
   context: ChatConversationContext;
+  viewerId: string;
+  onStatusChange: (status: string) => void;
+}) {
+  if (context.service === "travel-map") {
+    return <ChatPlaceContextBar context={context} />;
+  }
+  return (
+    <VacancyContextBar
+      context={context}
+      viewerId={viewerId}
+      onStatusChange={onStatusChange}
+    />
+  );
+}
+
+function VacancyContextBar({
+  context,
+  viewerId,
+  onStatusChange,
+}: {
+  context: ChatVacancyContext;
   viewerId: string;
   onStatusChange: (status: string) => void;
 }) {

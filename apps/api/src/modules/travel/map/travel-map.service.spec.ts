@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import type { TravelMapPhotosService } from './travel-map-photos.service';
 import { TravelMapService } from './travel-map.service';
@@ -51,6 +52,7 @@ function setup() {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       delete: jest.fn().mockResolvedValue({}),
     },
     travelMapPlaceReport: {
@@ -78,11 +80,13 @@ function setup() {
     upload: jest.fn().mockResolvedValue({ key: 'k1', url: 'u1' }),
     remove: jest.fn().mockResolvedValue(undefined),
   };
+  const events = { emitAsync: jest.fn().mockResolvedValue([]) };
   const service = new TravelMapService(
     prisma as unknown as PrismaService,
     photos as unknown as TravelMapPhotosService,
+    events as unknown as EventEmitter2,
   );
-  return { prisma, photos, service };
+  return { prisma, photos, events, service };
 }
 
 describe('TravelMapService.listPlaces', () => {
@@ -518,5 +522,83 @@ describe('TravelMapService: админка', () => {
         status: 'open',
       },
     );
+  });
+});
+
+describe('TravelMapService: группа места', () => {
+  const groupRow = (over: Record<string, unknown> = {}) => ({
+    ...placeRow({ status: 'active' }),
+    chatConversationId: null,
+    ...over,
+  });
+
+  it('уже открытую группу отдаёт без события', async () => {
+    const { prisma, events, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(
+      groupRow({ chatConversationId: 'c1' }),
+    );
+    await expect(service.openGroup(stranger, 'p1')).resolves.toEqual({
+      conversationId: 'c1',
+    });
+    expect(events.emitAsync).not.toHaveBeenCalled();
+  });
+
+  it('без ответа шины — 400 и ничего не сохраняет', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(groupRow());
+    await expect(service.openGroup(stranger, 'p1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.travelMapPlace.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('при ответе шины сохраняет id только в пустое поле', async () => {
+    const { prisma, events, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(groupRow());
+    events.emitAsync.mockResolvedValue([undefined, 'c9']);
+    await expect(service.openGroup(stranger, 'p1')).resolves.toEqual({
+      conversationId: 'c9',
+    });
+    expect(events.emitAsync.mock.calls[0][0]).toBe(
+      'travel.map.group.requested',
+    );
+    expect(events.emitAsync.mock.calls[0][1]).toMatchObject({
+      requesterId: 'u2',
+      placeId: 'p1',
+      title: 'Храм',
+      kindLabel: 'Храм',
+    });
+    expect(prisma.travelMapPlace.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p1', chatConversationId: null },
+      data: { chatConversationId: 'c9' },
+    });
+  });
+
+  it('скрытое место постороннему — 404', async () => {
+    const { prisma, service } = setup();
+    prisma.travelMapPlace.findUnique.mockResolvedValue(
+      groupRow({ status: 'hidden' }),
+    );
+    await expect(service.openGroup(stranger, 'p1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('поиск снимков режет лимит до 20', async () => {
+    const { prisma, service } = setup();
+    await service.searchSnapshots('мос', 500);
+    const args = prisma.travelMapPlace.findMany.mock.calls[0][0];
+    expect(args.take).toBe(20);
+    expect(args.where.status).toBe('active');
+    expect(args.where.OR).toHaveLength(2);
+  });
+
+  it('привязка беседы не перетирает уже сохранённую', async () => {
+    const { prisma, service } = setup();
+    await service.linkConversation('p1', 'c1');
+    expect(prisma.travelMapPlace.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p1', chatConversationId: null },
+      data: { chatConversationId: 'c1' },
+    });
   });
 });

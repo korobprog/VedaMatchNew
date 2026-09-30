@@ -68,6 +68,12 @@ export class TravelMapController {
     await this.map.deletePlace(user, id);
   }
 
+  @Post('places/:id/group')
+  @HttpCode(200)
+  openGroup(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.map.openGroup(user, id);
+  }
+
   @Post('places/:id/photos')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_MAP_PHOTO_BYTES } }),

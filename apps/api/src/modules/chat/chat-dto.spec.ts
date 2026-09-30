@@ -3,6 +3,7 @@ import {
   conversationTitle,
   toMessageDto,
   toReactionSummaries,
+  toConversationContext,
   toUserSummary,
   type ChatConversationRow,
   type ChatMessageRow,
@@ -156,5 +157,37 @@ describe('conversationTitle', () => {
     );
     expect(result.title).toBe('Киртан-группа');
     expect(result.companion).toBeNull();
+  });
+});
+
+describe('toConversationContext', () => {
+  const row = (over: Record<string, unknown>) =>
+    ({
+      contextService: null,
+      contextId: null,
+      contextTitle: null,
+      contextStatus: null,
+      contextMeta: null,
+      ...over,
+    }) as never;
+
+  it('отдаёт контекст карты путешествий с умолчаниями', () => {
+    expect(
+      toConversationContext(
+        row({ contextService: 'travel-map', contextId: 'p1' }),
+      ),
+    ).toEqual({
+      service: 'travel-map',
+      id: 'p1',
+      title: 'Место',
+      status: 'active',
+      meta: null,
+    });
+  });
+
+  it('не выдаёт неизвестный источник', () => {
+    expect(
+      toConversationContext(row({ contextService: 'x', contextId: 'p1' })),
+    ).toBeNull();
   });
 });

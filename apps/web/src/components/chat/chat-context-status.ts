@@ -1,4 +1,4 @@
-import type { ChatConversationContext } from "@vedamatch/shared";
+import type { ChatVacancyContext } from "@vedamatch/shared";
 
 /**
  * Что показать в шапке диалога, открытого по отклику в «Вакансиях», и что
@@ -35,7 +35,7 @@ const KIND_LABELS: Record<string, string> = {
 const DECIDABLE = new Set(["new", "in_dialog"]);
 
 export function contextBarState(
-  context: ChatConversationContext,
+  context: ChatVacancyContext,
   viewerId: string,
 ): ContextBarState {
   const kind = context.meta?.offerKind

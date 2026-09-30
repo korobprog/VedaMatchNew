@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChatConversationsService } from './chat-conversations.service';
 import { ChatEventsService } from './chat-events.service';
@@ -387,6 +391,67 @@ describe('ChatConversationsService', () => {
       ).data;
       expect(data.communityId).toBeNull();
       expect(data.visibility).toBe('private');
+    });
+  });
+
+  describe('группа места', () => {
+    const place = {
+      id: 'place-1',
+      title: 'Кафе Говинда',
+      kindLabel: 'Вегетарианское кафе',
+      lat: 55.75,
+      lng: 37.62,
+      city: 'Москва',
+    };
+
+    it('пишет контекст, берёт название места и сообщает шине', async () => {
+      prisma.chatConversation.create.mockResolvedValue(conversation());
+
+      await service.create('me', { kind: 'group', place });
+
+      const data = (
+        (prisma.chatConversation.create.mock.calls as unknown[][])[0][0] as {
+          data: Record<string, unknown>;
+        }
+      ).data;
+      expect(data).toMatchObject({
+        title: 'Кафе Говинда',
+        contextService: 'travel-map',
+        contextId: 'place-1',
+        contextTitle: 'Кафе Говинда',
+        contextStatus: 'active',
+        contextMeta: {
+          kindLabel: 'Вегетарианское кафе',
+          lat: 55.75,
+          lng: 37.62,
+          city: 'Москва',
+        },
+      });
+      expect(bus.emit).toHaveBeenCalledWith(
+        'chat.conversation.context-linked',
+        {
+          service: 'travel-map',
+          contextId: 'place-1',
+          conversationId: 'conversation-1',
+        },
+      );
+    });
+
+    it('отклоняет снимок с нечисловыми координатами', async () => {
+      await expect(
+        service.create('me', {
+          kind: 'group',
+          title: 'Группа',
+          place: { ...place, lat: Number.NaN },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.chatConversation.create).not.toHaveBeenCalled();
+    });
+
+    it('обычная группа шину не тревожит', async () => {
+      prisma.chatConversation.create.mockResolvedValue(conversation());
+      await service.create('me', { kind: 'group', title: 'Друзья' });
+      expect(bus.emit).not.toHaveBeenCalled();
     });
   });
 

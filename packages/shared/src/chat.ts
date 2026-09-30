@@ -215,7 +215,7 @@ export interface ChatConversationSummary {
  * решение принимается прямо в переписке. Поля — снимок из события: Чат не
  * читает чужие таблицы.
  */
-export interface ChatConversationContext {
+export interface ChatVacancyContext {
   service: 'vacancies';
   /** Id в сервисе-источнике: для «Вакансий» — отклик. */
   id: string;
@@ -230,6 +230,37 @@ export interface ChatConversationContext {
     responderId?: string;
   } | null;
 }
+
+/**
+ * Снимок места народной карты («Путешествия → Карта»). Едет в событии и
+ * хранится в `context*` беседы: Чат не читает таблицы карты.
+ */
+export interface ChatTravelMapPlaceSnapshot {
+  id: string;
+  title: string;
+  /** Подпись вида места словами: «Вегетарианское кафе». */
+  kindLabel: string;
+  lat: number;
+  lng: number;
+  city: string | null;
+}
+
+/** Группа места: беседа привязана к точке на карте, ссылка ведёт на карточку. */
+export interface ChatTravelMapContext {
+  service: 'travel-map';
+  /** Id места. */
+  id: string;
+  title: string;
+  status: string;
+  meta: {
+    kindLabel?: string;
+    lat?: number;
+    lng?: number;
+    city?: string | null;
+  } | null;
+}
+
+export type ChatConversationContext = ChatVacancyContext | ChatTravelMapContext;
 
 export interface ChatConversationDetail extends ChatConversationSummary {
   /** Закреплённое сообщение — одно на беседу, показывается под шапкой. */
@@ -326,6 +357,11 @@ export interface CreateChatConversationRequest {
   memberIds?: string[];
   /** Канал или группа: чья община. */
   communityId?: string;
+  /**
+   * Место народной карты, о котором группа: снимок из поиска
+   * `chat/conversations/place-search`. Хранится в `context*`, FK нет.
+   */
+  place?: ChatTravelMapPlaceSnapshot | null;
 }
 
 /** Найденное сообщение вместе с беседой, где оно лежит. */

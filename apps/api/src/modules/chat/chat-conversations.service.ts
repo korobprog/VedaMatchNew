@@ -16,6 +16,7 @@ import type {
   ChatRequestsState,
   ChatRequestSummary,
   ChatSearchState,
+  ChatTravelMapPlaceSnapshot,
   ChatUnreadState,
   CreateChatConversationRequest,
 } from '@vedamatch/shared';
@@ -370,7 +371,9 @@ export class ChatConversationsService {
     userId: string,
     dto: CreateChatConversationRequest,
   ) {
-    const title = dto.title?.trim();
+    const place = parsePlaceSnapshot(dto.place);
+    // Группа места без своего названия зовётся именем места.
+    const title = dto.title?.trim() || place?.title.trim();
     if (!title) throw new BadRequestException('У группы должно быть название');
     if (dto.communityId)
       await this.requireCommunityAdmin(userId, dto.communityId);
@@ -392,6 +395,22 @@ export class ChatConversationsService {
         title,
         description: dto.description?.trim() || null,
         communityId: dto.communityId ?? null,
+        // Контекст «Карты путешествий»: шапка беседы ведёт на карточку места.
+        // Снимок копируется целиком, чтобы чат не читал чужие таблицы.
+        ...(place
+          ? {
+              contextService: 'travel-map',
+              contextId: place.id,
+              contextTitle: place.title,
+              contextStatus: 'active',
+              contextMeta: {
+                kindLabel: place.kindLabel,
+                lat: place.lat,
+                lng: place.lng,
+                city: place.city,
+              },
+            }
+          : {}),
         createdById: userId,
         members: {
           create: [
@@ -408,7 +427,35 @@ export class ChatConversationsService {
       created.members.map((m) => m.userId),
       { type: 'conversation.upserted', conversation: summary },
     );
+    if (place) {
+      // Сервис-источник узнаёт, какая беседа привязана к его месту.
+      this.bus.emit('chat.conversation.context-linked', {
+        service: 'travel-map',
+        contextId: place.id,
+        conversationId: created.id,
+      });
+    }
     return summary;
+  }
+
+  /**
+   * Поиск мест для формы «Новая группа». Чат мест не хранит: спрашивает шину,
+   * ответить может только сервис карты. Нет подписчика или он упал — пустой
+   * список, форма просто без подсказок.
+   */
+  async searchPlaces(query: string): Promise<ChatTravelMapPlaceSnapshot[]> {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    try {
+      const answers = (await this.bus.emitAsync('travel.map.places.search', {
+        q,
+        limit: 10,
+      })) as unknown[];
+      const first = answers.find((a) => Array.isArray(a));
+      return (first as ChatTravelMapPlaceSnapshot[] | undefined) ?? [];
+    } catch {
+      return [];
+    }
   }
 
   private async createChannel(
@@ -1216,4 +1263,35 @@ export class ChatConversationsService {
     });
     return members.map((m) => m.userId);
   }
+}
+
+/**
+ * Снимок места из тела запроса. Тело приходит от клиента, поэтому проверяем
+ * вручную: в контекст беседы нельзя пускать неполные данные.
+ */
+function parsePlaceSnapshot(
+  raw: ChatTravelMapPlaceSnapshot | null | undefined,
+): ChatTravelMapPlaceSnapshot | null {
+  if (raw === undefined || raw === null) return null;
+  const place = raw as Partial<ChatTravelMapPlaceSnapshot>;
+  if (
+    typeof place.id !== 'string' ||
+    !place.id ||
+    typeof place.title !== 'string' ||
+    !place.title.trim() ||
+    typeof place.lat !== 'number' ||
+    !Number.isFinite(place.lat) ||
+    typeof place.lng !== 'number' ||
+    !Number.isFinite(place.lng)
+  ) {
+    throw new BadRequestException('Некорректное место для группы');
+  }
+  return {
+    id: place.id,
+    title: place.title,
+    kindLabel: typeof place.kindLabel === 'string' ? place.kindLabel : '',
+    lat: place.lat,
+    lng: place.lng,
+    city: typeof place.city === 'string' ? place.city : null,
+  };
 }

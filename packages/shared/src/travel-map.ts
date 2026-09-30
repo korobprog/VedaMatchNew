@@ -259,6 +259,8 @@ export interface TravelMapPlaceDto extends TravelMapPointDto {
   author: TravelMapAuthorDto | null;
   /** Смотрящий — автор или админ: показывать правку и удаление. */
   canEdit: boolean;
+  /** Группа места в «Общении»; null — ещё не открывали. */
+  chatConversationId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -325,4 +327,61 @@ export interface AdminHideTravelMapPlaceRequest {
 
 export interface AdminTravelMapReportsQuery {
   status?: TravelMapReportStatus;
+}
+
+// ----- Связь с «Общением»: только события шины -----
+
+/**
+ * «Открыть группу места». Карта публикует через emitAsync, «Общение» заводит
+ * группу со снимком места в `context*` и возвращает id беседы — тот же
+ * приём, что `travel.contact.requested`.
+ */
+export const TRAVEL_MAP_GROUP_REQUESTED_EVENT = 'travel.map.group.requested';
+
+export interface TravelMapGroupRequestedEvent {
+  requesterId: string;
+  placeId: string;
+  title: string;
+  kindLabel: string;
+  lat: number;
+  lng: number;
+  city: string | null;
+}
+
+/**
+ * Поиск мест для формы «Новая группа» в чате. Чат публикует через emitAsync,
+ * карта отвечает снимками: компоненты и клиенты чужого сервиса на вебе не
+ * импортируются, поэтому чат спрашивает свой API, а тот — шину.
+ */
+export const TRAVEL_MAP_PLACES_SEARCH_EVENT = 'travel.map.places.search';
+
+export interface TravelMapPlacesSearchRequest {
+  q: string;
+  limit: number;
+}
+
+export interface TravelMapPlaceSnapshotDto {
+  id: string;
+  title: string;
+  kindLabel: string;
+  lat: number;
+  lng: number;
+  city: string | null;
+}
+
+/**
+ * Чат привязал беседу к месту (создал группу с полем «Место» или по
+ * запросу карты). Карта запоминает id беседы снимком, без FK.
+ */
+export const CHAT_CONVERSATION_CONTEXT_LINKED_EVENT =
+  'chat.conversation.context-linked';
+
+export interface ChatConversationContextLinkedEvent {
+  service: string;
+  contextId: string;
+  conversationId: string;
+}
+
+export interface TravelMapGroupResponse {
+  conversationId: string;
 }
