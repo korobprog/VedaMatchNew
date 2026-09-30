@@ -9,10 +9,12 @@ import { getProfile } from "@/lib/api";
 import {
   getAstroChart,
   getAstroReadings,
+  getAstroState,
   getAstroToday,
   getAstroTransits,
 } from "@/lib/astro-api";
 import { formatDegrees } from "@/components/astro/chart-wheel";
+import { ChartBasisFacts } from "@/components/astro/chart-basis";
 import { ChartPanel } from "@/components/astro/chart-panel";
 import { DashaPanel } from "@/components/astro/dasha-panel";
 import { GrahaTable } from "@/components/astro/graha-table";
@@ -33,12 +35,13 @@ export default async function AstroChartPage({
   const { transits: transitsParam } = await searchParams;
   const openTransits =
     (Array.isArray(transitsParam) ? transitsParam[0] : transitsParam) === "1";
-  const [user, chart, readings, today, transits] = await Promise.all([
+  const [user, chart, readings, today, transits, state] = await Promise.all([
     getProfile(),
     getAstroChart(),
     getAstroReadings(),
     getAstroToday(),
     getAstroTransits(),
+    getAstroState(),
   ]);
   // Карты нет: с «Транзитов» — на страницу Астрологии с подсказкой на две
   // секунды «Сначала составьте свою натальную карту».
@@ -107,6 +110,12 @@ export default async function AstroChartPage({
         />
 
         <dl className="space-y-3 text-sm">
+          {state?.birthData && (
+            <ChartBasisFacts
+              source={state.birthData}
+              moonLongitude={moon.longitude}
+            />
+          )}
           {chart.lagna && (
             <div>
               <dt className="text-text-2">Лагна</dt>

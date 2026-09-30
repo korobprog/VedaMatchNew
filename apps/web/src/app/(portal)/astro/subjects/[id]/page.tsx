@@ -8,6 +8,7 @@ import {
   getAstroTransits,
 } from "@/lib/astro-api";
 import { formatDegrees } from "@/components/astro/chart-wheel";
+import { ChartBasisFacts } from "@/components/astro/chart-basis";
 import { ChartPanel } from "@/components/astro/chart-panel";
 import { DashaPanel } from "@/components/astro/dasha-panel";
 import { GrahaTable } from "@/components/astro/graha-table";
@@ -67,6 +68,7 @@ export default async function AstroSubjectChartPage({
         <ChartPanel chart={chart} transits={transits} />
 
         <dl className="space-y-3 text-sm">
+          <ChartBasisFacts source={subject} moonLongitude={moon.longitude} />
           {chart.lagna && (
             <div>
               <dt className="text-text-2">Лагна</dt>
