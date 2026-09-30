@@ -188,3 +188,17 @@ describe("глава «Вдохновение и Библиотека»", () => 
     expect(reading.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
   });
 });
+
+describe("глава «Вход и профиль»", () => {
+  const start = TOUR_CHAPTERS.find((chapter) => chapter.id === "start")!;
+
+  it("обе версии видео лежат в папке тура", () => {
+    expect(start.video.desktopUrl).toBe(`${TOUR_MEDIA_BASE}/start-v1-16x9.mp4`);
+    expect(start.video.mobileUrl).toBe(`${TOUR_MEDIA_BASE}/start-v1-9x16.mp4`);
+    expect(start.video.mobilePosterUrl).toBe(`${TOUR_MEDIA_BASE}/start-v1-9x16.jpg`);
+  });
+
+  it("рекламный текст без латиницы внутри русских слов", () => {
+    expect(start.promo?.text).not.toMatch(/[а-яё][a-z]|[a-z][а-яё]/i);
+  });
+});
