@@ -385,3 +385,118 @@ export interface ChatConversationContextLinkedEvent {
 export interface TravelMapGroupResponse {
   conversationId: string;
 }
+
+// ----- Маршруты: парикрамы, тропы, прогулки, экскурсии -----
+
+/**
+ * Маршрут — упорядоченная цепочка остановок. Остановка обычно ссылается на
+ * место карты, но хранит собственный снимок названия и координат: маршрут
+ * не должен рассыпаться, если место переименовали или убрали.
+ */
+export const TRAVEL_MAP_ROUTE_KINDS = [
+  'parikrama',
+  'trail',
+  'city_walk',
+  'excursion',
+] as const;
+export type TravelMapRouteKind = (typeof TRAVEL_MAP_ROUTE_KINDS)[number];
+
+export const TRAVEL_MAP_ROUTE_KIND_LABELS: Record<TravelMapRouteKind, string> = {
+  parikrama: 'Парикрама',
+  trail: 'Тропа',
+  city_walk: 'Прогулка по городу',
+  excursion: 'Экскурсия',
+};
+
+export const TRAVEL_MAP_ROUTE_KIND_ICONS: Record<TravelMapRouteKind, string> = {
+  parikrama: '🕉️',
+  trail: '🥾',
+  city_walk: '🚶',
+  excursion: '🧭',
+};
+
+export const TRAVEL_MAP_ROUTE_NAME_MAX = 120;
+export const TRAVEL_MAP_ROUTE_DESCRIPTION_MAX = 4000;
+export const TRAVEL_MAP_ROUTE_STOP_NOTE_MAX = 500;
+export const TRAVEL_MAP_ROUTE_STOPS_MIN = 2;
+export const TRAVEL_MAP_ROUTE_STOPS_MAX = 60;
+
+export const TRAVEL_MAP_ROUTE_STATUSES = ['active', 'hidden'] as const;
+export type TravelMapRouteStatus = (typeof TRAVEL_MAP_ROUTE_STATUSES)[number];
+
+export interface TravelMapRouteStopInput {
+  /** Место карты, если остановка — оно. Пусто — просто точка. */
+  placeId?: string | null;
+  name: string;
+  lat: number;
+  lng: number;
+  /** Что здесь: «вход со стороны реки», «лучше на рассвете». */
+  note?: string;
+}
+
+export interface TravelMapRouteStopDto {
+  id: string;
+  position: number;
+  placeId: string | null;
+  name: string;
+  lat: number;
+  lng: number;
+  note: string;
+  /** Снимок места, если оно ещё на карте: значок и фото для остановки. */
+  place: {
+    kind: TravelMapPlaceKind;
+    photoUrl: string | null;
+    stale: boolean;
+  } | null;
+}
+
+/** Строка в списке маршрутов и метка старта на карте. */
+export interface TravelMapRouteSummaryDto {
+  id: string;
+  kind: TravelMapRouteKind;
+  name: string;
+  city: string | null;
+  stopsCount: number;
+  /** По прямым между остановками, километры с одним знаком. */
+  distanceKm: number;
+  startLat: number;
+  startLng: number;
+  author: TravelMapAuthorDto | null;
+  status: TravelMapRouteStatus;
+  updatedAt: string;
+}
+
+export interface TravelMapRouteDto extends TravelMapRouteSummaryDto {
+  description: string;
+  country: string | null;
+  hiddenReason: string | null;
+  stops: TravelMapRouteStopDto[];
+  canEdit: boolean;
+  createdAt: string;
+}
+
+export interface TravelMapRoutesQuery {
+  minLat?: number;
+  maxLat?: number;
+  minLng?: number;
+  maxLng?: number;
+  /** Виды через запятую. */
+  kinds?: string;
+  q?: string;
+}
+
+export interface TravelMapRoutesResponse {
+  routes: TravelMapRouteSummaryDto[];
+  truncated: boolean;
+}
+
+export interface CreateTravelMapRouteRequest {
+  kind: TravelMapRouteKind;
+  name: string;
+  description?: string;
+  city?: string | null;
+  country?: string | null;
+  stops: TravelMapRouteStopInput[];
+}
+
+export type UpdateTravelMapRouteRequest = Partial<CreateTravelMapRouteRequest>;

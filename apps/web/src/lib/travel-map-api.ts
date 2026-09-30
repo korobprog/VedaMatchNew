@@ -3,6 +3,7 @@ import type {
   AdminTravelMapPlacesQuery,
   AdminTravelMapReportsQuery,
   CreateTravelMapPlaceRequest,
+  CreateTravelMapRouteRequest,
   TravelMapCheckVerdict,
   TravelMapFreshnessDto,
   TravelMapGroupResponse,
@@ -13,6 +14,12 @@ import type {
   TravelMapPlacesResponse,
   TravelMapReportDto,
   UpdateTravelMapPlaceRequest,
+  UpdateTravelMapRouteRequest,
+  TravelMapRouteDto,
+  TravelMapRouteSummaryDto,
+  TravelMapRoutesQuery,
+  TravelMapRoutesResponse,
+  TravelMapPlaceStatus,
 } from "@vedamatch/shared";
 import { apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
@@ -177,5 +184,57 @@ export const getAdminTravelMapReports = (
 
 export const resolveTravelMapReport = (id: string) =>
   request<unknown>(`/travel/map/admin/reports/${encodeURIComponent(id)}/resolve`, {
+    method: "POST",
+  });
+
+// ----- Маршруты -----
+
+const routePath = (id: string, suffix = "") =>
+  `/travel/map/routes/${encodeURIComponent(id)}${suffix}`;
+
+export const getTravelMapRoutes = (
+  query: TravelMapRoutesQuery,
+  signal?: AbortSignal,
+) =>
+  request<TravelMapRoutesResponse>(
+    `/travel/map/routes${toQuery({ ...query })}`,
+    { method: "GET", signal },
+  );
+
+export const getTravelMapRoute = (id: string, signal?: AbortSignal) =>
+  request<TravelMapRouteDto>(routePath(id), { method: "GET", signal });
+
+export const createTravelMapRoute = (body: CreateTravelMapRouteRequest) =>
+  request<TravelMapRouteDto>("/travel/map/routes", {
+    method: "POST",
+    ...json(body),
+  });
+
+export const updateTravelMapRoute = (
+  id: string,
+  body: UpdateTravelMapRouteRequest,
+) =>
+  request<TravelMapRouteDto>(routePath(id), { method: "PATCH", ...json(body) });
+
+export const deleteTravelMapRoute = (id: string) =>
+  request<void>(routePath(id), { method: "DELETE" });
+
+export const getAdminTravelMapRoutes = (
+  query: { status?: TravelMapPlaceStatus; q?: string },
+  signal?: AbortSignal,
+) =>
+  request<TravelMapRouteSummaryDto[]>(
+    `/travel/map/admin/routes${toQuery({ ...query })}`,
+    { method: "GET", signal },
+  );
+
+export const hideTravelMapRoute = (id: string, reason?: string) =>
+  request<unknown>(`/travel/map/admin/routes/${encodeURIComponent(id)}/hide`, {
+    method: "POST",
+    ...json({ reason }),
+  });
+
+export const unhideTravelMapRoute = (id: string) =>
+  request<unknown>(`/travel/map/admin/routes/${encodeURIComponent(id)}/unhide`, {
     method: "POST",
   });

@@ -491,6 +491,7 @@ model User {
   travelMapReports                   TravelMapPlaceReport[]        @relation("TravelMapReportsFiled")
   travelMapChecks                    TravelMapCheck[]              @relation("TravelMapChecks")
   travelMapNotes                     TravelMapNote[]               @relation("TravelMapNotesWritten")
+  travelMapRoutes                    TravelMapRoute[]              @relation("TravelMapRoutesAuthored")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
@@ -7299,6 +7300,7 @@ model TravelMapPlace {
   reports TravelMapPlaceReport[]
   checks  TravelMapCheck[]
   notes   TravelMapNote[]
+  routeStops TravelMapRouteStop[]
 
   @@index([status, lat, lng])
   @@index([status, kind])
@@ -7369,6 +7371,77 @@ model TravelMapNote {
 
   @@index([placeId, createdAt(sort: Desc)])
   @@index([authorId])
+}
+
+/// Вид маршрута — значок и фильтр, не свойства. Дублирует
+/// `TRAVEL_MAP_ROUTE_KINDS` из @vedamatch/shared.
+enum TravelMapRouteKind {
+  parikrama
+  trail
+  city_walk
+  excursion
+}
+
+enum TravelMapRouteStatus {
+  active
+  hidden
+}
+
+/// Маршрут: парикрама, тропа, прогулка по городу, экскурсия — упорядоченная
+/// цепочка остановок. Ценность карты не в точках, а в том, как их связали:
+/// парикраму с рассказом преданного на каждой остановке Яндекс не сделает.
+model TravelMapRoute {
+  id   String             @id @default(uuid())
+  kind TravelMapRouteKind
+  name String
+
+  description String  @default("")
+  city        String?
+  country     String?
+
+  /// Денормализовано из остановок: карта отдаёт список маршрутов без
+  /// подзапросов, а метка старта — первая остановка.
+  stopsCount Int   @default(0)
+  distanceKm Float @default(0)
+  startLat   Float
+  startLng   Float
+
+  status       TravelMapRouteStatus @default(active)
+  hiddenReason String?
+
+  /// SetNull: удалённый аккаунт не уносит парикраму, по которой ходят другие.
+  authorId String?
+  author   User?   @relation("TravelMapRoutesAuthored", fields: [authorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stops TravelMapRouteStop[]
+
+  @@index([status, startLat, startLng])
+  @@index([status, kind])
+  @@index([authorId])
+}
+
+/// Остановка маршрута. Ссылается на место карты, но хранит собственный
+/// снимок названия и координат: маршрут не должен рассыпаться, если место
+/// переименовали или убрали (SetNull), и может проходить через точки, которых
+/// на карте ещё нет.
+model TravelMapRouteStop {
+  id      String         @id @default(uuid())
+  routeId String
+  route   TravelMapRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  placeId String?
+  place   TravelMapPlace? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+
+  position Int
+  name     String
+  lat      Float
+  lng      Float
+  note     String @default("")
+
+  @@unique([routeId, position])
+  @@index([placeId])
 }
 
 /// Лента, к которой относится категория Вдохновения (VED-139). Открытки и

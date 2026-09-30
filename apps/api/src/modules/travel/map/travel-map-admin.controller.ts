@@ -10,13 +10,17 @@ import {
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
+import { TravelMapRoutesService } from './travel-map-routes.service';
 import { TravelMapService } from './travel-map.service';
 
 /** Модерация народной карты. Права проверяет сервис (`isAdmin`). */
 @Controller('travel/map/admin')
 @UseGuards(AuthGuard)
 export class TravelMapAdminController {
-  constructor(private readonly map: TravelMapService) {}
+  constructor(
+    private readonly map: TravelMapService,
+    private readonly routes: TravelMapRoutesService,
+  ) {}
 
   @Get('places')
   places(
@@ -70,5 +74,32 @@ export class TravelMapAdminController {
   ) {
     await this.map.adminResolveReport(user, id);
     return { ok: true };
+  }
+
+  @Get('routes')
+  listRoutes(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query() query: Record<string, unknown>,
+  ) {
+    return this.routes.adminList(user, query);
+  }
+
+  @Post('routes/:id/hide')
+  @HttpCode(200)
+  hideRoute(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.routes.adminHide(user, id, body);
+  }
+
+  @Post('routes/:id/unhide')
+  @HttpCode(200)
+  unhideRoute(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+  ) {
+    return this.routes.adminUnhide(user, id);
   }
 }

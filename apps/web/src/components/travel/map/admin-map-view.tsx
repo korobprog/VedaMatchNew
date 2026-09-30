@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  TRAVEL_MAP_ROUTE_KIND_ICONS,
+  TRAVEL_MAP_ROUTE_KIND_LABELS,
   travelMapPlaceKindOption,
+  type TravelMapRouteSummaryDto,
   type TravelMapPlaceDto,
   type TravelMapReportDto,
   type TravelMapReportStatus,
@@ -11,6 +14,9 @@ import {
 import {
   getAdminTravelMapPlaces,
   getAdminTravelMapReports,
+  getAdminTravelMapRoutes,
+  hideTravelMapRoute,
+  unhideTravelMapRoute,
   hideTravelMapPlace,
   resolveTravelMapReport,
   unhideTravelMapPlace,
@@ -23,7 +29,7 @@ const fieldClass =
 const smallButton =
   "rounded-lg border border-glass-brd px-3 py-1 text-sm text-text-1";
 
-type Tab = "places" | "reports";
+type Tab = "places" | "reports" | "routes";
 
 export function AdminMapView() {
   const [tab, setTab] = useState<Tab>("places");
@@ -36,6 +42,7 @@ export function AdminMapView() {
           [
             ["places", "Места"],
             ["reports", "Жалобы"],
+            ["routes", "Маршруты"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -61,8 +68,10 @@ export function AdminMapView() {
       ) : null}
       {tab === "places" ? (
         <PlacesTab onError={setError} />
-      ) : (
+      ) : tab === "reports" ? (
         <ReportsTab onError={setError} />
+      ) : (
+        <RoutesTab onError={setError} />
       )}
     </div>
   );
@@ -341,6 +350,141 @@ function ReportsTab({ onError }: { onError: (message: string | null) => void }) 
                   Разобрано
                 </button>
               ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function RoutesTab({ onError }: { onError: (message: string | null) => void }) {
+  const [status, setStatus] = useState<"" | "active" | "hidden">("");
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<TravelMapRouteSummaryDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      getAdminTravelMapRoutes(
+        { status: status || undefined, q: q.trim() || undefined },
+        controller.signal,
+      )
+        .then((res) => {
+          setItems(res);
+          onError(null);
+        })
+        .catch((cause: unknown) => {
+          if (controller.signal.aborted) return;
+          onError(cause instanceof Error ? cause.message : "Не загрузилось");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [status, q, reloadKey, onError]);
+
+  async function act(action: () => Promise<unknown>) {
+    onError(null);
+    try {
+      await action();
+      setReloadKey((n) => n + 1);
+    } catch (cause) {
+      onError(cause instanceof Error ? cause.message : "Не получилось");
+    }
+  }
+
+  return (
+    <section aria-label="Маршруты">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="text-xs text-text-2">
+          <span className="sr-only">Статус</span>
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as typeof status)}
+            className={fieldClass}
+          >
+            <option value="">Любой статус</option>
+            <option value="active">Видно всем</option>
+            <option value="hidden">Скрыто</option>
+          </select>
+        </label>
+        <label className="min-w-0 flex-1 basis-48">
+          <span className="sr-only">Поиск по названию</span>
+          <input
+            type="search"
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+            placeholder="Поиск по названию"
+            className={`${fieldClass} w-full`}
+          />
+        </label>
+      </div>
+
+      {loading ? (
+        <p role="status" className="text-sm text-text-2">
+          Загружаем…
+        </p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-text-2">Ничего не найдено.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((route) => (
+            <li
+              key={route.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-brd p-3"
+            >
+              <div className="min-w-0">
+                <Link
+                  href={`/travel/map/routes/${route.id}`}
+                  className="text-sm text-text-0 underline"
+                >
+                  <span aria-hidden="true">
+                    {TRAVEL_MAP_ROUTE_KIND_ICONS[route.kind]}{" "}
+                  </span>
+                  {route.name}
+                </Link>
+                <p className="text-xs text-text-2">
+                  {TRAVEL_MAP_ROUTE_KIND_LABELS[route.kind]}
+                  {route.city ? ` · ${route.city}` : ""}
+                  {route.author ? ` · ${route.author.name}` : ""}
+                  {route.status === "hidden" ? " · скрыто" : ""}
+                </p>
+              </div>
+              {route.status === "hidden" ? (
+                <button
+                  type="button"
+                  className={smallButton}
+                  aria-label={`Показать: ${route.name}`}
+                  onClick={() => act(() => unhideTravelMapRoute(route.id))}
+                >
+                  Показать
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={smallButton}
+                  aria-label={`Спрятать: ${route.name}`}
+                  onClick={() => {
+                    const reason = window.prompt(
+                      `Причина, почему прячем «${route.name}» (её увидит автор):`,
+                      "",
+                    );
+                    if (reason === null) return;
+                    void act(() =>
+                      hideTravelMapRoute(route.id, reason.trim() || undefined),
+                    );
+                  }}
+                >
+                  Спрятать
+                </button>
+              )}
             </li>
           ))}
         </ul>
