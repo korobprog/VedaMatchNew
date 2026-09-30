@@ -151,6 +151,7 @@ describe("MusicUploadForm — матх записи", () => {
         null,
         null,
         null,
+        expect.anything(),
       ),
     );
   });
@@ -179,6 +180,7 @@ describe("MusicUploadForm — матх записи", () => {
         "sri_chaitanya_saraswat_math",
         null,
         null,
+        expect.anything(),
       ),
     );
   });
@@ -210,6 +212,7 @@ describe("MusicUploadForm — со страницы исполнителя (VED-
         null,
         "a1",
         null,
+        expect.anything(),
       ),
     );
   });
@@ -235,6 +238,7 @@ describe("MusicUploadForm — из редактора книги (VED-297)", () 
         null,
         null,
         "book-1",
+        expect.anything(),
       ),
     );
   });
@@ -296,5 +300,101 @@ describe("MusicUploadForm — место для загрузок", () => {
     );
     expect(uploadMusicTrack).toHaveBeenCalledTimes(1);
     expect(screen.getAllByText("нет места")).toHaveLength(3);
+  });
+});
+
+describe("MusicUploadForm — «Повторить» после обрыва", () => {
+  const interrupted =
+    "Загрузка прервалась — телефон приостановил страницу или пропала связь.";
+
+  it("упавший файл получает «Повторить»: льётся только он, успех снимает ошибку", async () => {
+    const user = userEvent.setup();
+    uploadMusicTrack.mockImplementation(async (file: File) => {
+      if (file.name === "b.mp3" && uploadMusicTrack.mock.calls.length <= 2) {
+        throw new Error(interrupted);
+      }
+      return {
+        uploadId: `up-${file.name}`,
+        trackId: "t1",
+        status: "published",
+        title: file.name,
+        durationSeconds: 100,
+        transcoding: false,
+      };
+    });
+    render(<MusicUploadForm />);
+
+    await user.upload(screen.getByLabelText(/Файлы/i), [
+      new File(["1"], "a.mp3", { type: "audio/mpeg" }),
+      new File(["2"], "b.mp3", { type: "audio/mpeg" }),
+    ]);
+    await user.selectOptions(
+      screen.getByLabelText(/Основание/i),
+      "own_recording",
+    );
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+
+    expect(await screen.findByText(interrupted)).toBeInTheDocument();
+    const retryButtons = screen.getAllByRole("button", { name: "Повторить" });
+    expect(retryButtons).toHaveLength(1);
+    expect(uploadMusicTrack).toHaveBeenCalledTimes(2);
+
+    await user.click(retryButtons[0]);
+
+    await waitFor(() =>
+      expect(screen.queryByText(interrupted)).not.toBeInTheDocument(),
+    );
+    // Третий вызов — только b.mp3, с теми же настройками; a.mp3 не трогали.
+    expect(uploadMusicTrack).toHaveBeenCalledTimes(3);
+    const [file, basis] = uploadMusicTrack.mock.calls[2];
+    expect((file as File).name).toBe("b.mp3");
+    expect(basis).toBe("own_recording");
+    expect(
+      screen.queryByRole("button", { name: "Повторить" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("пока страница скрыта, показывает ожидание, а не ошибку", async () => {
+    const user = userEvent.setup();
+    let release: (value: unknown) => void = () => {};
+    uploadMusicTrack.mockImplementation(
+      (
+        _f: File,
+        _b: string,
+        _p: unknown,
+        _l: unknown,
+        _a: unknown,
+        _k: unknown,
+        options: { onWaiting: (w: boolean) => void },
+      ) => {
+        options.onWaiting(true);
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      },
+    );
+    render(<MusicUploadForm />);
+
+    await fillForm(user);
+    await user.click(screen.getByRole("button", { name: /Загрузить/i }));
+
+    expect(
+      (await screen.findAllByText(/Ждём возвращения в приложение…/)).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(interrupted)).not.toBeInTheDocument();
+
+    release({
+      uploadId: "up1",
+      trackId: "t1",
+      status: "published",
+      title: "Gaura",
+      durationSeconds: 100,
+      transcoding: false,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Ждём возвращения в приложение…/),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

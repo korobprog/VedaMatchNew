@@ -23,6 +23,7 @@ import {
   LineageSelect,
   lineageFromSelect,
 } from "@/components/lineage-picker";
+import { keepScreenAwake } from "@/lib/music-upload-retry";
 import { getTrack } from "@/lib/music-playback-api";
 import { keepUploadedTrackOffline } from "@/lib/music/offline-manager";
 import { Alert } from "@/components/ui/alert";
@@ -135,6 +136,158 @@ export function MusicUploadForm({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  /**
+   * Обрыв случился при скрытой странице или без связи, и заливка ждёт
+   * возвращения: это не ошибка, и показывать красное рано.
+   */
+  const [waiting, setWaiting] = useState(false);
+  /**
+   * Упавшие файлы с настройками, под которыми они шли: после отправки список
+   * выбора очищается, а «Повторить» должен лить тот же файл так же.
+   */
+  const [failed, setFailed] = useState<
+    Record<
+      string,
+      { file: File; basis: MusicUploadRightsBasis; lineage: string }
+    >
+  >({});
+
+  /** Ждём перекодирования на сервере и обновляем строку файла. */
+  function watchTranscode(name: string, uploadId: string) {
+    void waitForTranscode(uploadId, fetchMusicUploadState, {
+      cancelled: () => !mounted.current,
+    }).then((final) => {
+      if (!final || !mounted.current) return;
+      setResults((was) => ({
+        ...was,
+        [name]:
+          final.state === "completed"
+            ? { state: "ok", note: was[name]?.note ?? name }
+            : {
+                state: "failed",
+                note: final.failureReason ?? "Не удалось перекодировать",
+              },
+      }));
+      if (final.state === "completed") router.refresh();
+    });
+  }
+
+  /**
+   * Один файл: заливка, копия на устройство, итог в строке. Общий для пачки
+   * и для «Повторить», чтобы повтор вёл себя ровно как первая попытка.
+   */
+  async function processFile(
+    file: File,
+    settings: { basis: MusicUploadRightsBasis; lineage: string },
+  ): Promise<{ kind: "ok" | "failed" | "quota"; uploadId?: string }> {
+    setCurrentName(file.name);
+    setProgress(0);
+    try {
+      const result = await uploadMusicTrack(
+        file,
+        settings.basis,
+        setProgress,
+        lineageFromSelect(settings.lineage),
+        artist?.id ?? null,
+        audiobook?.id ?? null,
+        { onWaiting: setWaiting },
+      );
+      setFailed((was) => {
+        const rest = { ...was };
+        delete rest[file.name];
+        return rest;
+      });
+      if (result.transcoding) {
+        // Записи ещё нет — сервер перекодирует исходник. Копию на
+        // устройстве не кладём: здесь лежит FLAC или OGG, а играть портал
+        // будет m4a, и на iPhone такая копия просто молчала бы.
+        setResults((was) => ({
+          ...was,
+          [file.name]: { state: "transcoding", note: result.title },
+        }));
+        return { kind: "ok", uploadId: result.uploadId };
+      }
+      // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
+      // в браузере, и качать их обратно незачем. Карточку приходится
+      // спросить — в ответе на завершение заливки её нет, а в хранилище без
+      // неё запись негде подписать.
+      let kept = false;
+      if (keepCopy && offlineUserId) {
+        try {
+          const card = result.trackId ? await getTrack(result.trackId) : null;
+          if (card) {
+            await keepUploadedTrackOffline(offlineUserId, card, file);
+            kept = true;
+          }
+        } catch {
+          // Не хватило места или запрещено хранилище. Заливка при этом
+          // удалась, и объявлять её неудачной из-за копии нельзя: запись
+          // на портале есть, друзья её услышат.
+        }
+      }
+      setResults((was) => ({
+        ...was,
+        [file.name]: { state: "ok", note: result.title, kept },
+      }));
+      return { kind: "ok" };
+    } catch (cause) {
+      const note =
+        cause instanceof Error ? cause.message : "Не удалось загрузить";
+      // Квота общая для партии: сервер отказал одному — откажет и всем
+      // следующим. Останавливаемся, а не собираем тридцать одинаковых
+      // отказов.
+      if (isQuotaRejection(note)) return { kind: "quota" };
+      setFailed((was) => ({ ...was, [file.name]: { file, ...settings } }));
+      setResults((was) => ({
+        ...was,
+        [file.name]: { state: "failed", note },
+      }));
+      return { kind: "failed" };
+    } finally {
+      setWaiting(false);
+    }
+  }
+
+  /**
+   * Не даём экрану погаснуть на время заливки: погасший экран тоже
+   * приостанавливает страницу. Где не поддерживается — молча без этого.
+   */
+  async function withScreenAwake<T>(work: () => Promise<T>): Promise<T> {
+    const release = keepScreenAwake(navigator, document);
+    try {
+      return await work();
+    } finally {
+      release();
+    }
+  }
+
+  /** «Повторить»: только этот файл и с теми же настройками, что были. */
+  async function retry(name: string) {
+    const entry = failed[name];
+    if (!entry || busy) return;
+    setError(null);
+    setDone(null);
+    setResults((was) => ({
+      ...was,
+      [name]: { state: "skipped", note: "ждёт" },
+    }));
+    const outcome = await withScreenAwake(() => processFile(entry.file, entry));
+    setCurrentName(null);
+    setProgress(null);
+    if (outcome.kind === "quota") {
+      setResults((was) => ({
+        ...was,
+        [name]: { state: "failed", note: "Закончилось место" },
+      }));
+      setFailed((was) => ({ ...was, [name]: entry }));
+      return;
+    }
+    if (outcome.kind === "ok") {
+      setDone("Файл ушёл в очередь проверки.");
+      router.refresh();
+      if (outcome.uploadId) watchTranscode(name, outcome.uploadId);
+    }
+  }
 
   /**
    * Файлы уходят по одному, а не разом. Параллельная заливка десятка
@@ -166,72 +319,25 @@ export function MusicUploadForm({
 
     let ok = 0;
     const transcoding: { name: string; uploadId: string }[] = [];
-    for (const [index, file] of files.entries()) {
-      if (index >= stoppedAt) break;
-      setCurrentName(file.name);
-      setProgress(0);
-      try {
-        const result = await uploadMusicTrack(
-          file,
-          basis as MusicUploadRightsBasis,
-          setProgress,
-          lineageFromSelect(lineage),
-          artist?.id ?? null,
-          audiobook?.id ?? null,
-        );
-        ok += 1;
-        if (result.transcoding) {
-          // Записи ещё нет — сервер перекодирует исходник. Копию на
-          // устройстве не кладём: здесь лежит FLAC или OGG, а играть портал
-          // будет m4a, и на iPhone такая копия просто молчала бы.
-          transcoding.push({ name: file.name, uploadId: result.uploadId });
-          setResults((was) => ({
-            ...was,
-            [file.name]: { state: "transcoding", note: result.title },
-          }));
-          continue;
-        }
-        // Копию кладём тем же файлом, что только что уехал в бакет: байты уже
-        // в браузере, и качать их обратно незачем. Карточку приходится
-        // спросить — в ответе на завершение заливки её нет, а в хранилище без
-        // неё запись негде подписать.
-        let kept = false;
-        if (keepCopy && offlineUserId) {
-          try {
-            const card = result.trackId
-              ? await getTrack(result.trackId)
-              : null;
-            if (card) {
-              await keepUploadedTrackOffline(offlineUserId, card, file);
-              kept = true;
-            }
-          } catch {
-            // Не хватило места или запрещено хранилище. Заливка при этом
-            // удалась, и объявлять её неудачной из-за копии нельзя: запись
-            // на портале есть, друзья её услышат.
-          }
-        }
-        setResults((was) => ({
-          ...was,
-          [file.name]: { state: "ok", note: result.title, kept },
-        }));
-      } catch (cause) {
-        const note =
-          cause instanceof Error ? cause.message : "Не удалось загрузить";
-        // Квота общая для партии: сервер отказал одному — откажет и всем
-        // следующим. Останавливаемся, а не собираем тридцать одинаковых
-        // отказов.
-        if (isQuotaRejection(note)) {
+    const settings = { basis: basis as MusicUploadRightsBasis, lineage };
+    setFailed({});
+    await withScreenAwake(async () => {
+      for (const [index, file] of files.entries()) {
+        if (index >= stoppedAt) break;
+        const outcome = await processFile(file, settings);
+        if (outcome.kind === "quota") {
           stoppedAt = index;
           freeBytes = null;
           break;
         }
-        setResults((was) => ({
-          ...was,
-          [file.name]: { state: "failed", note },
-        }));
+        if (outcome.kind === "ok") {
+          ok += 1;
+          if (outcome.uploadId) {
+            transcoding.push({ name: file.name, uploadId: outcome.uploadId });
+          }
+        }
       }
-    }
+    });
 
     const skipped = files.slice(stoppedAt).map((file) => file.name);
     if (skipped.length > 0) {
@@ -270,22 +376,7 @@ export function MusicUploadForm({
     // следующий файл стоял бы в очереди на заливку, пока сервер жмёт
     // предыдущий.
     for (const { name, uploadId } of transcoding) {
-      void waitForTranscode(uploadId, fetchMusicUploadState, {
-        cancelled: () => !mounted.current,
-      }).then((final) => {
-        if (!final || !mounted.current) return;
-        setResults((was) => ({
-          ...was,
-          [name]:
-            final.state === "completed"
-              ? { state: "ok", note: was[name]?.note ?? name }
-              : {
-                  state: "failed",
-                  note: final.failureReason ?? "Не удалось перекодировать",
-                },
-        }));
-        if (final.state === "completed") router.refresh();
-      });
+      watchTranscode(name, uploadId);
     }
   }
 
@@ -387,6 +478,7 @@ export function MusicUploadForm({
           <p className="mt-1 truncate text-xs text-text-2">
             <span className="font-mono">{Math.round((progress ?? 0) * 100)}%</span>
             {currentName && ` · ${currentName}`}
+            {waiting && " · Ждём возвращения в приложение…"}
           </p>
         </div>
       )}
@@ -416,53 +508,72 @@ export function MusicUploadForm({
 
       {(files.length > 0 || Object.keys(results).length > 0) && (
         <ul className="mt-3 flex flex-col gap-1">
-          {(files.length > 0 ? files.map((f) => f.name) : Object.keys(results)).map(
-            (name) => {
-              const result = results[name];
-              return (
-                <li
-                  key={name}
-                  className="flex items-baseline gap-2 text-xs"
-                >
-                  <span className="min-w-0 flex-1 truncate text-text-1">
-                    {name}
-                  </span>
-                  <span
-                    // Причина отказа бывает длинной — место под неё не больше
-                    // половины строки, иначе она выталкивала имя файла.
-                    className={
-                      result?.state === "failed"
-                        ? "max-w-[55%] shrink-0 truncate text-magenta"
-                        : result?.state === "ok"
-                          ? "shrink-0 text-cyan"
-                          : "shrink-0 text-text-2"
-                    }
-                    // Смена «перекодируется…» на итог объявляется
-                    // скринридеру: ждать её приходится минуты, и глазами
-                    // на строку в это время никто не смотрит. Область живая
-                    // с первого итога, иначе атрибут появлялся бы вместе с
-                    // новым текстом и объявления не было бы.
-                    aria-live={result ? "polite" : undefined}
-                    title={
-                      result?.state === "failed" ? result.note : undefined
-                    }
-                  >
-                    {result?.state === "failed" || result?.state === "skipped"
-                      ? result.note
+          {(files.length > 0
+            ? [
+                ...files.map((f) => f.name),
+                // Упавшие в прошлый раз файлы остаются на экране с
+                // «Повторить», даже если человек уже выбрал новые.
+                ...Object.keys(failed).filter(
+                  (name) => !files.some((f) => f.name === name),
+                ),
+              ]
+            : Object.keys(results)
+          ).map((name) => {
+            const result = results[name];
+            return (
+              <li
+                key={name}
+                className="flex flex-wrap items-baseline gap-x-2 text-xs"
+              >
+                <span className="min-w-0 flex-1 truncate text-text-1">
+                  {name}
+                </span>
+                <span
+                  // Причина отказа бывает длинной — она переносится на
+                  // свою строку под именем, вместе с кнопкой «Повторить»,
+                  // а не выталкивает имя файла.
+                  className={
+                    result?.state === "failed"
+                      ? "basis-full text-magenta"
                       : result?.state === "ok"
-                        ? result.kept
-                          ? "в очереди · копия здесь"
-                          : "в очереди"
-                        : result?.state === "transcoding"
-                          ? "перекодируется…"
-                          : currentName === name
-                          ? "загружается"
+                        ? "shrink-0 text-cyan"
+                        : "shrink-0 text-text-2"
+                  }
+                  // Смена «перекодируется…» на итог объявляется
+                  // скринридеру: ждать её приходится минуты, и глазами
+                  // на строку в это время никто не смотрит. Область живая
+                  // с первого итога, иначе атрибут появлялся бы вместе с
+                  // новым текстом и объявления не было бы.
+                  aria-live={result ? "polite" : undefined}
+                  title={result?.state === "failed" ? result.note : undefined}
+                >
+                  {result?.state === "failed" || result?.state === "skipped"
+                    ? result.note
+                    : result?.state === "ok"
+                      ? result.kept
+                        ? "в очереди · копия здесь"
+                        : "в очереди"
+                      : result?.state === "transcoding"
+                        ? "перекодируется…"
+                        : currentName === name
+                          ? waiting
+                            ? "Ждём возвращения в приложение…"
+                            : "загружается"
                           : "ждёт"}
-                  </span>
-                </li>
-              );
-            },
-          )}
+                </span>
+                {result?.state === "failed" && name in failed && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void retry(name)}
+                    className="min-h-11 basis-full self-start text-left text-sm font-semibold text-magenta underline underline-offset-2 disabled:opacity-50"
+                  >
+                    Повторить
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

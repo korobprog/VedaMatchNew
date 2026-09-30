@@ -11,7 +11,15 @@ import {
   useSyncExternalStore,
   type ComponentProps,
 } from "react";
-import { FileText, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import {
+  FileText,
+  Loader2,
+  Paperclip,
+  Redo2,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { WORK_CHECKLIST_TEXT_MAX } from "@vedamatch/shared";
 import { CompactSoundButton } from "@/components/quick/compact-sound-button";
 import type {
@@ -39,6 +47,12 @@ import {
 import type { AttachOutcome, WorkUploadJob } from "./upload-queue";
 import { workUploads } from "./work-uploads";
 import { isLongChecklistText } from "./checklist-text";
+import {
+  createTextHistory,
+  recordText,
+  redoText,
+  undoText,
+} from "./text-history";
 import {
   chooseSection,
   chooseStatus,
@@ -1524,6 +1538,9 @@ function DescriptionField({
   const ref = useRef<HTMLTextAreaElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
+  // Поле управляется историей (VED-679): «Отменить» и «Вернуть» подставляют
+  // в него прежний текст так же, как набор.
+  const [history, setHistory] = useState(() => createTextHistory(initialValue));
 
   const measure = useCallback(() => {
     const element = ref.current;
@@ -1538,21 +1555,38 @@ function DescriptionField({
     measure();
   }, [expanded, measure]);
 
+  // Текст из истории меняет высоту поля без события input.
+  useLayoutEffect(measure, [history.present, measure]);
+
   useEffect(() => {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [measure]);
+
+  function step(move: typeof undoText) {
+    const next = move(history);
+    if (next === history) return;
+    setHistory(next);
+    onValueChange(next.present);
+  }
+
+  const historyButton =
+    "inline-flex size-11 items-center justify-center rounded-lg text-text-1 transition-colors hover:bg-bg-2 hover:text-text-0 disabled:opacity-40 disabled:hover:bg-transparent";
 
   return (
     <div className="mt-2">
       <label htmlFor={id} className="block text-xs text-text-1">
         Описание
       </label>
-      <DraftTextarea
+      <textarea
         id={id}
         ref={ref}
-        initialValue={initialValue}
-        onValueChange={onValueChange}
+        value={history.present}
+        onChange={(event) => {
+          const value = event.target.value;
+          setHistory((current) => recordText(current, value, Date.now()));
+          onValueChange(value);
+        }}
         onInput={measure}
         readOnly={readOnly}
         rows={4}
@@ -1570,17 +1604,45 @@ function DescriptionField({
           expanded ? "resize-none overflow-hidden" : ""
         }`}
       />
-      {(expanded || overflows) && (
-        <button
-          type="button"
-          aria-controls={id}
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-          className="mt-1 inline-flex min-h-9 items-center rounded-lg px-1 text-sm font-semibold text-magenta hover:underline"
-        >
-          {expanded ? "Свернуть" : "Читать далее"}
-        </button>
-      )}
+      <div className="mt-1 flex items-center gap-1">
+        {(expanded || overflows) && (
+          <button
+            type="button"
+            aria-controls={id}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+            className="inline-flex min-h-9 items-center rounded-lg px-1 text-sm font-semibold text-magenta hover:underline"
+          >
+            {expanded ? "Свернуть" : "Читать далее"}
+          </button>
+        )}
+        {!readOnly && (
+          <div className="ml-auto flex items-center">
+            <button
+              type="button"
+              aria-controls={id}
+              aria-label="Отменить правку описания"
+              title="Отменить"
+              disabled={history.past.length === 0}
+              onClick={() => step(undoText)}
+              className={historyButton}
+            >
+              <Undo2 aria-hidden className="size-5" />
+            </button>
+            <button
+              type="button"
+              aria-controls={id}
+              aria-label="Вернуть правку описания"
+              title="Вернуть"
+              disabled={history.future.length === 0}
+              onClick={() => step(redoText)}
+              className={historyButton}
+            >
+              <Redo2 aria-hidden className="size-5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

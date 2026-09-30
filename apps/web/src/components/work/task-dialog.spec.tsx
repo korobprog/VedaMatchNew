@@ -188,6 +188,30 @@ describe("WorkTaskDialog — кнопка «Сохранить» (VED-56)", () =
     });
   });
 
+  it("отменяет и возвращает правку описания кнопками у поля (VED-679)", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByDisplayValue("Кнопка сохранить");
+    const description = screen.getByPlaceholderText(
+      /Что именно нужно сделать/,
+    );
+    const undo = screen.getByRole("button", {
+      name: "Отменить правку описания",
+    });
+    const redo = screen.getByRole("button", {
+      name: "Вернуть правку описания",
+    });
+    expect(undo).toBeDisabled();
+    expect(redo).toBeDisabled();
+
+    await user.type(description, " и новое");
+    await user.click(undo);
+    expect(description).toHaveValue("Старое описание");
+    await user.click(redo);
+    expect(description).toHaveValue("Старое описание и новое");
+    expect(redo).toBeDisabled();
+  });
+
   it("puts the saved text back on «Отменить правки»", async () => {
     const user = userEvent.setup();
     open();
