@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
-import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
 import { TravelCashTemplatesService } from './travel-cash-templates.service';
 import { TravelCashService } from './travel-cash.service';
 

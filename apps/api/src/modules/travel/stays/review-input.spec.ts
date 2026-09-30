@@ -3,7 +3,7 @@ import {
   parseReviewInput,
   ratingSummary,
 } from './review-input';
-import { TravelInputError } from './travel-dto';
+import { TravelInputError } from '../travel-dto';
 
 describe('parseReviewInput', () => {
   it('оценка и текст без лишних пробелов', () => {

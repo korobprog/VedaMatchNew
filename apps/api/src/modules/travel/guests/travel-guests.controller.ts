@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { AccessTokenPayload } from '@vedamatch/shared';
-import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
 import {
   MAX_GUEST_PHOTO_BYTES,
   type UploadedGuestPhoto,

@@ -12,8 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
-import { AuthGuard, CurrentUser } from '../auth/auth.guard';
-import { isAdmin } from './is-admin';
+import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
+import { isAdmin } from '../is-admin';
 import { TravelAdminService } from './travel-admin.service';
 
 const ADMIN_STAY_STATUSES = ['removed_by_admin', 'published', 'draft'] as const;

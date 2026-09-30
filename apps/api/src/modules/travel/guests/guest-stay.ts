@@ -1,4 +1,4 @@
-import { countNights } from './travel-dates';
+import { countNights } from '../travel-dates';
 
 /**
  * Оплаченный срок гостя. Ничего не хранится: срок выводится из дня заезда и

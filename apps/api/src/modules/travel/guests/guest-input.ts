@@ -3,8 +3,8 @@ import {
   TRAVEL_MAX_PAID_NIGHTS,
   type TravelGuestColor,
 } from '@vedamatch/shared';
-import { CashInputError } from './cash-input';
-import { countNights, parseStayDate, TravelDateError } from './travel-dates';
+import { CashInputError } from '../cash/cash-input';
+import { countNights, parseStayDate, TravelDateError } from '../travel-dates';
 
 export const MAX_GUEST_NAME = 120;
 export const MAX_GUEST_PHONE = 40;

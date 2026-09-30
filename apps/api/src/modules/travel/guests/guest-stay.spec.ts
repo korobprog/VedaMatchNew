@@ -1,4 +1,4 @@
-import { CashInputError } from './cash-input';
+import { CashInputError } from '../cash/cash-input';
 import { parseEntryGuest, parseGuestInput } from './guest-input';
 import { compareGuests, paidThrough, unpaidNights } from './guest-stay';
 

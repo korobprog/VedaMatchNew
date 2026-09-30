@@ -3,7 +3,7 @@ import {
   TRAVEL_REVIEWABLE_STATUSES,
   type TravelRatingSummary,
 } from '@vedamatch/shared';
-import { TravelInputError } from './travel-dto';
+import { TravelInputError } from '../travel-dto';
 
 export const MIN_REVIEW_RATING = 1;
 export const MAX_REVIEW_RATING = 5;

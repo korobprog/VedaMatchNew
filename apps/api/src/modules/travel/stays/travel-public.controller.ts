@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { AccessTokenPayload } from '@vedamatch/shared';
-import { OptionalAuthGuard, OptionalUser } from '../auth/auth.guard';
+import { OptionalAuthGuard, OptionalUser } from '../../auth/auth.guard';
 import { TravelService } from './travel.service';
 
 /**

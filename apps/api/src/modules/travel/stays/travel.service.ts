@@ -25,26 +25,26 @@ import type {
   TravelStayKind,
   TravelStayPayment,
 } from '@vedamatch/shared';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { generateClaimToken, normalizeClaimToken } from './claim-token';
-import { normalizePublicCode } from './public-code';
+import { normalizePublicCode } from '../public-code';
 import {
   groupOccupancy,
   OCCUPYING_STATUSES,
   parseOccupancyWindow,
-} from './occupancy';
+} from '../occupancy';
 import {
   countNights,
   formatStayDate,
   rangesOverlap,
   TravelDateError,
-} from './travel-dates';
+} from '../travel-dates';
 import {
   calcTotalMinor,
   parseBookingInput,
   TravelInputError,
   type ParsedBookingInput,
-} from './travel-dto';
+} from '../travel-dto';
 import {
   contactCardBody,
   contactMessage,
@@ -54,7 +54,7 @@ import {
   bookingRecipients,
   TRAVEL_CONTACT_REQUESTED_EVENT,
   TRAVEL_EVENTS,
-} from './travel-events';
+} from '../travel-events';
 import {
   canReviewBooking,
   parseReviewInput,
