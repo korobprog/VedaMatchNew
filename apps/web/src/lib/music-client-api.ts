@@ -21,6 +21,14 @@ import type {
   MusicUploadStateDto,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
+import {
+  UploadNetworkError,
+  backoffDelay,
+  isPageReady,
+  isRetryableUploadError,
+  presignExpired,
+  waitUntilVisibleAndOnline,
+} from "@/lib/music-upload-retry";
 
 async function send<T>(path: string, init: RequestInit): Promise<T> {
   const res = await apiFetch(`${API_URL}${path}`, {
@@ -89,23 +97,56 @@ export async function uploadMusicTrack(
    * редактора книги. Сервер учитывает её только от редакции Музыки.
    */
   audiobookId: string | null = null,
+  /**
+   * `onWaiting(true)` — обрыв случился, пока страница скрыта или нет связи:
+   * ждём возвращения, прежде чем лить заново; `false` — дождались.
+   */
+  options: { onWaiting?: (waiting: boolean) => void } = {},
 ): Promise<CompleteMusicUploadResponse> {
-  const created = await send<CreateMusicUploadResponse>("/music/uploads", {
-    method: "POST",
-    body: JSON.stringify({
-      fileName: file.name,
-      mime: file.type,
-      sizeBytes: file.size,
-      rightsBasis,
-    }),
-  });
+  const requestUpload = () =>
+    send<CreateMusicUploadResponse>("/music/uploads", {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        mime: file.type,
+        sizeBytes: file.size,
+        rightsBasis,
+      }),
+    });
+  let created = await requestUpload();
+  let issuedAt = Date.now();
 
-  await putWithProgress(
-    created.url,
-    file,
-    onProgress,
-    created.headers["Content-Type"],
-  );
+  // Обрыв сети (телефон приостановил страницу) — не окончательная ошибка:
+  // ждём возвращения и льём заново. Частичный PUT в S3 не докачать, поэтому
+  // каждая попытка — с нуля, а если подпись успела истечь, берём новую.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await putWithProgress(
+        created.url,
+        file,
+        onProgress,
+        created.headers["Content-Type"],
+      );
+      break;
+    } catch (cause) {
+      const delay = backoffDelay(attempt);
+      if (delay === null || !isRetryableUploadError(cause)) throw cause;
+      onProgress?.(0);
+      if (!isPageReady(document, navigator)) {
+        options.onWaiting?.(true);
+        try {
+          await waitUntilVisibleAndOnline(document, navigator, window);
+        } finally {
+          options.onWaiting?.(false);
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (presignExpired(issuedAt, Date.now(), created.expiresInSeconds)) {
+        created = await requestUpload();
+        issuedAt = Date.now();
+      }
+    }
+  }
 
   return send<CompleteMusicUploadResponse>(
     `/music/uploads/${created.uploadId}/complete`,
@@ -183,7 +224,11 @@ function putWithProgress(
       xhr.status >= 200 && xhr.status < 300
         ? resolve()
         : reject(new Error(`Хранилище отказало (${xhr.status})`));
-    xhr.onerror = () => reject(new Error("Не удалось передать файл"));
+    // Обрыв, отмена и таймаут — сеть или приостановленная страница, а не
+    // ответ хранилища: такие ошибки вызывающий может повторить.
+    xhr.onerror = () => reject(new UploadNetworkError());
+    xhr.onabort = () => reject(new UploadNetworkError());
+    xhr.ontimeout = () => reject(new UploadNetworkError());
     xhr.send(file);
   });
 }
