@@ -592,7 +592,11 @@ function Select({
   return (
     <label className="block">
       <span className={labelClass}>{label}</span>
+      {/* Ключ по значению из адреса: кнопки панели («Показать всех»,
+          «Противоположный пол») меняют адрес без перезагрузки, и без
+          ключа список показывал бы прежний выбор (VED-674). */}
       <select
+        key={defaultValue ?? ""}
         name={name}
         defaultValue={defaultValue ?? ""}
         className={fieldClass}

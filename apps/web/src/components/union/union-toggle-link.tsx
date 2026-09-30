@@ -54,3 +54,23 @@ export function toggledHref(
   const query = next.toString();
   return query ? `${path}?${query}` : path;
 }
+
+/**
+ * «Противоположный пол» (VED-673): лента по умолчанию и так показывает
+ * противоположный пол, поэтому кнопка просто снимает выбранный вручную пол
+ * («Показать всех», «Мужской», «Женский»). Страница — снова первая.
+ */
+export function oppositeGenderHref(
+  path: string,
+  params: Record<string, string | string[] | undefined>,
+): string {
+  const next = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    if (name === "page" || name === "gender" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      next.append(name, item);
+    }
+  }
+  const query = next.toString();
+  return query ? `${path}?${query}` : path;
+}

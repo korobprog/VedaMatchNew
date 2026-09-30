@@ -154,3 +154,12 @@ describe("EVERYTHING_URL", () => {
     expect([...url.searchParams.keys()]).toEqual(["showAll"]);
   });
 });
+
+/* VED-674: «Показать всех» на панели и «Все» в целях — один фильтр. */
+describe("countActiveFilters: показать всех", () => {
+  it("gender=all вместе с showAll считается за один", () => {
+    expect(countActiveFilters({ gender: "all", showAll: "true" })).toBe(1);
+    expect(countActiveFilters({ gender: "all" })).toBe(1);
+    expect(countActiveFilters({ gender: "all", showAll: "true", stage: "x" })).toBe(2);
+  });
+});
