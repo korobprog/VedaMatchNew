@@ -12,6 +12,8 @@ import { TravelMapAdminController } from './map/travel-map-admin.controller';
 import { TravelMapController } from './map/travel-map.controller';
 import { TravelMapChatListener } from './map/travel-map-chat.listener';
 import { TravelMapPhotosService } from './map/travel-map-photos.service';
+import { TravelMapRoutesController } from './map/travel-map-routes.controller';
+import { TravelMapRoutesService } from './map/travel-map-routes.service';
 import { TravelMapService } from './map/travel-map.service';
 import { TravelManageController } from './manage/travel-manage.controller';
 import { TravelManageService } from './manage/travel-manage.service';
@@ -34,6 +36,7 @@ import { TravelService } from './stays/travel.service';
   controllers: [
     TravelAdminController,
     TravelMapAdminController,
+    TravelMapRoutesController,
     TravelMapController,
     TravelCashController,
     TravelGuestsController,
@@ -50,6 +53,7 @@ import { TravelService } from './stays/travel.service';
     TravelGuestPhotosService,
     TravelAdminService,
     TravelMapService,
+    TravelMapRoutesService,
     TravelMapPhotosService,
     TravelMapChatListener,
     TravelPurgeListener,

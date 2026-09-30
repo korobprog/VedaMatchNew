@@ -221,6 +221,12 @@ export function MapView() {
         >
           Добавить место
         </Link>
+        <Link
+          href="/travel/map/routes"
+          className="rounded-xl border border-glass-brd px-3 py-2 text-sm text-text-1"
+        >
+          Маршруты
+        </Link>
       </div>
 
       {error ? (

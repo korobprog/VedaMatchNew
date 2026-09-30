@@ -56,6 +56,14 @@ interface PlacesMapProps {
   onPick?: (lat: number, lng: number) => void;
   /** Стартовый центр (место, которое уже известно). Геолокацию тогда не спрашиваем. */
   initialCenter?: { lat: number; lng: number; zoom?: number } | null;
+  /** Подмена значка метки места по id (метки старта маршрутов). */
+  pointIcons?: Record<string, string>;
+  /** Линия маршрута поверх карты. */
+  polyline?: { lat: number; lng: number }[];
+  /** Нумерованные метки остановок. */
+  numbered?: { lat: number; lng: number; label: string }[];
+  /** При изменении карта подгоняется под эти точки. */
+  fitTo?: { lat: number; lng: number }[];
   ariaLabel?: string;
   className?: string;
 }
@@ -79,6 +87,10 @@ export function PlacesMap({
   pickValue = null,
   onPick,
   initialCenter = null,
+  pointIcons,
+  polyline,
+  numbered,
+  fitTo,
   ariaLabel = "Карта мест",
   className,
 }: PlacesMapProps) {
@@ -86,6 +98,7 @@ export function PlacesMap({
   const mapRef = useRef<LeafletMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
   const pickMarkerRef = useRef<Marker | null>(null);
+  const routeLayerRef = useRef<LayerGroup | null>(null);
   const [ready, setReady] = useState(false);
 
   const boundsRef = useRef(onBoundsChange);
@@ -141,6 +154,7 @@ export function PlacesMap({
       }).addTo(map);
 
       layerRef.current = L.layerGroup().addTo(map);
+      routeLayerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
 
       const report = () => {
@@ -186,6 +200,7 @@ export function PlacesMap({
       map?.remove();
       mapRef.current = null;
       layerRef.current = null;
+      routeLayerRef.current = null;
       pickMarkerRef.current = null;
     };
   }, []);
@@ -262,7 +277,7 @@ export function PlacesMap({
             className: "",
             html:
               `<span class="${classes}"${point.stale ? ' title="Давно не проверялось"' : ""}>` +
-              `<span aria-hidden="true">${option.icon}</span>` +
+              `<span aria-hidden="true">${pointIcons?.[point.id] ?? option.icon}</span>` +
               `<span class="travel-map-pin__label">${escapeHtml(point.name)}</span></span>`,
             iconSize: [0, 0],
             iconAnchor: [0, 0],
@@ -278,7 +293,66 @@ export function PlacesMap({
     return () => {
       disposed = true;
     };
-  }, [ready, points, communities, stays, activeId]);
+  }, [ready, points, communities, stays, activeId, pointIcons]);
+
+  // Линия маршрута и нумерованные остановки.
+  useEffect(() => {
+    if (!ready) return;
+    const layer = routeLayerRef.current;
+    if (!layer) return;
+    let disposed = false;
+    void (async () => {
+      const L = await import("leaflet");
+      if (disposed) return;
+      layer.clearLayers();
+      if (polyline && polyline.length >= 2) {
+        L.polyline(
+          polyline.map((p) => [p.lat, p.lng] as [number, number]),
+          { className: "travel-map-route-line", weight: 4, interactive: false },
+        ).addTo(layer);
+      }
+      for (const item of numbered ?? []) {
+        L.marker([item.lat, item.lng], {
+          icon: L.divIcon({
+            className: "",
+            html:
+              `<span class="travel-map-pin travel-map-pin--num" aria-hidden="true">` +
+              `${escapeHtml(item.label)}</span>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0],
+          }),
+          alt: `Остановка ${item.label}`,
+          keyboard: false,
+        }).addTo(layer);
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [ready, polyline, numbered]);
+
+  // Подгонка кадра под заданные точки.
+  useEffect(() => {
+    if (!ready || !fitTo || fitTo.length === 0) return;
+    const map = mapRef.current;
+    if (!map) return;
+    let disposed = false;
+    void (async () => {
+      const L = await import("leaflet");
+      if (disposed) return;
+      if (fitTo.length === 1) {
+        map.setView([fitTo[0].lat, fitTo[0].lng], PLACE_ZOOM);
+        return;
+      }
+      map.fitBounds(
+        L.latLngBounds(fitTo.map((p) => [p.lat, p.lng] as [number, number])),
+        { padding: [40, 40], maxZoom: 17 },
+      );
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [ready, fitTo]);
 
   // Единственный маркер выбора точки.
   useEffect(() => {
