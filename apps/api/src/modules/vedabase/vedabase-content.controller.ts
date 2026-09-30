@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { VedabaseContentService } from './vedabase-content.service';
+import { VedabaseColoringService } from './vedabase-coloring.service';
 import { VedabaseFilesService } from './vedabase-files.service';
 
 @Controller('vedabase')
@@ -10,6 +11,7 @@ export class VedabaseContentController {
   constructor(
     private readonly content: VedabaseContentService,
     private readonly files: VedabaseFilesService,
+    private readonly coloring: VedabaseColoringService,
   ) {}
   @Get('library') getLibrary() {
     return this.content.getLibrary();
@@ -27,6 +29,14 @@ export class VedabaseContentController {
     response.setHeader('ETag', `"${result.sha256}"`);
     response.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
     return result.chapter;
+  }
+  /** Цветной перевод стихов главы (VED-683). */
+  @Get('books/:bookSlug/chapters/:chapterSlug/colors')
+  getColors(
+    @Param('bookSlug') bookSlug: string,
+    @Param('chapterSlug') chapterSlug: string,
+  ) {
+    return this.coloring.forChapter(bookSlug, chapterSlug);
   }
   /** Файлы книги для скачивания: epub, fb2, pdf (VED-662). */
   @Get('books/:bookSlug/files') getFiles(@Param('bookSlug') slug: string) {

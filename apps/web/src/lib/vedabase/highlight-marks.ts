@@ -16,10 +16,13 @@ export interface ReaderMark {
 }
 
 const MARK_ATTR = "data-vb-mark";
+const COLOR_ATTR = "data-vb-color";
 
-/** Снимает всю наложенную подсветку внутри `root`. */
+/** Снимает всю наложенную подсветку и раскраску внутри `root`. */
 export function clearMarks(root: HTMLElement): void {
-  for (const mark of root.querySelectorAll(`mark[${MARK_ATTR}]`)) {
+  for (const mark of root.querySelectorAll(
+    `mark[${MARK_ATTR}], span[${COLOR_ATTR}]`,
+  )) {
     mark.replaceWith(...mark.childNodes);
   }
   root.normalize();
@@ -32,6 +35,38 @@ export function clearMarks(root: HTMLElement): void {
  * пустой — пропускается.
  */
 export function applyMark(block: HTMLElement, mark: ReaderMark): void {
+  wrapRange(block, mark.start, mark.end, (doc) => {
+    const wrapper = doc.createElement("mark");
+    wrapper.setAttribute(MARK_ATTR, mark.id);
+    wrapper.dataset.kind = mark.kind;
+    wrapper.className = "reader-mark rounded-sm";
+    return wrapper;
+  });
+}
+
+/**
+ * Цветной перевод (VED-683): отрезок текста блока — цветом из палитры
+ * читалки (`reader-color-*` в globals.css), под её тему.
+ */
+export function applyColor(
+  block: HTMLElement,
+  span: { start: number; end: number; color: string },
+): void {
+  wrapRange(block, span.start, span.end, (doc) => {
+    const wrapper = doc.createElement("span");
+    wrapper.setAttribute(COLOR_ATTR, span.color);
+    wrapper.className = `reader-color-${span.color}`;
+    return wrapper;
+  });
+}
+
+function wrapRange(
+  block: HTMLElement,
+  start: number,
+  end: number,
+  make: (doc: Document) => HTMLElement,
+): void {
+  const mark = { start, end };
   const doc = block.ownerDocument;
   const walker = doc.createTreeWalker(block, NodeFilter.SHOW_TEXT);
   const pieces: Array<{ node: Text; from: number; to: number }> = [];
@@ -48,10 +83,7 @@ export function applyMark(block: HTMLElement, mark: ReaderMark): void {
   for (const { node, from, to } of pieces) {
     const middle = from > 0 ? node.splitText(from) : node;
     if (to - from < middle.data.length) middle.splitText(to - from);
-    const wrapper = doc.createElement("mark");
-    wrapper.setAttribute(MARK_ATTR, mark.id);
-    wrapper.dataset.kind = mark.kind;
-    wrapper.className = "reader-mark rounded-sm";
+    const wrapper = make(doc);
     middle.replaceWith(wrapper);
     wrapper.append(middle);
   }

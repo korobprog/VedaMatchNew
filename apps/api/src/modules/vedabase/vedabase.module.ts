@@ -10,6 +10,7 @@ import { VedabaseBookStorageService } from './book-storage.service';
 import { VedabaseContentController } from './vedabase-content.controller';
 import { VedabaseContentRepository } from './vedabase-content.repository';
 import { VedabaseContentService } from './vedabase-content.service';
+import { VedabaseColoringService } from './vedabase-coloring.service';
 import { VedabaseFilesService } from './vedabase-files.service';
 
 @Module({
@@ -24,6 +25,7 @@ import { VedabaseFilesService } from './vedabase-files.service';
     VedabaseContentService,
     VedabaseAdminService,
     VedabaseFilesService,
+    VedabaseColoringService,
     VedabaseBookStorageService,
     GitabaseSyncService,
     GitabaseUserStateService,

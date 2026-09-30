@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  SaveVedabaseColoringRequest,
   VedabaseBookManifest,
   VedabaseChapterDocument,
   VedabaseClientMutation,
+  VedabaseColoringDto,
   VedabaseLocator,
 } from "@vedamatch/shared";
 import { VedabaseBookStorage } from "@/lib/vedabase/book-storage";
@@ -24,6 +26,8 @@ import type { VedabaseSearchResult } from "@/lib/vedabase/search-index";
 import {
   fetchVedabaseBookManifest,
   fetchVedabaseChapter,
+  fetchVedabaseColors,
+  saveVedabaseColoring,
 } from "@/lib/vedabase-client-api";
 import { AnnotationToolbar } from "./annotation-toolbar";
 import { BookDownloads } from "./book-downloads";
@@ -246,6 +250,7 @@ export function ReaderScreen({
   chapterSlug,
   onNavigate,
   back,
+  canEditColors = false,
 }: {
   userId: string;
   bookSlug: string;
@@ -253,6 +258,8 @@ export function ReaderScreen({
   onNavigate?(chapterSlug: string, unitId?: string): void;
   /** Куда ведёт «назад» в верхней панели; офлайн-читалка — без неё. */
   back?: { href: string; label: string };
+  /** Админ Библиотеки — может раскрашивать перевод (VED-683). */
+  canEditColors?: boolean;
 }) {
   const repository = useMemo(() => new VedabaseReaderRepository(userId), [userId]);
   const readerRef = useRef<HTMLDivElement>(null);
@@ -265,6 +272,32 @@ export function ReaderScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [colorings, setColorings] = useState<VedabaseColoringDto[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Раскраска — с сервера; офлайн её просто нет, текст читается и так.
+    fetchVedabaseColors(bookSlug, chapterSlug)
+      .then((loaded) => {
+        if (!cancelled) setColorings(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setColorings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookSlug, chapterSlug]);
+
+  const saveColoring = async (request: SaveVedabaseColoringRequest) => {
+    const saved = await saveVedabaseColoring(bookSlug, request);
+    setColorings((current) => [
+      ...current.filter(
+        (item) => !(item.unitId === saved.unitId && item.block === saved.block),
+      ),
+      ...(saved.spans.length ? [saved] : []),
+    ]);
+  };
   const [sheet, setSheet] = useState<
     "contents" | "notes" | "downloads" | null
   >(null);
@@ -579,6 +612,9 @@ export function ReaderScreen({
               ref={readerRef}
               chapter={chapter}
               marks={marks}
+              colorings={colorings}
+              canEditColors={canEditColors}
+              onSaveColoring={saveColoring}
               onUnitActivate={activateUnit}
             />
           </article>

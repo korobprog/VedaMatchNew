@@ -1429,6 +1429,8 @@ model VedabaseBook {
   versions        VedabaseBookVersion[] @relation("VedabaseBookVersions")
   /// Файлы книги для скачивания (VED-662): epub, fb2, pdf и прочие.
   files           VedabaseBookFile[]
+  /// Цветной перевод стихов (VED-683).
+  colorings       VedabaseColoring[]
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 }
@@ -1475,6 +1477,26 @@ model VedabaseChapter {
 
   @@unique([versionId, slug])
   @@unique([versionId, order])
+}
+
+/// Цветной перевод (VED-683): админ красит слова транслитерации или
+/// пословного перевода, читатели включают раскраску кнопкой. Отрезки —
+/// смещениями в тексте блока, как выделения читателя: HTML главы не меняется.
+model VedabaseColoring {
+  id          String       @id @default(uuid())
+  bookId      String
+  book        VedabaseBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapterSlug String
+  unitId      String
+  /// `transliterationHtml` или `synonymsHtml`.
+  block       String       @db.VarChar(32)
+  /// [{ start, end, color }] — по возрастанию, без пересечений.
+  spans       Json
+  updatedById String?
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([bookId, chapterSlug, unitId, block])
+  @@index([bookId, chapterSlug])
 }
 
 /// Файл книги Библиотеки для скачивания (VED-662, часть 3б). Заливает админ

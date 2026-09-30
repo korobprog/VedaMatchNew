@@ -2,7 +2,9 @@ import type {
   VedabaseAdminBook,
   VedabaseAdminBookPatch,
   VedabaseBookFileDto,
+  SaveVedabaseColoringRequest,
   VedabaseBookManifest,
+  VedabaseColoringDto,
   VedabaseSearchResult,
   VedabaseSyncPullResponse,
   VedabaseSyncPushRequest,
@@ -93,6 +95,32 @@ export function fetchVedabaseAdminBookFiles(
   return fetchJson(
     `/vedabase/admin/books/${encodeURIComponent(slug)}/files`,
     {},
+  );
+}
+
+/** Цветной перевод стихов главы (VED-683). */
+export function fetchVedabaseColors(
+  bookSlug: string,
+  chapterSlug: string,
+): Promise<VedabaseColoringDto[]> {
+  return fetchJson(
+    `/vedabase/books/${encodeURIComponent(bookSlug)}/chapters/${encodeURIComponent(chapterSlug)}/colors`,
+    {},
+  );
+}
+
+/** Сохранить раскраску блока — только админ сервиса. */
+export function saveVedabaseColoring(
+  bookSlug: string,
+  request: SaveVedabaseColoringRequest,
+): Promise<VedabaseColoringDto> {
+  return fetchJson(
+    `/vedabase/admin/books/${encodeURIComponent(bookSlug)}/colors`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
   );
 }
 

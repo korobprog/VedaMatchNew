@@ -131,3 +131,40 @@ export type {
   CompleteLibraryBookUploadRequest as CompleteVedabaseBookUploadRequest,
   LibraryBookUploadResponse as VedabaseBookUploadResponse,
 } from "./library";
+
+/**
+ * Цветной перевод (VED-683): цвета, которыми админ красит слова. Названия, а
+ * не hex: читалка подбирает оттенок под свою тему (день, пергамент, ночь).
+ */
+export const VEDABASE_COLORS = [
+  "red",
+  "orange",
+  "gold",
+  "green",
+  "blue",
+  "violet",
+] as const;
+export type VedabaseColor = (typeof VEDABASE_COLORS)[number];
+
+/** Блоки стиха, которые можно раскрашивать. */
+export const VEDABASE_COLOR_BLOCKS = ["transliterationHtml", "synonymsHtml"] as const;
+export type VedabaseColorBlock = (typeof VEDABASE_COLOR_BLOCKS)[number];
+
+/** Отрезок раскраски — смещения в тексте блока, как у выделений читателя. */
+export interface VedabaseColorSpan {
+  start: number;
+  end: number;
+  color: VedabaseColor;
+}
+
+/** Раскраска одного блока стиха. */
+export interface VedabaseColoringDto {
+  unitId: string;
+  block: VedabaseColorBlock;
+  spans: VedabaseColorSpan[];
+}
+
+/** Сохранение раскраски админом: пустой `spans` — снять раскраску. */
+export interface SaveVedabaseColoringRequest extends VedabaseColoringDto {
+  chapterSlug: string;
+}

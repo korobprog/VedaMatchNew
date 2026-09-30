@@ -1612,6 +1612,37 @@ body:has([data-music-player][data-measured="true"]) {
   color: var(--reader-mark-text);
 }
 
+/* Цветной перевод (VED-683): палитра под тему читалки. Светлая и пергамент —
+   тёмные оттенки (на #FFFFFF / #FBF4E4 не ниже 6:1, самый слабый — синий
+   #1D4ED8 и зелёный #166534 около 6.5:1), ночь — светлые (на #17161D выше
+   8:1). Цвет несёт смысл только вместе со словом, поэтому одного контраста
+   с фоном достаточно. */
+[data-reader-theme="light"],
+[data-reader-theme="sepia"] {
+  --reader-c-red: #b91c1c;
+  --reader-c-orange: #9a3412;
+  --reader-c-gold: #854d0e;
+  --reader-c-green: #166534;
+  --reader-c-blue: #1d4ed8;
+  --reader-c-violet: #7e22ce;
+}
+
+[data-reader-theme="dark"] {
+  --reader-c-red: #fca5a5;
+  --reader-c-orange: #fdba74;
+  --reader-c-gold: #fcd34d;
+  --reader-c-green: #86efac;
+  --reader-c-blue: #93c5fd;
+  --reader-c-violet: #d8b4fe;
+}
+
+.reader-color-red { color: var(--reader-c-red); }
+.reader-color-orange { color: var(--reader-c-orange); }
+.reader-color-gold { color: var(--reader-c-gold); }
+.reader-color-green { color: var(--reader-c-green); }
+.reader-color-blue { color: var(--reader-c-blue); }
+.reader-color-violet { color: var(--reader-c-violet); }
+
 /* Фрагмент с заметкой (VED-662): та же подложка плюс пунктир, чтобы его
    отличали от простого выделения не только по цвету. */
 [data-reader-theme] mark[data-kind="note"] {
