@@ -201,7 +201,7 @@ export default async function MusicTrackPage({
               <MusicQueueActions trackId={track.id} />
               <MusicOfflineButton track={track} />
               <MusicDownloadButton trackId={track.id} />
-              {/* «Редактировать запись» — в одном ряду с «Выключить через…»
+              {/* «Редактировать» — в одном ряду с «Таймером»
                   (VED-657); форма раскрывается ниже, над текстом. */}
               <div
                 className={`grid items-start gap-2 ${canEdit ? "grid-cols-2" : "grid-cols-1"}`}
@@ -214,7 +214,7 @@ export default async function MusicTrackPage({
                     className="flex h-11 items-center gap-2 rounded-xl border border-glass-brd px-4 text-sm font-semibold text-text-1 hover:text-text-0"
                   >
                     <Pencil aria-hidden className="size-4 shrink-0" />
-                    <span className="truncate">Редактировать запись</span>
+                    <span className="truncate">Редактировать</span>
                   </Link>
                 )}
               </div>
