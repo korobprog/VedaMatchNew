@@ -63,11 +63,15 @@ export function MusicSleepTimerButton() {
         }`}
       >
         <MoonIcon />
-        {timer.mode === "at" && left !== null
-          ? `Выключится через ${formatSleepLeft(left)}`
-          : timer.mode === "end-of-track"
-            ? "Выключится в конце записи"
-            : "Выключить через…"}
+        {/* Коротко (VED-671): кнопка стоит в одном ряду с «Редактировать» и
+            на телефоне не должна переноситься на две строки. */}
+        <span className="truncate">
+          {timer.mode === "at" && left !== null
+            ? `Таймер ${formatSleepLeft(left)}`
+            : timer.mode === "end-of-track"
+              ? "Таймер: конец записи"
+              : "Таймер"}
+        </span>
       </button>
 
       {open && (
@@ -112,7 +116,7 @@ function MoonIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="size-4 text-gold"
+      className="size-4 shrink-0 text-gold"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
