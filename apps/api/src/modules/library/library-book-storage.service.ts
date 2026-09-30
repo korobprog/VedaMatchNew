@@ -1,9 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -60,9 +65,11 @@ export class LibraryBookStorageService {
   }
 
   /**
-   * Подписанный PUT. `ContentType` и `ContentLength` входят в подпись: иначе
-   * выданной ссылкой можно залить что угодно и любого размера, а проверка
-   * на завершении случится уже после того, как байты в бакете.
+   * Подписанный PUT. `ContentLength` входит в подпись — выданной ссылкой
+   * нельзя залить больше заявленного. `ContentType` в подпись не входит:
+   * `s3-request-presigner` исключает его сам, поэтому тип объекта в бакете
+   * ничего не гарантирует. Формат сверяется по содержимому на завершении
+   * заливки, а при скачивании тип подставляет подписанная ссылка.
    */
   async presignPut(
     key: string,
@@ -92,18 +99,83 @@ export class LibraryBookStorageService {
     );
   }
 
-  /** `null` — объекта нет: ссылку браузер получил, но так и не залил файл. */
+  /**
+   * `null` — объекта нет: ссылку браузер получил, но так и не залил файл.
+   *
+   * Любой другой сбой — отказ хранилища, а не «файла нет». Раньше он тоже
+   * превращался в `null`: при недоступном S3 автору говорили, что файл не
+   * загрузился, он лил сто мегабайт заново, а в логе не оставалось ничего.
+   */
   async head(key: string): Promise<{ sizeBytes: number } | null> {
-    if (!this.s3Client || !this.bucket) return null;
+    if (!this.s3Client || !this.bucket) throw this.unavailable();
 
     try {
       const result = await this.s3Client.send(
         new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
       );
       return { sizeBytes: Number(result.ContentLength ?? 0) };
-    } catch {
-      return null;
+    } catch (error) {
+      if (isMissingObject(error)) return null;
+      throw this.unavailable(`head ${key}`, error);
     }
+  }
+
+  /** Первые байты объекта — по ним сверяется формат книги. */
+  async readHead(key: string, bytes: number): Promise<Uint8Array> {
+    if (!this.s3Client || !this.bucket) throw this.unavailable();
+
+    try {
+      const result = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Range: `bytes=0-${bytes - 1}`,
+        }),
+      );
+      const body = await result.Body?.transformToByteArray();
+      return body ? body.subarray(0, bytes) : new Uint8Array();
+    } catch (error) {
+      throw this.unavailable(`read ${key}`, error);
+    }
+  }
+
+  /** Все объекты под префиксом — для уборки брошенных заливок. */
+  async list(
+    prefix: string,
+  ): Promise<Array<{ key: string; lastModified: Date | null }>> {
+    if (!this.s3Client || !this.bucket) return [];
+
+    const objects: Array<{ key: string; lastModified: Date | null }> = [];
+    let token: string | undefined;
+    do {
+      const page = await this.s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      for (const item of page.Contents ?? []) {
+        if (item.Key)
+          objects.push({
+            key: item.Key,
+            lastModified: item.LastModified ?? null,
+          });
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return objects;
+  }
+
+  private unavailable(
+    action?: string,
+    error?: unknown,
+  ): ServiceUnavailableException {
+    if (action)
+      this.logger.error(
+        `Хранилище файлов книг не ответило (${action}): ${String(error)}`,
+      );
+    return new ServiceUnavailableException('book_storage_unavailable');
   }
 
   /**
@@ -115,7 +187,7 @@ export class LibraryBookStorageService {
     disposition: string,
     contentType: string,
   ): Promise<string> {
-    if (!this.s3Client || !this.bucket) return '';
+    if (!this.s3Client || !this.bucket) throw this.unavailable();
 
     return getSignedUrl(
       this.s3Client as unknown as Parameters<typeof getSignedUrl>[0],
@@ -138,19 +210,36 @@ export class LibraryBookStorageService {
   /**
    * Удаление. Молча: строка файла к этому моменту уже удалена, и оставшийся
    * в бакете объект — мусор, а не потеря. Ронять из-за него снятие файла
-   * или материала нельзя.
+   * или материала нельзя; оставшееся подберёт уборка брошенных объектов.
+   * `false` — объект остался.
    */
-  async remove(key: string): Promise<void> {
-    if (!this.s3Client || !this.bucket) return;
+  async remove(key: string): Promise<boolean> {
+    if (!this.s3Client || !this.bucket) return false;
 
     try {
       await this.s3Client.send(
         new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
       );
+      return true;
     } catch (error) {
       this.logger.warn(
         `Не удалось удалить файл книги ${key}: ${String(error)}`,
       );
+      return false;
     }
   }
+}
+
+/** Ответ «такого объекта нет» — в отличие от любого другого отказа S3. */
+export function isMissingObject(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { name, $metadata } = error as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  return (
+    name === 'NotFound' ||
+    name === 'NoSuchKey' ||
+    $metadata?.httpStatusCode === 404
+  );
 }

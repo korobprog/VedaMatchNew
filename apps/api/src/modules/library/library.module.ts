@@ -19,6 +19,7 @@ import { LibraryEntriesService } from './library-entries.service';
 import { LibraryPreferencesController } from './library-preferences.controller';
 import { LibraryPreferencesService } from './library-preferences.service';
 import { LibraryPreviewsService } from './library-previews.service';
+import { LibraryBookFilesSweeperService } from './library-book-files-sweeper.service';
 import { LibraryBookStorageService } from './library-book-storage.service';
 import { LibraryFilesService } from './library-files.service';
 import { LibraryLikesService } from './library-likes.service';
@@ -46,6 +47,7 @@ import { LibraryShlokasService } from './library-shlokas.service';
     LibraryPreferencesService,
     LibraryPreviewsService,
     LibraryBookStorageService,
+    LibraryBookFilesSweeperService,
     LibraryFilesService,
     LibraryBookmarksService,
     LibraryLikesService,

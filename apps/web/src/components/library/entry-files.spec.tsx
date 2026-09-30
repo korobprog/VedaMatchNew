@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LibraryEntryFileDto } from "@vedamatch/shared";
 import { EntryFiles } from "./entry-files";
-import { uploadBookFile } from "./book-file-upload";
+import { BookUploadError, uploadBookFile } from "./book-file-upload";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -90,6 +90,21 @@ describe("EntryFiles", () => {
       "e1",
       book,
       expect.any(Function),
+    );
+  });
+
+  it("отказ по содержимому называет словами", async () => {
+    vi.mocked(uploadBookFile).mockRejectedValueOnce(
+      new BookUploadError("book_file_content_mismatch"),
+    );
+    const user = userEvent.setup();
+    render(<EntryFiles locale="ru" entryId="e1" files={[]} canEdit />);
+    const book = new File(["%PDF"], "Гита.pdf", { type: "application/pdf" });
+
+    await user.upload(screen.getByLabelText("Прикрепить файл"), book);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Содержимое файла не соответствует его расширению",
     );
   });
 });

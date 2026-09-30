@@ -188,6 +188,10 @@ const ui = {
       "Хранилище файлов сейчас недоступно — попробуйте позже",
     "files.forbidden":
       "Прикреплять файлы может автор материала или администратор",
+    "files.storageUnavailable":
+      "Хранилище файлов не отвечает. Файл не потерян — попробуйте позже",
+    "files.contentMismatch":
+      "Содержимое файла не соответствует его расширению",
     "files.failed": "Файл не загрузился — попробуйте ещё раз",
     "files.network":
       "Связь прервалась — проверьте интернет и попробуйте ещё раз",
@@ -533,6 +537,10 @@ const ui = {
       "File storage is unavailable right now — please try later",
     "files.forbidden":
       "Files can be attached by the author of the material or an administrator",
+    "files.storageUnavailable":
+      "File storage is not responding. The file is not lost — please try later",
+    "files.contentMismatch":
+      "The contents of the file do not match its extension",
     "files.failed": "The file did not upload — please try again",
     "files.network":
       "The connection dropped — check the internet and try again",

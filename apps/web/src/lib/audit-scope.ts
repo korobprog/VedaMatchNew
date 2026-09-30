@@ -43,6 +43,8 @@ const ACTION_SERVICE: Record<AdminAuditAction, AdminServiceSlug | null> = {
   "library.entry-removed": "library",
   "library.entry-restored": "library",
   "library.author-lineage-applied": "library",
+  "library.file-added": "library",
+  "library.file-removed": "library",
   "vedabase.book-updated": "vedabase",
   "contacts.tag-created": "chat",
   "contacts.tag-updated": "chat",
