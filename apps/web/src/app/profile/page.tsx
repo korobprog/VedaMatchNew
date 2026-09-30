@@ -11,6 +11,7 @@ import { LineageBadge } from "@/components/lineage-badge";
 import { TimeZoneField } from "@/components/time-zone-field";
 import { CommunityPicker } from "@/components/communities/community-picker";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { PersonalPageLink } from "@/components/personal-page-link";
 import { ProfileAvatarButton } from "@/components/profile-avatar-button";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
@@ -64,13 +65,18 @@ export default async function ProfilePage() {
           Профиль
         </h1>
         <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
-          <div className="mb-6 flex items-center gap-4">
-            <UserAvatar
-              name={user.displayName}
-              avatarUrl={user.avatarUrl}
-              size={64}
-            />
-            <div>
+          <div className="mb-6 flex flex-wrap items-start gap-4">
+            {/* «Сменить фото» — под аватаром, слева (VED-686): на её прежнем
+                месте — вход на личную страницу. */}
+            <div className="flex flex-col items-center">
+              <UserAvatar
+                name={user.displayName}
+                avatarUrl={user.avatarUrl}
+                size={64}
+              />
+              <ProfileAvatarButton hasAvatar={Boolean(user.avatarUrl)} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
               <p className="text-lg font-semibold text-text-0">
                 {user.displayName}
               </p>
@@ -83,7 +89,9 @@ export default async function ProfilePage() {
                 <p className="text-sm text-cyan">{user.statusLine}</p>
               )}
               <p className="text-sm text-text-2">{user.email}</p>
-              <ProfileAvatarButton hasAvatar={Boolean(user.avatarUrl)} />
+              <div className="mt-2">
+                <PersonalPageLink userId={user.id} own />
+              </div>
             </div>
           </div>
           <dl className="space-y-3 text-sm">

@@ -117,6 +117,8 @@ function json(body: unknown): RequestInit {
 export interface BlogFeedFilterParams {
   category?: string | null;
   lineage?: string | null;
+  q?: string | null;
+  author?: string | null;
 }
 
 function filterQuery(
@@ -126,6 +128,8 @@ function filterQuery(
   const query = new URLSearchParams();
   if (filters.category) query.set("category", filters.category);
   if (filters.lineage) query.set("lineage", filters.lineage);
+  if (filters.q) query.set("q", filters.q);
+  if (filters.author) query.set("author", filters.author);
   if (cursor) query.set("cursor", cursor);
   return query;
 }

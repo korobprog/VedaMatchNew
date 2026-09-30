@@ -42,12 +42,16 @@ export function getBlogHomeFeed(): Promise<BlogHomeFeedResponse | null> {
 export interface BlogFeedFilterParams {
   category?: string | null;
   lineage?: string | null;
+  q?: string | null;
+  author?: string | null;
 }
 
 function filterSuffix(filters: BlogFeedFilterParams): string {
   const query = new URLSearchParams();
   if (filters.category) query.set("category", filters.category);
   if (filters.lineage) query.set("lineage", filters.lineage);
+  if (filters.q) query.set("q", filters.q);
+  if (filters.author) query.set("author", filters.author);
   return query.toString();
 }
 

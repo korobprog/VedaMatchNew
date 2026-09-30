@@ -220,6 +220,49 @@ export function blogAudienceStagesWhere(
 export interface BlogFeedFilters {
   category?: string;
   lineage?: string;
+  /** Поиск по содержанию: заголовок и текст поста (VED-687). */
+  q?: string;
+  /** Поиск по автору: мирское или духовное имя (VED-687). */
+  author?: string;
+}
+
+/** Короче двух букв поиск не сужает, а длиннее ста — не нужен. */
+export const BLOG_SEARCH_MIN = 2;
+export const BLOG_SEARCH_MAX = 100;
+
+function searchTerm(value: string | undefined): string | null {
+  const term = value?.trim().replace(/\s+/g, ' ') ?? '';
+  return term.length >= BLOG_SEARCH_MIN ? term.slice(0, BLOG_SEARCH_MAX) : null;
+}
+
+/** Поиск по содержанию поста (VED-687): заголовок или текст, без регистра. */
+export function blogSearchWhere(
+  q: string | undefined,
+): Prisma.BlogPostWhereInput | null {
+  const term = searchTerm(q);
+  if (!term) return null;
+  return {
+    OR: [
+      { title: { contains: term, mode: 'insensitive' } },
+      { text: { contains: term, mode: 'insensitive' } },
+    ],
+  };
+}
+
+/** Поиск по автору (VED-687): мирское или духовное имя, без регистра. */
+export function blogAuthorWhere(
+  author: string | undefined,
+): Prisma.BlogPostWhereInput | null {
+  const term = searchTerm(author);
+  if (!term) return null;
+  return {
+    author: {
+      OR: [
+        { name: { contains: term, mode: 'insensitive' } },
+        { spiritualName: { contains: term, mode: 'insensitive' } },
+      ],
+    },
+  };
 }
 
 /**
@@ -235,6 +278,10 @@ export function blogFilterConditions(
   if (category) conditions.push(category);
   const lineage = blogLineageWhere(filters.lineage);
   if (lineage) conditions.push(lineage);
+  const search = blogSearchWhere(filters.q);
+  if (search) conditions.push(search);
+  const author = blogAuthorWhere(filters.author);
+  if (author) conditions.push(author);
   return conditions;
 }
 

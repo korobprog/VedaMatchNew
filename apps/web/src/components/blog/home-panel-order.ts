@@ -12,7 +12,7 @@
  * календаря.
  */
 export type HomePanelButton =
-  | "calendar"
+  | "search"
   | "write"
   | "feed"
   | "favorites"
@@ -22,7 +22,7 @@ export type HomePanelButton =
   | "like";
 
 export const HOME_PANEL_DEFAULT_ORDER: readonly HomePanelButton[] = [
-  "calendar",
+  "search",
   "write",
   "feed",
   "favorites",
@@ -33,7 +33,7 @@ export const HOME_PANEL_DEFAULT_ORDER: readonly HomePanelButton[] = [
 ];
 
 export const HOME_PANEL_LABELS: Record<HomePanelButton, string> = {
-  calendar: "Вайшнавский календарь",
+  search: "Поиск по блог-ленте",
   write: "Написать пост",
   feed: "Вся лента",
   favorites: "Избранное",
@@ -54,7 +54,9 @@ export function normalizePanelOrder(raw: unknown): HomePanelButton[] {
   const seen = new Set<string>();
   const order: HomePanelButton[] = [];
   if (Array.isArray(raw)) {
-    for (const item of raw) {
+    for (const saved of raw) {
+      // «Календарь» заменён «Поиском» (VED-687) — на том же месте.
+      const item = saved === "calendar" ? "search" : saved;
       if (typeof item === "string" && known.has(item) && !seen.has(item)) {
         seen.add(item);
         order.push(item as HomePanelButton);

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import { getAdminTeamApplication, getProfile } from "@/lib/api";
@@ -19,12 +18,6 @@ export default async function AdminTeamApplicationPage({
 
   return (
     <>
-      <Link
-        href="/admin/team-applications"
-        className="mb-4 inline-block text-sm text-text-2 hover:text-text-0"
-      >
-        ← Все заявки
-      </Link>
       <TeamApplicationDetail application={application} />
     </>
   );

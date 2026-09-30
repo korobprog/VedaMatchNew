@@ -9,6 +9,7 @@ import {
   isIdLike,
   pageTitleForCrumb,
   portalBreadcrumbsHidden,
+  withoutParentSuffix,
 } from "./portal-path";
 
 const labels = (path: string, title: string | null = null) =>
@@ -258,5 +259,25 @@ describe("PORTAL_PATH_CONTAINERS", () => {
       }
     }
     expect([...PORTAL_PATH_CONTAINERS].sort()).toEqual([...containers].sort());
+  });
+});
+
+/* VED-678: «Доска — Планировщик» не повторяет «Планировщик» из пути. */
+describe("withoutParentSuffix", () => {
+  it("срезает хвост, который уже есть шагом выше", () => {
+    expect(
+      withoutParentSuffix("Доска — Планировщик", [
+        "Главная",
+        "Работа",
+        "Планировщик",
+      ]),
+    ).toBe("Доска");
+  });
+
+  it("чужой хвост и заголовок без тире не трогает", () => {
+    expect(withoutParentSuffix("Бхагавад-гита — Глава 2", ["Главная"])).toBe(
+      "Бхагавад-гита — Глава 2",
+    );
+    expect(withoutParentSuffix("Доска", ["Планировщик"])).toBe("Доска");
   });
 });

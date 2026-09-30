@@ -29,13 +29,20 @@ describe("порядок кнопок панели Блог-ленты (VED-497)
     expect(normalizePanelOrder([...saved].reverse()).at(-1)).toBe("like");
   });
 
+  it("«Календарь» заменён «Поиском» на том же месте (VED-687)", () => {
+    expect(normalizePanelOrder(["share", "calendar"]).slice(0, 2)).toEqual([
+      "share",
+      "search",
+    ]);
+  });
+
   it("сдвиг на шаг, у края — без изменений", () => {
     const order = [...HOME_PANEL_DEFAULT_ORDER];
     expect(movePanelButton(order, "write", -1).slice(0, 2)).toEqual([
       "write",
-      "calendar",
+      "search",
     ]);
-    expect(movePanelButton(order, "calendar", -1)).toEqual(order);
+    expect(movePanelButton(order, "search", -1)).toEqual(order);
     expect(movePanelButton(order, "like", 1)).toEqual(order);
   });
 });

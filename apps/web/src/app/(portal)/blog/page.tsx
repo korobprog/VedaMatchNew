@@ -80,7 +80,8 @@ export default async function BlogPage({
       <BlogFeed
         key={`${favorites ? "favorites" : "all"}:${filters.category ?? ""}:${
           filters.lineage ?? ""
-        }`}
+        }:${filters.q ?? ""}:${filters.author ?? ""}`}
+        searchOpen={first(params.search) === "1"}
         initial={feed ?? { posts: [], nextCursor: null }}
         scope={favorites ? "favorites" : "all"}
         showComposer={!favorites}

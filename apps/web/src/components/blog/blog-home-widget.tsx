@@ -9,12 +9,11 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   useTransition,
   type ReactNode,
 } from "react";
 import {
-  CalendarDays,
+  Search,
   Check,
   EyeOff,
   Heart,
@@ -37,12 +36,6 @@ import {
   fetchBlogFavorites,
   setBlogLike,
 } from "@/lib/blog-client-api";
-import {
-  VCALENDAR_URL,
-  getVcalendarButtonServerSnapshot,
-  getVcalendarButtonSnapshot,
-  subscribeVcalendarButton,
-} from "@/lib/vcalendar-button";
 import { BlogCarousel } from "./blog-carousel";
 import { BlogFitImage } from "./blog-fit-image";
 import {
@@ -102,13 +95,6 @@ export function BlogHomeWidget({
   const [favorites, setFavorites] = useState<BlogPostDto[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* «Вайшнавский календарь» (VED-489) — в свободном месте панели, у всех
-     по умолчанию; спрятать можно в настройке горячих кнопок (VED-496). */
-  const showCalendar = useSyncExternalStore(
-    subscribeVcalendarButton,
-    getVcalendarButtonSnapshot,
-    getVcalendarButtonServerSnapshot,
-  );
 
   function hide() {
     document.cookie = `${BLOG_HOME_COOKIE}=${serializeBlogHomeVisible(
@@ -222,20 +208,19 @@ export function BlogHomeWidget({
   const iconButton = `${iconShape} border-glass-brd text-text-1`;
 
   const buttons: Record<HomePanelButton, ReactNode> = {
-    calendar: showCalendar ? (
-      // Внешний сайт: `noopener`, чтобы вкладка не получила доступ к
-      // нашей через `window.opener`.
-      <a
-        href={VCALENDAR_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Вайшнавский календарь (vcalendar.ru, откроется в новой вкладке)"
-        title="Вайшнавский календарь: экадаши, посты и дни явления"
+    /* «Поиск» на месте «Календаря» (VED-687): ведёт в ленту с раскрытым
+       поиском — по содержанию, автору и духовной линии. Календарь остался
+       в горячей кнопке «Календарь». */
+    search: (
+      <Link
+        href="/blog?search=1"
+        aria-label="Поиск по блог-ленте"
+        title="Поиск по блог-ленте"
         className={`${iconButton} hover:border-cyan/60`}
       >
-        <CalendarDays aria-hidden className="size-4" />
-      </a>
-    ) : null,
+        <Search aria-hidden className="size-4" />
+      </Link>
+    ),
     /* «Написать пост» — плюсом, а не карандашом (VED-626): карандаш на
        портале означает «изменить». Цветом не выделяется (VED-630: «не надо
        выделять красным, сделай как остальные») — рамка и цвет как у

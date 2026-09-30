@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { redirectToLogin } from "@/lib/require-user";
 import { getMySupportTicket, getProfile } from "@/lib/api";
@@ -25,12 +24,6 @@ export default async function MySupportTicketPage({
       <NoiseOverlay />
       <Header user={user} />
       <main className="mx-auto max-w-3xl px-4 py-8 pb-24">
-        <Link
-          href="/support"
-          className="mb-4 inline-block text-sm text-text-2 hover:text-text-0"
-        >
-          ← Все обращения
-        </Link>
         <SupportThread ticket={ticket} mode="my" />
       </main>
     </div>

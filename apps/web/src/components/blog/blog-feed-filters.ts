@@ -19,6 +19,16 @@ import {
 export interface BlogFeedFilterValues {
   category: BlogPostCategory | null;
   lineage: LineageFilterValue | null;
+  /** Поиск по содержанию (VED-687). */
+  q?: string | null;
+  /** Поиск по автору (VED-687). */
+  author?: string | null;
+}
+
+/** Строка поиска из адреса: без лишних пробелов, не длиннее ста знаков. */
+function searchValue(value: string | undefined): string | null {
+  const term = value?.trim().replace(/\s+/g, " ").slice(0, 100) ?? "";
+  return term.length >= 2 ? term : null;
 }
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -33,9 +43,14 @@ export function parseBlogFeedFilters(
 ): BlogFeedFilterValues {
   const category = first(params.category);
   const lineage = first(params.lineage);
+  // Поиск — только когда задан: без него фильтры ровно те же, что раньше.
+  const q = searchValue(first(params.q));
+  const author = searchValue(first(params.author));
   return {
     category: isBlogPostCategory(category) ? category : null,
     lineage: isLineageFilterValue(lineage) ? lineage : null,
+    ...(q ? { q } : {}),
+    ...(author ? { author } : {}),
   };
 }
 
@@ -47,12 +62,17 @@ export function parseBlogFeedFilters(
 export function blogFeedHref(
   pathname: string,
   search: string,
-  patch: { category?: string | null; lineage?: string | null },
+  patch: {
+    category?: string | null;
+    lineage?: string | null;
+    q?: string | null;
+    author?: string | null;
+  },
 ): string {
   const next = new URLSearchParams(search);
   next.delete("cursor");
   next.delete("new");
-  for (const key of ["category", "lineage"] as const) {
+  for (const key of ["category", "lineage", "q", "author"] as const) {
     if (!(key in patch)) continue;
     const value = patch[key];
     if (value) next.set(key, value);

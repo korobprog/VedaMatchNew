@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MusicCover } from "@/components/music/music-cover";
 import { MusicPlayAllButton } from "@/components/music/player/play-all-button";
@@ -59,12 +58,6 @@ export default async function MusicPlaylistPage({
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
-      <Link
-        href="/music/playlists"
-        className="text-sm text-cyan hover:text-magenta"
-      >
-        ← Плейлисты
-      </Link>
 
       <header className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end">
         <MusicCover
