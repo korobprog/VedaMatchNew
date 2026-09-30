@@ -298,6 +298,7 @@ export function MapView() {
                     {option.label}
                     {point.city ? ` · ${point.city}` : ""}
                     {point.verified ? "" : " · не проверено"}
+                    {point.stale ? " · давно не проверялось" : ""}
                   </span>
                 </button>
                 <Link

@@ -143,6 +143,8 @@ export interface TravelMapPointDto {
   lineage: LineageId | null;
   verified: boolean;
   photoUrl: string | null;
+  /** Давно не подтверждалось — метка тусклая. */
+  stale: boolean;
 }
 
 /**
@@ -190,7 +192,59 @@ export interface TravelMapPlacesResponse {
   truncated: boolean;
 }
 
+/**
+ * Свежесть места. Народные карты умирают не от спама, а от устаревания:
+ * кафе закрылось, а метка висит. Поэтому у каждого места есть дата
+ * последнего подтверждения и число голосов «закрылось» за последние
+ * `TRAVEL_MAP_CLOSED_WINDOW_DAYS`. `stale` — подтверждений и правок не было
+ * дольше `TRAVEL_MAP_STALE_DAYS`: метка тускнеет и просит перепроверки.
+ */
+export interface TravelMapFreshnessDto {
+  lastConfirmedAt: string | null;
+  confirmations: number;
+  closedVotes: number;
+  stale: boolean;
+  /** Что отметил смотрящий, если отмечал. */
+  myVerdict: TravelMapCheckVerdict | null;
+}
+
+export const TRAVEL_MAP_CHECK_VERDICTS = ['confirmed', 'closed'] as const;
+export type TravelMapCheckVerdict = (typeof TRAVEL_MAP_CHECK_VERDICTS)[number];
+
+export const TRAVEL_MAP_CHECK_VERDICT_LABELS: Record<TravelMapCheckVerdict, string> =
+  {
+    confirmed: 'Был здесь, всё верно',
+    closed: 'Закрылось или переехало',
+  };
+
+export const TRAVEL_MAP_STALE_DAYS = 365;
+export const TRAVEL_MAP_CLOSED_WINDOW_DAYS = 90;
+/** Столько разных людей отметили «закрылось» — заводится жалоба админу. */
+export const TRAVEL_MAP_CLOSED_VOTES_TO_REPORT = 2;
+
+export interface CheckTravelMapPlaceRequest {
+  verdict: TravelMapCheckVerdict;
+}
+
+/** Короткая полезная заметка к месту: лайфхак, «вход со двора», «прасад по воскресеньям». */
+export interface TravelMapNoteDto {
+  id: string;
+  placeId: string;
+  text: string;
+  author: TravelMapAuthorDto | null;
+  canDelete: boolean;
+  createdAt: string;
+}
+
+export const TRAVEL_MAP_NOTE_TEXT_MAX = 1000;
+export const TRAVEL_MAP_NOTES_PER_PLACE = 50;
+
+export interface CreateTravelMapNoteRequest {
+  text: string;
+}
+
 export interface TravelMapPlaceDto extends TravelMapPointDto {
+  freshness: TravelMapFreshnessDto;
   description: string;
   address: string;
   country: string | null;

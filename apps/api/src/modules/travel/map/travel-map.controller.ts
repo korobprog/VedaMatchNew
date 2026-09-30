@@ -100,4 +100,39 @@ export class TravelMapController {
     await this.map.reportPlace(user, id, body);
     return { ok: true };
   }
+
+  @Post('places/:id/check')
+  @HttpCode(200)
+  check(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.map.checkPlace(user, id, body);
+  }
+
+  @Get('places/:id/notes')
+  listNotes(@CurrentUser() user: AccessTokenPayload, @Param('id') id: string) {
+    return this.map.listNotes(user, id);
+  }
+
+  @Post('places/:id/notes')
+  @Throttle({ default: { limit: 30, ttl: 60 * 60_000 } })
+  addNote(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.map.addNote(user, id, body);
+  }
+
+  @Delete('places/:id/notes/:noteId')
+  @HttpCode(204)
+  async deleteNote(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('noteId') noteId: string,
+  ) {
+    await this.map.deleteNote(user, id, noteId);
+  }
 }

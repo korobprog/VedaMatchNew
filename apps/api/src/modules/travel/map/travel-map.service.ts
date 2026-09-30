@@ -7,11 +7,18 @@ import {
 import { Prisma } from '@prisma/client';
 import {
   resolveDisplayName,
+  TRAVEL_MAP_CHECK_VERDICTS,
+  TRAVEL_MAP_CLOSED_VOTES_TO_REPORT,
+  TRAVEL_MAP_NOTE_TEXT_MAX,
+  TRAVEL_MAP_NOTES_PER_PLACE,
   TRAVEL_MAP_PLACE_PHOTOS_MAX,
   type AccessTokenPayload,
   type LineageId,
   type TravelMapAuthorDto,
+  type TravelMapCheckVerdict,
   type TravelMapCommunityPointDto,
+  type TravelMapFreshnessDto,
+  type TravelMapNoteDto,
   type TravelMapPlaceDto,
   type TravelMapPlacesResponse,
   type TravelMapPointDto,
@@ -20,6 +27,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { isAdmin } from '../is-admin';
+import { buildFreshness, closedWindowStart, isStale } from './map-freshness';
 import {
   parseCreatePlaceInput,
   parseHideReason,
@@ -60,7 +68,17 @@ const pointSelect = {
   lineage: true,
   verifiedAt: true,
   photoUrls: true,
+  // Для признака `stale`: метка тускнеет, когда ни подтверждений, ни правок.
+  lastConfirmedAt: true,
+  updatedAt: true,
 } as const;
+
+/** Причина автоматической жалобы, заведённой голосами «закрылось». */
+const CLOSED_AUTO_REPORT_REASON =
+  'Несколько человек отметили: место закрылось или переехало';
+
+const noteInclude = { author: { select: userSelect } } as const;
+type NoteRow = Prisma.TravelMapNoteGetPayload<{ include: typeof noteInclude }>;
 
 const placeInclude = { createdBy: { select: userSelect } } as const;
 
@@ -92,7 +110,36 @@ function pointOf(row: PointRow): TravelMapPointDto {
     lineage: row.lineage as LineageId | null,
     verified: row.verifiedAt != null,
     photoUrl: row.photoUrls[0] ?? null,
+    stale: isStale(new Date(), row),
   };
+}
+
+function parseVerdict(body: unknown): TravelMapCheckVerdict {
+  const raw =
+    body && typeof body === 'object'
+      ? (body as Record<string, unknown>).verdict
+      : undefined;
+  const verdict = TRAVEL_MAP_CHECK_VERDICTS.find((v) => v === raw);
+  if (!verdict) {
+    throw new BadRequestException(
+      'Отметка должна быть «был здесь» или «закрылось»',
+    );
+  }
+  return verdict;
+}
+
+function parseNoteText(body: unknown): string {
+  const raw =
+    body && typeof body === 'object'
+      ? (body as Record<string, unknown>).text
+      : undefined;
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (text.length < 2 || text.length > TRAVEL_MAP_NOTE_TEXT_MAX) {
+    throw new BadRequestException(
+      `Заметка — от 2 до ${TRAVEL_MAP_NOTE_TEXT_MAX} символов`,
+    );
+  }
+  return text;
 }
 
 @Injectable()
@@ -267,7 +314,7 @@ export class TravelMapService {
     if (!row || (row.status === 'hidden' && !this.canEdit(viewer, row))) {
       throw new NotFoundException('Место не найдено');
     }
-    return this.toPlaceDto(viewer, row);
+    return this.toPlaceDto(viewer, row, await this.loadFreshness(viewer, row));
   }
 
   // ===== Запись =====
@@ -281,7 +328,8 @@ export class TravelMapService {
       data: { ...data, createdById: viewer.sub },
       include: placeInclude,
     });
-    return this.toPlaceDto(viewer, row);
+    // Только что созданное место ничьих отметок не имеет: запросы не нужны.
+    return this.toPlaceDto(viewer, row, this.emptyFreshness(row));
   }
 
   async updatePlace(
@@ -296,7 +344,7 @@ export class TravelMapService {
       data,
       include: placeInclude,
     });
-    return this.toPlaceDto(viewer, row);
+    return this.toPlaceDto(viewer, row, await this.loadFreshness(viewer, row));
   }
 
   async deletePlace(viewer: AccessTokenPayload, id: string): Promise<void> {
@@ -325,7 +373,7 @@ export class TravelMapService {
       data: { photoKeys: { push: key }, photoUrls: { push: url } },
       include: placeInclude,
     });
-    return this.toPlaceDto(viewer, row);
+    return this.toPlaceDto(viewer, row, await this.loadFreshness(viewer, row));
   }
 
   async removePhoto(
@@ -351,7 +399,7 @@ export class TravelMapService {
       include: placeInclude,
     });
     await this.photos.remove(key);
-    return this.toPlaceDto(viewer, row);
+    return this.toPlaceDto(viewer, row, await this.loadFreshness(viewer, row));
   }
 
   async reportPlace(
@@ -375,6 +423,150 @@ export class TravelMapService {
     await this.prisma.travelMapPlaceReport.create({
       data: { placeId: id, reporterId: viewer.sub, reason },
     });
+  }
+
+  // ===== Свежесть: «был здесь» =====
+
+  async checkPlace(
+    viewer: AccessTokenPayload,
+    placeId: string,
+    body: unknown,
+  ): Promise<TravelMapFreshnessDto> {
+    const verdict = parseVerdict(body);
+    const place = await this.requireVisible(viewer, placeId);
+    const now = new Date();
+
+    // Одна отметка на человека: смена «закрылось» на «был» перезаписывает,
+    // а не копит голоса.
+    await this.prisma.travelMapCheck.upsert({
+      where: { placeId_userId: { placeId, userId: viewer.sub } },
+      create: { placeId, userId: viewer.sub, verdict },
+      update: { verdict },
+    });
+
+    let lastConfirmedAt = place.lastConfirmedAt;
+    if (verdict === 'confirmed') {
+      await this.prisma.travelMapPlace.update({
+        where: { id: placeId },
+        data: { lastConfirmedAt: now },
+      });
+      lastConfirmedAt = now;
+    }
+
+    const closedVotes = await this.countClosedVotes(placeId, now);
+    // Ровно порог, а не «не меньше»: третий и следующие голоса не должны
+    // плодить жалобы. Открытая жалоба системы — вторая защита от дубля.
+    if (
+      verdict === 'closed' &&
+      closedVotes === TRAVEL_MAP_CLOSED_VOTES_TO_REPORT
+    ) {
+      const open = await this.prisma.travelMapPlaceReport.findFirst({
+        where: { placeId, reporterId: null, status: 'open' },
+        select: { id: true },
+      });
+      if (!open) {
+        await this.prisma.travelMapPlaceReport.create({
+          data: {
+            placeId,
+            reporterId: null,
+            reason: CLOSED_AUTO_REPORT_REASON,
+          },
+        });
+      }
+    }
+
+    const confirmations = await this.prisma.travelMapCheck.count({
+      where: { placeId, verdict: 'confirmed' },
+    });
+    return buildFreshness(
+      {
+        lastConfirmedAt,
+        updatedAt: place.updatedAt,
+        confirmations,
+        closedVotes,
+        myVerdict: verdict,
+      },
+      now,
+    );
+  }
+
+  // ===== Заметки =====
+
+  async listNotes(
+    viewer: AccessTokenPayload,
+    placeId: string,
+  ): Promise<TravelMapNoteDto[]> {
+    await this.requireVisible(viewer, placeId);
+    const rows = await this.prisma.travelMapNote.findMany({
+      where: { placeId },
+      include: noteInclude,
+      orderBy: { createdAt: 'desc' },
+      take: TRAVEL_MAP_NOTES_PER_PLACE,
+    });
+    return rows.map((row) => this.noteOf(viewer, row));
+  }
+
+  async addNote(
+    viewer: AccessTokenPayload,
+    placeId: string,
+    body: unknown,
+  ): Promise<TravelMapNoteDto> {
+    const text = parseNoteText(body);
+    await this.requireVisible(viewer, placeId);
+    const row = await this.prisma.travelMapNote.create({
+      data: { placeId, authorId: viewer.sub, text },
+      include: noteInclude,
+    });
+    return this.noteOf(viewer, row);
+  }
+
+  async deleteNote(
+    viewer: AccessTokenPayload,
+    placeId: string,
+    noteId: string,
+  ): Promise<void> {
+    const note = await this.prisma.travelMapNote.findUnique({
+      where: { id: noteId },
+      select: { id: true, placeId: true, authorId: true },
+    });
+    // Заметка из другого места — та же «не найдена»: путь не должен
+    // позволять удалять чужое, подставив свой placeId.
+    if (!note || note.placeId !== placeId) {
+      throw new NotFoundException('Заметка не найдена');
+    }
+    if (note.authorId !== viewer.sub && !isAdmin(viewer)) {
+      throw new ForbiddenException('Удалить заметку может только её автор');
+    }
+    await this.prisma.travelMapNote.delete({ where: { id: noteId } });
+  }
+
+  private noteOf(viewer: AccessTokenPayload, row: NoteRow): TravelMapNoteDto {
+    return {
+      id: row.id,
+      placeId: row.placeId,
+      text: row.text,
+      author: authorOf(row.author),
+      canDelete: row.authorId === viewer.sub || isAdmin(viewer),
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  /** Место, которое смотрящий вправе видеть: спрятанное — только автору и админу. */
+  private async requireVisible(viewer: AccessTokenPayload, id: string) {
+    const row = await this.prisma.travelMapPlace.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        createdById: true,
+        lastConfirmedAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!row || (row.status === 'hidden' && !this.canEdit(viewer, row))) {
+      throw new NotFoundException('Место не найдено');
+    }
+    return row;
   }
 
   // ===== Администрация =====
@@ -402,7 +594,11 @@ export class TravelMapService {
       orderBy: { createdAt: 'desc' },
       take: ADMIN_PLACES_LIMIT,
     });
-    return rows.map((row) => this.toPlaceDto(viewer, row));
+    // Список админки — обзор, а не карточка: счётчики отметок здесь не
+    // показываются, лишние запросы на 200 строк ни к чему.
+    return rows.map((row) =>
+      this.toPlaceDto(viewer, row, this.emptyFreshness(row)),
+    );
   }
 
   async adminVerify(
@@ -527,16 +723,56 @@ export class TravelMapService {
       data,
       include: placeInclude,
     });
-    return this.toPlaceDto(viewer, row);
+    return this.toPlaceDto(viewer, row, await this.loadFreshness(viewer, row));
+  }
+
+  private emptyFreshness(row: PlaceRow): TravelMapFreshnessDto {
+    return buildFreshness(
+      { ...row, confirmations: 0, closedVotes: 0, myVerdict: null },
+      new Date(),
+    );
+  }
+
+  private async loadFreshness(
+    viewer: AccessTokenPayload,
+    row: PlaceRow,
+  ): Promise<TravelMapFreshnessDto> {
+    const now = new Date();
+    const [confirmations, closedVotes, mine] = await Promise.all([
+      this.prisma.travelMapCheck.count({
+        where: { placeId: row.id, verdict: 'confirmed' },
+      }),
+      this.countClosedVotes(row.id, now),
+      this.prisma.travelMapCheck.findUnique({
+        where: { placeId_userId: { placeId: row.id, userId: viewer.sub } },
+        select: { verdict: true },
+      }),
+    ]);
+    return buildFreshness(
+      { ...row, confirmations, closedVotes, myVerdict: mine?.verdict ?? null },
+      now,
+    );
+  }
+
+  private countClosedVotes(placeId: string, now: Date): Promise<number> {
+    return this.prisma.travelMapCheck.count({
+      where: {
+        placeId,
+        verdict: 'closed',
+        updatedAt: { gte: closedWindowStart(now) },
+      },
+    });
   }
 
   private toPlaceDto(
     viewer: AccessTokenPayload,
     row: PlaceRow,
+    freshness: TravelMapFreshnessDto,
   ): TravelMapPlaceDto {
     const author = this.canEdit(viewer, row);
     return {
       ...pointOf(row),
+      freshness,
       description: row.description,
       address: row.address,
       country: row.country,

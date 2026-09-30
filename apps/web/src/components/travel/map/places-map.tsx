@@ -252,6 +252,7 @@ export function PlacesMap({
         const classes = [
           "travel-map-pin",
           point.verified ? "" : "travel-map-pin--unverified",
+          point.stale ? "travel-map-pin--stale" : "",
           point.id === activeId ? "travel-map-pin--active" : "",
         ]
           .filter(Boolean)
@@ -260,13 +261,13 @@ export function PlacesMap({
           icon: L.divIcon({
             className: "",
             html:
-              `<span class="${classes}">` +
+              `<span class="${classes}"${point.stale ? ' title="Давно не проверялось"' : ""}>` +
               `<span aria-hidden="true">${option.icon}</span>` +
               `<span class="travel-map-pin__label">${escapeHtml(point.name)}</span></span>`,
             iconSize: [0, 0],
             iconAnchor: [0, 0],
           }),
-          alt: `${option.label}: ${point.name}${point.verified ? "" : ", не проверено"}`,
+          alt: `${option.label}: ${point.name}${point.verified ? "" : ", не проверено"}${point.stale ? ", давно не проверялось" : ""}`,
           keyboard: true,
           zIndexOffset: point.id === activeId ? 1000 : 0,
         })

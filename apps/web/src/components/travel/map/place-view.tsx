@@ -5,17 +5,28 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   LINEAGES,
+  TRAVEL_MAP_CHECK_VERDICTS,
+  TRAVEL_MAP_CHECK_VERDICT_LABELS,
+  TRAVEL_MAP_NOTE_TEXT_MAX,
   TRAVEL_MAP_PLACE_PHOTOS_MAX,
   travelMapPlaceKindOption,
+  type TravelMapCheckVerdict,
+  type TravelMapFreshnessDto,
+  type TravelMapNoteDto,
   type TravelMapPlaceDto,
 } from "@vedamatch/shared";
 import {
+  addTravelMapNote,
+  checkTravelMapPlace,
+  deleteTravelMapNote,
+  getTravelMapNotes,
   deleteTravelMapPhoto,
   deleteTravelMapPlace,
   getTravelMapPlace,
   reportTravelMapPlace,
   uploadTravelMapPhoto,
 } from "@/lib/travel-map-api";
+import { closedWarning, freshnessLabel } from "./map-freshness";
 import { PlacesMap } from "./places-map";
 
 const buttonClass =
@@ -34,14 +45,35 @@ export function PlaceView({ id }: { id: string }) {
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const [freshness, setFreshness] = useState<TravelMapFreshnessDto | null>(null);
+  const [notes, setNotes] = useState<TravelMapNoteDto[] | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [notesError, setNotesError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     getTravelMapPlace(id, controller.signal)
-      .then(setPlace)
+      .then((loaded) => {
+        setPlace(loaded);
+        setFreshness(loaded.freshness);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setError(cause instanceof Error ? cause.message : "Не загрузилось");
+      });
+    return () => controller.abort();
+  }, [id]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getTravelMapNotes(id, controller.signal)
+      .then(setNotes)
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setNotes([]);
+        setNotesError(
+          cause instanceof Error ? cause.message : "Заметки не загрузились",
+        );
       });
     return () => controller.abort();
   }, [id]);
@@ -73,6 +105,8 @@ export function PlaceView({ id }: { id: string }) {
     );
   }
 
+  const currentFreshness = freshness ?? place.freshness;
+  const warning = closedWarning(currentFreshness);
   const option = travelMapPlaceKindOption(place.kind);
   const lineage = place.lineage
     ? LINEAGES.find((item) => item.id === place.lineage)
@@ -111,6 +145,46 @@ export function PlaceView({ id }: { id: string }) {
           </span>
         ) : null}
       </p>
+
+      <section aria-labelledby="freshness-heading" className="mt-4">
+        <h2 id="freshness-heading" className="sr-only">
+          Свежесть данных
+        </h2>
+        <p className="text-sm text-text-1">
+          {freshnessLabel(currentFreshness, new Date())}
+        </p>
+        {warning ? (
+          <p
+            role="status"
+            className="mt-2 rounded-xl border border-gold bg-bg-1 p-3 text-sm text-text-0"
+          >
+            {warning}
+          </p>
+        ) : null}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {TRAVEL_MAP_CHECK_VERDICTS.map((verdict: TravelMapCheckVerdict) => {
+            const active = currentFreshness.myVerdict === verdict;
+            return (
+              <button
+                key={verdict}
+                type="button"
+                aria-pressed={active}
+                disabled={busy}
+                onClick={() =>
+                  run(async () =>
+                    setFreshness(await checkTravelMapPlace(id, verdict)),
+                  )
+                }
+                className={`${buttonClass} disabled:opacity-60 ${
+                  active ? "border-cyan bg-bg-2 text-text-0" : ""
+                }`}
+              >
+                {TRAVEL_MAP_CHECK_VERDICT_LABELS[verdict]}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {place.photoUrls.length > 0 ? (
         <ul className="mt-4 flex gap-3 overflow-x-auto" aria-label="Фотографии">
@@ -251,6 +325,102 @@ export function PlaceView({ id }: { id: string }) {
           Показать на карте
         </Link>
       </div>
+
+
+      <section aria-labelledby="notes-heading" className="mt-8">
+        <h2 id="notes-heading" className="font-display text-xl text-text-0">
+          Заметки
+        </h2>
+        {notesError ? (
+          <p role="alert" className="mt-2 text-sm text-magenta">
+            {notesError}
+          </p>
+        ) : null}
+        {notes === null ? (
+          <p role="status" className="mt-2 text-sm text-text-2">
+            Загружаем заметки…
+          </p>
+        ) : notes.length === 0 ? (
+          <p className="mt-2 text-sm text-text-2">
+            Заметок пока нет — напишите первую: где вход, когда прасад, что взять
+            с собой.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {notes.map((note) => (
+              <li
+                key={note.id}
+                className="rounded-2xl border border-glass-brd bg-bg-1 p-3"
+              >
+                <p className="whitespace-pre-line text-sm text-text-0">
+                  {note.text}
+                </p>
+                <p className="mt-1 text-xs text-text-2">
+                  {note.author
+                    ? `${note.author.name}${note.author.isAgent ? " · ИИ" : ""}`
+                    : "Автор удалён"}
+                  {" · "}
+                  {new Date(note.createdAt).toLocaleDateString("ru-RU")}
+                </p>
+                {note.canDelete ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!window.confirm("Удалить заметку?")) return;
+                      void run(async () => {
+                        await deleteTravelMapNote(id, note.id);
+                        setNotes((list) =>
+                          (list ?? []).filter((item) => item.id !== note.id),
+                        );
+                      });
+                    }}
+                    className="mt-1 text-xs text-magenta underline"
+                  >
+                    Удалить
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        <form
+          className="mt-3 space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = noteText.trim();
+            if (!text) return;
+            void run(async () => {
+              const created = await addTravelMapNote(id, text);
+              setNotes((list) => [created, ...(list ?? [])]);
+              setNoteText("");
+            });
+          }}
+        >
+          <label className="flex flex-col gap-1 text-xs text-text-2">
+            Новая заметка
+            <textarea
+              rows={3}
+              maxLength={TRAVEL_MAP_NOTE_TEXT_MAX}
+              value={noteText}
+              onChange={(event) => setNoteText(event.target.value)}
+              className="w-full rounded-xl border border-glass-brd bg-bg-0 px-3 py-2 text-sm text-text-0"
+            />
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={busy || !noteText.trim()}
+              className={`${buttonClass} disabled:opacity-60`}
+            >
+              Добавить заметку
+            </button>
+            <span className="text-xs text-text-2">
+              {noteText.length}/{TRAVEL_MAP_NOTE_TEXT_MAX}
+            </span>
+          </div>
+        </form>
+      </section>
 
       {error ? (
         <p role="alert" className="mt-4 text-sm text-magenta">
