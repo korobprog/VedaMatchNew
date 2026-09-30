@@ -489,6 +489,7 @@ model User {
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
+  blogAuthorProfile                  BlogAuthorProfile?
   blogFavorites                      BlogFavorite[]
   blogLikes                          BlogLike[]
 
@@ -7385,6 +7386,15 @@ model BlogSettings {
   /// (VED-446: по умолчанию без срока).
   feedLifetimeHours Int      @default(0)
   updatedAt         DateTime @updatedAt
+}
+
+/// Личная страница автора (VED-686): «О себе». Строки нет — автор ещё
+/// ничего о себе не написал.
+model BlogAuthorProfile {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  about     String
+  updatedAt DateTime @updatedAt
 }
 
 // ===== Групповые звонки в беседах (VED-293) =====

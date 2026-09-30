@@ -12,6 +12,7 @@ import {
   resolveMaterialFilters,
   toAudienceStages,
   toLineageId,
+  type BlogAboutResponse,
   type BlogAuthorDto,
   type BlogAuthorFeedResponse,
   type BlogFavoriteResponse,
@@ -62,6 +63,7 @@ import {
   planBlogMedia,
 } from './blog-media-rules';
 import { BlogVideoService } from './blog-video.service';
+import { parseBlogAbout } from './blog-about';
 import {
   clampFeedLifetimeHours,
   feedUntilFrom,
@@ -310,7 +312,7 @@ export class BlogService {
       ? { AND: [base, blogCursorFilter(decoded)] }
       : base;
 
-    const [rows, total] = await Promise.all([
+    const [rows, total, profile] = await Promise.all([
       this.prisma.blogPost.findMany({
         where,
         select: postSelect(viewer.userId),
@@ -318,6 +320,10 @@ export class BlogService {
         take: BLOG_PAGE_SIZE + 1,
       }),
       this.prisma.blogPost.count({ where: base }),
+      this.prisma.blogAuthorProfile.findUnique({
+        where: { userId: authorId },
+        select: { about: true },
+      }),
     ]);
 
     const page = takeBlogPage(rows);
@@ -326,7 +332,23 @@ export class BlogService {
       posts: await this.postDtos(page.items, viewer, now),
       nextCursor: page.nextCursor,
       total,
+      about: profile?.about ?? null,
     };
+  }
+
+  /** «О себе» на своей личной странице (VED-686); пустое — стирает. */
+  async updateAbout(userId: string, body: unknown): Promise<BlogAboutResponse> {
+    const about = parseBlogAbout(body);
+    if (about === null) {
+      await this.prisma.blogAuthorProfile.deleteMany({ where: { userId } });
+    } else {
+      await this.prisma.blogAuthorProfile.upsert({
+        where: { userId },
+        create: { userId, about },
+        update: { about },
+      });
+    }
+    return { about };
   }
 
   async post(

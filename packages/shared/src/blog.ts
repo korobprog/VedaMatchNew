@@ -15,6 +15,8 @@ import type { LINEAGE_ALL, LineageId } from './lineage';
 
 /** Заголовок поста: он виден в ленте рядом с картинкой, поэтому короткий. */
 export const BLOG_POST_TITLE_MAX_LENGTH = 120;
+/** «О себе» на личной странице автора (VED-686). */
+export const BLOG_ABOUT_MAX_LENGTH = 2000;
 /**
  * Текст поста (VED-371).
  *
@@ -259,6 +261,17 @@ export interface BlogAuthorFeedResponse extends BlogFeedResponse {
   author: BlogAuthorDto;
   /** Сколько всего постов у автора. */
   total: number;
+  /** «О себе» с личной страницы (VED-686); null — не заполнено. */
+  about: string | null;
+}
+
+/** Правка «О себе» (VED-686); пустая строка стирает текст. */
+export interface UpdateBlogAboutRequest {
+  about: string;
+}
+
+export interface BlogAboutResponse {
+  about: string | null;
 }
 
 /** Ответ на «Нравится» и его снятие (VED-505): отметка и новое число. */

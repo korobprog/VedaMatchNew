@@ -106,6 +106,12 @@ export class BlogController {
     });
   }
 
+  /** «О себе» на своей личной странице (VED-686). */
+  @Put('authors/me/about')
+  updateAbout(@CurrentUser() user: AccessTokenPayload, @Body() body: unknown) {
+    return this.blog.updateAbout(user.sub, body);
+  }
+
   @Get('authors/:authorId')
   authorFeed(
     @CurrentUser() user: AccessTokenPayload,
