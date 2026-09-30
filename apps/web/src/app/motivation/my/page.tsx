@@ -12,6 +12,7 @@ import { PostcardButton } from "@/components/motivation/postcard-button";
 import { DeleteOwnReelButton } from "@/components/motivation/delete-own-reel";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
+import { displayImageUrl } from "@/components/motivation/display-image";
 
 const stageLabels: Record<MotivationReelStage, { text: string; tone: string }> = {
   ai_review: { text: "Проверка", tone: "bg-magenta/10 text-magenta border-magenta/40" },
@@ -91,7 +92,7 @@ function ReelCard({ reel }: { reel: MotivationReelDto }) {
     <Link href={href} className="glass flex gap-4 rounded-2xl p-4 transition hover:bg-glass">
       {reel.post.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={reel.post.imageUrl} alt="" className="h-24 w-20 flex-none rounded-xl object-cover" />
+        <img src={displayImageUrl(reel.post)} alt="" className="h-24 w-20 flex-none rounded-xl object-cover" />
       ) : (
         <div aria-hidden="true" className="h-24 w-20 flex-none rounded-xl bg-bg-2" />
       )}

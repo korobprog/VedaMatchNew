@@ -9,6 +9,7 @@ import Redis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   backfillThumbKey,
+  backfillWebKey,
   MAX_THUMB_ATTEMPTS,
   THUMB_RETRY_PAUSE_MS,
 } from './image-thumb';
@@ -28,9 +29,45 @@ export interface ThumbBatchResult {
 interface ThumbCandidate {
   id: string;
   imageUrl: string | null;
-  imageThumbAttempts: number;
+  /** Сколько попыток уже потрачено на копию этого прохода. */
+  attempts: number;
   updatedAt: Date;
 }
+
+/**
+ * Описание прохода бэкфилла: какие поля поста он ведёт и чем делает копию.
+ * Превью и web-копия устроены одинаково и различаются только этим.
+ */
+interface BackfillPass {
+  label: string;
+  url: 'imageThumbUrl' | 'imageWebUrl';
+  attempts: 'imageThumbAttempts' | 'imageWebAttempts';
+  attemptAt: 'imageThumbAttemptAt' | 'imageWebAttemptAt';
+  key: typeof backfillThumbKey;
+  upload: (
+    thumbs: MotivationImageThumbService,
+    key: string,
+    bytes: Buffer,
+  ) => Promise<string>;
+}
+
+const THUMB_PASS: BackfillPass = {
+  label: 'thumb',
+  url: 'imageThumbUrl',
+  attempts: 'imageThumbAttempts',
+  attemptAt: 'imageThumbAttemptAt',
+  key: backfillThumbKey,
+  upload: (thumbs, key, bytes) => thumbs.upload(key, bytes),
+};
+
+const WEB_PASS: BackfillPass = {
+  label: 'web copy',
+  url: 'imageWebUrl',
+  attempts: 'imageWebAttempts',
+  attemptAt: 'imageWebAttemptAt',
+  key: backfillWebKey,
+  upload: (thumbs, key, bytes) => thumbs.uploadWeb(key, bytes),
+};
 
 /**
  * Бэкфилл лёгких копий иллюстраций (VED-629).
@@ -110,6 +147,9 @@ export class MotivationThumbWorkerService
     }
     try {
       await this.runBatch();
+      // Web-копии — после превью: превью нужнее (им пользуются слайды
+      // викторины), и сбой одной пачки не должен мешать другой.
+      await this.runWebBatch();
     } catch (error) {
       this.logger.error(
         'Motivation thumb worker tick failed',
@@ -130,23 +170,38 @@ export class MotivationThumbWorkerService
   }
 
   /**
-   * Одна пачка. Пост без копии берётся, пока не кончились попытки и с
+   * Одна пачка превью. Пост без копии берётся, пока не кончились попытки и с
    * прошлой прошла пауза: отметка ставится при клейме, так что пост,
    * брошенный упавшим процессом, сам вернётся в очередь по её истечении.
    */
-  async runBatch(now = new Date()): Promise<ThumbBatchResult> {
+  runBatch(now = new Date()): Promise<ThumbBatchResult> {
+    return this.runPass(THUMB_PASS, now);
+  }
+
+  /**
+   * Одна пачка web-копий: те же правила, что у превью, но свои поля попыток —
+   * неудача одной копии не отнимает попытки у другой.
+   */
+  runWebBatch(now = new Date()): Promise<ThumbBatchResult> {
+    return this.runPass(WEB_PASS, now);
+  }
+
+  private async runPass(
+    pass: BackfillPass,
+    now: Date,
+  ): Promise<ThumbBatchResult> {
     const result: ThumbBatchResult = { done: 0, failed: 0, skipped: 0 };
     const base = this.publicBase();
     if (!base) return result;
-    const posts: ThumbCandidate[] = await this.prisma.motivationPost.findMany({
+    const posts = (await this.prisma.motivationPost.findMany({
       where: {
         imageUrl: { not: null },
-        imageThumbUrl: null,
-        imageThumbAttempts: { lt: MAX_THUMB_ATTEMPTS },
+        [pass.url]: null,
+        [pass.attempts]: { lt: MAX_THUMB_ATTEMPTS },
         OR: [
-          { imageThumbAttemptAt: null },
+          { [pass.attemptAt]: null },
           {
-            imageThumbAttemptAt: {
+            [pass.attemptAt]: {
               lt: new Date(now.getTime() - THUMB_RETRY_PAUSE_MS),
             },
           },
@@ -162,18 +217,25 @@ export class MotivationThumbWorkerService
       select: {
         id: true,
         imageUrl: true,
-        imageThumbAttempts: true,
+        [pass.attempts]: true,
         updatedAt: true,
       },
-    });
-    for (const post of posts) {
-      const outcome = await this.process(post, base, now);
+    })) as unknown as Array<Record<string, unknown>>;
+    for (const row of posts) {
+      const post: ThumbCandidate = {
+        id: row.id as string,
+        imageUrl: row.imageUrl as string | null,
+        attempts: row[pass.attempts] as number,
+        updatedAt: row.updatedAt as Date,
+      };
+      const outcome = await this.process(pass, post, base, now);
       result[outcome] += 1;
     }
     return result;
   }
 
   private async process(
+    pass: BackfillPass,
     post: ThumbCandidate,
     base: string,
     now: Date,
@@ -184,13 +246,13 @@ export class MotivationThumbWorkerService
       where: {
         id: post.id,
         imageUrl,
-        imageThumbUrl: null,
-        imageThumbAttempts: post.imageThumbAttempts,
+        [pass.url]: null,
+        [pass.attempts]: post.attempts,
         updatedAt: post.updatedAt,
       },
       data: {
-        imageThumbAttempts: { increment: 1 },
-        imageThumbAttemptAt: now,
+        [pass.attempts]: { increment: 1 },
+        [pass.attemptAt]: now,
         updatedAt: post.updatedAt,
       },
     });
@@ -202,17 +264,18 @@ export class MotivationThumbWorkerService
       if (!response.ok)
         throw new Error(`image fetch failed: ${response.status}`);
       const bytes = Buffer.from(await response.arrayBuffer());
-      const thumbUrl = await this.thumbs.upload(
-        backfillThumbKey(imageUrl, base, post.id, now.getTime()),
+      const copyUrl = await pass.upload(
+        this.thumbs,
+        pass.key(imageUrl, base, post.id, now.getTime()),
         bytes,
       );
-      return (await this.writeThumb(post.id, imageUrl, thumbUrl))
+      return (await this.writeCopy(pass, post.id, imageUrl, copyUrl))
         ? 'done'
         : 'skipped';
     } catch (error) {
       this.logger.warn(
-        `Unable to backfill image thumb for ${post.id} (attempt ${
-          post.imageThumbAttempts + 1
+        `Unable to backfill image ${pass.label} for ${post.id} (attempt ${
+          post.attempts + 1
         }/${MAX_THUMB_ATTEMPTS}): ${String(error)}`,
       );
       return 'failed';
@@ -224,25 +287,27 @@ export class MotivationThumbWorkerService
    * точной: если пост между чтением и записью поменяли, перечитываем и
    * пробуем снова. Сменилась сама картинка — копия уже не её, не пишем.
    */
-  private async writeThumb(
+  private async writeCopy(
+    pass: BackfillPass,
     id: string,
     imageUrl: string,
-    thumbUrl: string,
+    copyUrl: string,
   ): Promise<boolean> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const row = await this.prisma.motivationPost.findUnique({
+      const row = (await this.prisma.motivationPost.findUnique({
         where: { id },
-        select: { imageUrl: true, imageThumbUrl: true, updatedAt: true },
-      });
-      if (!row || row.imageUrl !== imageUrl || row.imageThumbUrl) return false;
+        select: { imageUrl: true, [pass.url]: true, updatedAt: true },
+      })) as unknown as Record<string, unknown> | null;
+      if (!row || row.imageUrl !== imageUrl || row[pass.url]) return false;
+      const rowUpdatedAt = row.updatedAt as Date;
       const written = await this.prisma.motivationPost.updateMany({
         where: {
           id,
           imageUrl,
-          imageThumbUrl: null,
-          updatedAt: row.updatedAt,
+          [pass.url]: null,
+          updatedAt: rowUpdatedAt,
         },
-        data: { imageThumbUrl: thumbUrl, updatedAt: row.updatedAt },
+        data: { [pass.url]: copyUrl, updatedAt: rowUpdatedAt },
       });
       if (written.count) return true;
     }

@@ -78,6 +78,7 @@ import { PROVIDER_BUSY } from './motivation-worker.service';
 import {
   MotivationImageThumbService,
   thumbFields,
+  webFields,
 } from './motivation-image-thumb.service';
 
 const LANGUAGES: readonly MotivationLanguage[] = ['ru', 'en', 'hi'];
@@ -386,7 +387,7 @@ export class MotivationReelsService {
         'Рилс уже опубликован: картинку можно поменять только до публикации',
       );
 
-    const { url, thumbUrl, crop } = await this.prepareUploadedImage(
+    const { url, thumbUrl, webUrl, crop } = await this.prepareUploadedImage(
       postId,
       file!,
     );
@@ -401,6 +402,7 @@ export class MotivationReelsService {
       data: {
         imageUrl: url,
         ...thumbFields(thumbUrl),
+        ...webFields(webUrl),
         // Кадр для Stories пока тот же файл: он уже вертикальный.
         storyImageUrl: url,
         imageSource: 'uploaded',
@@ -462,7 +464,7 @@ export class MotivationReelsService {
     });
     if (!post) throw new NotFoundException('Публикация не найдена');
 
-    const { url, thumbUrl, crop } = await this.prepareUploadedImage(
+    const { url, thumbUrl, webUrl, crop } = await this.prepareUploadedImage(
       postId,
       file!,
     );
@@ -471,6 +473,7 @@ export class MotivationReelsService {
       data: {
         imageUrl: url,
         ...thumbFields(thumbUrl),
+        ...webFields(webUrl),
         // Кадр для Stories пока тот же файл: он уже вертикальный.
         storyImageUrl: url,
         imageSource: 'uploaded',
@@ -504,6 +507,7 @@ export class MotivationReelsService {
   ): Promise<{
     url: string;
     thumbUrl: string | null;
+    webUrl: string | null;
     crop: ReturnType<typeof coverCrop>;
   }> {
     const image = sharp(file.buffer, {
@@ -527,7 +531,8 @@ export class MotivationReelsService {
     const url = await this.generation.uploadStory(key, prepared, 'image/webp');
     // Копия для ленты (VED-629): кадр 1080×1920, на слайде хватает 720.
     const thumbUrl = (await this.thumbs?.forNewImage(key, prepared)) ?? null;
-    return { url, thumbUrl, crop };
+    const webUrl = (await this.thumbs?.webForNewImage(key, prepared)) ?? null;
+    return { url, thumbUrl, webUrl, crop };
   }
 
   /**
@@ -999,6 +1004,7 @@ export class MotivationReelsService {
       generationStage: string | null;
       imageUrl: string | null;
       imageThumbUrl?: string | null;
+      imageWebUrl?: string | null;
       storyImageUrl: string | null;
       videoUrl: string | null;
       videoStatus: string;
@@ -1090,6 +1096,7 @@ export class MotivationReelsService {
         categoryTitle: post.category,
         imageUrl: post.imageUrl ?? '',
         imageThumbUrl: post.imageThumbUrl ?? '',
+        imageWebUrl: post.imageWebUrl ?? '',
         storyImageUrl: post.storyImageUrl ?? '',
         videoUrl: post.videoStatus === 'ready' ? (post.videoUrl ?? '') : '',
         videoHasSound: Boolean(post.videoVoice || post.videoTrackId),

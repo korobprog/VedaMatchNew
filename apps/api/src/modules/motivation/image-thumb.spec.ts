@@ -1,11 +1,15 @@
 import sharp from 'sharp';
 import {
   backfillThumbKey,
+  backfillWebKey,
+  IMAGE_WEB_QUALITY,
   IMAGE_THUMB_WIDTH,
   imageKeyFromUrl,
   renderImageThumb,
+  renderImageWeb,
   thumbKeyForImageKey,
   thumbSize,
+  webKeyForImageKey,
 } from './image-thumb';
 
 function png(width: number, height: number) {
@@ -143,5 +147,60 @@ describe('renderImageThumb', () => {
 
   it('не картинка — ошибка', async () => {
     await expect(renderImageThumb(Buffer.from('png'))).rejects.toThrow();
+  });
+});
+
+describe('webKeyForImageKey', () => {
+  it('заменяет расширение оригинала на -web.webp', () => {
+    expect(webKeyForImageKey('motivation/2026-09-01/p1/v123.png')).toBe(
+      'motivation/2026-09-01/p1/v123-web.webp',
+    );
+  });
+
+  it('точка в папке не считается расширением', () => {
+    expect(webKeyForImageKey('motivation/v1.5/p1/file')).toBe(
+      'motivation/v1.5/p1/file-web.webp',
+    );
+  });
+});
+
+describe('backfillWebKey', () => {
+  it('своя ссылка — ключ рядом с оригиналом', () => {
+    expect(
+      backfillWebKey(
+        'https://cdn.test/motivation/d/p1/v1.png',
+        'https://cdn.test',
+        'p1',
+        7,
+      ),
+    ).toBe('motivation/d/p1/v1-web.webp');
+  });
+
+  it('чужая ссылка — отдельная папка поста с версией', () => {
+    expect(
+      backfillWebKey(
+        'https://other.example/a.png',
+        'https://cdn.test',
+        'p1',
+        7,
+      ),
+    ).toBe('motivation/web/p1/v7-web.webp');
+  });
+});
+
+describe('renderImageWeb', () => {
+  it('оставляет размер 1024×1536 и отдаёт WebP', async () => {
+    const out = await renderImageWeb(await png(1024, 1536));
+    const meta = await sharp(out).metadata();
+    expect(meta.format).toBe('webp');
+    expect([meta.width, meta.height]).toEqual([1024, 1536]);
+    expect(IMAGE_WEB_QUALITY).toBe(88);
+  });
+
+  it('узкий кадр не увеличивает', async () => {
+    const meta = await sharp(
+      await renderImageWeb(await png(300, 400)),
+    ).metadata();
+    expect([meta.width, meta.height]).toEqual([300, 400]);
   });
 });

@@ -25,6 +25,7 @@ import { classifyAiFailure, isRetryableFailure } from './ai-failure';
 import {
   MotivationImageThumbService,
   thumbFields,
+  webFields,
 } from './motivation-image-thumb.service';
 
 /**
@@ -314,6 +315,11 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
       // мегабайты. Не вышло — пост всё равно уходит, копию доделает бэкфилл.
       const imageThumbUrl =
         (await this.thumbs?.forNewImage(`${baseKey}.png`, image.bytes)) ?? null;
+      // Web-копия: тот же кадр WebP без потери размера — лента показывает её
+      // вместо PNG в мегабайты.
+      const imageWebUrl =
+        (await this.thumbs?.webForNewImage(`${baseKey}.png`, image.bytes)) ??
+        null;
       // Сторис — отдельный файл: тот же фон, докадрированный до 9:16, плюс
       // текст и подпись. Раньше сюда клался тот же imageUrl, и «Скачать для
       // Stories» отдавало картинку без единого слова.
@@ -343,6 +349,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               generationErrorCode: null,
               imageUrl,
               ...thumbFields(imageThumbUrl),
+              ...webFields(imageWebUrl),
               storyImageUrl,
               imageApprovedAt: now,
               publishedAt: now,
@@ -363,6 +370,7 @@ export class MotivationWorkerService implements OnModuleInit, OnModuleDestroy {
               generationErrorCode: null,
               imageUrl,
               ...thumbFields(imageThumbUrl),
+              ...webFields(imageWebUrl),
               storyImageUrl,
               modelVersion: 'responses:image_generation',
               // Кадр — единственная платная стадия текстового конвейера,

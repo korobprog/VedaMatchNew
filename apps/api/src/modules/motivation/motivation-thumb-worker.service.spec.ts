@@ -30,6 +30,9 @@ function createWorker(publicUrl = BASE) {
     upload: jest
       .fn()
       .mockImplementation((key: string) => Promise.resolve(`${BASE}/${key}`)),
+    uploadWeb: jest
+      .fn()
+      .mockImplementation((key: string) => Promise.resolve(`${BASE}/${key}`)),
   };
   const config = {
     get: jest.fn((key: string) =>
@@ -217,12 +220,96 @@ describe('MotivationThumbWorkerService', () => {
     expect(motivationPost.findMany).not.toHaveBeenCalled();
   });
 
-  it('тик без Redis отрабатывает пачку и снимает флаг работы', async () => {
+  it('тик без Redis отрабатывает обе пачки и снимает флаг работы', async () => {
     const { worker, thumbs } = createWorker();
 
     await worker.tick();
 
     expect(thumbs.upload).toHaveBeenCalledTimes(1);
+    expect(thumbs.uploadWeb).toHaveBeenCalledTimes(1);
     expect((worker as unknown as { running: boolean }).running).toBe(false);
+  });
+
+  describe('web-копии', () => {
+    it('берёт посты без web-копии по своим полям попыток', async () => {
+      const { worker, motivationPost } = createWorker();
+
+      await worker.runWebBatch(now);
+
+      const [query] = motivationPost.findMany.mock.calls[0] as [
+        { where: Record<string, unknown>; take: number },
+      ];
+      expect(query.take).toBe(THUMB_BATCH);
+      expect(query.where).toMatchObject({
+        imageUrl: { not: null },
+        imageWebUrl: null,
+        imageWebAttempts: { lt: MAX_THUMB_ATTEMPTS },
+      });
+      expect(query.where.OR).toEqual([
+        { imageWebAttemptAt: null },
+        { imageWebAttemptAt: { lt: new Date('2026-09-28T11:50:00.000Z') } },
+      ]);
+    });
+
+    it('клеймит, кладёт -web.webp рядом и пишет, не сдвигая updatedAt', async () => {
+      const { worker, motivationPost, thumbs } = createWorker();
+      motivationPost.findMany.mockResolvedValue([
+        { ...candidate, imageWebAttempts: 0 },
+      ]);
+      motivationPost.findUnique.mockResolvedValue({
+        imageUrl: candidate.imageUrl,
+        imageWebUrl: null,
+        updatedAt,
+      });
+
+      const result = await worker.runWebBatch(now);
+
+      expect(result).toEqual({ done: 1, failed: 0, skipped: 0 });
+      expect(callArg(motivationPost.updateMany, 0)).toEqual({
+        where: {
+          id: 'post-1',
+          imageUrl: candidate.imageUrl,
+          imageWebUrl: null,
+          imageWebAttempts: 0,
+          updatedAt,
+        },
+        data: {
+          imageWebAttempts: { increment: 1 },
+          imageWebAttemptAt: now,
+          updatedAt,
+        },
+      });
+      expect(thumbs.upload).not.toHaveBeenCalled();
+      expect(thumbs.uploadWeb).toHaveBeenCalledWith(
+        'motivation/2026-09-01/post-1/v1-web.webp',
+        expect.any(Buffer),
+      );
+      expect(callArg(motivationPost.updateMany, 1)).toEqual({
+        where: {
+          id: 'post-1',
+          imageUrl: candidate.imageUrl,
+          imageWebUrl: null,
+          updatedAt,
+        },
+        data: {
+          imageWebUrl: `${BASE}/motivation/2026-09-01/post-1/v1-web.webp`,
+          updatedAt,
+        },
+      });
+    });
+
+    it('картинку сменили, пока шла копия, — старую web-копию не пишет', async () => {
+      const { worker, motivationPost } = createWorker();
+      motivationPost.findUnique.mockResolvedValue({
+        imageUrl: `${BASE}/motivation/2026-09-01/post-1/v2.png`,
+        imageWebUrl: null,
+        updatedAt: new Date(),
+      });
+
+      const result = await worker.runWebBatch(now);
+
+      expect(result).toEqual({ done: 0, failed: 0, skipped: 1 });
+      expect(motivationPost.updateMany).toHaveBeenCalledTimes(1);
+    });
   });
 });

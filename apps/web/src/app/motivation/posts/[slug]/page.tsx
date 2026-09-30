@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { categoryLink } from "@/components/motivation/feed-style";
+import { feedImageUrl } from "@/components/motivation/display-image";
 import { getPublicMotivationPost } from "@/lib/motivation-api";
 import {
   OG_IMAGE_TYPE,
@@ -93,6 +94,6 @@ export default async function PublicMotivationPostPage({ params }: { params: Pro
        верхней строки. Высота ограничена, чтобы вертикальная не занимала весь
        экран и кнопки под ней оставались видны. */
     /* eslint-disable-next-line @next/next/no-img-element */
-    <img src={post.imageUrl} alt={post.title} className="max-h-[70vh] w-full bg-bg-1 object-contain" />
+    <img src={feedImageUrl(post)} alt={post.title} className="max-h-[70vh] w-full bg-bg-1 object-contain" />
   )}<div className="p-6 sm:p-10"><p className="text-sm font-semibold uppercase tracking-widest text-gold">VedaMatch Motivation</p>{category && <Link href={category.href} aria-label={`Категория: ${category.title}`} className="glass mt-3 inline-flex items-center gap-1.5 rounded-full border border-glass-brd px-3 py-1.5 text-sm text-text-1 hover:text-text-0"><span aria-hidden="true">📂</span>{category.title}</Link>}<h1 className="mt-3 text-3xl font-bold">{post.title}</h1><p className="mt-5 whitespace-pre-line text-lg leading-8 text-text-1">{post.text}</p>{post.attributionSpeaker && <p className="mt-6 border-l-2 border-gold pl-4 text-sm text-text-2">{post.attributionSpeaker}{post.attributionWork ? ` · ${post.attributionWork}` : ""}</p>}<div className="mt-8 grid gap-3 sm:grid-cols-2"><a href={`/m/${encodeURIComponent(post.slug)}/story`} download className="rounded-xl border border-gold px-5 py-3 text-center font-medium text-gold">Скачать для Stories</a><Link href="/login" className="rounded-xl bg-gradient-to-r from-magenta to-[#B23EFF] px-5 py-3 text-center font-medium text-white">Войти или зарегистрироваться в VedaMatch</Link></div></div></article></main>;
 }

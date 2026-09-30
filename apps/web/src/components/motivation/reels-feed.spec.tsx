@@ -35,6 +35,7 @@ const post = (id: string, overrides: Partial<MotivationPostDto> = {}): Motivatio
   categoryTitle: "Каждый день",
   imageUrl: `https://cdn/${id}.webp`,
   imageThumbUrl: "",
+  imageWebUrl: "",
   storyImageUrl: "",
   videoUrl: "",
   videoHasSound: false,
@@ -548,12 +549,17 @@ describe("ReelsFeed", () => {
     expect(frame).toHaveAttribute("alt", "");
   });
 
-  it("показывает оригинал картинки, а не лёгкую копию викторины (VED-629)", () => {
+  it("кадр — полноразмерный WebP, подложка — копия 720, оригинал не грузится", () => {
     fetchOk({});
     render(
       <ReelsFeed
         initial={{
-          items: [post("a", { imageThumbUrl: "https://cdn/a-w720.webp" })],
+          items: [
+            post("a", {
+              imageThumbUrl: "https://cdn/a-w720.webp",
+              imageWebUrl: "https://cdn/a-web.webp",
+            }),
+          ],
           nextCursor: null,
         }}
         tab="forYou"
@@ -562,9 +568,12 @@ describe("ReelsFeed", () => {
     );
 
     const slide = within(screen.getByRole("feed", { name: "Лента вдохновения" })).getAllByRole("article")[0];
-    const sources = [...slide.querySelectorAll("img")].map((img) => img.getAttribute("src"));
-    expect(sources).toContain("https://cdn/a.webp");
-    expect(sources).not.toContain("https://cdn/a-w720.webp");
+    const images = [...slide.querySelectorAll("img")];
+    const frame = images.find((img) => img.classList.contains("object-contain"));
+    const backdrop = images.find((img) => img.classList.contains("blur-2xl"));
+    expect(frame).toHaveAttribute("src", "https://cdn/a-web.webp");
+    expect(backdrop).toHaveAttribute("src", "https://cdn/a-w720.webp");
+    expect(images.map((img) => img.getAttribute("src"))).not.toContain("https://cdn/a.webp");
   });
 
   it("отправка своим живёт внутри «Поделиться», а не соседней кнопкой", () => {

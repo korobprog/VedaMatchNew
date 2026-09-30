@@ -629,6 +629,13 @@ model MotivationPost {
   /// а пост, брошенный упавшим процессом, возвращается в очередь после паузы.
   imageThumbAttempts   Int                           @default(0)
   imageThumbAttemptAt  DateTime?
+  /// Копия `imageUrl` для ленты: WebP в полном размере оригинала. Пиксели те
+  /// же, что у PNG, а весит в разы меньше; оригинал остаётся для скачивания.
+  /// Пусто — копии ещё нет, клиент берёт оригинал. Старые посты доделывает
+  /// тот же бэкфилл, что и `imageThumbUrl`, со своим счётчиком попыток.
+  imageWebUrl          String?
+  imageWebAttempts     Int                           @default(0)
+  imageWebAttemptAt    DateTime?
   storyImageUrl        String?
   /// Кадр-открытка: та же картинка с поздравлением сверху. Появляется по
   /// кнопке, поэтому необязательное поле.

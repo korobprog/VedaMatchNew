@@ -150,6 +150,7 @@ export class MotivationManualPostService {
           promptVersion: 'manual-v1',
           imageUrl: null,
           imageThumbUrl: null,
+          imageWebUrl: null,
           storyImageUrl: null,
           imagePrompt: null,
           translations: {

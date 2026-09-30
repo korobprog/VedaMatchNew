@@ -47,7 +47,7 @@ function build({
   policy?: { dailyLimit: number | null; blocked: boolean } | null;
   usedToday?: number;
   settings?: { userReelsEnabled: boolean; userDailyLimit: number };
-  thumbs?: { forNewImage: jest.Mock };
+  thumbs?: { forNewImage: jest.Mock; webForNewImage?: jest.Mock };
 } = {}) {
   const create = jest
     .fn()
@@ -86,6 +86,11 @@ describe('MotivationPicturesService.create', () => {
         .mockImplementation((key: string) =>
           Promise.resolve(`https://cdn/${key.replace('.webp', '-w720.webp')}`),
         ),
+      webForNewImage: jest
+        .fn()
+        .mockImplementation((key: string) =>
+          Promise.resolve(`https://cdn/${key.replace('.webp', '-web.webp')}`),
+        ),
     };
     const { service, create, uploadStory } = build({ thumbs });
 
@@ -93,9 +98,12 @@ describe('MotivationPicturesService.create', () => {
 
     const [imageKey, prepared] = uploadStory.mock.calls[0] as [string, Buffer];
     expect(thumbs.forNewImage).toHaveBeenCalledWith(imageKey, prepared);
+    expect(thumbs.webForNewImage).toHaveBeenCalledWith(imageKey, prepared);
     expect(createdData(create)).toMatchObject({
       imageThumbUrl: `https://cdn/${imageKey.replace('.webp', '-w720.webp')}`,
       imageThumbAttempts: 0,
+      imageWebUrl: `https://cdn/${imageKey.replace('.webp', '-web.webp')}`,
+      imageWebAttempts: 0,
     });
   });
 

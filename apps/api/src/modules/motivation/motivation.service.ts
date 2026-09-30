@@ -1872,6 +1872,7 @@ export class MotivationService {
       imageUrl: post.imageUrl ?? '',
       imageThumbUrl:
         (post as { imageThumbUrl?: string | null }).imageThumbUrl ?? '',
+      imageWebUrl: (post as { imageWebUrl?: string | null }).imageWebUrl ?? '',
       storyImageUrl: post.storyImageUrl ?? '',
       // Наружу — только принятое видео: в review оно ещё не просмотрено.
       videoUrl:
