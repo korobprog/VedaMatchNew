@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import type {
@@ -19,8 +20,10 @@ import type {
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
 import { BookPatchError, parseBookPatch } from './book-admin-input';
+import { ColoringInputError, parseColoring } from './coloring-input';
 import { isAdmin } from './is-admin';
 import { VedabaseAdminService } from './vedabase-admin.service';
+import { VedabaseColoringService } from './vedabase-coloring.service';
 import { VedabaseFilesService } from './vedabase-files.service';
 
 /** Префикс под слагом сервиса, как требует контракт модуля. */
@@ -30,6 +33,7 @@ export class VedabaseAdminController {
   constructor(
     private readonly admin: VedabaseAdminService,
     private readonly files: VedabaseFilesService,
+    private readonly coloring: VedabaseColoringService,
   ) {}
 
   @Get('books')
@@ -95,6 +99,23 @@ export class VedabaseAdminController {
   ) {
     this.assertAdmin(user);
     await this.files.remove(slug, fileId);
+  }
+
+  /** Цветной перевод блока стиха (VED-683). */
+  @Put('books/:slug/colors')
+  saveColoring(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('slug') slug: string,
+    @Body() body: unknown,
+  ) {
+    this.assertAdmin(user);
+    try {
+      return this.coloring.save(user.sub, slug, parseColoring(body));
+    } catch (error) {
+      if (error instanceof ColoringInputError)
+        throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   private assertAdmin(user: AccessTokenPayload): void {

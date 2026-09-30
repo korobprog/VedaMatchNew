@@ -2,6 +2,7 @@ import { redirectToLogin } from "@/lib/require-user";
 import { Header } from "@/components/header";
 import { ReaderScreen } from "@/components/vedabase/reader-screen";
 import { getProfile } from "@/lib/api";
+import { canAdminService } from "@vedamatch/shared";
 
 type Params = Promise<{ bookSlug: string; chapterSlug: string }>;
 type Query = Promise<{ fromPost?: string }>;
@@ -42,6 +43,7 @@ export default async function VedabaseReaderPage({
         bookSlug={bookSlug}
         chapterSlug={chapterSlug}
         back={back}
+        canEditColors={canAdminService(user, "vedabase")}
       />
     </div>
   );

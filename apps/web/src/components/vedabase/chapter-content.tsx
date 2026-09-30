@@ -5,9 +5,25 @@ import {
   useRef,
   useState,
 } from "react";
-import { Bold } from "lucide-react";
-import type { VedabaseChapterDocument, VedabaseReadingUnit } from "@vedamatch/shared";
-import { applyMark, clearMarks, type ReaderMark } from "@/lib/vedabase/highlight-marks";
+import { Bold, Palette, PencilLine } from "lucide-react";
+import type {
+  SaveVedabaseColoringRequest,
+  VedabaseChapterDocument,
+  VedabaseColor,
+  VedabaseColorBlock,
+  VedabaseColoringDto,
+  VedabaseColorSpan,
+  VedabaseReadingUnit,
+} from "@vedamatch/shared";
+import { paintRange } from "@/lib/vedabase/color-spans";
+import {
+  applyColor,
+  applyMark,
+  clearMarks,
+  type ReaderMark,
+} from "@/lib/vedabase/highlight-marks";
+import { selectionToRange } from "@/lib/vedabase/locators";
+import { ColoringBar } from "./coloring-bar";
 import { BlockSpeakButton } from "./block-speak-button";
 import { CopyBlockButton } from "./copy-block-button";
 import { sanskritSegments, unitHeading } from "./reader-text";
@@ -59,11 +75,41 @@ export const ChapterContent = forwardRef<
     onUnitActivate(unitId: string): void;
     /** Выделения и заметки главы — подсвечиваются в тексте (VED-662). */
     marks?: readonly ChapterMark[];
+    /** Цветной перевод блоков главы (VED-683). */
+    colorings?: readonly VedabaseColoringDto[];
+    /** Админ Библиотеки: может раскрашивать. */
+    canEditColors?: boolean;
+    onSaveColoring?(request: SaveVedabaseColoringRequest): Promise<void>;
   }
->(function ChapterContent({ chapter, onUnitActivate, marks = [] }, ref) {
+>(function ChapterContent(
+  {
+    chapter,
+    onUnitActivate,
+    marks = [],
+    colorings = [],
+    canEditColors = false,
+    onSaveColoring,
+  },
+  ref,
+) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   /** Стихи, где пословный перевод показан с санскритом жирным (VED-683). */
   const [boldUnits, setBoldUnits] = useState<ReadonlySet<string>>(new Set());
+  /** Блоки («стих/блок»), где включён цветной перевод. */
+  const [coloredOn, setColoredOn] = useState<ReadonlySet<string>>(new Set());
+  /** Правка раскраски админом: один блок за раз, черновик отрезков. */
+  const [editing, setEditing] = useState<{
+    key: string;
+    unitId: string;
+    block: VedabaseColorBlock;
+    spans: VedabaseColorSpan[];
+    dirty: boolean;
+  } | null>(null);
+  const [colorHint, setColorHint] = useState<string | null>(null);
+  const [colorPending, setColorPending] = useState(false);
+  const savedSpans = (key: string): VedabaseColorSpan[] =>
+    colorings.find((item) => `${item.unitId}/${item.block}` === key)?.spans ??
+    [];
   const setRoot = useCallback(
     (node: HTMLDivElement | null) => {
       rootRef.current = node;
@@ -80,6 +126,25 @@ export const ChapterContent = forwardRef<
     const root = rootRef.current;
     if (!root) return;
     clearMarks(root);
+    const blockOf = (unitId: string, block: string) =>
+      [...root.querySelectorAll<HTMLElement>("[data-vedabase-block]")].find(
+        (element) =>
+          element.dataset.vedabaseBlock === block &&
+          element.closest<HTMLElement>("[data-unit-id]")?.dataset.unitId ===
+            unitId,
+      );
+    // Сначала раскраска, поверх неё — выделения читателя.
+    for (const key of coloredOn) {
+      const [unitId, block] = key.split("/");
+      const target = blockOf(unitId, block);
+      const spans =
+        editing?.key === key
+          ? editing.spans
+          : (colorings.find(
+              (item) => item.unitId === unitId && item.block === block,
+            )?.spans ?? []);
+      if (target) for (const span of spans) applyColor(target, span);
+    }
     for (const mark of marks) {
       const block = [
         ...root.querySelectorAll<HTMLElement>("[data-vedabase-block]"),
@@ -91,7 +156,62 @@ export const ChapterContent = forwardRef<
       );
       if (block) applyMark(block, mark);
     }
-  }, [chapter, marks, boldUnits]);
+  }, [chapter, marks, boldUnits, coloredOn, colorings, editing]);
+
+  function toggleColored(key: string) {
+    setColoredOn((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    if (editing?.key === key) setEditing(null);
+  }
+
+  function paint(color: VedabaseColor | null) {
+    const root = rootRef.current;
+    if (!root || !editing) return;
+    const range = selectionToRange(
+      window.getSelection(),
+      root,
+      chapter.bookSlug,
+      chapter.slug,
+    );
+    if (
+      !range ||
+      range.locator.unitId !== editing.unitId ||
+      range.range.block !== editing.block
+    ) {
+      setColorHint("Сначала выделите слова именно в этом блоке.");
+      return;
+    }
+    setColorHint(null);
+    setEditing({
+      ...editing,
+      spans: paintRange(editing.spans, range.range.start, range.range.end, color),
+      dirty: true,
+    });
+    window.getSelection()?.removeAllRanges();
+  }
+
+  async function saveColoring() {
+    if (!editing || !onSaveColoring) return;
+    setColorPending(true);
+    try {
+      await onSaveColoring({
+        chapterSlug: chapter.slug,
+        unitId: editing.unitId,
+        block: editing.block,
+        spans: editing.spans,
+      });
+      setEditing(null);
+      setColorHint(null);
+    } catch {
+      setColorHint("Не сохранилось — проверьте связь и попробуйте ещё раз.");
+    } finally {
+      setColorPending(false);
+    }
+  }
 
   return (
     <div ref={setRoot} className="divide-y divide-[var(--reader-border)]">
@@ -126,6 +246,52 @@ export const ChapterContent = forwardRef<
                         label={`${unit.title}, ${label}`}
                       />
                     )}
+                    {(key === "transliterationHtml" || key === "synonymsHtml") &&
+                      (canEditColors ||
+                        savedSpans(`${unit.id}/${key}`).length > 0) && (
+                        <button
+                          type="button"
+                          aria-pressed={coloredOn.has(`${unit.id}/${key}`)}
+                          aria-label="Цветной перевод"
+                          title="Цветной перевод"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleColored(`${unit.id}/${key}`);
+                          }}
+                          className="reader-muted reader-bordered reader-hover inline-flex size-8 flex-none items-center justify-center rounded-lg border aria-pressed:bg-[var(--reader-surface-2)] aria-pressed:text-[var(--reader-text)]"
+                        >
+                          <Palette aria-hidden className="size-4" />
+                        </button>
+                      )}
+                    {canEditColors &&
+                      (key === "transliterationHtml" || key === "synonymsHtml") &&
+                      coloredOn.has(`${unit.id}/${key}`) && (
+                        <button
+                          type="button"
+                          aria-pressed={editing?.key === `${unit.id}/${key}`}
+                          aria-label="Править раскраску"
+                          title="Править раскраску"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            const blockKey = `${unit.id}/${key}`;
+                            setColorHint(null);
+                            setEditing(
+                              editing?.key === blockKey
+                                ? null
+                                : {
+                                    key: blockKey,
+                                    unitId: unit.id,
+                                    block: key as VedabaseColorBlock,
+                                    spans: savedSpans(blockKey),
+                                    dirty: false,
+                                  },
+                            );
+                          }}
+                          className="reader-muted reader-bordered reader-hover inline-flex size-8 flex-none items-center justify-center rounded-lg border aria-pressed:bg-[var(--reader-surface-2)] aria-pressed:text-[var(--reader-text)]"
+                        >
+                          <PencilLine aria-hidden className="size-4" />
+                        </button>
+                      )}
                     {key === "synonymsHtml" && (
                       <button
                         type="button"
@@ -149,6 +315,19 @@ export const ChapterContent = forwardRef<
                     <CopyBlockButton html={safeHtml} label={`${unit.title}, ${label}`} />
                   </div>
                 </div>
+                {editing?.key === `${unit.id}/${key}` && (
+                  <ColoringBar
+                    pending={colorPending}
+                    dirty={editing.dirty}
+                    hint={colorHint}
+                    onPaint={paint}
+                    onSave={() => void saveColoring()}
+                    onCancel={() => {
+                      setEditing(null);
+                      setColorHint(null);
+                    }}
+                  />
+                )}
                 {key === "synonymsHtml" && boldUnits.has(unit.id) ? (
                   // Тот же текст, что в разметке, — смещения выделений не
                   // съезжают; курсив исходника тут не нужен, нужен санскрит.

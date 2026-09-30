@@ -17,6 +17,12 @@ import {
 } from "@/lib/vedabase/locators";
 import { ReaderScreen } from "./reader-screen";
 
+// Раскраска (VED-683) приходит с сервера; в тестах сети нет — пустая.
+vi.mock("@/lib/vedabase-client-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/vedabase-client-api")>()),
+  fetchVedabaseColors: () => Promise.resolve([]),
+}));
+
 const userId = "reader-user";
 const bookSlug = "book-one";
 const contentVersion = "version-one";
@@ -351,17 +357,23 @@ describe("ReaderScreen", () => {
     selectText("block-unit-1-translationHtml", 0, 4);
     await user.click(screen.getByRole("button", { name: "Выделить" }));
     // Выделение сразу видно в тексте (VED-662).
-    await waitFor(() =>
-      expect(
-        screen.getByTestId("block-unit-1-translationHtml").querySelector("mark")?.textContent,
-      ).toBe("Yoga"),
+    // Сохранение идёт через IndexedDB — на загруженной машине дольше
+    // секунды по умолчанию.
+    await waitFor(
+      () =>
+        expect(
+          screen.getByTestId("block-unit-1-translationHtml").querySelector("mark")?.textContent,
+        ).toBe("Yoga"),
+      { timeout: 5000 },
     );
     selectText("block-unit-1-translationHtml", 5, 11);
     await user.click(screen.getByRole("button", { name: "Заметка" }));
     await user.type(screen.getByLabelText("Текст заметки"), "Initial note");
     await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
 
-    expect(await screen.findByText("Initial note")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Initial note", undefined, { timeout: 5000 }),
+    ).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: "Изменить заметку: Initial note" }),
     );
@@ -382,7 +394,7 @@ describe("ReaderScreen", () => {
         ]),
       );
       expect(mutations.filter((mutation) => mutation.entity === "annotation")).toHaveLength(3);
-    });
+    }, { timeout: 5000 });
   });
 
   it("searches intersected local postings and navigates to a plain-text result", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMark, clearMarks } from "./highlight-marks";
+import { applyColor, applyMark, clearMarks } from "./highlight-marks";
 
 function block(html: string): HTMLElement {
   const element = document.createElement("div");
@@ -45,5 +45,17 @@ describe("clearMarks", () => {
     applyMark(root, { id: "b", start: 2, end: 11, kind: "note" });
     clearMarks(root);
     expect(root.innerHTML).toBe(original);
+  });
+});
+
+describe("applyColor", () => {
+  it("красит отрезок, clearMarks снимает и раскраску", () => {
+    const root = block("<p>ман-мана бхава</p>");
+    applyColor(root, { start: 0, end: 8, color: "blue" });
+    expect(root.querySelector("span.reader-color-blue")?.textContent).toBe(
+      "ман-мана",
+    );
+    clearMarks(root);
+    expect(root.innerHTML).toBe("<p>ман-мана бхава</p>");
   });
 });
