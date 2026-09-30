@@ -8,13 +8,13 @@ import type {
   AdminTravelStayDto,
   TravelPlaceDto,
 } from '@vedamatch/shared';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import {
   reviewSelect,
   stayCardSelect,
   toReviewDto,
   toStayCard,
-} from './travel.service';
+} from '../stays/travel.service';
 
 /**
  * Слаг точки на карте: латиницей, из названия. Транслитерация продублирована

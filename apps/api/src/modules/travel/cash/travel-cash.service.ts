@@ -13,7 +13,7 @@ import {
   type TravelCashIcon,
   type TravelGuestColor,
 } from '@vedamatch/shared';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { cashBalance, DEFAULT_CASH_CATEGORIES } from './cash-book';
 import {
   cashFiltersWhere,
@@ -28,8 +28,8 @@ import {
   parseCashRange,
   parseOpeningMinor,
 } from './cash-input';
-import { parseEntryGuest } from './guest-input';
-import { formatStayDate } from './travel-dates';
+import { parseEntryGuest } from '../guests/guest-input';
+import { formatStayDate } from '../travel-dates';
 
 /**
  * Предел записей в одном ответе ленты. Хостел вносит десятки строк в день, и

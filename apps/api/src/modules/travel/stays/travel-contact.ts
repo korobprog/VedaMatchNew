@@ -1,4 +1,4 @@
-import { countNights } from './travel-dates';
+import { countNights } from '../travel-dates';
 
 /**
  * Кому писать по объекту. Владелец — тот, кто отвечает за место; если его

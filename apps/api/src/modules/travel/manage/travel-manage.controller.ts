@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import type { TravelBookingStatus } from '@prisma/client';
 import type { AccessTokenPayload } from '@vedamatch/shared';
-import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
 import { TravelManageService } from './travel-manage.service';
 
 const MANAGER_DECISIONS = [

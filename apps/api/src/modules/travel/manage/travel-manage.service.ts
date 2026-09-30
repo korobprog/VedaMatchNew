@@ -12,16 +12,16 @@ import type {
   TravelManagedOccupancyResponse,
   TravelStayCardDto,
 } from '@vedamatch/shared';
-import { PrismaService } from '../../prisma/prisma.service';
-import { groupOccupancy, MANAGED_OCCUPANCY_STATUSES } from './occupancy';
-import { generatePublicCode } from './public-code';
-import { formatStayDate } from './travel-dates';
-import { parseStayInput, TravelInputError } from './travel-dto';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { groupOccupancy, MANAGED_OCCUPANCY_STATUSES } from '../occupancy';
+import { generatePublicCode } from '../public-code';
+import { formatStayDate } from '../travel-dates';
+import { parseStayInput, TravelInputError } from '../travel-dto';
 import {
   notifiesGuest,
   TRAVEL_BOOKING_DECIDED_EVENT,
   TRAVEL_EVENTS,
-} from './travel-events';
+} from '../travel-events';
 import {
   bookingInclude,
   occupancyWindow,
@@ -29,7 +29,7 @@ import {
   stayCardSelect,
   toBookingDto,
   toStayCard,
-} from './travel.service';
+} from '../stays/travel.service';
 
 /**
  * Куда можно перевести заявку из текущего состояния.

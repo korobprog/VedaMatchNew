@@ -10,8 +10,8 @@ import type {
   TravelGuestDto,
   TravelGuestsResponse,
 } from '@vedamatch/shared';
-import { PrismaService } from '../../prisma/prisma.service';
-import { CashInputError } from './cash-input';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { CashInputError } from '../cash/cash-input';
 import { parseGuestInput } from './guest-input';
 import { compareGuests, paidThrough, unpaidNights } from './guest-stay';
 import {
@@ -20,7 +20,7 @@ import {
   TravelGuestPhotosService,
   type UploadedGuestPhoto,
 } from './travel-guest-photos.service';
-import { formatStayDate } from './travel-dates';
+import { formatStayDate } from '../travel-dates';
 
 const guestSelect = {
   id: true,

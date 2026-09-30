@@ -8,7 +8,7 @@ import type {
   TravelCashTemplateDto,
   TravelCashTemplatesResponse,
 } from '@vedamatch/shared';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { CashInputError } from './cash-input';
 import {
   MAX_TEMPLATES_PER_STAY,

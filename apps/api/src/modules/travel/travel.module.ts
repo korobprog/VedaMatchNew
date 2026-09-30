@@ -1,19 +1,19 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { TravelAdminController } from './travel-admin.controller';
-import { TravelAdminService } from './travel-admin.service';
-import { TravelCashController } from './travel-cash.controller';
-import { TravelCashTemplatesService } from './travel-cash-templates.service';
-import { TravelCashService } from './travel-cash.service';
-import { TravelGuestPhotosService } from './travel-guest-photos.service';
-import { TravelGuestsController } from './travel-guests.controller';
-import { TravelGuestsService } from './travel-guests.service';
-import { TravelManageController } from './travel-manage.controller';
-import { TravelManageService } from './travel-manage.service';
-import { TravelPublicController } from './travel-public.controller';
+import { TravelAdminController } from './admin/travel-admin.controller';
+import { TravelAdminService } from './admin/travel-admin.service';
+import { TravelCashController } from './cash/travel-cash.controller';
+import { TravelCashTemplatesService } from './cash/travel-cash-templates.service';
+import { TravelCashService } from './cash/travel-cash.service';
+import { TravelGuestPhotosService } from './guests/travel-guest-photos.service';
+import { TravelGuestsController } from './guests/travel-guests.controller';
+import { TravelGuestsService } from './guests/travel-guests.service';
+import { TravelManageController } from './manage/travel-manage.controller';
+import { TravelManageService } from './manage/travel-manage.service';
+import { TravelPublicController } from './stays/travel-public.controller';
 import { TravelPurgeListener } from './travel-purge.listener';
-import { TravelController } from './travel.controller';
-import { TravelService } from './travel.service';
+import { TravelController } from './stays/travel.controller';
+import { TravelService } from './stays/travel.service';
 
 /**
  * Сервис «Путешествия», раздел «Ночлег». По контракту сервисного модуля

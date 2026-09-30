@@ -16,7 +16,7 @@ import type {
   TravelStayKind,
   TravelStayPayment,
 } from '@vedamatch/shared';
-import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
 import { TravelService } from './travel.service';
 
 /**

@@ -4,7 +4,7 @@ import {
   type TravelCashIcon,
   type TravelCashKind,
 } from '@vedamatch/shared';
-import { countNights, parseStayDate, TravelDateError } from './travel-dates';
+import { countNights, parseStayDate, TravelDateError } from '../travel-dates';
 
 /**
  * Разбор ввода кассы. Чистые функции без Nest: сервис превращает
