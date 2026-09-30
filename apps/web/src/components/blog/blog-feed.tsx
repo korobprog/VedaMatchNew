@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import type { BlogFeedResponse, BlogPostDto } from "@vedamatch/shared";
 import {
   BlogApiError,
@@ -14,6 +14,7 @@ import {
   BlogLineageFilter,
 } from "./blog-feed-filter-menus";
 import type { BlogFeedFilterValues } from "./blog-feed-filters";
+import { BlogSearchForm } from "./blog-search";
 import { BLOG_ICON_BUTTON } from "./blog-menu";
 import { BlogPostCard } from "./blog-post-card";
 
@@ -29,6 +30,7 @@ export function BlogFeed({
   nav,
   beforeComposer,
   filters,
+  searchOpen = false,
 }: {
   initial: BlogFeedResponse;
   /** `favorites` — вкладка «Избранное» (VED-238). */
@@ -49,8 +51,13 @@ export function BlogFeed({
    * ещё» догружает с теми же фильтрами.
    */
   filters?: BlogFeedFilterValues;
+  /** Поиск раскрыт сразу — `?search=1`, кнопка «Поиск» с главной (VED-687). */
+  searchOpen?: boolean;
 }) {
   const [composing, setComposing] = useState(autoFocusComposer);
+  const [searching, setSearching] = useState(
+    searchOpen || Boolean(filters?.q || filters?.author),
+  );
   const [posts, setPosts] = useState(initial.posts);
   const [cursor, setCursor] = useState(initial.nextCursor);
   const [pending, setPending] = useState(false);
@@ -96,6 +103,20 @@ export function BlogFeed({
         {nav}
         {filters && (
           <>
+            <button
+              type="button"
+              onClick={() => setSearching((open) => !open)}
+              aria-expanded={searching}
+              aria-label="Поиск по блог-ленте"
+              title="Поиск по блог-ленте"
+              className={`inline-flex size-11 items-center justify-center rounded-lg border ${
+                searching || filters.q || filters.author
+                  ? "border-cyan bg-bg-1 text-text-0"
+                  : "border-glass-brd text-text-1 hover:border-cyan/60"
+              }`}
+            >
+              <Search aria-hidden className="size-4" />
+            </button>
             <BlogCategoryFilter value={filters.category} />
             <BlogLineageFilter value={filters.lineage} />
           </>
@@ -140,13 +161,17 @@ export function BlogFeed({
         </div>
       )}
 
+      {filters && searching && <BlogSearchForm filters={filters} />}
+
       {posts.length === 0 ? (
         <p className="rounded-2xl border border-glass-brd bg-glass px-4 py-8 text-center text-sm text-text-1">
-          {filters && (filters.category || filters.lineage)
-            ? "С такими фильтрами постов нет. Выберите другую категорию или линию."
-            : scope === "favorites"
-              ? "В избранном пока пусто. Отметьте пост звёздочкой — он появится здесь."
-              : "Здесь пока пусто. Напишите первый пост — его увидят все на главной."}
+          {filters && (filters.q || filters.author)
+            ? "По такому запросу постов нет. Попробуйте другое слово или имя."
+            : filters && (filters.category || filters.lineage)
+              ? "С такими фильтрами постов нет. Выберите другую категорию или линию."
+              : scope === "favorites"
+                ? "В избранном пока пусто. Отметьте пост звёздочкой — он появится здесь."
+                : "Здесь пока пусто. Напишите первый пост — его увидят все на главной."}
         </p>
       ) : (
         /* `space-y-3`, а не 4 (VED-371): восемь пикселей между тремя

@@ -37,9 +37,6 @@ export default async function AdminUserDetailPage({
 
   return (
     <>
-      <Link href="/admin/users" className="mb-4 inline-flex text-sm font-medium text-text-1 hover:text-magenta">
-        ← К списку пользователей
-      </Link>
 
       <div className="glass rounded-2xl border border-glass-brd p-6 mb-6">
         <div className="flex flex-wrap items-start gap-4">

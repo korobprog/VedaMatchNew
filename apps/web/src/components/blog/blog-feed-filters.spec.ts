@@ -106,3 +106,24 @@ describe("blogFeedHref", () => {
     ).toBe("/blog?lineage=iskcon");
   });
 });
+
+/* VED-687: поиск по блог-ленте из адреса. */
+describe("parseBlogFeedFilters: поиск", () => {
+  it("читает содержание и автора, пробелы схлопнуты", () => {
+    expect(
+      parseBlogFeedFilters({ q: "  карма  йога ", author: "Радха" }),
+    ).toEqual({
+      category: null,
+      lineage: null,
+      q: "карма йога",
+      author: "Радха",
+    });
+  });
+
+  it("одна буква — не поиск", () => {
+    expect(parseBlogFeedFilters({ q: "к" })).toEqual({
+      category: null,
+      lineage: null,
+    });
+  });
+});

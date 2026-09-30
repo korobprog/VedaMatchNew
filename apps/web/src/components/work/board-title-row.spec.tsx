@@ -16,9 +16,9 @@ describe("WorkBoardTitleRow", () => {
     const row = title.parentElement!;
     expect(row).toHaveClass("grid", "grid-cols-[1fr_auto_1fr]");
     expect(title).toHaveClass("text-center");
-    const [back, middle, end] = [...row.children];
-    expect(back).toHaveAttribute("href", "/work/planner");
-    expect(back).toHaveTextContent("Назад");
+    const [left, middle, end] = [...row.children];
+    // «Назад» убран (VED-681): путь наверх — в крошках, колонка пустая.
+    expect(left).toBeEmptyDOMElement();
     expect(middle).toBe(title);
     expect(end).toContainElement(
       screen.getByRole("button", { name: "Оплата" }),
@@ -35,6 +35,6 @@ describe("WorkBoardTitleRow", () => {
   it("префикса задач в строке нет", () => {
     render(<WorkBoardTitleRow name="VedaMatch" />);
     const row = screen.getByRole("heading", { level: 1 }).parentElement!;
-    expect(row).toHaveTextContent(/^Назад\s*VedaMatch$/);
+    expect(row).toHaveTextContent(/^VedaMatch$/);
   });
 });

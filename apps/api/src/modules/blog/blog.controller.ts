@@ -74,12 +74,17 @@ export class BlogController {
     // (VED-596).
     @Query('category') category?: string,
     @Query('lineage') lineage?: string,
+    // Поиск (VED-687): по содержанию и по автору.
+    @Query('q') q?: string,
+    @Query('author') author?: string,
   ) {
     return this.blog.feed(user.sub, isAdmin(user), {
       scope,
       cursor,
       category,
       lineage,
+      q,
+      author,
     });
   }
 
@@ -90,10 +95,14 @@ export class BlogController {
     @Query('cursor') cursor?: string,
     @Query('category') category?: string,
     @Query('lineage') lineage?: string,
+    @Query('q') q?: string,
+    @Query('author') author?: string,
   ) {
     return this.blog.favorites(user.sub, isAdmin(user), cursor, {
       category,
       lineage,
+      q,
+      author,
     });
   }
 

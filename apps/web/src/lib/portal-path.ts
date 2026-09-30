@@ -296,6 +296,19 @@ export function pageTitleForCrumb(
   return clean;
 }
 
+/** Заголовок без хвоста « — Родитель», если родитель уже есть в пути. */
+export function withoutParentSuffix(
+  title: string,
+  parents: readonly string[],
+): string {
+  const match = /^(.+?)\s+[—–-]\s+([^—–]+)$/.exec(title);
+  if (!match) return title;
+  const tail = match[2].trim().toLocaleLowerCase("ru-RU");
+  return parents.some((label) => label.toLocaleLowerCase("ru-RU") === tail)
+    ? match[1].trim()
+    : title;
+}
+
 function serviceName(
   slug: string,
   resolve?: (slug: string, fallback: string) => string,
@@ -366,7 +379,13 @@ export function buildPortalPath(
         : humanizeSegment(segment);
     }
     // Имя записи, человека, товара — из заголовка страницы, если он есть.
-    if (last && !literal && title) label = title;
+    // Хвост « — Планировщик», уже стоящий шагом выше, не повторяем
+    // (VED-678): «… › Планировщик › Доска», а не «Доска — Планировщик».
+    if (last && !literal && title)
+      label = withoutParentSuffix(
+        title,
+        crumbs.map((crumb) => crumb.label),
+      );
 
     crumbs.push({
       label: clip(label),

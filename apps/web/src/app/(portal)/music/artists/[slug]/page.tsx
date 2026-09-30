@@ -9,7 +9,6 @@ import { MusicArtistAdminRename } from "@/components/music/artist-admin-rename";
 import { MusicArtistPlayback } from "@/components/music/music-artist-playback";
 import { MusicAudiobookCard } from "@/components/music/audiobook-card";
 import { MusicCover } from "@/components/music/music-cover";
-import { MusicCatalogBackLink } from "@/components/music/catalog-back-link";
 import { plural } from "@/lib/plural";
 
 const KIND_LABELS: Record<string, string> = {
@@ -69,13 +68,8 @@ export default async function MusicArtistPage({
 
   return (
     <main className="relative mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10">
-      {/* «← Каталог» — в левом поле над строкой имени (VED-588). */}
-      <MusicCatalogBackLink />
       <header className="flex items-center gap-5">
-        {/* Обложка опущена на 12px (VED-588): «← Каталог» висит над ней и
-            почти касался круга. Поле сверху растит и шапку — до кнопок
-            «Слушать» под ней промежуток прежний. */}
-        <div className="mt-3 h-24 w-24 shrink-0 overflow-hidden rounded-full">
+        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full">
           <MusicCover
             url={artist.coverUrl}
             seed={artist.id}

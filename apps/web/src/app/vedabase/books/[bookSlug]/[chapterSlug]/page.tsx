@@ -27,12 +27,13 @@ export default async function VedabaseReaderPage({
      он подставляется в запрос к заведомо своему адресу, чужой ссылкой сюда
      не подменить, куда уводит кнопка. */
   const { fromPost } = await searchParams;
+  // «Назад» — только к афоризму (VED-681): к библиотеке ведут крошки.
   const back = fromPost
     ? {
         href: `/motivation?post=${encodeURIComponent(fromPost)}`,
         label: "← К афоризму",
       }
-    : { href: "/vedabase", label: "← К библиотеке" };
+    : undefined;
 
   return (
     // Высота шапки портала: панели читалки прилипают под ней, а не под ней прячутся.

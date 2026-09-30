@@ -3,7 +3,9 @@ import {
   blogAudienceStagesWhere,
   blogCategoryChoice,
   blogCategoryWhere,
+  blogAuthorWhere,
   blogFilterConditions,
+  blogSearchWhere,
   blogLineageChoice,
   blogLineageInput,
   blogLineageWhere,
@@ -237,5 +239,36 @@ describe('blogAudienceStagesWhere (VED-590)', () => {
         { authorId: 'me' },
       ],
     });
+  });
+});
+
+/* VED-687: поиск по блог-ленте. */
+describe('поиск по блог-ленте', () => {
+  it('содержание — заголовок или текст без регистра, пробелы схлопнуты', () => {
+    expect(blogSearchWhere('  карма   йога ')).toEqual({
+      OR: [
+        { title: { contains: 'карма йога', mode: 'insensitive' } },
+        { text: { contains: 'карма йога', mode: 'insensitive' } },
+      ],
+    });
+  });
+
+  it('автор — мирское или духовное имя', () => {
+    expect(blogAuthorWhere('Санкарш')).toEqual({
+      author: {
+        OR: [
+          { name: { contains: 'Санкарш', mode: 'insensitive' } },
+          { spiritualName: { contains: 'Санкарш', mode: 'insensitive' } },
+        ],
+      },
+    });
+  });
+
+  it('короче двух букв — без условия; оба поиска складываются к фильтрам', () => {
+    expect(blogSearchWhere('к')).toBeNull();
+    expect(blogAuthorWhere(undefined)).toBeNull();
+    expect(blogFilterConditions({ q: 'гита', author: 'Радха' })).toHaveLength(
+      2,
+    );
   });
 });
