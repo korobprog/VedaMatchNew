@@ -7289,6 +7289,10 @@ model TravelMapPlace {
   /// точек, и считать по таблице подтверждений на каждую — лишний запрос.
   lastConfirmedAt DateTime?
 
+  /// Группа места в «Общении» — id беседы снимком из события, без FK:
+  /// таблицы чата карте недоступны. Одна группа на место.
+  chatConversationId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

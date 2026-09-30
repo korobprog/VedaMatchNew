@@ -126,6 +126,16 @@ export class ChatController {
     return this.conversations.search(user.sub, query ?? '');
   }
 
+  /**
+   * Подсказки мест для формы «Новая группа». Объявлен выше `:id`, иначе
+   * «place-search» уйдёт в detail как идентификатор беседы.
+   */
+  @Get('conversations/place-search')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  placeSearch(@Query('q') query?: string) {
+    return this.conversations.searchPlaces(query ?? '');
+  }
+
   @Get('conversations/:id')
   detail(
     @CurrentUser() user: AccessTokenPayload,

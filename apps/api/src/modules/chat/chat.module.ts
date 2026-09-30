@@ -18,6 +18,7 @@ import { ChatMessagesService } from './chat-messages.service';
 import { ChatPresenceService } from './chat-presence.service';
 import { ChatPurgeListener } from './chat-purge.listener';
 import { ChatTravelListener } from './chat-travel.listener';
+import { ChatTravelMapListener } from './chat-travel-map.listener';
 import { ChatVacanciesListener } from './chat-vacancies.listener';
 import { ChatWelcomeListener } from './chat-welcome.listener';
 import { ChatOfficialChannelService } from './chat-official-channel.service';
@@ -82,6 +83,7 @@ import { ChatStatusVideoService } from './statuses/chat-status-video.service';
     ChatPurgeListener,
     ChatVacanciesListener,
     ChatTravelListener,
+    ChatTravelMapListener,
     ChatWelcomeListener,
     ChatOfficialChannelService,
     ChatOfficialPostsService,

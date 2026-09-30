@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   ChatChannelCommunity,
+  ChatTravelMapPlaceSnapshot,
   ChatUserSummary,
   CommunityDto,
 } from "@vedamatch/shared";
 import { createChatConversation } from "@/lib/chat-client";
 import { searchCommunities } from "@/lib/communities-api";
 import { ChatAvatar } from "./chat-avatar";
+import { ChatPlacePicker } from "./chat-place-picker";
 
 type Mode = "group" | "channel";
 
@@ -39,6 +41,7 @@ export function ChatNewConversation({
       .id ?? "",
   );
   const [groupCommunityId, setGroupCommunityId] = useState("");
+  const [place, setPlace] = useState<ChatTravelMapPlaceSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Название группы совпало с чужой общиной, а община при этом не выбрана —
@@ -92,7 +95,7 @@ export function ChatNewConversation({
   }
 
   async function create() {
-    const name = title.trim();
+    const name = title.trim() || (mode === "group" ? (place?.title ?? "") : "");
     if (!name) {
       setError(
         mode === "group"
@@ -116,6 +119,7 @@ export function ChatNewConversation({
               title: name,
               memberIds: selected,
               communityId: groupCommunityId || undefined,
+              place: place ?? undefined,
             }
           : {
               kind: "channel",
@@ -218,6 +222,8 @@ export function ChatNewConversation({
               </select>
             </label>
           )}
+
+          <ChatPlacePicker value={place} onChange={setPlace} />
 
           <span className="text-xs font-medium text-text-1">
             Кого позвать{" "}

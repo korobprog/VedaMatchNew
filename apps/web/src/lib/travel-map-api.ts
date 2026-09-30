@@ -5,6 +5,7 @@ import type {
   CreateTravelMapPlaceRequest,
   TravelMapCheckVerdict,
   TravelMapFreshnessDto,
+  TravelMapGroupResponse,
   TravelMapNoteDto,
   GeoSearchResult,
   TravelMapPlaceDto,
@@ -73,6 +74,10 @@ export const getTravelMapPlaces = (
     `/travel/map/places${toQuery({ ...query })}`,
     { method: "GET", signal },
   );
+
+/** Группа места в «Общении»: создаёт беседу или возвращает уже существующую. */
+export const openTravelMapPlaceGroup = (id: string) =>
+  request<TravelMapGroupResponse>(placePath(id, "/group"), { method: "POST" });
 
 export const getTravelMapPlace = (id: string, signal?: AbortSignal) =>
   request<TravelMapPlaceDto>(placePath(id), { method: "GET", signal });

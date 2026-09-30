@@ -23,6 +23,7 @@ import {
   deleteTravelMapPhoto,
   deleteTravelMapPlace,
   getTravelMapPlace,
+  openTravelMapPlaceGroup,
   reportTravelMapPlace,
   uploadTravelMapPhoto,
 } from "@/lib/travel-map-api";
@@ -49,6 +50,22 @@ export function PlaceView({ id }: { id: string }) {
   const [notes, setNotes] = useState<TravelMapNoteDto[] | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+
+  async function openGroup() {
+    setGroupBusy(true);
+    setGroupError(null);
+    try {
+      const { conversationId } = await openTravelMapPlaceGroup(id);
+      router.push(`/chat/${conversationId}`);
+    } catch (cause) {
+      setGroupError(
+        cause instanceof Error ? cause.message : "Не удалось открыть группу",
+      );
+      setGroupBusy(false);
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -324,6 +341,35 @@ export function PlaceView({ id }: { id: string }) {
         >
           Показать на карте
         </Link>
+        <div className="mt-3 flex flex-col gap-1">
+          {place.chatConversationId ? (
+            <Link
+              href={`/chat/${place.chatConversationId}`}
+              aria-label="Открыть группу места"
+              className={`${buttonClass} w-fit`}
+            >
+              Открыть группу места
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void openGroup()}
+              disabled={groupBusy}
+              aria-label="Открыть группу места"
+              className={`${buttonClass} w-fit disabled:opacity-60`}
+            >
+              {groupBusy ? "Открываю…" : "Открыть группу места"}
+            </button>
+          )}
+          <p className="text-xs text-text-2">
+            Общая беседа всех, кому важно это место
+          </p>
+          {groupError ? (
+            <p role="alert" className="text-xs text-magenta">
+              {groupError}
+            </p>
+          ) : null}
+        </div>
       </div>
 
 

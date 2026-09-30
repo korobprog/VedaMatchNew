@@ -11,6 +11,8 @@ import {
   resolveDisplayName,
   type ChatAttachmentDto,
   type ChatConversationContext,
+  type ChatTravelMapContext,
+  type ChatVacancyContext,
   type ChatConversationSummary,
   type ChatMemberDto,
   type ChatMessageDto,
@@ -275,12 +277,22 @@ export function toConversationContext(
     | 'contextMeta'
   >,
 ): ChatConversationContext | null {
-  if (row.contextService !== 'vacancies' || !row.contextId) return null;
+  if (!row.contextId) return null;
+  if (row.contextService === 'travel-map') {
+    return {
+      service: 'travel-map',
+      id: row.contextId,
+      title: row.contextTitle ?? 'Место',
+      status: row.contextStatus ?? 'active',
+      meta: (row.contextMeta as ChatTravelMapContext['meta']) ?? null,
+    };
+  }
+  if (row.contextService !== 'vacancies') return null;
   return {
     service: 'vacancies',
     id: row.contextId,
     title: row.contextTitle ?? 'Предложение',
     status: row.contextStatus ?? 'new',
-    meta: (row.contextMeta as ChatConversationContext['meta']) ?? null,
+    meta: (row.contextMeta as ChatVacancyContext['meta']) ?? null,
   };
 }

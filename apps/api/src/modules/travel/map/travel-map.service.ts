@@ -4,12 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import {
   resolveDisplayName,
   TRAVEL_MAP_CHECK_VERDICTS,
   TRAVEL_MAP_CLOSED_VOTES_TO_REPORT,
   TRAVEL_MAP_NOTE_TEXT_MAX,
+  TRAVEL_MAP_PLACE_KIND_LABELS,
   TRAVEL_MAP_NOTES_PER_PLACE,
   TRAVEL_MAP_PLACE_PHOTOS_MAX,
   type AccessTokenPayload,
@@ -17,6 +19,9 @@ import {
   type TravelMapAuthorDto,
   type TravelMapCheckVerdict,
   type TravelMapCommunityPointDto,
+  type TravelMapGroupRequestedEvent,
+  type TravelMapGroupResponse,
+  type TravelMapPlaceSnapshotDto,
   type TravelMapFreshnessDto,
   type TravelMapNoteDto,
   type TravelMapPlaceDto,
@@ -147,6 +152,7 @@ export class TravelMapService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly photos: TravelMapPhotosService,
+    private readonly events: EventEmitter2,
   ) {}
 
   // ===== Чтение =====
@@ -315,6 +321,118 @@ export class TravelMapService {
       throw new NotFoundException('Место не найдено');
     }
     return this.toPlaceDto(viewer, row, await this.loadFreshness(viewer, row));
+  }
+
+  // ===== Связь с «Общением» (только шина событий) =====
+
+  /**
+   * Группа места. Уже открытую отдаём как есть, без события: одна группа на
+   * место. Создаёт её «Общение» по событию, мы лишь запоминаем id.
+   */
+  async openGroup(
+    viewer: AccessTokenPayload,
+    placeId: string,
+  ): Promise<TravelMapGroupResponse> {
+    const row = await this.prisma.travelMapPlace.findUnique({
+      where: { id: placeId },
+      select: {
+        id: true,
+        name: true,
+        kind: true,
+        lat: true,
+        lng: true,
+        city: true,
+        status: true,
+        createdById: true,
+        chatConversationId: true,
+      },
+    });
+    // Спрятанное — «не найдено», как в getPlace.
+    if (!row || (row.status === 'hidden' && !this.canEdit(viewer, row))) {
+      throw new NotFoundException('Место не найдено');
+    }
+    if (row.chatConversationId) {
+      return { conversationId: row.chatConversationId };
+    }
+
+    const event: TravelMapGroupRequestedEvent = {
+      requesterId: viewer.sub,
+      placeId: row.id,
+      title: row.name,
+      kindLabel: TRAVEL_MAP_PLACE_KIND_LABELS[row.kind],
+      lat: row.lat,
+      lng: row.lng,
+      city: row.city,
+    };
+    const results: unknown[] = await this.events.emitAsync(
+      'travel.map.group.requested',
+      event,
+    );
+    const conversationId =
+      results.find((value): value is string => typeof value === 'string') ??
+      null;
+    if (!conversationId) {
+      throw new BadRequestException(
+        'Не удалось открыть группу: «Общение» не ответило',
+      );
+    }
+    // Два нажатия одновременно: id сохранится только от первого. Второй
+    // получит свою беседу от чата, но запись не затрёт.
+    await this.prisma.travelMapPlace.updateMany({
+      where: { id: row.id, chatConversationId: null },
+      data: { chatConversationId: conversationId },
+    });
+    return { conversationId };
+  }
+
+  /** Ответ на поиск мест из формы «Новая группа» в чате. */
+  async searchSnapshots(
+    q: string,
+    limit: number,
+  ): Promise<TravelMapPlaceSnapshotDto[]> {
+    const text = q.trim();
+    const rows = await this.prisma.travelMapPlace.findMany({
+      where: {
+        status: 'active',
+        ...(text
+          ? {
+              OR: [
+                { name: { contains: text, mode: 'insensitive' } },
+                { city: { contains: text, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        kind: true,
+        name: true,
+        lat: true,
+        lng: true,
+        city: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Math.max(1, Math.min(Math.floor(limit) || 0, 20)),
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.name,
+      kindLabel: TRAVEL_MAP_PLACE_KIND_LABELS[row.kind],
+      lat: row.lat,
+      lng: row.lng,
+      city: row.city,
+    }));
+  }
+
+  /** Чат привязал беседу к месту; уже сохранённую не перетираем. */
+  async linkConversation(
+    placeId: string,
+    conversationId: string,
+  ): Promise<void> {
+    await this.prisma.travelMapPlace.updateMany({
+      where: { id: placeId, chatConversationId: null },
+      data: { chatConversationId: conversationId },
+    });
   }
 
   // ===== Запись =====
@@ -787,6 +905,7 @@ export class TravelMapService {
       verifiedAt: row.verifiedAt?.toISOString() ?? null,
       author: authorOf(row.createdBy),
       canEdit: author,
+      chatConversationId: row.chatConversationId,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
