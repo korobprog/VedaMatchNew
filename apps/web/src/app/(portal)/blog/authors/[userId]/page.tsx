@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MessageCircle } from "lucide-react";
 import { getBlogAuthorFeed } from "@/lib/blog-api";
 import { requireUser } from "@/lib/require-user";
 import { BlogAuthorFeed } from "@/components/blog/blog-author-feed";
+import { BlogAuthorAbout } from "@/components/blog/blog-author-about";
 import { plural } from "@/lib/plural";
 
 export const metadata = {
@@ -10,7 +13,8 @@ export const metadata = {
 };
 
 /**
- * Личный блог участника (VED-116).
+ * Личная страница участника (VED-686) — выросла из личного блога (VED-116):
+ * шапка, «О себе», «Написать» в мессенджер и посты автора.
  *
  * Свой блог — это собственные посты человека в общей ленте, собранные на
  * одной странице: заводить для них отдельную сущность значило бы иметь два
@@ -60,7 +64,18 @@ export default async function BlogAuthorPage({
             {!mine && " · блог участника"}
           </p>
         </div>
+        {!mine && (
+          <Link
+            href={`/chat/with/${encodeURIComponent(feed.author.id)}`}
+            className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-glass-brd px-3 py-2 text-sm font-semibold text-text-0 transition-colors hover:bg-bg-2"
+          >
+            <MessageCircle aria-hidden className="size-4" />
+            Написать
+          </Link>
+        )}
       </div>
+
+      <BlogAuthorAbout initial={feed.about} mine={mine} />
 
       <BlogAuthorFeed initial={feed} authorId={feed.author.id} mine={mine} />
     </main>

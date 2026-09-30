@@ -1,5 +1,6 @@
 // Браузерный клиент сервиса «Блог-лента» поверх общего apiFetch.
 import {
+  BLOG_ABOUT_MAX_LENGTH,
   BLOG_IMAGE_MAX_BYTES,
   BLOG_POST_TEXT_MAX_LENGTH,
   BLOG_POST_TITLE_MAX_LENGTH,
@@ -8,6 +9,7 @@ import {
   BLOG_VIDEO_MAX_SECONDS,
 } from "@vedamatch/shared";
 import type {
+  BlogAboutResponse,
   BlogAuthorFeedResponse,
   BlogFavoriteResponse,
   BlogFeedResponse,
@@ -40,6 +42,7 @@ export class BlogApiError extends Error {
  * только в крайнем случае: на экране он всё равно читается как поломка.
  */
 const MESSAGES: Record<string, string> = {
+  about_too_long: `«О себе» длиннее ${BLOG_ABOUT_MAX_LENGTH} знаков.`,
   post_empty: "Напишите что-нибудь или добавьте фотографию.",
   title_too_long: `Заголовок длиннее ${BLOG_POST_TITLE_MAX_LENGTH} знаков.`,
   // С числом, а не «слишком длинный»: до сервера этот отказ теперь доезжает
@@ -370,5 +373,13 @@ export function updateBlogSettings(
   return request<BlogSettingsDto>("/blog/admin/settings", {
     method: "PATCH",
     ...json({ feedLifetimeHours }),
+  });
+}
+
+/** «О себе» на своей личной странице (VED-686); пустое — стирает. */
+export function updateBlogAbout(about: string): Promise<BlogAboutResponse> {
+  return request<BlogAboutResponse>("/blog/authors/me/about", {
+    method: "PUT",
+    ...json({ about }),
   });
 }
