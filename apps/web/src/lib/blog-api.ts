@@ -4,6 +4,7 @@
 // тянуть в модуль, который импортируют клиентские компоненты, — сборка падает.
 import { cookies } from "next/headers";
 import type {
+  BlogAlbumResponse,
   BlogAuthorFeedResponse,
   BlogAuthorFilesResponse,
   BlogFeedResponse,
@@ -80,6 +81,15 @@ export function getBlogAuthorFiles(
 ): Promise<BlogAuthorFilesResponse | null> {
   return blogGet<BlogAuthorFilesResponse>(
     `/blog/authors/${encodeURIComponent(authorId)}/files`,
+  );
+}
+
+/** Фотоальбом личной страницы; null — нет автора, не авторизован или сбой. */
+export function getBlogAuthorAlbum(
+  authorId: string,
+): Promise<BlogAlbumResponse | null> {
+  return blogGet<BlogAlbumResponse>(
+    `/blog/authors/${encodeURIComponent(authorId)}/photos`,
   );
 }
 

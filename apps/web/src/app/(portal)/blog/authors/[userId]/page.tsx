@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MessageCircle } from "lucide-react";
-import { getBlogAuthorFeed, getBlogAuthorFiles } from "@/lib/blog-api";
+import {
+  getBlogAuthorAlbum,
+  getBlogAuthorFeed,
+  getBlogAuthorFiles,
+} from "@/lib/blog-api";
 import { requireUser } from "@/lib/require-user";
 import { BlogAuthorFeed } from "@/components/blog/blog-author-feed";
 import { BlogAuthorAbout } from "@/components/blog/blog-author-about";
 import { BlogAuthorFiles } from "@/components/blog/blog-author-files";
+import { BlogAuthorAlbum } from "@/components/blog/blog-author-album";
 import { plural } from "@/lib/plural";
 
 export const metadata = {
@@ -31,9 +36,10 @@ export default async function BlogAuthorPage({
 }) {
   const { userId } = await params;
   const viewer = await requireUser();
-  const [feed, files] = await Promise.all([
+  const [feed, files, album] = await Promise.all([
     getBlogAuthorFeed(userId),
     getBlogAuthorFiles(userId),
+    getBlogAuthorAlbum(userId),
   ]);
   if (!feed) notFound();
 
@@ -82,6 +88,8 @@ export default async function BlogAuthorPage({
       <BlogAuthorAbout initial={feed.about} mine={mine} />
 
       <BlogAuthorFiles initial={files?.files ?? []} mine={mine} />
+
+      <BlogAuthorAlbum initial={album?.photos ?? []} mine={mine} />
 
       <BlogAuthorFeed initial={feed} authorId={feed.author.id} mine={mine} />
     </main>

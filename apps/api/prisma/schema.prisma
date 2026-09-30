@@ -491,6 +491,7 @@ model User {
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
   blogAuthorProfile                  BlogAuthorProfile?
   blogAuthorFiles                    BlogAuthorFile[]
+  blogAlbumPhotos                    BlogAlbumPhoto[]
   blogFavorites                      BlogFavorite[]
   blogLikes                          BlogLike[]
 
@@ -7410,6 +7411,23 @@ model BlogAuthorFile {
   /// Ключ `BLOG_AUTHOR_FILE_FORMATS`: строка, чтобы новый формат не требовал миграции.
   format     String
   sizeBytes  Int
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Фотоальбом личной страницы (VED-686, часть 3). Фото пережимается в webp
+/// и лежит публично — как картинки постов.
+model BlogAlbumPhoto {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storageKey String   @unique
+  url        String
+  width      Int?
+  height     Int?
+  sizeBytes  Int?
+  caption    String?
   createdAt  DateTime @default(now())
 
   @@index([userId, createdAt])

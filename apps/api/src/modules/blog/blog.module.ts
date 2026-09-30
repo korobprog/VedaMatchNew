@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { BlogAdminController } from './blog-admin.controller';
+import { BlogAlbumService } from './blog-album.service';
 import { BlogAuthorFilesService } from './blog-author-files.service';
 import { BlogAvatarService } from './blog-avatar.service';
 import { BlogFileStorageService } from './blog-file-storage.service';
@@ -32,6 +33,7 @@ import { BlogVideoService } from './blog-video.service';
     BlogVideoService,
     BlogFileStorageService,
     BlogAuthorFilesService,
+    BlogAlbumService,
     BlogPurgeListener,
     BlogLibraryListener,
   ],

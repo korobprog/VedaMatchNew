@@ -21,6 +21,7 @@ import {
   type AccessTokenPayload,
   type BlogPostAudienceStagesRequest,
   type CompleteBlogAuthorFileUploadRequest,
+  type UpdateBlogAlbumPhotoRequest,
   type CreateBlogAuthorFileUploadRequest,
   type BlogPostCategoryRequest,
   type BlogPostLineageRequest,
@@ -28,6 +29,7 @@ import {
   type UpdateBlogPostRequest,
 } from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../auth/auth.guard';
+import { BlogAlbumService } from './blog-album.service';
 import { BlogAuthorFilesService } from './blog-author-files.service';
 import { BlogService } from './blog.service';
 import { isAdmin } from './is-admin';
@@ -57,6 +59,7 @@ export class BlogController {
   constructor(
     private readonly blog: BlogService,
     private readonly authorFiles: BlogAuthorFilesService,
+    private readonly album: BlogAlbumService,
   ) {}
 
   /** Виджет главной: несколько свежих постов и счётчик «и ещё N». */
@@ -143,6 +146,48 @@ export class BlogController {
     @Param('fileId') fileId: string,
   ): Promise<void> {
     await this.authorFiles.remove(user.sub, fileId);
+  }
+
+  /**
+   * Фото в альбом своей страницы (VED-686): multipart, поле `files`, как у
+   * поста. Часть фото может не пройти — отказы приезжают в `failed`.
+   */
+  @Post('authors/me/photos')
+  @Throttle({ default: { ttl: 3_600_000, limit: 60 } })
+  @UseInterceptors(
+    FilesInterceptor('files', BLOG_POST_MAX_IMAGES, UPLOAD_OPTIONS),
+  )
+  uploadPhotos(
+    @CurrentUser() user: AccessTokenPayload,
+    @UploadedFiles() files?: UploadedImageFile[],
+  ) {
+    return this.album.upload(user.sub, files ?? []);
+  }
+
+  @Patch('authors/me/photos/:photoId')
+  updatePhoto(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('photoId') photoId: string,
+    @Body() body: UpdateBlogAlbumPhotoRequest,
+  ) {
+    return this.album.updateCaption(user.sub, photoId, body);
+  }
+
+  @Delete('authors/me/photos/:photoId')
+  @HttpCode(204)
+  async removePhoto(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('photoId') photoId: string,
+  ): Promise<void> {
+    await this.album.remove(user.sub, photoId);
+  }
+
+  @Get('authors/:authorId/photos')
+  authorPhotos(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('authorId') authorId: string,
+  ) {
+    return this.album.forAuthor(user.sub, authorId);
   }
 
   @Get('authors/:authorId/files')
