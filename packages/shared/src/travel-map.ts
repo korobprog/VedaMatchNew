@@ -425,6 +425,12 @@ export const TRAVEL_MAP_ROUTE_STATUSES = ['active', 'hidden'] as const;
 export type TravelMapRouteStatus = (typeof TRAVEL_MAP_ROUTE_STATUSES)[number];
 
 export interface TravelMapRouteStopInput {
+  /**
+   * Id существующей остановки при правке: она обновляется на месте и
+   * сохраняет фото, видео и рассказ. Без id — новая; отсутствующие в
+   * списке — удаляются вместе с медиа.
+   */
+  id?: string | null;
   /** Место карты, если остановка — оно. Пусто — просто точка. */
   placeId?: string | null;
   name: string;
@@ -448,6 +454,8 @@ export interface TravelMapRouteStopDto {
     photoUrl: string | null;
     stale: boolean;
   } | null;
+  /** Рассказ, фото и видео для режима прогулки. */
+  media: TravelMapStopMediaDto;
 }
 
 /** Строка в списке маршрутов и метка старта на карте. */
@@ -500,3 +508,33 @@ export interface CreateTravelMapRouteRequest {
 }
 
 export type UpdateTravelMapRouteRequest = Partial<CreateTravelMapRouteRequest>;
+
+// ----- Режим прогулки: рассказ, фото и короткое видео на остановке -----
+
+/**
+ * Прогулка — маршрут, который читают по остановкам: у каждой фото, короткое
+ * видео и рассказ автора («что за храм, где вход, когда прасад»). На
+ * телефоне — «следующая остановка» с расстоянием и направлением.
+ */
+export const TRAVEL_MAP_STOP_STORY_MAX = 4000;
+export const TRAVEL_MAP_STOP_PHOTOS_MAX = 6;
+/** Видео короткое: минута, чтобы смотреть на ходу, и до 60 МБ. */
+export const TRAVEL_MAP_STOP_VIDEO_MAX_BYTES = 60 * 1024 * 1024;
+export const TRAVEL_MAP_STOP_VIDEO_MAX_SECONDS = 60;
+export const TRAVEL_MAP_STOP_VIDEO_MIME_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+] as const;
+
+export interface TravelMapStopMediaDto {
+  photoUrls: string[];
+  videoUrl: string | null;
+  /** Рассказ автора; `note` остаётся короткой подписью. */
+  story: string;
+}
+
+/** Правка рассказа отдельно от остановок: текст пишут после того, как маршрут собран. */
+export interface UpdateTravelMapStopStoryRequest {
+  story: string;
+}

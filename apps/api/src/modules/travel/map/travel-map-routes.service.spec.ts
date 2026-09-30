@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- вызовы jest.fn() типизируются как any */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return -- вызовы jest.fn() типизируются как any */
 import {
   BadRequestException,
   ForbiddenException,
@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '@vedamatch/shared';
 import type { PrismaService } from '../../../prisma/prisma.service';
+import type { TravelMapPhotosService } from './travel-map-photos.service';
 import { TravelMapRoutesService } from './travel-map-routes.service';
 
 const author = { sub: 'u1' } as AccessTokenPayload;
@@ -47,14 +48,24 @@ function setup() {
     travelMapRouteStop: {
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({}),
     },
     travelMapPlace: { findMany: jest.fn().mockResolvedValue([]) },
   };
   prisma.$transaction = jest.fn((cb: (tx: unknown) => unknown) => cb(prisma));
+  const photos = {
+    uploadImage: jest.fn().mockResolvedValue({ key: 'k-new', url: 'u-new' }),
+    uploadVideo: jest.fn().mockResolvedValue({ key: 'v-new', url: 'vu-new' }),
+    remove: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new TravelMapRoutesService(
     prisma as unknown as PrismaService,
+    photos as unknown as TravelMapPhotosService,
   );
-  return { prisma, service };
+  return { prisma, photos, service };
 }
 
 const moscow = { name: 'Москва', lat: 55.7558, lng: 37.6173 };
@@ -196,18 +207,57 @@ describe('TravelMapRoutesService', () => {
   });
 
   describe('update', () => {
-    it('со stops пересоздаёт остановки в транзакции и пересчитывает старт', async () => {
-      const { prisma, service } = setup();
+    it('со stops: id сохраняется, новая создаётся, пропавшая удаляется с ключами S3', async () => {
+      const { prisma, photos, service } = setup();
       prisma.travelMapRoute.findUnique.mockResolvedValue(routeRow());
-      await service.update(author, 'r1', { stops: [spb, moscow] });
+      prisma.travelMapRouteStop.findMany.mockResolvedValue([
+        { id: 's1', photoKeys: ['a'], videoKey: null },
+        { id: 's2', photoKeys: ['b', 'c'], videoKey: 'v' },
+      ]);
+      await service.update(author, 'r1', {
+        stops: [spb, { ...moscow, id: 's1' }],
+      });
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(prisma.travelMapRouteStop.deleteMany).toHaveBeenCalledWith({
-        where: { routeId: 'r1' },
+        where: { id: { in: ['s2'] } },
       });
-      expect(prisma.travelMapRouteStop.createMany).toHaveBeenCalled();
+      // s1 сначала уходит в отрицательную позицию, затем получает итоговую.
+      const updates = prisma.travelMapRouteStop.update.mock.calls.map(
+        (c: any[]) => c[0],
+      );
+      expect(updates[0]).toEqual({
+        where: { id: 's1' },
+        data: { position: -1 },
+      });
+      expect(updates[1].where).toEqual({ id: 's1' });
+      expect(updates[1].data.position).toBe(1);
+      // Медиа-поля при правке не трогаем.
+      expect(updates[1].data).not.toHaveProperty('photoKeys');
+      expect(updates[1].data).not.toHaveProperty('story');
+      const created = prisma.travelMapRouteStop.create.mock.calls[0][0].data;
+      expect(created).toMatchObject({ routeId: 'r1', position: 0 });
+      expect(photos.remove.mock.calls.map((c: any[]) => c[0])).toEqual([
+        'b',
+        'c',
+        'v',
+      ]);
       const data = prisma.travelMapRoute.update.mock.calls[0][0].data;
       expect(data.startLat).toBe(spb.lat);
       expect(data.stopsCount).toBe(2);
+    });
+
+    it('чужой id остановки — 400, S3 не трогаем', async () => {
+      const { prisma, photos, service } = setup();
+      prisma.travelMapRoute.findUnique.mockResolvedValue(routeRow());
+      prisma.travelMapRouteStop.findMany.mockResolvedValue([
+        { id: 's1', photoKeys: ['a'], videoKey: null },
+      ]);
+      await expect(
+        service.update(author, 'r1', {
+          stops: [{ ...moscow, id: 'alien' }, spb],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(photos.remove).not.toHaveBeenCalled();
     });
 
     it('без stops остановки не трогает', async () => {
@@ -235,6 +285,7 @@ describe('TravelMapRoutesService', () => {
       prisma.travelMapRoute.findUnique.mockResolvedValue({
         id: 'r1',
         authorId: 'u1',
+        stops: [],
       });
       await expect(service.remove(stranger, 'r1')).rejects.toBeInstanceOf(
         ForbiddenException,
@@ -243,6 +294,134 @@ describe('TravelMapRoutesService', () => {
       expect(prisma.travelMapRoute.delete).toHaveBeenCalledWith({
         where: { id: 'r1' },
       });
+    });
+
+    it('после удаления чистит медиа всех остановок', async () => {
+      const { prisma, photos, service } = setup();
+      prisma.travelMapRoute.findUnique.mockResolvedValue({
+        id: 'r1',
+        authorId: 'u1',
+        stops: [
+          { photoKeys: ['a', 'b'], videoKey: 'v' },
+          { photoKeys: [], videoKey: null },
+        ],
+      });
+      await service.remove(author, 'r1');
+      expect(photos.remove.mock.calls.map((c: any[]) => c[0])).toEqual([
+        'a',
+        'b',
+        'v',
+      ]);
+    });
+  });
+
+  describe('медиа остановки', () => {
+    const file = { buffer: Buffer.from('x'), mimetype: 'image/jpeg', size: 1 };
+    function withStop(
+      prisma: Record<string, any>,
+      over: Record<string, unknown> = {},
+    ) {
+      prisma.travelMapRoute.findUnique.mockResolvedValue(
+        routeRow({ stops: [] }),
+      );
+      prisma.travelMapRouteStop.findUnique.mockResolvedValue({
+        id: 's1',
+        routeId: 'r1',
+        photoKeys: ['a'],
+        photoUrls: ['ua'],
+        videoKey: 'old-v',
+        ...over,
+      });
+    }
+
+    it('шестое фото после шести — 400', async () => {
+      const { prisma, photos, service } = setup();
+      const six = ['1', '2', '3', '4', '5', '6'];
+      withStop(prisma, { photoKeys: six, photoUrls: six });
+      await expect(
+        service.addStopPhoto(author, 'r1', 's1', file),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(photos.uploadImage).not.toHaveBeenCalled();
+    });
+
+    it('фото дописывается с префиксом остановки', async () => {
+      const { prisma, photos, service } = setup();
+      withStop(prisma);
+      await service.addStopPhoto(author, 'r1', 's1', file);
+      expect(photos.uploadImage).toHaveBeenCalledWith(
+        'travel/map/routes/r1/s1',
+        file,
+      );
+      expect(prisma.travelMapRouteStop.update.mock.calls[0][0].data).toEqual({
+        photoKeys: { push: 'k-new' },
+        photoUrls: { push: 'u-new' },
+      });
+    });
+
+    it('остановка другого маршрута — 404', async () => {
+      const { prisma, service } = setup();
+      withStop(prisma, { routeId: 'other' });
+      await expect(
+        service.addStopPhoto(author, 'r1', 's1', file),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('не-автор — 403', async () => {
+      const { prisma, service } = setup();
+      withStop(prisma);
+      await expect(
+        service.updateStopStory(stranger, 'r1', 's1', { story: 'x' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('удаление фото убирает пару и ключ из S3; плохой индекс — 404', async () => {
+      const { prisma, photos, service } = setup();
+      withStop(prisma);
+      await expect(
+        service.removeStopPhoto(author, 'r1', 's1', 3),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await service.removeStopPhoto(author, 'r1', 's1', 0);
+      expect(prisma.travelMapRouteStop.update.mock.calls[0][0].data).toEqual({
+        photoKeys: [],
+        photoUrls: [],
+      });
+      expect(photos.remove).toHaveBeenCalledWith('a');
+    });
+
+    it('замена видео удаляет старый ключ', async () => {
+      const { prisma, photos, service } = setup();
+      withStop(prisma);
+      await service.setStopVideo(author, 'r1', 's1', file);
+      expect(prisma.travelMapRouteStop.update.mock.calls[0][0].data).toEqual({
+        videoKey: 'v-new',
+        videoUrl: 'vu-new',
+      });
+      expect(photos.remove).toHaveBeenCalledWith('old-v');
+    });
+
+    it('удаление видео обнуляет поля и чистит S3', async () => {
+      const { prisma, photos, service } = setup();
+      withStop(prisma);
+      await service.removeStopVideo(author, 'r1', 's1');
+      expect(prisma.travelMapRouteStop.update.mock.calls[0][0].data).toEqual({
+        videoKey: null,
+        videoUrl: null,
+      });
+      expect(photos.remove).toHaveBeenCalledWith('old-v');
+    });
+
+    it('рассказ обрезается, длиннее 4000 — 400', async () => {
+      const { prisma, service } = setup();
+      withStop(prisma);
+      await service.updateStopStory(author, 'r1', 's1', { story: '  Привет ' });
+      expect(prisma.travelMapRouteStop.update.mock.calls[0][0].data).toEqual({
+        story: 'Привет',
+      });
+      await expect(
+        service.updateStopStory(author, 'r1', 's1', {
+          story: 'a'.repeat(4001),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

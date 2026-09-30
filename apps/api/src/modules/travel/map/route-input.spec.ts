@@ -20,6 +20,7 @@ describe('route-input', () => {
     expect(r.description).toBe('');
     expect(r.city).toBeNull();
     expect(r.stops[0]).toEqual({
+      id: null,
       placeId: null,
       name: 'Старт',
       lat: 27.5,
@@ -45,6 +46,7 @@ describe('route-input', () => {
       'длинная заметка',
       valid({ stops: [stop({ note: 'a'.repeat(501) }), stop()] }),
     ],
+    ['id числом', valid({ stops: [stop({ id: 5 }), stop()] })],
     ['placeId числом', valid({ stops: [stop({ placeId: 5 }), stop()] })],
   ])('отклоняет: %s', (_label, body) => {
     expect(() => parseCreateRouteInput(body)).toThrow(BadRequestException);

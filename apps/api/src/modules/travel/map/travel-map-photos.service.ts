@@ -12,6 +12,10 @@ import {
 } from '@aws-sdk/client-s3';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import {
+  TRAVEL_MAP_STOP_VIDEO_MAX_BYTES,
+  TRAVEL_MAP_STOP_VIDEO_MIME_TYPES,
+} from '@vedamatch/shared';
 
 export const MAX_MAP_PHOTO_BYTES = 10 * 1024 * 1024;
 export const MAP_PHOTO_MIME = new Set([
@@ -22,6 +26,12 @@ export const MAP_PHOTO_MIME = new Set([
 
 const PHOTO_WIDTH = 1600;
 const PHOTO_QUALITY = 80;
+
+const VIDEO_EXT: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
 
 export interface UploadedMapPhoto {
   buffer: Buffer;
@@ -65,16 +75,23 @@ export class TravelMapPhotosService {
     return Boolean(this.s3Client && this.bucket && this.publicUrl);
   }
 
-  /** Ключ случайный: перезалив не упирается в кэш старой картинки. */
-  async upload(
+  /**
+   * Фото места: обратная совместимость с вызовами по `placeId`.
+   * Ключ случайный: перезалив не упирается в кэш старой картинки.
+   */
+  upload(
     placeId: string,
     file: UploadedMapPhoto | undefined,
   ): Promise<{ key: string; url: string }> {
-    if (!this.s3Client || !this.bucket || !this.publicUrl) {
-      throw new ServiceUnavailableException(
-        'Загрузка фото сейчас недоступна: хранилище не настроено',
-      );
-    }
+    return this.uploadImage(`travel/map/${placeId}`, file);
+  }
+
+  /** Фото по произвольному префиксу ключа, например остановки маршрута. */
+  async uploadImage(
+    prefix: string,
+    file: UploadedMapPhoto | undefined,
+  ): Promise<{ key: string; url: string }> {
+    const { client, bucket, publicUrl } = this.requireStorage();
     if (!file?.buffer) {
       throw new BadRequestException('Файл не передан');
     }
@@ -97,10 +114,10 @@ export class TravelMapPhotosService {
     } catch {
       throw new BadRequestException('Не удалось прочитать изображение');
     }
-    const key = `travel/map/${placeId}/${randomUUID()}.webp`;
-    await this.s3Client.send(
+    const key = `${prefix}/${randomUUID()}.webp`;
+    await client.send(
       new PutObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
         Body: data,
         ContentType: 'image/webp',
@@ -108,7 +125,58 @@ export class TravelMapPhotosService {
         ACL: 'public-read',
       }),
     );
-    return { key, url: `${this.publicUrl.replace(/\/$/, '')}/${key}` };
+    return { key, url: `${publicUrl.replace(/\/$/, '')}/${key}` };
+  }
+
+  /**
+   * Короткое видео остановки. Без sharp и без перекодирования: кладём как
+   * есть. Длительность на сервере не проверяем (ffprobe в образе нет), поэтому
+   * «короткое» держится только лимитом размера; длину ограничивает клиент.
+   */
+  async uploadVideo(
+    prefix: string,
+    file: UploadedMapPhoto | undefined,
+  ): Promise<{ key: string; url: string }> {
+    const { client, bucket, publicUrl } = this.requireStorage();
+    if (!file?.buffer) {
+      throw new BadRequestException('Файл не передан');
+    }
+    const ext = (
+      TRAVEL_MAP_STOP_VIDEO_MIME_TYPES as readonly string[]
+    ).includes(file.mimetype)
+      ? VIDEO_EXT[file.mimetype]
+      : undefined;
+    if (!ext) {
+      throw new BadRequestException('Подойдут только MP4, WebM и MOV');
+    }
+    if (file.size > TRAVEL_MAP_STOP_VIDEO_MAX_BYTES) {
+      throw new BadRequestException('Видео больше 60 МБ');
+    }
+    const key = `${prefix}/${randomUUID()}.${ext}`;
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        CacheControl: 'public, max-age=31536000, immutable',
+        ACL: 'public-read',
+      }),
+    );
+    return { key, url: `${publicUrl.replace(/\/$/, '')}/${key}` };
+  }
+
+  private requireStorage() {
+    if (!this.s3Client || !this.bucket || !this.publicUrl) {
+      throw new ServiceUnavailableException(
+        'Загрузка файлов сейчас недоступна: хранилище не настроено',
+      );
+    }
+    return {
+      client: this.s3Client,
+      bucket: this.bucket,
+      publicUrl: this.publicUrl,
+    };
   }
 
   /** Ошибки удаления только логируем: строка в базе уже обновлена. */
@@ -119,9 +187,7 @@ export class TravelMapPhotosService {
         new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
       );
     } catch (error) {
-      this.logger.warn(
-        `Не удалось удалить фото места ${key}: ${String(error)}`,
-      );
+      this.logger.warn(`Не удалось удалить файл ${key}: ${String(error)}`);
     }
   }
 }

@@ -5,13 +5,24 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import type { AccessTokenPayload } from '@vedamatch/shared';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  TRAVEL_MAP_STOP_VIDEO_MAX_BYTES,
+  type AccessTokenPayload,
+} from '@vedamatch/shared';
 import { AuthGuard, CurrentUser } from '../../auth/auth.guard';
+import {
+  MAX_MAP_PHOTO_BYTES,
+  type UploadedMapPhoto,
+} from './travel-map-photos.service';
 import { TravelMapRoutesService } from './travel-map-routes.service';
 
 /** Маршруты народной карты: читать и добавлять может любой вошедший. */
@@ -57,5 +68,62 @@ export class TravelMapRoutesController {
     @Param('id') id: string,
   ): Promise<void> {
     await this.routes.remove(user, id);
+  }
+
+  @Post(':id/stops/:stopId/photos')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_MAP_PHOTO_BYTES } }),
+  )
+  addStopPhoto(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('stopId') stopId: string,
+    @UploadedFile() file?: UploadedMapPhoto,
+  ) {
+    return this.routes.addStopPhoto(user, id, stopId, file);
+  }
+
+  @Delete(':id/stops/:stopId/photos/:index')
+  removeStopPhoto(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('stopId') stopId: string,
+    @Param('index', ParseIntPipe) index: number,
+  ) {
+    return this.routes.removeStopPhoto(user, id, stopId, index);
+  }
+
+  @Post(':id/stops/:stopId/video')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: TRAVEL_MAP_STOP_VIDEO_MAX_BYTES },
+    }),
+  )
+  setStopVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('stopId') stopId: string,
+    @UploadedFile() file?: UploadedMapPhoto,
+  ) {
+    return this.routes.setStopVideo(user, id, stopId, file);
+  }
+
+  @Delete(':id/stops/:stopId/video')
+  removeStopVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('stopId') stopId: string,
+  ) {
+    return this.routes.removeStopVideo(user, id, stopId);
+  }
+
+  @Patch(':id/stops/:stopId/story')
+  updateStopStory(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @Param('stopId') stopId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.routes.updateStopStory(user, id, stopId, body);
   }
 }

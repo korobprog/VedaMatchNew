@@ -11,6 +11,7 @@ import {
 } from "@vedamatch/shared";
 import { deleteTravelMapRoute, getTravelMapRoute } from "@/lib/travel-map-api";
 import { PlacesMap } from "./places-map";
+import { WalkEditor } from "./walk-editor";
 import { formatDistance } from "./route-geo";
 import { stopsLabel } from "./route-list-view";
 
@@ -123,6 +124,15 @@ export function RouteView({ id }: { id: string }) {
         />
       </div>
 
+      <div className="mb-4">
+        <Link
+          href={`/travel/map/routes/${route.id}/walk`}
+          className="travel-map-walk-cta"
+        >
+          Пройти маршрут
+        </Link>
+      </div>
+
       {route.canEdit ? (
         <div className="mb-4 flex flex-wrap gap-2">
           <Link
@@ -170,7 +180,7 @@ export function RouteView({ id }: { id: string }) {
               >
                 {index + 1}
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm text-text-0">
                   <span className="sr-only">Остановка {index + 1}: </span>
                   {option ? <span aria-hidden="true">{option.icon} </span> : null}
@@ -197,10 +207,40 @@ export function RouteView({ id }: { id: string }) {
                   </p>
                 ) : null}
               </div>
+              {stop.media.photoUrls[0] ? (
+                <span className="relative shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={stop.media.photoUrls[0]}
+                    alt={`Фото: ${stop.name}`}
+                    loading="lazy"
+                    className="h-14 w-14 rounded-xl object-cover"
+                  />
+                  {stop.media.videoUrl ? (
+                    <span
+                      role="img"
+                      aria-label="Есть видео"
+                      className="travel-map-media-badge"
+                    >
+                      🎬
+                    </span>
+                  ) : null}
+                </span>
+              ) : stop.media.videoUrl ? (
+                <span
+                  role="img"
+                  aria-label="Есть видео"
+                  className="shrink-0 text-2xl"
+                >
+                  🎬
+                </span>
+              ) : null}
             </li>
           );
         })}
       </ol>
+
+      {route.canEdit ? <WalkEditor route={route} onChange={setRoute} /> : null}
     </article>
   );
 }
