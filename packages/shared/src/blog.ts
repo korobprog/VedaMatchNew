@@ -474,3 +474,39 @@ export interface CompleteBlogAuthorFileUploadRequest {
   key: string;
   fileName: string;
 }
+
+// ===== Фотоальбом личной страницы (VED-686, часть 3) =====
+
+/** Сколько фотографий держит альбом одной страницы. */
+export const BLOG_ALBUM_MAX_PHOTOS = 300;
+/** Подпись к фото — строка-другая, не пост. */
+export const BLOG_ALBUM_CAPTION_MAX_LENGTH = 300;
+
+export interface BlogAlbumPhotoDto {
+  id: string;
+  /** Публичная ссылка на пережатую webp. */
+  url: string;
+  width: number | null;
+  height: number | null;
+  caption: string | null;
+  createdAt: string;
+}
+
+export interface BlogAlbumResponse {
+  /** Свежие сверху. */
+  photos: BlogAlbumPhotoDto[];
+}
+
+/**
+ * Ответ на заливку: фото едут пачкой (поле `files`, до
+ * `BLOG_POST_MAX_IMAGES` за раз), часть может не пройти — отказы рядом.
+ */
+export interface BlogAlbumUploadResponse {
+  photos: BlogAlbumPhotoDto[];
+  failed: BlogImageRejection[];
+}
+
+/** Подпись к фото; пустая строка стирает. */
+export interface UpdateBlogAlbumPhotoRequest {
+  caption: string;
+}

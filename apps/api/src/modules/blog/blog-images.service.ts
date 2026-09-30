@@ -93,6 +93,18 @@ export class BlogImagesService {
   }
 
   /**
+   * Фото альбома личной страницы (VED-686). Ключ под пользователем, а не
+   * под постом: у альбома нет поста, и при удалении аккаунта ключи собирает
+   * `BlogPurgeListener` по таблице, а не по префиксу.
+   */
+  storeAlbumPhoto(
+    userId: string,
+    file: UploadedImageFile,
+  ): Promise<StoredImage | null> {
+    return this.store(`blog/album/${userId}/${randomUUID()}.webp`, file.buffer);
+  }
+
+  /**
    * Ролик и его обложка — два объекта с общим именем (VED-116).
    *
    * Ролик кладём как есть: перекодировать пятидесятимегабайтный файл прямо в

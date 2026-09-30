@@ -39,6 +39,12 @@ export class BlogPurgeListener {
       select: { storageKey: true },
     });
     storageKeys.push(...files.map((file) => file.storageKey));
+    // Фото альбома личной страницы (VED-686) — тоже отдельные объекты.
+    const photos = await this.prisma.blogAlbumPhoto.findMany({
+      where: { userId: event.userId },
+      select: { storageKey: true },
+    });
+    storageKeys.push(...photos.map((photo) => photo.storageKey));
     if (posts.length > 0) {
       this.logger.log(
         `С пользователем ${event.userId} уходят ${posts.length} постов блога и ${storageKeys.length} картинок`,
@@ -47,7 +53,11 @@ export class BlogPurgeListener {
 
     return {
       storageKeys,
-      counts: { blogPosts: posts.length, blogAuthorFiles: files.length },
+      counts: {
+        blogPosts: posts.length,
+        blogAuthorFiles: files.length,
+        blogAlbumPhotos: photos.length,
+      },
     };
   }
 }
