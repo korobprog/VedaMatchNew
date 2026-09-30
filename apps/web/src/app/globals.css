@@ -1912,3 +1912,63 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     animation: none;
   }
 }
+
+/* Метки подсервиса «Карта» («Путешествия»). Цвета — только токены темы:
+   фон и текст меняются вместе с переключателем, кромка — акцент вида. */
+.travel-map-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  max-width: 14rem;
+  border-radius: 0.6rem;
+  border: 1.5px solid var(--vm-magenta);
+  background: var(--vm-bg-1);
+  padding: 0.12rem 0.5rem 0.12rem 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--vm-text-0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.travel-map-pin__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Не проверено администрацией: пунктир и приглушённая метка. */
+.travel-map-pin--unverified {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+/* Слой общин портала — свой цвет, чтобы не путать с местами людей. */
+.travel-map-pin--community {
+  border-color: var(--vm-cyan);
+}
+
+.travel-map-pin--stay {
+  border-color: var(--vm-cyan);
+  border-style: double;
+  border-width: 3px;
+}
+
+.travel-map-pin--active {
+  background: var(--vm-bg-2);
+  border-color: var(--vm-gold);
+  z-index: 1;
+}
+
+.leaflet-marker-icon:hover .travel-map-pin,
+.leaflet-marker-icon:focus-visible .travel-map-pin {
+  background: var(--vm-bg-2);
+}
+
+.travel-map-pick {
+  display: block;
+  transform: translate(-50%, -100%);
+  font-size: 1.75rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}

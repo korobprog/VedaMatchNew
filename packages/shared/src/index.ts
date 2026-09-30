@@ -42,6 +42,7 @@ export * from './task-status';
 export * from './work';
 export * from './wellness';
 export * from './travel';
+export * from './travel-map';
 export * from './bookmarks';
 export * from './blog';
 export * from './text-blank-lines';

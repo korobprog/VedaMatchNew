@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   TRAVEL_STAY_KIND_LABELS,
   type AdminTravelStayDto,
@@ -106,6 +107,11 @@ export function AdminTravelView() {
 
   return (
     <div className="mt-6 space-y-8">
+      <p className="text-sm">
+        <Link href="/admin/travel/map" className="text-cyan underline">
+          Модерация народной карты (места и жалобы)
+        </Link>
+      </p>
       {error ? (
         <p role="alert" className="text-sm text-magenta">
           {error}

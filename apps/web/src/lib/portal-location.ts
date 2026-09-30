@@ -189,6 +189,7 @@ const PORTAL_STEPS: Readonly<Record<string, Readonly<Record<string, string>>>> =
     bookings: "Брони",
     cash: "Касса",
     manage: "Управление",
+    map: "Карта",
     stays: "Жильё",
   },
   union: {
