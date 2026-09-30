@@ -236,6 +236,8 @@ export interface ChatVacancyContext {
  * хранится в `context*` беседы: Чат не читает таблицы карты.
  */
 export interface ChatTravelMapPlaceSnapshot {
+  /** Место (по умолчанию) или набор на экскурсию. */
+  kind?: 'place' | 'tour';
   id: string;
   title: string;
   /** Подпись вида места словами: «Вегетарианское кафе». */
@@ -253,6 +255,8 @@ export interface ChatTravelMapContext {
   title: string;
   status: string;
   meta: {
+    /** `tour` — группа набора на экскурсию: ссылка ведёт на набор, а не на место. */
+    kind?: 'place' | 'tour';
     kindLabel?: string;
     lat?: number;
     lng?: number;

@@ -437,6 +437,23 @@ describe('ChatConversationsService', () => {
       );
     });
 
+    it('набор на экскурсию помечается kind: tour, место — place', async () => {
+      prisma.chatConversation.create.mockResolvedValue(conversation());
+
+      await service.create('me', {
+        kind: 'group',
+        place: { ...place, id: 'tour-1', kind: 'tour' },
+      });
+      await service.create('me', { kind: 'group', place });
+
+      const calls = prisma.chatConversation.create.mock.calls as unknown[][];
+      const metaOf = (i: number) =>
+        (calls[i][0] as { data: { contextMeta: { kind: string } } }).data
+          .contextMeta.kind;
+      expect(metaOf(0)).toBe('tour');
+      expect(metaOf(1)).toBe('place');
+    });
+
     it('отклоняет снимок с нечисловыми координатами', async () => {
       await expect(
         service.create('me', {

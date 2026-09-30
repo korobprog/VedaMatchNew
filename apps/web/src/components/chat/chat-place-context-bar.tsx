@@ -1,8 +1,12 @@
 import Link from "next/link";
 import type { ChatTravelMapContext } from "@vedamatch/shared";
-import { placeContextHref, placeContextLabel } from "./chat-place-context";
+import {
+  placeContextHref,
+  placeContextLabel,
+  placeContextTitle,
+} from "./chat-place-context";
 
-/** Шапка группы места: название ведёт на карточку места в «Путешествиях». */
+/** Шапка группы места или набора: название ведёт на карточку в «Путешествиях». */
 export function ChatPlaceContextBar({
   context,
 }: {
@@ -16,7 +20,7 @@ export function ChatPlaceContextBar({
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-1">
-          Группа места
+          {placeContextTitle(context)}
         </span>
         <Link
           href={placeContextHref(context)}

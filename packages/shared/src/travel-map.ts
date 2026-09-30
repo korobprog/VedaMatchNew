@@ -340,6 +340,9 @@ export const TRAVEL_MAP_GROUP_REQUESTED_EVENT = 'travel.map.group.requested';
 
 export interface TravelMapGroupRequestedEvent {
   requesterId: string;
+  /** `tour` — группа набора: чат запишет `meta.kind`, ссылка поведёт на набор. */
+  kind?: 'place' | 'tour';
+  /** Id места или набора. */
   placeId: string;
   title: string;
   kindLabel: string;
@@ -537,4 +540,133 @@ export interface TravelMapStopMediaDto {
 /** Правка рассказа отдельно от остановок: текст пишут после того, как маршрут собран. */
 export interface UpdateTravelMapStopStoryRequest {
   story: string;
+}
+
+// ----- Экскурсоводы и наборы на дату -----
+
+/**
+ * Экскурсовод — человек портала, который объявил, что водит. Профиль один
+ * на человека; набор (`TravelMapTour`) — конкретная прогулка по маршруту
+ * на дату, куда записываются. Оплата — только словами и реквизитами гида,
+ * как у ночлега: портал денег за экскурсии не берёт.
+ */
+export const TRAVEL_MAP_GUIDE_ABOUT_MAX = 2000;
+export const TRAVEL_MAP_GUIDE_LANGUAGES_MAX = 10;
+export const TRAVEL_MAP_GUIDE_CITIES_MAX = 10;
+
+export interface TravelMapGuideDto {
+  userId: string;
+  name: string;
+  isAgent: boolean;
+  about: string;
+  languages: string[];
+  cities: string[];
+  telegram: string | null;
+  phone: string | null;
+  /** Сколько наборов провёл и сколько назначено. */
+  toursDone: number;
+  toursUpcoming: number;
+  createdAt: string;
+}
+
+export interface UpsertTravelMapGuideRequest {
+  about: string;
+  languages?: string[];
+  cities?: string[];
+  telegram?: string | null;
+  phone?: string | null;
+}
+
+export const TRAVEL_MAP_TOUR_PAYMENTS = ['free', 'seva', 'paid'] as const;
+export type TravelMapTourPayment = (typeof TRAVEL_MAP_TOUR_PAYMENTS)[number];
+
+export const TRAVEL_MAP_TOUR_PAYMENT_LABELS: Record<TravelMapTourPayment, string> = {
+  free: 'Бесплатно',
+  seva: 'За служение',
+  paid: 'За плату',
+};
+
+export const TRAVEL_MAP_TOUR_STATUSES = ['scheduled', 'cancelled', 'done'] as const;
+export type TravelMapTourStatus = (typeof TRAVEL_MAP_TOUR_STATUSES)[number];
+
+export const TRAVEL_MAP_TOUR_STATUS_LABELS: Record<TravelMapTourStatus, string> = {
+  scheduled: 'Набор открыт',
+  cancelled: 'Отменена',
+  done: 'Прошла',
+};
+
+export const TRAVEL_MAP_TOUR_TITLE_MAX = 120;
+export const TRAVEL_MAP_TOUR_NOTE_MAX = 2000;
+export const TRAVEL_MAP_TOUR_MEETING_MAX = 300;
+export const TRAVEL_MAP_TOUR_CAPACITY_MAX = 500;
+
+export interface TravelMapTourParticipantDto {
+  userId: string;
+  name: string;
+  isAgent: boolean;
+  joinedAt: string;
+}
+
+export interface TravelMapTourDto {
+  id: string;
+  title: string;
+  /** Снимок маршрута: название и id, если маршрут ещё есть. */
+  routeId: string | null;
+  routeName: string;
+  routeKind: TravelMapRouteKind | null;
+  city: string | null;
+  guide: TravelMapAuthorDto;
+  startsAt: string;
+  /** IANA-зона места встречи: «в 7:00» — там, а не у смотрящего. */
+  timezone: string | null;
+  meetingPoint: string;
+  capacity: number | null;
+  payment: TravelMapTourPayment;
+  priceMinor: number | null;
+  currency: string;
+  note: string;
+  status: TravelMapTourStatus;
+  participantsCount: number;
+  /** Смотрящий записан. */
+  joined: boolean;
+  /** Смотрящий — гид набора или админ. */
+  canManage: boolean;
+  chatConversationId: string | null;
+  /** Список участников виден гиду и админу; остальным — пусто. */
+  participants: TravelMapTourParticipantDto[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TravelMapToursQuery {
+  /** `1` — только предстоящие (по умолчанию), `0` — все. */
+  upcoming?: string;
+  routeId?: string;
+  guideId?: string;
+  city?: string;
+}
+
+export interface CreateTravelMapTourRequest {
+  routeId: string;
+  title?: string;
+  startsAt: string;
+  timezone?: string | null;
+  meetingPoint: string;
+  capacity?: number | null;
+  payment: TravelMapTourPayment;
+  priceMinor?: number | null;
+  currency?: string;
+  note?: string;
+}
+
+export type UpdateTravelMapTourRequest = Partial<Omit<CreateTravelMapTourRequest, 'routeId'>>;
+
+/** Участник записался или вышел — «Общение» добавляет его в группу набора или убирает. */
+export const TRAVEL_MAP_TOUR_MEMBERSHIP_EVENT = 'travel.map.tour.membership';
+
+export interface TravelMapTourMembershipEvent {
+  conversationId: string;
+  guideId: string;
+  userId: string;
+  action: 'joined' | 'left';
 }

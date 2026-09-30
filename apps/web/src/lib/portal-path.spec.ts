@@ -132,6 +132,12 @@ describe("buildPortalPath", () => {
       "Новое место",
     ]);
     expect(labels("/travel/map/routes/r1/walk").at(-1)).toBe("Прогулка");
+    expect(labels("/travel/map/tours/t1/edit").slice(3)).toEqual([
+      "Наборы",
+      "Набор",
+      "Правка",
+    ]);
+    expect(labels("/travel/map/guides/me").at(-1)).toBe("Мой профиль гида");
     expect(labels("/travel/map/routes/r1/edit")).toEqual([
       "Главная",
       "Путешествия",

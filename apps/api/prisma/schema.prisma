@@ -492,6 +492,9 @@ model User {
   travelMapChecks                    TravelMapCheck[]              @relation("TravelMapChecks")
   travelMapNotes                     TravelMapNote[]               @relation("TravelMapNotesWritten")
   travelMapRoutes                    TravelMapRoute[]              @relation("TravelMapRoutesAuthored")
+  travelMapGuide                     TravelMapGuide?               @relation("TravelMapGuideProfile")
+  travelMapToursGuided               TravelMapTour[]               @relation("TravelMapToursGuided")
+  travelMapTourParticipations        TravelMapTourParticipant[]    @relation("TravelMapTourParticipations")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
@@ -7417,6 +7420,7 @@ model TravelMapRoute {
   updatedAt DateTime @updatedAt
 
   stops TravelMapRouteStop[]
+  tours TravelMapTour[]
 
   @@index([status, startLat, startLng])
   @@index([status, kind])
@@ -7450,6 +7454,92 @@ model TravelMapRouteStop {
 
   @@unique([routeId, position])
   @@index([placeId])
+}
+
+/// Экскурсовод: человек портала, объявивший, что водит. Один профиль на
+/// человека; наборы — отдельно.
+model TravelMapGuide {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation("TravelMapGuideProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  about     String   @default("")
+  languages String[] @default([])
+  cities    String[] @default([])
+  telegram  String?
+  phone     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum TravelMapTourPayment {
+  free
+  seva
+  paid
+}
+
+enum TravelMapTourStatus {
+  scheduled
+  cancelled
+  done
+}
+
+/// Набор на экскурсию: прогулка по маршруту на дату, куда записываются.
+/// Маршрут — SetNull со снимком названия: удалённая парикрама не должна
+/// стирать набор, на который люди уже записались.
+model TravelMapTour {
+  id    String @id @default(uuid())
+  title String
+
+  routeId   String?
+  route     TravelMapRoute? @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  routeName String
+  city      String?
+
+  /// Гид — владелец набора. Cascade: без гида набора нет.
+  guideId String
+  guide   User   @relation("TravelMapToursGuided", fields: [guideId], references: [id], onDelete: Cascade)
+
+  startsAt     DateTime
+  /// IANA-зона места встречи, как у общин: «в 7:00» — там, а не у смотрящего.
+  timezone     String?
+  meetingPoint String  @default("")
+  capacity     Int?
+  payment      TravelMapTourPayment @default(free)
+  priceMinor   Int?
+  currency     String               @default("rub")
+  note         String               @default("")
+
+  status TravelMapTourStatus @default(scheduled)
+
+  /// Денормализовано: список наборов без подзапроса.
+  participantsCount Int @default(0)
+
+  /// Группа набора в «Общении» — снимок id беседы, без FK.
+  chatConversationId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants TravelMapTourParticipant[]
+
+  @@index([status, startsAt])
+  @@index([guideId, startsAt])
+  @@index([routeId])
+}
+
+model TravelMapTourParticipant {
+  id     String        @id @default(uuid())
+  tourId String
+  tour   TravelMapTour @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  userId String
+  user   User          @relation("TravelMapTourParticipations", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([tourId, userId])
+  @@index([userId])
 }
 
 /// Лента, к которой относится категория Вдохновения (VED-139). Открытки и

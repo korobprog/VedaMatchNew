@@ -12,6 +12,7 @@ import {
 import { deleteTravelMapRoute, getTravelMapRoute } from "@/lib/travel-map-api";
 import { PlacesMap } from "./places-map";
 import { WalkEditor } from "./walk-editor";
+import { TourRouteBlock } from "./tour-route-block";
 import { formatDistance } from "./route-geo";
 import { stopsLabel } from "./route-list-view";
 
@@ -164,6 +165,8 @@ export function RouteView({ id }: { id: string }) {
           {route.description}
         </p>
       ) : null}
+
+      <TourRouteBlock routeId={route.id} />
 
       <h2 className="mb-2 font-display text-xl text-text-0">Остановки</h2>
       <ol className="space-y-2">
