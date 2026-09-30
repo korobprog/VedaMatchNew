@@ -36,6 +36,7 @@ function reelDto(overrides: Partial<MotivationReelDto>): MotivationReelDto {
       categoryTitle: "daily",
       imageUrl: "",
       imageThumbUrl: "",
+      imageWebUrl: "",
       storyImageUrl: "",
       videoUrl: "",
       videoHasSound: false,

@@ -122,7 +122,11 @@ describe('MotivationWorkerService', () => {
 
     const failure = motivationPost.updateMany.mock.calls
       .map(([input]) => input as { data: Record<string, unknown> })
-      .find((input) => 'generationErrorCode' in input.data && input.data.generationErrorCode !== null);
+      .find(
+        (input) =>
+          'generationErrorCode' in input.data &&
+          input.data.generationErrorCode !== null,
+      );
     expect(failure?.data.attemptCount).toBeUndefined();
   });
 
@@ -306,7 +310,9 @@ describe('MotivationWorkerService', () => {
     const { prisma, generation, motivationPost } = createWorker({
       // Реального одобрения нет — как и раньше, когда settings отсутствовал
       // и shouldAutoPublish возвращал false, даже не дойдя до этого запроса.
-      motivationModerationAudit: { findFirst: jest.fn().mockResolvedValue(null) },
+      motivationModerationAudit: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     });
     const settings = {
       read: jest.fn().mockResolvedValue({ autoQuoteDiscoveryEnabled: true }),
@@ -404,6 +410,13 @@ describe('MotivationWorkerService', () => {
             `https://cdn.test/${key.replace(/\.png$/, '-w720.webp')}`,
           ),
         ),
+      webForNewImage: jest
+        .fn()
+        .mockImplementation((key: string) =>
+          Promise.resolve(
+            `https://cdn.test/${key.replace(/\.png$/, '-web.webp')}`,
+          ),
+        ),
     };
     const worker = new MotivationWorkerService(
       prisma as never,
@@ -427,9 +440,18 @@ describe('MotivationWorkerService', () => {
     expect(update.data.imageThumbUrl).toBe(
       `https://cdn.test/${imageKey.replace(/\.png$/, '-w720.webp')}`,
     );
+    expect(thumbs.webForNewImage).toHaveBeenCalledWith(
+      imageKey,
+      expect.any(Buffer),
+    );
+    expect(update.data.imageWebUrl).toBe(
+      `https://cdn.test/${imageKey.replace(/\.png$/, '-web.webp')}`,
+    );
     expect(update.data).toMatchObject({
       imageThumbAttempts: 0,
       imageThumbAttemptAt: null,
+      imageWebAttempts: 0,
+      imageWebAttemptAt: null,
     });
   });
 
@@ -443,7 +465,10 @@ describe('MotivationWorkerService', () => {
       undefined,
       undefined,
       undefined,
-      { forNewImage: jest.fn().mockResolvedValue(null) } as never,
+      {
+        forNewImage: jest.fn().mockResolvedValue(null),
+        webForNewImage: jest.fn().mockResolvedValue(null),
+      } as never,
     );
 
     await worker.tick();

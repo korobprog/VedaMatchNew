@@ -85,6 +85,7 @@ import {
   isSameFeedHref,
 } from "./feed-position";
 import { SourceLink } from "./source-link";
+import { displayImageUrl, feedImageUrl } from "./display-image";
 import { RemainingBadge } from "./remaining-badge";
 import {
   attributionParts,
@@ -1267,11 +1268,12 @@ function ReelSlide({
         // и плечи. Кадр мельче, зато на нём всё, что нарисовано, — в том числе
         // у картинок, сделанных до этой правки.
         <div className="absolute inset-0">
-          {/* Оба слоя — оригинал: лёгкая копия только для викторины
-              (VED-629), во Вдохновении просили качество. */}
+          {/* Подложка размыта — ей хватает лёгкой копии 720. Сам кадр —
+              полноразмерный WebP: качество оригинала при весе в разы
+              меньше; оригинал PNG остаётся для скачивания. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={post.imageUrl}
+            src={displayImageUrl(post)}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
@@ -1281,7 +1283,7 @@ function ReelSlide({
               набрана поверх слайда, и повторять её в alt незачем. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={post.imageUrl}
+            src={feedImageUrl(post)}
             alt={printed ? quote || post.title : ""}
             loading={position < 2 ? "eager" : "lazy"}
             className="absolute inset-x-0 bottom-[4.5rem] top-0 h-[calc(100%-4.5rem)] w-full object-contain"

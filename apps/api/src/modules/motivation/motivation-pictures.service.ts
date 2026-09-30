@@ -15,6 +15,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   MotivationImageThumbService,
   thumbFields,
+  webFields,
 } from './motivation-image-thumb.service';
 import { isAdmin } from './is-admin';
 import { MotivationCategoriesService } from './motivation-categories.service';
@@ -145,7 +146,10 @@ export class MotivationPicturesService {
     });
 
     const id = randomUUID();
-    const { imageUrl, imageThumbUrl } = await this.store(id, file!);
+    const { imageUrl, imageThumbUrl, imageWebUrl } = await this.store(
+      id,
+      file!,
+    );
     const title = pictureTitle(input.text, categoryRow?.title ?? category);
     const now = new Date();
 
@@ -176,6 +180,7 @@ export class MotivationPicturesService {
         attributionWork: input.work || null,
         imageUrl,
         ...thumbFields(imageThumbUrl),
+        ...webFields(imageWebUrl),
         storyImageUrl: imageUrl,
         generationStage: 'uploaded',
         promptVersion: 'picture-v1',
@@ -232,7 +237,11 @@ export class MotivationPicturesService {
   private async store(
     postId: string,
     file: UploadedReelImage,
-  ): Promise<{ imageUrl: string; imageThumbUrl: string | null }> {
+  ): Promise<{
+    imageUrl: string;
+    imageThumbUrl: string | null;
+    imageWebUrl: string | null;
+  }> {
     const image = sharp(file.buffer, {
       failOn: 'error',
       limitInputPixels: true,
@@ -261,6 +270,10 @@ export class MotivationPicturesService {
     // килобайт даже в WebP, а на слайде хватает 720.
     const imageThumbUrl =
       (await this.thumbs?.forNewImage(key, prepared)) ?? null;
-    return { imageUrl, imageThumbUrl };
+    // Web-копия: те же пиксели, но лёгкая; лента берёт её, оригинал — для
+    // скачивания.
+    const imageWebUrl =
+      (await this.thumbs?.webForNewImage(key, prepared)) ?? null;
+    return { imageUrl, imageThumbUrl, imageWebUrl };
   }
 }
