@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toggledHref } from "./union-toggle-link";
+import { oppositeGenderHref, toggledHref } from "./union-toggle-link";
 
 /* VED-652: «Показать всех» и «Избранное» — переключатели в адресе. */
 describe("toggledHref", () => {
@@ -29,5 +29,21 @@ describe("toggledHref", () => {
         "all",
       ),
     ).toBe("/union/recommendations?gender=all");
+  });
+});
+
+/* VED-673: «Противоположный пол» — снять выбранный вручную пол. */
+describe("oppositeGenderHref", () => {
+  it("убирает пол и страницу, остальное оставляет", () => {
+    expect(
+      oppositeGenderHref("/union/recommendations", {
+        gender: "all",
+        page: "2",
+        stage: "devotee",
+      }),
+    ).toBe("/union/recommendations?stage=devotee");
+    expect(oppositeGenderHref("/union/recommendations", {})).toBe(
+      "/union/recommendations",
+    );
   });
 });

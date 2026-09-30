@@ -46,7 +46,12 @@ export function first(value: string | string[] | undefined): string | undefined 
 export function countActiveFilters(
   params: Record<string, string | string[] | undefined>,
 ): number {
-  return filterKeys.filter((key) => Boolean(first(params[key]))).length;
+  const count = filterKeys.filter((key) => Boolean(first(params[key]))).length;
+  // «Показать всех» на панели (`gender=all`) и чип «Все» в целях
+  // (`showAll`) человек видит одним фильтром (VED-674) — и считаем за один.
+  return first(params.gender) === "all" && first(params.showAll) === "true"
+    ? count - 1
+    : count;
 }
 
 /** Условия, которые выдачу расширяют, а не сужают: сбрасывать их бессмысленно. */

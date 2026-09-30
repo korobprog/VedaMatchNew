@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Star, Users } from "lucide-react";
+import { Mars, Star, Users, Venus, VenusAndMars } from "lucide-react";
 import { redirect } from "next/navigation";
 import { RecommendationsView } from "@/components/union/recommendations-view";
 import { RecommendationsEmpty } from "@/components/union/recommendations-empty";
@@ -13,6 +13,7 @@ import {
 } from "@/components/union/page-size";
 import {
   UnionToggleLink,
+  oppositeGenderHref,
   toggledHref,
 } from "@/components/union/union-toggle-link";
 import { UnionNav } from "@/components/union/union-nav";
@@ -62,9 +63,9 @@ export default async function UnionRecommendationsPage({
         )?.total ?? 0)
       : 0;
 
-  // «Показать всех» и «Избранное» (VED-652): по умолчанию лента — анкеты
-  // противоположного пола; «Показать всех» снимает этот отбор, повторный
-  // клик возвращает его.
+  // «Показать всех», «Противоположный пол» и «Избранное» (VED-652,
+  // VED-673): по умолчанию лента — анкеты противоположного пола; «Показать
+  // всех» снимает этот отбор, «Противоположный пол» возвращает его.
   const path = "/union/recommendations";
   const showEveryone = first(params.gender) === "all";
   const favoritesOnly = first(params.favoritesOnly) === "true";
@@ -75,6 +76,22 @@ export default async function UnionRecommendationsPage({
         icon={<Users size={20} aria-hidden />}
         label="Показать всех"
         active={showEveryone}
+      />
+      {/* «Противоположный пол» (VED-673): мужчине — женский значок, женщине —
+          мужской. Нажата, пока пол не выбран вручную: это и есть умолчание. */}
+      <UnionToggleLink
+        href={oppositeGenderHref(path, params)}
+        icon={
+          user.gender === "male" ? (
+            <Venus size={20} aria-hidden />
+          ) : user.gender === "female" ? (
+            <Mars size={20} aria-hidden />
+          ) : (
+            <VenusAndMars size={20} aria-hidden />
+          )
+        }
+        label="Противоположный пол"
+        active={!first(params.gender)}
       />
       <UnionToggleLink
         href={toggledHref(path, params, "favoritesOnly", "true")}
