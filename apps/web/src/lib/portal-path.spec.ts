@@ -117,6 +117,22 @@ describe("buildPortalPath", () => {
     ]);
   });
 
+  it("карта путешествий: папка places выпадает, место — из заголовка", () => {
+    expect(labels("/travel/map/places/p1/edit")).toEqual([
+      "Главная",
+      "Путешествия",
+      "Карта",
+      "Место",
+      "Правка",
+    ]);
+    expect(labels("/travel/map/new")).toEqual([
+      "Главная",
+      "Путешествия",
+      "Карта",
+      "Новое место",
+    ]);
+  });
+
   it("ветка беседы: буквальная папка thread выпадает", () => {
     expect(labels("/chat/c1/thread/m1")).toEqual([
       "Главная",

@@ -486,6 +486,9 @@ model User {
   travelBookings                     TravelBooking[]               @relation("TravelBookingsPlaced")
   travelReviews                      TravelReview[]                @relation("TravelReviewsWritten")
   travelCashEntries                  TravelCashEntry[]             @relation("TravelCashEntriesAuthored")
+  travelMapPlaces                    TravelMapPlace[]              @relation("TravelMapPlacesCreated")
+  travelMapPlacesVerified            TravelMapPlace[]              @relation("TravelMapPlacesVerified")
+  travelMapReports                   TravelMapPlaceReport[]        @relation("TravelMapReportsFiled")
   workTravelBookings                 WorkTravelBooking[]           @relation("WorkTravelBookings")
   bookmarks                          BookmarksEntry[]              @relation("BookmarksOwned")
   blogPosts                          BlogPost[]                    @relation("BlogPostsWritten")
@@ -7196,6 +7199,122 @@ model TravelReview {
 
   @@index([stayId, status, createdAt(sort: Desc)])
   @@index([authorId])
+}
+
+// ===== Путешествия → Карта: народная карта мест =====
+
+/// Вид места народной карты. Дублирует список из @vedamatch/shared
+/// (`TRAVEL_MAP_PLACE_KINDS`): enum держит базу честной, справочник —
+/// подписи и значки. Линия (ISKCON, матх, паривар) — не вид, а строка
+/// `lineage` из общего справочника линий, как у людей и материалов.
+enum TravelMapPlaceKind {
+  temple
+  math
+  nama_hatta
+  bhakti_vriksha
+  ashram
+  farm
+  holy_place
+  cafe
+  shop
+  eco_shop
+  prasadam
+  harinam_spot
+  sankirtana_spot
+  other
+}
+
+/// Черновиков нет: место либо на карте, либо спрятано администрацией.
+enum TravelMapPlaceStatus {
+  active
+  hidden
+}
+
+/// Место, отмеченное человеком портала: храм, кафе, место харинамы.
+///
+/// Отдельно от `TravelPlace`: тот — точка администрации, вокруг которой
+/// собирается ночлег, и заводить её может только админ. Здесь — народная
+/// карта: публикуется сразу, без премодерации, а администрация подтверждает
+/// (`verifiedAt`) и прячет по жалобе. Премодерация убила бы карту на старте:
+/// первые сотни мест некому проверять.
+///
+/// Общины в эту таблицу не копируются: слой общин на карте читается из
+/// портальной `Community` напрямую. FK на неё нет намеренно — «храм» здесь и
+/// «храм» в справочнике общин могут быть одним местом, и склейку решит
+/// человек, а не база.
+model TravelMapPlace {
+  id   String             @id @default(uuid())
+  kind TravelMapPlaceKind
+  name String
+
+  description String @default("")
+  address     String @default("")
+  lat         Float
+  lng         Float
+  city        String?
+  country     String?
+  /// LineageId из @vedamatch/shared строкой, без enum Postgres: новая линия —
+  /// правка одного файла, а не миграция. Пусто у кафе и мест харинамы.
+  lineage     String?
+
+  /// Свободный текст: «ежедневно 9–21, пн выходной». Расписание структурой
+  /// не нужно, пока по нему ничего не считается.
+  openingHours String?
+  website      String?
+  phone        String?
+  telegram     String?
+
+  /// Ключи и публичные ссылки парами по индексу: ключ — чтобы удалить из
+  /// S3, ссылка — чтобы показать без подписи. Фото места публичны.
+  photoKeys String[] @default([])
+  photoUrls String[] @default([])
+
+  status       TravelMapPlaceStatus @default(active)
+  /// Почему спрятано — автору, а не всем.
+  hiddenReason String?
+
+  /// Отметка администрации «место проверено». Слабее статуса: место без
+  /// отметки на карте есть, но с пометкой «не проверено».
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedBy   User?     @relation("TravelMapPlacesVerified", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  /// SetNull: удалённый аккаунт не уносит с карты храм, который он отметил.
+  createdById String?
+  createdBy   User?   @relation("TravelMapPlacesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports TravelMapPlaceReport[]
+
+  @@index([status, lat, lng])
+  @@index([status, kind])
+  @@index([createdById])
+}
+
+enum TravelMapReportStatus {
+  open
+  resolved
+}
+
+/// Жалоба на место: закрылось, дубль, не то, чем назвалось. Своя таблица, а
+/// не `UserReport` модерации: там жалуются на человека, здесь — на точку.
+model TravelMapPlaceReport {
+  id      String         @id @default(uuid())
+  placeId String
+  place   TravelMapPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  reporterId String?
+  reporter   User?   @relation("TravelMapReportsFiled", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  reason    String
+  status    TravelMapReportStatus @default(open)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([placeId])
 }
 
 /// Лента, к которой относится категория Вдохновения (VED-139). Открытки и

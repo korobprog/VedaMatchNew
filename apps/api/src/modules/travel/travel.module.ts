@@ -8,6 +8,10 @@ import { TravelCashService } from './cash/travel-cash.service';
 import { TravelGuestPhotosService } from './guests/travel-guest-photos.service';
 import { TravelGuestsController } from './guests/travel-guests.controller';
 import { TravelGuestsService } from './guests/travel-guests.service';
+import { TravelMapAdminController } from './map/travel-map-admin.controller';
+import { TravelMapController } from './map/travel-map.controller';
+import { TravelMapPhotosService } from './map/travel-map-photos.service';
+import { TravelMapService } from './map/travel-map.service';
 import { TravelManageController } from './manage/travel-manage.controller';
 import { TravelManageService } from './manage/travel-manage.service';
 import { TravelPublicController } from './stays/travel-public.controller';
@@ -16,7 +20,7 @@ import { TravelController } from './stays/travel.controller';
 import { TravelService } from './stays/travel.service';
 
 /**
- * Сервис «Путешествия», раздел «Ночлег». По контракту сервисного модуля
+ * Сервис «Путешествия», разделы «Ночлег» и «Карта». По контракту сервисного модуля
  * импортирует только AuthModule; PrismaService глобальный, EventEmitter2
  * инжектится напрямую.
  *
@@ -28,6 +32,8 @@ import { TravelService } from './stays/travel.service';
   imports: [AuthModule],
   controllers: [
     TravelAdminController,
+    TravelMapAdminController,
+    TravelMapController,
     TravelCashController,
     TravelGuestsController,
     TravelManageController,
@@ -42,6 +48,8 @@ import { TravelService } from './stays/travel.service';
     TravelGuestsService,
     TravelGuestPhotosService,
     TravelAdminService,
+    TravelMapService,
+    TravelMapPhotosService,
     TravelPurgeListener,
   ],
 })
