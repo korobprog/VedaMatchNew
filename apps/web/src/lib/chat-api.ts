@@ -9,6 +9,7 @@ import type {
   ChatColorTemplatesState,
   ChatConversationDetail,
   ChatConversationThemeState,
+  ChatDirectWithState,
   ChatListState,
   ChatChannelCommunitiesState,
   ChatDiscoverState,
@@ -96,6 +97,20 @@ export function getChatConversation(
   return chatGet<ChatConversationDetail>(
     `/chat/conversations/${encodeURIComponent(id)}`,
   );
+}
+
+/**
+ * Личный диалог с человеком — мини-чат на личной странице (VED-686).
+ *
+ * `null` — переписки ещё нет, и это не ошибка: страница показывает пустой
+ * мини-чат, а диалог заводится первым сообщением из него.
+ */
+export function getDirectChatWith(
+  userId: string,
+): Promise<ChatConversationDetail | null> {
+  return chatGet<ChatDirectWithState>(
+    `/chat/direct-with/${encodeURIComponent(userId)}`,
+  ).then((state) => state?.conversation ?? null);
 }
 
 export function getAdminChatReports(
