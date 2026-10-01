@@ -372,3 +372,24 @@ export class BlogController {
     await this.blog.remove(user.sub, isAdmin(user), id);
   }
 }
+
+/**
+ * Пост для превью ссылки (VED-718) — без входа, как публичное «Радио»
+ * (`music-radio.controller.ts`): мессенджер приходит без cookie, и если
+ * отдать ему 401, в карточке окажется общая картинка портала вместо
+ * картинки поста. Только заголовок, начало текста и картинки — автор,
+ * счётчики и статусы гостю не нужны.
+ *
+ * Объявлен отдельным классом: гард у `BlogController` стоит на классе и
+ * действует на все его маршруты, а снимать его ради одного нельзя.
+ */
+@Controller('blog')
+@Throttle({ default: { ttl: 60_000, limit: 60 } })
+export class BlogPublicController {
+  constructor(private readonly blog: BlogService) {}
+
+  @Get('public/posts/:id')
+  publicPost(@Param('id') id: string) {
+    return this.blog.publicPost(id);
+  }
+}

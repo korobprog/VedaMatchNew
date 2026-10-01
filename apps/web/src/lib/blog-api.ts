@@ -3,6 +3,7 @@
 // Отдельный файл от браузерного `blog-client-api.ts`: `next/headers` нельзя
 // тянуть в модуль, который импортируют клиентские компоненты, — сборка падает.
 import { cookies } from "next/headers";
+import { cache } from "react";
 import type {
   BlogAlbumResponse,
   BlogAuthorFeedResponse,
@@ -11,6 +12,7 @@ import type {
   BlogFeedResponse,
   BlogHomeFeedResponse,
   BlogPostDto,
+  BlogPublicPostDto,
   BlogSettingsDto,
 } from "@vedamatch/shared";
 
@@ -34,6 +36,35 @@ async function blogGet<T>(path: string): Promise<T | null> {
     return null;
   }
 }
+
+/**
+ * Запрос без входа (VED-718): превью ссылки и тизер гостя спрашивают API
+ * публичным методом, cookie для него не нужны. null — поста нет или он не из
+ * общей ленты: страница покажет приглашение войти, а превью останется без
+ * картинки, но уже без карточки портала.
+ */
+async function blogGetPublic<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    // Nest отдаёт пустое тело контроллерам, вернувшим null (см. lib/api.ts).
+    const text = await res.text();
+    return text ? (JSON.parse(text) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Пост без входа (VED-718) — для `generateMetadata` и тизера гостя. В
+ * React.cache: оба зовут его в одном рендерe, запрос уходит один (как
+ * `getServiceCard` в lib/api.ts).
+ */
+export const getPublicBlogPost = cache((id: string) =>
+  blogGetPublic<BlogPublicPostDto>(
+    `/blog/public/posts/${encodeURIComponent(id)}`,
+  ),
+);
 
 export function getBlogHomeFeed(): Promise<BlogHomeFeedResponse | null> {
   // Карусель на главной листает больше постов, чем полоса в приложении,

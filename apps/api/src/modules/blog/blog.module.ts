@@ -9,7 +9,7 @@ import { BlogFileStorageService } from './blog-file-storage.service';
 import { BlogImagesService } from './blog-images.service';
 import { BlogLibraryListener } from './blog-library.listener';
 import { BlogPurgeListener } from './blog-purge.listener';
-import { BlogController } from './blog.controller';
+import { BlogController, BlogPublicController } from './blog.controller';
 import { BlogService } from './blog.service';
 import { BlogVideoService } from './blog-video.service';
 
@@ -25,7 +25,7 @@ import { BlogVideoService } from './blog-video.service';
  */
 @Module({
   imports: [AuthModule, ModerationModule],
-  controllers: [BlogAdminController, BlogController],
+  controllers: [BlogAdminController, BlogController, BlogPublicController],
   providers: [
     BlogService,
     BlogAvatarService,

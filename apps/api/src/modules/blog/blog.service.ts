@@ -27,6 +27,7 @@ import {
   type BlogPostCreatedResponse,
   type BlogPostDto,
   type BlogPostLinkDto,
+  type BlogPublicPostDto,
   type BlogFeedReviewRequest,
   type BlogPostUpdatedResponse,
   type BlogSettingsDto,
@@ -178,6 +179,21 @@ interface Viewer {
   userId: string;
   isAdmin: boolean;
   hiddenUserIds: Set<string>;
+}
+
+/** Сколько текста уходит в карточку ссылки и тизер гостя (VED-718). */
+const PUBLIC_EXCERPT_LENGTH = 280;
+
+/**
+ * Начало текста поста одной строкой: карточке ссылки нужно описание в одну
+ * строку, а в тизере гостя переносы строк всё равно схлопнулись бы.
+ */
+function publicExcerpt(text: string, length = PUBLIC_EXCERPT_LENGTH): string {
+  const plain = text.replace(/\s+/g, ' ').trim();
+  if (plain.length <= length) return plain;
+  const cut = plain.slice(0, length - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${cut.slice(0, space > length / 2 ? space : cut.length)}…`;
 }
 
 @Injectable()
@@ -381,6 +397,37 @@ export class BlogService {
       throw new NotFoundException('post_not_found');
     }
     return this.postDto(row, viewer, new Date());
+  }
+
+  /**
+   * Пост без входа (VED-718): превью ссылки в мессенджере собирает бот, у
+   * которого нет cookie, а перехваченный гардом запрос вернул бы карточку
+   * портала. Отдаём ровно то, что нужно карточке, — заголовок, начало текста
+   * и картинки в порядке карусели, — без автора, счётчиков и статусов.
+   *
+   * Только принятое в общую ленте, как в `feedWhere`: личное, ожидающее и
+   * отклонённое по прямой ссылке гостю не светим.
+   */
+  async publicPost(id: string): Promise<BlogPublicPostDto> {
+    const row = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        text: true,
+        feedStatus: true,
+        images: { select: IMAGE_SELECT, orderBy: { position: 'asc' as const } },
+      },
+    });
+    if (!row || row.feedStatus !== 'feed') {
+      throw new NotFoundException('post_not_found');
+    }
+    return {
+      id: row.id,
+      title: row.title,
+      excerpt: publicExcerpt(row.text),
+      media: row.images,
+    };
   }
 
   /**

@@ -253,6 +253,20 @@ export interface BlogPostDto {
   feedReviewNote?: string | null;
 }
 
+/**
+ * Пост для превью ссылки (VED-718): мессенджер приходит без входа, и ему
+ * нужны только заголовок, картинки и начало текста. Ни автора, ни счётчиков,
+ * ни статусов — гость их не видит.
+ */
+export interface BlogPublicPostDto {
+  id: string;
+  title: string | null;
+  /** Обрезанное начало текста — для описания в карточке и тизера гостя. */
+  excerpt: string;
+  /** Фото и ролики в порядке карусели; картинкой превью ролика служит `posterUrl`. */
+  media: BlogMediaDto[];
+}
+
 export interface BlogFeedResponse {
   posts: BlogPostDto[];
   /** null — дальше ничего нет. */
