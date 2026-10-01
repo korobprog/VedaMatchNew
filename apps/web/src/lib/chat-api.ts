@@ -19,6 +19,7 @@ import type {
   ChatUnreadState,
   ChatUserSummary,
 } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000";
 
@@ -29,7 +30,7 @@ async function chatGet<T>(path: string): Promise<T | null> {
   if (!token) return null;
 
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(await clientIpHeaders()) },
     cache: "no-store",
   });
   if (!res.ok) return null;
@@ -55,7 +56,10 @@ export function getChatMap(): Promise<ChatMapState | null> {
  * запрашивает её до входа. Городов в ответе нет — см. ChatPublicMapState.
  */
 export async function getChatPublicMap(): Promise<ChatPublicMapState | null> {
-  const res = await fetch(`${API_URL}/chat/public-map`, { cache: "no-store" });
+  const res = await fetch(`${API_URL}/chat/public-map`, {
+    headers: await clientIpHeaders(),
+    cache: "no-store",
+  });
   if (!res.ok) return null;
   return (await res.json()) as ChatPublicMapState;
 }

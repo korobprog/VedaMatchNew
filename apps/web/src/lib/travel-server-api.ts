@@ -1,4 +1,5 @@
 import type { TravelStayDto } from "@vedamatch/shared";
+import { clientIpHeaders } from "@/lib/client-ip";
 
 // Серверные запросы «Путешествий»: страница объекта по QR рендерится на
 // сервере, чтобы гость со слабым интернетом сразу видел карточку, а превью
@@ -11,7 +12,7 @@ export async function getPublicStay(
 ): Promise<TravelStayDto | null> {
   const res = await fetch(
     `${API_URL}/travel/public/stays/${encodeURIComponent(code)}`,
-    { cache: "no-store" },
+    { headers: await clientIpHeaders(), cache: "no-store" },
   );
   if (res.status === 404 || res.status === 400) return null;
   if (!res.ok) throw new Error(`travel public stay: ${res.status}`);
