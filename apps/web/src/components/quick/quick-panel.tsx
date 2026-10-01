@@ -98,6 +98,7 @@ import {
   BUILTIN_QUICK_ACTIONS,
   isExternalQuickHref,
   quickHrefOpensApp,
+  openQuickAppHref,
   CUSTOM_ACTION_PREFIX,
   addCustomQuickAction,
   arrangeQuickActions,
@@ -779,6 +780,7 @@ function HeaderAction({
         href={meta.href}
         target={quickHrefOpensApp(meta.href) ? undefined : "_blank"}
         rel="noopener noreferrer"
+        onClick={(event) => void openQuickAppHref(event, meta.href!)}
         aria-label={
           quickHrefOpensApp(meta.href)
             ? meta.label
@@ -1108,7 +1110,10 @@ function QuickTiles({
                     quickHrefOpensApp(meta.href) ? undefined : "_blank"
                   }
                   rel="noopener noreferrer"
-                  onClick={onClose}
+                  onClick={(event) => {
+                    openQuickAppHref(event, meta.href!);
+                    onClose();
+                  }}
                   title={meta.hint}
                   className={tileClass}
                 >
