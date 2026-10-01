@@ -1198,3 +1198,69 @@ describe('BlogService feed review (VED-686)', () => {
     ).resolves.toMatchObject({ feedReviewNote: null });
   });
 });
+
+describe('BlogService.publicPost (VED-718)', () => {
+  // Карточку ссылки собирает мессенджер без входа: ей нужны заголовок, начало
+  // текста и картинки — и ничего из того, чего гость не должен видеть.
+  it('returns title, excerpt and media, nothing private', async () => {
+    const { service } = build(
+      storedPost({
+        feedStatus: 'feed',
+        text: `  Первый абзац.\n\n  Второй   абзац ${'слов '.repeat(60)}`,
+        images: [
+          {
+            id: 'p',
+            kind: 'photo',
+            url: 'https://cdn/p.webp',
+            width: 3,
+            height: 4,
+            posterUrl: null,
+            durationSec: null,
+          },
+        ],
+      }),
+    );
+
+    const post = await service.publicPost('post-1');
+
+    expect(post).toEqual({
+      id: 'post-1',
+      title: 'Заголовок',
+      excerpt: expect.stringMatching(/^Первый абзац\. Второй абзац/),
+      media: [
+        {
+          id: 'p',
+          kind: 'photo',
+          url: 'https://cdn/p.webp',
+          width: 3,
+          height: 4,
+          posterUrl: null,
+          durationSec: null,
+        },
+      ],
+    });
+    // Одна строка и короче предела: такое описание и уходит в og:description.
+    expect(post.excerpt).not.toContain('\n');
+    expect(post.excerpt.length).toBeLessThanOrEqual(280);
+    expect(post).not.toHaveProperty('author');
+    expect(post).not.toHaveProperty('likeCount');
+    expect(post).not.toHaveProperty('feedStatus');
+  });
+
+  // Личное, ожидающее и отклонённое по прямой ссылке не светим.
+  it('hides a post that is not in the general feed', async () => {
+    const { service } = build(storedPost({ feedStatus: 'personal' }));
+
+    await expect(service.publicPost('post-1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('answers 404 for a post that is gone', async () => {
+    const { service } = build(null);
+
+    await expect(service.publicPost('nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});

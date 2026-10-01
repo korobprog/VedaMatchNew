@@ -55,6 +55,22 @@ describe("proxy", () => {
     }
   });
 
+  // Пост открыт гостю ради превью ссылки в мессенджере (VED-718): боту нужны
+  // мета-теги, человеку без аккаунта — тизер с кнопкой входа. Лента и всё
+  // остальное под `/blog` остаются за гардом.
+  it("opens a blog post link for a guest and keeps the rest of /blog private", () => {
+    const open = proxy(
+      new NextRequest("https://vedamatch.ru/blog/posts/post-1"),
+    );
+    expect(open.headers.get("location")).toBeNull();
+
+    for (const path of ["/blog", "/blog/posts", "/blog/authors/u1"]) {
+      const response = proxy(new NextRequest(`https://vedamatch.ru${path}`));
+
+      expect(response.headers.get("location"), path).toContain("returnTo=");
+    }
+  });
+
   // Ссылка на конференцию — главный путь VED-360: гость обязан увидеть
   // карточку приглашения, а не лендинг, иначе «зарегался и сразу в комнате»
   // начинается с блуждания.

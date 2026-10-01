@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
 import { canAdminService } from "@vedamatch/shared";
+import { headers } from "next/headers";
 import { Header } from "@/components/header";
+import { getProfile } from "@/lib/api";
 import { requireUser } from "@/lib/require-user";
 import { InstallEnvironmentBeacon } from "@/components/pwa/install-environment-beacon";
 import { MusicOfflineIdentity } from "@/components/music/player/offline-identity";
 import { MusicEditorIdentity } from "@/components/music/player/editor-identity";
+
+/** Зеркало PATHNAME_HEADER в lib/require-user.ts: proxy кладёт путь запроса. */
+const PATHNAME_HEADER = "x-pathname";
 
 /**
  * Приватные разделы портала: один guard и одна шапка на всех вместо
@@ -16,7 +21,17 @@ export default async function PortalLayout({
 }: {
   children: ReactNode;
 }) {
-  const user = await requireUser();
+  // Пост блог-ленты открыт гостю (VED-718): «Поделиться» ведёт на саму ссылку
+  // поста, и читатель приходит без аккаунта — боту мессенджера нужны мета-теги
+  // превью, человеку — тизер с кнопкой входа. Гостю здесь только фон: шапка,
+  // плеер и окна остаются для вошедшего, страница рисует своё.
+  const pathname = (await headers()).get(PATHNAME_HEADER);
+  const user = pathname?.startsWith("/blog/posts/")
+    ? await getProfile()
+    : await requireUser();
+  if (!user) {
+    return <div className="relative min-h-dvh bg-bg-0">{children}</div>;
+  }
   // Тот же способ проверки прав, что и на странице записи (VED-102,
   // VED-109): редакция Музыки — роль плюс список сервисов админки.
   const canEditMusic = canAdminService(
