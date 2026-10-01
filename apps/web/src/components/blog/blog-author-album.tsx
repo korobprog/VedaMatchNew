@@ -28,7 +28,17 @@ export function BlogAuthorAlbum({
   const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [uploading, setUploading] = useState(0);
+  /**
+   * Обрыв случился при скрытой странице, и заливка ждёт возвращения: это
+   * не ошибка, и красное показывать рано (VED-684).
+   */
+  const [waiting, setWaiting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  /**
+   * Снимки, что не долились из-за связи: их повторяет кнопка «Повторить».
+   * Отказ сервера сюда не попадает — те же файлы получат тот же отказ.
+   */
+  const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
 
@@ -36,28 +46,53 @@ export function BlogAuthorAlbum({
 
   const shown = expanded ? photos : photos.slice(0, PREVIEW_COUNT);
 
+  /** Заливка пачки — общая для выбора файлов и для «Повторить». */
+  async function uploadAll(
+    picked: File[],
+  ): Promise<{ failed: string[]; lost: File[] }> {
+    setUploading(picked.length);
+    try {
+      const res = await uploadAlbumPhotos(picked, { onWaiting: setWaiting });
+      setPhotos((prev) => [...res.photos, ...prev]);
+      return {
+        failed: res.failed.map((f) => `${f.name}: ${albumErrorText(f.reason)}`),
+        lost: res.failed
+          .filter((f) => f.reason === "network")
+          .map((f) => picked.find((file) => file.name === f.name))
+          .filter((file): file is File => Boolean(file)),
+      };
+    } finally {
+      setUploading(0);
+    }
+  }
+
   async function onPick(list: FileList | null) {
     const picked = Array.from(list ?? []);
     if (inputRef.current) inputRef.current.value = "";
     if (picked.length === 0) return;
     setErrors([]);
+    setRetryFiles([]);
     const { accepted, rejected } = albumPreflight(picked, photos.length);
     const failed = rejected.map(
       (r) => `${r.name}: ${albumErrorText(r.reason)}`,
     );
+    let lost: File[] = [];
     if (accepted.length > 0) {
-      setUploading(accepted.length);
-      try {
-        const res = await uploadAlbumPhotos(accepted);
-        setPhotos((prev) => [...res.photos, ...prev]);
-        for (const f of res.failed) {
-          failed.push(`${f.name}: ${albumErrorText(f.reason)}`);
-        }
-      } finally {
-        setUploading(0);
-      }
+      const result = await uploadAll(accepted);
+      failed.push(...result.failed);
+      lost = result.lost;
     }
     setErrors(failed);
+    setRetryFiles(lost);
+  }
+
+  /** «Повторить»: только те снимки, что не долились из-за связи (VED-684). */
+  async function retry() {
+    if (retryFiles.length === 0 || uploading > 0) return;
+    setErrors([]);
+    const { failed, lost } = await uploadAll(retryFiles);
+    setErrors(failed);
+    setRetryFiles(lost);
   }
 
   function onChanged(photo: BlogAlbumPhotoDto) {
@@ -112,14 +147,31 @@ export function BlogAuthorAlbum({
       {uploading > 0 && (
         <p role="status" className="mt-3 text-xs text-text-1">
           Загружаю {uploading} фото…
+          {waiting && " · Ждём возвращения в приложение…"}
         </p>
       )}
 
       {errors.length > 0 && (
-        <ul role="alert" className="mt-3 space-y-1 text-xs text-text-0">
+        <ul role="alert" className="mt-3 space-y-1">
           {errors.map((text) => (
-            <li key={text}>{text}</li>
+            // Причина — красной строкой, «Повторить» под ней: так же устроена
+            // загрузка записи (VED-684).
+            <li key={text} className="text-xs">
+              <span className="block text-magenta">{text}</span>
+            </li>
           ))}
+          {retryFiles.length > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => void retry()}
+                disabled={uploading > 0}
+                className="min-h-11 text-left text-sm font-semibold text-magenta underline underline-offset-2 disabled:opacity-50"
+              >
+                Повторить
+              </button>
+            </li>
+          )}
         </ul>
       )}
 

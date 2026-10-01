@@ -10,6 +10,12 @@ import type {
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
 import { BlogApiError, blogErrorText } from "@/lib/blog-client-api";
+import {
+  backoffDelay,
+  isPageReady,
+  keepScreenAwake,
+  waitUntilVisibleAndOnline,
+} from "@/lib/music-upload-retry";
 
 export { BlogApiError };
 
@@ -100,28 +106,68 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 /**
  * Заливает фото пачками по BLOG_POST_MAX_IMAGES. Сбой пачки не рвёт остальные:
  * её файлы попадают в `failed`. Новые фото идут первыми, как в альбоме.
+ *
+ * Обрыв при свёрнутом приложении — не окончательная ошибка (VED-684): пачка
+ * ждёт возвращения в приложение и связи и уходит заново — до трёх попыток.
  */
 export async function uploadAlbumPhotos(
   files: File[],
+  /** `onWaiting(true)` — ждём возвращения в приложение; `false` — дождались. */
+  options: { onWaiting?: (waiting: boolean) => void } = {},
 ): Promise<BlogAlbumUploadResponse> {
   let photos: BlogAlbumPhotoDto[] = [];
   const failed: BlogAlbumUploadResponse["failed"] = [];
-  for (const part of chunk(files, BLOG_POST_MAX_IMAGES)) {
-    const form = new FormData();
-    for (const file of part) form.append("files", file);
+  // Экран не гаснет на время заливки: погасший экран тоже приостанавливает
+  // страницу. Где не поддерживается — молча без этого.
+  const release = keepScreenAwake(navigator, document);
+  try {
+    for (const part of chunk(files, BLOG_POST_MAX_IMAGES)) {
+      try {
+        const res = await uploadBatch(part, options);
+        photos = [...res.photos, ...photos];
+        failed.push(...res.failed);
+      } catch (cause) {
+        const reason = cause instanceof BlogApiError ? cause.code : "network";
+        for (const file of part) failed.push({ name: file.name, reason });
+      }
+    }
+  } finally {
+    release();
+  }
+  return { photos, failed };
+}
+
+/**
+ * Одна пачка с повторами при обрыве. Отказ сервера не повторяем: тот же
+ * файл получит тот же ответ, а время на него тратить не стоит.
+ */
+async function uploadBatch(
+  part: File[],
+  options: { onWaiting?: (waiting: boolean) => void },
+): Promise<BlogAlbumUploadResponse> {
+  const form = new FormData();
+  for (const file of part) form.append("files", file);
+  for (let attempt = 1; ; attempt += 1) {
     try {
-      const res = await request<BlogAlbumUploadResponse>(
+      return await request<BlogAlbumUploadResponse>(
         "/blog/authors/me/photos",
         { method: "POST", body: form },
       );
-      photos = [...res.photos, ...photos];
-      failed.push(...res.failed);
     } catch (cause) {
-      const reason = cause instanceof BlogApiError ? cause.code : "network";
-      for (const file of part) failed.push({ name: file.name, reason });
+      const delay =
+        cause instanceof BlogApiError ? null : backoffDelay(attempt);
+      if (delay === null) throw cause;
+      if (!isPageReady(document, navigator)) {
+        options.onWaiting?.(true);
+        try {
+          await waitUntilVisibleAndOnline(document, navigator, window);
+        } finally {
+          options.onWaiting?.(false);
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-  return { photos, failed };
 }
 
 export function updateAlbumCaption(
