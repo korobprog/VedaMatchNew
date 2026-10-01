@@ -41,7 +41,18 @@ export function BlogAuthorFiles({
     name: string;
     fraction: number;
   } | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  /**
+   * Обрыв случился при скрытой странице, и заливка ждёт возвращения: это
+   * не ошибка, и красное показывать рано (VED-684).
+   */
+  const [waiting, setWaiting] = useState(false);
+  /**
+   * Неудачи строками. `file` держит сам файл — по нему работает «Повторить»;
+   * у отказа до заливки (не тот формат, слишком большой) повтора нет.
+   */
+  const [errors, setErrors] = useState<
+    { text: string; file: File | null }[]
+  >([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
 
@@ -59,27 +70,65 @@ export function BlogAuthorFiles({
     if (picked.length === 0) return;
     setErrors([]);
     let count = files.length;
-    const failed: string[] = [];
+    const failed: { text: string; file: File | null }[] = [];
     for (const file of picked) {
       const rejection = authorFilePreflight(file, count);
       if (rejection) {
-        failed.push(`${file.name}: ${authorFileErrorText(rejection)}`);
+        failed.push({
+          text: `${file.name}: ${authorFileErrorText(rejection)}`,
+          file: null,
+        });
         continue;
       }
       setUploading({ name: file.name, fraction: 0 });
       try {
-        const created = await uploadAuthorFile(file, (fraction) =>
-          setUploading({ name: file.name, fraction }),
-        );
+        const created = await uploadOne(file);
         setFiles((prev) => [created, ...prev]);
         count += 1;
       } catch (cause) {
         const code = cause instanceof AuthorFileError ? cause.code : "network";
-        failed.push(`${file.name}: ${authorFileErrorText(code)}`);
+        failed.push({
+          text: `${file.name}: ${authorFileErrorText(code)}`,
+          file,
+        });
       }
     }
     setUploading(null);
     setErrors(failed);
+  }
+
+  /** Заливка одного файла — общая для пачки и для «Повторить». */
+  function uploadOne(file: File): Promise<BlogAuthorFileDto> {
+    return uploadAuthorFile(
+      file,
+      (fraction) => setUploading({ name: file.name, fraction }),
+      { onWaiting: setWaiting },
+    );
+  }
+
+  /** «Повторить»: только этот файл, остальные строки ошибок не трогаем. */
+  async function retry(entry: { text: string; file: File | null }) {
+    if (!entry.file || uploading) return;
+    setUploading({ name: entry.file.name, fraction: 0 });
+    try {
+      const created = await uploadOne(entry.file);
+      setFiles((prev) => [created, ...prev]);
+      setErrors((prev) => prev.filter((item) => item !== entry));
+    } catch (cause) {
+      const code = cause instanceof AuthorFileError ? cause.code : "network";
+      setErrors((prev) =>
+        prev.map((item) =>
+          item === entry
+            ? {
+                text: `${entry.file!.name}: ${authorFileErrorText(code)}`,
+                file: entry.file,
+              }
+            : item,
+        ),
+      );
+    } finally {
+      setUploading(null);
+    }
   }
 
   async function remove(file: BlogAuthorFileDto) {
@@ -89,7 +138,9 @@ export function BlogAuthorFiles({
       setFiles((prev) => prev.filter((f) => f.id !== file.id));
     } catch (cause) {
       const code = cause instanceof AuthorFileError ? cause.code : "network";
-      setErrors([`${file.name}: ${authorFileErrorText(code)}`]);
+      setErrors([
+        { text: `${file.name}: ${authorFileErrorText(code)}`, file: null },
+      ]);
     }
   }
 
@@ -168,6 +219,7 @@ export function BlogAuthorFiles({
         <div className="mt-3">
           <p className="truncate text-xs text-text-1">
             Загружаю: {uploading.name}
+            {waiting && " · Ждём возвращения в приложение…"}
           </p>
           <div
             role="progressbar"
@@ -186,9 +238,26 @@ export function BlogAuthorFiles({
       )}
 
       {errors.length > 0 && (
-        <ul role="alert" className="mt-3 space-y-1 text-xs text-text-0">
-          {errors.map((text) => (
-            <li key={text}>{text}</li>
+        <ul role="alert" className="mt-3 space-y-1">
+          {errors.map((item, index) => (
+            // Причина — красной строкой, «Повторить» под ней: так же устроена
+            // загрузка записи (VED-684).
+            <li
+              key={`${item.text}-${index}`}
+              className="flex flex-wrap items-baseline gap-x-2 text-xs"
+            >
+              <span className="basis-full text-magenta">{item.text}</span>
+              {item.file && (
+                <button
+                  type="button"
+                  onClick={() => void retry(item)}
+                  disabled={uploading !== null}
+                  className="min-h-11 basis-full self-start text-left text-sm font-semibold text-magenta underline underline-offset-2 disabled:opacity-50"
+                >
+                  Повторить
+                </button>
+              )}
+            </li>
           ))}
         </ul>
       )}

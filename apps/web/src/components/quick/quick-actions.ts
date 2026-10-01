@@ -225,12 +225,13 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
   {
     id: "guide",
     kind: "builtin",
-    // VED-698: «Гид» — презентационные видео о сервисах и экскурсоводы
-    // Путешествий: города, языки и наборы каждого. Кнопка, как её просили, однослойная —
-    // «Экскурсоводы» на плитку не влезает (VED-369).
+    // VED-698: «Гид» — презентационные видео о сервисах VedaMatch. Заказчик
+    // просил собрать их в кнопке и дал адрес: /tour#start, где тур сразу
+    // открывается главой «Вход и профиль». Экскурсоводы Путешествий остались
+    // в своём сервисе и к этой кнопке больше не привязаны.
     label: "Гид",
-    hint: "Экскурсоводы: кто водит по маршрутам — Путешествия",
-    href: "/travel/map/guides",
+    hint: "Видео-презентации о сервисах VedaMatch",
+    href: "/tour#start",
   },
   {
     id: "calculator",
@@ -289,6 +290,58 @@ export function isExternalQuickHref(href: string): boolean {
  */
 export function quickHrefOpensApp(href: string): boolean {
   return /^https:\/\/(t|telegram)\.me\//.test(href);
+}
+
+/** Сколько ждать, пока телефон отдаст ссылку приложению, прежде чем идти в браузер. */
+export const APP_LINK_FALLBACK_MS = 1500;
+
+/**
+ * Адрес приложения для ссылки (VED-562): `tg://` открывает Телеграм сразу.
+ *
+ * Именно промежуточная страница t.me и оставалась белым экраном: телефон
+ * передаёт ссылку приложению ещё до того, как страница успевает нарисоваться,
+ * а окно браузера остаётся пустым. Вызов `tg://` открывает приложение сразу,
+ * без страницы-посредника. `null` — ссылка не Телеграма, открываем её как
+ * обычно.
+ */
+export function appHrefFor(href: string): string | null {
+  const invite = /^https:\/\/(?:t|telegram)\.me\/\+([A-Za-z0-9_-]+)\/?$/.exec(
+    href,
+  );
+  if (invite) return `tg://joininvite/${invite[1]}`;
+  const channel = /^https:\/\/(?:t|telegram)\.me\/([A-Za-z0-9_]+)\/?$/.exec(
+    href,
+  );
+  if (channel) return `tg://resolve?domain=${channel[1]}`;
+  return null;
+}
+
+/**
+ * Открывает ссылку через приложение телефона и возвращает `true`, если переход
+ * взял на себя. Приложение подхватило ссылку — вкладка уходит в фон и таймер
+ * отменяется; не подхватило (Телеграм не установлен) — через паузу уходим на
+ * страницу канала в браузере, откуда есть «Назад».
+ *
+ * `navigate` передаётся снаружи, чтобы проверять без браузера.
+ */
+export function openQuickAppHref(
+  event: { preventDefault(): void },
+  href: string,
+  navigate: (url: string) => void = (url) => window.location.assign(url),
+): boolean {
+  const appHref = appHrefFor(href);
+  if (!appHref || typeof document === "undefined") return false;
+  event.preventDefault();
+  const fallback = window.setTimeout(() => {
+    if (!document.hidden) navigate(href);
+  }, APP_LINK_FALLBACK_MS);
+  const onHidden = () => {
+    window.clearTimeout(fallback);
+    document.removeEventListener("visibilitychange", onHidden);
+  };
+  document.addEventListener("visibilitychange", onHidden);
+  navigate(appHref);
+  return true;
 }
 
 /** Прежнее имя списка: панель и тесты звали его так с VED-118. */

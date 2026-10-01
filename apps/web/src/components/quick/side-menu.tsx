@@ -20,6 +20,7 @@ import {
 import {
   isExternalQuickHref,
   quickHrefOpensApp,
+  openQuickAppHref,
   parseQuickConfig,
   quickActionCatalog,
   quickActionMeta,
@@ -175,7 +176,10 @@ function SideMenuItem({
         href={href}
         target={quickHrefOpensApp(href) ? undefined : "_blank"}
         rel="noopener noreferrer"
-        onClick={onClose}
+        onClick={(event) => {
+          openQuickAppHref(event, href);
+          onClose();
+        }}
         className={rowClass}
       >
         {icon}

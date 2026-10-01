@@ -4,6 +4,7 @@ import type {
   ChatConversationDetail,
   ChatMessageDto as ChatMessage,
   ChatConversationSummary,
+  ChatDirectWithState,
   ChatMessageDto,
   ChatReactionSummary,
   ChatSearchState,
@@ -284,6 +285,19 @@ export function loadOlderChatMessages(
   return send<ChatConversationDetail>(
     `/chat/conversations/${conversationId}?before=${encodeURIComponent(before)}`,
   );
+}
+
+/**
+ * Личный диалог с человеком для мини-чата личной страницы (VED-686).
+ * `null` — переписки ещё нет: страница её не заводит, это делает первое
+ * сообщение.
+ */
+export function fetchDirectChat(
+  userId: string,
+): Promise<ChatConversationDetail | null> {
+  return send<ChatDirectWithState>(
+    `/chat/direct-with/${encodeURIComponent(userId)}`,
+  ).then((state) => state.conversation);
 }
 
 export function uploadChatFile(

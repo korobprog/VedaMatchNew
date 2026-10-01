@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BUILTIN_QUICK_ACTIONS,
   quickHrefOpensApp,
+  APP_LINK_FALLBACK_MS,
+  appHrefFor,
+  openQuickAppHref,
   DEFAULT_QUICK_ACTIONS,
   isExternalQuickHref,
   PINNED_QUICK_ACTIONS,
@@ -505,11 +508,13 @@ describe("каталог кнопок", () => {
 
   /* VED-711, VED-697, VED-698: две новые встроенные кнопки — со своими
      адресами и в наборе по умолчанию, чтобы увидели их и новички. */
-  it("«Планировщик» ведёт в Работу, «Гид» — к экскурсоводам Путешествия", () => {
+  it("«Планировщик» ведёт в Работу, «Гид» — к видео-презентациям тура", () => {
     expect(quickActionMeta("planner")?.label).toBe("Планировщик");
     expect(quickActionMeta("planner")?.href).toBe("/work/planner");
     expect(quickActionMeta("guide")?.label).toBe("Гид");
-    expect(quickActionMeta("guide")?.href).toBe("/travel/map/guides");
+    // VED-698: заказчик дал адрес самих видео: тур открывается главой
+    // «Вход и профиль», экскурсоводы Путешествий остались в своём сервисе.
+    expect(quickActionMeta("guide")?.href).toBe("/tour#start");
     expect(DEFAULT_QUICK_ACTIONS).toContain("planner");
     expect(DEFAULT_QUICK_ACTIONS).toContain("guide");
   });
@@ -624,5 +629,82 @@ describe("quickHrefOpensApp (VED-562)", () => {
   it("остальные внешние ссылки — новой вкладкой", () => {
     expect(quickHrefOpensApp("https://vcalendar.ru/")).toBe(false);
     expect(quickHrefOpensApp("https://t.me.evil.com/x")).toBe(false);
+  });
+});
+
+/* VED-562: белый экран на месте страницы t.me — открываем приложение сразу. */
+describe("openQuickAppHref", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("ссылки Телеграма превращаются в адрес приложения", () => {
+    expect(appHrefFor("https://t.me/vedamatch")).toBe(
+      "tg://resolve?domain=vedamatch",
+    );
+    expect(appHrefFor("https://telegram.me/vedamatch/")).toBe(
+      "tg://resolve?domain=vedamatch",
+    );
+    expect(appHrefFor("https://t.me/vedamatch_bot")).toBe(
+      "tg://resolve?domain=vedamatch_bot",
+    );
+    expect(appHrefFor("https://t.me/+AbCd_123")).toBe(
+      "tg://joininvite/AbCd_123",
+    );
+    expect(appHrefFor("https://vcalendar.ru/")).toBeNull();
+    // Веб-просмотр канала — не ссылка приложения.
+    expect(appHrefFor("https://t.me/s/vedamatch")).toBeNull();
+  });
+
+  it("клик уходит в приложение мимо страницы-посредника", () => {
+    const navigate = vi.fn();
+    const event = { preventDefault: vi.fn() };
+    expect(
+      openQuickAppHref(event, "https://t.me/vedamatch", navigate),
+    ).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith("tg://resolve?domain=vedamatch");
+  });
+
+  it("приложение не подхватило ссылку — уходим на страницу канала", () => {
+    vi.useFakeTimers();
+    const navigate = vi.fn();
+    openQuickAppHref(
+      { preventDefault: () => {} },
+      "https://t.me/vedamatch",
+      navigate,
+    );
+    vi.advanceTimersByTime(APP_LINK_FALLBACK_MS);
+    expect(navigate).toHaveBeenLastCalledWith("https://t.me/vedamatch");
+  });
+
+  it("приложение открылось — вкладка ушла в фон, откат не срабатывает", () => {
+    vi.useFakeTimers();
+    const navigate = vi.fn();
+    openQuickAppHref(
+      { preventDefault: () => {} },
+      "https://t.me/vedamatch",
+      navigate,
+    );
+    Object.defineProperty(document, "hidden", {
+      value: true,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    vi.advanceTimersByTime(APP_LINK_FALLBACK_MS);
+    Object.defineProperty(document, "hidden", {
+      value: false,
+      configurable: true,
+    });
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith("tg://resolve?domain=vedamatch");
+  });
+
+  it("чужая ссылка остаётся обычной — переход не перехватывается", () => {
+    const navigate = vi.fn();
+    const event = { preventDefault: vi.fn() };
+    expect(
+      openQuickAppHref(event, "https://vcalendar.ru/", navigate),
+    ).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

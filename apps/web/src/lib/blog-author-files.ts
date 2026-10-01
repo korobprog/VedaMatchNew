@@ -15,6 +15,14 @@ import type {
   CreateBlogAuthorFileUploadRequest,
 } from "@vedamatch/shared";
 import { API_URL, apiFetch } from "@/lib/http-client";
+import {
+  UploadNetworkError,
+  UPLOAD_INTERRUPTED_MESSAGE,
+  backoffDelay,
+  isPageReady,
+  keepScreenAwake,
+  waitUntilVisibleAndOnline,
+} from "@/lib/music-upload-retry";
 
 /** Отказ с кодом API или клиента. */
 export class AuthorFileError extends Error {
@@ -72,6 +80,9 @@ const MESSAGES: Record<string, string> = {
   file_upload_unavailable: "Хранилище файлов сейчас недоступно.",
   storage_rejected: "Хранилище отклонило файл. Попробуйте ещё раз.",
   network: "Нет связи — файл не загрузился.",
+  // То же словами, что у загрузки записи (VED-684): причина обрыва одна и
+  // та же — телефон приостановил страницу.
+  upload_interrupted: UPLOAD_INTERRUPTED_MESSAGE,
 };
 
 /** Отказ словами; незнакомый код — «не загрузился». */
@@ -104,25 +115,63 @@ async function post<T>(path: string, body: unknown): Promise<T> {
  * Загрузить файл на свою страницу: заявка → PUT в бакет → завершение.
  * `onProgress` получает долю от 0 до 1 (по `XMLHttpRequest`: у `fetch` нет
  * событий отправки тела).
+ *
+ * Обрыв при свёрнутом приложении — не окончательная ошибка (VED-684):
+ * заливка ждёт возвращения в приложение и связи и продолжается сама — до
+ * трёх попыток. Как и у записи, в фоне страница грузить не может: файл
+ * дольётся, когда человек вернётся.
  */
 export async function uploadAuthorFile(
   file: File,
   onProgress?: (fraction: number) => void,
+  /** `onWaiting(true)` — ждём возвращения в приложение; `false` — дождались. */
+  options: { onWaiting?: (waiting: boolean) => void } = {},
 ): Promise<BlogAuthorFileDto> {
   const request: CreateBlogAuthorFileUploadRequest = {
     fileName: file.name,
     sizeBytes: file.size,
   };
-  const upload = await post<BlogAuthorFileUploadResponse>(
-    "/blog/authors/me/files/upload",
-    request,
-  );
-  await putWithProgress(upload, file, onProgress);
-  const complete: CompleteBlogAuthorFileUploadRequest = {
-    key: upload.key,
-    fileName: file.name,
-  };
-  return post<BlogAuthorFileDto>("/blog/authors/me/files", complete);
+  // Экран не гаснет на время заливки: погасший экран тоже приостанавливает
+  // страницу. Где не поддерживается — молча без этого.
+  const release = keepScreenAwake(navigator, document);
+  try {
+    const create = () =>
+      post<BlogAuthorFileUploadResponse>(
+        "/blog/authors/me/files/upload",
+        request,
+      );
+    let upload = await create();
+    // Частичный PUT в бакет не докачать, поэтому каждая попытка — с нуля;
+    // подпись к тому же могла истечь, и перед повтором берём новую.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await putWithProgress(upload, file, onProgress);
+        break;
+      } catch (cause) {
+        if (!(cause instanceof UploadNetworkError)) throw cause;
+        const delay = backoffDelay(attempt);
+        if (delay === null) throw new AuthorFileError("upload_interrupted");
+        onProgress?.(0);
+        if (!isPageReady(document, navigator)) {
+          options.onWaiting?.(true);
+          try {
+            await waitUntilVisibleAndOnline(document, navigator, window);
+          } finally {
+            options.onWaiting?.(false);
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        upload = await create();
+      }
+    }
+    const complete: CompleteBlogAuthorFileUploadRequest = {
+      key: upload.key,
+      fileName: file.name,
+    };
+    return await post<BlogAuthorFileDto>("/blog/authors/me/files", complete);
+  } finally {
+    release();
+  }
 }
 
 /** Убрать свой файл. */
@@ -155,7 +204,11 @@ function putWithProgress(
       xhr.status >= 200 && xhr.status < 300
         ? resolve()
         : reject(new AuthorFileError("storage_rejected"));
-    xhr.onerror = () => reject(new AuthorFileError("network"));
+    // Обрыв, отмена и таймаут — сеть или приостановленная страница, а не
+    // ответ хранилища: такие ошибки вызывающий может повторить (VED-684).
+    xhr.onerror = () => reject(new UploadNetworkError());
+    xhr.onabort = () => reject(new UploadNetworkError());
+    xhr.ontimeout = () => reject(new UploadNetworkError());
     xhr.send(file);
   });
 }

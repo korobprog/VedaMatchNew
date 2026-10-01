@@ -61,10 +61,18 @@ export class WorkApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await apiFetch(`${API_URL}${path}`, {
-    credentials: "include",
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_URL}${path}`, {
+      credentials: "include",
+      ...init,
+    });
+  } catch {
+    // Обрыв связи: fetch отклоняется `TypeError` без статуса. Статус 0 —
+    // метка обрыва, по которой очередь загрузок «Работы» переотправляет
+    // файл после возвращения (VED-608); без неё повтор не срабатывал.
+    throw new WorkApiError("Нет связи. Попробуйте ещё раз", 0);
+  }
   if (!res.ok) {
     // Бэкенд присылает готовый русский текст ошибки — он точнее кода статуса.
     const message = await res
