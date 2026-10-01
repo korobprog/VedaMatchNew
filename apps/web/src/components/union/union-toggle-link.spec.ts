@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { oppositeGenderHref, toggledHref } from "./union-toggle-link";
+import {
+  oppositeGenderHref,
+  oppositeGenderLabel,
+  toggledHref,
+} from "./union-toggle-link";
 
 /* VED-652: «Показать всех» и «Избранное» — переключатели в адресе. */
 describe("toggledHref", () => {
@@ -45,5 +49,18 @@ describe("oppositeGenderHref", () => {
     expect(oppositeGenderHref("/union/recommendations", {})).toBe(
       "/union/recommendations",
     );
+  });
+});
+
+/* VED-673: надпись кнопки — «Женщины» мужчине и «Мужчины» женщине. */
+describe("oppositeGenderLabel", () => {
+  it("мужчине — «Женщины», женщине — «Мужчины»", () => {
+    expect(oppositeGenderLabel("male")).toBe("Женщины");
+    expect(oppositeGenderLabel("female")).toBe("Мужчины");
+  });
+
+  it("без определённого пола остаётся «Противоположный пол»", () => {
+    expect(oppositeGenderLabel(null)).toBe("Противоположный пол");
+    expect(oppositeGenderLabel(undefined)).toBe("Противоположный пол");
   });
 });

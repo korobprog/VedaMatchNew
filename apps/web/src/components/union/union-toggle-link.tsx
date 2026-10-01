@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { Gender } from "@vedamatch/shared";
 
 /**
  * Переключатель на панели ленты Знакомств (VED-652) — ссылкой: состояние
@@ -53,6 +54,20 @@ export function toggledHref(
   if (!on) next.set(key, onValue);
   const query = next.toString();
   return query ? `${path}?${query}` : path;
+}
+
+/**
+ * Надпись кнопки фильтра по противоположному полу (VED-673): заказчик просил
+ * вместо абстрактного «Противоположный пол» прямо «Женщины» мужчине и
+ * «Мужчины» женщине. Значок при этом уже соответствует надписи: мужчине —
+ * Венера, женщине — Марс.
+ */
+export function oppositeGenderLabel(
+  gender: Gender | null | undefined,
+): string {
+  if (gender === "male") return "Женщины";
+  if (gender === "female") return "Мужчины";
+  return "Противоположный пол";
 }
 
 /**
