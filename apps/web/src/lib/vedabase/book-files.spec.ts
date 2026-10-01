@@ -3,6 +3,7 @@ import {
   BOOK_FILE_ACCEPT,
   bookFileRejection,
   bookUploadMessage,
+  completeRetriable,
   formatFileSize,
 } from "./book-files";
 
@@ -31,6 +32,33 @@ describe("bookUploadMessage", () => {
   it("называет причину словами, незнакомую — общей фразой", () => {
     expect(bookUploadMessage("book_file_too_large")).toMatch(/100 МБ/);
     expect(bookUploadMessage("teapot")).toMatch(/не загрузился/);
+  });
+
+  it("сбой хранилища не называет ошибкой файла", () => {
+    expect(bookUploadMessage("book_storage_unavailable")).toMatch(
+      /не потерян/,
+    );
+    expect(bookUploadMessage("book_file_content_mismatch")).toMatch(
+      /расширению/,
+    );
+    expect(bookUploadMessage("storage_rejected")).toMatch(/не приняло/);
+  });
+});
+
+describe("completeRetriable", () => {
+  it("переспрашивает при обрыве сети и сбое сервера", () => {
+    expect(completeRetriable("network")).toBe(true);
+    expect(completeRetriable("book_storage_unavailable")).toBe(true);
+    expect(completeRetriable("500")).toBe(true);
+    expect(completeRetriable("502")).toBe(true);
+  });
+
+  it("отказ по существу не повторяет", () => {
+    expect(completeRetriable("book_file_too_large")).toBe(false);
+    expect(completeRetriable("book_file_content_mismatch")).toBe(false);
+    expect(completeRetriable("too_many_book_files")).toBe(false);
+    expect(completeRetriable("403")).toBe(false);
+    expect(completeRetriable("")).toBe(false);
   });
 });
 

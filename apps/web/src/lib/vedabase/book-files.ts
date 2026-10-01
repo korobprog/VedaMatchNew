@@ -25,8 +25,31 @@ const MESSAGES: Record<string, string> = {
   book_file_too_large: "Файл больше 100 МБ.",
   too_many_book_files: `У книги уже ${VEDABASE_BOOK_FILES_PER_BOOK} файлов — уберите лишний.`,
   book_upload_unavailable: "Хранилище файлов сейчас недоступно.",
+  book_storage_unavailable:
+    "Хранилище файлов не отвечает. Файл не потерян — попробуйте позже.",
+  book_file_content_mismatch:
+    "Содержимое файла не соответствует его расширению.",
+  book_file_missing: "Файл не дошёл до хранилища. Загрузите его ещё раз.",
+  storage_rejected: "Хранилище не приняло файл. Загрузите его ещё раз.",
   network: "Нет связи — файл не загрузился.",
 };
+
+/** Сколько раз переспросить завершение заливки и с какими паузами. */
+export const COMPLETE_RETRY_DELAYS_MS = [1000, 3000];
+
+/**
+ * Стоит ли переспросить завершение заливки.
+ *
+ * Файл к этому моменту уже в бакете: сто мегабайт залиты, не дошёл только
+ * последний короткий запрос. Отказ по существу (4xx с кодом причины)
+ * повторять незачем; обрыв сети и сбой сервера — стоит, завершение на
+ * сервере повторяемо по ключу.
+ */
+export function completeRetriable(code: string): boolean {
+  if (code === "network" || code === "book_storage_unavailable") return true;
+  const status = Number(code);
+  return Number.isInteger(status) && status >= 500;
+}
 
 /** Отказ словами; незнакомый код — «не загрузился». */
 export function bookUploadMessage(code: string): string {

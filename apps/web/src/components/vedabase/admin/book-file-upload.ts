@@ -12,7 +12,11 @@ import type {
   VedabaseBookUploadResponse,
   VedabaseBookFileDto,
 } from "@vedamatch/shared";
-import { API_URL, apiFetch } from "@/lib/http-client";
+import { API_URL, NetworkError, apiFetch } from "@/lib/http-client";
+import {
+  COMPLETE_RETRY_DELAYS_MS,
+  completeRetriable,
+} from "@/lib/vedabase/book-files";
 
 /** Отказ с кодом API — по коду форма называет причину словами. */
 export class BookUploadError extends Error {
@@ -34,14 +38,50 @@ async function failureCode(res: Response): Promise<string> {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await apiFetch(`${API_URL}${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await apiFetch(`${API_URL}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    // Обрыв сети — тем же кодом, что и при заливке: форма называет его
+    // словами, а завершение по нему переспрашивается.
+    if (error instanceof NetworkError) throw new BookUploadError("network");
+    throw error;
+  }
   if (!res.ok) throw new BookUploadError(await failureCode(res));
   return (await res.json()) as T;
+}
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Завершение заливки с повтором. Файл уже в бакете, и терять его из-за
+ * оборвавшегося короткого запроса нельзя: без повтора человек лил сто
+ * мегабайт заново, а первый объект оставался в бакете брошенным.
+ */
+async function completeUpload(
+  slug: string,
+  body: CompleteVedabaseBookUploadRequest,
+  delays: readonly number[] = COMPLETE_RETRY_DELAYS_MS,
+): Promise<VedabaseBookFileDto> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await post<VedabaseBookFileDto>(
+        `/vedabase/admin/books/${encodeURIComponent(slug)}/files`,
+        body,
+      );
+    } catch (error) {
+      const retriable =
+        error instanceof BookUploadError && completeRetriable(error.code);
+      if (!retriable || attempt >= delays.length) throw error;
+      await wait(delays[attempt]);
+    }
+  }
 }
 
 /**
@@ -71,10 +111,7 @@ export async function uploadBookFile(
     key: upload.key,
     fileName: file.name,
   };
-  return post<VedabaseBookFileDto>(
-    `/vedabase/admin/books/${encodeURIComponent(slug)}/files`,
-    complete,
-  );
+  return completeUpload(slug, complete);
 }
 
 /** Убрать файл у книги. */
@@ -86,7 +123,12 @@ export async function deleteBookFile(
     `${API_URL}/vedabase/admin/books/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`,
     { method: "DELETE", credentials: "include" },
   );
-  if (!res.ok) throw new BookUploadError(await failureCode(res));
+  if (res.ok) return;
+  const code = await failureCode(res);
+  // Файла уже нет — убрали в соседней вкладке или вторым нажатием. Цель
+  // достигнута, отказом это не считаем.
+  if (code === "book_file_not_found") return;
+  throw new BookUploadError(code);
 }
 
 function putWithProgress(
@@ -97,9 +139,11 @@ function putWithProgress(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", upload.url);
-    // Заголовки — из ответа сервера, а не `file.type`: они вошли в подпись,
-    // а для djvu, fb2 и mobi браузер тип файла вообще не знает. Разойдутся —
-    // S3 ответит 403.
+    // Дольше ссылка всё равно не живёт. Без предела оборванная заливка
+    // висела бы вечно, а поле выбора файла оставалось выключенным.
+    xhr.timeout = upload.expiresInSeconds * 1000;
+    // Заголовки — из ответа сервера, а не `file.type`: для djvu, fb2 и mobi
+    // браузер тип файла вообще не знает.
     for (const [name, value] of Object.entries(upload.headers)) {
       xhr.setRequestHeader(name, value);
     }
@@ -113,6 +157,8 @@ function putWithProgress(
         ? resolve()
         : reject(new BookUploadError("storage_rejected"));
     xhr.onerror = () => reject(new BookUploadError("network"));
+    xhr.ontimeout = () => reject(new BookUploadError("network"));
+    xhr.onabort = () => reject(new BookUploadError("network"));
     xhr.send(file);
   });
 }

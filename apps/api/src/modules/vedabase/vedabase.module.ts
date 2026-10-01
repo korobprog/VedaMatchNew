@@ -6,6 +6,7 @@ import { GitabaseSyncService } from '../gitabase/gitabase-sync.service';
 import { GitabaseUserStateService } from '../gitabase/gitabase-user-state.service';
 import { VedabaseAdminController } from './vedabase-admin.controller';
 import { VedabaseAdminService } from './vedabase-admin.service';
+import { VedabaseBookFilesSweeperService } from './book-files-sweeper.service';
 import { VedabaseBookStorageService } from './book-storage.service';
 import { VedabaseContentController } from './vedabase-content.controller';
 import { VedabaseContentRepository } from './vedabase-content.repository';
@@ -27,6 +28,7 @@ import { VedabaseFilesService } from './vedabase-files.service';
     VedabaseFilesService,
     VedabaseColoringService,
     VedabaseBookStorageService,
+    VedabaseBookFilesSweeperService,
     GitabaseSyncService,
     GitabaseUserStateService,
     VedabaseAssistantListener,

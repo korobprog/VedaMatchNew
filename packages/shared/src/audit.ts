@@ -48,6 +48,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'vedabase.book-updated',
   'blog.feed-approved',
   'blog.feed-rejected',
+  'vedabase.file-added',
+  'vedabase.file-removed',
   'contacts.tag-created',
   'contacts.tag-updated',
   'contacts.tag-deleted',
