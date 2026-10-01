@@ -1,5 +1,5 @@
 import { MusicAdminTabs } from "@/components/music/admin/admin-tabs";
-import { MusicModerationCard } from "@/components/music/admin/moderation-card";
+import { MusicModerationQueue } from "@/components/music/admin/moderation-queue";
 import { formatBytes } from "@/lib/music-duration";
 import {
   getMusicAdminArtists,
@@ -75,16 +75,11 @@ export default async function AdminMusicQueuePage() {
           вкладки «Справочники» или из сервиса.
         </p>
       ) : (
-        <ul className="space-y-4">
-          {items.map((item) => (
-            <MusicModerationCard
-              key={item.track.id}
-              item={item}
-              artists={artists?.items ?? []}
-              categories={categories?.items ?? []}
-            />
-          ))}
-        </ul>
+        <MusicModerationQueue
+          items={items}
+          artists={artists?.items ?? []}
+          categories={categories?.items ?? []}
+        />
       )}
     </>
   );
