@@ -2,18 +2,13 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { PublicRadio } from "@/components/music/radio/public-radio";
 import { getSharedRadioTrack } from "@/lib/music-radio-server-api";
+import { sharedTrackMetadata } from "@/lib/radio-share-meta";
 import { getAppManifest } from "@/lib/app-download-api";
 import { isComContourHost } from "@/lib/app-download-contour";
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
-
-const RADIO_TITLE = "Радио VedaMatch";
-const RADIO_DESCRIPTION =
-  "Киртаны, бхаджаны и записи с программ круглые сутки — слушайте без регистрации и установите приложение VedaMatch.";
-const RADIO_OG_DESCRIPTION =
-  "Киртаны, бхаджаны и записи с программ круглые сутки — слушайте без регистрации.";
 
 /**
  * Запись, которой поделились (VED-661): `/radio?track=…`. Только свой
@@ -27,10 +22,8 @@ function parseSharedTrackId(raw: string | string[] | undefined): string | null {
 /**
  * Карточка ссылки (VED-718): сюда делятся записью каталога, и в мессенджере
  * должна красоваться её обложка с названием, а не карточка портала. Превью
- * собирается на сервере, без cookie, — публичный метод API.
- *
- * `openGraph.images` объявляется всегда: пустой список перекрывает
- * opengraph-image.png из корня, иначе бот получил бы картинку портала.
+ * собирается на сервере, без cookie, — публичный метод API. Правила сборки и
+ * почему заголовок идёт и в `<title>`, — в `sharedTrackMetadata()`.
  */
 export async function generateMetadata({
   searchParams,
@@ -39,29 +32,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const id = parseSharedTrackId((await searchParams).track);
   const shared = id ? await getSharedRadioTrack(id) : null;
-  const track = shared?.track ?? null;
-  const artist = track?.artist?.name ?? null;
-  const title = track
-    ? `${track.title}${artist ? ` — ${artist}` : ""}`
-    : RADIO_TITLE;
-  const image = track?.coverUrl ?? null;
-  return {
-    title: RADIO_TITLE,
-    description: RADIO_DESCRIPTION,
-    openGraph: {
-      type: "website",
-      siteName: "VedaMatch",
-      title,
-      description: RADIO_OG_DESCRIPTION,
-      images: image ? [{ url: image, alt: title }] : [],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description: RADIO_OG_DESCRIPTION,
-      images: image ? [image] : [],
-    },
-  };
+  return sharedTrackMetadata(shared?.track ?? null);
 }
 
 /**
