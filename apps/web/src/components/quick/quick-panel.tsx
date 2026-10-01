@@ -22,7 +22,9 @@ import {
   Check,
   CirclePause,
   CirclePlay,
+  ClipboardList,
   Columns2,
+  Compass,
   HeartHandshake,
   History,
   Images,
@@ -168,6 +170,11 @@ const ICONS: Record<
   telegram: TelegramIcon,
   // VED-659: транзиты — орбита вокруг светила.
   transits: Orbit,
+  // VED-711: планы и задачи — список, а не календарь (календарь свой, у него
+  // «Календарь»).
+  planner: ClipboardList,
+  // VED-697, VED-698: компас — как у путника, который идёт по маршруту.
+  guide: Compass,
   calculator: Calculator,
   invite: Share2,
   donate: HeartHandshake,

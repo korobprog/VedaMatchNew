@@ -235,6 +235,8 @@ describe("QuickPanel", () => {
       "blog",
       "telegram",
       "transits",
+      "planner",
+      "guide",
     ]);
   });
 
@@ -255,7 +257,7 @@ describe("QuickPanel", () => {
   });
 
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":10,"ids":[]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":11,"ids":[]}');
     // Опустошить панель может только админ: у остальных три кнопки
     // закреплены (VED-326), и пустой она не бывает.
     await openPanel({ admin: true });
@@ -469,7 +471,9 @@ describe("QuickPanel", () => {
     const user = await openPanel();
 
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
-    await user.click(screen.getByRole("switch", { name: /Работа/ }));
+    // Строго с начала имени: у кнопки «Планировщик» подсказка кончается
+    // «— Работа», и общий /Работа/ цеплял бы обе (VED-711).
+    await user.click(screen.getByRole("switch", { name: /^Работа/ }));
 
     expect(
       JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids,

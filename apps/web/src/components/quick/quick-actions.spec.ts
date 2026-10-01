@@ -35,7 +35,7 @@ describe("parseQuickConfig", () => {
   });
 
   it("возвращает сохранённый порядок как есть", () => {
-    expect(parseQuickConfig('{"v":10,"ids":["donate","aphorism"]}')).toEqual({
+    expect(parseQuickConfig('{"v":11,"ids":["donate","aphorism"]}')).toEqual({
       ids: ["donate", "aphorism"],
       custom: [],
     });
@@ -50,16 +50,16 @@ describe("parseQuickConfig", () => {
   it("молча выбрасывает кнопки, которых больше нет", () => {
     // В хранилище лежит набор с прошлой версии портала.
     expect(
-      parseQuickConfig('{"v":10,"ids":["donate","horoscope","qr"]}').ids,
+      parseQuickConfig('{"v":11,"ids":["donate","horoscope","qr"]}').ids,
     ).toEqual(["donate"]);
   });
 
   it("пустой набор — это выбор: панель можно опустошить", () => {
-    expect(parseQuickConfig('{"v":10,"ids":[]}').ids).toEqual([]);
+    expect(parseQuickConfig('{"v":11,"ids":[]}').ids).toEqual([]);
   });
 
   it("убирает дубли: две одинаковые кнопки — сбой, а не выбор", () => {
-    expect(parseQuickConfig('{"v":10,"ids":["donate","donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":11,"ids":["donate","donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -67,7 +67,7 @@ describe("parseQuickConfig", () => {
   it("сервисную кнопку узнаёт по слагу, а не по каталогу с сервера", () => {
     // Каталог приезжает запросом, а набор разбирается сразу при открытии.
     expect(
-      parseQuickConfig('{"v":10,"ids":["service:work","service:выдумка"]}').ids,
+      parseQuickConfig('{"v":11,"ids":["service:work","service:выдумка"]}').ids,
     ).toEqual(["service:work"]);
   });
 
@@ -93,6 +93,9 @@ describe("parseQuickConfig", () => {
       // VED-562: «Телеграм» — позже всех.
       "telegram",
       "transits",
+      // VED-711, VED-697, VED-698: «Планировщик» и «Гид» — позже всех.
+      "planner",
+      "guide",
     ]);
   });
 
@@ -108,6 +111,8 @@ describe("parseQuickConfig", () => {
         "blog",
         "telegram",
         "transits",
+        "planner",
+        "guide",
       ],
       custom: [],
     });
@@ -129,6 +134,8 @@ describe("parseQuickConfig", () => {
         "blog",
         "telegram",
         "transits",
+        "planner",
+        "guide",
       ],
       custom: [],
     });
@@ -146,6 +153,8 @@ describe("parseQuickConfig", () => {
         "blog",
         "telegram",
         "transits",
+        "planner",
+        "guide",
       ],
     );
   });
@@ -169,6 +178,8 @@ describe("parseQuickConfig", () => {
         "blog",
         "telegram",
         "transits",
+        "planner",
+        "guide",
       ],
       custom: [{ label: "Работа", href: "/work" }],
     });
@@ -195,6 +206,8 @@ describe("parseQuickConfig", () => {
         "blog",
         "telegram",
         "transits",
+        "planner",
+        "guide",
       ],
       custom: [{ label: "Работа", href: "/work" }],
     });
@@ -211,6 +224,8 @@ describe("parseQuickConfig", () => {
       "blog",
       "telegram",
       "transits",
+      "planner",
+      "guide",
     ]);
   });
 
@@ -224,6 +239,8 @@ describe("parseQuickConfig", () => {
       "blog",
       "telegram",
       "transits",
+      "planner",
+      "guide",
     ]);
   });
 
@@ -237,19 +254,42 @@ describe("parseQuickConfig", () => {
       custom: [{ label: "Работа", href: "/work" }],
     });
     expect(parseQuickConfig(raw)).toEqual({
-      ids: ["donate", "custom:/work", "calendar", "telegram", "transits"],
+      ids: [
+        "donate",
+        "custom:/work",
+        "calendar",
+        "telegram",
+        "transits",
+        "planner",
+        "guide",
+      ],
       custom: [{ label: "Работа", href: "/work" }],
     });
   });
 
   it("«Телеграм» не задваивается, если он уже стоит в записи восьмой версии", () => {
     expect(parseQuickConfig('{"v":8,"ids":["telegram","donate"]}').ids).toEqual(
-      ["telegram", "donate", "transits"],
+      ["telegram", "donate", "transits", "planner", "guide"],
     );
   });
 
+  /* VED-711, VED-697, VED-698: «Планировщик» и «Гид» доезжают и до записей
+     десятой версии: заказчик просил кнопки, а выключить их раньше было
+     нельзя — их не существовало. */
+  it("запись десятой версии получает «Планировщик» и «Гид» в конец", () => {
+    const raw = JSON.stringify({
+      v: 10,
+      ids: ["donate", "custom:/work"],
+      custom: [{ label: "Работа", href: "/work" }],
+    });
+    expect(parseQuickConfig(raw)).toEqual({
+      ids: ["donate", "custom:/work", "planner", "guide"],
+      custom: [{ label: "Работа", href: "/work" }],
+    });
+  });
+
   it("выключенные в девятой версии кнопки остаются выключенными", () => {
-    expect(parseQuickConfig('{"v":10,"ids":["donate"]}').ids).toEqual([
+    expect(parseQuickConfig('{"v":11,"ids":["donate"]}').ids).toEqual([
       "donate",
     ]);
   });
@@ -264,7 +304,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка на чужой сайт в панель не попадает", () => {
     const raw = JSON.stringify({
-      v: 10,
+      v: 11,
       ids: ["custom:https://example.com"],
       custom: [{ label: "Не наше", href: "https://example.com" }],
     });
@@ -273,7 +313,7 @@ describe("parseQuickConfig", () => {
 
   it("своя кнопка без подписи — сбой хранилища, а не кнопка", () => {
     const raw = JSON.stringify({
-      v: 10,
+      v: 11,
       ids: ["custom:/work"],
       custom: [{ label: "  ", href: "/work" }],
     });
@@ -462,6 +502,17 @@ describe("каталог кнопок", () => {
     const at = DEFAULT_QUICK_ACTIONS.indexOf("calendar");
     expect(DEFAULT_QUICK_ACTIONS[at + 1]).toBe("telegram");
   });
+
+  /* VED-711, VED-697, VED-698: две новые встроенные кнопки — со своими
+     адресами и в наборе по умолчанию, чтобы увидели их и новички. */
+  it("«Планировщик» ведёт в Работу, «Гид» — к экскурсоводам Путешествия", () => {
+    expect(quickActionMeta("planner")?.label).toBe("Планировщик");
+    expect(quickActionMeta("planner")?.href).toBe("/work/planner");
+    expect(quickActionMeta("guide")?.label).toBe("Гид");
+    expect(quickActionMeta("guide")?.href).toBe("/travel/map/guides");
+    expect(DEFAULT_QUICK_ACTIONS).toContain("planner");
+    expect(DEFAULT_QUICK_ACTIONS).toContain("guide");
+  });
 });
 
 // VED-326, п. 6: три кнопки, которые человек не выключает.
@@ -530,7 +581,7 @@ describe("«Меню» живёт только в шапке", () => {
 
   it("из старой записи «Меню» уходит, остальное на месте", () => {
     const stored = parseQuickConfig(
-      '{"v":10,"ids":["search","donate","invite","menu","aphorism"]}',
+      '{"v":11,"ids":["search","donate","invite","menu","aphorism"]}',
     );
     expect(arrangeQuickActions(stored.ids, PINNED_QUICK_ACTIONS)).toEqual([
       "search",
