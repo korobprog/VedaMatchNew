@@ -206,6 +206,27 @@ describe('AstroSubjectsService', () => {
         '1985-03-07T18:00:00.000Z',
       );
     });
+
+    it('игнорирует пояс из запроса — пояс только по координатам места', async () => {
+      // Устройство прислало свой пояс (VED-672): он не сдвигает ни пояс
+      // места, ни момент рождения — иначе одинаковые данные дали бы на
+      // разных смартфонах разные даши.
+      prisma.astroSubject.create.mockResolvedValue(row());
+      await service.create(
+        OWNER,
+        body({
+          birthDate: '1985-03-07',
+          birthTime: '23:30',
+          place: { label: 'Мумбаи', latitude: 19.07, longitude: 72.87 },
+          timezone: 'Europe/Moscow',
+        }),
+      );
+      const { data } = argOf<CreateArg>(prisma.astroSubject.create);
+      expect(data.timezone).toBe('Asia/Kolkata');
+      expect((data.bornAtUtc as Date).toISOString()).toBe(
+        '1985-03-07T18:00:00.000Z',
+      );
+    });
   });
 
   describe('ответ наружу', () => {

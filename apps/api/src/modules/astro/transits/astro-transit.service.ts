@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { AstroTodayDto } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { birthMomentOf } from '../birth-moment';
 import {
   AstroGenerationService,
   ASTRO_PROMPT_VERSION,
@@ -44,7 +45,7 @@ export class AstroTransitService {
     if (!birth || birth.timeAccuracy === 'unknown') return null;
 
     const chart = buildVedicChart(this.ephemeris, {
-      bornAtUtc: birth.bornAtUtc,
+      bornAtUtc: birthMomentOf(birth).bornAtUtc,
       latitude: birth.latitude,
       longitude: birth.longitude,
       timeAccuracy: birth.timeAccuracy,

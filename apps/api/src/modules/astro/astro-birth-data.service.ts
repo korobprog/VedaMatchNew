@@ -11,7 +11,7 @@ import type {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { computeAstroCompleteness } from './astro-completeness';
-import { resolveBirthMoment } from './birth-moment';
+import { birthMomentOf, resolveBirthMoment } from './birth-moment';
 
 const TIME_ACCURACIES: AstroTimeAccuracy[] = [
   'exact',
@@ -82,7 +82,12 @@ export class AstroBirthDataService {
       timeAccuracy,
       latitude: place.latitude,
       longitude: place.longitude,
-      timezone: body.timezone,
+      // Пояс рождения берётся ТОЛЬКО из координат места, а не из запроса (VED-672):
+      // `timezone` в теле — единственное значение, которое присылает устройство,
+      // и старый кэш бандла мог подставлять сюда пояс телефона. Тогда два
+      // смартфона с одинаковыми датой, временем и местом сохраняли бы разный
+      // bornAtUtc, а границы даш чувствительны к нему в сотни дней на час —
+      // отсюда «разные Махадаши» при одинаковых, как кажется, данных.
     });
 
     const data = {
@@ -152,14 +157,10 @@ export class AstroBirthDataService {
   }
 
   private toDto(row: BirthDataRow): AstroBirthDataDto {
-    const moment = resolveBirthMoment({
-      birthDate: toIsoDate(row.birthDateLocal),
-      birthTime: row.birthTimeLocal,
-      timeAccuracy: row.timeAccuracy,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      timezone: row.timezone,
-    });
+    // Момент — через `birthMomentOf` (VED-672): записи, сохранённые со старым
+    // поясом телефона, пересчитываются, и наружу уходит ровно тот момент, по
+    // которому считается карта.
+    const moment = birthMomentOf(row);
 
     return {
       birthDate: toIsoDate(row.birthDateLocal),
@@ -170,8 +171,8 @@ export class AstroBirthDataService {
         latitude: row.latitude,
         longitude: row.longitude,
       },
-      timezone: row.timezone,
-      bornAtUtc: row.bornAtUtc.toISOString(),
+      timezone: moment.timezone,
+      bornAtUtc: moment.bornAtUtc.toISOString(),
       utcOffsetMinutes: moment.utcOffsetMinutes,
       nonexistentLocalTime: moment.nonexistentLocalTime,
     };

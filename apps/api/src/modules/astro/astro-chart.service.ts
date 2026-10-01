@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { VedicChart } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { birthMomentOf } from './birth-moment';
 import type { EphemerisProvider } from './ephemeris/ephemeris-provider';
 import { EPHEMERIS_PROVIDER } from './ephemeris/ephemeris.token';
 import { buildVedicChart } from './vedic/vedic-chart';
@@ -27,7 +28,9 @@ export class AstroChartService {
     }
 
     return buildVedicChart(this.ephemeris, {
-      bornAtUtc: birthData.bornAtUtc,
+      // Момент — через `birthMomentOf`: записи, сохранённые со старым поясом,
+      // пересчитываются, и карта одинакова на любом устройстве (VED-672).
+      bornAtUtc: birthMomentOf(birthData).bornAtUtc,
       latitude: birthData.latitude,
       longitude: birthData.longitude,
       timeAccuracy: birthData.timeAccuracy,
@@ -53,7 +56,7 @@ export class AstroChartService {
     if (!subject) throw new NotFoundException('Запись не найдена');
 
     return buildVedicChart(this.ephemeris, {
-      bornAtUtc: subject.bornAtUtc,
+      bornAtUtc: birthMomentOf(subject).bornAtUtc,
       latitude: subject.latitude,
       longitude: subject.longitude,
       timeAccuracy: subject.timeAccuracy,

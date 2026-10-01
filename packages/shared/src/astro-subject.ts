@@ -53,7 +53,7 @@ export interface SaveAstroSubjectRequest {
   timeAccuracy?: AstroTimeAccuracy;
   gender?: Gender | null;
   place: AstroSubjectPlaceDto;
-  /** Ручное переопределение зоны; иначе определяется по координатам. */
+  /** Ручное переопределение зоны; сервер его не принимает — пояс всегда по координатам (VED-672). */
   timezone?: string;
   notes?: string | null;
 }
