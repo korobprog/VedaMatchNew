@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AdminApiKeysController } from './admin-api-keys.controller';
 import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysService } from './api-keys.service';
+import { AuthAdminService } from './auth-admin.service';
 import { AuthProvidersService } from './auth-providers.service';
 import { AuthController, WellKnownController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -22,6 +23,7 @@ import { TelegramInitDataVerifierService } from './telegram-init-data-verifier.s
     AuthService,
     ApiKeysService,
     AuthProvidersService,
+    AuthAdminService,
     IdentityService,
     JwtSignService,
     AuthGuard,
