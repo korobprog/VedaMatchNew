@@ -508,11 +508,13 @@ describe("каталог кнопок", () => {
 
   /* VED-711, VED-697, VED-698: две новые встроенные кнопки — со своими
      адресами и в наборе по умолчанию, чтобы увидели их и новички. */
-  it("«Планировщик» ведёт в Работу, «Гид» — к экскурсоводам Путешествия", () => {
+  it("«Планировщик» ведёт в Работу, «Гид» — к видео-презентациям тура", () => {
     expect(quickActionMeta("planner")?.label).toBe("Планировщик");
     expect(quickActionMeta("planner")?.href).toBe("/work/planner");
     expect(quickActionMeta("guide")?.label).toBe("Гид");
-    expect(quickActionMeta("guide")?.href).toBe("/travel/map/guides");
+    // VED-698: заказчик дал адрес самих видео: тур открывается главой
+    // «Вход и профиль», экскурсоводы Путешествий остались в своём сервисе.
+    expect(quickActionMeta("guide")?.href).toBe("/tour#start");
     expect(DEFAULT_QUICK_ACTIONS).toContain("planner");
     expect(DEFAULT_QUICK_ACTIONS).toContain("guide");
   });
