@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import type {
   SaveVedabaseColoringRequest,
   VedabaseBookManifest,
@@ -22,6 +23,12 @@ import {
   type VedabaseSelectionRange,
   type VedabaseTextRange,
 } from "@/lib/vedabase/locators";
+import {
+  READER_LOAD_TEXT,
+  ReaderLoadError,
+  readerLoadRetriable,
+  type ReaderLoadFailure,
+} from "@/lib/vedabase/reader-load";
 import type { VedabaseSearchResult } from "@/lib/vedabase/search-index";
 import {
   fetchVedabaseBookManifest,
@@ -94,24 +101,26 @@ export class VedabaseReaderRepository {
     this.books = new VedabaseBookStorage(userId);
   }
 
-  async loadBook(bookSlug: string): Promise<VedabaseBookManifest | null> {
+  /** Сбой сети или портала — `ReaderLoadError` с разобранной причиной. */
+  async loadBook(bookSlug: string): Promise<VedabaseBookManifest> {
     const local = (await (await this.database).get("library", bookSlug))?.manifest;
     if (local) return local;
     try {
       return await fetchVedabaseBookManifest(bookSlug);
-    } catch {
-      return null;
+    } catch (error) {
+      throw new ReaderLoadError(error);
     }
   }
 
-  async loadChapter(bookSlug: string, chapterSlug: string): Promise<VedabaseChapterDocument | null> {
+  /** Сбой сети или портала — `ReaderLoadError` с разобранной причиной. */
+  async loadChapter(bookSlug: string, chapterSlug: string): Promise<VedabaseChapterDocument> {
     const local = await this.books.getChapter(bookSlug, chapterSlug);
     if (local) return local;
     try {
       const response = await fetchVedabaseChapter(bookSlug, chapterSlug);
       return JSON.parse(await response.text()) as VedabaseChapterDocument;
-    } catch {
-      return null;
+    } catch (error) {
+      throw new ReaderLoadError(error);
     }
   }
 
@@ -271,6 +280,8 @@ export function ReaderScreen({
   const [annotations, setAnnotations] = useState<ReaderAnnotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<ReaderLoadFailure | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [colorings, setColorings] = useState<VedabaseColoringDto[]>([]);
 
@@ -308,6 +319,7 @@ export function ReaderScreen({
       if (!cancelled) {
         setLoading(true);
         setError(null);
+        setFailure(null);
       }
     });
     void Promise.all([
@@ -338,7 +350,12 @@ export function ReaderScreen({
         );
       })
       .catch((loadError: unknown) => {
-        if (!cancelled) setError(message(loadError));
+        if (cancelled) return;
+        // Прошлая глава не должна остаться на экране под чужим адресом.
+        setManifest(null);
+        setChapter(null);
+        if (loadError instanceof ReaderLoadError) setFailure(loadError.failure);
+        else setError(message(loadError));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -346,7 +363,7 @@ export function ReaderScreen({
     return () => {
       cancelled = true;
     };
-  }, [bookSlug, chapterSlug, repository]);
+  }, [bookSlug, chapterSlug, repository, attempt]);
 
   useEffect(() => {
     if (!activeLocator || activeLocator.chapterSlug !== chapterSlug) return;
@@ -452,24 +469,19 @@ export function ReaderScreen({
       .catch((saveError) => setError(message(saveError)));
   };
 
-  const addAnnotation = (
+  // Оба отдают промис: форма заметки ждёт записи и при сбое оставляет текст.
+  const addAnnotation = async (
     selection: VedabaseSelectionRange,
     kind: "highlight" | "note",
     noteText: string | null,
   ) => {
-    void repository
-      .createAnnotation(selection, kind, noteText)
-      .then((saved) => setAnnotations((current) => [...current, saved]))
-      .catch((saveError) => setError(message(saveError)));
+    const saved = await repository.createAnnotation(selection, kind, noteText);
+    setAnnotations((current) => [...current, saved]);
   };
 
-  const updateNote = (id: string, noteText: string) => {
-    void repository
-      .updateNote(id, noteText)
-      .then((saved) =>
-        setAnnotations((current) => [...current.filter((item) => item.id !== id), saved]),
-      )
-      .catch((saveError) => setError(message(saveError)));
+  const updateNote = async (id: string, noteText: string) => {
+    const saved = await repository.updateNote(id, noteText);
+    setAnnotations((current) => [...current.filter((item) => item.id !== id), saved]);
   };
 
   const selectSearchResult = (result: VedabaseSearchResult) => {
@@ -518,19 +530,34 @@ export function ReaderScreen({
     else navigate(targetChapter, unitId);
   };
 
-  if (loading) return <p className="p-6 text-sm text-text-2">Загружаем главу…</p>;
-  if (error && !chapter)
+  if (loading)
     return (
-      <p role="alert" className="mx-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300">
-        {error}
-      </p>
+      <ReaderFallback back={back} theme={preferences.theme}>
+        <p role="status" className="reader-muted text-sm">
+          Загружаем главу…
+        </p>
+      </ReaderFallback>
     );
   if (!manifest || !chapter) {
+    const retry = () => setAttempt((current) => current + 1);
     return (
-      <p role="alert" className="mx-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
-        Этой главы нет на устройстве. Скачайте книгу целиком, пока есть сеть,
-        и попробуйте снова.
-      </p>
+      <ReaderFallback back={back} theme={preferences.theme}>
+        <p
+          role="alert"
+          className={`reader-subtle rounded-xl p-4 ${failure === "offline" ? "" : "reader-danger"}`}
+        >
+          {failure ? READER_LOAD_TEXT[failure] : (error ?? READER_LOAD_TEXT.failed)}
+        </p>
+        {(!failure || readerLoadRetriable(failure)) && (
+          <button
+            type="button"
+            onClick={retry}
+            className="reader-surface reader-hover mt-3 min-h-11 rounded-xl border px-4 text-sm font-semibold"
+          >
+            Повторить
+          </button>
+        )}
+      </ReaderFallback>
     );
   }
 
@@ -636,7 +663,11 @@ export function ReaderScreen({
         readerRef={readerRef}
         bookSlug={bookSlug}
         chapterSlug={chapterSlug}
-        onCreateHighlight={(selection) => addAnnotation(selection, "highlight", null)}
+        onCreateHighlight={(selection) =>
+          void addAnnotation(selection, "highlight", null).catch((saveError) =>
+            setError(message(saveError)),
+          )
+        }
         onCreateNote={(selection, noteText) => addAnnotation(selection, "note", noteText)}
       />
       <ShelfSheet
@@ -670,6 +701,39 @@ export function ReaderScreen({
         onClose={() => setSearchOpen(false)}
         onSelect={selectSearchResult}
       />
+    </main>
+  );
+}
+
+/**
+ * Экран читалки, пока главы нет: загрузка или сбой. Дорога назад здесь та же,
+ * что в верхней панели, — панель появляется только с главой, и без этой
+ * ссылки человек оставался на сообщении об ошибке без выхода.
+ */
+function ReaderFallback({
+  back,
+  theme,
+  children,
+}: {
+  back?: { href: string; label: string };
+  theme: ReaderPreferences["theme"];
+  children: ReactNode;
+}) {
+  return (
+    <main data-reader-theme={theme} className="reader-shell flex min-h-dvh flex-col">
+      {back && (
+        <div className="reader-surface sticky top-[var(--reader-top,0px)] z-20 border-b">
+          <div className="mx-auto flex max-w-[1500px] px-2 py-2 sm:px-4">
+            <Link
+              href={back.href}
+              className="reader-hover flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold transition-colors"
+            >
+              {back.label}
+            </Link>
+          </div>
+        </div>
+      )}
+      <div className="mx-auto w-full max-w-3xl px-4 py-6">{children}</div>
     </main>
   );
 }

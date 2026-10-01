@@ -10,7 +10,7 @@ import type {
   VedabaseSyncPushRequest,
   VedabaseSyncPushResponse,
 } from "@vedamatch/shared";
-import { apiFetch } from "@/lib/http-client";
+import { ApiError, apiFetch } from "@/lib/http-client";
 import { apiBase } from "@/lib/api-base";
 
 const API_URL = apiBase();
@@ -179,7 +179,8 @@ async function assertSuccessful(response: Response): Promise<void> {
       }
     }
   } catch {}
-  throw new Error(message);
+  // Со статусом: читалка по нему отличает «книги нет» от сбоя сервера.
+  throw new ApiError(message, response.status);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

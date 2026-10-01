@@ -37,7 +37,13 @@ export function ShelfSheet({
     <dialog
       ref={ref}
       aria-label={title}
-      onClose={onClose}
+      // `close` приходит и после программного `dialog.close()` из эффекта
+      // выше, причём с опозданием — когда соседняя шторка уже открыта. Без
+      // проверки переход «Содержание → Скачать книгу» закрывал вторую
+      // шторку следом за первой. Закрытую снаружи шторку не закрываем снова.
+      onClose={() => {
+        if (open) onClose();
+      }}
       onClick={(event) => {
         // Клик мимо содержимого — по самому <dialog>, то есть по подложке.
         if (event.target === event.currentTarget) onClose();

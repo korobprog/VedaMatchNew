@@ -15,7 +15,7 @@ import {
   serializeLocator,
   serializeTextRange,
 } from "@/lib/vedabase/locators";
-import { ReaderScreen } from "./reader-screen";
+import { ReaderScreen, VedabaseReaderRepository } from "./reader-screen";
 
 // Раскраска (VED-683) приходит с сервера; в тестах сети нет — пустая.
 vi.mock("@/lib/vedabase-client-api", async (importOriginal) => ({
@@ -199,6 +199,7 @@ describe("ReaderScreen", () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     await deleteVedabaseDb(userId);
   });
 
@@ -292,6 +293,85 @@ describe("ReaderScreen", () => {
     );
   });
 
+  it("при сбое загрузки оставляет дорогу назад и кнопку повтора", async () => {
+    await seedReader();
+    render(
+      <ReaderScreen
+        userId={userId}
+        bookSlug={bookSlug}
+        chapterSlug="missing"
+        back={{ href: "/motivation?post=abc", label: "← К афоризму" }}
+      />,
+    );
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("link", { name: "← К афоризму" })).toHaveAttribute(
+      "href",
+      "/motivation?post=abc",
+    );
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeInTheDocument();
+  });
+
+  it("снятую с полки книгу называет недоступной, а не «нет на устройстве»", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ message: "book_not_found" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+    render(
+      <ReaderScreen
+        userId={userId}
+        bookSlug="blocked-book"
+        chapterSlug="chapter-1"
+        back={{ href: "/vedabase", label: "← К библиотеке" }}
+      />,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Эта книга или глава сейчас недоступна",
+    );
+    expect(screen.queryByRole("button", { name: "Повторить" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "← К библиотеке" })).toBeInTheDocument();
+  });
+
+  it("при сбое записи оставляет текст заметки и не говорит «сохранена»", async () => {
+    await seedReader();
+    const user = userEvent.setup();
+    vi.spyOn(
+      VedabaseReaderRepository.prototype,
+      "createAnnotation",
+    ).mockRejectedValueOnce(new Error("QuotaExceededError"));
+    render(
+      <ReaderScreen
+        userId={userId}
+        bookSlug={bookSlug}
+        chapterSlug="chapter-1"
+      />,
+    );
+    await screen.findByRole("heading", { name: "Chapter One" });
+
+    selectText("block-unit-1-translationHtml", 5, 11);
+    await user.click(screen.getByRole("button", { name: "Заметка" }));
+    await user.type(screen.getByLabelText("Текст заметки"), "Дорогая мысль");
+    await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Заметка не сохранилась",
+    );
+    expect(screen.getByLabelText("Текст заметки")).toHaveValue("Дорогая мысль");
+    expect(screen.queryByText("Заметка сохранена")).not.toBeInTheDocument();
+
+    // Вторая попытка проходит — текст не пришлось набирать заново.
+    await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
+    expect(await screen.findByText("Заметка сохранена")).toBeInTheDocument();
+    expect(await screen.findByText("Дорогая мысль")).toBeInTheDocument();
+  });
+
   it("persists reader preferences and toggles a bookmark locally first", async () => {
     await seedReader();
     const user = userEvent.setup();
@@ -371,6 +451,8 @@ describe("ReaderScreen", () => {
     await user.type(screen.getByLabelText("Текст заметки"), "Initial note");
     await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
 
+    // Форма закрывается после записи, а не по нажатию.
+    await screen.findByText("Заметка сохранена", undefined, { timeout: 5000 });
     expect(
       await screen.findByText("Initial note", undefined, { timeout: 5000 }),
     ).toBeInTheDocument();
