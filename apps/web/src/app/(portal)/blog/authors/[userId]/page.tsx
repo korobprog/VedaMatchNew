@@ -6,7 +6,9 @@ import {
   getBlogAuthorFeed,
   getBlogAuthorFiles,
 } from "@/lib/blog-api";
+import { getDirectChatWith } from "@/lib/chat-api";
 import { requireUser } from "@/lib/require-user";
+import { PersonalMiniChat } from "@/components/chat/personal-mini-chat";
 import { BlogAuthorFeed } from "@/components/blog/blog-author-feed";
 import { BlogAuthorAbout } from "@/components/blog/blog-author-about";
 import { BlogAuthorFiles } from "@/components/blog/blog-author-files";
@@ -36,10 +38,14 @@ export default async function BlogAuthorPage({
 }) {
   const { userId } = await params;
   const viewer = await requireUser();
-  const [feed, files, album] = await Promise.all([
+  // Свою страницу открывают смотреть свои посты: мини-чат с собой не нужен,
+  // и запрос к мессенджеру за ним не стоит.
+  const minePage = userId === viewer.id;
+  const [feed, files, album, chat] = await Promise.all([
     getBlogAuthorFeed(userId),
     getBlogAuthorFiles(userId),
     getBlogAuthorAlbum(userId),
+    minePage ? Promise.resolve(null) : getDirectChatWith(userId),
   ]);
   if (!feed) notFound();
 
@@ -84,6 +90,16 @@ export default async function BlogAuthorPage({
           </Link>
         )}
       </div>
+
+      {/* Миниатюра мессенджера (VED-686): переписка с хозяином страницы прямо
+          здесь, а кнопка в шапке открывает полноценный мессенджер. */}
+      {!mine && (
+        <PersonalMiniChat
+          initial={chat}
+          companion={{ id: feed.author.id, name: feed.author.name }}
+          viewerId={viewer.id}
+        />
+      )}
 
       <BlogAuthorAbout initial={feed.about} mine={mine} />
 

@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type {
   AccessTokenPayload,
+  ChatDirectWithState,
   CreateChatConversationRequest,
   CreateChatReportRequest,
   EditChatMessageRequest,
@@ -68,6 +69,19 @@ export class ChatController {
   @Get('requests')
   requests(@CurrentUser() user: AccessTokenPayload) {
     return this.conversations.requests(user.sub);
+  }
+
+  /**
+   * Личный диалог с человеком — мини-чат на личной странице (VED-686).
+   * Обёртка, а не сама беседа: диалога может не быть, а `null` в ответе Nest
+   * превращает в пустое тело, которое клиент читает как ошибку.
+   */
+  @Get('direct-with/:userId')
+  async directWith(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('userId') userId: string,
+  ): Promise<ChatDirectWithState> {
+    return { conversation: await this.conversations.directWith(user.sub, userId) };
   }
 
   /** Люди, из которых собирается группа: собеседники личных диалогов. */

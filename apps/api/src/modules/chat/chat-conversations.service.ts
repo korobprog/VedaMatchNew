@@ -294,6 +294,31 @@ export class ChatConversationsService {
   }
 
   /**
+   * Личный диалог с человеком — мини-чат на личной странице (VED-686).
+   *
+   * Находится и ждущий ответа запрос, и принятая переписка: у них один
+   * `directKey`. В отличие от `create`, ничего не заводит: страницу открывают
+   * смотреть, а запрос на переписку — это действие того, кто пишет.
+   */
+  async directWith(
+    userId: string,
+    targetId: string,
+  ): Promise<ChatConversationDetail | null> {
+    // С собой диалога нет ни в базе, ни в интерфейсе — мини-чат на своей
+    // странице не показывается вовсе.
+    if (!targetId || targetId === userId) return null;
+    const row = await this.prisma.chatConversation.findUnique({
+      where: { directKey: directKey(userId, targetId) },
+      include: chatConversationInclude(userId),
+    });
+    if (!row) return null;
+    // Вышедший из диалога не открывает его чужой страницей: своё участие
+    // проверяем здесь, а не полагаемся на include.
+    if (!row.members.some((m) => m.userId === userId && !m.leftAt)) return null;
+    return this.detail(userId, row.id);
+  }
+
+  /**
    * Создание беседы. Личный диалог заводится один на пару — уникальность
    * держит `directKey` в базе, а не проверка перед вставкой.
    */

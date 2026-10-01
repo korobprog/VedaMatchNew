@@ -285,6 +285,16 @@ export interface ChatConversationDetail extends ChatConversationSummary {
   isConference: boolean;
 }
 
+/** Личный диалог с человеком — мини-чат на личной странице (VED-686). */
+export interface ChatDirectWithState {
+  /**
+   * Диалог, если он уже есть, — включая ждущий ответа запрос. `null` —
+   * переписки ещё нет: смотреть страницу не значит заводить диалог, запрос
+   * уходит первым сообщением из мини-чата.
+   */
+  conversation: ChatConversationDetail | null;
+}
+
 /** Сколько непрочитанного во всём сервисе — для значка на плитке. */
 export interface ChatUnreadState {
   /** Сумма непрочитанных сообщений по всем беседам. */
