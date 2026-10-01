@@ -2,14 +2,18 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import {
   LIBRARY_BOOK_FILES_PER_ENTRY,
   LIBRARY_BOOK_MAX_BYTES,
   libraryBookFormatOf,
+  type AdminAuditEvent,
   type CompleteLibraryBookUploadRequest,
   type CreateLibraryBookUploadRequest,
   type LibraryBookFormat,
@@ -19,7 +23,10 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   BOOK_MIME,
+  BOOK_SNIFF_BYTES,
+  bookContentMatches,
   bookDisposition,
+  bookFileAuditDetails,
   bookFileKey,
   bookFileName,
   bookFormatOfKey,
@@ -29,6 +36,12 @@ import {
   BOOK_UPLOAD_URL_TTL_SECONDS,
   LibraryBookStorageService,
 } from './library-book-storage.service';
+
+interface EntryRef {
+  filesCount: number;
+  title: string;
+  addedById: string | null;
+}
 
 interface FileRow {
   id: string;
@@ -54,9 +67,12 @@ interface FileRow {
  */
 @Injectable()
 export class LibraryFilesService {
+  private readonly logger = new Logger(LibraryFilesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: LibraryBookStorageService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async createUpload(
@@ -90,7 +106,12 @@ export class LibraryFilesService {
     };
   }
 
-  /** Заливка закончена: сверяем объект в бакете и прикрепляем файл. */
+  /**
+   * Заливка закончена: сверяем объект в бакете и прикрепляем файл.
+   *
+   * Повтор с тем же ключом отдаёт уже прикреплённый файл — браузер
+   * переспрашивает завершение, когда ответ потерялся по дороге.
+   */
   async complete(
     userId: string,
     viewerIsAdmin: boolean,
@@ -101,36 +122,50 @@ export class LibraryFilesService {
     const format = bookFormatOfKey(body?.key, entryId);
     if (!format) throw new BadRequestException('book_key_mismatch');
 
-    // Повторное завершение — не ошибка: браузер мог не дождаться ответа и
-    // спросить ещё раз, а файл уже прикреплён.
-    const already = await this.prisma.libraryEntryFile.findUnique({
-      where: { storageKey: body.key },
-    });
+    const already = await this.attached(body.key);
     if (already) return this.toDto(already);
 
-    if (entry.filesCount >= LIBRARY_BOOK_FILES_PER_ENTRY) {
-      await this.storage.remove(body.key);
-      throw new BadRequestException('too_many_book_files');
-    }
     const object = await this.storage.head(body.key);
     if (!object) throw new BadRequestException('book_file_missing');
+    if (object.sizeBytes <= 0)
+      throw await this.reject(body.key, 'book_file_empty');
     // Размер держит и подпись ссылки, но сверка здесь не зависит от того,
     // соблюдает ли хранилище подписанный Content-Length.
-    if (object.sizeBytes > LIBRARY_BOOK_MAX_BYTES) {
-      await this.storage.remove(body.key);
-      throw new BadRequestException('book_file_too_large');
-    }
+    if (object.sizeBytes > LIBRARY_BOOK_MAX_BYTES)
+      throw await this.reject(body.key, 'book_file_too_large');
+    const head = await this.storage.readHead(body.key, BOOK_SNIFF_BYTES);
+    if (!bookContentMatches(format, head))
+      throw await this.reject(body.key, 'book_file_content_mismatch');
 
-    const created = await this.prisma.libraryEntryFile.create({
-      data: {
-        entryId,
-        storageKey: body.key,
-        name: bookFileName(body.fileName, format),
-        format,
-        sizeBytes: object.sizeBytes,
-        addedById: userId,
-      },
-    });
+    const data = {
+      entryId,
+      storageKey: body.key,
+      name: bookFileName(body.fileName, format),
+      format,
+      sizeBytes: object.sizeBytes,
+      addedById: userId,
+    };
+    let created: FileRow | null;
+    try {
+      created = await this.attach(entryId, data);
+    } catch (error) {
+      // Параллельный повтор того же завершения успел первым.
+      const winner = isUniqueViolation(error)
+        ? await this.attached(body.key)
+        : null;
+      if (!winner) throw error;
+      return this.toDto(winner);
+    }
+    if (!created) throw await this.reject(body.key, 'too_many_book_files');
+
+    this.audit(
+      userId,
+      viewerIsAdmin,
+      entry,
+      entryId,
+      'library.file-added',
+      created,
+    );
     return this.toDto(created);
   }
 
@@ -140,10 +175,9 @@ export class LibraryFilesService {
     entryId: string,
     fileId: string,
   ): Promise<void> {
-    await this.editableEntry(userId, viewerIsAdmin, entryId);
+    const entry = await this.editableEntry(userId, viewerIsAdmin, entryId);
     const file = await this.prisma.libraryEntryFile.findUnique({
       where: { id: fileId },
-      select: { id: true, entryId: true, storageKey: true },
     });
     if (!file || file.entryId !== entryId) {
       throw new NotFoundException('book_file_not_found');
@@ -152,10 +186,28 @@ export class LibraryFilesService {
     // Объект — после строки: упадёт удаление из бакета, останется мусор, а
     // не ссылка в никуда на странице материала.
     await this.storage.remove(file.storageKey);
+    this.audit(
+      userId,
+      viewerIsAdmin,
+      entry,
+      entryId,
+      'library.file-removed',
+      file,
+    );
   }
 
   /** Файлы материала для его страницы — с подписанными ссылками. */
   async forEntry(entryId: string): Promise<LibraryEntryFileDto[]> {
+    // Страницу материала читают все, и статья или видео не должны падать
+    // оттого, что хранилище не настроено: ссылок на скачивание всё равно не
+    // выдать, поэтому отвечаем пустым списком. Остальные пути (`complete`)
+    // без хранилища честно отвечают 503.
+    if (!this.storage.configured) {
+      this.logger.warn(
+        `Хранилище файлов книг не настроено: файлы материала ${entryId} не отданы`,
+      );
+      return [];
+    }
     const files = await this.prisma.libraryEntryFile.findMany({
       where: { entryId },
       orderBy: { createdAt: 'asc' },
@@ -180,6 +232,66 @@ export class LibraryFilesService {
   }
 
   /**
+   * Строка файла под замком материала: счёт и вставка в одной транзакции.
+   * Без замка два завершения разом оба видели четыре файла и оба
+   * прикрепляли пятый. `null` — у материала уже предел.
+   */
+  private attach(
+    entryId: string,
+    data: Prisma.LibraryEntryFileUncheckedCreateInput,
+  ): Promise<FileRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "LibraryEntry" WHERE "id" = ${entryId} FOR UPDATE`;
+      const count = await tx.libraryEntryFile.count({ where: { entryId } });
+      if (count >= LIBRARY_BOOK_FILES_PER_ENTRY) return null;
+      return tx.libraryEntryFile.create({ data });
+    });
+  }
+
+  private attached(key: string): Promise<FileRow | null> {
+    return this.prisma.libraryEntryFile.findUnique({
+      where: { storageKey: key },
+    });
+  }
+
+  /** Объект не подошёл: убираем его из бакета и отвечаем причиной. */
+  private async reject(
+    key: string,
+    reason: string,
+  ): Promise<BadRequestException> {
+    await this.storage.remove(key);
+    return new BadRequestException(reason);
+  }
+
+  /**
+   * В журнал попадает только админ над чужим материалом: автор, который
+   * возится со своими файлами, — не админское действие.
+   */
+  private audit(
+    userId: string,
+    viewerIsAdmin: boolean,
+    entry: EntryRef,
+    entryId: string,
+    action: 'library.file-added' | 'library.file-removed',
+    file: Pick<FileRow, 'name' | 'format' | 'sizeBytes'>,
+  ): void {
+    if (!viewerIsAdmin || entry.addedById === userId) return;
+    const event: AdminAuditEvent = {
+      actorId: userId,
+      action,
+      targetType: 'platform',
+      targetId: entryId,
+      details: bookFileAuditDetails({
+        entry: entry.title,
+        name: file.name,
+        format: file.format,
+        sizeBytes: file.sizeBytes,
+      }),
+    };
+    this.events.emit('admin.action', event);
+  }
+
+  /**
    * Материал, к которому этот человек вправе прикреплять файлы. Скрытый
    * жалобами или снятый — 404, как и на его странице.
    */
@@ -187,12 +299,15 @@ export class LibraryFilesService {
     userId: string,
     viewerIsAdmin: boolean,
     entryId: string,
-  ): Promise<{ filesCount: number }> {
+  ): Promise<EntryRef> {
     const entry = await this.prisma.libraryEntry.findUnique({
       where: { id: entryId },
       select: {
         status: true,
         addedById: true,
+        titleRu: true,
+        titleEn: true,
+        url: true,
         _count: { select: { files: true } },
       },
     });
@@ -202,7 +317,11 @@ export class LibraryFilesService {
     if (entry.addedById !== userId && !viewerIsAdmin) {
       throw new ForbiddenException('not_entry_owner');
     }
-    return { filesCount: entry._count.files };
+    return {
+      filesCount: entry._count.files,
+      title: entry.titleRu ?? entry.titleEn ?? entry.url ?? entryId,
+      addedById: entry.addedById,
+    };
   }
 
   private async toDto(file: FileRow): Promise<LibraryEntryFileDto> {
@@ -220,4 +339,11 @@ export class LibraryFilesService {
       createdAt: file.createdAt.toISOString(),
     };
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
 }

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   BOOK_FILE_ACCEPT,
   BOOK_UPLOAD_ERROR_KEYS,
+  COMPLETE_RETRY_DELAYS_MS,
   bookFileRejection,
   bookUploadErrorKey,
+  completeRetriable,
   formatFileSize,
 } from "./book-files";
 import { libraryDictionary } from "./i18n";
@@ -51,6 +53,32 @@ describe("bookUploadErrorKey", () => {
   it("незнакомый код — «не загрузился», а не пустота", () => {
     expect(bookUploadErrorKey("brand_new_rule")).toBe("files.failed");
     expect(bookUploadErrorKey("too_many_book_files")).toBe("files.tooMany");
+    expect(bookUploadErrorKey("book_storage_unavailable")).toBe(
+      "files.storageUnavailable",
+    );
+    expect(bookUploadErrorKey("book_file_content_mismatch")).toBe(
+      "files.contentMismatch",
+    );
+  });
+});
+
+describe("completeRetriable", () => {
+  it("переспрашивает обрыв сети и сбой сервера", () => {
+    expect(completeRetriable("network")).toBe(true);
+    expect(completeRetriable("book_storage_unavailable")).toBe(true);
+    expect(completeRetriable("500")).toBe(true);
+    expect(completeRetriable("503")).toBe(true);
+  });
+
+  it("отказ по существу не повторяет", () => {
+    expect(completeRetriable("400")).toBe(false);
+    expect(completeRetriable("403")).toBe(false);
+    expect(completeRetriable("book_file_content_mismatch")).toBe(false);
+    expect(completeRetriable("book_key_mismatch")).toBe(false);
+  });
+
+  it("делает две повторные попытки с растущей паузой", () => {
+    expect(COMPLETE_RETRY_DELAYS_MS).toEqual([1000, 3000]);
   });
 });
 

@@ -43,6 +43,8 @@ const TEMPLATES: Record<AdminAuditAction, string> = {
   'library.entry-removed': 'Запись Образования снята с публикации',
   'library.entry-restored': 'Запись Образования возвращена',
   'library.author-lineage-applied': 'Линия автора проставлена его материалам',
+  'library.file-added': 'К материалу Образования добавлен файл',
+  'library.file-removed': 'У материала Образования убран файл',
   'vedabase.book-updated': 'Книга Библиотеки изменена',
   'blog.feed-approved': 'Пост принят в общую ленту Блога',
   'blog.feed-rejected': 'Пост отклонён для общей ленты Блога',

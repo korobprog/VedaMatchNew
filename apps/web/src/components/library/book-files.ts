@@ -35,8 +35,9 @@ export function bookFileRejection(
 }
 
 /**
- * Коды отказа — строкой словаря. Покрывает все `BadRequestException` и 403
- * из library-files.service.ts, плюс два сбоя самой заливки в бакет.
+ * Коды отказа — строкой словаря. Покрывает `BadRequestException`,
+ * `ServiceUnavailableException` и 403 из library-files.service.ts, плюс два
+ * сбоя самой заливки в бакет и обрыв сети.
  */
 export const BOOK_UPLOAD_ERROR_KEYS: Record<string, LibraryTextKey> = {
   unsupported_book_format: "files.unsupportedFormat",
@@ -45,11 +46,30 @@ export const BOOK_UPLOAD_ERROR_KEYS: Record<string, LibraryTextKey> = {
   too_many_book_files: "files.tooMany",
   book_upload_unavailable: "files.unavailable",
   not_entry_owner: "files.forbidden",
+  book_storage_unavailable: "files.storageUnavailable",
+  book_file_content_mismatch: "files.contentMismatch",
   book_file_missing: "files.failed",
   book_key_mismatch: "files.failed",
   storage_rejected: "files.failed",
   network: "files.network",
 };
+
+/** Сколько раз переспросить завершение заливки и с какими паузами. */
+export const COMPLETE_RETRY_DELAYS_MS = [1000, 3000];
+
+/**
+ * Стоит ли переспросить завершение заливки.
+ *
+ * Файл к этому моменту уже в бакете: сто мегабайт залиты, не дошёл только
+ * последний короткий запрос. Отказ по существу (4xx с кодом причины)
+ * повторять незачем; обрыв сети и сбой сервера — стоит, завершение на
+ * сервере повторяемо по ключу.
+ */
+export function completeRetriable(code: string): boolean {
+  if (code === "network" || code === "book_storage_unavailable") return true;
+  const status = Number(code);
+  return Number.isInteger(status) && status >= 500;
+}
 
 /** Строка словаря для отказа с кодом; незнакомый код — «не загрузился». */
 export function bookUploadErrorKey(code: string): LibraryTextKey {
