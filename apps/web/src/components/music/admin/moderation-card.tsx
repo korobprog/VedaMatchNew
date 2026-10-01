@@ -39,10 +39,16 @@ export function MusicModerationCard({
   item,
   artists,
   categories,
+  selection,
 }: {
   item: MusicModerationItemDto;
   artists: MusicArtistDto[];
   categories: MusicCategoryDto[];
+  /**
+   * Массовый выбор (VED-688): галочка в шапке карточки. Без пропса
+   * карточка остаётся прежней — одиночной, без галочки.
+   */
+  selection?: { selected: boolean; onToggle: () => void };
 }) {
   const router = useRouter();
   const { track } = item;
@@ -93,6 +99,19 @@ export function MusicModerationCard({
   return (
     <li className="glass rounded-2xl border border-glass-brd p-4">
       <div className="flex flex-wrap items-center gap-2 text-xs">
+        {/* Массовый выбор (VED-688): цель 32×32 вокруг галочки 16 — тем же
+            приёмом, что в списке «Все записи». Без `selection` галочки нет. */}
+        {selection && (
+          <label className="-ml-1 flex size-8 shrink-0 cursor-pointer items-center justify-center self-center">
+            <input
+              type="checkbox"
+              checked={selection.selected}
+              onChange={selection.onToggle}
+              aria-label={`Выбрать «${track.title}»`}
+              className="size-4"
+            />
+          </label>
+        )}
         <span className="rounded-full border border-gold/40 px-2 py-0.5 text-gold">
           Ждёт проверки
         </span>
