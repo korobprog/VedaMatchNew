@@ -23,6 +23,7 @@ import {
 } from '@vedamatch/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UsersService } from '../../users/users.service';
+import { birthMomentOf } from '../birth-moment';
 import {
   AstroGenerationService,
   ASTRO_PROMPT_VERSION,
@@ -362,7 +363,7 @@ export class AstroCompatibilityService {
     gender: Gender | null;
   }): MoonPlacement {
     const chart = buildVedicChart(this.ephemeris, {
-      bornAtUtc: subject.bornAtUtc,
+      bornAtUtc: birthMomentOf(subject).bornAtUtc,
       latitude: subject.latitude,
       longitude: subject.longitude,
       timeAccuracy: subject.timeAccuracy,
@@ -386,7 +387,7 @@ export class AstroCompatibilityService {
     if (!birth) return null;
 
     const chart = buildVedicChart(this.ephemeris, {
-      bornAtUtc: birth.bornAtUtc,
+      bornAtUtc: birthMomentOf(birth).bornAtUtc,
       latitude: birth.latitude,
       longitude: birth.longitude,
       timeAccuracy: birth.timeAccuracy,
@@ -431,7 +432,7 @@ export class AstroCompatibilityService {
     timeAccuracy: AstroTimeAccuracy;
   }): string {
     return buildVedicChart(this.ephemeris, {
-      bornAtUtc: birth.bornAtUtc,
+      bornAtUtc: birthMomentOf(birth).bornAtUtc,
       latitude: birth.latitude,
       longitude: birth.longitude,
       timeAccuracy: birth.timeAccuracy,

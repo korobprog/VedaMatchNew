@@ -29,7 +29,13 @@ export interface BirthMomentInput {
   timeAccuracy: AstroTimeAccuracy;
   latitude: number;
   longitude: number;
-  /** Ручное переопределение зоны; иначе определяется по координатам. */
+  /**
+   * Ручное переопределение зоны; иначе определяется по координатам.
+   *
+   * Сюда передаётся только серверное значение — сохранённая строка записи.
+   * Из HTTP-запроса оно НЕ берётся (VED-672): пояс телефона менял бы
+   * bornAtUtc при неизменных дате, времени и месте.
+   */
   timezone?: string;
 }
 
@@ -58,6 +64,70 @@ export function resolveTimezone(latitude: number, longitude: number): string {
     );
   }
   return zone;
+}
+
+/** Строка записи рождения — своя карта или запись астролога. */
+export interface BirthRowLike {
+  /** Локальная дата рождения, как её ввёл человек; без неё строка неполная. */
+  birthDateLocal?: Date | null;
+  birthTimeLocal?: string | null;
+  timeAccuracy?: AstroTimeAccuracy;
+  latitude?: number;
+  longitude?: number;
+  /** Сохранённый при записи пояс — он же признак её согласованности. */
+  timezone?: string | null;
+  /** Сохранённый момент рождения. */
+  bornAtUtc?: Date | null;
+}
+
+/**
+ * Момент рождения строки записи (VED-672).
+ *
+ * Источник истины — введённые дата, время и координаты: пояс определяется по
+ * месту, и любое устройство при одном и том же вводе получит один и тот же
+ * момент. Это лечит записи, сохранённые до правки: они держат пояс телефона
+ * (см. `astro-birth-data.service.ts`), и одна и та же карта оставалась бы
+ * разной на разных устройствах, пока человек её не пересохранит.
+ *
+ * Сохранённый момент при этом не выбрасывается: карта не должна меняться от
+ * обновления базы часовых поясов, поэтому согласованная запись — та, чей пояс
+ * совпал с поясом места — считается по тому моменту, с каким её сохранили.
+ */
+export function birthMomentOf(row: BirthRowLike): BirthMoment {
+  const hasInput =
+    row.birthDateLocal instanceof Date &&
+    row.latitude !== undefined &&
+    row.longitude !== undefined &&
+    row.timeAccuracy !== undefined;
+
+  if (!hasInput) {
+    // Строки без введённых даты и места (фикстуры, выгрузки) считаются по
+    // сохранённому моменту — пересчитывать их не из чего.
+    if (!row.bornAtUtc) {
+      throw new BadRequestException('Запись рождения не содержит данных');
+    }
+    return {
+      bornAtUtc: row.bornAtUtc,
+      timezone: row.timezone ?? 'UTC',
+      utcOffsetMinutes: 0,
+      resolvedTime: '',
+      nonexistentLocalTime: false,
+    };
+  }
+
+  const derived = resolveBirthMoment({
+    birthDate: row.birthDateLocal!.toISOString().slice(0, 10),
+    birthTime: row.birthTimeLocal ?? null,
+    timeAccuracy: row.timeAccuracy!,
+    latitude: row.latitude!,
+    longitude: row.longitude!,
+  });
+
+  const consistent = Boolean(row.timezone) && row.timezone === derived.timezone;
+  if (consistent && row.bornAtUtc) {
+    return { ...derived, bornAtUtc: row.bornAtUtc };
+  }
+  return derived;
 }
 
 export function resolveBirthMoment(input: BirthMomentInput): BirthMoment {
