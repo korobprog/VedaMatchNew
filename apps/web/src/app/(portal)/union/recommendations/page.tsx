@@ -14,6 +14,7 @@ import {
 import {
   UnionToggleLink,
   oppositeGenderHref,
+  oppositeGenderLabel,
   toggledHref,
 } from "@/components/union/union-toggle-link";
 import { UnionNav } from "@/components/union/union-nav";
@@ -77,8 +78,9 @@ export default async function UnionRecommendationsPage({
         label="Показать всех"
         active={showEveryone}
       />
-      {/* «Противоположный пол» (VED-673): мужчине — женский значок, женщине —
-          мужской. Нажата, пока пол не выбран вручную: это и есть умолчание. */}
+      {/* «Противоположный пол» (VED-673): мужчине — женский значок и надпись
+          «Женщины», женщине — мужской и «Мужчины», как просил заказчик.
+          Нажата, пока пол не выбран вручную: это и есть умолчание. */}
       <UnionToggleLink
         href={oppositeGenderHref(path, params)}
         icon={
@@ -90,22 +92,27 @@ export default async function UnionRecommendationsPage({
             <VenusAndMars size={20} aria-hidden />
           )
         }
-        label="Противоположный пол"
+        label={oppositeGenderLabel(user.gender)}
         active={!first(params.gender)}
       />
-      <UnionToggleLink
-        href={toggledHref(path, params, "favoritesOnly", "true")}
-        icon={
-          <Star
-            size={20}
-            aria-hidden
-            fill={favoritesOnly ? "currentColor" : "none"}
-          />
-        }
-        label="Избранное"
-        active={favoritesOnly}
-      />
     </>
+  );
+  /* «Избранное» — не в основной группе, а правее «Крупнее» (VED-673): эти две
+     кнопки заказчик просил поменять местами, поэтому «Избранное» рисуется
+     последним в ряду и прижимается к правому краю. */
+  const favoritesToggle = (
+    <UnionToggleLink
+      href={toggledHref(path, params, "favoritesOnly", "true")}
+      icon={
+        <Star
+          size={20}
+          aria-hidden
+          fill={favoritesOnly ? "currentColor" : "none"}
+        />
+      }
+      label="Избранное"
+      active={favoritesOnly}
+    />
   );
   // «Найдено» — в заголовке (VED-652), а не в ряду кнопок.
   const found =
@@ -146,7 +153,10 @@ export default async function UnionRecommendationsPage({
           <>
             {/* Переключатели и над пустой выдачей: включённое «Избранное» без
               избранных иначе нечем было бы выключить. */}
-            <div className="mb-4 flex items-center gap-2">{toolbar}</div>
+            <div className="mb-4 flex items-center gap-2">
+              {toolbar}
+              <div className="ml-auto">{favoritesToggle}</div>
+            </div>
             <RecommendationsEmpty
               params={params}
               narrowingFilterCount={countNarrowingFilters(params)}
@@ -167,6 +177,7 @@ export default async function UnionRecommendationsPage({
             <RecommendationsView
               items={recommendations.items}
               toolbar={toolbar}
+              toolbarEnd={favoritesToggle}
             />
             {/* «Показывать по» — рядом с перелистыванием, там и возникает
                 вопрос. Не показываем, когда выбирать нечего: при выдаче

@@ -42,13 +42,20 @@ function subscribeToMobileQuery(onChange: () => void): () => void {
 export function RecommendationsView({
   items,
   toolbar,
+  toolbarEnd,
 }: {
   items: UnionRecommendation[];
   /**
-   * Переключатели рядом со «Свайпами» — «Показать всех» и «Избранное»
-   * (VED-652). «Найдено» уехало в заголовок страницы.
+   * Переключатели рядом со «Свайпами» — «Показать всех» и «Противоположный
+   * пол» (VED-652). «Найдено» уехало в заголовок страницы.
    */
   toolbar?: React.ReactNode;
+  /**
+   * Кнопка в самый правый край ряда — «Избранное» (VED-673). Заказчик просил
+   * поменять «Избранное» и «Крупнее» местами, поэтому «Избранное» живёт
+   * отдельной слотой и рисуется после кнопки плотности.
+   */
+  toolbarEnd?: React.ReactNode;
 }) {
   const isMobile = useSyncExternalStore(
     subscribeToMobileQuery,
@@ -211,10 +218,12 @@ export function RecommendationsView({
             icon={density === 2 ? <DenseGlyph /> : <LargeGlyph />}
             label={densityLabel(density)}
             pressable={false}
-            className="ml-auto"
             onClick={() => chooseDensity(nextDensity(density))}
           />
         )}
+
+        {/* «Избранное» — после «Крупнее», в правый край ряда (VED-673). */}
+        {toolbarEnd && <div className="ml-auto">{toolbarEnd}</div>}
       </div>
 
       {isMobile ? (

@@ -1,5 +1,6 @@
 // API-клиент сервиса Union. См. docs/service-module-contract.md
 import { cookies } from "next/headers";
+import { resolveUnionPageSize } from "@/components/union/page-size";
 import type {
   UnionArchiveListResponse,
   UnionFavoritesResponse,
@@ -53,7 +54,14 @@ export const getUnionProfileState = () =>
 export const getUnionRecommendations = (
   params?: Record<string, string | string[] | undefined>,
 ) => {
-  const query = toQueryString(params);
+  const query = toQueryString({
+    ...params,
+    /* «Показывать по 100» показывало двенадцать (VED-673): в селекте по
+       умолчанию стоит сто, но в адресе pageSize нет, запрос уходил без него,
+       и API в этом случае отдавал свою двенадцать. Теперь фактический размер
+       страницы уходит всегда — как показано в селекте, так и листаем. */
+    pageSize: String(resolveUnionPageSize(params?.pageSize)),
+  });
   return unionGet<UnionRecommendationsResponse>(
     `/union/recommendations${query}`,
   );
