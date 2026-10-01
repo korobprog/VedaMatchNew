@@ -235,6 +235,8 @@ describe("QuickPanel", () => {
       "blog",
       "telegram",
       "transits",
+      "planner",
+      "guide",
     ]);
   });
 
@@ -255,7 +257,7 @@ describe("QuickPanel", () => {
   });
 
   it("пустая панель говорит, что делать", async () => {
-    window.localStorage.setItem(STORAGE_KEY, '{"v":10,"ids":[]}');
+    window.localStorage.setItem(STORAGE_KEY, '{"v":11,"ids":[]}');
     // Опустошить панель может только админ: у остальных три кнопки
     // закреплены (VED-326), и пустой она не бывает.
     await openPanel({ admin: true });

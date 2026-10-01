@@ -42,6 +42,8 @@ export type BuiltinQuickActionId =
   | "calendar"
   | "telegram"
   | "transits"
+  | "planner"
+  | "guide"
   | "calculator"
   | "invite"
   | "donate"
@@ -210,6 +212,27 @@ export const BUILTIN_QUICK_ACTIONS: readonly QuickActionMeta[] = [
     href: "/astro/chart?transits=1",
   },
   {
+    id: "planner",
+    kind: "builtin",
+    // VED-711: «Планировщик» — страница рабочих сред в Работе. Раньше её
+    // держали закладкой (`custom:/work/planner`), и кнопка пропадала при
+    // любом сбое разбора записи: незнакомый идентификатор `dedupe` молча
+    // выкидывает, а встроенного «Планировщика» не существовало.
+    label: "Планировщик",
+    hint: "Канбан-доски и задачи: своя среда под проект — Работа",
+    href: "/work/planner",
+  },
+  {
+    id: "guide",
+    kind: "builtin",
+    // VED-698: «Гид» — презентационные видео о сервисах и экскурсоводы
+    // Путешествий: города, языки и наборы каждого. Кнопка, как её просили, однослойная —
+    // «Экскурсоводы» на плитку не влезает (VED-369).
+    label: "Гид",
+    hint: "Экскурсоводы: кто водит по маршрутам — Путешествия",
+    href: "/travel/map/guides",
+  },
+  {
     id: "calculator",
     kind: "builtin",
     label: "Калькулятор",
@@ -337,8 +360,25 @@ const QUICK_ACTIONS_ADDED_IN_V9: readonly QuickActionId[] = ["telegram"];
  */
 const QUICK_ACTIONS_ADDED_IN_V10: readonly QuickActionId[] = ["transits"];
 
+/**
+ * «Планировщик» и «Гид» приехали в одиннадцатой версии (VED-711, VED-697,
+ * VED-698) — по тому же правилу: кнопки просили добавить в панель. У
+ * «Планировщика» до этого была своя кнопка из закладки, и пропала она
+ * именно потому, что встроенной кнопки не было: `dedupe` незнакомое
+ * выкидывает.
+ */
+const QUICK_ACTIONS_ADDED_IN_V11: readonly QuickActionId[] = [
+  "planner",
+  "guide",
+];
+
+/** Всё, что приехало после десятой версии. */
+const ADDED_SINCE_V10: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V11;
 /** Всё, что приехало после девятой версии, — дописывается к старым записям. */
-const ADDED_SINCE_V9: readonly QuickActionId[] = QUICK_ACTIONS_ADDED_IN_V10;
+const ADDED_SINCE_V9: readonly QuickActionId[] = [
+  ...QUICK_ACTIONS_ADDED_IN_V10,
+  ...ADDED_SINCE_V10,
+];
 /** Всё, что приехало после восьмой. */
 const ADDED_SINCE_V8: readonly QuickActionId[] = [
   ...QUICK_ACTIONS_ADDED_IN_V9,
@@ -375,9 +415,10 @@ const ADDED_SINCE_V3: readonly QuickActionId[] = [
  * четвёртая — «Открытку» (VED-326), пятая — «Историю» (VED-392), шестая —
  * «Плеер» (VED-416), седьмая — «Приложение» (VED-448), восьмая — «Радио» и
  * «Блог-лента» (VED-502, VED-506), девятая — «Телеграм» (VED-562), десятая —
- * «Транзиты» (VED-659).
+ * «Транзиты» (VED-659), одиннадцатая — «Планировщик» и «Гид» (VED-711,
+ * VED-697, VED-698).
  */
-const CONFIG_VERSION = 10;
+const CONFIG_VERSION = 11;
 
 /**
  * Три кнопки, которые стоят первыми и не выключаются (VED-326, п. 6).
@@ -473,6 +514,8 @@ export const DEFAULT_QUICK_ACTIONS: readonly QuickActionId[] = [
   "calendar",
   "telegram",
   "transits",
+  "planner",
+  "guide",
   "support",
 ];
 
@@ -605,9 +648,10 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
       const custom = parseCustom(record.custom);
       return { ids: dedupe(record.ids, custom), custom };
     }
-    // Восьмая, седьмая, шестая, пятая, четвёртая и третья версии: всё то
-    // же, плюс кнопки, которых тогда не было.
+    // Десятая, девятая, восьмая, седьмая, шестая, пятая, четвёртая и
+    // третья версии: всё то же, плюс кнопки, которых тогда не было.
     if (
+      record.v === 10 ||
       record.v === 9 ||
       record.v === 8 ||
       record.v === 7 ||
@@ -618,7 +662,9 @@ export function parseQuickConfig(raw: string | null): QuickConfig {
     ) {
       const custom = parseCustom(record.custom);
       const added =
-        record.v === 9
+        record.v === 10
+          ? ADDED_SINCE_V10
+          : record.v === 9
           ? ADDED_SINCE_V9
           : record.v === 8
           ? ADDED_SINCE_V8
