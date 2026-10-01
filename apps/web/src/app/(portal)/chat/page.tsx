@@ -4,7 +4,7 @@ import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatListView } from "@/components/chat/chat-list-view";
 import { StatusStrip } from "@/components/chat/statuses/status-strip";
 import { QuickConferenceButton } from "@/components/chat/conference/quick-conference-button";
-import { getChatList } from "@/lib/chat-api";
+import { getChatList, getChatMoments } from "@/lib/chat-api";
 import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
 
@@ -14,10 +14,8 @@ export default async function ChatPage() {
   const user = await getProfile();
   if (!user) redirectToLogin("/chat");
 
-  const state = (await getChatList()) ?? {
-    conversations: [],
-    requestsCount: 0,
-  };
+  const [list, moments] = await Promise.all([getChatList(), getChatMoments()]);
+  const state = list ?? { conversations: [], requestsCount: 0 };
 
   return (
     <>
@@ -127,7 +125,7 @@ export default async function ChatPage() {
           me={{ id: user.id, name: user.displayName, avatarUrl: user.avatarUrl }}
         />
         <QuickConferenceButton />
-        <ChatListView initial={state} viewerId={user.id} />
+        <ChatListView initial={state} moments={moments} viewerId={user.id} />
       </main>
     </>
   );

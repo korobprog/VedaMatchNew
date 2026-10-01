@@ -15,6 +15,9 @@ import type {
   ChatDiscoverState,
   ChatFavoriteEmojisDto,
   ChatMapState,
+  ChatMomentFeed,
+  ChatMomentSettingsState,
+  ChatMomentsState,
   ChatPublicMapState,
   ChatRequestsState,
   ChatUnreadState,
@@ -40,6 +43,22 @@ async function chatGet<T>(path: string): Promise<T | null> {
 
 export function getChatList(): Promise<ChatListState | null> {
   return chatGet<ChatListState>("/chat/conversations");
+}
+
+/** Полоса колец над списком бесед. */
+export function getChatMoments(): Promise<ChatMomentsState | null> {
+  return chatGet<ChatMomentsState>("/chat/moments");
+}
+
+/** Моменты одного человека — то, что открывает просмотрщик. */
+export function getChatMomentsOf(
+  userId: string,
+): Promise<ChatMomentFeed | null> {
+  return chatGet<ChatMomentFeed>(`/chat/moments/user/${userId}`);
+}
+
+export function getChatMomentSettings(): Promise<ChatMomentSettingsState | null> {
+  return chatGet<ChatMomentSettingsState>("/chat/moments/settings");
 }
 
 /** Непрочитанное во всём сервисе — для значка на плитке главной. */

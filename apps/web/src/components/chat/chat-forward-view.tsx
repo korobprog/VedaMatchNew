@@ -27,10 +27,14 @@ export function ChatForwardView({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const targets = conversations.filter(
-    (conversation) =>
-      conversation.canWrite && conversation.id !== fromConversationId,
-  );
+  // «Избранное» первой строкой: «переслать себе» — самая частая пересылка,
+  // и искать её среди беседы с людьми человек не должен.
+  const targets = conversations
+    .filter(
+      (conversation) =>
+        conversation.canWrite && conversation.id !== fromConversationId,
+    )
+    .sort((a, b) => Number(b.saved) - Number(a.saved));
 
   async function forward(conversation: ChatConversationSummary) {
     setBusyId(conversation.id);

@@ -7,6 +7,7 @@ import Link from "next/link";
 import type {
   ChatConversationSummary,
   ChatListState,
+  ChatMomentsState,
   ChatSearchHit,
   ChatStatusRing,
 } from "@vedamatch/shared";
@@ -18,6 +19,7 @@ import { formatChatStamp } from "./chat-time";
 import { isOnline } from "./chat-presence";
 import { plural } from "./chat-plural";
 import { ChatLocalTime } from "./chat-local-time";
+import { MomentsRail } from "./moments/moments-rail";
 
 type Tab = "all" | "direct" | "group" | "channel";
 
@@ -36,10 +38,13 @@ const TABS: { id: Tab; label: string }[] = [
 export function ChatListView({
   initial,
   viewerId,
+  moments,
 }: {
   initial: ChatListState;
   /** Своё прочтение гасит счётчик; чужое — про галочки у собеседника. */
   viewerId: string;
+  /** Полоса моментов. `null` — раздел не ответил; список это переживает. */
+  moments?: ChatMomentsState | null;
 }) {
   const router = useRouter();
   const [state, setState] = useState(initial);
@@ -199,6 +204,8 @@ export function ChatListView({
 
   return (
     <div className="flex flex-col gap-4">
+      {moments && <MomentsRail initial={moments} />}
+
       <label className="flex h-11 items-center gap-2.5 rounded-2xl border border-glass-brd bg-glass px-3.5">
         <SearchIcon />
         <input
@@ -358,14 +365,23 @@ function ConversationRow({
         highlighted ? "border border-glass-brd bg-glass" : ""
       }`}
     >
-      <ChatAvatar
-        kind={conversation.kind}
-        user={conversation.companion}
-        title={conversation.title}
-        imageUrl={conversation.avatarUrl}
-        online={isOnline(conversation.companion?.lastSeenAt)}
-        ring={conversation.kind === "direct" ? ring : null}
-      />
+      {conversation.saved ? (
+        <span
+          aria-hidden
+          className="flex size-[50px] shrink-0 items-center justify-center rounded-2xl border border-gold/34 bg-gold/12 text-gold"
+        >
+          <BookmarkIcon />
+        </span>
+      ) : (
+        <ChatAvatar
+          kind={conversation.kind}
+          user={conversation.companion}
+          title={conversation.title}
+          imageUrl={conversation.avatarUrl}
+          online={isOnline(conversation.companion?.lastSeenAt)}
+          ring={conversation.kind === "direct" ? ring : null}
+        />
+      )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">
           <span
@@ -491,6 +507,24 @@ function ChevronIcon() {
       aria-hidden
     >
       <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function BookmarkIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6.5 4h11a1 1 0 011 1v15l-6.5-4-6.5 4V5a1 1 0 011-1z" />
     </svg>
   );
 }

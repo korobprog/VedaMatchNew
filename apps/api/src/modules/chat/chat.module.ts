@@ -38,10 +38,14 @@ import { PeopleAvatarService } from './people/people-avatar.service';
 import { PeopleController } from './people/people.controller';
 import { PeopleRequestsService } from './people/people-requests.service';
 import { PeopleService } from './people/people.service';
+import { MomentsController } from './moments/moments.controller';
+import { MomentsService } from './moments/moments.service';
+import { ChatMomentsPurger } from './moments/moments-purge.service';
+import { MomentsVideoService } from './moments/moments-video.service';
 
 /**
- * Сервис «Общение»: беседы и справочник людей (папка `people/` — бывший
- * сервис «Контакты»).
+ * Сервис «Общение»: беседы, справочник людей (папка `people/` — бывший
+ * сервис «Контакты») и моменты (папка `moments/`).
  *
  * По контракту сервисного модуля фичевые модули не импортируются — в том
  * числе Знакомства, чей чат сюда переехал миграцией. ModerationModule
@@ -67,6 +71,7 @@ import { ChatStatusVideoService } from './statuses/chat-status-video.service';
     PeopleController,
     PeopleAdminController,
     ChatStatusesController,
+    MomentsController,
   ],
   providers: [
     ChatConversationsService,
@@ -99,6 +104,9 @@ import { ChatStatusVideoService } from './statuses/chat-status-video.service';
     PeopleAvatarService,
     ChatStatusesService,
     ChatStatusVideoService,
+    MomentsService,
+    MomentsVideoService,
+    ChatMomentsPurger,
   ],
 })
 export class ChatModule {}

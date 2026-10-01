@@ -28,7 +28,11 @@ export function chatListPreview(
     return { text: "Идёт групповой звонок", live: true };
 
   const message = conversation.lastMessage;
-  if (!message) return { text: "Пока ни одного сообщения", live: false };
+  // В «Избранном» пустота — не «сообщений нет», а назначение беседы.
+  if (!message)
+    return conversation.saved
+      ? { text: "Заметки, ссылки и всё, что переслали себе", live: false }
+      : { text: "Пока ни одного сообщения", live: false };
   if (message.deletedAt) return { text: "Сообщение удалено", live: false };
 
   const prefix =
@@ -49,6 +53,8 @@ function attachmentLabel(kind: string | undefined): string {
       return "Файл";
     case "story":
       return "Сторис";
+    case "moment":
+      return "Ответ на момент";
     default:
       return "Вложение";
   }

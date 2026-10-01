@@ -38,10 +38,13 @@ describe('ChatReportsService', () => {
   const bus = { emit: fn() };
   const moderation = { hasOpenReportBetween: fn(() => Promise.resolve(false)) };
 
+  const moments = { assertVisible: fn(() => Promise.resolve()) };
+
   const service = new ChatReportsService(
     prisma as unknown as PrismaService,
     bus as never,
     moderation as unknown as ModerationService,
+    moments as never,
   );
 
   beforeEach(() => {

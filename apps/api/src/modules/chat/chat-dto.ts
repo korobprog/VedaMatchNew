@@ -127,6 +127,12 @@ export function toMessageDto(
   viewerId: string,
   /** Когда собеседники в последний раз читали — для галочки «прочитано». */
   othersLastReadAt?: Date | null,
+  /**
+   * «Избранное» — беседа с самим собой. Галочек там не бывает вовсе: без
+   * этого признака каждая своя заметка вечно висела бы «доставлено, не
+   * прочитано», потому что читать её, кроме автора, некому.
+   */
+  options?: { saved?: boolean },
 ): ChatMessageDto {
   const deleted = Boolean(row.deletedAt);
   return {
@@ -152,7 +158,7 @@ export function toMessageDto(
     deletedAt: row.deletedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     readByOthers:
-      row.authorId === viewerId
+      row.authorId === viewerId && !options?.saved
         ? Boolean(othersLastReadAt && othersLastReadAt >= row.createdAt)
         : undefined,
     viewsCount: row.viewsCount,
@@ -184,6 +190,11 @@ export function conversationTitle(
   companion: ChatUserSummary | null;
   avatarUrl: string | null;
 } {
+  // «Избранное» — тоже личный диалог, только с самим собой: собеседника в
+  // нём нет, и запасной заголовок «Диалог» показал бы человеку не то.
+  if (row.savedForId && row.savedForId === viewerId)
+    return { title: 'Избранное', companion: null, avatarUrl: null };
+
   if (row.kind !== 'direct')
     return {
       title: row.title ?? 'Беседа',
@@ -217,6 +228,7 @@ export function toConversationSummary(
 ): ChatConversationSummary {
   const mine = row.members.find((m) => m.userId === viewerId);
   const { title, companion, avatarUrl } = conversationTitle(row, viewerId);
+  const saved = Boolean(row.savedForId && row.savedForId === viewerId);
   const now = new Date();
 
   // Картинка личного диалога — фото собеседника, и загруженное фото
@@ -239,7 +251,10 @@ export function toConversationSummary(
         : null,
       membersCount:
         row._count?.members ?? row.members.filter((m) => !m.leftAt).length,
-      unreadCount: extra.unreadCount,
+      saved,
+      // В беседе с собой непрочитанного не бывает: писать её, кроме автора,
+      // некому, а значок на плитке главной он получал бы от самого себя.
+      unreadCount: saved ? 0 : extra.unreadCount,
       muted: Boolean(mine?.mutedUntil && mine.mutedUntil > now),
       pinned: Boolean(mine?.pinnedAt),
       official: row.official,

@@ -64,6 +64,7 @@ const ATTACHMENT_LABELS: Record<ChatAttachmentDto['kind'], string> = {
   vacancy: 'Вакансия',
   stay: 'Жильё',
   call: 'Звонок',
+  moment: 'Момент',
 };
 
 export function attachmentLabel(kind: ChatAttachmentDto['kind']): string {

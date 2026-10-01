@@ -70,6 +70,13 @@ export class ChatMessagesService {
      * «Вакансиях»): второе о том же — шум.
      */
     options: { silent?: boolean } = {},
+    /**
+     * Папки в бакете сверх папки беседы. Передаёт только код API — сейчас
+     * это ответ на момент, где снимок собирает сервер из своей же строки.
+     * Из браузера сюда ничего не приходит: иначе перебором идентификаторов
+     * можно было бы вложить в свою переписку чужой приватный момент.
+     */
+    extraAttachmentKeyPrefixes: readonly string[] = [],
   ): Promise<ChatMessageDto> {
     const conversation = await this.conversations.requireConversation(
       conversationId,
@@ -82,6 +89,7 @@ export class ChatMessagesService {
         dto.attachments,
         this.uploads.storagePrefix,
         attachmentsConversationId,
+        extraAttachmentKeyPrefixes,
       ),
     );
     this.validated(() => assertSendable(body, attachments));
@@ -159,7 +167,10 @@ export class ChatMessagesService {
       data: { lastReadAt: created.createdAt },
     });
 
-    const dtoOut = toMessageDto(created, userId);
+    // В «Избранном» галочек не бывает: читать заметку, кроме автора, некому.
+    const dtoOut = toMessageDto(created, userId, null, {
+      saved: conversation.savedForId === userId,
+    });
     this.events.publish(await this.conversations.recipients(conversation), {
       type: 'message.created',
       conversationId,

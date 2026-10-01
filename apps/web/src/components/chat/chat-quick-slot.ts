@@ -13,6 +13,7 @@ export type ChatQuickSlotId =
   | "photo"
   | "file"
   | "emoji"
+  | "moment"
   | "story"
   | "notice"
   | "product"
@@ -23,6 +24,7 @@ export const CHAT_QUICK_SLOT_IDS: readonly ChatQuickSlotId[] = [
   "photo",
   "file",
   "emoji",
+  "moment",
   "story",
   "notice",
   "product",
