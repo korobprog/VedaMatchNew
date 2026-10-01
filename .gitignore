@@ -40,3 +40,7 @@ apps/web/AGENTS.md
 apps/web/CLAUDE.md
 # Симлинк node_modules (worktree) — правило со слэшем его не ловит.
 node_modules
+# Cookie-файлы watchman (RPC-каталог React Native/Expo) появляются в корне
+# рядом с запущенным dev-сервером. Пустышка, случайно попавшая в один из
+# PR'ов через `git add -A`.
+.watchman-cookie*
