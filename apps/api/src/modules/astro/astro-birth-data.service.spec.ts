@@ -192,16 +192,21 @@ describe('AstroBirthDataService', () => {
       expect(prisma.astroBirthData.upsert).not.toHaveBeenCalled();
     });
 
-    it('принимает ручное переопределение часового пояса', async () => {
+    it('игнорирует пояс из запроса — пояс определяется только по координатам', async () => {
       prisma.astroBirthData.upsert.mockResolvedValue(storedRow);
       prisma.user.findUnique.mockResolvedValue({ birthDate: null });
 
+      // Устройство прислало свой пояс (старый бандл): он не должен сдвинуть
+      // ни пояс места, ни момент рождения (VED-672).
       await service.save('user-1', {
         ...validRequest,
         timezone: 'Europe/Kyiv',
       });
 
-      expect(written().timezone).toBe('Europe/Kyiv');
+      expect(written().timezone).toBe('Europe/Moscow');
+      expect(written().bornAtUtc.toISOString()).toBe(
+        '1987-05-12T02:20:00.000Z',
+      );
     });
   });
 });

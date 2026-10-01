@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   UNKNOWN_TIME_FALLBACK,
+  birthMomentOf,
   resolveBirthMoment,
   resolveTimezone,
 } from './birth-moment';
@@ -188,5 +189,53 @@ describe('resolveBirthMoment — проверка ввода', () => {
       timeAccuracy: 'exact',
     });
     expect(moment.nonexistentLocalTime).toBe(false);
+  });
+});
+
+/* VED-672: момент строки записи — из введённых данных, но с уважением к
+   сохранённому. */
+describe('birthMomentOf', () => {
+  /** Катманду, 06:30 — момент 1984-09-12T01:00:00Z. */
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    birthDateLocal: new Date('1984-09-12T00:00:00.000Z'),
+    birthTimeLocal: '06:30',
+    timeAccuracy: 'exact' as const,
+    latitude: 27.7172,
+    longitude: 85.324,
+    timezone: 'Asia/Kathmandu',
+    bornAtUtc: new Date('1984-09-12T01:00:00.000Z'),
+    ...overrides,
+  });
+
+  it('согласованная запись считается по сохранённому моменту', () => {
+    // Карта не должна меняться от обновления базы часовых поясов: пока пояс
+    // записи совпадает с поясом места, решает сохранённый момент.
+    const moment = birthMomentOf(row({ bornAtUtc: new Date('1984-09-12T00:30:00.000Z') }));
+    expect(moment.bornAtUtc.toISOString()).toBe('1984-09-12T00:30:00.000Z');
+  });
+
+  it('запись с поясом телефона пересчитывается по месту рождения', () => {
+    // Телефон с московским поясом сохранил карту рождения в Катманду: момент
+    // должен считаться по Непалу, а не по поясу устройства.
+    const moment = birthMomentOf(
+      row({ timezone: 'Europe/Moscow', bornAtUtc: new Date('1984-09-11T22:30:00.000Z') }),
+    );
+    expect(moment.timezone).toBe('Asia/Kathmandu');
+    expect(moment.bornAtUtc.toISOString()).toBe('1984-09-12T01:00:00.000Z');
+  });
+
+  it('одинаковые данные с разных телефонов дают один момент', () => {
+    const fromMoscow = birthMomentOf(
+      row({ timezone: 'Europe/Moscow', bornAtUtc: new Date('1984-09-11T22:30:00.000Z') }),
+    );
+    const fromKathmandu = birthMomentOf(row());
+    expect(fromMoscow.bornAtUtc.toISOString()).toBe(
+      fromKathmandu.bornAtUtc.toISOString(),
+    );
+  });
+
+  it('строка без введённых данных считается по сохранённому моменту', () => {
+    const moment = birthMomentOf({ bornAtUtc: new Date('1984-09-12T01:00:00.000Z') });
+    expect(moment.bornAtUtc.toISOString()).toBe('1984-09-12T01:00:00.000Z');
   });
 });

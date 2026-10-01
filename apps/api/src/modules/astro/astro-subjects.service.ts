@@ -15,7 +15,7 @@ import {
   ASTRO_SUBJECT_NOTES_MAX,
 } from '@vedamatch/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import { resolveBirthMoment } from './birth-moment';
+import { birthMomentOf, resolveBirthMoment } from './birth-moment';
 
 /**
  * Записи астролога — карты людей, которых он ведёт.
@@ -127,7 +127,9 @@ export class AstroSubjectsService {
       timeAccuracy,
       latitude: place.latitude,
       longitude: place.longitude,
-      timezone: body.timezone,
+      // Как в своей карте: пояс — по координатам, из запроса не принимается,
+      // чтобы одинаковые данные давали одинаковую карту на любом устройстве
+      // (VED-672, см. astro-birth-data.service.ts).
     });
 
     return {
@@ -149,17 +151,12 @@ export class AstroSubjectsService {
   }
 
   private toDto(row: SubjectRow): AstroSubjectDto {
-    // Момент пересчитывается на чтение, а не хранится: смещение и признак
-    // несуществующего времени зависят от базы часовых поясов, и вчерашний
-    // ответ мог бы разойтись с сегодняшним расчётом карты.
-    const moment = resolveBirthMoment({
-      birthDate: row.birthDateLocal.toISOString().slice(0, 10),
-      birthTime: row.birthTimeLocal,
-      timeAccuracy: row.timeAccuracy,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      timezone: row.timezone,
-    });
+    /* Момент пересчитывается на чтение, а не хранится: смещение и признак
+       несуществующего времени зависят от базы часовых поясов, и вчерашний
+       ответ мог бы разойтись с сегодняшним расчётом карты. `birthMomentOf`
+       (VED-672) к тому же пересчитывает записи, сохранённые со старым поясом
+       телефона: наружу уходит тот момент, по которому считается карта. */
+    const moment = birthMomentOf(row);
 
     return {
       id: row.id,
@@ -173,7 +170,7 @@ export class AstroSubjectsService {
         latitude: row.latitude,
         longitude: row.longitude,
       },
-      timezone: row.timezone,
+      timezone: moment.timezone,
       utcOffsetMinutes: moment.utcOffsetMinutes,
       notes: row.notes,
       nonexistentLocalTime: moment.nonexistentLocalTime,
