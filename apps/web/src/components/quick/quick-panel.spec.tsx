@@ -471,7 +471,9 @@ describe("QuickPanel", () => {
     const user = await openPanel();
 
     await user.click(screen.getByRole("button", { name: "Настроить панель" }));
-    await user.click(screen.getByRole("switch", { name: /Работа/ }));
+    // Строго с начала имени: у кнопки «Планировщик» подсказка кончается
+    // «— Работа», и общий /Работа/ цеплял бы обе (VED-711).
+    await user.click(screen.getByRole("switch", { name: /^Работа/ }));
 
     expect(
       JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).ids,
