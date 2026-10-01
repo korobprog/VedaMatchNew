@@ -21,20 +21,24 @@ export const workUploads: WorkUploadQueue<WorkTaskDto, CreateWorkTaskRequest> =
     waitBeforeRetry: whenVisible,
   });
 
-/** Разрешается, когда вкладка на экране: сразу или по `visibilitychange`. */
+/**
+ * Разрешается, когда вкладка снова на экране и есть связь: файл переотправляют
+ * после возвращения, а не в пустоту при выключенном интернете — два повтора
+ * израсходовались бы сразу.
+ */
 function whenVisible(): Promise<void> {
-  if (
-    typeof document === "undefined" ||
-    document.visibilityState === "visible"
-  ) {
-    return Promise.resolve();
-  }
+  if (typeof document === "undefined") return Promise.resolve();
+  const ready = () =>
+    document.visibilityState === "visible" && navigator.onLine !== false;
+  if (ready()) return Promise.resolve();
   return new Promise((resolve) => {
     const onChange = () => {
-      if (document.visibilityState !== "visible") return;
+      if (!ready()) return;
       document.removeEventListener("visibilitychange", onChange);
+      window.removeEventListener("online", onChange);
       resolve();
     };
     document.addEventListener("visibilitychange", onChange);
+    window.addEventListener("online", onChange);
   });
 }
