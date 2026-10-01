@@ -304,8 +304,11 @@ export function PublicRadio({
         />
       )}
 
+      {/* `min-w-0` у колонок обязателен: у элемента сетки `min-width: auto`,
+          и однострочное (`truncate`) название в эфире растягивало колонку до
+          своей полной длины — на телефоне страница уезжала вбок. */}
       <section className="grid gap-8 lg:grid-cols-12">
-        <div className="flex flex-col gap-6 lg:col-span-7">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-7">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-cyan">
             <Radio aria-hidden className="size-4" />
             Эфир без регистрации
@@ -729,7 +732,7 @@ function InstallCard({
     <aside
       id="install"
       aria-labelledby="radio-install"
-      className="glass flex scroll-mt-24 flex-col gap-3 self-start rounded-3xl border border-magenta/60 p-6 lg:col-span-5 lg:mt-12"
+      className="glass flex min-w-0 scroll-mt-24 flex-col gap-3 self-start rounded-3xl border border-magenta/60 p-6 lg:col-span-5 lg:mt-12"
     >
       <h2
         id="radio-install"

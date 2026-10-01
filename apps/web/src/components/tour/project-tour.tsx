@@ -77,7 +77,7 @@ export function ProjectTour({ chapters }: { chapters: TourChapter[] }) {
           Туториал · {chapters.length}{" "}
           {plural(chapters.length, "глава", "главы", "глав")}
         </p>
-        <h1 className="font-display text-4xl font-bold text-text-0 md:text-5xl">
+        <h1 className="font-display text-3xl font-bold text-text-0 sm:text-4xl md:text-5xl">
           Познакомьтесь с VedaMatch
         </h1>
         <p className="max-w-2xl text-lg text-text-1">

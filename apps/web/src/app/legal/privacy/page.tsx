@@ -13,7 +13,7 @@ const REVISION = "28 июля 2026 года";
 export default function PrivacyPage() {
   return (
     <>
-      <h1 className="font-display text-2xl font-bold text-text-0 md:text-3xl">
+      <h1 className="font-display text-2xl font-bold text-text-0 hyphens-auto md:text-3xl">
         Политика конфиденциальности
       </h1>
       <p className="mt-1 text-sm text-text-2">Редакция от {REVISION}</p>
