@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PREVIEW_VERSION } from "@/lib/radio-share-meta";
 import { MusicShareTrackButton } from "./share-track-button";
 
 const push = vi.fn();
@@ -40,7 +41,7 @@ describe("MusicShareTrackButton", () => {
 
     expect(share).toHaveBeenCalledWith({
       title: "Маха-мантра 7 — Судеви и Кишори Мохан",
-      url: `${window.location.origin}/radio?track=t%201`,
+      url: `${window.location.origin}/radio?track=t%201&v=${PREVIEW_VERSION}`,
     });
     expect(push).not.toHaveBeenCalled();
   });
@@ -67,7 +68,9 @@ describe("MusicShareTrackButton", () => {
     await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     const href = new URL(push.mock.calls[0][0] as string, "https://x.test");
     expect(href.pathname).toBe("/share");
-    expect(href.searchParams.get("link")).toBe("/radio?track=t%201");
+    expect(href.searchParams.get("link")).toBe(
+      `/radio?track=t%201&v=${PREVIEW_VERSION}`,
+    );
     expect(href.searchParams.get("text")).toBe(
       "Маха-мантра 7 — Судеви и Кишори Мохан",
     );
