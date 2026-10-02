@@ -9,11 +9,19 @@
  *
  * Отсюда два правила, нарушать нельзя:
  *   — заголовок материала идёт и в `<title>`, и в `og:title`;
- *   — `openGraph.images` никогда не пуст: у записи без обложки — её
- *     собственная карточка `/radio/og-image` с названием. Пустой список
- *     перекрывал opengraph-image.png из корня (картинки VedaMatch быть не
- *     должно), но без картинки мессенджер берёт логотип сайта из своей
- *     заглушки — выходит то же самое.
+ *   — `openGraph.images` никогда не пуст: превью — всегда собственная
+ *     карточка записи `/radio/og-image` с названием (и с обложкой, когда она
+ *     есть). Пустой список перекрывал opengraph-image.png из корня (картинки
+ *     VedaMatch быть не должно), но без картинки мессенджер берёт логотип
+ *     сайта из своей заглушки — выходит то же самое.
+ *
+ * Обложка записи в `og:image` напрямую не уходит: она лежит в хранилище за
+ * подписью со сроком жизни, и мессенджер, пришедший за превью часами позже,
+ * получал 403 и оставлял превью без картинки. Поэтому обложка вшивается в
+ * карточку (`/radio/og-image`) — адрес свой, без подписи, и размеры кадра
+ * известны заранее. Размеры (`width`/`height`/`type`) объявлять обязательно:
+ * без них WhatsApp рисует маленький квадратный эскиз и обрезает кадр по
+ * центру, срезая заголовок.
  */
 import type { Metadata } from "next";
 import type { MusicTrackDto } from "@vedamatch/shared";
@@ -27,9 +35,15 @@ export const RADIO_OG_DESCRIPTION =
 /**
  * Версия раскладки карточки в её адресе. Мессенджеры кэшируют картинку по
  * адресу: после смены карточки старая могла бы жить в их кэше сутки (так
- * WhatsApp держал старый кадр у «Вдохновения», VED-357).
+ * WhatsApp держал старый кадр у «Вдохновения», VED-357), а Телеграм — и
+ * вовсе запомнить превью без картинки, если в момент первого запроса кадр
+ * не отдался. Смена версии меняет адрес и заставляет краулер прийти заново.
  */
-export const OG_CARD_VERSION = "1";
+export const OG_CARD_VERSION = "2";
+
+/** Размеры кадра `/radio/og-image` — ровно столько же, сколько в метатегах. */
+export const OG_CARD_WIDTH = 1200;
+export const OG_CARD_HEIGHT = 630;
 
 /** «Название — Исполнитель»; без исполнителя — одно название. */
 export function sharedTrackTitle(track: MusicTrackDto): string {
@@ -37,7 +51,7 @@ export function sharedTrackTitle(track: MusicTrackDto): string {
   return artist ? `${track.title} — ${artist}` : track.title;
 }
 
-/** Собственная карточка записи вместо обложки — `/radio/og-image`. */
+/** Собственная карточка записи вместо подписной обложки — `/radio/og-image`. */
 export function sharedTrackCardPath(trackId: string): string {
   return `/radio/og-image?track=${encodeURIComponent(trackId)}&v=${OG_CARD_VERSION}`;
 }
@@ -51,9 +65,7 @@ export function sharedTrackMetadata(
   track: MusicTrackDto | null,
 ): Metadata {
   const heading = track ? sharedTrackTitle(track) : RADIO_TITLE;
-  const image = track
-    ? track.coverUrl ?? sharedTrackCardPath(track.id)
-    : null;
+  const image = track ? sharedTrackCardPath(track.id) : null;
   return {
     // Корень — тоже с названием: часть мессенджеров показывает `<title>`, и
     // общий заголовок прятал песню.
@@ -64,7 +76,17 @@ export function sharedTrackMetadata(
       siteName: "VedaMatch",
       title: heading,
       description: RADIO_OG_DESCRIPTION,
-      images: image ? [{ url: image, alt: heading }] : [],
+      images: image
+        ? [
+            {
+              url: image,
+              type: "image/jpeg",
+              width: OG_CARD_WIDTH,
+              height: OG_CARD_HEIGHT,
+              alt: heading,
+            },
+          ]
+        : [],
     },
     twitter: {
       card: "summary_large_image",
