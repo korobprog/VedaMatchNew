@@ -24,22 +24,41 @@ function createWorker(options: {
   commentCount?: number;
   archivedAt?: Date | null;
   member?: boolean;
+  /** Кому адресована строка; по умолчанию он же и исполнитель задачи. */
+  recipientId?: string;
+  /** Исполнитель задачи на момент отправки. */
+  assigneeId?: string | null;
+  createdById?: string | null;
+  /** Кто ставил строку в очередь; по умолчанию — обычный участник. */
+  actorId?: string | null;
+  actorIsAgent?: boolean;
+  /** В окне этой строки актор действовал от имени получателя. */
+  actedForRecipient?: boolean;
 }) {
   const emit = jest.fn();
   const deleted: string[] = [];
+  const recipientId = options.recipientId ?? 'recipient';
   const prisma = {
     workTaskNotice: {
       updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
       findMany: jest.fn(() => Promise.resolve([{ id: 'notice-1' }])),
       findUnique: jest.fn(() =>
         Promise.resolve({
-          recipientId: 'recipient',
+          id: 'notice-1',
+          recipientId,
+          actorId: options.actorId === undefined ? 'actor' : options.actorId,
+          createdAt: new Date('2026-09-22T10:00:00.000Z'),
+          notifyAt: new Date('2026-09-22T10:03:00.000Z'),
           fromColumnId: options.withoutMove
             ? null
             : (options.fromColumn?.id ?? 'col-gone'),
           commentBody: options.commentBody ?? null,
           commentCount: options.commentCount ?? 0,
-          actor: { name: 'Гопал', spiritualName: null },
+          actor: {
+            name: 'Гопал',
+            spiritualName: null,
+            isAgent: options.actorIsAgent ?? false,
+          },
           task: {
             id: 'task-1',
             number: 5,
@@ -47,6 +66,14 @@ function createWorker(options: {
             spaceId: 'space-1',
             columnId: options.column.id,
             archivedAt: options.archivedAt ?? null,
+            assigneeId:
+              options.assigneeId === undefined
+                ? recipientId
+                : options.assigneeId,
+            createdById:
+              options.createdById === undefined
+                ? 'author'
+                : options.createdById,
             space: { prefix: 'VED' },
             column: options.column,
           },
@@ -63,6 +90,13 @@ function createWorker(options: {
     workSpaceMember: {
       findFirst: jest.fn(() =>
         Promise.resolve((options.member ?? true) ? { id: 'member-1' } : null),
+      ),
+    },
+    workActivity: {
+      findFirst: jest.fn(() =>
+        Promise.resolve(
+          options.actedForRecipient ? { id: 'activity-1' } : null,
+        ),
       ),
     },
   } as unknown as PrismaService;
@@ -232,5 +266,99 @@ describe('WorkNoticeWorkerService.tick', () => {
     ).prisma.workTaskNotice.updateMany.mockResolvedValue({ count: 0 });
     await worker.tick();
     expect(emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorkNoticeWorkerService — строка протухла (VED-507)', () => {
+  it('пока дозревало, задачу поручили другому — прежнему исполнителю не шлём', async () => {
+    // Строка адресована тому, кто был исполнителем в момент постановки; к
+    // отправке ход уже на другом, и новость ему не положена.
+    const { worker, emit, deleted } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      recipientId: 'stas',
+      assigneeId: 'sevak',
+      createdById: 'mamu',
+    });
+    await worker.tick();
+    expect(emit).not.toHaveBeenCalled();
+    expect(deleted).toEqual(['notice-1']);
+  });
+
+  it('получатель остался автором, но исполнителем стал другой — тоже не шлём', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      recipientId: 'mamu',
+      assigneeId: 'sevak',
+      createdById: 'mamu',
+    });
+    await worker.tick();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('у задачы нет ни исполнителя, ни автора — некому писать', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      assigneeId: null,
+      createdById: null,
+    });
+    await worker.tick();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('строка адресована самому действовавшему — не шлём', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      recipientId: 'stas',
+      assigneeId: 'stas',
+      actorId: 'stas',
+    });
+    await worker.tick();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('строку завёл агент, распоряжавшийся от имени получателя — не шлём', async () => {
+    const { worker, emit, deleted } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      actorIsAgent: true,
+      actedForRecipient: true,
+    });
+    await worker.tick();
+    expect(emit).not.toHaveBeenCalled();
+    expect(deleted).toEqual(['notice-1']);
+  });
+
+  it('агент работал сам, без человека — обычное уведомление уходит', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: todo,
+      actorIsAgent: true,
+      actedForRecipient: false,
+    });
+    await worker.tick();
+    expect(emit).toHaveBeenCalledWith(
+      'work.task.status-changed',
+      expect.objectContaining({ recipientId: 'recipient' }),
+    );
+  });
+
+  it('обычный участник — историю от его имени не дочитываем', async () => {
+    const { worker, emit } = createWorker({
+      column: testing,
+      fromColumn: todo,
+    });
+    await worker.tick();
+    expect(
+      (
+        worker as unknown as {
+          prisma: { workActivity: { findFirst: jest.Mock } };
+        }
+      ).prisma.workActivity.findFirst,
+    ).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledTimes(1);
   });
 });

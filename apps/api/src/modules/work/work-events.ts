@@ -58,15 +58,24 @@ export function workTaskRecipients(
  * сейчас ход, — исполнителю. Автор, поручивший задачу другому, уведомлений о
  * ней не получает: «это совершенно не нужно». Нет исполнителя — автору.
  *
+ * `onBehalfOfId` — человек, от чьего имени действовал агент: строка в очереди
+ * ключуется актором, а актор в этом случае — служебный аккаунт, и без этой
+ * поправки человек получил бы уведомление о действии, которое заказал сам.
+ * Тот же запрет: себе и тому, от чьего имени работаем, не пишем.
+ *
  * Поднятие задачи в ленте (VED-320) идёт по `workTaskRecipients`, шире: там
  * просили, чтобы изменение видели «все остальные админы».
  */
 export function workTaskNoticeRecipients(
   task: { assigneeId: string | null; createdById: string | null },
   actorId: string,
+  onBehalfOfId?: string | null,
 ): string[] {
   const target = task.assigneeId ?? task.createdById;
-  return target && target !== actorId ? [target] : [];
+  if (!target || target === actorId || target === (onBehalfOfId ?? null)) {
+    return [];
+  }
+  return [target];
 }
 
 /**
