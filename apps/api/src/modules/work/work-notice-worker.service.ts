@@ -20,6 +20,23 @@ import { resolveTaskStatusMark } from './work-task-status';
 import { workTaskKey } from './work-validate';
 
 /**
+ * На сколько активность может опережать саму строку очереди: пишется она
+ * перед постановкой, и пара секунд гонки не должна ломать сверку.
+ */
+const ACTIVITY_SLACK_MS = 60_000;
+
+/** Строка очереди ровно в том объёме, в котором её решает отправлять воркер. */
+type DeliverableNotice = {
+  id: string;
+  recipientId: string;
+  actorId: string | null;
+  createdAt: Date;
+  notifyAt: Date;
+  actor: { isAgent: boolean } | null;
+  task: { id: string; assigneeId: string | null; createdById: string | null };
+};
+
+/**
  * Отправка дозревших уведомлений о работе с карточкой.
  *
  * Устройство повторяет `MotivationWorkerService`, который CLAUDE.md называет
@@ -110,6 +127,54 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Причина не слать уже занятую запись (VED-507). `null` — слать.
+   *
+   * Получатель в строке заморожен в момент постановки, а между постановкой и
+   * отправкой проходит окно дозревания. Воркер — последний рубеж: он дочитывает
+   * задачу заново и сверяет, что человек всё ещё тот, кому новость положена.
+   */
+  private async staleReason(notice: DeliverableNotice): Promise<string | null> {
+    const owner = notice.task.assigneeId ?? notice.task.createdById;
+    if (!owner || owner !== notice.recipientId) {
+      return 'получатель больше не владеет задачей';
+    }
+    if (notice.actorId && notice.recipientId === notice.actorId) {
+      return 'строка адресована самому действовавшему';
+    }
+    if (notice.actor?.isAgent && (await this.actedForRecipient(notice))) {
+      return 'задачей распоряжался агент от имени получателя';
+    }
+    return null;
+  }
+
+  /**
+   * Действовал ли актор этой строки внутри её окна от имени получателя.
+   *
+   * `onBehalfOf` в строке очереди не лежит — там только актор, которым при
+   * агентском ключе служебный аккаунт, — поэтому человека восстанавливаем из
+   * истории: поручение и комментарий пишутся в WorkActivity тем же актором и с
+   * тем же `onBehalfOf`, что и кладутся в очередь. Окно ограничиваем сроком
+   * самой строки: более старая запись относится к прошлому окну, которое уже
+   * отправлено.
+   */
+  private async actedForRecipient(notice: DeliverableNotice): Promise<boolean> {
+    if (!notice.actorId) return false;
+    const activity = await this.prisma.workActivity.findFirst({
+      where: {
+        taskId: notice.task.id,
+        actorId: notice.actorId,
+        onBehalfOfId: notice.recipientId,
+        createdAt: {
+          gte: new Date(notice.createdAt.getTime() - ACTIVITY_SLACK_MS),
+          lte: notice.notifyAt,
+        },
+      },
+      select: { id: true },
+    });
+    return activity !== null;
+  }
+
+  /**
    * Одна запись: занять, решить, слать ли, отправить и удалить.
    *
    * Запись удаляется в любом исходе, включая «не слать»: очередь хранит
@@ -126,11 +191,15 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
       const notice = await this.prisma.workTaskNotice.findUnique({
         where: { id: noticeId },
         select: {
+          id: true,
           recipientId: true,
+          actorId: true,
           fromColumnId: true,
           commentBody: true,
           commentCount: true,
-          actor: { select: { name: true, spiritualName: true } },
+          createdAt: true,
+          notifyAt: true,
+          actor: { select: { name: true, spiritualName: true, isAgent: true } },
           task: {
             select: {
               id: true,
@@ -139,6 +208,8 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
               spaceId: true,
               columnId: true,
               archivedAt: true,
+              assigneeId: true,
+              createdById: true,
               space: { select: { prefix: true } },
               column: { select: { id: true, name: true, isDone: true } },
             },
@@ -149,6 +220,18 @@ export class WorkNoticeWorkerService implements OnModuleInit, OnModuleDestroy {
       const { task } = notice;
       // Задачу убрали в архив, пока уведомление дозревало: новость протухла.
       if (task.archivedAt) return;
+
+      // Получатель заморожен в момент постановки (VED-507), а живёт строка
+      // три минуты — за это время задачу успевают поручить другому. Строку на
+      // бывшего исполнителя не слать: это ровно та вспышка, на которую жалуется
+      // заказчик.
+      const stale = await this.staleReason(notice);
+      if (stale) {
+        this.logger.log(
+          `Уведомление ${noticeId} не отправлено: ${stale} (VED-507)`,
+        );
+        return;
+      }
 
       // Колонку могли снести вместе с доской — тогда сказать «откуда» нечего
       // и переезд из окна выпадает. Комментарий из того же окна при этом

@@ -125,4 +125,39 @@ describe('workTaskNoticeRecipients (VED-507)', () => {
       workTaskNoticeRecipients({ assigneeId: null, createdById: null }, 'mamu'),
     ).toEqual([]);
   });
+
+  it('агент действовал от имени человека — тому не шлём (VED-507)', () => {
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: 'sevak', createdById: 'stas' },
+        'agent',
+        'sevak',
+      ),
+    ).toEqual([]);
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: null, createdById: 'stas' },
+        'agent',
+        'stas',
+      ),
+    ).toEqual([]);
+    // Человеку, которому задача не поручена, агент не мешает получить новость.
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: 'sevak', createdById: 'stas' },
+        'agent',
+        'mamu',
+      ),
+    ).toEqual(['sevak']);
+  });
+
+  it('без on behalf — как и раньше, только актор в счёт', () => {
+    expect(
+      workTaskNoticeRecipients(
+        { assigneeId: 'sevak', createdById: 'stas' },
+        'agent',
+        null,
+      ),
+    ).toEqual(['sevak']);
+  });
 });

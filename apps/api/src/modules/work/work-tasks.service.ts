@@ -221,6 +221,9 @@ export class WorkTasksService {
         boardId: true,
         columnId: true,
         createdById: true,
+        // Нужен, чтобы при поручении понять, сменился ли исполнитель (VED-507):
+        // от правки графы зависит, гасить ли отложенные уведомления о задаче.
+        assigneeId: true,
       },
     });
     if (!task) throw new NotFoundException('Задача не найдена');
@@ -478,6 +481,10 @@ export class WorkTasksService {
     );
 
     const data: Prisma.WorkTaskUpdateInput = {};
+    // Чем графа станет по итогу правки; `undefined` — просьба её не трогать.
+    // От значения зависит, гасить ли отложенное (VED-507): поручили задачу —
+    // уведомления о ней, адресованные поручившему, уходят из очереди.
+    let assigneeId: string | null | undefined;
     if (request.title !== undefined) {
       data.title = requireText(
         request.title,
@@ -500,10 +507,7 @@ export class WorkTasksService {
       await this.assertAssigneeIsMember(context.spaceId, request.assigneeId);
       // Снятый исполнитель — это снова составивший (VED-320): графа не
       // пустует.
-      const assigneeId = resolveWorkAssignee(
-        request.assigneeId,
-        context.createdById,
-      );
+      assigneeId = resolveWorkAssignee(request.assigneeId, context.createdById);
       data.assignee = assigneeId
         ? { connect: { id: assigneeId } }
         : { disconnect: true };
@@ -574,6 +578,19 @@ export class WorkTasksService {
         },
       });
       if (task) {
+        // Поручение (VED-507): очередь помнит получателя, замороженного в
+        // момент постановки, — строка на поручившего или на прежнего
+        // исполнителя дозревала бы и всплыла бы у человека, которому задача
+        // больше не поручена. Гасим только при настоящей смене графы: правка
+        // срока с тем же исполнителем ничего не поручала.
+        if (assigneeId !== context.assigneeId) {
+          await this.notices.cancelOnOwnerChange(
+            taskId,
+            userId,
+            assigneeId ?? null,
+            onBehalfOfId,
+          );
+        }
         this.events.emit(WORK_TASK_MARK_REFRESHED_EVENT, {
           name: WORK_TASK_MARK_REFRESHED_EVENT,
           spaceId: context.spaceId,
@@ -586,8 +603,13 @@ export class WorkTasksService {
     }
 
     // Поручение — единственная правка карточки, о которой человеку нужно
-    // узнать сразу: остальные поля он увидит, когда откроет её сам.
-    if (request.assigneeId && request.assigneeId !== userId) {
+    // узнать сразу: остальные поля он увидит, когда откроет её сам. Себе —
+    // и тому, от чьего имени поручил агент, — новость не нужна (VED-507).
+    if (
+      request.assigneeId &&
+      request.assigneeId !== userId &&
+      request.assigneeId !== onBehalfOfId
+    ) {
       const notify = await this.notifyContext(taskId, userId);
       if (notify) {
         this.events.emit(WORK_EVENTS.taskAssigned, {
@@ -713,7 +735,12 @@ export class WorkTasksService {
         },
       });
       if (task) {
-        await this.notices.enqueueMove(task, userId, wasDone.columnId);
+        await this.notices.enqueueMove(
+          task,
+          userId,
+          wasDone.columnId,
+          onBehalfOfId,
+        );
         const candidates = workTaskRecipients(task, userId);
         const members =
           candidates.length > 0
@@ -929,7 +956,9 @@ export class WorkTasksService {
       where: { id: taskId },
       select: { id: true, assigneeId: true, createdById: true },
     });
-    if (task) await this.notices.enqueueComment(task, userId, body);
+    if (task) {
+      await this.notices.enqueueComment(task, userId, body, onBehalfOfId);
+    }
 
     await this.emitHandled(taskId, context.spaceId, userId, onBehalfOfId);
     return this.get(taskId, userId);
