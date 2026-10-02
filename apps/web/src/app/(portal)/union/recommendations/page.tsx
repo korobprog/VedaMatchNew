@@ -13,8 +13,11 @@ import {
 } from "@/components/union/page-size";
 import {
   UnionToggleLink,
+  effectiveGenderFilter,
+  everyoneHref,
   oppositeGenderHref,
   oppositeGenderLabel,
+  oppositeGenderOf,
   toggledHref,
 } from "@/components/union/union-toggle-link";
 import { UnionNav } from "@/components/union/union-nav";
@@ -65,24 +68,27 @@ export default async function UnionRecommendationsPage({
       : 0;
 
   // «Показать всех», «Противоположный пол» и «Избранное» (VED-652,
-  // VED-673): по умолчанию лента — анкеты противоположного пола; «Показать
-  // всех» снимает этот отбор, «Противоположный пол» возвращает его.
+  // VED-673): по умолчанию лента — анкеты противоположного пола.
   const path = "/union/recommendations";
-  const showEveryone = first(params.gender) === "all";
+  /* Состояние кнопок считается так же, как сервер считает выдачу (VED-673):
+     кнопка раньше смотрела только на `gender`, а выдача — ещё и на `showAll`,
+     и «Женщины» горела, пока в ленте были и мужчины. */
+  const effectiveGender = effectiveGenderFilter(params, user.gender);
+  const showEveryone = effectiveGender === "all";
+  const showOpposite = effectiveGender === oppositeGenderOf(user.gender);
   const favoritesOnly = first(params.favoritesOnly) === "true";
   const toolbar = (
     <>
       <UnionToggleLink
-        href={toggledHref(path, params, "gender", "all")}
+        href={everyoneHref(path, params)}
         icon={<Users size={20} aria-hidden />}
         label="Показать всех"
         active={showEveryone}
       />
       {/* «Противоположный пол» (VED-673): мужчине — женский значок и надпись
-          «Женщины», женщине — мужской и «Мужчины», как просил заказчик.
-          Нажата, пока пол не выбран вручную: это и есть умолчание. */}
+          «Женщины», женщине — мужской и «Мужчины», как просил заказчик. */}
       <UnionToggleLink
-        href={oppositeGenderHref(path, params)}
+        href={oppositeGenderHref(path, params, user.gender)}
         icon={
           user.gender === "male" ? (
             <Venus size={20} aria-hidden />
@@ -93,7 +99,7 @@ export default async function UnionRecommendationsPage({
           )
         }
         label={oppositeGenderLabel(user.gender)}
-        active={!first(params.gender)}
+        active={showOpposite}
       />
     </>
   );
