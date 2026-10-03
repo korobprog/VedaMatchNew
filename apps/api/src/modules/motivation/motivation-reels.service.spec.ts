@@ -1128,7 +1128,8 @@ describe('MotivationReelsService.uploadVideo (VED-696)', () => {
       where: { id: 'post-1' },
       data: expect.objectContaining({
         videoUrl: 'https://cdn/video.mp4',
-        videoHasSound: true,
+        videoVoice: true,
+        videoStatus: 'ready',
         reviewStatus: 'image_review',
         status: 'draft',
       }),
