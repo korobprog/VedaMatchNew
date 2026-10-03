@@ -491,7 +491,13 @@ export class MotivationReelsService {
       where: { id: postId },
       data: {
         videoUrl: url,
-        videoHasSound: true, // Предполагаем, что есть звук.
+        // `videoHasSound` — вычисляемое поле DTO (`videoVoice || videoTrackId`),
+        // в БД его нет: писать его в Prisma нельзя. Звук предполагаем
+        // включённым — автор загрузил ролик как есть.
+        videoVoice: true,
+        // Без `ready` DTO не отдаёт `videoUrl` (показывает только готовое
+        // видео), и загруженный ролик был бы не виден ни автору, ни ленте.
+        videoStatus: 'ready',
         reviewStatus: 'image_review',
         status: 'draft',
         generationStage: 'image_review',
