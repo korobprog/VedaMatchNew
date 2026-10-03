@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { MusicArtistPlayback } from "./music-artist-playback";
 
+// «Поделиться» в строке использует роутер (VED-732) — в тестах он не смонтирован.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const player = vi.hoisted(() => ({
   value: {
     current: null as null | { id: string },
@@ -127,7 +132,7 @@ describe("MusicArtistPlayback", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "По алфавиту" }));
-    await user.click(screen.getByRole("button", { name: /Бхаджан/ }));
+    await user.click(screen.getByRole("button", { name: /^(Пауза|Слушать): Бхаджан/ }));
 
     expect(player.value.play).toHaveBeenCalledWith("b", ["a", "b", "y"]);
   });
@@ -257,7 +262,7 @@ describe("MusicArtistPlayback", () => {
       const bhajan = screen
         .getAllByRole("article")
         .find((card) => card.textContent?.includes("Бхаджан"));
-      await user.click(within(bhajan!).getByRole("button", { name: /Бхаджан/ }));
+      await user.click(within(bhajan!).getByRole("button", { name: /^(Пауза|Слушать): Бхаджан/ }));
 
       expect(player.value.play).toHaveBeenCalledWith("b", ["y", "b", "a"]);
     });

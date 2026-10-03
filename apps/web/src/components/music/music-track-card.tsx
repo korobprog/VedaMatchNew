@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { MusicTrackDto } from "@vedamatch/shared";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
-import { MusicFavoriteButton } from "./favorites-provider";
+import { MusicShareTrackButton } from "./share-track-button";
 import { MusicPlayButton } from "./player/play-button";
 
 /**
@@ -47,13 +47,12 @@ export function MusicTrackCard({
 
       <MusicPlayButton trackId={track.id} title={track.title} queue={queue} />
 
-      {/* Сердце — в правом верхнем углу обложки, подальше от кнопки запуска:
-          рядом их путают пальцем, а «отметил вместо послушал» человек
-          замечает не сразу. */}
-      <MusicFavoriteButton
-        trackId={track.id}
-        title={track.title}
+      {/* «Поделиться» — в правом верхнем углу обложки, подальше от кнопки
+          запуска: рядом их путают пальцем (VED-732). */}
+        <MusicShareTrackButton
+        track={track}
         className="absolute right-1 top-1 bg-bg-0/50 backdrop-blur-sm"
+        size="size-8"
       />
 
       {/* Значок вынесен из ссылки: внутри скрытой от скринридера обложки он

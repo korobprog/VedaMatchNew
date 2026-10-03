@@ -5,6 +5,10 @@ import { MusicTrackRow } from "./music-track-row";
 
 const player = vi.hoisted(() => ({ value: null as null | Record<string, unknown> }));
 vi.mock("./player/player-provider", () => ({ useMusicPlayer: () => player.value }));
+// «Поделиться» в строке использует роутер (VED-732) — в тестах он не смонтирован.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 const track = {
   id: "t1",
@@ -77,7 +81,7 @@ describe("MusicTrackRow", () => {
       player.value = { current: { id: "t1" }, isPlaying: true, isLoading: false, queue: [] };
       render(<MusicTrackRow track={track} position={1} />);
 
-      const row = screen.getByRole("button", { name: /Maha Mantra/ });
+      const row = screen.getByRole("button", { name: /^(Пауза|Слушать): Maha Mantra/ });
       expect(row).toHaveAttribute("aria-current", "true");
       expect(row).toHaveAttribute("data-current");
       expect(row).toHaveClass("bg-violet/10", "ring-violet/40");
@@ -89,7 +93,7 @@ describe("MusicTrackRow", () => {
       player.value = { current: { id: "other" }, isPlaying: true, isLoading: false, queue: [] };
       render(<MusicTrackRow track={track} position={1} />);
 
-      const row = screen.getByRole("button", { name: /Maha Mantra/ });
+      const row = screen.getByRole("button", { name: /^(Пауза|Слушать): Maha Mantra/ });
       expect(row).not.toHaveAttribute("aria-current");
       expect(row).not.toHaveAttribute("data-current");
       expect(row).not.toHaveClass("bg-violet/10");

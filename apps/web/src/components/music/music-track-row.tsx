@@ -3,7 +3,7 @@ import type { MusicTrackDto } from "@vedamatch/shared";
 import { formatTrackDuration } from "@/lib/music-duration";
 import { MusicCover } from "./music-cover";
 import { MusicPlayRow } from "./player/play-row";
-import { MusicFavoriteButton } from "./favorites-provider";
+import { MusicShareTrackButton } from "./share-track-button";
 
 /**
  * Запись строкой — для списков внутри альбома, исполнителя и очереди.
@@ -122,10 +122,12 @@ export function MusicTrackRow({
             </svg>
           </Link>
         )}
-        <MusicFavoriteButton
-          trackId={track.id}
-          title={track.title}
-          className="pointer-events-auto -mr-1.5 size-8!"
+        {/* «Поделиться» вместо лайка (VED-732): заказчик просил настоящее
+            «поделиться» треком — ссылка с превью, копирование, мессенджеры. */}
+        <MusicShareTrackButton
+          track={track}
+          className="pointer-events-auto -mr-1.5"
+          size="size-8"
         />
         <Link
           href={`/music/tracks/${track.id}`}
