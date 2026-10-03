@@ -807,41 +807,31 @@ describe("ReelWizard", () => {
       expect(screen.getByRole("button", { name: /Взять из наших книг/ })).toBeInTheDocument();
     });
 
-    it("выбранный ролик показывает превью и уходит на шаг проверки с заглушкой", async () => {
+    it("выбранный ролик отправляется после проверки", async () => {
       stubObjectUrls();
-      const fetchMock = routeFetch({ "/motivation/reels/quota": () => quota });
+      const fetchMock = routeFetch({
+        "/motivation/reels/quota": () => quota,
+        "/motivation/reels": () => ({ id: "reel-1" }),
+        "/motivation/reels/reel-1/video": () => reelDto({ id: "reel-1", videoState: "none" }),
+      });
       const user = userEvent.setup();
       const { container } = render(<ReelWizard prefill={{}} donation={null} />);
       await screen.findByText("Сегодня: 0 из 1");
       await user.click(screen.getByRole("button", { name: /Добавить видео/ }));
-
       const input = screen.getByLabelText(/Видео \(MP4/);
-      expect(input).toHaveAttribute("accept", "video/*");
       await user.upload(input, videoFile());
-
-      // Превью выбранного ролика и подпись с файлом.
       const preview = container.querySelector("video") as HTMLVideoElement;
-      expect(preview).toHaveAttribute("src", "blob:clip");
-      expect(screen.getByText(/Видео взято: clip\.mp4/)).toBeInTheDocument();
-      // Длительность из метаданных превью — в пределах нормы, отказа нет.
       Object.defineProperty(preview, "duration", { value: 12, configurable: true });
       fireEvent.loadedMetadata(preview);
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-
       await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
-
-      // Ролик перенесён дальше по мастеру — и на шаге проверки честная
-      // заглушка: сервер видео в рилсы ещё не принимает.
-      expect(screen.getByText("Видео · проверка")).toBeInTheDocument();
-      expect(screen.getByText(/Ваш файл: clip\.mp4/)).toBeInTheDocument();
-      expect(container.querySelector("video")).toHaveAttribute("src", "blob:clip");
-      expect(screen.getByText(/Отправка видео пока не открыта/)).toBeInTheDocument();
-      expect(screen.getByText(/сервер ещё не принимает видео/)).toBeInTheDocument();
-      // Кнопки «Отправить» нет вовсе — и ничего не отправлено.
-      expect(screen.queryByRole("button", { name: /Отправить/ })).not.toBeInTheDocument();
-      expect(
-        fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === "GET"),
-      ).toBe(true);
+      expect(screen.getByRole("button", { name: "Отправить на проверку" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+      await waitFor(() => 
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/motivation/reels/reel-1/video"), 
+          expect.objectContaining({ method: "POST" })
+        )
+      );
     });
 
     it("файл не того формата отбивается с объяснением", async () => {

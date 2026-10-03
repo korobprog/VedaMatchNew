@@ -64,6 +64,13 @@ import {
   validateReelImageSize,
   type UploadedReelImage,
 } from './reel-image';
+import type { UploadedVideo } from './video-upload';
+import {
+  checkVideo,
+  videoContentType,
+  videoKey,
+  videoMessage,
+} from './video-upload';
 import sharp from 'sharp';
 import { canAnimateReel } from './reel-animate';
 import { readingUnitQuote, readingUnitsOf } from './reading-unit-quote';
@@ -434,6 +441,74 @@ export class MotivationReelsService {
           source: 'uploaded',
           width: crop.width,
           height: crop.height,
+        },
+      },
+    });
+    return this.get(userId, postId);
+  }
+
+  /**
+   * Загрузка видео в рилс (VED-696): автор загружает свой ролик вместо
+   * генерируемой картинки. Валидация — как у ленты «Видео», хранилище то же,
+   * но стадия проверки общая с обычными рилсами (у видеоленты своя).
+   */
+  async uploadVideo(
+    userId: string,
+    postId: string,
+    file: UploadedVideo | undefined,
+    body?: Record<string, unknown>,
+  ): Promise<MotivationReelDto> {
+    // Валидация видео — как у ленты «Видео» (video-upload.ts). Длительность
+    // из заголовка файла браузер знает только для mp4/mov: для webm сервер её
+    // не прочитает, поэтому принимаем и заявленную (как делает лента «Видео»).
+    const claimed =
+      body && typeof body === 'object' ? body.durationSeconds : undefined;
+    const check = checkVideo(file, claimed);
+    if (!check.ok) throw new BadRequestException(videoMessage(check.problem));
+
+    const post = await this.prisma.motivationPost.findFirst({
+      where: { id: postId, authorUserId: userId, origin: 'user' },
+      select: { id: true, status: true, reviewStatus: true },
+    });
+    if (!post) throw new NotFoundException('Рилс не найден');
+    if (post.status === 'published')
+      throw new BadRequestException(
+        'Рилс уже опубликован: видео можно загрузить только до публикации',
+      );
+
+    // Сохраняем видео в то же хранилище, что лента «Видео».
+    const key = videoKey(postId, check.container, Date.now());
+    const url = await this.generation.uploadStory(
+      key,
+      file!.buffer,
+      videoContentType(check.container),
+    );
+
+    // Видео загрузил автор → на проверку к администратору (как свой кадр).
+    // Администраторов не проверяем (у них нет отдельного uploadReelVideo).
+    const now = new Date();
+    await this.prisma.motivationPost.update({
+      where: { id: postId },
+      data: {
+        videoUrl: url,
+        videoHasSound: true, // Предполагаем, что есть звук.
+        reviewStatus: 'image_review',
+        status: 'draft',
+        generationStage: 'image_review',
+        generationErrorCode: null,
+        imageApprovedAt: null,
+      },
+    });
+    await this.prisma.motivationModerationAudit.create({
+      data: {
+        postId,
+        actorId: userId,
+        action: 'author_video',
+        reason: null,
+        metadata: {
+          source: 'uploaded',
+          durationSeconds: check.durationSeconds,
+          container: check.container,
         },
       },
     });

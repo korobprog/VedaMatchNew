@@ -129,9 +129,7 @@ type Step = "text" | "image" | "review";
  * обращением к администратору.
  *
  * Четвёртым источником добавлено видео (VED-696): свой ролик вместо картинки
- * с цитатой. Пока сервер не принимает видео в рилсы — дальше выбора и превью
- * ветка не идёт: на шаге проверки стоит честная заглушка, а не кнопка, которая
- * обещает отправку, которой нет.
+ * с цитатой. Видео проходит два шага: выбор файла и проверка с отправкой.
  */
 export function ReelWizard({
   prefill,
@@ -485,6 +483,112 @@ export function ReelWizard({
     setError(null);
     setPollStalled(false);
     setStep("text");
+  }
+
+  /**
+   * Отправка видео-рилса (VED-696): создать рилс, затем залить видео по образцу
+   * uploadImage (строки ~444-457). Политика повтора — как у фоновой записи.
+   */
+  async function submitVideo() {
+    if (!video) return;
+    setError(null);
+    setPending(true);
+    try {
+      // Шаг 1: создать рилс. У видео нет текста цитаты, но POST /motivation/reels
+      // ожидает MotivationReelCreateInput — делаем минимальное тело.
+      const body: MotivationReelCreateInput = {
+        source: { kind: "own", text: "", author: null, work: null },
+        language: "ru",
+        category: null,
+        visualStyle: null,
+        explanation: null,
+      };
+      const createResp = await apiFetch(`${API_URL}/motivation/reels`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!createResp.ok) throw new Error(await readError(createResp));
+      const created = (await createResp.json()) as MotivationReelCreateResult;
+
+      // Шаг 2: залить видео с устойчивой политикой повтора (music-upload-retry.ts).
+      // Импорты из music-upload-retry.ts уже есть, используем их.
+      const form = new FormData();
+      form.append("file", video.file);
+      // Заявленная длительность — для webm сервер сам её не прочитает
+      // (та же схема, что у ленты «Видео»: checkVideo(file, claimed)).
+      if (video.durationSeconds != null)
+        form.append("durationSeconds", String(video.durationSeconds));
+
+      let attempt = 0;
+      let lastError: Error | null = null;
+      const { UPLOAD_MAX_ATTEMPTS } = await import("@/lib/music-upload-retry");
+      const { backoffDelay, UploadNetworkError, waitUntilVisibleAndOnline } =
+        await import("@/lib/music-upload-retry");
+
+      while (attempt < UPLOAD_MAX_ATTEMPTS) {
+        attempt++;
+        try {
+          // Перед повтором ждём возвращения на экран и восстановления связи.
+          if (attempt > 1) {
+            const delay = backoffDelay(attempt - 1);
+            if (delay !== null) await new Promise((r) => setTimeout(r, delay));
+            await waitUntilVisibleAndOnline(document, navigator, window);
+          }
+
+          const uploadResp = await apiFetch(
+            `${API_URL}/motivation/reels/${created.id}/video`,
+            {
+              method: "POST",
+              credentials: "include",
+              body: form,
+            },
+          );
+
+          if (!uploadResp.ok) {
+            // HTTP-отказ — не повтор: сервер уже вынес решение.
+            throw new Error(await readError(uploadResp));
+          }
+
+          // Успех: рилс создан и видео залито.
+          const result = (await uploadResp.json()) as MotivationReelDto;
+          setReelId(result.id);
+          setReel(result);
+          setStep("review");
+          setPollStalled(false);
+          setQuota((current) =>
+            current && !current.unlimited
+              ? {
+                  ...current,
+                  used: current.used + 1,
+                  remaining: Math.max(0, current.remaining - 1),
+                }
+              : current,
+          );
+          return; // Выходим из цикла повторов.
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          // Если обрыв сети — можно повторить; HTTP-отказ — нет.
+          if (
+            !(await import("@/lib/music-upload-retry")).isRetryableUploadError(e)
+          ) {
+            throw lastError;
+          }
+          // Сетевой обрыв: если попытки не исчерпаны, крутим цикл дальше.
+        }
+      }
+
+      // Попытки исчерпаны, а сеть так и не вернулась.
+      throw (
+        lastError ||
+        new Error("Не удалось загрузить видео после нескольких попыток")
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось отправить видео");
+    } finally {
+      setPending(false);
+    }
   }
 
   const exhausted = quotaExhausted(quota);
@@ -852,10 +956,7 @@ export function ReelWizard({
           именно уходит администраторам. После отправки на том же шаге живёт
           статус сборки: возвращать его на отдельный экран значило бы уводить
           от карточки, за которой человек и пришёл. */}
-      {/* Шаг проверки для видео (VED-696). Честная заглушка: сервер ещё не
-          принимает видео в рилсы (у `/motivation/reels/:id` загрузки видео
-          нет), поэтому файл дальше выбора и превью не уходит. Кнопки
-          «Отправить» нет вовсе — она обещала бы отправку, которой не будет. */}
+      {/* Шаг проверки для видео (VED-696): превью и отправка. */}
       {step === "review" && !reelId && !exhausted && videoMode && (
         <div className="space-y-4">
           <div className="glass space-y-3 rounded-2xl p-4 text-sm text-text-1">
@@ -881,19 +982,10 @@ export function ReelWizard({
               </p>
             </div>
           </div>
-          <div className="rounded-2xl border border-gold/40 bg-gold/5 p-4 text-sm text-text-1">
-            <p className="font-semibold text-text-0">Отправка видео пока не открыта</p>
-            <p className="mt-1">
-              Ролик выбран и проверен, но сервер ещё не принимает видео для
-              рилсов — отправить его сейчас некуда, и файл никуда не уходит и не
-              сохраняется. Когда обработка видео появится, на этом шаге будет
-              кнопка «Отправить на проверку».
-            </p>
-          </div>
+          {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setStep("text")} className={secondaryButtonClass}>
-              ← Назад
-            </button>
+            <button type="button" disabled={pending} onClick={() => setStep("text")} className={secondaryButtonClass}>← Назад</button>
+            <button type="button" disabled={pending || !video} onClick={() => void submitVideo()} className={primaryButtonClass}>{pending ? "Отправляем…" : "Отправить на проверку"}</button>
           </div>
         </div>
       )}
