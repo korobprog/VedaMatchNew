@@ -1,9 +1,10 @@
 import Link from "next/link";
+import type { ChatListState } from "@vedamatch/shared";
 import { BackgroundOrbs } from "@/components/landing/Orb";
 import { NoiseOverlay } from "@/components/landing/NoiseOverlay";
 import { ChatListView } from "@/components/chat/chat-list-view";
+import { ChatActionsRow } from "@/components/chat/chat-actions-row";
 import { StatusStrip } from "@/components/chat/statuses/status-strip";
-import { QuickConferenceButton } from "@/components/chat/conference/quick-conference-button";
 import { getChatList, getChatMoments } from "@/lib/chat-api";
 import { getProfile } from "@/lib/api";
 import { redirectToLogin } from "@/lib/require-user";
@@ -15,7 +16,11 @@ export default async function ChatPage() {
   if (!user) redirectToLogin("/chat");
 
   const [list, moments] = await Promise.all([getChatList(), getChatMoments()]);
-  const state = list ?? { conversations: [], requestsCount: 0 };
+  const state: ChatListState = list ?? { conversations: [], requestsCount: 0 };
+
+  // Канал VedaMatch теперь круглой кнопкой в верхнем ряду (VED-730), а не
+  // строкой списка, — кнопке нужен адрес беседы и счётчик непрочитанных.
+  const news = state.conversations.find((c) => c.official) ?? null;
 
   return (
     <>
@@ -31,100 +36,119 @@ export default async function ChatPage() {
               Личные диалоги, группы и каналы общин.
             </p>
           </div>
-          <Link
-            href="/chat/people"
-            aria-label="Люди портала"
-            className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+          {/* VED-730: компактный верхний ряд кнопок. Прежние четыре значка
+              на месте, рядом сжаты бывшие разноразмерные блоки: «Быстрая
+              конференция» — кнопкой со значком, «VedaMatch-новости» и
+              «Избранное» — круглыми кнопками, «Мой статус» — фотографией
+              правее всех. */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/chat/people"
+              aria-label="Люди портала"
+              className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
             >
-              <circle cx="9" cy="8" r="3.4" />
-              <path d="M3.2 19.2c0-3.2 2.6-5.2 5.8-5.2s5.8 2 5.8 5.2" />
-              <path d="M16.2 5.2a3.4 3.4 0 010 6.6" />
-              <path d="M17.6 14.4c2.1.5 3.6 2.2 3.6 4.8" />
-            </svg>
-          </Link>
-          <Link
-            href="/chat/map"
-            aria-label="Карта общин и людей"
-            className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <circle cx="9" cy="8" r="3.4" />
+                <path d="M3.2 19.2c0-3.2 2.6-5.2 5.8-5.2s5.8 2 5.8 5.2" />
+                <path d="M16.2 5.2a3.4 3.4 0 010 6.6" />
+                <path d="M17.6 14.4c2.1.5 3.6 2.2 3.6 4.8" />
+              </svg>
+            </Link>
+            <Link
+              href="/chat/map"
+              aria-label="Карта общин и людей"
+              className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
             >
-              <path d="M9 4L3.5 6.2v13.3L9 17.3l6 2.2 5.5-2.2V4L15 6.2z" />
-              <path d="M9 4v13.3" />
-              <path d="M15 6.2V19.5" />
-            </svg>
-          </Link>
-          <Link
-            href="/chat/discover"
-            aria-label="Открытые беседы"
-            className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M9 4L3.5 6.2v13.3L9 17.3l6 2.2 5.5-2.2V4L15 6.2z" />
+                <path d="M9 4v13.3" />
+                <path d="M15 6.2V19.5" />
+              </svg>
+            </Link>
+            <Link
+              href="/chat/discover"
+              aria-label="Открытые беседы"
+              className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-glass-brd bg-glass text-text-1 transition-colors hover:text-text-0"
             >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3.5 12h17" />
-              <path d="M12 3.2a15 15 0 010 17.6" />
-              <path d="M12 3.2a15 15 0 000 17.6" />
-            </svg>
-          </Link>
-          <Link
-            href="/chat/new"
-            aria-label="Новая группа"
-            className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-mint-edge bg-mint text-on-mint"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3.5 12h17" />
+                <path d="M12 3.2a15 15 0 010 17.6" />
+                <path d="M12 3.2a15 15 0 000 17.6" />
+              </svg>
+            </Link>
+            <Link
+              href="/chat/new"
+              aria-label="Новая группа"
+              className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-mint-edge bg-mint text-on-mint"
             >
-              <path d="M4 19.5V17l10-10 2.5 2.5-10 10H4z" />
-              <path d="M15 6l3-3 2.5 2.5-3 3z" />
-            </svg>
-          </Link>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M4 19.5V17l10-10 2.5 2.5-10 10H4z" />
+                <path d="M15 6l3-3 2.5 2.5-3 3z" />
+              </svg>
+            </Link>
+            <ChatActionsRow
+              me={{
+                id: user.id,
+                name: user.displayName,
+                avatarUrl: user.avatarUrl,
+              }}
+              news={
+                news
+                  ? {
+                      conversationId: news.id,
+                      unreadCount: news.unreadCount,
+                    }
+                  : null
+              }
+            />
+          </div>
         </header>
-        {/* Быстрая конференция (VED-360) — здесь, а не шестым значком в
-            шапке: у неё есть что сказать словами («ссылка, по которой
-            входят сразу, до четырёх человек»), а значок этого не скажет. */}
-        {/* Статусы (VED-129) — первой строкой, как в WhatsApp и Telegram. */}
+        {/* Статусы других людей (VED-129) — первой строкой, как в WhatsApp и
+            Telegram. Свой статус стоит в ряду кнопок выше (VED-730). */}
         <StatusStrip
           me={{ id: user.id, name: user.displayName, avatarUrl: user.avatarUrl }}
         />
-        <QuickConferenceButton />
         <ChatListView initial={state} moments={moments} viewerId={user.id} />
       </main>
     </>
