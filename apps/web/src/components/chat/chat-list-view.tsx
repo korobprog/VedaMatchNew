@@ -189,6 +189,9 @@ export function ChatListView({
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return state.conversations
+      // Канал VedaMatch и «Избранное» (VED-730) — круглыми кнопками в верхнем
+      // ряду, а не строками списка: строка дублировала бы кнопку.
+      .filter((c) => !c.official && !c.saved)
       .filter((c) => (tab === "all" ? true : c.kind === tab))
       .filter((c) =>
         needle
@@ -198,9 +201,10 @@ export function ChatListView({
       );
   }, [state.conversations, tab, query]);
 
-  // Официальный канал VedaMatch стоит сверху наравне с закреплёнными.
-  const pinned = visible.filter((c) => c.pinned || c.official);
-  const rest = visible.filter((c) => !c.pinned && !c.official);
+  // Закреплённые самим человеком — сверху; официальный канал VedaMatch сюда
+  // больше не попадает: он теперь кнопкой в верхнем ряду (VED-730).
+  const pinned = visible.filter((c) => c.pinned);
+  const rest = visible.filter((c) => !c.pinned);
 
   return (
     <div className="flex flex-col gap-4">
@@ -365,23 +369,14 @@ function ConversationRow({
         highlighted ? "border border-glass-brd bg-glass" : ""
       }`}
     >
-      {conversation.saved ? (
-        <span
-          aria-hidden
-          className="flex size-[50px] shrink-0 items-center justify-center rounded-2xl border border-gold/34 bg-gold/12 text-gold"
-        >
-          <BookmarkIcon />
-        </span>
-      ) : (
-        <ChatAvatar
-          kind={conversation.kind}
-          user={conversation.companion}
-          title={conversation.title}
-          imageUrl={conversation.avatarUrl}
-          online={isOnline(conversation.companion?.lastSeenAt)}
-          ring={conversation.kind === "direct" ? ring : null}
-        />
-      )}
+      <ChatAvatar
+        kind={conversation.kind}
+        user={conversation.companion}
+        title={conversation.title}
+        imageUrl={conversation.avatarUrl}
+        online={isOnline(conversation.companion?.lastSeenAt)}
+        ring={conversation.kind === "direct" ? ring : null}
+      />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">
           <span
@@ -507,24 +502,6 @@ function ChevronIcon() {
       aria-hidden
     >
       <path d="M9 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function BookmarkIcon() {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M6.5 4h11a1 1 0 011 1v15l-6.5-4-6.5 4V5a1 1 0 011-1z" />
     </svg>
   );
 }

@@ -15,9 +15,15 @@ test("сообщение доезжает во вторую вкладку жи�
   await page.goto("/chat");
   await expect(page.locator('a[href^="/chat/"]').first()).toBeVisible();
 
-  const hrefs = await page.locator('a[href^="/chat/"]').evaluateAll((links) =>
-    links.map((link) => link.getAttribute("href") ?? ""),
-  );
+  // :not([aria-label]) — якорь на строки списка бесед (VED-730): в верхнем
+  // ряду кнопок появились ссылки на беседы (кнопка «VedaMatch-новости»
+  // ведёт в /chat/<id>), и первая UUID-ссылка в DOM больше не обязана быть
+  // строкой обычной беседы с доступным полем ввода.
+  const hrefs = await page
+    .locator('a[href^="/chat/"]:not([aria-label])')
+    .evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href") ?? ""),
+    );
   const href = hrefs.find((value) => CONVERSATION_HREF.test(value));
   expect(href, "в демо-данных должна быть хотя бы одна беседа").toBeTruthy();
 
