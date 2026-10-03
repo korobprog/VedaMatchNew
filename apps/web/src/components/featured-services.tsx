@@ -1,19 +1,5 @@
 import Link from "next/link";
-import {
-  BookOpen,
-  GraduationCap,
-  Heart,
-  LayoutGrid,
-  Leaf,
-  Megaphone,
-  MessagesSquare,
-  MoonStar,
-  Music,
-  ShoppingBag,
-  Sparkles,
-  SquareKanban,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ServiceIcon } from "@/components/icons/service-icons";
 import type { HomeFeaturedOption } from "@/lib/home-featured";
 import {
   resolveFeaturedAccents,
@@ -33,27 +19,13 @@ import { FeaturedColorPicker } from "./featured-color-picker";
  * Какие три — решает сам человек (VED-86): «ходовое» у каждого своё. Выбор
  * собирает `resolveHomeFeatured` на сервере, здесь только рисуем.
  */
-type IconComponent =
-  | LucideIcon
-  | ((props: { className?: string }) => React.ReactElement);
-
-interface FeaturedLook {
-  /** Значок: готовый из lucide или свой, нарисованный здесь. */
-  Icon: IconComponent;
-  /**
-   * Любимый цвет знака. Совпадёт с соседом — возьмёт свободный
-   * (`resolveFeaturedAccents`, VED-452): кнопки различаются не только
-   * словом. Человек может перекрасить кнопку кружком в её углу.
-   */
-  accent: FeaturedAccent;
-}
+type FeaturedGlyphProps = { className?: string };
 
 /**
- * Трубка с волной вызова. Рисованная, а не готовая: соседние значки ряда —
- * штриховые, и гладиентная иконка из каталога сервисов рядом с ними выглядит
- * чужой. Волна отличает её от простой трубки «положить звонок».
+ * Трубка с волной вызова — значок раздела «Звонки». Рисованная, а не готовая:
+ * волна отличает её от простой трубки «положить звонок».
  */
-function HandsetIcon({ className }: { className?: string }) {
+function HandsetIcon({ className }: FeaturedGlyphProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -74,28 +46,51 @@ function HandsetIcon({ className }: { className?: string }) {
 }
 
 /**
- * Значки штриховые у всех, включая сервисы из каталога: градиентные значки
- * каталога рядом со штриховыми выглядят чужими (см. `HandsetIcon`).
+ * Значок кнопки — тот же `ServiceIcon`, что стоит в карточке сервиса (VED-719:
+ * «сделай одинаковыми значки на кнопках и в сервисах, такими как в сервисах»).
+ * Знак берётся по слагу сервиса, поэтому кнопка и карточка совпадают и для
+ * будущих сервисов, которых ещё нет в `switch` значков: оба возьмут один и
+ * тот же запасной знак.
+ *
+ * Исключение — «Звонки» (`calls`): это раздел вне каталога (`home-featured.ts`),
+ * карточки сервиса у него нет, и сравнивать знак не с чем. Его значок
+ * штриховой и красится выбранным акцентом; каталожные значки несут
+ * собственные цвета сервиса и перекраске акцентом не поддаются (цвет кнопки,
+ * VED-452, для них выбирается, но на градиентный знак не влияет).
  */
-const LOOKS: Record<string, FeaturedLook> = {
-  chat: { Icon: MessagesSquare, accent: "text-cyan" },
-  music: { Icon: Music, accent: "text-violet" },
+function FeaturedGlyph({ slug, className }: FeaturedGlyphProps & { slug: string }) {
+  if (slug === "calls") return <HandsetIcon className={className} />;
+  return (
+    <span aria-hidden className="inline-flex">
+      <ServiceIcon slug={slug} className={className} />
+    </span>
+  );
+}
+
+/**
+ * Любимый цвет знака (VED-452). Совпадёт с соседом — возьмёт свободный
+ * (`resolveFeaturedAccents`): кнопки различаются не только словом. Человек
+ * может перекрасить кнопку кружком в её углу.
+ */
+const ACCENTS: Record<string, FeaturedAccent> = {
+  chat: "text-cyan",
+  music: "text-violet",
   // Звонок начинается внутри диалога, а этот экран отвечает на другой
   // вопрос — кто звонил вчера.
-  calls: { Icon: HandsetIcon, accent: "text-magenta" },
-  union: { Icon: Heart, accent: "text-magenta" },
-  vedabase: { Icon: BookOpen, accent: "text-violet" },
-  motivation: { Icon: Sparkles, accent: "text-violet" },
-  library: { Icon: GraduationCap, accent: "text-cyan" },
-  astro: { Icon: MoonStar, accent: "text-violet" },
-  market: { Icon: ShoppingBag, accent: "text-magenta" },
-  work: { Icon: SquareKanban, accent: "text-cyan" },
-  notices: { Icon: Megaphone, accent: "text-magenta" },
-  wellness: { Icon: Leaf, accent: "text-cyan" },
+  calls: "text-magenta",
+  union: "text-magenta",
+  vedabase: "text-violet",
+  motivation: "text-violet",
+  library: "text-cyan",
+  astro: "text-violet",
+  market: "text-magenta",
+  work: "text-cyan",
+  notices: "text-magenta",
+  wellness: "text-cyan",
 };
 
-/** Новый сервис каталога, для которого значок ещё не подобран. */
-const FALLBACK_LOOK: FeaturedLook = { Icon: LayoutGrid, accent: "text-cyan" };
+/** Новый сервис каталога, для которого акцент ещё не подобран. */
+const FALLBACK_ACCENT: FeaturedAccent = "text-cyan";
 
 /**
  * `unread` — непрочитанные беседы и запросы «Общения» одним числом. Значок
@@ -116,14 +111,13 @@ export function FeaturedServices({
   savedColors?: (FeaturedAccent | null)[] | null;
 }) {
   const accents = resolveFeaturedAccents(
-    items.map(({ key }) => (LOOKS[key] ?? FALLBACK_LOOK).accent),
+    items.map(({ key }) => ACCENTS[key] ?? FALLBACK_ACCENT),
     savedColors,
   );
   return (
     <section aria-label="Ходовые сервисы" className="mb-4">
       <ul className="grid grid-cols-3 gap-2 sm:gap-3">
         {items.map(({ key, name, hint, href }, index) => {
-          const { Icon } = LOOKS[key] ?? FALLBACK_LOOK;
           const accent = accents[index];
           const badge = key === "chat" ? unread : 0;
           const label =
@@ -137,7 +131,10 @@ export function FeaturedServices({
                 className="service-edge relative flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-2xl glass px-2 py-4 text-center transition-transform duration-200 hover:-translate-y-0.5 sm:min-h-[128px]"
               >
                 <span className="relative">
-                  <Icon aria-hidden className={`size-7 sm:size-8 ${accent}`} />
+                  <FeaturedGlyph
+                    slug={key}
+                    className={`size-7 sm:size-8 ${accent}`}
+                  />
                   {badge > 0 && (
                     <span
                       aria-hidden="true"
