@@ -6,7 +6,11 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { IMAGE_SIZE, type ImageProvider } from './image-cost';
 import { FalImageService } from './fal-image.service';
 import { stripJsonFence } from './chat-json';
@@ -563,6 +567,27 @@ export class MotivationGenerationService {
       }),
     );
     return `${publicUrl.replace(/\/$/, '')}/${key}`;
+  }
+
+  /**
+   * Читает файл из S3 по ключу.
+   *
+   * Нужен бэкфиллу копий иллюстраций (VED-629): раньше он качал оригинал по
+   * публичной ссылке `S3_PUBLIC_URL`, но из контейнера API этот адрес
+   * недоступен (hairpin NAT до собственного публичного IP не проходит) — и
+   * каждый пост безвозвратно тратил все попытки. С ключом и тем же клиентом,
+   * которым идёт заливка, чтение работает.
+   */
+  async downloadStory(key: string): Promise<Buffer> {
+    const bucket = this.config.get<string>('S3_BUCKET_NAME');
+    if (!this.s3 || !bucket)
+      throw new ServiceUnavailableException('S3 is not configured');
+    const result = await this.s3.send(
+      new GetObjectCommand({ Bucket: bucket, Key: key }),
+    );
+    if (!result.Body)
+      throw new ServiceUnavailableException('S3 returned empty body');
+    return Buffer.from(await result.Body.transformToByteArray());
   }
 
   private validateCopy(value: unknown) {
