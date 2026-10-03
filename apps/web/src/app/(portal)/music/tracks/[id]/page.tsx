@@ -5,7 +5,6 @@ import { Pencil } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getMusicTrack } from "@/lib/music-api";
 import { MusicCover } from "@/components/music/music-cover";
-import { MusicFavoriteButton } from "@/components/music/favorites-provider";
 import { MusicReportForm } from "@/components/music/music-report-form";
 import { MusicAddToPlaylist } from "@/components/music/music-add-to-playlist";
 import { MusicOfflineButton } from "@/components/music/offline-button";
@@ -130,14 +129,6 @@ export default async function MusicTrackPage({
               }}
               size="size-11"
               className="border border-glass-brd"
-            />
-            {/* Сердце (VED-113): из строк списков его убрали ради времени
-                записи, и карточка стала местом, где запись отмечают. */}
-            <MusicFavoriteButton
-              trackId={track.id}
-              title={track.title}
-              size="size-11"
-              className="shrink-0 border border-glass-brd"
             />
           </>
         }
