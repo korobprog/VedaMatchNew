@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Pencil, Share2 } from "lucide-react";
 import type { BlogPostDto } from "@vedamatch/shared";
-import { LineageInfoButton } from "@/components/lineage-info-button";
-import { MaterialStagesButton } from "@/components/material-stages-button";
+import { MaterialMarksButton } from "@/components/material-marks-button";
 import {
   setBlogPostAudienceStages,
   setBlogPostCategory,
@@ -89,26 +88,17 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
               }}
             />
           )}
-          {/* «Линия» с домиком и ступени с отпечатком (VED-616, VED-632) —
-              у всех: к какой линии и каким ступеням пост. Менять в этих
-              окнах может только администратор (VED-632: «участники ничего
-              менять не могут»); автор выбирает линию и ступень в форме
-              публикации и правки (VED-590). */}
-          <LineageInfoButton
+          {/* Фильтры поста одной кнопкой (VED-715): ступени
+              самоидентификации и линия — в одном окне, как «Фильтры
+              материалов» на главной. Участник (VED-632: «участники ничего
+              менять не могут») видит только зафиксированную админом
+              индикацию; меняет их администратор, автор же выбирает линию и
+              ступень в форме публикации и правки (VED-590). */}
+          <MaterialMarksButton
+            stages={post.audienceStages ?? []}
             subjects={[{ title: "Пост", lineage: post.lineage ?? null }]}
             buttonClassName="rounded-lg"
-            onSave={
-              post.canModerate
-                ? async (lineage) => {
-                    setPost(await setBlogPostLineage(post.id, lineage));
-                  }
-                : undefined
-            }
-          />
-          <MaterialStagesButton
-            stages={post.audienceStages ?? []}
-            buttonClassName="rounded-lg"
-            onSave={
+            onSaveStages={
               post.canModerate
                 ? async (stages) => {
                     setPost(
@@ -117,6 +107,13 @@ export function BlogPostView({ initial }: { initial: BlogPostDto }) {
                         stages.length === 0 ? "all" : stages,
                       ),
                     );
+                  }
+                : undefined
+            }
+            onSaveLineage={
+              post.canModerate
+                ? async (lineage) => {
+                    setPost(await setBlogPostLineage(post.id, lineage));
                   }
                 : undefined
             }

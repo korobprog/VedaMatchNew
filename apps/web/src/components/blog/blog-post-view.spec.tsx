@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlogPostDto } from "@vedamatch/shared";
 import {
+  setBlogPostAudienceStages,
   setBlogPostCategory,
   setBlogPostLineage,
 } from "@/lib/blog-client-api";
@@ -16,7 +17,13 @@ vi.mock("@/lib/blog-client-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/blog-client-api")>()),
   setBlogPostLineage: vi.fn(),
   setBlogPostCategory: vi.fn(),
+  setBlogPostAudienceStages: vi.fn(),
 }));
+
+// Вызовы не смешиваются между тестами: ассерты «не вызывалось» честные.
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function makePost(overrides: Partial<BlogPostDto> = {}): BlogPostDto {
   return {
@@ -87,20 +94,30 @@ describe("ряд действий поста: только для админов
 });
 
 /* VED-596: «в меню кнопок поста значок „Линия“, только для админов».
-   VED-616: разметка — отпечатком пальца у админа, домик — всем. */
-describe("«Линия» поста", () => {
-  it("участник видит только домик: к какой линии пост", async () => {
+   VED-616: разметка — всем. VED-715: домик и отпечаток объединены в одну
+   кнопку — окно фильтров как на главной. */
+describe("«Фильтры» поста (VED-715)", () => {
+  it("участник видит одну кнопку: оба фильтра, окно только показывает", async () => {
     const user = userEvent.setup();
-    render(<BlogPostView initial={makePost({ lineage: "ipbys" })} />);
+    render(
+      <BlogPostView
+        initial={makePost({ lineage: "ipbys", audienceStages: ["yogi"] })}
+      />,
+    );
     expect(screen.queryByRole("button", { name: /^Разметка/ })).toBeNull();
 
     await user.click(
-      screen.getByRole("button", { name: "Линия. Пост: Гаудия-матх — IPBYS" }),
+      screen.getByRole("button", {
+        name: "Самоидентификация: Йог. Пост: Гаудия-матх — IPBYS",
+      }),
     );
     expect(screen.getByText("Гаудия-матх — IPBYS")).toBeInTheDocument();
+    expect(screen.getByText("Йог")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
-  it("админ назначает линию в окне домика, и значок показывает её (VED-632)", async () => {
+  it("админ назначает линию в том же окне, и значок показывает её", async () => {
     const user = userEvent.setup();
     vi.mocked(setBlogPostLineage).mockResolvedValue(
       makePost({ canModerate: true, lineage: "iskcon" }),
@@ -109,31 +126,67 @@ describe("«Линия» поста", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Линия. Пост: Для всех линий",
+        name: "Самоидентификация: для всех. Пост: Для всех линий",
       }),
     );
+    // Оба выбора в одном окне: ступени и линия.
+    expect(
+      screen.getByRole("group", { name: "Ступени самоидентификации" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "ISKCON" }));
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     expect(setBlogPostLineage).toHaveBeenCalledWith("post-1", "iskcon");
+    expect(setBlogPostAudienceStages).not.toHaveBeenCalled();
     expect(
-      await screen.findByRole("button", { name: "Линия. Пост: ISKCON" }),
+      await screen.findByRole("button", {
+        name: "Самоидентификация: для всех. Пост: ISKCON",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("админ назначает ступень — пишется только ступень", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setBlogPostAudienceStages).mockResolvedValue(
+      makePost({ canModerate: true, audienceStages: ["devotee"] }),
+    );
+    render(<BlogPostView initial={makePost({ canModerate: true })} />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Самоидентификация: для всех. Пост: Для всех линий",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Преданный" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(setBlogPostAudienceStages).toHaveBeenCalledWith("post-1", [
+      "devotee",
+    ]);
+    expect(setBlogPostLineage).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole("button", {
+        name: "Самоидентификация: Преданный. Пост: Для всех линий",
+      }),
     ).toBeInTheDocument();
   });
 
   /* VED-632: «участники ничего менять в этих фильтрах не могут» — автор
-     выбирает линию в форме публикации (VED-590), а домик у него только
-     показывает. */
-  it("автор своего поста видит линию, но не меняет её в домике", async () => {
+     выбирает линию в форме публикации (VED-590), а кнопка фильтров у него
+     только показывает. */
+  it("автор своего поста видит оба фильтра, но не меняет их", async () => {
     const user = userEvent.setup();
     render(<BlogPostView initial={makePost({ canEdit: true })} />);
 
     await user.click(
       screen.getByRole("button", {
-        name: "Линия. Пост: Для всех линий",
+        name: "Самоидентификация: для всех. Пост: Для всех линий",
       }),
     );
     expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(
+      screen.queryByRole("group", { name: "Ступени самоидентификации" }),
+    ).toBeNull();
   });
 });
 
