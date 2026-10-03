@@ -28,6 +28,12 @@ import type {
 import { apiFetch } from "@/lib/http-client";
 import { DonateButton } from "@/components/donate-sheet";
 import { PicturePublishForm } from "./picture-publish-form";
+import { ReelVideoSource, type ReelVideoPick } from "./reel-video-source";
+import {
+  formatVideoDuration,
+  videoDurationProblem,
+  videoFileProblem,
+} from "./admin/video-file";
 import { ATTRIBUTION_GROUP_CLASS, fieldLabelClass } from "./field-label";
 import { AttributionFieldLabel } from "./attribution-field-label";
 import { splitQuoteAndExplanation } from "./quote-text";
@@ -121,6 +127,9 @@ type Step = "text" | "image" | "review";
  * видел, что именно уходит администраторам. Дальше конвейер работает сам, а
  * экран статуса опрашивает сервер и показывает стадии; отказ — с причиной и одним
  * обращением к администратору.
+ *
+ * Четвёртым источником добавлено видео (VED-696): свой ролик вместо картинки
+ * с цитатой. Видео проходит два шага: выбор файла и проверка с отправкой.
  */
 export function ReelWizard({
   prefill,
@@ -146,9 +155,13 @@ export function ReelWizard({
   /** `picture` — готовая картинка с цитатой: файл первым шагом (VED-97).
    * Из «Открыток» ленты (VED-240) по умолчанию — тоже «Готовая картинка»:
    * туда и пришли делать открытку, а не печатать цитату поверх фото. */
-  const [sourceKind, setSourceKind] = useState<"own" | "vedabase" | "picture">(
+  const [sourceKind, setSourceKind] = useState<"own" | "vedabase" | "picture" | "video">(
     fromBook ? "vedabase" : prefill.tab === "cards" ? "picture" : "own",
   );
+  /** Свой ролик (VED-696): файл, превью и длительность из его метаданных. */
+  const [video, setVideo] = useState<ReelVideoPick | null>(null);
+  /** Почему ролик не взят: чужой формат, слишком большой, слишком длинный. */
+  const [videoError, setVideoError] = useState<string | null>(null);
   // Фрагмент из книг: пришёл из читалки или выбран поиском прямо здесь.
   const [book, setBook] = useState<MotivationReelSourceHit | null>(
     fromBook
@@ -221,6 +234,51 @@ export function ReelWizard({
     setImageError(tooSmall);
     if (!tooSmall) setFile(next);
   }, []);
+
+  /**
+   * Ролик берём только тот, который приняли бы и в ленту «Видео»: тот же
+   * `videoFileProblem` — тип, размер, а длительность проверяет превью
+   * (`onVideoDuration` ниже). Отказ до любого следующего шага, как у кадра.
+   */
+  const acceptVideo = useCallback((next: File | null) => {
+    if (!next) {
+      setVideo(null);
+      setVideoError(null);
+      return;
+    }
+    const problem = videoFileProblem(next);
+    if (problem) {
+      setVideoError(problem);
+      return;
+    }
+    setVideoError(null);
+    setVideo({ file: next, url: URL.createObjectURL(next), durationSeconds: null });
+  }, []);
+
+  /**
+   * Длительность пришла из метаданных превью. Браузер мог её не отдать
+   * (`NaN`/`Infinity`) — это не отказ: сервер у mp4/mov прочитает свою
+   * (`videoDurationProblem` пропускает такое же молча).
+   */
+  const onVideoDuration = useCallback((seconds: number) => {
+    setVideo((prev) =>
+      prev
+        ? {
+            ...prev,
+            durationSeconds: Number.isFinite(seconds) ? seconds : null,
+          }
+        : prev,
+    );
+    setVideoError(videoDurationProblem(seconds));
+  }, []);
+
+  // Ссылка превью живёт, пока выбран этот файл: освобождаем её при замене и
+  // при уходе со страницы. По ссылке, а не по объекту: длительность
+  // пересобирает тот же объект с тем же url — освобождать тут нечего.
+  const videoUrl = video?.url ?? null;
+  useEffect(() => () => {
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+  }, [videoUrl]);
 
   /**
    * Ctrl+V где угодно на шаге. Слушаем окно, а не поле: вставлять человек
@@ -427,14 +485,123 @@ export function ReelWizard({
     setStep("text");
   }
 
+  /**
+   * Отправка видео-рилса (VED-696): создать рилс, затем залить видео по образцу
+   * uploadImage (строки ~444-457). Политика повтора — как у фоновой записи.
+   */
+  async function submitVideo() {
+    if (!video) return;
+    setError(null);
+    setPending(true);
+    try {
+      // Шаг 1: создать рилс. У видео нет текста цитаты, но POST /motivation/reels
+      // ожидает MotivationReelCreateInput — делаем минимальное тело.
+      const body: MotivationReelCreateInput = {
+        source: { kind: "own", text: "", author: null, work: null },
+        language: "ru",
+        category: null,
+        visualStyle: null,
+        explanation: null,
+      };
+      const createResp = await apiFetch(`${API_URL}/motivation/reels`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!createResp.ok) throw new Error(await readError(createResp));
+      const created = (await createResp.json()) as MotivationReelCreateResult;
+
+      // Шаг 2: залить видео с устойчивой политикой повтора (music-upload-retry.ts).
+      // Импорты из music-upload-retry.ts уже есть, используем их.
+      const form = new FormData();
+      form.append("file", video.file);
+      // Заявленная длительность — для webm сервер сам её не прочитает
+      // (та же схема, что у ленты «Видео»: checkVideo(file, claimed)).
+      if (video.durationSeconds != null)
+        form.append("durationSeconds", String(video.durationSeconds));
+
+      let attempt = 0;
+      let lastError: Error | null = null;
+      const { UPLOAD_MAX_ATTEMPTS } = await import("@/lib/music-upload-retry");
+      const { backoffDelay, UploadNetworkError, waitUntilVisibleAndOnline } =
+        await import("@/lib/music-upload-retry");
+
+      while (attempt < UPLOAD_MAX_ATTEMPTS) {
+        attempt++;
+        try {
+          // Перед повтором ждём возвращения на экран и восстановления связи.
+          if (attempt > 1) {
+            const delay = backoffDelay(attempt - 1);
+            if (delay !== null) await new Promise((r) => setTimeout(r, delay));
+            await waitUntilVisibleAndOnline(document, navigator, window);
+          }
+
+          const uploadResp = await apiFetch(
+            `${API_URL}/motivation/reels/${created.id}/video`,
+            {
+              method: "POST",
+              credentials: "include",
+              body: form,
+            },
+          );
+
+          if (!uploadResp.ok) {
+            // HTTP-отказ — не повтор: сервер уже вынес решение.
+            throw new Error(await readError(uploadResp));
+          }
+
+          // Успех: рилс создан и видео залито.
+          const result = (await uploadResp.json()) as MotivationReelDto;
+          setReelId(result.id);
+          setReel(result);
+          setStep("review");
+          setPollStalled(false);
+          setQuota((current) =>
+            current && !current.unlimited
+              ? {
+                  ...current,
+                  used: current.used + 1,
+                  remaining: Math.max(0, current.remaining - 1),
+                }
+              : current,
+          );
+          return; // Выходим из цикла повторов.
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          // Если обрыв сети — можно повторить; HTTP-отказ — нет.
+          if (
+            !(await import("@/lib/music-upload-retry")).isRetryableUploadError(e)
+          ) {
+            throw lastError;
+          }
+          // Сетевой обрыв: если попытки не исчерпаны, крутим цикл дальше.
+        }
+      }
+
+      // Попытки исчерпаны, а сеть так и не вернулась.
+      throw (
+        lastError ||
+        new Error("Не удалось загрузить видео после нескольких попыток")
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось отправить видео");
+    } finally {
+      setPending(false);
+    }
+  }
+
   const exhausted = quotaExhausted(quota);
   const picture = step === "text" && sourceKind === "picture";
+  /** Свой ролик (VED-696) — своя ветка: файл и превью вместо текста цитаты. */
+  const videoMode = sourceKind === "video";
 
-  /* Три пути в начале мастера. «Готовая картинка» — первой (VED-97): у
+  /* Четыре пути в начале мастера. «Готовая картинка» — первой (VED-97): у
      открытки цитата уже на картинке, и путь «набери текст → дойди до шага с
-     файлом» заставлял перепечатывать её зря. */
+     файлом» заставлял перепечатывать её зря. «Добавить видео» (VED-696) —
+     последним: это новый путь, и по объёму он ближе к «Готовой картинке». */
   const sourceCards = (
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className="grid gap-2 sm:grid-cols-2">
       <ChoiceCard
         active={sourceKind === "picture"}
         onClick={() => setSourceKind("picture")}
@@ -453,6 +620,12 @@ export function ReelWizard({
         title="📚 Взять из наших книг"
         hint={book ? "фрагмент выбран" : "оглавление или поиск по словам"}
       />
+      <ChoiceCard
+        active={sourceKind === "video"}
+        onClick={() => setSourceKind("video")}
+        title="🎬 Добавить видео"
+        hint="короткий ролик вместо картинки"
+      />
     </div>
   );
 
@@ -461,13 +634,17 @@ export function ReelWizard({
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-mono text-xs uppercase tracking-wide text-text-2">
           {picture && "Готовая картинка · один шаг"}
-          {step === "text" && !picture && "Шаг 1 из 3 · Текст и источник"}
+          {/* У видео свой короткий путь из двух экранов (VED-696): выбор файла
+              и проверка, без шага «Картинка» — ролик и есть картинка. */}
+          {videoMode && step === "text" && "Видео · выбор файла"}
+          {videoMode && step === "review" && "Видео · проверка"}
+          {step === "text" && !picture && !videoMode && "Шаг 1 из 3 · Текст и источник"}
           {step === "image" && "Шаг 2 из 3 · Картинка"}
-          {step === "review" && "Шаг 3 из 3 · Проверка"}
+          {step === "review" && !videoMode && "Шаг 3 из 3 · Проверка"}
         </div>
         {quota && <div className="text-xs text-text-2">{quotaLine(quota)}</div>}
       </header>
-      {!picture && <StepBar step={step} />}
+      {!picture && !videoMode && <StepBar step={step} />}
 
       {error && (
         <p role="alert" className="rounded-xl bg-red-100 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">
@@ -524,6 +701,11 @@ export function ReelWizard({
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
+            // У видео текста нет: дальше — сразу проверка с превью (VED-696).
+            if (videoMode) {
+              setStep("review");
+              return;
+            }
             if (!textError && trimmed) setStep("image");
           }}
         >
@@ -541,6 +723,18 @@ export function ReelWizard({
               }}
             />
           )}
+          {videoMode ? (
+            /* Ветка «Добавить видео» (VED-696): вместо текста цитаты — свой
+               ролик. Дальше путь идёт сразу на проверку: шаг «Картинка»
+               видео не нужен, ролик и есть картинка. */
+            <ReelVideoSource
+              pick={video}
+              error={videoError}
+              onPick={acceptVideo}
+              onDuration={onVideoDuration}
+            />
+          ) : (
+            <>
           <label className="block text-sm text-text-1">
             <span className={fieldLabelClass()}>Текст цитаты</span>
             <textarea
@@ -623,12 +817,18 @@ export function ReelWizard({
               ? "Своя цитата не попадёт в общую ленту «Для вас» — только в «Мои» и по ссылке: у неё нет проверенного источника."
               : "Фрагмент сверяется с текстом главы. Сократить можно, переписать нельзя — иначе он перестанет быть цитатой."}
           </p>
+            </>
+          )}
           <button
             type="submit"
-            disabled={!trimmed || Boolean(textError) || (sourceKind === "vedabase" && !book)}
+            disabled={
+              videoMode
+                ? !video || Boolean(videoError)
+                : !trimmed || Boolean(textError) || (sourceKind === "vedabase" && !book)
+            }
             className={primaryButtonClass}
           >
-            Дальше: картинка
+            {videoMode ? "Дальше: проверка" : "Дальше: картинка"}
           </button>
         </form>
       )}
@@ -756,7 +956,41 @@ export function ReelWizard({
           именно уходит администраторам. После отправки на том же шаге живёт
           статус сборки: возвращать его на отдельный экран значило бы уводить
           от карточки, за которой человек и пришёл. */}
-      {step === "review" && !reelId && !exhausted && (
+      {/* Шаг проверки для видео (VED-696): превью и отправка. */}
+      {step === "review" && !reelId && !exhausted && videoMode && (
+        <div className="space-y-4">
+          <div className="glass space-y-3 rounded-2xl p-4 text-sm text-text-1">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-text-2">Видео</p>
+              {video && (
+                <video
+                  src={video.url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="mt-2 w-full rounded-2xl border border-glass-brd"
+                />
+              )}
+              <p className="mt-1 text-text-0">
+                {video
+                  ? `Ваш файл: ${video.file.name} · ${formatImageSize(video.file.size)}${
+                      video.durationSeconds !== null
+                        ? ` · ${formatVideoDuration(video.durationSeconds)}`
+                        : ""
+                    }`
+                  : "Файл не выбран"}
+              </p>
+            </div>
+          </div>
+          {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={pending} onClick={() => setStep("text")} className={secondaryButtonClass}>← Назад</button>
+            <button type="button" disabled={pending || !video} onClick={() => void submitVideo()} className={primaryButtonClass}>{pending ? "Отправляем…" : "Отправить на проверку"}</button>
+          </div>
+        </div>
+      )}
+
+      {step === "review" && !reelId && !exhausted && !videoMode && (
         <form className="space-y-4" onSubmit={submit}>
           <div className="glass space-y-3 rounded-2xl p-4 text-sm text-text-1">
             <div>

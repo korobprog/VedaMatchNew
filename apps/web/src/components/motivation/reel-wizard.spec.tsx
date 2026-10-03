@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotivationReelDto } from "@vedamatch/shared";
@@ -776,5 +776,100 @@ describe("ReelWizard", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // VED-696: четвёртый источник — свой ролик. Сервер видео в рилсы пока не
+  // принимает, поэтому дальше выбора и превью ветка не идёт: на шаге проверки
+  // честная заглушка вместо кнопки отправки, которой нечем подкрепить.
+  describe("«Добавить видео» (VED-696)", () => {
+    function videoFile(name = "clip.mp4", type = "video/mp4", size = 2000) {
+      return new File([new Uint8Array(size)], name, { type });
+    }
+
+    /** jsdom не умеет object URLs — превью и освобождение ссылки подменяем. */
+    function stubObjectUrls() {
+      URL.createObjectURL = vi.fn(() => "blob:clip");
+      URL.revokeObjectURL = vi.fn();
+    }
+
+    it("карточка «Добавить видео» — четвёртая в меню источников", async () => {
+      routeFetch({ "/motivation/reels/quota": () => quota });
+      render(<ReelWizard prefill={{}} donation={null} />);
+      await screen.findByText("Сегодня: 0 из 1");
+
+      const card = screen.getByRole("button", { name: /Добавить видео/ });
+      expect(card).toHaveAttribute("aria-pressed", "false");
+      // Остальные три источника на месте — видео добавилось к ним, а не вместо.
+      expect(
+        screen.getByRole("button", { name: /Готовая картинка с цитатой/ }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Написать самому/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Взять из наших книг/ })).toBeInTheDocument();
+    });
+
+    it("выбранный ролик отправляется после проверки", async () => {
+      stubObjectUrls();
+      const fetchMock = routeFetch({
+        "/motivation/reels/quota": () => quota,
+        "/motivation/reels": () => ({ id: "reel-1" }),
+        "/motivation/reels/reel-1/video": () => reelDto({ id: "reel-1", videoState: "none" }),
+      });
+      const user = userEvent.setup();
+      const { container } = render(<ReelWizard prefill={{}} donation={null} />);
+      await screen.findByText("Сегодня: 0 из 1");
+      await user.click(screen.getByRole("button", { name: /Добавить видео/ }));
+      const input = screen.getByLabelText(/Видео \(MP4/);
+      await user.upload(input, videoFile());
+      const preview = container.querySelector("video") as HTMLVideoElement;
+      Object.defineProperty(preview, "duration", { value: 12, configurable: true });
+      fireEvent.loadedMetadata(preview);
+      await user.click(screen.getByRole("button", { name: "Дальше: проверка" }));
+      expect(screen.getByRole("button", { name: "Отправить на проверку" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+      await waitFor(() => 
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining("/motivation/reels/reel-1/video"), 
+          expect.objectContaining({ method: "POST" })
+        )
+      );
+    });
+
+    it("файл не того формата отбивается с объяснением", async () => {
+      stubObjectUrls();
+      routeFetch({ "/motivation/reels/quota": () => quota });
+      // `applyAccept: false`: поле принимает только video/*, а здесь как раз и
+      // проверяем, что чужой формат до проверки не проскользнет.
+      const user = userEvent.setup({ applyAccept: false });
+      render(<ReelWizard prefill={{}} donation={null} />);
+      await screen.findByText("Сегодня: 0 из 1");
+      await user.click(screen.getByRole("button", { name: /Добавить видео/ }));
+
+      await user.upload(
+        screen.getByLabelText(/Видео \(MP4/),
+        new File(["x"], "note.txt", { type: "text/plain" }),
+      );
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Нужен видеофайл: mp4, webm или mov",
+      );
+      expect(screen.getByRole("button", { name: "Дальше: проверка" })).toBeDisabled();
+    });
+
+    it("ролик длиннее 90 секунд отбивается после чтения метаданных", async () => {
+      stubObjectUrls();
+      routeFetch({ "/motivation/reels/quota": () => quota });
+      const user = userEvent.setup();
+      const { container } = render(<ReelWizard prefill={{}} donation={null} />);
+      await screen.findByText("Сегодня: 0 из 1");
+      await user.click(screen.getByRole("button", { name: /Добавить видео/ }));
+      await user.upload(screen.getByLabelText(/Видео \(MP4/), videoFile());
+
+      const preview = container.querySelector("video") as HTMLVideoElement;
+      Object.defineProperty(preview, "duration", { value: 300, configurable: true });
+      fireEvent.loadedMetadata(preview);
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/длиннее 90 секунд/);
+      expect(screen.getByRole("button", { name: "Дальше: проверка" })).toBeDisabled();
+    });
   });
 });

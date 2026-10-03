@@ -58,6 +58,7 @@ import { MotivationAnalyticsService } from './motivation-analytics.service';
 import { MotivationPicturesService } from './motivation-pictures.service';
 import { MotivationQuizService } from './motivation-quiz.service';
 import { MAX_REEL_IMAGE_BYTES, type UploadedReelImage } from './reel-image';
+import { MAX_VIDEO_BYTES, type UploadedVideo } from './video-upload';
 import { MotivationVideosService } from './motivation-videos.service';
 
 @Controller()
@@ -389,6 +390,19 @@ export class MotivationController {
     @UploadedFile() file?: UploadedReelImage,
   ) {
     return this.reels.uploadImage(user.sub, id, file);
+  }
+  @Post('motivation/reels/:id/video')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_VIDEO_BYTES } }),
+  )
+  uploadReelVideo(
+    @CurrentUser() user: AccessTokenPayload,
+    @Param('id') id: string,
+    @UploadedFile() file?: UploadedVideo,
+    @Body() body?: Record<string, unknown>,
+  ) {
+    return this.reels.uploadVideo(user.sub, id, file, body);
   }
   /**
    * Повтор ИИ-проверки. Живёт среди админских маршрутов рилсов, но обращается

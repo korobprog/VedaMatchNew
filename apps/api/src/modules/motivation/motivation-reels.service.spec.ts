@@ -987,3 +987,158 @@ describe('MotivationReelsService.adminUploadImage', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('MotivationReelsService.uploadVideo (VED-696)', () => {
+  // Переиспользуем хелперы из video-upload.spec.ts
+  function box(type: string, payload: Buffer): Buffer {
+    const header = Buffer.alloc(8);
+    header.writeUInt32BE(payload.length + 8, 0);
+    header.write(type, 4, 'latin1');
+    return Buffer.concat([header, payload]);
+  }
+
+  function ftyp(brand: string): Buffer {
+    return box('ftyp', Buffer.from(`${brand}\0\0\0\0isom`, 'latin1'));
+  }
+
+  function mvhd0(timescale: number, duration: number): Buffer {
+    const payload = Buffer.alloc(20);
+    payload.writeUInt32BE(timescale, 12);
+    payload.writeUInt32BE(duration, 16);
+    return box('mvhd', payload);
+  }
+
+  function mp4(seconds: number): Buffer {
+    return Buffer.concat([
+      ftyp('isom'),
+      box('mdat', Buffer.alloc(16)),
+      box('moov', mvhd0(1000, seconds * 1000)),
+    ]);
+  }
+
+  const validMp4 = mp4(15);
+
+  function buildUploadService(
+    postData: unknown = { 
+      id: 'post-1', 
+      status: 'draft', 
+      reviewStatus: 'draft',
+      moderationAudits: [],
+      readingUnit: null,
+    },
+  ) {
+    const update = jest.fn().mockResolvedValue({});
+    const create = jest.fn().mockResolvedValue({});
+    const uploadStory = jest.fn().mockResolvedValue('https://cdn/video.mp4');
+    const findFirst = jest.fn().mockResolvedValue(postData);
+    const service = new MotivationReelsService(
+      {
+        motivationPost: {
+          findFirst,
+          update,
+        },
+        motivationModerationAudit: { create },
+      } as never,
+      { read: jest.fn().mockResolvedValue({ userVideoEnabled: true }) } as never,
+      {} as never,
+      { uploadStory } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    return { service, update, create, uploadStory, findFirst };
+  }
+
+  it('отбивает файл без содержимого', async () => {
+    const { service } = buildUploadService();
+    await expect(
+      service.uploadVideo('user-1', 'post-1', undefined),
+    ).rejects.toThrow(/файл не выбран/i);
+  });
+
+  it('отбивает файл неизвестного формата', async () => {
+    const { service } = buildUploadService();
+    await expect(
+      service.uploadVideo('user-1', 'post-1', {
+        buffer: Buffer.from('not a video'),
+        mimetype: 'application/octet-stream',
+        size: 11,
+      } as never),
+    ).rejects.toThrow(/нужен видеофайл/i);
+  });
+
+  it('отбивает файл больше 50 МБ', async () => {
+    const { service } = buildUploadService();
+    const largeBuffer = Buffer.alloc(51 * 1024 * 1024);
+    validMp4.copy(largeBuffer);
+    await expect(
+      service.uploadVideo('user-1', 'post-1', {
+        buffer: largeBuffer,
+        mimetype: 'video/mp4',
+        size: largeBuffer.length,
+      } as never),
+    ).rejects.toThrow(/50.*МБ/i);
+  });
+
+  it('отбивает чужой рилс', async () => {
+    const { service } = buildUploadService(null);
+    await expect(
+      service.uploadVideo('user-1', 'post-1', {
+        buffer: validMp4,
+        mimetype: 'video/mp4',
+        size: validMp4.length,
+      } as never),
+    ).rejects.toThrow(/не найден/i);
+  });
+
+  it('отбивает попытку поменять видео опубликованного рилса', async () => {
+    const { service } = buildUploadService({
+      id: 'post-1',
+      status: 'published',
+      reviewStatus: 'published',
+    });
+    await expect(
+      service.uploadVideo('user-1', 'post-1', {
+        buffer: validMp4,
+        mimetype: 'video/mp4',
+        size: validMp4.length,
+      } as never),
+    ).rejects.toThrow(/уже опубликован/i);
+  });
+
+  it('успешно загружает видео и отправляет на проверку', async () => {
+    const { service, update, create, uploadStory } = buildUploadService();
+    // Мокаем get(), чтобы не нужно было создавать полный post
+    jest.spyOn(service, 'get').mockResolvedValue({ id: 'post-1' } as never);
+
+    await service.uploadVideo('user-1', 'post-1', {
+      buffer: validMp4,
+      mimetype: 'video/mp4',
+      size: validMp4.length,
+    } as never);
+
+    expect(uploadStory).toHaveBeenCalledWith(
+      expect.stringMatching(/^motivation\/videos\/post-1-\d+\.mp4$/),
+      validMp4,
+      'video/mp4',
+    );
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'post-1' },
+      data: expect.objectContaining({
+        videoUrl: 'https://cdn/video.mp4',
+        videoHasSound: true,
+        reviewStatus: 'image_review',
+        status: 'draft',
+      }),
+    });
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        postId: 'post-1',
+        actorId: 'user-1',
+        action: 'author_video',
+      }),
+    });
+  });
+});
