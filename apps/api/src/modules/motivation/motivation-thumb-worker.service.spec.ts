@@ -27,6 +27,9 @@ function createWorker(publicUrl = BASE) {
     }),
   };
   const thumbs = {
+    readOriginal: jest
+      .fn()
+      .mockImplementation(() => Promise.resolve(Buffer.from([1, 2, 3]))),
     upload: jest
       .fn()
       .mockImplementation((key: string) => Promise.resolve(`${BASE}/${key}`)),
@@ -111,9 +114,8 @@ describe('MotivationThumbWorkerService', () => {
         updatedAt,
       },
     });
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(candidate.imageUrl);
-    expect(init.signal).toBeInstanceOf(AbortSignal);
+    const [key] = thumbs.readOriginal.mock.calls[0] as [string];
+    expect(key).toBe('motivation/2026-09-01/post-1/v1.png');
     expect(thumbs.upload).toHaveBeenCalledWith(
       'motivation/2026-09-01/post-1/v1-w720.webp',
       expect.any(Buffer),
@@ -145,7 +147,7 @@ describe('MotivationThumbWorkerService', () => {
 
   it('недоступный оригинал — неудача: попытка потрачена, копия не пишется', async () => {
     const { worker, motivationPost, thumbs } = createWorker();
-    fetchMock.mockResolvedValue({ ok: false, status: 404 });
+    thumbs.readOriginal.mockRejectedValueOnce(new Error('NoSuchKey'));
 
     const result = await worker.runBatch(now);
 

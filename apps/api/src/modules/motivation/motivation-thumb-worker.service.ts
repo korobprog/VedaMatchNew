@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   backfillThumbKey,
   backfillWebKey,
+  imageKeyFromUrl,
   MAX_THUMB_ATTEMPTS,
   THUMB_RETRY_PAUSE_MS,
 } from './image-thumb';
@@ -258,12 +259,7 @@ export class MotivationThumbWorkerService
     });
     if (!claimed.count) return 'skipped';
     try {
-      const response = await fetch(imageUrl, {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (!response.ok)
-        throw new Error(`image fetch failed: ${response.status}`);
-      const bytes = Buffer.from(await response.arrayBuffer());
+      const bytes = await this.downloadOriginal(imageUrl, base);
       const copyUrl = await pass.upload(
         this.thumbs,
         pass.key(imageUrl, base, post.id, now.getTime()),
@@ -280,6 +276,29 @@ export class MotivationThumbWorkerService
       );
       return 'failed';
     }
+  }
+
+  /**
+   * Оригинал для пережатия.
+   *
+   * Свой файл читаем из S3 по ключу: публичный адрес `S3_PUBLIC_URL` из
+   * контейнера API недоступен (hairpin NAT до собственного публичного IP), и
+   * прежний fetch по этой ссылке тратил все попытки бэкфилла впустую — копии
+   * не доделывались ни для одного старого поста. Чужая ссылка (старый домен,
+   * внешний адрес) — по-прежнему по HTTP, ключа для неё нет.
+   */
+  private async downloadOriginal(
+    imageUrl: string,
+    base: string,
+  ): Promise<Buffer> {
+    const key = imageKeyFromUrl(imageUrl, base);
+    if (key) return this.thumbs.readOriginal(key);
+    const response = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok)
+      throw new Error(`image fetch failed: ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
   }
 
   /**

@@ -47,6 +47,17 @@ export class MotivationImageThumbService {
 
   constructor(private readonly generation: MotivationGenerationService) {}
 
+  /**
+   * Оригинал по ключу из того же S3, куда идут копии.
+   *
+   * Бэкфилл раньше читал оригинал по публичной ссылке, а она из контейнера API
+   * недоступна (hairpin NAT) — копии не доделывались ни для одного старого
+   * поста. Чтение по ключу обходит сеть наружу.
+   */
+  async readOriginal(imageKey: string): Promise<Buffer> {
+    return this.generation.downloadStory(imageKey);
+  }
+
   /** Копия по готовому ключу; ошибки наружу — решает вызывающий. */
   async upload(thumbKey: string, bytes: Buffer): Promise<string> {
     const thumb = await renderImageThumb(bytes);
