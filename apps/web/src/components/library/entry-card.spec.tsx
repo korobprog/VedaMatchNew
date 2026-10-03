@@ -272,7 +272,7 @@ describe("EntryCard", () => {
     expect(article?.className).toContain("relative");
     expect(article?.className).toContain("has-[[aria-expanded=true]]:z-40");
   });
-  it("отпечаток стоит в одной паре с домиком «Линия», слева от него (VED-607, VED-632)", () => {
+  it("фильтры одной кнопкой в группе разметки (VED-715)", () => {
     render(
       <EntryCard
         entry={{ ...entry, canEdit: true, canSetLineage: true }}
@@ -283,22 +283,24 @@ describe("EntryCard", () => {
     const group = screen.getByTestId("entry-admin-marks");
     expect(group).toHaveClass("ml-auto", "flex", "shrink-0");
     const buttons = within(group).getAllByRole("button");
-    expect(buttons).toHaveLength(2);
-    expect(buttons[0]).toHaveAccessibleName(/^Самоидентификация/);
-    expect(buttons[1]).toHaveAccessibleName(/^Линия/);
-    // 40px, чтобы пара влезала в строку с «Редактировать» и «Удалить».
-    for (const button of buttons) expect(button).toHaveClass("size-10");
+    // Домик и отпечаток объединены: одна кнопка несёт и ступени, и линию.
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName(
+      "Самоидентификация: для всех. Материал: ISKCON",
+    );
+    // 40px, чтобы кнопка влезала в строку с «Редактировать» и «Удалить».
+    expect(buttons[0]).toHaveClass("size-10");
   });
 
-  /* VED-632: «на всех материалах должно присутствовать две кнопки-значка»
-     — и у участников, только для показа. */
-  it("читателю — та же пара: отпечаток и домик (VED-632)", () => {
+  /* VED-715: «участники видят зафиксированную админом индикацию этих двух
+     фильтров» — та же одна кнопка, только для показа. */
+  it("читателю — та же одна кнопка фильтров (VED-715)", () => {
     render(<EntryCard entry={entry} locale="ru" />);
 
     const group = screen.getByTestId("entry-admin-marks");
     const buttons = within(group).getAllByRole("button");
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(1);
     expect(buttons[0]).toHaveAccessibleName(/^Самоидентификация/);
-    expect(buttons[1]).toHaveAccessibleName(/^Линия/);
+    expect(buttons[0]).toHaveAccessibleName(/Материал/);
   });
 });

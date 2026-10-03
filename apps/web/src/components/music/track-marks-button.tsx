@@ -2,15 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import type { LineageId, SpiritualStage } from "@vedamatch/shared";
-import { LineageInfoButton } from "@/components/lineage-info-button";
-import { MaterialStagesButton } from "@/components/material-stages-button";
+import { MaterialMarksButton } from "@/components/material-marks-button";
 import { updateMusicTrack } from "@/lib/music-admin-client-api";
 
 /**
- * Пара значков на странице записи (VED-632), у всех участников: отпечаток
- * пальца — для каких ступеней самоидентификации запись, домик — к какой
- * линии запись и её исполнитель. Редакции Музыки (`canEdit`) те же окна
- * дают поменять и сохранить ступени и линию записи — запросом правки записи.
+ * Один значок фильтров на странице записи (VED-715), у всех участников:
+ * ступени самоидентификации и духовная линия — записи и её исполнителя —
+ * раскрываются в одном окне. Участник видит индикацию, редакции Музыки
+ * (`canEdit`) те же фильтры дают поменять и сохранить запросом правки
+ * записи.
  */
 export function MusicTrackMarksButtons({
   trackId,
@@ -29,41 +29,37 @@ export function MusicTrackMarksButtons({
   const router = useRouter();
 
   return (
-    <>
-      <MaterialStagesButton
-        stages={audienceStages}
-        menuLabel="Самоидентификация записи"
-        onSave={
-          canEdit
-            ? async (next) => {
-                await updateMusicTrack(trackId, { audienceStages: next });
-                router.refresh();
-              }
-            : undefined
-        }
-      />
-      <LineageInfoButton
-        subjects={[
-          { title: "Запись", lineage },
-          ...(artistLineage !== undefined
-            ? [
-                {
-                  title: "Исполнитель",
-                  lineage: artistLineage,
-                  emptyLabel: "Линия не указана",
-                },
-              ]
-            : []),
-        ]}
-        onSave={
-          canEdit
-            ? async (next) => {
-                await updateMusicTrack(trackId, { lineage: next });
-                router.refresh();
-              }
-            : undefined
-        }
-      />
-    </>
+    <MaterialMarksButton
+      stages={audienceStages}
+      menuLabel="Фильтры записи"
+      subjects={[
+        { title: "Запись", lineage },
+        ...(artistLineage !== undefined
+          ? [
+              {
+                title: "Исполнитель",
+                lineage: artistLineage,
+                emptyLabel: "Линия не указана",
+              },
+            ]
+          : []),
+      ]}
+      onSaveStages={
+        canEdit
+          ? async (next) => {
+              await updateMusicTrack(trackId, { audienceStages: next });
+              router.refresh();
+            }
+          : undefined
+      }
+      onSaveLineage={
+        canEdit
+          ? async (next) => {
+              await updateMusicTrack(trackId, { lineage: next });
+              router.refresh();
+            }
+          : undefined
+      }
+    />
   );
 }

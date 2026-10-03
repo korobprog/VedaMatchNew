@@ -24,12 +24,11 @@ afterEach(() => {
   setLibraryEntryLineage.mockReset();
 });
 
-/* VED-632: «на всех материалах должно присутствовать две кнопки-значка —
-   домик … духовной линии и отпечаток пальца … самоидентификации. Для
-   админов то же самое, только помимо отображения они могут менять и
-   сохранять это отображение». */
-describe("EntryMarksButtons (VED-632)", () => {
-  it("участнику — оба значка, только показывают", async () => {
+/* VED-632: «для админов то же самое, только помимо отображения они могут
+   менять и сохранять». VED-715: домик и отпечаток объединены в одну
+   кнопку — окно фильтров как на главной. */
+describe("EntryMarksButtons (VED-715)", () => {
+  it("участнику — одна кнопка, оба фильтра только показывают", async () => {
     render(
       <EntryMarksButtons
         locale="ru"
@@ -38,19 +37,18 @@ describe("EntryMarksButtons (VED-632)", () => {
         lineage="iskcon"
       />,
     );
-    expect(
-      screen.getByRole("button", {
-        name: "Самоидентификация: Ищущий, Йог",
-      }),
-    ).toBeDefined();
-    const house = screen.getByRole("button", { name: /^Линия/ });
-    expect(house.getAttribute("aria-label")).toContain("ISKCON");
+    const trigger = screen.getByRole("button", {
+      name: "Самоидентификация: Ищущий, Йог. Материал: ISKCON",
+    });
+    await userEvent.click(trigger);
 
-    await userEvent.click(house);
+    expect(screen.getByText("Ищущий, Йог")).toBeDefined();
+    expect(screen.getByText("ISKCON")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Сохранить" })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
-  it("админ меняет ступени в отпечатке — пишутся только ступени", async () => {
+  it("админ меняет ступени в том же окне — пишутся только ступени", async () => {
     setLibraryEntryAudienceStages.mockResolvedValue({
       id: "e-1",
       audienceStages: ["seeker", "devotee"],
@@ -66,7 +64,6 @@ describe("EntryMarksButtons (VED-632)", () => {
         onChanged={onChanged}
       />,
     );
-
     await userEvent.click(
       screen.getByRole("button", { name: /^Самоидентификация/ }),
     );
@@ -89,7 +86,7 @@ describe("EntryMarksButtons (VED-632)", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("админ меняет линию в домике — пишется только линия", async () => {
+  it("админ меняет линию в том же окне — пишется только линия", async () => {
     setLibraryEntryLineage.mockResolvedValue({ id: "e-1", lineage: "ipbys" });
     render(
       <EntryMarksButtons
@@ -100,8 +97,9 @@ describe("EntryMarksButtons (VED-632)", () => {
         canSet
       />,
     );
-
-    await userEvent.click(screen.getByRole("button", { name: /^Линия/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Самоидентификация/ }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Гаудия-матх" }));
     await userEvent.click(screen.getByRole("button", { name: "IPBYS" }));
     await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
